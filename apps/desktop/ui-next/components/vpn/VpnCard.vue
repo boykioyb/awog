@@ -194,7 +194,7 @@ const avatarStyle = computed(() => {
   gap: 5px;
   flex: 0 0 auto;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
 }
 .vpn-dot {
   width: 8px;
@@ -218,7 +218,7 @@ const avatarStyle = computed(() => {
   display: inline-flex;
   align-items: center;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
@@ -230,7 +230,7 @@ const avatarStyle = computed(() => {
   gap: 4px;
   font-size: 12px;
   font-weight: 500;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--accent);

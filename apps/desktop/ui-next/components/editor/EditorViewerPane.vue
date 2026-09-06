@@ -83,9 +83,9 @@ const diffLines = computed<DiffLine[]>(() => {
   background: var(--bg);
   font-family: var(--code);
   font-size: 12px;
-  /* design-token-ok: the diff pane pins 12px so rows stay put across Appearance; a
-     fixed leading keeps every row on the pixel grid. */
-  line-height: 19px;
+  /* The diff pane pins 12px so rows stay put across Appearance; an EVEN fixed leading
+     keeps every row — and the gutter digits centred in it — on the pixel grid. */
+  line-height: 20px;
   padding: 8px 0;
 }
 .edview-diffline {

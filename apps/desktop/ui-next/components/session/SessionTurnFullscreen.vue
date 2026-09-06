@@ -213,7 +213,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .merr-msg {
   color: var(--text);
-  line-height: 1.5;
+  line-height: var(--lh-md);
   overflow-wrap: anywhere;
   min-width: 0;
 }

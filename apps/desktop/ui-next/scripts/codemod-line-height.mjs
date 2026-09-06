@@ -15,6 +15,11 @@
 // (badges, hint chips — deliberately outside Appearance scaling) get the whole-pixel
 // leading they already render, so their geometry does not move at all.
 //
+// SUPERSEDED IN PART by scripts/codemod-line-height-coefficients.mjs: the rules this one
+// skips (any rule that already states a leading, unitless coefficient and all) were the
+// backlog that script cleared. Kept because it is the pass that ADDS a missing leading,
+// which is still the right move for a new rule that picks a --fs-* step.
+//
 //   node scripts/codemod-line-height.mjs [--dry-run] [--verbose]
 // Then `node scripts/check-design-tokens.mjs` must report 0 R4 violations.
 //
@@ -40,7 +45,12 @@ const LH_FOR_FS = {
 // from a coefficient. 12px x 1.5 = 18px exactly, which is 146 of the 152 such rules —
 // badges, chips and count pills that would otherwise inherit the 20px meant for body text
 // and grow 2px each.
+//
+// Rounded UP to an EVEN px (ADR 0079 D2d): an odd line box is odd at every base, and an
+// even icon centred in it lands on a half pixel. `Math.round` here used to emit 15 / 17 /
+// 19px; rounding up also guarantees no box ever gets shorter.
 const OLD_GLOBAL_COEFFICIENT = 1.5
+const ceilEven = (px) => Math.ceil(px / 2) * 2
 
 const RE_FONT_SIZE_TOKEN = /(?<![\w-])font-size\s*:\s*var\(\s*(--fs-(?:xs|sm|md|lg|xl|2xl))\s*\)/
 const RE_FONT_SIZE_PX = /(?<![\w-])font-size\s*:\s*(\d*\.?\d+)px\b/
@@ -105,7 +115,7 @@ for (const { relPath, absPath } of sourceFiles()) {
       const blockStart = region.offset + block.index + 1
       const leading = token
         ? `var(${LH_FOR_FS[token[1]]})`
-        : `${Math.round(Number(px[1]) * OLD_GLOBAL_COEFFICIENT)}px`
+        : `${ceilEven(Number(px[1]) * OLD_GLOBAL_COEFFICIENT)}px`
       fileEdits.push(insertionFor(masked, blockStart, body, fs, leading))
       edits.push({ file: relPath, line, from: `font-size: ${fs[1]}`, to: leading })
     }

@@ -490,7 +490,7 @@ function parseTags(text: string): string[] {
 .sse-err {
   margin-top: 4px;
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 16px;
   color: var(--danger);
 }
 /* Masked password field + its reveal toggle (mirrors VpnEditor's .vpe-eye). */

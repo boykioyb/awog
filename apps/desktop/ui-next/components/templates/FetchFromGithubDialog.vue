@@ -125,7 +125,7 @@ const onFetch = async () => {
 .tpd-hint {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .tpd-check {
   display: flex;

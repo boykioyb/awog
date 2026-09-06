@@ -125,7 +125,7 @@ function toggleThink(key: string) {
   border: 1px solid var(--border);
   font-size: 12px;
   font-family: var(--font-mono, ui-monospace, monospace);
-  line-height: 1;
+  line-height: 12px;
   color: var(--textDim);
 }
 /* Live preview text — one line, ellipsised (matches craft's cross-fading preview). */

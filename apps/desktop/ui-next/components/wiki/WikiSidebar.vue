@@ -200,7 +200,7 @@ const chars = computed(() =>
 .wsb-empty {
   padding: 16px 8px;
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .wsb-space {
   margin-bottom: 2px;
@@ -247,7 +247,7 @@ const chars = computed(() =>
 .wsb-count {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   min-width: 18px;
   text-align: right;
   color: var(--textFaint);
@@ -259,6 +259,6 @@ const chars = computed(() =>
 .wsb-foot {
   padding: 6px 8px;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 18px;
 }
 </style>

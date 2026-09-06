@@ -60,7 +60,7 @@ watch(
   display: flex;
   gap: 8px;
   font-size: var(--fs-xs);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
   word-break: break-word;
 }
 .ctl-gutter {

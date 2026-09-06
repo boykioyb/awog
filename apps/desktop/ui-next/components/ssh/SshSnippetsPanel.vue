@@ -179,7 +179,7 @@ async function del(snippet: SshSnippet): Promise<void> {
 }
 .ssh-sn-count {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 2px 7px;
   border-radius: var(--r-pill);
   color: var(--textDim);

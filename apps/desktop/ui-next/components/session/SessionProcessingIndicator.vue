@@ -152,7 +152,7 @@ const elapsedLabel = computed(() => {
 .procelapsed {
   margin-left: 6px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   opacity: 0.6;
   font-variant-numeric: tabular-nums;
 }

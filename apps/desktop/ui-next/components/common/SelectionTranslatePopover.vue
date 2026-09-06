@@ -157,7 +157,7 @@ useEscToClose(
   padding: 2px 7px;
   font-size: 12px;
   font-family: var(--code, ui-monospace, monospace);
-  line-height: 1.4;
+  line-height: 18px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
@@ -199,7 +199,7 @@ useEscToClose(
 }
 .sttresult {
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
   color: var(--text);
   word-break: break-word;
   user-select: text;

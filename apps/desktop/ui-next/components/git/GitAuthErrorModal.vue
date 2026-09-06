@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
 }
 .gae-hint {
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
   color: var(--textDim);
 }
 .gae-cmd {
@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
   border-radius: var(--r-sm);
   color: var(--textDim);
   font-size: var(--fs-xs);
-  line-height: 1.45;
+  line-height: var(--lh-xs);
   white-space: pre-wrap;
   word-break: break-word;
 }

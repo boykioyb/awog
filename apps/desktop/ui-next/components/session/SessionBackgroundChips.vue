@@ -141,7 +141,7 @@ function onStop(shellId: string): void {
   border: 1px solid var(--border);
   background: transparent;
   font-size: 12px;
-  line-height: 1.2;
+  line-height: 16px;
   color: var(--text);
 }
 .bgsh-chip.is-running {

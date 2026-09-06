@@ -1283,7 +1283,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 .sshbar-warn {
   margin: 6px 2px 0;
   color: var(--amber);
-  line-height: 1.4;
+  line-height: var(--lh-sm);
 }
 /* Two-axis dock: .chatwrap stacks the top row (chat + right panel) over the
    full-width bottom panel; .wptop is the horizontal row the prototype's .chatwrap
@@ -1464,7 +1464,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   outline: none;
   resize: vertical;
   min-height: 4.5em;
-  line-height: 1.4;
+  line-height: var(--lh-sm);
   font-family: var(--sans);
 }
 /* When the popover has an explicit height (resized), grow the textarea to fill and

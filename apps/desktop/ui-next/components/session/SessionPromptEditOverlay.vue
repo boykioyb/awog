@@ -147,7 +147,7 @@ watch(
   color: var(--text);
   font-size: 1em;
   font-family: var(--sans);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
 }
 .pe-textarea:focus {
   border-color: var(--accent);

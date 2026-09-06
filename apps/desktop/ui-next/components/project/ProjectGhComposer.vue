@@ -303,7 +303,7 @@ defineExpose({ focus })
   color: var(--text);
   font-family: inherit;
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .ghci:disabled {
   opacity: 0.6;
@@ -312,7 +312,7 @@ defineExpose({ focus })
   min-height: 4.5rem;
   padding: 2px 2px 6px;
   font-size: 1em;
-  line-height: 1.6;
+  line-height: var(--lh-prose);
 }
 .ghcbar {
   display: flex;

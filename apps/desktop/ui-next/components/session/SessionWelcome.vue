@@ -133,7 +133,7 @@ function useSuggestion(prompt: string) {
 .swsub {
   max-width: 420px;
   color: var(--textDim);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
 }
 .swctx {
   display: flex;
@@ -205,7 +205,7 @@ function useSuggestion(prompt: string) {
 .swcardd {
   font-size: 0.9231em;
   color: var(--textDim);
-  line-height: 1.45;
+  line-height: var(--lh-sm);
 }
 .swhints {
   display: flex;
@@ -223,7 +223,7 @@ function useSuggestion(prompt: string) {
 }
 .swhint kbd {
   font-size: 11px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 6px;
   border-radius: var(--r-xs);
   color: var(--textDim);

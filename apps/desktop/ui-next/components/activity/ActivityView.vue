@@ -431,7 +431,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
 .actcbig {
   font-size: var(--fs-2xl);
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 26px;
   margin-top: 4px;
 }
 .actcsub {

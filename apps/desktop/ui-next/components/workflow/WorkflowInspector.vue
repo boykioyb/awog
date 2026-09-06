@@ -238,7 +238,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   font-size: var(--fs-sm);
   color: var(--textDim);
   margin-top: 6px;
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .wfi-outs {
   display: flex;
@@ -328,7 +328,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   color: var(--textDim);
   margin-top: 5px;
   margin-left: 22px;
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .wfi-empty {
   display: flex;

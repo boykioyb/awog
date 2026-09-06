@@ -293,7 +293,7 @@ function onCompact() {
   margin-left: auto;
   font-variant-numeric: tabular-nums;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   color: var(--textDim);
 }
 .ctxitems {

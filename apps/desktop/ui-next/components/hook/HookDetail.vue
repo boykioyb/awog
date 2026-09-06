@@ -198,7 +198,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 .hkd-desc {
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   margin: 0;
 }
 .hkd-trust {
@@ -231,7 +231,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 .hkd-trust-desc {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .hkd-trust-btn {
   align-self: flex-start;

@@ -339,7 +339,7 @@ function formatResetsIn(ms: number | undefined): string {
 }
 .tp-title {
   font-weight: 650;
-  line-height: 1.15;
+  line-height: 16px;
 }
 .tp-sub {
   font-size: 12px;
@@ -363,7 +363,7 @@ function formatResetsIn(ms: number | undefined): string {
 }
 .tp-sech {
   font-size: 11px;
-  line-height: 17px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 .tp-empty {
@@ -430,7 +430,7 @@ function formatResetsIn(ms: number | undefined): string {
   flex: 0 0 26px;
   text-align: right;
   font-size: 11px;
-  line-height: 17px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 

@@ -1150,7 +1150,7 @@ function namesToEntries(names: string[]): KvEntry[] {
   flex-direction: column;
   gap: 2px;
   font-size: var(--fs-sm);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .cne-setup-t {
   font-weight: 600;
@@ -1202,7 +1202,7 @@ function namesToEntries(names: string[]): KvEntry[] {
 .cne-ta {
   resize: vertical;
   min-height: 3rem;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .cne-hint {
   font-size: var(--fs-xs);

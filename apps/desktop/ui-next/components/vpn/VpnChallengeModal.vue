@@ -127,7 +127,7 @@ watch(
 .vch-hint {
   margin: 0;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 18px;
   color: var(--textDim);
 }
 </style>

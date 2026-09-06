@@ -145,7 +145,7 @@ function onRowClick(node: WikiTreeNode): void {
 .wtn-count {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   min-width: 18px;
   text-align: right;
   color: var(--textFaint);

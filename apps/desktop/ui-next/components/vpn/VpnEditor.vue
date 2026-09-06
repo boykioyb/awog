@@ -422,7 +422,7 @@ function parseTags(text: string): string[] {
 }
 .vpe-set {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 2px 7px;
   border-radius: var(--r-pill);
   color: var(--accent);
@@ -462,7 +462,7 @@ function parseTags(text: string): string[] {
 .vpe-err {
   margin-top: 4px;
   font-size: 12px;
-  line-height: 1.3;
+  line-height: 16px;
   color: var(--danger);
 }
 /* Masked secret field + its 👁 reveal toggle (mirrors SettingsKeyRow's .keyeye). */

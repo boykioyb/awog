@@ -358,7 +358,7 @@ watch(
   color: var(--textDim);
   font-size: var(--fs-sm);
   font-weight: 500;
-  line-height: 1;
+  line-height: 12px;
   white-space: nowrap;
   cursor: pointer;
   transition:

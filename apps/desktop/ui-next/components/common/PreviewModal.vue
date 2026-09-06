@@ -653,7 +653,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvdirty {
   color: var(--amber);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   flex: 0 0 auto;
 }
 .pvmeta {
@@ -665,7 +665,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .pvtrunc {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   color: var(--amber);
   background: var(--bgActive);
   border: 1px solid var(--border);
@@ -739,7 +739,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   border-radius: var(--r-xs);
   color: var(--textDim);
   font-size: var(--fs-sm);
-  line-height: 1.35;
+  line-height: var(--lh-sm);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -818,7 +818,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  line-height: 0;
+  line-height: 0; /* design-token-ok: line-height: 0 removes the inline strut around the <img>. */
 }
 /* Natural size — so 100% means 1:1 pixels. Everything else (fit on open, zoom, pan, rotate,
    flip) rides on the transform in `imgStyle`. */
@@ -934,7 +934,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .pvdlgm {
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .pvdlgerr {
   color: var(--danger);

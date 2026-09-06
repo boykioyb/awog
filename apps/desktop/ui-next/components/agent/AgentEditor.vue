@@ -484,12 +484,12 @@ const onSave = () => {
 .age-ta {
   resize: vertical;
   min-height: 3rem;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .age-hint {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .age-tiers {
   display: flex;

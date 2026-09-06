@@ -153,7 +153,7 @@ const sourcePath = computed(() => {
 .cmd-desc {
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   margin: 0;
 }
 .cmd-invoke {

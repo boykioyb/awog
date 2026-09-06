@@ -865,7 +865,7 @@ const msgActions = computed<MsgAction[]>(() => [
 }
 .merr-msg {
   color: var(--text);
-  line-height: 1.5;
+  line-height: var(--lh-md);
   overflow-wrap: anywhere;
 }
 .merr-retry {

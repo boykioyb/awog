@@ -442,7 +442,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   /* mono-ok: path the export was written to */
   font-family: var(--code);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 18px;
   overflow-wrap: anywhere;
 }
 .expsaved-dir {
@@ -465,7 +465,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   /* mono-ok: preview of the exported markdown */
   font-family: var(--code);
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 20px;
   color: var(--text);
 }
 /* Prompt mode: editable text area filling the body — user can tweak before copy/save.
@@ -483,7 +483,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   /* mono-ok: exported prompt text */
   font-family: var(--code);
   font-size: 12px;
-  line-height: 1.55;
+  line-height: 20px;
   color: var(--text);
   white-space: pre-wrap;
   overflow-wrap: anywhere;

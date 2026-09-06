@@ -112,7 +112,7 @@ function tagStyle(kind: SlashItem['kind']) {
 .sitag {
   justify-self: end;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 3px 7px;

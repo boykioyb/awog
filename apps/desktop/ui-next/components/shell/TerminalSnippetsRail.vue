@@ -216,7 +216,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
 }
 .tsr-count {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   min-width: 18px;
   padding: 2px 6px;
   border-radius: var(--r-pill);
@@ -305,7 +305,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
 }
 .tsr-badge {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 2px 6px;
   border-radius: var(--r-xs);
   color: var(--textDim);

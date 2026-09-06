@@ -107,7 +107,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .lcd-body {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-md);
   white-space: pre-wrap;
 }
 .lcd-foot {

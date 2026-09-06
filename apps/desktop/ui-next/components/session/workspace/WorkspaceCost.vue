@@ -279,7 +279,7 @@ const dayTitle = (d: CostDay): string =>
 .wscost-big {
   font-size: 34px;
   font-weight: 650;
-  line-height: 1.1;
+  line-height: 38px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }

@@ -29,12 +29,12 @@ withDefaults(
   font-size: var(--fs-lg);
   font-weight: 600;
   color: var(--text);
-  line-height: 1.3;
+  line-height: var(--lh-md);
 }
 .setpanesub {
   margin-top: 4px;
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 </style>

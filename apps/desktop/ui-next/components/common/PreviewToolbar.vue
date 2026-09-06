@@ -627,7 +627,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   color: var(--textDim);
   cursor: pointer;
   font-size: 1em;
-  line-height: 1;
+  line-height: 14px;
 }
 .pvtb.wide {
   padding: 0 10px;

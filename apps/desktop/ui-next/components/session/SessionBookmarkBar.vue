@@ -149,7 +149,7 @@ const onJump = (row: BookmarkRow) => {
   color: var(--accent);
   font-family: var(--code, monospace);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   text-align: center;
 }
 .bmb-list {
@@ -190,7 +190,7 @@ const onJump = (row: BookmarkRow) => {
   flex: 0 0 auto;
   color: var(--textDim);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   font-family: var(--code, monospace);
 }
 /* Dangling: dimmed and inert — the anchor stays on disk, only the jump is gone. */

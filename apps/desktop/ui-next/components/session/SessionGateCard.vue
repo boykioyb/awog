@@ -174,7 +174,7 @@
       <Icon name="alert" />
       {{ t('sessions.gate.error') }}
     </div>
-    <div style="font-size: var(--fs-md); line-height: 1.5">{{ block.text }}</div>
+    <div style="font-size: var(--fs-md); line-height: var(--lh-md)">{{ block.text }}</div>
     <div class="cact">
       <button class="btn pri sm" @click="onRetry">
         <Icon name="refresh" />

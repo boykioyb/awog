@@ -326,15 +326,15 @@ function openOnGithub(): void {
   position: absolute;
   top: -3px;
   right: -3px;
-  min-width: 15px;
-  height: 15px;
+  min-width: 16px;
+  height: 16px;
   padding: 0 3px;
   border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--bg);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
-  line-height: 15px;
+  line-height: 16px;
   text-align: center;
 }
 
@@ -430,7 +430,7 @@ function openOnGithub(): void {
 }
 .ntf-tab-n {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   color: var(--textDim);
 }
 .ntf-tab.on .ntf-tab-n {
@@ -524,7 +524,7 @@ function openOnGithub(): void {
   border-radius: var(--r-pill);
   color: var(--textDim);
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 18px;
 }
 .ntf-grp-n {
   flex: 0 0 auto;

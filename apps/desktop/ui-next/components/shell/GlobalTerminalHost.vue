@@ -465,7 +465,7 @@ function onResize(ev: PointerEvent): void {
   color: var(--textDim);
   font-family: var(--code);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
 }
 .gterm-btn {
   display: inline-flex;

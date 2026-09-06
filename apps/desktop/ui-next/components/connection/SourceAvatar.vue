@@ -126,7 +126,7 @@ watch(() => [props.source.slug, props.source.icon], loadIcon)
   border-radius: var(--r-btn);
 }
 .savatar-emoji {
-  line-height: 1;
+  line-height: var(--lh-xs);
 }
 .savatar-img {
   width: 80%;

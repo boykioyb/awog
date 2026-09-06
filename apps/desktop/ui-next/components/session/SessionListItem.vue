@@ -330,7 +330,7 @@ input.ttl {
   border: 1px solid;
   border-radius: var(--r-xs);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   white-space: nowrap;
 }
 /* Indicator chips: small mono count pills, subtle (§1). Color tokens only — no
@@ -345,7 +345,7 @@ input.ttl {
   align-items: center;
   gap: 3px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   color: var(--textFaint);
 }
 /* Keep the meta sub-row on a SINGLE line: never wrap, and let the two text parts

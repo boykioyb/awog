@@ -549,7 +549,7 @@ const confirmRerun = () => {
 .tpc-rerun-hint {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .tpc-rerun-ta {
   width: 100%;
@@ -563,7 +563,7 @@ const confirmRerun = () => {
   resize: vertical;
   min-height: 4rem;
   outline: none;
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .tpc-rerun-ta:focus {
   border-color: var(--accent);

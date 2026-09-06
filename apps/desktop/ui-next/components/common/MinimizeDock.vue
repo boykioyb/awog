@@ -210,7 +210,7 @@ watch(
   flex-direction: column;
   min-width: 0;
   flex: 1;
-  line-height: 1.25;
+  line-height: 18px;
 }
 .mdtitle {
   font-weight: 600;

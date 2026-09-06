@@ -232,7 +232,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   /* mono-ok: terminal preview swatch — shows real terminal text */
   font-family: var(--code);
   font-size: var(--fs-xs);
-  line-height: 1;
+  line-height: 12px;
 }
 .tap-swatch-dots {
   display: flex;

@@ -6,13 +6,13 @@
 //   R1  border-radius: <n>px           → must be var(--r-*)   (or 50% / 0 / inherit)
 //   R2  font-size: <n>rem              → must be var(--fs-*)  (px and em stay, see below)
 //   R3  var(--code) outside CODE_SURFACES / a `mono-ok` marker → mono is for real code
-//   R4  line-height: <fractional coefficient>   → must be var(--lh-*) or a whole px
+//   R4  line-height: <coefficient> / <odd px>   → must be var(--lh-*) or an EVEN px
 //   R5  icon size on an ODD px      → must be var(--icon-*) or an even px
 //
 // Runs as part of `pnpm lint`; on demand it is  pnpm check:tokens  (add --all to skip the
-// 40-line cap). R1–R3 report zero outright. R4 reports zero against a per-file CEILING of
-// pre-existing coefficients (LEGACY_COEFFICIENTS) that still needs a human pass — new code
-// is held to the rule, the backlog can only shrink.
+// 40-line cap). Every rule reports zero outright — R4 used to carry a per-file ceiling of
+// pre-existing coefficients; that backlog is cleared (W13) and the ceiling is gone, so a
+// coefficient anywhere is now a plain failure.
 //
 // Node only, zero dependencies (same house style as scripts/inline-katex-fonts.mjs).
 
@@ -120,118 +120,23 @@ const HERO_REM = 2.4615
 // also inherits as a fixed LENGTH, so a child that only sets font-size still lands on a
 // whole pixel instead of re-multiplying.
 //
-// Legal: var(--lh-*) · a whole px · an INTEGER coefficient (integer x integer px is still
-// an integer, which is why the `line-height: 1` used on icon buttons is fine) · the CSS-wide
-// keywords. Everything else — fractional coefficients, fractional px, em/%/normal — either
-// is a half pixel already or becomes one at some Appearance base.
+// INTEGER coefficients are NOT an exemption (they were, until W13). `line-height: 1` pins
+// the line box TO the font-size, and the font-size is what Appearance drags: 4 of the 6
+// --fs-* steps are odd at the default base (xs 11 · md 13 · lg 15 · xl 17), and every step
+// flips parity as the base moves 12→18. An even icon centred in an odd line box is back on
+// a half pixel — (19 - 16) / 2 = 1.5 — which is the defect ADR 0079 D6 just removed from
+// the icon scale. So the rule is about PARITY, not just about fractions.
+//
+// Legal: var(--lh-*) (round(up, base * k, 2px) ⇒ even at every base by construction) · an
+// EVEN whole px · the CSS-wide keywords. Everything else — any coefficient (including 0),
+// odd or fractional px, em/%/normal — either is a half pixel already or becomes one at
+// some base.
+//
+// A site where the raw number IS the geometry opts out with `design-token-ok: <reason>`.
+// Exactly two do: PreviewModal's `line-height: 0` (kills the inline strut so the frame
+// measures the <img> — not a text line box at all) and theme-cute's decorative
+// blockquote `::before` quote glyph (absolutely positioned, nothing centred against it).
 const LH_TOKENS = ['--lh-xs', '--lh-sm', '--lh-md', '--lh-lg', '--lh-xl', '--lh-2xl', '--lh-prose']
-
-// Pre-existing fractional coefficients, counted per file on 2026-09-06 — the guard was
-// added AFTER them, and rewriting a leading the author tuned by eye is a visual change
-// that needs a human, not a codemod (the pairing codemod deliberately skips any rule that
-// already states a leading). The allowance is a CEILING: a file may lose sites, never gain
-// them, so new code is held to the rule while the backlog is worked down file by file.
-// Delete an entry once its file is clean. Ngoại lệ một-lần (không phải nợ) dùng marker
-// `design-token-ok` ngay tại dòng thay vì vào bảng này.
-const LEGACY_COEFFICIENTS = new Map([
-  ['assets/css/app-shell.css', 3], // 1.2 · 1.25 · 1.4
-  ['assets/css/prototype.css', 26], // 1.7 x4 · 1.6 x3 · 2.1 x2 · 1.5 x4 · 1.65 x3 · 1.75 · 1.4 x3 · 1.55 x2 · 1.35 · 1.62 x2 · 1.72
-  ['assets/css/theme-cute.css', 4], // 1.55 · 1.4 · 1.65 · 1.6
-  ['components/activity/ActivityView.vue', 1], // 1.15
-  ['components/agent/AgentBodyEditModal.vue', 2], // 1.55 x2
-  ['components/agent/AgentDetail.vue', 2], // 1.6 · 1.5
-  ['components/agent/AgentEditor.vue', 2], // 1.55 · 1.5
-  ['components/command/CommandBodyEditModal.vue', 2], // 1.55 x2
-  ['components/command/CommandDetail.vue', 1], // 1.6
-  ['components/command/CommandEditor.vue', 1], // 1.55
-  ['components/command/CommandPromptCreator.vue', 2], // 1.55 x2
-  ['components/common/MinimizeDock.vue', 1], // 1.25
-  ['components/common/PreviewModal.vue', 2], // 1.35 · 1.5
-  ['components/common/SelectionTranslatePopover.vue', 2], // 1.4 · 1.5
-  ['components/connection/ConnectionAddPicker.vue', 2], // 1.4 x2
-  ['components/connection/ConnectionDetail.vue', 6], // 1.5 x3 · 1.6 · 1.4 · 1.55
-  ['components/connection/ConnectionEditor.vue', 2], // 1.5 · 1.55
-  ['components/connection/ConnectionSecretPanel.vue', 1], // 1.5
-  ['components/connection/ConnectionToolsLog.vue', 1], // 1.5
-  ['components/git/GitAuthErrorModal.vue', 2], // 1.5 · 1.45
-  ['components/git/GitBranchDeleteModal.vue', 1], // 1.5
-  ['components/git/GitInitEmptyState.vue', 1], // 1.5
-  ['components/git/GitPrSummaryModal.vue', 2], // 1.55 · 1.6
-  ['components/hook/HookConfigEditModal.vue', 2], // 1.55 x2
-  ['components/hook/HookDetail.vue', 2], // 1.6 · 1.55
-  ['components/hook/HookEditor.vue', 1], // 1.55
-  ['components/hook/HookPromptCreator.vue', 3], // 1.55 x3
-  ['components/hook/HookScriptEditModal.vue', 2], // 1.55 x2
-  ['components/library/LibraryConfirmDelete.vue', 1], // 1.6
-  ['components/library/LibraryCreatorPanel.vue', 3], // 1.6 x2 · 1.55
-  ['components/library/LibraryImportModal.vue', 1], // 1.5
-  ['components/onboarding/steps/StepAccount.vue', 2], // 1.5 x2
-  ['components/onboarding/steps/StepAppearance.vue', 1], // 1.5
-  ['components/onboarding/steps/StepProject.vue', 2], // 1.5 x2
-  ['components/onboarding/TourHost.vue', 1], // 1.5
-  ['components/pet/PetHud.vue', 1], // 1.35
-  ['components/project/ProjectEditor.vue', 2], // 1.5 · 1.55
-  ['components/project/ProjectGhComposer.vue', 2], // 1.5 · 1.6
-  ['components/project/ProjectGhFileDiff.vue', 2], // 1.55 x2
-  ['components/project/ProjectLlmDefaultsModal.vue', 1], // 1.5
-  ['components/rule/RuleBodyEditModal.vue', 2], // 1.55 x2
-  ['components/rule/RuleDetail.vue', 1], // 1.6
-  ['components/rule/RuleEditor.vue', 1], // 1.55
-  ['components/rule/RulePromptCreator.vue', 2], // 1.55 x2
-  ['components/session/SessionBackgroundChips.vue', 1], // 1.2
-  ['components/session/SessionComposer.vue', 1], // 1.4
-  ['components/session/SessionDetail.vue', 2], // 1.4 x2
-  ['components/session/SessionExportModal.vue', 3], // 1.5 · 1.55 x2
-  ['components/session/SessionGateCard.vue', 1], // 1.5
-  ['components/session/SessionMessageItem.vue', 1], // 1.5
-  ['components/session/SessionPromptEditOverlay.vue', 1], // 1.6
-  ['components/session/SessionStepItem.vue', 1], // 1.6
-  ['components/session/SessionTurnFullscreen.vue', 1], // 1.5
-  ['components/session/SessionWelcome.vue', 2], // 1.6 · 1.45
-  ['components/session/workspace/WorkspaceCost.vue', 1], // 1.1
-  ['components/settings/SettingsCodexDialog.vue', 1], // 1.55
-  ['components/settings/SettingsDeviceAccess.vue', 1], // 1.5
-  ['components/settings/SettingsDevicePairModal.vue', 1], // 1.5
-  ['components/settings/SettingsDevices.vue', 4], // 1.5 x4
-  ['components/settings/SettingsLogTail.vue', 1], // 1.5
-  ['components/settings/SettingsMemory.vue', 2], // 1.5 x2
-  ['components/settings/SettingsOAuthDialog.vue', 1], // 1.5
-  ['components/settings/SettingsPaneHeader.vue', 2], // 1.3 · 1.55
-  ['components/settings/SettingsPet.vue', 1], // 1.5
-  ['components/shell/TerminalSnippetEditor.vue', 1], // 1.5
-  ['components/shell/TopBarNotifications.vue', 1], // 1.35
-  ['components/skill/SkillBodyEditModal.vue', 2], // 1.55 x2
-  ['components/skill/SkillDetail.vue', 1], // 1.6
-  ['components/skill/SkillEditor.vue', 1], // 1.55
-  ['components/ssh/SftpChownModal.vue', 1], // 1.5
-  ['components/ssh/SshEditor.vue', 1], // 1.3
-  ['components/ssh/SshEmptyState.vue', 1], // 1.5
-  ['components/ssh/SshHostKeyModal.vue', 1], // 1.6
-  ['components/ssh/SshIdentityEditor.vue', 1], // 1.5
-  ['components/ssh/SshImportPicker.vue', 1], // 1.5
-  ['components/ssh/SshSnippetEditor.vue', 1], // 1.5
-  ['components/task/DirtyWorkspaceWarnModal.vue', 1], // 1.6
-  ['components/task/NewTaskModal.vue', 1], // 1.5
-  ['components/task/TaskDetail.vue', 1], // 1.6
-  ['components/task/TaskPhaseCard.vue', 2], // 1.55 · 1.5
-  ['components/templates/FetchFromGithubDialog.vue', 1], // 1.5
-  ['components/templates/SaveAsTemplateDialog.vue', 1], // 1.55
-  ['components/templates/TemplateDetail.vue', 1], // 1.6
-  ['components/vpn/VpnChallengeModal.vue', 1], // 1.4
-  ['components/vpn/VpnEditor.vue', 1], // 1.3
-  ['components/vpn/VpnEmptyState.vue', 1], // 1.5
-  ['components/vpn/VpnLogModal.vue', 1], // 1.5
-  ['components/WhatsNewModal.vue', 3], // 1.55 x2 · 1.5
-  ['components/wiki/WikiImportModal.vue', 1], // 1.5
-  ['components/wiki/WikiReader.vue', 1], // 1.25
-  ['components/wiki/WikiSidebar.vue', 2], // 1.5 · 1.4
-  ['components/workflow/WorkflowInspector.vue', 2], // 1.5 x2
-  ['components/workflow/WorkflowPromptCreator.vue', 2], // 1.55 · 1.5
-  ['pages/connections.vue', 1], // 1.6
-  ['pages/pet.vue', 1], // 1.35
-  ['pages/tray-popover.vue', 1], // 1.15
-  ['pages/wiki.vue', 1], // 1.6
-])
 
 const RE_RADIUS = /(border(?:-(?:top|bottom)-(?:left|right))?-radius)\s*:\s*([^;}\n]+)/g
 const RE_FONT_SIZE = /(font-size)\s*:\s*([^;}\n]+)/g
@@ -338,21 +243,41 @@ function checkLineHeight(value, rule) {
   if (LH_TOKENS.some((t) => new RegExp(`var\\(\\s*${t}\\s*\\)`).test(v))) return null
   if (/^(inherit|unset|initial|revert)$/.test(v)) return null
 
-  const px = /^(-?\d*\.?\d+)px$/.exec(v)
-  if (px && Number.isInteger(Number(px[1]))) return null
+  const px = /^(\d*\.?\d+)px$/.exec(v)
+  if (px && Number(px[1]) % 2 === 0) return null
   const coefficient = /^(\d*\.?\d+)$/.exec(v)
-  if (coefficient && Number.isInteger(Number(coefficient[1]))) return null
 
   const paired = /--fs-(xs|sm|md|lg|xl|2xl)\b/.exec(rule)
-  const suggestion = paired ? `var(--lh-${paired[1]})` : 'var(--lh-md)'
+  const pinned = /(?<![\w-])font-size\s*:\s*(\d*\.?\d+)px/.exec(rule)
+  const suggestion = paired
+    ? `var(--lh-${paired[1]})`
+    : pinned
+      ? `${Math.ceil(Number(pinned[1]) / 2) * 2}px`
+      : 'var(--lh-md)'
+  const orElse = '(hoặc một px CHẴN nếu font-size cũng là px cố định)'
+
   if (coefficient) {
     const px13 = Math.round(Number(coefficient[1]) * REM_BASE_PX * 100) / 100
+    const n = Number(coefficient[1])
+    const why =
+      n === 0
+        ? 'hộp dòng bằng 0 là thủ thuật bố cục (khử inline strut), không phải leading. ' +
+          'Nếu ĐÚNG là chủ ý: thêm `design-token-ok: <lý do>`. '
+        : Number.isInteger(n)
+          ? `hệ số NGUYÊN ghim hộp dòng ĐÚNG BẰNG font-size (= ${px13}px trên body 13px), ` +
+            'mà 4/6 bậc `--fs-*` là LẺ ở base 13 và mọi bậc lật chẵn/lẻ khi Appearance kéo ' +
+            'base 12→18 ⇒ icon chẵn căn giữa trong đó rơi vào nửa pixel. '
+          : `hệ số không đơn vị nhân lại với font-size (= ${px13}px trên body 13px) → nửa pixel. `
+    return `${why}Dùng \`${suggestion}\` ${orElse}`
+  }
+  if (px) {
     return (
-      `hệ số không đơn vị nhân lại với font-size (= ${px13}px trên body 13px) → nửa pixel. ` +
-      `Dùng \`${suggestion}\` (hoặc một px nguyên nếu font-size cũng là px cố định)`
+      `px LẺ ⇒ hộp dòng lẻ ở MỌI base, và icon chẵn căn giữa trong đó rơi vào nửa pixel ` +
+      `((${Number(px[1])} - 16) / 2 = ${(Number(px[1]) - 16) / 2}). ` +
+      `Dùng \`${Math.ceil(Number(px[1]) / 2) * 2}px\` (làm tròn LÊN — không thu chiều cao)`
     )
   }
-  return `dùng \`${suggestion}\` hoặc một px nguyên thay vì \`${v}\``
+  return `dùng \`${suggestion}\` hoặc một px chẵn thay vì \`${v}\``
 }
 
 // --- Rule 5: icon scale -------------------------------------------------------------
@@ -403,7 +328,6 @@ function checkIconSize(site) {
 // not a mechanical round-down — and it is a separate pass.
 
 const violations = { radius: [], type: [], mono: [], leading: [], icon: [] }
-const legacyLeading = new Map()
 
 for (const dir of SCAN_DIRS) {
   const abs = join(ROOT, dir)
@@ -434,13 +358,7 @@ for (const dir of SCAN_DIRS) {
 
         for (const [, prop, value] of line.matchAll(RE_LINE_HEIGHT)) {
           const hint = checkLineHeight(value, enclosingRule(rawLines, i))
-          if (!hint) continue
-          const found = (legacyLeading.get(relPath) ?? []).concat({
-            ...at,
-            text: `${prop}: ${value.trim()}`,
-            hint,
-          })
-          legacyLeading.set(relPath, found)
+          if (hint) violations.leading.push({ ...at, text: `${prop}: ${value.trim()}`, hint })
         }
       }
 
@@ -471,20 +389,6 @@ for (const dir of SCAN_DIRS) {
   }
 }
 
-// Over-budget files report ALL of their sites: the allowance is a count, not a set of
-// line numbers (those rot on the first edit), so the reviewer picks which ones to fix.
-for (const [relPath, sites] of legacyLeading) {
-  const allowance = LEGACY_COEFFICIENTS.get(relPath) ?? 0
-  if (sites.length <= allowance) continue
-  for (const site of sites) violations.leading.push(site)
-  violations.leading.push({
-    file: relPath,
-    line: 0,
-    text: `${sites.length} site trong file, hạn mức legacy là ${allowance}`,
-    hint: 'hạ số site xuống bằng cách chuyển sang `var(--lh-*)` — KHÔNG nới hạn mức',
-  })
-}
-
 const all = process.argv.includes('--all')
 const CAP = 40
 
@@ -492,7 +396,7 @@ const RULES = [
   { key: 'radius', title: 'R1  border-radius không dùng token --r-*' },
   { key: 'type', title: 'R2  font-size dùng rem thay vì token --fs-*' },
   { key: 'mono', title: 'R3  var(--code) ngoài danh sách bề mặt code' },
-  { key: 'leading', title: 'R4  line-height không dùng token --lh-* (hệ số lẻ / px lẻ)' },
+  { key: 'leading', title: 'R4  line-height không dùng token --lh-* (hệ số / px lẻ)' },
   { key: 'icon', title: 'R5  cỡ icon lẻ — phải là token --icon-* hoặc px chẵn' },
 ]
 
@@ -511,12 +415,7 @@ for (const rule of RULES) {
 }
 
 if (!total) {
-  const backlog = [...LEGACY_COEFFICIENTS.values()].reduce((a, b) => a + b, 0)
-  process.stdout.write(
-    'check-design-tokens: OK — không có vi phạm.\n' +
-      `  R4 còn ${backlog} site legacy trong ${LEGACY_COEFFICIENTS.size} file (hệ số không đơn vị ` +
-      'có trước khi có rule) — xem LEGACY_COEFFICIENTS, mỗi lần đi qua file nào thì dọn file đó.\n',
-  )
+  process.stdout.write('check-design-tokens: OK — không có vi phạm.\n')
   process.exit(0)
 }
 

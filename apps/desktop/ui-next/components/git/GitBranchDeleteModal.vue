@@ -92,7 +92,7 @@ function submit() {
 }
 .gbd-desc {
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
   color: var(--textMuted);
 }
 .gbd-toggle {

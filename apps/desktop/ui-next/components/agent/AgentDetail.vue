@@ -173,7 +173,7 @@ const mcpLabel = (id: string): string => props.mcpServers.find((s) => s.id === i
 .agd-desc {
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   margin: 0;
 }
 .agd-chips {
@@ -185,6 +185,6 @@ const mcpLabel = (id: string): string => props.mcpServers.find((s) => s.id === i
   font-size: var(--fs-xs);
   color: var(--textDim);
   margin-top: 8px;
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 </style>

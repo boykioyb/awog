@@ -788,7 +788,7 @@ function relativeWhen(iso: string): string {
 .ghtab-n {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  line-height: 1;
+  line-height: 12px;
   padding: 2px 7px;
   border-radius: var(--r-pill);
   background: var(--bgActive);

@@ -306,7 +306,7 @@ const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value]
 }
 .ssh-src-body {
   font-size: 1em;
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   color: var(--textDim);
   max-width: 60ch;
 }

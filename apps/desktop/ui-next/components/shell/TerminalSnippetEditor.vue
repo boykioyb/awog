@@ -147,7 +147,7 @@ const onSave = (): void => {
 .tse-ta {
   resize: vertical;
   min-height: 6rem;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .tse-hint {
   font-size: var(--fs-xs);

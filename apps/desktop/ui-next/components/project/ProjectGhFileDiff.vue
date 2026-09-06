@@ -67,7 +67,7 @@ const rows = computed<DiffRow[]>(() => {
   background: var(--bgInput);
   font-family: var(--code);
   font-size: var(--fs-xs);
-  line-height: 1.55;
+  line-height: var(--lh-sm);
 }
 .ghdiff-empty {
   padding: 9px 11px;
@@ -88,7 +88,7 @@ const rows = computed<DiffRow[]>(() => {
   color: var(--textFaint);
   user-select: none;
   font-size: var(--fs-xs);
-  line-height: 1.55;
+  line-height: var(--lh-sm);
   white-space: nowrap;
 }
 .dln-n {

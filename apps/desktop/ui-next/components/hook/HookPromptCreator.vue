@@ -197,7 +197,7 @@ const onEditDetails = () => {
 .hpc-hint {
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .hpc-field {
   display: flex;
@@ -219,7 +219,7 @@ const onEditDetails = () => {
   min-height: 4rem;
   color: var(--text);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: var(--lh-md);
   font-family: var(--sans);
 }
 .hpc-err {
@@ -255,7 +255,7 @@ const onEditDetails = () => {
 .hpc-pdesc {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .hpc-cmd {
   margin: 0;

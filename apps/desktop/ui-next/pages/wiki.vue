@@ -535,7 +535,7 @@ async function onRename(page: WikiPage): Promise<void> {
 }
 .wk-blanktext {
   max-width: 420px;
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   font-size: 1em;
   margin: 0;
 }

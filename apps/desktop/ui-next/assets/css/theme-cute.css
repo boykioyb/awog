@@ -221,7 +221,6 @@ body.light[data-theme-family='cute'][data-surface='deep'] {
    rhythm and weight.
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute'] {
-  line-height: 1.55;
   letter-spacing: 0.001em;
 }
 body[data-theme-family='cute'] :is(.mono, .tm, .mmeta, .bdg, .gbadge, .ghhash, .ghdate) {
@@ -470,7 +469,7 @@ body[data-theme-family='cute'] :is(.li.on, .libli.on) {
 }
 body[data-theme-family='cute'] :is(.li .ttl, .libli .ttl) {
   font-weight: 550;
-  line-height: 1.4;
+  line-height: var(--lh-sm);
 }
 body[data-theme-family='cute'] :is(.li.on .ttl, .libli.on .ttl) {
   font-weight: 600;
@@ -791,7 +790,7 @@ body[data-theme-family='cute'] .mu {
   box-shadow: none;
 }
 body[data-theme-family='cute'] :is(.blk.txt, .ma p, .mu) {
-  line-height: 1.65;
+  line-height: var(--lh-prose);
 }
 /* Steps stay one-line and closed by default (that convention is deliberate); only
    their chrome softens. */
@@ -824,7 +823,7 @@ body[data-theme-family='cute'] .mdinline blockquote::before {
   top: 2px;
   right: 9px;
   font-size: 1.9em;
-  line-height: 1;
+  line-height: 1; /* design-token-ok: decorative ::before glyph, absolutely positioned — the line box IS the glyph box. */
   color: var(--accentBorder);
   pointer-events: none;
 }
@@ -1124,7 +1123,7 @@ body[data-theme-family='cute'] .cempty-t {
 }
 body[data-theme-family='cute'] .cempty-b {
   color: var(--textDim);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   max-width: 30ch;
 }
 body[data-theme-family='cute'] .cempty-cta {

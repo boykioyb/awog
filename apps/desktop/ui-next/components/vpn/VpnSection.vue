@@ -252,7 +252,7 @@ onMounted(() => {
 }
 .vpnx-count {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);

@@ -322,7 +322,7 @@ const forwardLabel = (fwd: PortForward): string => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border: 1px solid;
   border-radius: var(--r-pill);
@@ -338,7 +338,7 @@ const forwardLabel = (fwd: PortForward): string => {
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);

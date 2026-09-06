@@ -139,7 +139,7 @@
           <span class="pe-dot" />
           {{ progress || (isClone ? t('projects.editor.cloning') : t('projects.editor.saving')) }}
         </div>
-        <div v-if="error" class="mono" style="line-height: 1.5">{{ error }}</div>
+        <div v-if="error" class="mono" style="line-height: var(--lh-md)">{{ error }}</div>
       </div>
     </div>
 
@@ -409,7 +409,7 @@ const onSubmit = () => {
 .pe-ta {
   resize: vertical;
   min-height: 4rem;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .pe-hint {
   font-size: var(--fs-xs);

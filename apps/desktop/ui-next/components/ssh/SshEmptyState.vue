@@ -45,6 +45,6 @@ defineProps<{ icon: string; title: string; body: string }>()
   max-width: 320px;
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 </style>

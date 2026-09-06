@@ -798,7 +798,7 @@ async function pDeleteAll() {
   border-radius: var(--r-xs);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   font-variant-numeric: tabular-nums;
   background: var(--amberDim);
   color: var(--amber);

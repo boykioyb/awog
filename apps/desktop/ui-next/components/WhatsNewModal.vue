@@ -90,7 +90,7 @@ const kindStyle = (kind: ChangeKind) => ({
 }
 .wn-hl {
   color: var(--textMuted);
-  line-height: 1.55;
+  line-height: var(--lh-md);
   margin-bottom: 10px;
 }
 /* Two-column grid: badge column auto-sizes to the widest label so every body
@@ -113,12 +113,12 @@ const kindStyle = (kind: ChangeKind) => ({
   border: 1px solid;
   border-radius: var(--r-pill);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 18px;
   white-space: nowrap;
   background: transparent;
 }
 .wn-text {
   color: var(--text);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 </style>

@@ -105,7 +105,7 @@ async function copy(): Promise<void> {
   margin-top: 3px;
   font-size: 12px;
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: 18px;
 }
 .acc-url {
   display: block;

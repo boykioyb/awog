@@ -276,7 +276,7 @@ const onSave = () => {
 .ssi-ta {
   resize: vertical;
   min-height: 6rem;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .ssi-seg {
   align-self: flex-start;

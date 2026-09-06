@@ -136,7 +136,7 @@ function metaOf(item: AwogPetItem): string {
   /* Fixed 12px, like every other hint chip: this is secondary text, and the row must
      not grow when the user raises the app font size. */
   font-size: 12px;
-  line-height: 1.35;
+  line-height: 18px;
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -146,7 +146,7 @@ function metaOf(item: AwogPetItem): string {
   flex: none;
   font-size: 12px;
   font-family: var(--mono, ui-monospace, monospace);
-  line-height: 1;
+  line-height: 12px;
   color: var(--textDim);
 }
 .meta.is-awaiting {

@@ -156,7 +156,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
 .cap-opt-s {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  line-height: 1.4;
+  line-height: var(--lh-xs);
 }
 .cap-seplbl {
   font-size: var(--fs-xs);
@@ -214,7 +214,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
 .cap-card-tl {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  line-height: 1.4;
+  line-height: var(--lh-xs);
 }
 .cap-empty {
   font-size: var(--fs-sm);

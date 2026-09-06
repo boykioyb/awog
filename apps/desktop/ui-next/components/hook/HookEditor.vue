@@ -562,7 +562,7 @@ defineExpose({
 .hke-ta {
   resize: vertical;
   min-height: 3rem;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .hke-hint {
   font-size: var(--fs-xs);

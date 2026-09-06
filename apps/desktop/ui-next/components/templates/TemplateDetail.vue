@@ -106,7 +106,7 @@ const groups = computed<Group[]>(() => {
 .tdt-desc {
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   margin: 0 0 18px;
 }
 .tdt-section-hd {

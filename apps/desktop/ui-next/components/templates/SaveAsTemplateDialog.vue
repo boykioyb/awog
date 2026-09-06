@@ -197,7 +197,7 @@ const onSave = async () => {
 .tpd-ta {
   resize: vertical;
   min-height: 3rem;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .tpd-hint {
   font-size: var(--fs-xs);

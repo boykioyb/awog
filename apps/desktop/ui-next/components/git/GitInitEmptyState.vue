@@ -148,7 +148,7 @@ async function onInit() {
 .ginit-desc {
   text-align: center;
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
   color: var(--textDim);
   margin: 2px 0 8px;
 }

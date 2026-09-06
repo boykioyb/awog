@@ -629,7 +629,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   /* mono-ok: PR body — markdown with fenced code, written to a fixed column */
   font-family: var(--code);
   font-size: 1em;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .prm-textarea:focus {
   border-color: var(--accent);
@@ -643,7 +643,7 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   font-size: 1em;
-  line-height: 1.6;
+  line-height: var(--lh-prose);
 }
 .prm-empty {
   color: var(--textDim);

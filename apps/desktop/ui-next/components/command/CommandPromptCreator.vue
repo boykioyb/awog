@@ -170,7 +170,7 @@ const onEditDetails = () => {
 .cpc-hint {
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .cpc-promptbox {
   background: var(--bgInput);
@@ -187,7 +187,7 @@ const onEditDetails = () => {
   min-height: 4rem;
   color: var(--text);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: var(--lh-md);
   font-family: var(--sans);
 }
 .cpc-err {

@@ -107,7 +107,7 @@ const connect = async () => {
 }
 .ob-lead {
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .oba-chips {
   display: flex;
@@ -141,6 +141,6 @@ const connect = async () => {
 }
 .oba-hint {
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 </style>

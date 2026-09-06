@@ -1,6 +1,6 @@
 # Feature — Native macOS polish (ui-next)
 
-> Trạng thái: **P0–P4 đã land** (2026-09-06, branch `feature/native-macos-polish`). P5 (vibrancy) chưa bắt đầu — cần ADR riêng.
+> Trạng thái: **P0–P4 + P7b + P8 + P9 đã land** (2026-09-06, branch `feature/native-macos-polish`). P5 (vibrancy) chưa bắt đầu — cần ADR riêng.
 > Scan gốc thực hiện 2026-09-06 trên `main` @ v0.33.0.
 > Mục tiêu: bỏ cảm giác "web page nhét trong cửa sổ" của app desktop, không đổi kiến trúc, không thêm dependency.
 
@@ -108,7 +108,7 @@ Nguyên px ở mọi base 12→18. Codemod `scripts/codemod-type-scale.mjs` map 
 
 Văn bản dài lấy `--lh-prose` (22px trên chữ 13px = 1.69): `.mdbody` (markdown.css + 4 bản scoped), `.mdinline` (bong bóng chat), `.ghmdbody` (issue/PR body). Code block lấy `--lh-sm` (18px). Heading trong prose giữ hệ số `1.3` kèm marker `design-token-ok` — font-size của chúng là `em` (ngoại lệ §8) nên không tồn tại leading nguyên chung cho cả nhóm h1…h6.
 
-Rule **đã tự khai** `line-height` thì codemod không đụng: **173 site / 97 file** còn hệ số lẻ, khai trong `LEGACY_COEFFICIENTS` của guard dưới dạng trần đếm theo file (chỉ được giảm) — chờ duyệt bằng mắt từng file.
+Rule **đã tự khai** `line-height` thì codemod của bước này không đụng — hệ số lẻ còn lại nằm trong `LEGACY_COEFFICIENTS` của guard dưới dạng trần đếm theo file, chờ duyệt bằng mắt. **Nợ đó đã dọn xong ở W13** (2026-09-06) và bảng trần đã bị gỡ.
 
 **Codemod chỉ đụng `rem`.** Giá trị `em` (108× `1em` + ~30 giá trị `em` khác) là **tương đối với cha** — map sang token tuyệt đối sẽ đổi ngữ nghĩa. 219× `font-size: 12px` là badge/hint cố ý không scale ([.claude/rules/nuxt-vue.md](../../.claude/rules/nuxt-vue.md)) → giữ, có thể đặt tên `--fs-badge: 12px`.
 
@@ -267,6 +267,40 @@ Hai rule tìm thấy nhưng **cố ý để lại**, cần quyết định riên
 - **`.stabs`** ([SessionTabBar.vue](../../apps/desktop/ui-next/components/session/SessionTabBar.vue)) — `align-items: stretch`, không phải `center`, nên nằm ngoài tiêu chí. Nó *có* cùng lỗi (tab con cao 37 − 2px border = 35, chữ 20px ⇒ 7.5), nhưng `.stab.on` có **nền accent trải hết chiều cao** nên inset shadow sẽ bị nó che, còn outset thì bị nội dung phía dưới che. Cần một cách khác (`::after` tuyệt đối, hoặc `min-height: 39px`).
 - **`.oshead, .oscorner`** ([OfficeSheetView.vue](../../apps/desktop/ui-next/components/common/OfficeSheetView.vue)) — ô `<th>` sticky, căn giữa bằng `vertical-align` mặc định chứ không phải `align-items`, và còn `border-right` trên trục kia. Đường kẻ ở đây là **lưới bảng tính**, đổi sang shadow rủi ro hơn lợi (26 → 25, lệch 3.5px cho hộp dòng 18px).
 
+### W13 — Xoá sạch hệ số `line-height` không đơn vị (P9)
+
+W3 chỉ ghép cặp `--fs-*` ↔ `--lh-*` cho rule **chưa** khai leading; rule đã tự khai một hệ số thì để lại (ghi đè con số tác giả căn bằng mắt là đổi layout, việc của người). Nợ còn lại: **248 site / 143 file** (234 trong `<style>` + 4 inline `style=`, cộng phần R4 trước đây cho qua).
+
+**`line-height: 1` là lỗ hổng, không phải ngoại lệ** (73 site). Guard cũ lập luận "nguyên × px nguyên vẫn nguyên" — đúng nhưng không đủ: `1` ghim hộp dòng **đúng bằng font-size**, mà font-size là thứ Appearance kéo. 4/6 bậc `--fs-*` LẺ ở base 13 (xs 11 · md 13 · lg 15 · xl 17) và **mọi** bậc lật chẵn/lẻ khi base đi 12→18 ⇒ icon chẵn căn giữa trong hộp dòng lẻ lại rơi vào nửa pixel, đúng cái W9 vừa khử.
+
+Codemod [`scripts/codemod-line-height-coefficients.mjs`](../../apps/desktop/ui-next/scripts/codemod-line-height-coefficients.mjs), luật đích theo thứ tự:
+
+| Điều kiện | Đích | Vì sao |
+|---|---|---|
+| hệ số ≤ **1.25** (hộp chật cố ý: badge, pill, chip, nút một glyph `×`, số hero) | **px chẵn**, làm tròn LÊN | token sẽ phình hộp tới +5px (`.gbadge` 17 → 22) |
+| `font-size` là **px cố định** | **px chẵn**, làm tròn LÊN | rule đã opt-out khỏi Appearance ⇒ leading cũng phải |
+| còn lại | `--lh-*` **nhỏ nhất mà không thu hộp dòng** | leading phải scale cùng chữ |
+
+`--lh-prose` thắng ô 22px khi hệ số ≥ 1.6 (ý đồ văn bản dài, và prose ≥ lg ở mọi base).
+
+**Ràng buộc mật độ đứng trên hết** (bài học W10): **không có gì được thấp đi**. Mọi giá trị làm tròn **LÊN**; token chỉ được chọn khi ≥ hộp dòng hiện tại. Dung sai `0.2px` cho trường hợp bậc token nằm dưới giá trị hiện tại đúng một hạt bụi (`1.55 × 13 = 20.15` vs `--lh-md` 20) — một phần năm pixel nằm dưới lưới device và chính là phép làm tròn mà đợt này tồn tại để làm. Kết quả đo: **149 hộp dòng cao thêm** (max +2.8px), **82 không đổi**, **17 thấp đi ≤ 0.2px**.
+
+**Guard R4 chặt lại**: bắt **mọi** hệ số không đơn vị (kể cả `1`, `2`, `0`) **và** px lẻ. Hợp lệ: `var(--lh-*)` · px **chẵn** · keyword CSS. `LEGACY_COEFFICIENTS` + toàn bộ cơ chế trần theo file **đã xoá**, cùng dòng nhắc nợ mà guard in ra khi xanh.
+
+Phần px lẻ kéo theo **6 site** viết tay từ P7a (`Math.round(px × 1.5)` cho ra số lẻ): `.donut-rreset` / `.sb-badge` / `.tp-sech` / `.rl-reset` 17 → 18, `.ntf-badge` 15 → 16 (kèm `height: 15px` → `16px` để chữ còn căn giữa), `.edview-diff` 19 → 20. Hộp dòng lẻ **lẻ ở mọi base**, tệ hơn hệ số — nên chúng nằm trong cùng một lập luận, không phải mở rộng phạm vi.
+
+Hai ngoại lệ giữ nguyên kèm marker `design-token-ok`:
+
+- `.pvimgcenter` ([PreviewModal.vue](../../apps/desktop/ui-next/components/common/PreviewModal.vue)) `line-height: 0` — khử inline strut để khung đo **đúng bằng** ảnh, thứ mà `translate(-50%,-50%)` phía trên phụ thuộc vào. Không phải hộp dòng của văn bản.
+- `blockquote::before` ([theme-cute.css](../../apps/desktop/ui-next/assets/css/theme-cute.css)) `line-height: 1` — dấu ngoặc kép trang trí, `position: absolute`, một ký tự, không có gì căn giữa vào nó; đặt độ dài sẽ xê dịch dấu so với `top: 2px` của chính nó.
+
+Ba quyết định thủ công đáng ghi:
+
+- `body[data-theme-family='cute'] { line-height: 1.55 }` — override **toàn cục** đè lên `html,body{line-height:var(--lh-md)}`, mua được 0.15px và trả bằng parity của cả theme family ⇒ **xoá**, Cute kế thừa `--lh-md`.
+- `.stat .big` — `font-size` là `2.4615rem` (hero, ngoại lệ §8) nên fractional ở 4/6 base; `line-height: 1` ⇒ `32px` cố định (không đổi ở base 13, chẵn ở mọi base). Muốn triệt để thì phải token hoá cỡ hero — việc riêng, xem §10.
+- `.ftree` (2 bản) `2.1` → `var(--lh-2xl)` — token `--lh-2xl` khai đúng bằng `round(up, base × 2.1, 2px)`, tức chính con số tác giả viết; hàng cao thêm 2.8px vì chữ của `.ftree` là `--fs-sm` (base − 1) chứ không phải base.
+
+
 ## 5. Thứ tự thi công
 
 | Phase | Workstream | Trạng thái | File đụng | Commit |
@@ -278,6 +312,7 @@ Hai rule tìm thấy nhưng **cố ý để lại**, cần quyết định riên
 | **P4** | W8 (guard + docs + ADR) | ✅ — guard nối vào `pnpm lint` | 7 | `a49a68f` + `b323405` |
 | **P7b** | W9 (icon scale + guard R5) | ✅ — 1482 declaration / 169 file | 169 | — |
 | **P8** | ~~W10~~ + W11 + W12 (leading chẵn / hairline) | ✅ — W10 đã rút lại (xem §4), 42/42 ô leading chẵn, 8 rule hairline | 176 | `8bc2ad2` |
+| **P9** | W13 (xoá hệ số leading + siết R4) | ✅ — 248 site / 143 file, guard bỏ `LEGACY_COEFFICIENTS` | 150 | — |
 | **P5** *(chưa làm, cần ADR riêng)* | Vibrancy / translucency | ⬜ | toàn bộ thang màu | — |
 
 Mỗi phase = 1 commit riêng theo [.claude/rules/git-commit.md](../../.claude/rules/git-commit.md). P2 tách 2 commit (radius / type).
@@ -289,13 +324,14 @@ Chạy sau mỗi phase, trong `apps/desktop/ui-next/`:
 ```bash
 node scripts/check-design-tokens.mjs                    # R1–R6, phải 0 vi phạm
 node scripts/codemod-icon-scale.mjs --dry-run           # phải 0 site (idempotent)
-node scripts/codemod-spacing.mjs --dry-run              # phải 0 site (idempotent)
+node scripts/codemod-line-height-coefficients.mjs --dry-run   # phải 0 site (idempotent)
 grep -rhoE 'border-radius: *[0-9]+px' components layouts pages assets/css | sort | uniq -c
 grep -rhoE 'font-size: *[0-9.]+rem'   components layouts pages assets/css | sort | uniq -c
 grep -rc 'var(--code)' components layouts pages assets/css | grep -v ':0$'
 grep -rn 'text-transform: *uppercase' components layouts pages assets/css
 grep -rn '::-webkit-scrollbar' components layouts pages assets/css
 grep -rn 'app-region' components layouts pages assets/css
+grep -rhoE 'line-height: *[0-9.]+;'  components layouts pages assets/css | sort | uniq -c   # phải rỗng
 ```
 
 Kèm: `pnpm typecheck` (phải EXIT 0 — xem [project_ui_typecheck_broken]), `pnpm lint`, và **chạy app thật** trên cả 2 theme × 2 theme-family (`awog` / `cute`) × dark/light.
@@ -309,7 +345,7 @@ Codemod không bắt được lỗi thị giác. Duyệt tối thiểu: NavRail,
 - `border-radius: 50%` (63 site) — vòng tròn.
 - `font-size: 12px` cố định (219 site) — badge/hint không scale, theo rule hiện hành.
 - `font-size` đơn vị `em` — tương đối với cha, khác ngữ nghĩa token.
-- `2.4615rem` (32px) hero/empty state.
+- `2.4615rem` (32px) hero/empty state — `line-height` của nó là `32px` cố định (W13), vì không tồn tại bậc `--lh-*` nào ≥ 32 @base13.
 - Monaco, xterm, VueFlow — tự vẽ, không theo token hệ thống.
 - [browser.ts](../../apps/desktop/electron/src/browser.ts), [pet-window.ts](../../apps/desktop/electron/src/pet-window.ts).
 - [apps/desktop/remote-pwa/](../../apps/desktop/remote-pwa/) — PWA mobile, CSS riêng, ngoài phạm vi.
@@ -339,5 +375,7 @@ Codemod không bắt được lỗi thị giác. Duyệt tối thiểu: NavRail,
 - Đổi tên `.ssh-mono` / `.sshx-card-mono` → `-monogram` (mono ở đây là *monogram*, không phải monospace).
 - Gỡ 2 override `font-family: var(--sans)` giờ đã thừa trong `theme-cute.css`.
 - `check-design-tokens.mjs` giữ bản sao riêng của `SCAN_DIRS`/`SKIP_FILES`/`maskBlockComments` thay vì import `scripts/lib/css-sites.mjs` — cố ý để script tự chứa, nhưng phải sync tay.
+- **Token hoá cỡ chữ hero** `2.4615rem` (`.stat .big`, 1 site): rem × base cho ra fractional ở 4/6 base (29.5 / 32 / 34.5 / 36.9 / 39.4 / 44.3). W13 đã ghim hộp dòng ở `32px` nên **hộp** chẵn ở mọi base, nhưng chữ vẫn vẽ ở cỡ phân số. Fix thật là `calc(var(--font-size-base) + 19px)` — đổi cỡ chữ, nằm ngoài phạm vi W13.
+- **`SourceAvatar` `:size="glyphSize"` = 13px lẻ** khi `size='sm'` ([SourceAvatar.vue](../../apps/desktop/ui-next/components/connection/SourceAvatar.vue)): cỡ icon lẻ mà R5 không bắt vì component đi qua `<component :is>`, không phải import lucide trực tiếp — `scripts/lib/icon-sites.mjs` không học được. 13 → 14 khi nào rà `:is` binding.
 - 3 chỗ selection lệch chuẩn để lại: `.sshsess-row.on` (chỉ đổi màu chữ), `.ostab.on` + `.ntf-tab.on` (2 tín hiệu accent, không fill).
 - `[role='tab']` chưa nằm trong họ press-state của P0 nên session tab không có phản hồi khi bấm.

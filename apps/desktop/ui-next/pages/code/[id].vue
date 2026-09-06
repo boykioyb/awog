@@ -251,7 +251,7 @@ onMounted(() => {
 .codetab-dirty {
   color: var(--amber);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
 }
 .codetab-x {
   display: grid;

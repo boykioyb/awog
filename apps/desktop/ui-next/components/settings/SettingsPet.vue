@@ -172,7 +172,7 @@ const scale = computed<string>({
   background: var(--bgInput);
   color: var(--text);
   font: inherit;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .petlines:focus {
   outline: none;
@@ -219,7 +219,7 @@ const scale = computed<string>({
   color: var(--text);
 }
 .petname {
-  line-height: 1;
+  line-height: 14px;
 }
 .pethint {
   margin-top: 8px;

@@ -185,7 +185,7 @@ const onReset = async () => {
 .pll-note {
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .pll-field {
   display: flex;

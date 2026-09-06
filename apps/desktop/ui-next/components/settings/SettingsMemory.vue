@@ -238,7 +238,7 @@ onMounted(() => {
 .memempty {
   padding: 10px 2px;
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .memgroup {
   margin-bottom: 12px;
@@ -313,6 +313,6 @@ onMounted(() => {
   gap: 6px;
 }
 .membody {
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 </style>

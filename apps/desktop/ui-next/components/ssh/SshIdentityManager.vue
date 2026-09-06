@@ -180,7 +180,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: inline-flex;
   align-items: center;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
@@ -197,7 +197,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border-radius: var(--r-pill);
   color: var(--accent);

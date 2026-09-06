@@ -1038,7 +1038,7 @@ onBeforeUnmount(() => {
   color: var(--textDim);
   font-size: 1em;
   font-weight: 500;
-  line-height: 1;
+  line-height: 14px;
   white-space: nowrap;
   cursor: pointer;
   transition:

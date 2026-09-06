@@ -125,7 +125,7 @@ onBeforeUnmount(stopTicker)
   text-align: center;
   color: var(--textMuted);
   font-size: var(--fs-md);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .pair-qr {
   width: 240px;

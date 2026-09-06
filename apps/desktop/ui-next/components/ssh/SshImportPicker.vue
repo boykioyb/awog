@@ -112,7 +112,7 @@ const confirm = () => {
 .ssp-sub {
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .ssp-state {
   font-size: var(--fs-sm);

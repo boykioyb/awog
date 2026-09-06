@@ -312,7 +312,7 @@ body.light[data-surface='deep'] {
   max-width: 100%;
   font-size: 12px;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: 16px;
   color: var(--textDim);
   white-space: nowrap;
 }
@@ -327,7 +327,7 @@ body.light[data-surface='deep'] {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  line-height: 1.25;
+  line-height: var(--lh-md);
 }
 
 /* Session list width is applied inline with !important by SessionList (so it beats
@@ -513,7 +513,7 @@ body.light[data-surface='deep'] {
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   font-weight: 700;
-  line-height: 1;
+  line-height: 12px;
 }
 
 /* Collapsible section header (chevron + label + count + add). */
@@ -1274,7 +1274,7 @@ textarea.gcpta {
   border: 1px solid var(--border);
   color: var(--textFaint);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 18px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
   opacity: 0.6;

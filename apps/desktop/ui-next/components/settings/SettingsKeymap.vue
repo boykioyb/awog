@@ -147,7 +147,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
   background: var(--bgEl);
   color: var(--text);
   font-size: var(--fs-sm);
-  line-height: 1;
+  line-height: 12px;
 }
 .km-cap.on {
   border-color: var(--accent);

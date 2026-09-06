@@ -313,7 +313,7 @@ const onBackdrop = () => {
   min-height: 7rem;
   color: var(--text);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: var(--lh-md);
   font-family: var(--sans);
 }
 .wfpc-ta:focus {
@@ -349,7 +349,7 @@ const onBackdrop = () => {
 .wfpc-draft-desc {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .wfpc-groups {
   margin-top: 9px;

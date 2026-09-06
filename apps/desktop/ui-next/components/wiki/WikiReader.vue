@@ -358,7 +358,7 @@ async function onCopyPath(): Promise<void> {
 .wr-title {
   font-size: 1.6em;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 26px;
   margin: 0 0 4px;
 }
 .wr-tags {

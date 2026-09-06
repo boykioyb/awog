@@ -191,7 +191,7 @@ onBeforeUnmount(cleanup)
 .cxtext {
   font-size: 1em;
   color: var(--text);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .cxreopen {
   justify-content: center;

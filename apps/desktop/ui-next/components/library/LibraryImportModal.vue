@@ -131,7 +131,7 @@ const confirm = async (): Promise<void> => {
 .lim-sub {
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .lim-state {
   font-size: var(--fs-sm);
@@ -181,7 +181,7 @@ const confirm = async (): Promise<void> => {
 .lim-grp-ct {
   font-family: var(--mono, monospace);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
 }
 .lim-item {
   display: flex;

@@ -140,7 +140,7 @@ function onFocus() {
 }
 .donut-pct {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
 }
 
 /* Tooltip — hidden until hover; opens upward, anchored to the donut. Left-anchored
@@ -213,7 +213,7 @@ function onFocus() {
   flex: 0 0 22px;
   text-align: right;
   font-size: 11px;
-  line-height: 17px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 @media (prefers-reduced-motion: reduce) {

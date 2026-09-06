@@ -522,7 +522,7 @@ body,
   border: 1px solid var(--border);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
   color: var(--text);
-  line-height: 1.35;
+  line-height: var(--lh-sm);
   pointer-events: none;
 }
 
@@ -597,7 +597,7 @@ body,
   justify-content: center;
   font-size: 12px;
   font-family: var(--mono, ui-monospace, monospace);
-  line-height: 1;
+  line-height: 12px;
   font-weight: 600;
   color: #0b0b0c;
   background: var(--textMuted);

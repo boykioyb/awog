@@ -295,7 +295,7 @@ const formattedTime = computed(() => {
 .td-desc {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-md);
   margin-bottom: 6px;
 }
 .td-discuss {

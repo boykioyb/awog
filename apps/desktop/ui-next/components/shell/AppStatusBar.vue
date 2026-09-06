@@ -177,7 +177,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   background: transparent;
   color: var(--textDim);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -208,7 +208,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   color: var(--accent);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
-  line-height: 17px;
+  line-height: 18px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;

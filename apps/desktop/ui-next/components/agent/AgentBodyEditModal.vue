@@ -179,7 +179,7 @@ const onApply = () => {
 .abe-hint {
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .abe-promptbox {
   background: var(--bgInput);
@@ -196,7 +196,7 @@ const onApply = () => {
   min-height: 4rem;
   color: var(--text);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: var(--lh-md);
   font-family: var(--sans);
 }
 .abe-err {

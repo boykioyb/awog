@@ -295,14 +295,14 @@ onBeforeUnmount(() => creator.teardown())
 .lcp-hint {
   font-size: var(--fs-sm);
   color: var(--textDim);
-  line-height: 1.6;
+  line-height: var(--lh-md);
 }
 .lcp-msg {
   display: flex;
   flex-direction: column;
   gap: 6px;
   font-size: var(--fs-sm);
-  line-height: 1.6;
+  line-height: var(--lh-md);
 }
 .lcp-msg.user .lcp-text {
   align-self: flex-end;
@@ -372,7 +372,7 @@ onBeforeUnmount(() => creator.teardown())
   resize: none;
   color: var(--text);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: var(--lh-md);
   font-family: var(--sans);
 }
 .lcp-row {

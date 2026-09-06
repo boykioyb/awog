@@ -32,7 +32,7 @@ Scale token cần dùng **đã tồn tại** nhưng ngủ yên: `--r-xs|sm|btn|c
 | # | Mảnh | Quyết định |
 |---|---|---|
 | **D1** | Cách token hoá | Dùng **codemod** (`scripts/codemod-radius.mjs`, `scripts/codemod-type-scale.mjs` — Node thuần) + **guard script** ([scripts/check-design-tokens.mjs](../../apps/desktop/ui-next/scripts/check-design-tokens.mjs)), **không** sửa tay. |
-| **D2** | Thang chữ + leading | `--fs-*` **và** `--lh-*` khai bằng `calc(var(--font-size-base) ± Npx)`; **cấm rem** cho cỡ chữ, **cấm hệ số không đơn vị** cho leading. |
+| **D2** | Thang chữ + leading | `--fs-*` **và** `--lh-*` khai bằng `calc(var(--font-size-base) ± Npx)`; **cấm rem** cho cỡ chữ, **cấm MỌI hệ số không đơn vị** cho leading — kể cả hệ số nguyên (D2d). |
 | **D3** | Mono | `var(--code)` chỉ dành cho code thật; chỗ dùng mono để *căn số* chuyển sang `--sans` + `font-variant-numeric: tabular-nums`. |
 | **D4** | Vỏ cửa sổ | Title bar do OS vẽ được **giấu** ở cửa sổ chính, top bar của app trở thành drag region; popout session **giữ frame native**. |
 | **D5** | Vibrancy | **Ngoài phạm vi** ADR này — tách ADR riêng. |
@@ -120,7 +120,9 @@ Bản D2 đầu chỉ token hoá `font-size` và để nguyên `html,body{line-h
 
 Ngoại lệ giữ hệ số: **hệ số nguyên** (`line-height: 1` trên icon button) — nguyên × px nguyên vẫn nguyên; và **heading trong prose**, vì `font-size` của chúng là `em` (đã là ngoại lệ của D2) nên không tồn tại một leading nguyên chung cho cả nhóm h1…h6.
 
-Rule **đã tự khai** leading bằng hệ số lẻ thì codemod không đụng — ghi đè một con số tác giả căn bằng mắt là đổi layout, việc của người chứ không phải của script. 173 site / 97 file như vậy nằm trong `LEGACY_COEFFICIENTS` của guard, dưới dạng **trần đếm theo file**: file chỉ được giảm site, không được tăng ⇒ code mới vẫn bị R4 chặn trong khi nợ cũ được dọn dần.
+> **Sửa 2026-09-06 (D2d):** ngoại lệ "hệ số nguyên" **đã bị rút**. Nguyên × px nguyên đúng là nguyên, nhưng nguyên chưa đủ — phải **CHẴN** (xem D2c), và `line-height: 1` ghim hộp dòng đúng bằng font-size, thứ Appearance kéo qua 6 mức. Heading trong prose vẫn là ngoại lệ, khai bằng marker `design-token-ok`.
+
+Rule **đã tự khai** leading bằng hệ số lẻ thì codemod không đụng — ghi đè một con số tác giả căn bằng mắt là đổi layout, việc của người chứ không phải của script. 173 site / 97 file như vậy nằm trong `LEGACY_COEFFICIENTS` của guard, dưới dạng **trần đếm theo file**: file chỉ được giảm site, không được tăng ⇒ code mới vẫn bị R4 chặn trong khi nợ cũ được dọn dần. **Nợ đó đã dọn xong ở D2d và bảng trần đã bị xoá.**
 
 ### D3 — Mono chỉ cho code thật
 
@@ -191,6 +193,36 @@ Phụ thuộc vào một tính năng CSS mới thì phải **đo, không giả �
 
 Đánh đổi: thang leading chuyển từ **offset** (như `--fs-*`) sang **tỉ lệ**, nên ở base 18 hộp dòng cao hơn bản offset 2–3px. Ngược với lập luận của D2 cho *font-size*, và cố ý: lý do D2 từ chối tỉ lệ là **rem × base = phân số**, mà `round()` khử đúng phân số đó; còn leading thì *nên* giãn theo cỡ chữ.
 
+### D2d — Không hệ số nào cả, và px phải CHẴN (bổ sung 2026-09-06)
+
+D2b để lại một cửa mở và một đống nợ. Cửa mở: **hệ số nguyên vẫn hợp lệ**, với lý do "nguyên × px nguyên vẫn nguyên". Đống nợ: 173 site hệ số lẻ có trước rule, gửi vào `LEGACY_COEFFICIENTS` dưới dạng trần đếm theo file. Cộng lại là **248 site / 143 file** mà R4 không thật sự chặn.
+
+**Lý do "nguyên vẫn nguyên" sai từ D2c trở đi.** Nguyên chưa đủ — hộp dòng phải **CHẴN**, vì icon cỡ chẵn căn giữa trong hộp dòng lẻ rơi vào nửa pixel. Mà `line-height: 1` ghim hộp dòng **đúng bằng font-size**, và font-size là thứ Appearance kéo: 4/6 bậc `--fs-*` LẺ ngay ở base mặc định (xs 11 · md 13 · lg 15 · xl 17), và mọi bậc lật chẵn/lẻ khi base đi 12→18. Hệ số nguyên vì thế không phải ngoại lệ, nó là **cùng một lỗi viết bằng chữ số khác**.
+
+R4 sau đợt này:
+
+| | |
+|---|---|
+| Hợp lệ | `var(--lh-*)` · **px CHẴN** · `inherit`/`unset`/`initial`/`revert` |
+| Vi phạm | mọi hệ số không đơn vị (kể cả `1`, `2`, `0`) · px **lẻ** · px phân số · `em`/`%`/`normal` |
+| Opt-out | `design-token-ok: <lý do>` tại dòng — đúng **2 site** (xem "Ngoại lệ cố ý") |
+
+`LEGACY_COEFFICIENTS` và toàn bộ cơ chế trần theo file bị **xoá**, cùng dòng nhắc nợ guard in ra khi xanh. Trần đếm theo file là một công cụ đúng cho đúng một tình huống — có rule trước, có nợ sau, và có ý định trả nợ; giữ nó sau khi nợ đã trả là để lại một cơ chế mà lần tới ai đó sẽ dùng để *hoãn* thay vì để *trả*.
+
+**Ràng buộc mật độ chi phối mọi lựa chọn giá trị.** D7 đã cho thấy cái giá của việc làm tròn xuống: mọi control thấp đi 2px và user phản hồi app "chật". Nên codemod [`codemod-line-height-coefficients.mjs`](../../apps/desktop/ui-next/scripts/codemod-line-height-coefficients.mjs) làm tròn **LÊN** không có ngoại lệ; một bậc `--lh-*` chỉ được chọn khi ≥ hộp dòng hiện tại, dung sai đúng **0.2px** (`1.55 × 13 = 20.15` vs `--lh-md` 20 — một phần năm pixel nằm dưới lưới device). Kết quả: 149 hộp dòng cao thêm (nhiều nhất +2.8px), 82 không đổi, 17 thấp đi ≤ 0.2px.
+
+Ba nhánh đích, xét theo thứ tự:
+
+| Điều kiện | Đích | Vì sao |
+|---|---|---|
+| hệ số ≤ 1.25 — hộp **chật cố ý** (badge, pill, chip, nút một glyph `×`, số hero) | **px chẵn** | một bậc token sẽ phình hộp tới +5px: `.gbadge` (`--fs-xs` 11 + padding 6) đi từ 17 lên 22 |
+| `font-size` là **px cố định** | **px chẵn** | rule đã opt-out khỏi Appearance ⇒ leading của nó cũng phải, token thì lại bám base |
+| còn lại | `--lh-*` nhỏ nhất **không thu hộp dòng** | chữ scale thì dòng phải scale theo |
+
+Đánh đổi của nhánh px: hộp chật không giãn theo Appearance nữa, nên ở base 18 glyph tràn ra ngoài hộp dòng của chính nó. Chấp nhận được vì tất cả đều là nhãn **một dòng** nằm trong hộp có padding — glyph tràn đối xứng và padding nuốt phần tràn; đổi lại, hộp chẵn ở cả 6 base thay vì 2.
+
+**Px lẻ nằm trong cùng lập luận, không phải mở rộng phạm vi.** Một hộp dòng px lẻ thì lẻ ở **mọi** base — tệ hơn hệ số, vốn ít nhất còn chẵn ở vài base. Codemod của D2b sinh ra 6 site như vậy (`Math.round(px × 1.5)`), đều được kéo lên chẵn: `.donut-rreset` / `.sb-badge` / `.tp-sech` / `.rl-reset` 17 → 18, `.ntf-badge` 15 → 16 (kèm `height` 15 → 16 để chữ còn căn giữa), `.edview-diff` 19 → 20.
+
 ### D7 — Spacing: khử số lẻ trước, token hoá sau
 
 2397 declaration `padding`/`margin`/`gap` trong 246 file, **918 con số lẻ**, 30 giá trị padding + 19 giá trị gap khác nhau. Cám dỗ là ép hết lên lưới 4pt trong một đợt. **Từ chối:** `9 → 12` dịch **3px**, nhân với 753 site là wrap/overflow ở hàng trăm chỗ mà không ai review được — và một diff không review được thì bằng không có review.
@@ -216,7 +248,8 @@ Guard **phải im lặng** ở 4 chỗ sau, nếu không nó sẽ bị tắt đi
 - `border-radius: 50%` (63 site) — vòng tròn (avatar, dot, spinner). Không token nào biểu diễn được.
 - `font-size: <n>px` (221 site, hầu hết `12px`) — badge / hint / count chip **cố ý không scale** theo Appearance, theo [.claude/rules/nuxt-vue.md](../../.claude/rules/nuxt-vue.md).
 - `font-size` đơn vị **`em`** (~150 site) — tương đối với cha. Map sang token tuyệt đối là **đổi ngữ nghĩa**, không phải token hoá.
-- `font-size: 2.4615rem` (32px) — hero / empty state, một site duy nhất.
+- `font-size: 2.4615rem` (32px) — hero / empty state, một site duy nhất. Cỡ chữ này fractional ở 4/6 base nên **không có** bậc `--lh-*` nào hợp; leading của nó là `32px` cố định (D2d).
+- `line-height` giữ nguyên kèm marker ở **đúng 2 site** (D2d): `.pvimgcenter` `line-height: 0` — khử inline strut để khung đo đúng bằng `<img>`, thứ mà `translate(-50%,-50%)` phụ thuộc vào, không phải hộp dòng của văn bản; và `blockquote::before` của theme Cute `line-height: 1` — dấu ngoặc kép trang trí, `position: absolute`, một ký tự, không có gì căn giữa vào nó.
 
 Ngoài ra Monaco, xterm và VueFlow tự vẽ theo hệ của chúng, không theo token của app; [apps/desktop/remote-pwa/](../../apps/desktop/remote-pwa/) có CSS riêng và nằm ngoài phạm vi.
 
@@ -253,6 +286,8 @@ Ngoài ra Monaco, xterm và VueFlow tự vẽ theo hệ của chúng, không the
   - **Rule chết `.steph .chev`** ([prototype.css](../../apps/desktop/ui-next/assets/css/prototype.css)): `chev` là *tên icon* (`<Icon name="chev">`), không phải class — nên cả `.steph .chev{width…}` lẫn `.step.col .steph .chev{transform:rotate(-90deg)}` đều không khớp element nào.
   - **`.ni .bdg` cao 17px** (lẻ) trong hộp dòng 20px ⇒ lệch 1.5px. Badge chữ nên nằm ngoài R5; xử lý khi rà badge.
   - Sửa **13 site `border-radius: var(--r)`** — biến `--r` không được khai ở đâu trong repo, nên radius rơi về 0. Guard đã bắt.
+  - **Token hoá cỡ chữ hero** `2.4615rem` thành `calc(var(--font-size-base) + 19px)` (32 @base13, nguyên ở mọi base). D2d mới chỉ ghim *hộp dòng* của nó ở 32px; bản thân glyph vẫn vẽ ở cỡ phân số tại 4/6 base.
+  - **`SourceAvatar` `:size="glyphSize"` = 13** khi `size='sm'` — cỡ icon lẻ mà R5 không thấy, vì component đi qua `<component :is>` chứ không phải import lucide trực tiếp nên `learnIconClasses()` không học được. Rà `:is` binding thì sửa luôn.
   - Quyết định riêng cho vibrancy (P5) nếu còn muốn làm.
 
 ## Tham chiếu

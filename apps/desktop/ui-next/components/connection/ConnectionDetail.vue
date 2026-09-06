@@ -665,7 +665,7 @@ watch(
 .cnd-hero-tagline {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .cnd-hero-meta {
   display: flex;
@@ -726,7 +726,7 @@ watch(
 .cnd-lead {
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   margin: 0 0 14px;
 }
 /* ── Card system (General tab + shared) ─────────────────────────────────────
@@ -779,7 +779,7 @@ watch(
 .cnd-row-hint {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  line-height: 1.4;
+  line-height: var(--lh-xs);
 }
 .cnd-trust {
   text-transform: capitalize;
@@ -824,7 +824,7 @@ watch(
   border: 1px solid var(--accentBorder);
   color: var(--accent);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 18px;
 }
 .cnd-card-err {
   display: flex;
@@ -1062,7 +1062,7 @@ watch(
   /* mono-ok: JSON config editor */
   font-family: var(--code);
   font-size: var(--fs-sm);
-  line-height: 1.55;
+  line-height: var(--lh-md);
   outline: none;
 }
 .cnd-edit-ta.lg {
@@ -1074,7 +1074,7 @@ watch(
 .cnd-edit-hint {
   font-size: var(--fs-xs);
   color: var(--textFaint);
-  line-height: 1.5;
+  line-height: var(--lh-sm);
 }
 .cnd-edit-actions {
   display: flex;

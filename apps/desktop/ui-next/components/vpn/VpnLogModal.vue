@@ -77,7 +77,7 @@ watch(
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
 }
 .vlog-dot {
   width: 8px;
@@ -105,7 +105,7 @@ watch(
   overflow-wrap: anywhere;
   font-family: var(--code);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 18px;
   color: var(--text);
 }
 </style>

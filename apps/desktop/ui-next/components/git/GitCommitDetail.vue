@@ -82,7 +82,7 @@
   </div>
 
   <div v-else class="cdbody">
-    <div class="ftree" style="line-height: 2">
+    <div class="ftree" style="line-height: var(--lh-xl)">
       <div v-for="f in files" :key="f.f" @contextmenu.prevent="emit('context-file', $event, f.f)">
         <span v-if="f.st === 'A'" class="a2">A</span>
         <span v-else class="m">M</span>

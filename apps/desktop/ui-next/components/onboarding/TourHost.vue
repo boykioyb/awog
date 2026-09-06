@@ -235,7 +235,7 @@ onBeforeUnmount(unbindListeners)
 }
 .tour-pop-body {
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-md);
   margin-bottom: 13px;
 }
 .tour-pop-foot {

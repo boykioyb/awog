@@ -475,7 +475,7 @@ const onDirtyContinue = (suppress: boolean) => {
 .nt-ta {
   resize: vertical;
   min-height: 4rem;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .nt-hint {
   font-size: var(--fs-xs);

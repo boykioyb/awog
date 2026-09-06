@@ -203,7 +203,7 @@ function platformLabel(platform: string): string {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 5px 10px;
   border-radius: var(--r-pill);
   border: 1px solid transparent;
@@ -255,7 +255,7 @@ function platformLabel(platform: string): string {
   margin-top: 3px;
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .dev-guide {
   margin-bottom: 14px;
@@ -281,7 +281,7 @@ function platformLabel(platform: string): string {
 .dev-guide-steps li {
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .dev-guide-link {
   border: none;
@@ -297,7 +297,7 @@ function platformLabel(platform: string): string {
   margin-top: 10px;
   font-size: 12px;
   color: var(--textFaint);
-  line-height: 1.5;
+  line-height: 18px;
 }
 .dev-empty {
   display: flex;
@@ -322,7 +322,7 @@ function platformLabel(platform: string): string {
 .dev-empty-body {
   font-size: var(--fs-md);
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-md);
   max-width: 320px;
   margin-bottom: 6px;
 }
@@ -362,7 +362,7 @@ function platformLabel(platform: string): string {
 }
 .dev-chip {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   padding: 3px 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);

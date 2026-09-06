@@ -356,7 +356,7 @@ const onSave = () => {
 .ske-ta {
   resize: vertical;
   min-height: 3rem;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .ske-hint {
   font-size: var(--fs-xs);

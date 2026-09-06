@@ -181,7 +181,7 @@ watch(
 .wim-hint {
   margin: 0;
   font-size: 1em;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .wim-field {
   display: flex;

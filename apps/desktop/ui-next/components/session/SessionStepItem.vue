@@ -108,7 +108,7 @@
         <!-- skill -->
         <div
           v-else-if="isSkill"
-          style="font-size: var(--fs-sm); color: var(--textMuted); line-height: 1.6"
+          style="font-size: var(--fs-sm); color: var(--textMuted); line-height: var(--lh-md)"
         >
           {{ block.detail || t('sessions.step.skillRunning') }}
         </div>

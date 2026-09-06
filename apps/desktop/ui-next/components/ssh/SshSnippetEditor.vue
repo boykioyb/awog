@@ -111,7 +111,7 @@ const onSave = () => {
 .sne-ta {
   resize: vertical;
   min-height: 6rem;
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .sne-hint {
   font-size: var(--fs-xs);

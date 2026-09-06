@@ -1463,7 +1463,7 @@ function onPaste(e: ClipboardEvent) {
   border: 1px solid var(--border);
   color: var(--textDim);
   font-size: var(--fs-sm);
-  line-height: 1;
+  line-height: 12px;
   opacity: 0;
   transform: scale(0.85);
   transition:
@@ -1669,7 +1669,7 @@ textarea.ci {
   overflow: hidden;
   color: var(--accent);
   font: inherit;
-  line-height: 1.4;
+  line-height: var(--lh-sm);
 }
 /* Enhance spinner while the one-shot rewrite is in flight (local rotation — the
    prototype `.spin` is a pulsing dot scoped under .steph, not a rotator). */

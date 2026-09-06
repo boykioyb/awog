@@ -219,7 +219,7 @@ const onCancel = () => {
 .oareauth {
   font-size: 1em;
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-md);
   padding: 9px 11px;
   border-radius: var(--r-sm);
   background: var(--bgInput);

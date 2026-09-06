@@ -95,7 +95,7 @@ watch(
 /* Fixed-size count badge (not em-scaled) — same rule as the other count chips. */
 .mcpc {
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   color: var(--textFaint);
 }
 /* Popover opens upward from the composer bar; narrower than the header config pop.

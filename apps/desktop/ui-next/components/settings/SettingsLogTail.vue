@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
   margin: 0;
   font-family: var(--code);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 18px;
   color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;

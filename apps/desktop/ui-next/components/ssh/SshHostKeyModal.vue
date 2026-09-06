@@ -130,7 +130,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .skh-body {
   font-size: var(--fs-sm);
   color: var(--textMuted);
-  line-height: 1.6;
+  line-height: var(--lh-md);
 }
 .skh-body.warn {
   color: var(--danger);

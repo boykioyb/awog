@@ -353,7 +353,7 @@ const onSave = () => {
 .cme-ta {
   resize: vertical;
   min-height: 3rem;
-  line-height: 1.55;
+  line-height: var(--lh-md);
 }
 .cme-hint {
   font-size: var(--fs-xs);

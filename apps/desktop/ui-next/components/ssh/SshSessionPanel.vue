@@ -493,7 +493,7 @@ function onSend(text: string, command?: SlashCommandRef) {
   background: transparent;
   color: var(--textDim);
   font-size: 12px;
-  line-height: 1;
+  line-height: 12px;
   white-space: nowrap;
   cursor: pointer;
   transition:

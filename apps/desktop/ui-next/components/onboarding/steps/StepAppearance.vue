@@ -60,7 +60,7 @@ const ensureDark = (dark: boolean) => {
 }
 .ob-lead {
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .obap-field {
   display: flex;

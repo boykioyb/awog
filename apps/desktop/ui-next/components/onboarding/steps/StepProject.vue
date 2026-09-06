@@ -74,7 +74,7 @@ const onPick = async () => {
 }
 .ob-lead {
   color: var(--textMuted);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 .obp-ok {
   color: var(--accent);
@@ -88,6 +88,6 @@ const onPick = async () => {
 }
 .obp-hint {
   color: var(--textDim);
-  line-height: 1.5;
+  line-height: var(--lh-md);
 }
 </style>
