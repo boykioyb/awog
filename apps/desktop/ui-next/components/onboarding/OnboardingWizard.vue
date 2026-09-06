@@ -172,13 +172,13 @@ const goTo = (i: number) => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 13px 16px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
 .ob-dots {
   display: flex;
-  gap: 7px;
+  gap: 6px;
 }
 .ob-dot {
   width: 8px;

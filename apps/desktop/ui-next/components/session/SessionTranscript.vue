@@ -416,7 +416,7 @@ onUnmounted(() => {
 .milist {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 14px;
 }
 .mi-enter-active {
   transition:

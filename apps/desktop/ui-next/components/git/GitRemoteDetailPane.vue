@@ -214,7 +214,7 @@ watch(
 .gdp-input {
   flex: 1;
   min-width: 0;
-  padding: 7px 10px;
+  padding: 6px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);

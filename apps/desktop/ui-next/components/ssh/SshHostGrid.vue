@@ -260,7 +260,7 @@ const connectFirst = () => {
 .sshx-grouphdr {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   padding: 14px 18px 2px;
   color: var(--textDim);
   font-size: 12px;
@@ -326,7 +326,7 @@ const connectFirst = () => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 .sshx-card-name {
   font-size: var(--fs-md);
@@ -352,7 +352,7 @@ const connectFirst = () => {
   margin-top: 2px;
 }
 .sshx-card-tag {
-  padding: 1px 7px;
+  padding: 1px 6px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
   font-size: 12px;

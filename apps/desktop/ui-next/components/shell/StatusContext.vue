@@ -215,14 +215,14 @@ function onCompact() {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 0;
+  padding: 2px 0;
 }
 .cathead {
   font-size: 12px;
   line-height: 18px;
   color: var(--textFaint);
   border-bottom: 1px solid var(--border);
-  padding-bottom: 5px;
+  padding-bottom: 4px;
   margin-bottom: 2px;
 }
 .catsq {
@@ -234,7 +234,7 @@ function onCompact() {
   flex: 0 0 auto;
 }
 .cathead .catlbl {
-  margin-left: 17px;
+  margin-left: 16px;
 }
 .catlbl {
   flex: 1;

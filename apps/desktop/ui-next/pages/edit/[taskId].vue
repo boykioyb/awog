@@ -172,7 +172,7 @@ onMounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 9px;
+  gap: 8px;
   color: var(--textDim);
 }
 .editempty-icon {

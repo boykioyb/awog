@@ -138,7 +138,7 @@ const onApply = () => {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  padding: 11px;
+  padding: 10px;
 }
 .hse-ta {
   width: 100%;
@@ -159,7 +159,7 @@ const onApply = () => {
   background: var(--bgInput);
   border: 1px solid var(--danger);
   border-radius: var(--r-sm);
-  padding: 8px 11px;
+  padding: 8px 10px;
 }
 .hse-preview {
   height: 320px;

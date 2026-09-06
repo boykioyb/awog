@@ -633,7 +633,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvhead {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
@@ -670,7 +670,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   background: var(--bgActive);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
-  padding: 3px 7px;
+  padding: 2px 6px;
   white-space: nowrap;
   flex: 0 0 auto;
 }
@@ -735,7 +735,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .mdoitem {
   display: block;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border-radius: var(--r-xs);
   color: var(--textDim);
   font-size: var(--fs-sm);
@@ -777,8 +777,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvseltr {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 4px;
+  padding: 4px 10px;
   color: var(--text);
   background: var(--bgEl);
   border: 1px solid var(--border);
@@ -880,7 +880,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   margin: auto 0;
   padding: 40px 20px;
   color: var(--textDim);
@@ -943,7 +943,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .pvinput {
   width: 100%;
-  padding: 9px 11px;
+  padding: 8px 10px;
   border-radius: var(--r-sm);
   background: var(--bg);
   border: 1px solid var(--border);
@@ -962,7 +962,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .pvbtn {
   font-weight: 500;
-  padding: 7px 14px;
+  padding: 6px 14px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   color: var(--textDim);
@@ -1041,7 +1041,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   font-family: var(--code);
   font-size: 0.9em;
   background: var(--bgActive);
-  padding: 1px 5px;
+  padding: 1px 4px;
   border-radius: var(--r-xs);
 }
 .mdbody :deep(pre) {

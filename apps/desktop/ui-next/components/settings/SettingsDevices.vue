@@ -204,7 +204,7 @@ function platformLabel(platform: string): string {
   gap: 6px;
   font-size: 12px;
   line-height: 1;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border-radius: var(--r-pill);
   border: 1px solid transparent;
   font-weight: 550;
@@ -252,7 +252,7 @@ function platformLabel(platform: string): string {
   color: var(--text);
 }
 .dev-banner-hint {
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: var(--fs-md);
   color: var(--textMuted);
   line-height: 1.5;
@@ -276,7 +276,7 @@ function platformLabel(platform: string): string {
   padding-left: 20px;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
 .dev-guide-steps li {
   font-size: var(--fs-md);
@@ -363,7 +363,7 @@ function platformLabel(platform: string): string {
 .dev-chip {
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   color: var(--textDim);

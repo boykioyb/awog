@@ -68,7 +68,7 @@ function relativeWhen(iso: string): string {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 11px;
+  padding: 8px 10px;
   border-top: 1px solid var(--border);
 }
 .ghcommit-list > .ghcommit-row:first-child {

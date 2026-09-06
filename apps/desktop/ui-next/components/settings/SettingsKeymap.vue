@@ -128,7 +128,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 5px;
+  gap: 4px;
 }
 .km-row {
   display: flex;
@@ -141,7 +141,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
   justify-content: center;
   min-width: 42px;
   height: 26px;
-  padding: 0 9px;
+  padding: 0 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: var(--bgEl);

@@ -114,7 +114,7 @@ function onFocus() {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 0 4px;
   border-radius: var(--r-xs);
   cursor: default;
@@ -153,8 +153,8 @@ function onFocus() {
   display: none;
   width: 240px;
   flex-direction: column;
-  gap: 7px;
-  padding: 11px 12px;
+  gap: 6px;
+  padding: 10px 12px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-btn);
@@ -180,7 +180,7 @@ function onFocus() {
 .donut-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 .donut-rlbl {
   flex: 0 0 84px;

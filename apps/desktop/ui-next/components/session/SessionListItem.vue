@@ -278,7 +278,7 @@ input.ttl {
   color: var(--text);
   border: 1px solid var(--accentBorder);
   border-radius: var(--r-xs);
-  padding: 2px 7px;
+  padding: 2px 6px;
   outline: none;
   font: inherit;
 }
@@ -326,7 +326,7 @@ input.ttl {
    + 12px mono match the app's .bdg node-badge convention, not the round .tag pill. */
 .statusbadge {
   flex: 0 0 auto;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border: 1px solid;
   border-radius: var(--r-xs);
   font-size: 12px;
@@ -343,7 +343,7 @@ input.ttl {
 .lindchip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   font-size: 12px;
   line-height: 1;
   color: var(--textFaint);

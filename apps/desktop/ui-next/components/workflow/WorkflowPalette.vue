@@ -62,7 +62,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   overflow: hidden;
 }
 .wfpal-hd {
-  padding: 9px 11px;
+  padding: 8px 10px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textDim);
@@ -71,7 +71,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
 }
 .wfpal-list {
   overflow-y: auto;
-  padding: 7px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -80,7 +80,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 9px;
+  padding: 6px 8px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--bgEl);
@@ -117,7 +117,7 @@ const onDragStart = (e: DragEvent, agentId: string) => {
   white-space: nowrap;
 }
 .wfpal-empty {
-  padding: 14px 9px;
+  padding: 14px 8px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--textFaint);

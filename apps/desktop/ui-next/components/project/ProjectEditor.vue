@@ -386,7 +386,7 @@ const onSubmit = () => {
 }
 .pe-input {
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -432,8 +432,8 @@ const onSubmit = () => {
 .pe-genbtn {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
+  gap: 4px;
+  padding: 2px 8px;
   border-radius: var(--r-xs);
   background: transparent;
   border: 1px solid var(--border);
@@ -485,12 +485,12 @@ const onSubmit = () => {
 .pe-srctitle {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 550;
   color: var(--text);
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
 .pe-srchint {
   font-size: var(--fs-xs);

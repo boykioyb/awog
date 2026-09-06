@@ -97,7 +97,7 @@ const { t } = useI18n()
 .sshx-kc-count {
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -142,7 +142,7 @@ const { t } = useI18n()
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 .sshx-kc-name {
   font-size: var(--fs-md);
@@ -161,7 +161,7 @@ const { t } = useI18n()
   align-items: center;
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -178,7 +178,7 @@ const { t } = useI18n()
   gap: 4px;
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   color: var(--accent);
   background: var(--accentDim);

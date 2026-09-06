@@ -220,10 +220,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 3px;
+  gap: 2px;
   width: 44px;
   height: 32px;
-  padding: 3px 5px;
+  padding: 2px 4px;
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   overflow: hidden;

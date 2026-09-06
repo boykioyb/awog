@@ -164,7 +164,7 @@ async function onInit() {
 .ginit-sec-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 .ginit-sec-title {
   font-size: 1em;
@@ -191,7 +191,7 @@ async function onInit() {
 .ginit-input {
   flex: 1;
   min-width: 0;
-  padding: 8px 11px;
+  padding: 8px 10px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);

@@ -98,7 +98,7 @@ function onDismiss(): void {
 .bgwake-go {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   flex: none;
   padding: 4px 10px;
   border-radius: var(--r-xs);
@@ -117,7 +117,7 @@ function onDismiss(): void {
   align-items: center;
   justify-content: center;
   flex: none;
-  padding: 3px;
+  padding: 2px;
   border-radius: var(--r-xs);
   color: var(--text);
   opacity: 0.5;

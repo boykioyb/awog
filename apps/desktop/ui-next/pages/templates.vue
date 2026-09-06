@@ -136,7 +136,7 @@ const {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }

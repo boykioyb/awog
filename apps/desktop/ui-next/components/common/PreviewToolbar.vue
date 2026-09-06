@@ -573,8 +573,8 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 10px;
+  gap: 4px;
+  padding: 6px 10px;
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
@@ -619,10 +619,10 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   display: grid;
   grid-auto-flow: column;
   place-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 28px;
   height: 28px;
-  padding: 0 7px;
+  padding: 0 6px;
   border-radius: var(--r-sm);
   color: var(--textDim);
   cursor: pointer;
@@ -656,7 +656,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   width: 1px;
   height: 20px;
   background: var(--border);
-  margin: 0 3px;
+  margin: 0 2px;
 }
 
 /* dropdown (theme picker / actions) */
@@ -670,7 +670,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   min-width: 188px;
   max-height: 60vh;
   overflow-y: auto;
-  padding: 5px;
+  padding: 4px;
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
@@ -686,14 +686,14 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   font-size: 12px;
   line-height: 18px;
   color: var(--textFaint);
-  padding: 6px 8px 3px;
+  padding: 6px 8px 2px;
 }
 .pvmi {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 9px;
+  padding: 6px 8px;
   border-radius: var(--r-xs);
   color: var(--text);
   cursor: pointer;
@@ -736,7 +736,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   left: 50%;
   transform: translateX(-50%);
   white-space: nowrap;
-  padding: 5px 11px;
+  padding: 4px 10px;
   border-radius: var(--r-sm);
   font-size: 12px;
   line-height: 18px;

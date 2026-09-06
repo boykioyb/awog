@@ -75,21 +75,25 @@ const viewOptions = [
 </script>
 
 <style scoped>
+/* Hairline as an INSET SHADOW, not a border: a 1px border eats a pixel of the CONTENT
+   box under `box-sizing: border-box`, leaving an odd height (44 - 1 = 43) that puts every
+   vertically centred child on a half pixel. A shadow takes no layout space. Inset rather
+   than outset so the next sibling's background cannot paint over the line. */
 .edtop {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   padding: 8px 14px;
   min-height: 44px;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 -1px 0 var(--border);
   background: var(--bgPanel);
 }
 .edback {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 9px;
+  gap: 4px;
+  padding: 4px 8px;
   border-radius: var(--r-sm);
   color: var(--textDim);
   background: transparent;

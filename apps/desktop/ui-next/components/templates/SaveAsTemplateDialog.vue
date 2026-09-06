@@ -181,7 +181,7 @@ const onSave = async () => {
 }
 .tpd-input {
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -212,8 +212,8 @@ const onSave = async () => {
 .tpd-kind {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 9px;
+  gap: 8px;
+  padding: 6px 8px;
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: background 0.12s ease;

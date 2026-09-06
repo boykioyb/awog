@@ -93,7 +93,7 @@ const entries = computed<Entry[]>(() => {
 .wstasks-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);

@@ -133,7 +133,7 @@
             </div>
             <div
               v-if="thread.labels.length"
-              style="display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px"
+              style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px"
             >
               <span
                 v-for="l in thread.labels"
@@ -674,7 +674,7 @@ function relativeWhen(iso: string): string {
 .ghsk-body {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   margin-top: 12px;
 }
 .ghskbar {
@@ -757,8 +757,8 @@ function relativeWhen(iso: string): string {
 .ghtab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 10px 11px;
+  gap: 6px;
+  padding: 10px 10px;
   margin-bottom: -1px;
   border: 0;
   border-bottom: 2px solid transparent;
@@ -789,7 +789,7 @@ function relativeWhen(iso: string): string {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: var(--r-pill);
   background: var(--bgActive);
   color: var(--textDim);
@@ -804,7 +804,7 @@ function relativeWhen(iso: string): string {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   background: transparent;
@@ -825,7 +825,7 @@ function relativeWhen(iso: string): string {
 .ghchd {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 /* Comments sit flat on the panel — drop the grey fill, keep the outline + spacing. */
 .ghcomment {
@@ -844,17 +844,17 @@ function relativeWhen(iso: string): string {
 /* Threaded inline review comments: a left rail groups the thread; replies indent. */
 .ghrthread {
   border-left: 2px solid var(--border);
-  padding-left: 11px;
+  padding-left: 10px;
   margin: 10px 0;
 }
 .ghrt-loc {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   overflow-wrap: anywhere;
 }
 /* The commented code snippet (diff_hunk) above a review thread. */
@@ -867,7 +867,7 @@ function relativeWhen(iso: string): string {
 .ghrt-reply {
   margin-left: 18px;
   border-left: 1px solid var(--border);
-  padding-left: 11px;
+  padding-left: 10px;
 }
 /* Approve PR — distinct green outline (not the primary fill, so it doesn't compete
    with the composer's Comment button). */

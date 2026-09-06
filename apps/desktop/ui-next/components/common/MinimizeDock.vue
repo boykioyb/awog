@@ -149,9 +149,9 @@ watch(
   pointer-events: auto;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 8px 8px 8px 11px;
+  padding: 8px 8px 8px 10px;
   border-radius: var(--r-btn);
   background: var(--bgEl);
   border: 1px solid var(--border);

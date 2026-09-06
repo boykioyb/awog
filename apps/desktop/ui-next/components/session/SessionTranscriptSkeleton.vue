@@ -36,7 +36,7 @@ const ROWS: SkRow[] = [
 .skmsg {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
 }
 .skmsg.a {

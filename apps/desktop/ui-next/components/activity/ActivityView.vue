@@ -483,7 +483,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   overflow: hidden;
 }
 .acthint {
-  padding: 18px 15px;
+  padding: 18px 14px;
   color: var(--textFaint);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
@@ -493,7 +493,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
-  padding: 7px 11px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   background: var(--amberDim);
   border: 1px solid var(--amberBorder);
@@ -517,7 +517,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   border-bottom: 1px solid var(--border);
 }
 .acttable td {
-  padding: 9px 14px;
+  padding: 8px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--textMuted);
 }
@@ -553,7 +553,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin: 20px 0 9px;
+  margin: 20px 0 8px;
 }
 .actsesh .sech {
   margin: 0;
@@ -625,7 +625,7 @@ const rangeSubtitle = computed(() => t(`activity.range.long.${range.value}`))
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 3px 0;
+  padding: 2px 0;
 }
 .actdaydate {
   flex: 0 0 auto;

@@ -8,6 +8,7 @@
 //   R3  var(--code) outside CODE_SURFACES / a `mono-ok` marker → mono is for real code
 //   R4  line-height: <fractional coefficient>   → must be var(--lh-*) or a whole px
 //   R5  icon size on an ODD px      → must be var(--icon-*) or an even px
+//   R6  padding/margin/gap on an ODD px  → must be even (±1px stays)
 //
 // Runs as part of `pnpm lint`; on demand it is  pnpm check:tokens  (add --all to skip the
 // 40-line cap). R1–R3 report zero outright. R4 reports zero against a per-file CEILING of
@@ -239,6 +240,11 @@ const RE_CODE_VAR = /var\(\s*--code\s*\)/
 // Stops at ` " ' ` too, so an inline `style="line-height: 1.5"` in a template is read as
 // one declaration instead of swallowing the rest of the attribute.
 const RE_LINE_HEIGHT = /(line-height)\s*:\s*([^;}"'\n]+)/g
+// R6. Hand-synced with scripts/codemod-spacing.mjs — if the two predicates drift, the
+// guard reports sites the codemod cannot fix (or waves through sites it rewrites).
+// `(?<![-\w])` keeps `scroll-padding` and camelCase `marginTop` (JS style objects) out.
+const RE_SPACING =
+  /(?<![-\w])((?:padding|margin)(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?|(?:row-|column-)?gap)\s*:\s*([^;}"'\n]+)/g
 
 const pickToken = (scale, px) => scale.find((s) => px <= s.maxPx) ?? scale[scale.length - 1]
 
@@ -356,6 +362,42 @@ function checkLineHeight(value, rule) {
   return `dùng \`${suggestion}\` hoặc một px nguyên thay vì \`${v}\``
 }
 
+// --- Rule 6: spacing parity ---------------------------------------------------------
+// Padding / margin / gap on an ODD px hands the half pixel straight back to the centring
+// maths that R4 and R5 just cleaned out: an odd inset inside an even box (or the reverse)
+// puts the child on a .5 boundary again. The shell had 918 odd numbers across 2400+
+// spacing declarations, in no rhythm at all (30 padding values, 19 gap values).
+//
+// This rule is deliberately WEAKER than "snap to a 4pt grid": forcing 9→12 moves three
+// pixels and wraps content in places nobody can review, so the bar for now is only
+// EVEN — every value within 1px of where it was. A real --sp-* scale is a later pass,
+// once the surviving set of values is small enough to name.
+//
+// `±1px` is legal: a 1px inset is an optical nudge or hairline compensation, never
+// rhythm, and both moves available to it (0 and 2) are wrong.
+//
+// Fractional px is out of scope on purpose — there is none in the repo, and rounding a
+// fraction is a >1px move that belongs to a human. scripts/codemod-spacing.mjs holds the
+// exact same predicate; keep them in step.
+const SPACING_EXEMPT_PX = 1
+
+function checkSpacing(value) {
+  const odd = [...value.matchAll(/(-?\d+)px/g)]
+    .map((m) => Number(m[1]))
+    .filter((n) => Math.abs(n) !== SPACING_EXEMPT_PX && Math.abs(n) % 2 === 1)
+  if (!odd.length) return null
+  const hint = value.trim().replace(/(-?\d+)px/g, (m, raw) => {
+    const n = Number(raw)
+    if (Math.abs(n) === SPACING_EXEMPT_PX || Math.abs(n) % 2 === 0) return m
+    return `${Math.sign(n) * (Math.abs(n) - 1)}px`
+  })
+  return (
+    `khoảng cách px lẻ (${odd.map((n) => `${n}px`).join(', ')}) → nửa pixel khi con căn giữa. ` +
+    `Dùng \`${hint}\` (làm tròn XUỐNG số chẵn — chật thì an toàn với overflow). ` +
+    'Nếu con số lẻ CHÍNH LÀ hình dạng: thêm `design-token-ok: <lý do>`'
+  )
+}
+
 // --- Rule 5: icon scale -------------------------------------------------------------
 // Scale declared next to --fs-* / --lh-* at assets/css/prototype.css: 12/14/16/20/24, all
 // EVEN and fixed px (an icon is a glyph, not text — it must not scale with Appearance).
@@ -385,7 +427,7 @@ function checkIconSize(site) {
   )
 }
 
-const violations = { radius: [], type: [], mono: [], leading: [], icon: [] }
+const violations = { radius: [], type: [], mono: [], leading: [], icon: [], spacing: [] }
 const legacyLeading = new Map()
 
 for (const dir of SCAN_DIRS) {
@@ -413,6 +455,11 @@ for (const dir of SCAN_DIRS) {
         for (const [, prop, value] of line.matchAll(RE_FONT_SIZE)) {
           const hint = checkFontSize(value)
           if (hint) violations.type.push({ ...at, text: `${prop}: ${value.trim()}`, hint })
+        }
+
+        for (const [, prop, value] of line.matchAll(RE_SPACING)) {
+          const hint = checkSpacing(value)
+          if (hint) violations.spacing.push({ ...at, text: `${prop}: ${value.trim()}`, hint })
         }
 
         for (const [, prop, value] of line.matchAll(RE_LINE_HEIGHT)) {
@@ -477,6 +524,7 @@ const RULES = [
   { key: 'mono', title: 'R3  var(--code) ngoài danh sách bề mặt code' },
   { key: 'leading', title: 'R4  line-height không dùng token --lh-* (hệ số lẻ / px lẻ)' },
   { key: 'icon', title: 'R5  cỡ icon lẻ — phải là token --icon-* hoặc px chẵn' },
+  { key: 'spacing', title: 'R6  padding/margin/gap px lẻ — phải chẵn (±1px được giữ)' },
 ]
 
 let total = 0
@@ -507,7 +555,7 @@ process.stdout.write(
   `\ncheck-design-tokens: ${total} vi phạm ` +
     `(radius ${violations.radius.length}, type ${violations.type.length}, ` +
     `mono ${violations.mono.length}, leading ${violations.leading.length}, ` +
-    `icon ${violations.icon.length}).\n` +
-    'Xem docs/features/native-macos-polish.md §4 (W3/W4/W5/W9) để biết bảng map token.\n',
+    `icon ${violations.icon.length}, spacing ${violations.spacing.length}).\n` +
+    'Xem docs/features/native-macos-polish.md §4 (W3/W4/W5/W9/W10) để biết bảng map token.\n',
 )
 process.exit(1)

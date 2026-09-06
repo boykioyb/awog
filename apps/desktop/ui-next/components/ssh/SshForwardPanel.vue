@@ -208,8 +208,8 @@ onBeforeUnmount(() => {
 .ssh-fp-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 9px 12px;
+  gap: 6px;
+  padding: 8px 12px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textDim);
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
 .ssh-fp-count {
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -262,7 +262,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 14px;
+  padding: 8px 14px;
 }
 .ssh-fp-row + .ssh-fp-row {
   border-top: 1px solid var(--border);
@@ -272,7 +272,7 @@ onBeforeUnmount(() => {
   align-items: center;
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border: 1px solid currentColor;
   border-radius: var(--r-pill);
   background: transparent;

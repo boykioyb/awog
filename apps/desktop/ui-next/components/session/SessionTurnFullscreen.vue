@@ -137,7 +137,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .fthead {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
@@ -188,7 +188,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .abody {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
   max-width: 880px;
   margin: 0 auto;
@@ -197,7 +197,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .merr {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
   margin: 4px 0;
   padding: 10px 12px;
   border-radius: var(--r-btn);

@@ -205,7 +205,7 @@ async function del(snippet: SshSnippet): Promise<void> {
 .sshx-sn-count {
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -270,7 +270,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 .sshx-sn-name {
   font-size: var(--fs-md);

@@ -405,7 +405,7 @@ onMounted(() => {
 .ssh-sf-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex: 0 0 auto;
   padding: 6px 10px;
   font-size: var(--fs-xs);
@@ -458,7 +458,7 @@ onMounted(() => {
 .ssh-sf-crumbs {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   padding: 4px 8px;
   flex: 1;
   min-width: 0;
@@ -502,7 +502,7 @@ onMounted(() => {
   background: transparent;
   color: var(--accent);
   cursor: pointer;
-  padding: 1px 3px;
+  padding: 1px 2px;
   border-radius: var(--r-xs);
   font-family: var(--code);
 }
@@ -568,8 +568,8 @@ onMounted(() => {
 .ssh-sf-hrow {
   display: grid;
   align-items: center;
-  gap: 9px;
-  padding: 5px 10px;
+  gap: 8px;
+  padding: 4px 10px;
   position: sticky;
   top: 0;
   z-index: 1;
@@ -597,7 +597,7 @@ button.ssh-sf-hc:hover {
   text-align: right;
 }
 .ssh-sf-sort {
-  margin-left: 3px;
+  margin-left: 2px;
   font-size: 9px;
   line-height: 14px;
   color: var(--accent);
@@ -605,9 +605,9 @@ button.ssh-sf-hc:hover {
 .ssh-sf-row {
   display: grid;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border: none;
   background: transparent;
   color: var(--text);
@@ -655,7 +655,7 @@ button.ssh-sf-hc:hover {
 .ssh-sf-name {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   min-width: 0;
 }
 .ssh-sf-nametext {

@@ -162,7 +162,7 @@ const confirm = async (): Promise<void> => {
 .lim-grp {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   padding: 8px 12px;
   background: var(--bgHover);
   color: var(--textDim);
@@ -186,8 +186,8 @@ const confirm = async (): Promise<void> => {
 .lim-item {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
-  padding: 11px 12px;
+  gap: 10px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: background 0.12s;
   border-top: 1px solid var(--border);
@@ -196,14 +196,14 @@ const confirm = async (): Promise<void> => {
   background: var(--bgHover);
 }
 .lim-check {
-  margin-top: 3px;
+  margin-top: 2px;
   flex: 0 0 auto;
   accent-color: var(--accent);
 }
 .lim-item-tx {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-width: 0;
 }
 .lim-item-nm {

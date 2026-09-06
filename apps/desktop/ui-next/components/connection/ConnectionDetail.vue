@@ -250,7 +250,7 @@
                   width: var(--icon-xs);
                   height: var(--icon-xs);
                   flex: 0 0 auto;
-                  margin-top: 3px;
+                  margin-top: 2px;
                 "
               />
               <div class="cnd-tool-body">
@@ -641,9 +641,9 @@ watch(
   flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: 13px;
+  gap: 12px;
   margin: 14px 14px 0;
-  padding: 15px 16px;
+  padding: 14px 16px;
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
@@ -745,7 +745,7 @@ watch(
 .cnd-card-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   padding: 10px 14px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
@@ -838,9 +838,9 @@ watch(
 }
 .cnd-banner {
   display: flex;
-  gap: 9px;
+  gap: 8px;
   margin-top: 14px;
-  padding: 11px 13px;
+  padding: 10px 12px;
   border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -917,15 +917,15 @@ watch(
 .cnd-tools {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
 /* Activity console (ConnectionToolsLog) placement: a small gap under whatever it
    follows (loading row / error banner / tools list). */
 .cnd-log {
-  margin-top: 9px;
+  margin-top: 8px;
 }
 .cnd-log-foot {
-  margin-top: 9px;
+  margin-top: 8px;
 }
 .cnd-log-toggle {
   display: inline-flex;
@@ -954,8 +954,8 @@ watch(
 .cnd-tool {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: var(--r-sm);
   background: var(--bgEl);
   border: 1px solid var(--border);
@@ -971,7 +971,7 @@ watch(
 .cnd-tool-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 .cnd-tool-name {
   font-size: var(--fs-sm);
@@ -1003,7 +1003,7 @@ watch(
 .cnd-perm-group {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 .cnd-perm-label {
   font-size: var(--fs-xs);
@@ -1057,7 +1057,7 @@ watch(
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 9px 11px;
+  padding: 8px 10px;
   color: var(--text);
   /* mono-ok: JSON config editor */
   font-family: var(--code);

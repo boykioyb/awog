@@ -204,7 +204,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 .hkd-trust {
   display: flex;
   align-items: flex-start;
-  gap: 11px;
+  gap: 10px;
   margin-top: 16px;
   padding: 12px 14px;
   border-radius: var(--r-btn);
@@ -275,7 +275,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 .hkd-kvs {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
 .hkd-kvs-tight {
   margin-top: 10px;
@@ -284,7 +284,7 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 11px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -314,8 +314,8 @@ const envCount = computed(() => Object.keys(props.hook.env ?? {}).length)
 .hkd-run {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 7px 11px;
+  gap: 10px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);

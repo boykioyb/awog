@@ -70,7 +70,7 @@ const rows = computed<DiffRow[]>(() => {
   line-height: 1.55;
 }
 .ghdiff-empty {
-  padding: 9px 11px;
+  padding: 8px 10px;
   color: var(--textDim);
 }
 /* Flex rows (not a table) so the code cell wraps reliably while the gutter stays

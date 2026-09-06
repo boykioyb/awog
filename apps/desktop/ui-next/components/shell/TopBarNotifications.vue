@@ -328,7 +328,7 @@ function openOnGithub(): void {
   right: -3px;
   min-width: 15px;
   height: 15px;
-  padding: 0 3px;
+  padding: 0 2px;
   border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--bg);
@@ -365,7 +365,7 @@ function openOnGithub(): void {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 9px 8px 9px 11px;
+  padding: 8px 8px 8px 10px;
   border-bottom: 1px solid var(--border);
 }
 .ntf-head-title {
@@ -406,14 +406,14 @@ function openOnGithub(): void {
 .ntf-tabs {
   display: flex;
   gap: 4px;
-  padding: 7px 8px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border);
 }
 .ntf-tab {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
+  gap: 4px;
+  padding: 2px 8px;
   border: 1px solid transparent;
   border-radius: var(--r-pill);
   background: transparent;
@@ -442,7 +442,7 @@ function openOnGithub(): void {
   /* Hard stop on sideways scroll: rows ellipsize (TopBarNotifyRow), so anything
      wider than the panel is a layout bug, not content the user should pan to. */
   overflow-x: hidden;
-  padding: 0 5px 5px;
+  padding: 0 4px 4px;
 }
 /* Repo group. The header sticks to the top of the scroll box so you always know
    which repo the rows under the cursor belong to. */
@@ -465,7 +465,7 @@ function openOnGithub(): void {
   /* Opaque: rows scroll UNDER this. */
   background: var(--bgEl);
   border: 0;
-  padding: 7px 8px 5px 4px;
+  padding: 6px 8px 4px 4px;
   font: inherit;
   font-size: 12px;
   line-height: 18px;
@@ -538,7 +538,7 @@ function openOnGithub(): void {
 }
 .ntf-note {
   margin: 0;
-  padding: 8px 7px;
+  padding: 8px 6px;
   color: var(--textDim);
 }
 .ntf-note.err {
@@ -548,7 +548,7 @@ function openOnGithub(): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 11px;
+  padding: 8px 10px;
   border-top: 1px solid var(--border);
   color: var(--textDim);
   font-size: 12px;

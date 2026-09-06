@@ -694,7 +694,7 @@ const msgActions = computed<MsgAction[]>(() => [
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: var(--r-sm);
   background: var(--accentDim);
   border: 1px solid var(--accentBorder);
@@ -763,8 +763,8 @@ const msgActions = computed<MsgAction[]>(() => [
   padding: 0 4px;
 }
 .abody.bubble .mmetarow.footer {
-  margin: 0 -14px -11px;
-  padding: 7px 12px;
+  margin: 0 -14px -10px;
+  padding: 6px 12px;
   border-top: 1px solid var(--border);
 }
 .mmetatxt {
@@ -813,7 +813,7 @@ const msgActions = computed<MsgAction[]>(() => [
 .abody {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
 }
 /* Unified turn card (Settings → Sessions · Assistant bubble): wraps the collapsed
    activity section + the final response in one elevated, left-tailed card. */
@@ -822,7 +822,7 @@ const msgActions = computed<MsgAction[]>(() => [
   border: 1px solid var(--border);
   border-radius: var(--r-panel);
   border-bottom-left-radius: var(--r-xs);
-  padding: 11px 14px;
+  padding: 10px 14px;
   /* Clip the full-bleed footer bar to the card's rounded corners. */
   overflow: hidden;
 }
@@ -833,7 +833,7 @@ const msgActions = computed<MsgAction[]>(() => [
   height: 7px;
   border-radius: 50%;
   background: var(--accent);
-  margin-right: 5px;
+  margin-right: 4px;
   vertical-align: middle;
   opacity: 0.5;
 }
@@ -842,7 +842,7 @@ const msgActions = computed<MsgAction[]>(() => [
 .merr {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
+  gap: 8px;
   margin: 4px 0;
   padding: 10px 12px;
   border-radius: var(--r-btn);

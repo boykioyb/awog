@@ -167,9 +167,9 @@ const projName = computed(() => (active.value ? projectName(active.value.project
 .statusbar :deep(.sb-item) {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   height: 20px;
-  padding: 0 7px;
+  padding: 0 6px;
   border: 0;
   border-radius: var(--r-xs);
   background: transparent;

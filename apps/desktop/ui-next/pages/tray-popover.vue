@@ -316,7 +316,7 @@ function formatResetsIn(ms: number | undefined): string {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 11px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
@@ -354,7 +354,7 @@ function formatResetsIn(ms: number | undefined): string {
   padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 13px;
+  gap: 12px;
 }
 .tp-sec {
   display: flex;
@@ -382,7 +382,7 @@ function formatResetsIn(ms: number | undefined): string {
 .rl-acct {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 .rl-acctname {
   font-size: 12px;
@@ -438,10 +438,10 @@ function formatResetsIn(ms: number | undefined): string {
 .tp-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
   text-align: left;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   border: 1px solid transparent;
   background: transparent;
@@ -486,14 +486,14 @@ function formatResetsIn(ms: number | undefined): string {
 /* ── Footer ── */
 .tp-foot {
   flex: 0 0 auto;
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-top: 1px solid var(--border);
 }
 .tp-fbtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   width: 100%;
   padding: 8px;
   border-radius: var(--r-sm);

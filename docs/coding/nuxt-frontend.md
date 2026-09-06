@@ -128,6 +128,7 @@ Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compil
 |---|---|---|
 | Type scale | `--fs-xs` 11 · `--fs-sm` 12 · `--fs-md` 13 · `--fs-lg` 15 · `--fs-xl` 17 · `--fs-2xl` 22 (@base 13) | `font-size: <n>rem` |
 | Leading | `--lh-xs` 16 · `--lh-sm` 18 · `--lh-md` 20 · `--lh-lg` 22 · `--lh-xl` 24 · `--lh-2xl` 28 · `--lh-prose` 22 (@base 13) | `line-height: <hệ số lẻ>` |
+| Spacing | chưa có token — **quy ước**: `padding` / `margin` / `gap` px **chẵn** (±1px được giữ) | `padding/margin/gap` px **lẻ** |
 | Radius | `--r-xs` 6 · `--r-sm` 8 · `--r-btn` 10 · `--r-card` 14 · `--r-panel` 16 · `--r-pill` | `border-radius: <n>px` |
 | Icon | `--icon-xs` 12 · `--icon-sm` 14 · `--icon-md` 16 (mặc định `.icn`) · `--icon-lg` 20 · `--icon-xl` 24 | cỡ icon **px lẻ** |
 | Màu | `useTheme()` / CSS var | hex trong class hoặc `<style>` |
@@ -136,7 +137,9 @@ Lý do tách đôi: theme token đổi runtime (dark ↔ light), Tailwind compil
 
 Type scale khai bằng `calc(var(--font-size-base) ± Npx)` — Appearance cho kéo base 12→18, nên `rem` sẽ cho ra nửa pixel (`0.8846rem` = 11.5px) và macOS render nhoè. `em` vẫn hợp lệ (tương đối với cha); `px` cố định hợp lệ cho badge không muốn scale.
 
-Leading khai cùng kiểu (`calc(var(--font-size-base) + Npx)`) và **phải có đơn vị**. Hệ số không đơn vị nhân lại với font-size của từng element, nên `1.5` biến `--fs-md` 13px thành hộp dòng 19.5px — đúng cái nửa pixel mà type scale vừa khử. Giá trị có đơn vị kế thừa xuống dưới dạng **độ dài cố định**, không nhân lại.
+Leading **phải có đơn vị**. Hệ số không đơn vị nhân lại với font-size của từng element, nên `1.5` biến `--fs-md` 13px thành hộp dòng 19.5px — đúng cái nửa pixel mà type scale vừa khử. Giá trị có đơn vị kế thừa xuống dưới dạng **độ dài cố định**, không nhân lại.
+
+Nguyên pixel chưa đủ — hộp dòng còn phải **CHẴN**, vì icon cỡ chẵn căn giữa trong hộp dòng lẻ lại rơi vào nửa pixel (`(19 − 16) / 2 = 1.5`). Bản `calc(base + Npx)` chỉ chẵn ở base 13 và 15; ở 12/14/16/18 mọi bậc ra số lẻ. Nên `--lh-*` khai bằng **`round(up, calc(var(--font-size-base) * k), 2px)`** — hàm math của CSS (Chrome 125+, Electron 33 = Chromium 130) snap mỗi bậc lên bội số 2px, chẵn bằng cấu tạo ở cả **6 base × 7 token**. Hệ số `k` chọn sao cho base 13 giữ **đúng** giá trị cũ: 1.2 / 1.35 / 1.5 / 1.6 / 1.8 / 2.1 / 1.65.
 
 - Rule nào tự khai `font-size: var(--fs-X)` thì khai luôn `line-height: var(--lh-X)` (cùng hậu tố). Codemod [`scripts/codemod-line-height.mjs`](../../apps/desktop/ui-next/scripts/codemod-line-height.mjs) ghép cặp này.
 - `font-size` là px cố định (badge/chip không scale) ⇒ `line-height` cũng là **px nguyên**, không phải token.
@@ -150,6 +153,15 @@ Icon scale **cố định px** (không `calc()` theo base): icon là hình vẽ,
 - `.icn` mang `stroke-width: 1.5`, **không** phải 1.7. `stroke-width` là **user unit** của viewBox `0 0 24 24`, nên bề rộng nét thật = `stroke-width × size/24`: ở `--icon-md` thì 1.5 ra đúng **1 device pixel**, 1.7 ra 1.13px, 2 ra 1.33px và nhìn nặng.
 - Ba kênh khai cỡ icon đều bị guard R5 soi: rule CSS trên `.icn`/`svg`/class đã thấy gắn lên `<Icon>`, `style="width: …"` inline trên `<Icon>`/`<svg>`/component lucide, và `:size="…"` trên component lucide. Codemod: [`scripts/codemod-icon-scale.mjs`](../../apps/desktop/ui-next/scripts/codemod-icon-scale.mjs).
 - **`<Icon :size="13" />` không có tác dụng** — [`Icon.vue`](../../apps/desktop/ui-next/components/Icon.vue) chỉ nhận prop `name`, `size` rơi xuống `$attrs` thành attribute `size` mà `<svg>` không hiểu. Muốn đổi cỡ thì dùng `style` hoặc một class.
+
+Spacing (`padding` / `margin` / `gap`) **chưa có thang token** — đợt vừa rồi chỉ khử số lẻ, chưa định nhịp. Guard **R6** fail khi thấy px lẻ; codemod [`scripts/codemod-spacing.mjs`](../../apps/desktop/ui-next/scripts/codemod-spacing.mjs) làm tròn **xuống** số chẵn gần nhất (9→8, 7→6, 5→4, 3→2, 11→10, 13→12, 15→14), mỗi giá trị dịch tối đa 1px.
+
+- Làm tròn **xuống** chứ không lên: chật hơn thì không bao giờ gây overflow, rộng hơn thì có.
+- **`±1px` được giữ** (69 site): 1px là nudge quang học hoặc bù chiều dày hairline, không phải nhịp — cả 0 lẫn 2 đều sai.
+- Rule chỉ đụng `padding*` / `margin*` / `gap`. **Không** đụng `width` / `height` / `top` / `left` / `inset` / `transform` — đó là **hình dạng**, số lẻ ở đó thường là cố ý.
+- Chưa ép về lưới 4pt: 9→12 dịch 3px và làm wrap/overflow hàng loạt. Token hoá `--sp-*` là đợt sau, khi bộ giá trị còn lại đủ nhỏ để đặt tên.
+
+**Hairline trên thanh cao cố định** dùng `box-shadow: inset 0 -1px 0 var(--border)`, **không** `border-bottom`. Với `box-sizing: border-box` thì border ăn mất 1px của **content box**, nên thanh cao 44px chỉ còn 43 và mọi con căn giữa rơi vào nửa pixel (`(43 − 28) / 2 = 7.5`). `box-shadow` không chiếm chỗ trong layout. Dùng `inset` chứ không outset: shadow outset bị **background của sibling kế tiếp** vẽ đè (thứ tự cây) và mất hẳn đường kẻ. Chỉ áp dụng cho **thanh có chiều cao cố định + căn giữa con theo trục dọc** — đừng migrate toàn bộ border của app.
 
 **Hai marker opt-out**, ghi ngay trên dòng cần miễn:
 

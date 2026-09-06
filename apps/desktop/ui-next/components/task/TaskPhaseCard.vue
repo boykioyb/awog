@@ -277,8 +277,8 @@ const confirmRerun = () => {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 10px 13px;
+  gap: 10px;
+  padding: 10px 12px;
   background: transparent;
   border: 0;
   text-align: left;
@@ -379,16 +379,16 @@ const confirmRerun = () => {
 .tpc-rc-loop {
   width: 10px;
   height: 10px;
-  margin-right: 3px;
+  margin-right: 2px;
   vertical-align: -1px;
 }
 .tpc-rc-ok {
   color: var(--green);
-  margin-left: 3px;
+  margin-left: 2px;
 }
 .tpc-rc-fail {
   color: var(--danger);
-  margin-left: 3px;
+  margin-left: 2px;
 }
 .tpc-live {
   display: inline-flex;
@@ -426,9 +426,9 @@ const confirmRerun = () => {
 .tpc-history {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex-wrap: wrap;
-  padding: 9px 13px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--bgSubtle);
 }
@@ -453,7 +453,7 @@ const confirmRerun = () => {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 0 13px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border);
   background: var(--bgSubtle);
 }
@@ -461,7 +461,7 @@ const confirmRerun = () => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 0;
+  padding: 8px 0;
   background: transparent;
   border: 0;
   border-bottom: 1.5px solid transparent;
@@ -483,7 +483,7 @@ const confirmRerun = () => {
   flex: 1;
 }
 .tpc-tabbody {
-  padding: 13px;
+  padding: 12px;
 }
 .tpc-trace {
   /* mono-ok: phase trace output */
@@ -498,13 +498,13 @@ const confirmRerun = () => {
 .tpc-msgs {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  margin-bottom: 11px;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 .tpc-msg {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 .tpc-msg-role {
   font-size: var(--fs-xs);
@@ -532,7 +532,7 @@ const confirmRerun = () => {
   background: var(--bgInput);
   color: var(--text);
   border-radius: var(--r-sm);
-  padding: 7px 10px;
+  padding: 6px 10px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-family: var(--sans);

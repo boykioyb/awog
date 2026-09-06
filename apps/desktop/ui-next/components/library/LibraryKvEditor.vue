@@ -146,15 +146,15 @@ const toggleSecret = async (i: number) => {
 .lkv-rows {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 6px;
 }
 .lkv-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 .lkv-input {
-  padding: 6px 9px;
+  padding: 6px 8px;
   border-radius: var(--r-xs);
   background: var(--bgInput);
   border: 1px solid var(--border);

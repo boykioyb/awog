@@ -148,7 +148,7 @@
     <div class="lscroll">
       <template v-if="groupBy === 'none'">
         <template v-if="filtered.length">
-          <div class="grpitems" style="padding-top: 5px">
+          <div class="grpitems" style="padding-top: 4px">
             <SessionListItem
               v-for="s in flatPage.items"
               :key="s.id"
@@ -716,7 +716,7 @@ function toggleFoldAll() {
 .bulkall {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   cursor: pointer;
   min-width: 0;
 }

@@ -40,7 +40,7 @@ const { t } = useI18n()
   background: var(--bgPanel);
 }
 .edtree-head {
-  padding: 9px 12px;
+  padding: 8px 12px;
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);

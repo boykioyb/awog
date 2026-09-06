@@ -1575,7 +1575,7 @@ textarea.ci {
    above the textarea; auto-dismisses (showNotice). */
 .cmdnotice {
   margin: 0 2px 6px;
-  padding: 5px 10px;
+  padding: 4px 10px;
   border-radius: var(--r-xs);
   background: var(--bgActive);
   border: 1px solid var(--border);
@@ -1616,8 +1616,8 @@ textarea.ci {
 .sfollow {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  margin-bottom: 9px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 /* Drop the grey fill (prototype .fwcard uses var(--bgSubtle)) — the accent left-border
    + outline already mark these as quote cards, matching the flat composer chips. */
@@ -1644,7 +1644,7 @@ textarea.ci {
 /* Queued (gửi sau) chip row sits above the input; chips reuse .att with an accent
    tint so they read as pending-send rather than attachments. */
 .qattc {
-  margin-bottom: 9px;
+  margin-bottom: 8px;
 }
 .qatt {
   color: var(--accent);
@@ -1767,7 +1767,7 @@ textarea.ci {
   align-items: center;
   gap: 6px;
   margin: 4px 2px 0;
-  padding: 5px 9px;
+  padding: 4px 8px;
   border-radius: var(--r-xs);
   font-size: 12px;
   line-height: 18px;
@@ -1799,7 +1799,7 @@ textarea.ci {
 .pinlist {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
 }
 .pinrow {
   display: flex;
@@ -1885,7 +1885,7 @@ textarea.ci {
 .pinreuse-bar {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   margin-top: -2px;
 }
 .pinreuse-name {
@@ -1894,7 +1894,7 @@ textarea.ci {
   background: var(--bgInput, var(--bgActive));
   border: 1px solid var(--accentBorder, var(--border));
   border-radius: var(--r-xs);
-  padding: 5px 8px;
+  padding: 4px 8px;
   color: var(--text);
   font-size: 12px;
   line-height: 18px;
@@ -1920,7 +1920,7 @@ textarea.ci {
 .pinreuse-save {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 4px 8px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);

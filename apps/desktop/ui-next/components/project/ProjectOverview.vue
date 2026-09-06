@@ -79,7 +79,7 @@
           v-for="s in view.ses"
           :key="s.id"
           class="rs rs-link"
-          style="padding: 7px 0; border-top: 1px solid var(--border); cursor: pointer"
+          style="padding: 6px 0; border-top: 1px solid var(--border); cursor: pointer"
           :title="t('projects.overview.openSession')"
           @click="openSession(s.id)"
         >
@@ -98,7 +98,7 @@
           v-for="task in view.tasks"
           :key="task.t"
           class="rs"
-          style="padding: 7px 0; border-top: 1px solid var(--border)"
+          style="padding: 6px 0; border-top: 1px solid var(--border)"
         >
           <Icon name="tasks" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="st1">{{ task.t }}</span>
@@ -360,7 +360,7 @@ async function onGhAccount(v: string) {
   align-items: center;
   gap: 8px;
   margin-top: 8px;
-  padding: 8px 11px;
+  padding: 8px 10px;
   border-radius: var(--r-sm);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);

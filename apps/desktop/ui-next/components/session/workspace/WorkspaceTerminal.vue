@@ -1020,7 +1020,7 @@ onBeforeUnmount(() => {
 .wsterm-tabs {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex: 0 0 auto;
   padding: 4px 6px;
   overflow-x: auto;
@@ -1031,7 +1031,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: none;
   border-radius: var(--r-xs);
   background: transparent;

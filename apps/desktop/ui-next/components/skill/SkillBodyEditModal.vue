@@ -175,7 +175,7 @@ const onApply = () => {
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  padding: 11px;
+  padding: 10px;
 }
 .sbe-ta {
   width: 100%;
@@ -196,7 +196,7 @@ const onApply = () => {
   background: var(--bgInput);
   border: 1px solid var(--danger);
   border-radius: var(--r-sm);
-  padding: 8px 11px;
+  padding: 8px 10px;
 }
 .sbe-preview {
   display: flex;

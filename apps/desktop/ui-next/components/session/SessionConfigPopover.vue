@@ -228,7 +228,7 @@ const filteredGroups = computed<[string, string[]][]>(() => {
 .budgetfield {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   flex: 1;
   font-size: 12px;
   line-height: 18px;
@@ -239,7 +239,7 @@ const filteredGroups = computed<[string, string[]][]>(() => {
   background: var(--bgInput, var(--bgActive));
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
-  padding: 5px 8px;
+  padding: 4px 8px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }

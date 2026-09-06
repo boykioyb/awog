@@ -107,8 +107,8 @@ watch(
 .pe-head {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 11px 14px;
+  gap: 8px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }
@@ -159,7 +159,7 @@ watch(
   padding: 0 14px 14px;
 }
 .pe-btn {
-  padding: 6px 13px;
+  padding: 6px 12px;
   border-radius: var(--r-xs);
   font-size: 1em;
   font-weight: 500;

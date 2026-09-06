@@ -60,11 +60,17 @@ export function isOptedOut(rawLines, maskedLines, index) {
   return false
 }
 
-export function* sourceFiles() {
+/** `skip` is an extra, CALLER-side exclusion list on top of SKIP_FILES — for a file that
+ *  is legitimately in scope but must not be rewritten right now (e.g. someone else has
+ *  uncommitted work in it). It only silences the codemod: check-design-tokens.mjs still
+ *  reads every file, so a skipped file has to be clean already or carry a legacy
+ *  allowance. Keep entries short-lived. */
+export function* sourceFiles(skip = []) {
+  const skipped = new Set(skip)
   for (const dir of SCAN_DIRS) {
     for (const absPath of walk(join(ROOT, dir))) {
       const relPath = relative(ROOT, absPath).split(sep).join('/')
-      if (SKIP_FILES.has(relPath)) continue
+      if (SKIP_FILES.has(relPath) || skipped.has(relPath)) continue
       yield { relPath, absPath }
     }
   }
@@ -80,12 +86,13 @@ export function* sourceFiles() {
  * one-rule-per-line shape and is excluded from Prettier.
  *
  * `mapValue(value, at)` returns the new value, or the value unchanged to skip.
+ * `skip` excludes files by path — see sourceFiles().
  * Returns the list of applied edits.
  */
-export function rewriteDeclarations({ re, mapValue, dryRun = false }) {
+export function rewriteDeclarations({ re, mapValue, dryRun = false, skip = [] }) {
   const edits = []
 
-  for (const { relPath, absPath } of sourceFiles()) {
+  for (const { relPath, absPath } of sourceFiles(skip)) {
     const src = readFileSync(absPath, 'utf8')
     const masked = maskBlockComments(src)
     const fileEdits = []

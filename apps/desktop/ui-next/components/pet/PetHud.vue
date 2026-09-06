@@ -97,9 +97,9 @@ function metaOf(item: AwogPetItem): string {
 .row {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: 6px;
   width: 100%;
-  padding: 5px 7px;
+  padding: 4px 6px;
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
@@ -122,7 +122,7 @@ function metaOf(item: AwogPetItem): string {
 .rowtop {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
 }
 .title {
@@ -176,13 +176,13 @@ function metaOf(item: AwogPetItem): string {
   justify-content: center;
 }
 .empty {
-  padding: 6px 7px;
+  padding: 6px 6px;
   color: var(--textDim);
 }
 
 .perm {
   margin-top: 4px;
-  padding: 7px;
+  padding: 6px;
   border-top: 1px solid var(--border);
   display: flex;
   flex-direction: column;

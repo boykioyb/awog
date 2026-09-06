@@ -166,7 +166,7 @@ async function del(snippet: SshSnippet): Promise<void> {
 .ssh-sn-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex: 0 0 auto;
   padding: 6px 10px;
   font-size: var(--fs-xs);
@@ -180,7 +180,7 @@ async function del(snippet: SshSnippet): Promise<void> {
 .ssh-sn-count {
   font-size: 12px;
   line-height: 1;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -246,7 +246,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 9px 10px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgEl);
@@ -259,7 +259,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   cursor: pointer;
 }
 .ssh-sn-name {

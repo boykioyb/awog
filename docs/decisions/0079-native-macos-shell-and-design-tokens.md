@@ -37,6 +37,8 @@ Scale token cần dùng **đã tồn tại** nhưng ngủ yên: `--r-xs|sm|btn|c
 | **D4** | Vỏ cửa sổ | Title bar do OS vẽ được **giấu** ở cửa sổ chính, top bar của app trở thành drag region; popout session **giữ frame native**. |
 | **D5** | Vibrancy | **Ngoài phạm vi** ADR này — tách ADR riêng. |
 | **D6** | Thang icon | `--icon-*` là **px cố định, mọi bậc chẵn** (12/14/16/20/24), `.icn` mặc định 16 + `stroke-width: 1.5`. |
+| **D7** | Spacing | Chưa token hoá. Luật duy nhất: `padding`/`margin`/`gap` px **chẵn** (±1px được giữ), làm tròn **xuống**. Guard R6 + codemod. |
+| **D8** | Hairline trên thanh cao cố định | `box-shadow: inset 0 -1px 0` thay `border-bottom` — border ăn 1px của content box và đẩy con căn giữa vào nửa pixel. |
 
 ### D1 — Token hoá bằng codemod + guard, không sửa tay
 
@@ -174,6 +176,38 @@ Rủi ro "to thêm 1px làm vỡ container" đã rà hết: mọi hộp vuông c
 Điểm khác biệt về công cụ so với D1: R1–R4 nhận diện vi phạm bằng **cú pháp** (`border-radius: <px>` là vi phạm, hết), nên guard tự chứa được. R5 phải trả lời "rule này có đang chỉnh cỡ **icon** không?" — `width: 15px` cũng là chấm trạng thái, ô màu, thanh skeleton, núm switch, caret. Câu trả lời không nằm trong CSS mà nằm trong **template**: [`scripts/lib/icon-sites.mjs`](../../apps/desktop/ui-next/scripts/lib/icon-sites.mjs) quét một lượt mọi `.vue`, gom class đứng trên `<Icon>` / `<svg>` / component `lucide-vue-next`, và **loại mọi tên cũng xuất hiện trên element khác** (nhập nhằng ⇒ không phải icon). Codemod và guard **import chung** module đó — hai bản sao của một classifier sẽ lệch ngay lần đổi tên class đầu tiên, và lệch ở đây tệ hơn không có: codemod sẽ sửa những site guard không bao giờ kiểm.
 
 Ba kênh khai cỡ icon đều phải phủ, vì bỏ sót một kênh là guard mù kênh đó: rule CSS, `style="width: …"` inline trên `<Icon>`, và `:size="…"` — prop **của lucide**, không phải của `Icon.vue` (`<Icon :size="13" />` là no-op, xem "Việc cần làm tiếp").
+
+#### D2c — Leading phải CHẴN, không chỉ nguyên (bổ sung 2026-09-06)
+
+D2b khai `--lh-*` bằng `calc(var(--font-size-base) + Npx)`, cho **pixel nguyên** ở mọi base — nhưng **chẵn/lẻ thì đổi theo base**: `--lh-md = base + 7` ra 20 ở base 13 (chẵn) và **19 / 21 / 23** ở base 12 / 14 / 16. Điều đó làm hỏng chính D6: một icon **chẵn** căn giữa trong hộp dòng **lẻ** lại rơi vào nửa pixel — `(19 − 16) / 2 = 1.5`. Bảo đảm của D2b vì thế chỉ đúng ở base 13 và 15.
+
+```
+--lh-md: round(up, calc(var(--font-size-base) * 1.5), 2px);
+```
+
+`round()` là math function của CSS (Chrome 125+; Electron 33 = Chromium 130) — snap mỗi bậc lên **bội số của 2px**, nên toàn bộ bảng **6 base × 7 token** chẵn *bằng cấu tạo*, không phải bằng may mắn của một phép cộng. Hệ số chọn sao cho **base 13 giữ đúng giá trị D2b** (16/18/20/22/24/28/22): `1.2 · 1.35 · 1.5 · 1.6 · 1.8 · 2.1 · 1.65`.
+
+Phụ thuộc vào một tính năng CSS mới thì phải **đo, không giả định**: `CSS.supports('line-height','round(up, 19.5px, 2px)')` trả `true` và `getComputedStyle` đọc đúng `20px` trên **CSS đã build** trong Electron 33. Nếu trình duyệt không hiểu, `var(--lh-md)` sẽ invalid-at-computed-value-time và line-height rơi về giá trị kế thừa — hỏng im lặng, nên phép đo này là bắt buộc chứ không phải thủ tục.
+
+Đánh đổi: thang leading chuyển từ **offset** (như `--fs-*`) sang **tỉ lệ**, nên ở base 18 hộp dòng cao hơn bản offset 2–3px. Ngược với lập luận của D2 cho *font-size*, và cố ý: lý do D2 từ chối tỉ lệ là **rem × base = phân số**, mà `round()` khử đúng phân số đó; còn leading thì *nên* giãn theo cỡ chữ.
+
+### D7 — Spacing: khử số lẻ trước, token hoá sau
+
+2397 declaration `padding`/`margin`/`gap` trong 246 file, **918 con số lẻ**, 30 giá trị padding + 19 giá trị gap khác nhau. Cám dỗ là ép hết lên lưới 4pt trong một đợt. **Từ chối:** `9 → 12` dịch **3px**, nhân với 753 site là wrap/overflow ở hàng trăm chỗ mà không ai review được — và một diff không review được thì bằng không có review.
+
+Đợt này vì thế chỉ đặt **một** ràng buộc, ràng buộc rẻ nhất có ích: **mọi giá trị phải chẵn**, mỗi giá trị dịch **tối đa 1px**, làm tròn **xuống** (chật thì không gây overflow, rộng thì có). `±1px` miễn trừ — 1px là nudge quang học hoặc bù chiều dày hairline, không phải nhịp.
+
+**Không** đụng `width`/`height`/`top`/`left`/`inset`/`transform`: đó là **hình dạng**, và số lẻ ở đó thường là cố ý (chấm trạng thái 7px, caret 1px).
+
+Token hoá `--sp-*` là quyết định **sau**, khi bộ giá trị còn lại (39, xuống từ 48) đủ nhỏ để đặt tên. Đặt tên cho 48 giá trị hỗn độn chỉ là đổi chỗ hỗn độn.
+
+### D8 — Hairline trên thanh cao cố định là shadow, không phải border
+
+Sau D2b + D6, 18 element còn nằm trên nửa pixel — tất cả cùng một nguyên nhân: `* { box-sizing: border-box }` + `height: 44px` + `border-bottom: 1px` ⇒ content box **43px**, và nút cao 28px căn giữa rơi vào `(43 − 28) / 2 = 7.5`. Đường kẻ 1px chiếm chỗ trong layout là thứ biến mọi con số chẵn tác giả chọn thành số lẻ.
+
+`box-shadow` vẽ mà không chiếm chỗ ⇒ content box giữ nguyên. Chọn **`inset 0 -1px 0`** chứ không phải outset `0 1px 0`: theo thứ tự paint, background của **sibling kế tiếp** vẽ sau shadow outset của sibling trước ⇒ đường kẻ biến mất. Inset vẽ trong padding box nên chỉ con của chính element mới che được, và điều đó kiểm được từng rule một.
+
+**Phạm vi hẹp có chủ đích** — chỉ rule vừa có chiều cao cố định, vừa có hairline 1px, vừa căn giữa con theo trục dọc: đúng **8 rule** (6 base + 2 override của theme Cute). Migrate toàn bộ border của app sang box-shadow là một thay đổi khác, rủi ro khác, và không giải quyết vấn đề này nhanh hơn. Hai chỗ khác cùng triệu chứng (`.stabs` có con nền trải hết chiều cao, `.oshead` là lưới bảng tính) **để lại** kèm lý do — xem [native-macos-polish.md §4 W12](../features/native-macos-polish.md).
 
 ### Ngoại lệ cố ý — khai trong guard script
 

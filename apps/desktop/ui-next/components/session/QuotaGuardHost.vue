@@ -62,7 +62,7 @@ function runAction(tt: QuotaToast) {
    primary way out of the block, distinct from the amber warning surface. */
 .q-act {
   flex: 0 0 auto;
-  padding: 3px 10px;
+  padding: 2px 10px;
   border: 1px solid var(--accent);
   border-radius: var(--r-pill);
   background: var(--accentDim);

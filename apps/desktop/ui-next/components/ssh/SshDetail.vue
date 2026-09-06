@@ -275,7 +275,7 @@ const forwardLabel = (fwd: PortForward): string => {
   flex: 0 0 auto;
   display: flex;
   align-items: flex-start;
-  gap: 13px;
+  gap: 12px;
   padding: 16px 18px;
   border-bottom: 1px solid var(--border);
 }
@@ -323,7 +323,7 @@ const forwardLabel = (fwd: PortForward): string => {
   gap: 6px;
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border: 1px solid;
   border-radius: var(--r-pill);
   background: transparent;
@@ -339,7 +339,7 @@ const forwardLabel = (fwd: PortForward): string => {
   gap: 4px;
   font-size: 12px;
   line-height: 1;
-  padding: 3px 8px;
+  padding: 2px 8px;
   border-radius: var(--r-pill);
   color: var(--textDim);
   background: var(--bgHover);
@@ -366,7 +366,7 @@ const forwardLabel = (fwd: PortForward): string => {
   align-items: center;
   gap: 6px;
   height: 30px;
-  padding: 0 13px;
+  padding: 0 12px;
   margin-right: 4px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
@@ -425,7 +425,7 @@ const forwardLabel = (fwd: PortForward): string => {
 .ssh-act-sep {
   width: 1px;
   height: 18px;
-  margin: 0 3px;
+  margin: 0 2px;
   background: var(--border);
 }
 
@@ -518,7 +518,7 @@ const forwardLabel = (fwd: PortForward): string => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 8px 12px;
 }
 .ssh-fwd + .ssh-fwd {
   border-top: 1px solid var(--border);
@@ -554,9 +554,9 @@ const forwardLabel = (fwd: PortForward): string => {
 .ssh-surface-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex: 0 0 auto;
-  padding: 9px 12px;
+  padding: 8px 12px;
   color: var(--textDim);
   border-bottom: 1px solid var(--border);
   font-size: var(--fs-xs);

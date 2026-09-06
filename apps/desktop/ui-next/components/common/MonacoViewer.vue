@@ -286,7 +286,7 @@ onBeforeUnmount(() => {
   color: var(--textDim);
 }
 .mvretry {
-  padding: 5px 14px;
+  padding: 4px 14px;
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   background: transparent;

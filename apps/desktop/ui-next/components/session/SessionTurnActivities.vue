@@ -95,7 +95,7 @@ function toggleThink(key: string) {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 3px 6px;
+  padding: 2px 6px;
   border-radius: var(--r-sm);
   cursor: pointer;
   color: var(--textDim);
@@ -116,7 +116,7 @@ function toggleThink(key: string) {
 .tbadge {
   flex: 0 0 auto;
   min-width: 18px;
-  padding: 0 5px;
+  padding: 0 4px;
   height: 16px;
   display: inline-flex;
   align-items: center;
@@ -144,8 +144,8 @@ function toggleThink(key: string) {
   /* Indent the activity rows so they read as nested under the "N · preview" header
      (craft TurnCard tree indent). A hairline rail on the left groups the run as one
      unit; the ~7px left margin lines the rail up under the header chevron. */
-  margin-left: 7px;
-  padding-left: 13px;
+  margin-left: 6px;
+  padding-left: 12px;
   border-left: 1px solid var(--border);
 }
 /* Neutralize the prototype's `.think.col .thb{display:none}` inside the Collapse

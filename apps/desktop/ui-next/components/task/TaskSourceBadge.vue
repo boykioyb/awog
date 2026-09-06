@@ -63,7 +63,7 @@ const open = (url: string): void => {
 .tsb {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   color: var(--textMuted);
 }
 .tsb.link {

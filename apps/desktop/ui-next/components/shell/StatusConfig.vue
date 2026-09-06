@@ -110,7 +110,7 @@
             <Icon v-if="row.slug === activeStyleId" name="check" class="styck" />
           </div>
         </template>
-        <label class="nmk" style="padding: 0 11px 9px" @click.stop="toggleNoMd">
+        <label class="nmk" style="padding: 0 10px 8px" @click.stop="toggleNoMd">
           <span class="tog2 sm" :class="{ off: !noMd }" />
           {{ t('sessions.config.noMarkdown') }}
         </label>

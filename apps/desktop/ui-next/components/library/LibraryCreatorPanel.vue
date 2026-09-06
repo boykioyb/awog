@@ -264,7 +264,7 @@ onBeforeUnmount(() => creator.teardown())
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 13px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
   flex: 0 0 auto;
 }
@@ -346,7 +346,7 @@ onBeforeUnmount(() => creator.teardown())
   background: var(--bgInput);
   border: 1px solid var(--danger);
   border-radius: var(--r-sm);
-  padding: 8px 11px;
+  padding: 8px 10px;
 }
 .lcp-foot {
   flex: 0 0 auto;
@@ -356,7 +356,7 @@ onBeforeUnmount(() => creator.teardown())
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
-  padding: 11px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;

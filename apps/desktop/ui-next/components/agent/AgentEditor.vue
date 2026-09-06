@@ -464,7 +464,7 @@ const onSave = () => {
 }
 .age-input {
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -512,7 +512,7 @@ const onSave = () => {
 .age-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
 }
 .age-chipx {
   display: inline-flex;

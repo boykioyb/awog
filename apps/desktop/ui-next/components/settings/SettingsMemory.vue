@@ -272,7 +272,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 .membtn {
-  padding: 5px;
+  padding: 4px;
   border: 0;
   background: transparent;
   border-radius: var(--r-sm);

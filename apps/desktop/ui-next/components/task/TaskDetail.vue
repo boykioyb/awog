@@ -248,7 +248,7 @@ const formattedTime = computed(() => {
 .td-status {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 .td-statusi {
   width: var(--icon-xs);
@@ -283,7 +283,7 @@ const formattedTime = computed(() => {
 .td-meta-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 .td-meta-icn {
   width: var(--icon-xs);
@@ -317,7 +317,7 @@ const formattedTime = computed(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 9px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgSubtle);

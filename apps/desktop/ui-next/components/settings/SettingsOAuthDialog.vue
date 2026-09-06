@@ -220,7 +220,7 @@ const onCancel = () => {
   font-size: 1em;
   color: var(--textDim);
   line-height: 1.5;
-  padding: 9px 11px;
+  padding: 8px 10px;
   border-radius: var(--r-sm);
   background: var(--bgInput);
   border: 1px solid var(--border);
@@ -233,7 +233,7 @@ const onCancel = () => {
 .oarow {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 }
 .oabadge {
   display: grid;
@@ -276,7 +276,7 @@ const onCancel = () => {
 }
 .oaerror {
   border-radius: var(--r-sm);
-  padding: 8px 11px;
+  padding: 8px 10px;
   font-size: 1em;
   background: var(--dangerDim);
   border: 1px solid var(--danger);

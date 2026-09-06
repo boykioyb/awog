@@ -58,7 +58,7 @@ const points = computed(() => [
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 10px;
   text-align: left;
   width: 100%;
   max-width: 380px;

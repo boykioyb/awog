@@ -135,7 +135,7 @@ function openGit() {
 }
 .sb-menu-sep {
   height: 1px;
-  margin: 5px 4px;
+  margin: 4px 4px;
   background: var(--border);
 }
 .mi {

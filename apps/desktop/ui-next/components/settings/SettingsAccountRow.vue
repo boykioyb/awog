@@ -186,7 +186,7 @@ const formatTestResult = (result: AccountTestResult): string => {
 .acrmain {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 }
 .acrradio {
   flex: 0 0 auto;
@@ -211,7 +211,7 @@ const formatTestResult = (result: AccountTestResult): string => {
 .acrtop {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
 }
 .acrlabel {
   font-size: 1em;
@@ -287,16 +287,16 @@ const formatTestResult = (result: AccountTestResult): string => {
 .acrmodels {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  padding-left: 27px;
+  gap: 4px;
+  padding-left: 26px;
 }
 .acrmodel {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
 .acrtest {
-  margin-left: 27px;
-  padding: 5px 9px;
+  margin-left: 26px;
+  padding: 4px 8px;
   border-radius: var(--r-xs);
   font-size: 1em;
   background: var(--bgEl);

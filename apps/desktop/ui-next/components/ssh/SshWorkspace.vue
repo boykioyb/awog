@@ -339,7 +339,7 @@ watch(
 .sshx-tabs {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex: 0 0 auto;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
@@ -348,7 +348,7 @@ watch(
 .sshx-tab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex: 0 0 auto;
   max-width: 220px;
   padding: 6px 10px;
@@ -490,8 +490,8 @@ watch(
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 12px;
+  gap: 8px;
+  padding: 6px 12px;
   border-bottom: 1px solid var(--border);
 }
 .sshx-tbar-dot {

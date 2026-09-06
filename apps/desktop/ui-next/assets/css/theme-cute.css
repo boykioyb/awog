@@ -316,18 +316,18 @@ body[data-theme-family='cute'] .side {
    taking the accent. No dark fills, no borders on rows.
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute'] .side {
-  padding: 10px 9px;
+  padding: 10px 8px;
 }
 body[data-theme-family='cute'] .navg {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--textFaint);
-  padding: 13px 10px 5px;
+  padding: 12px 10px 4px;
 }
 body[data-theme-family='cute'] .ni {
   min-height: 36px;
-  padding: 7px 10px;
+  padding: 6px 10px;
   gap: 10px;
   border-radius: var(--r-btn);
   border: 1px solid transparent;
@@ -396,15 +396,15 @@ body[data-theme-family='cute'] .sfoot {
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute'] .stabs {
   min-height: 42px;
-  padding: 5px 8px 0;
-  gap: 5px;
+  padding: 4px 8px 0;
+  gap: 4px;
   background: var(--bgRail);
 }
 body[data-theme-family='cute'] .stab {
   height: 30px;
   align-self: center;
-  padding: 0 9px;
-  gap: 7px;
+  padding: 0 8px;
+  gap: 6px;
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
   background: var(--bgEl);
@@ -453,7 +453,7 @@ body[data-theme-family='cute'] .lscroll {
   padding: 8px;
 }
 body[data-theme-family='cute'] :is(.li, .libli) {
-  padding: 9px 11px;
+  padding: 8px 10px;
   margin-bottom: 4px;
   border-radius: var(--r-card);
   border: 1px solid transparent;
@@ -476,7 +476,7 @@ body[data-theme-family='cute'] :is(.li.on .ttl, .libli.on .ttl) {
   font-weight: 600;
 }
 body[data-theme-family='cute'] .li .sub {
-  margin-top: 5px;
+  margin-top: 4px;
 }
 /* Row hover actions (pin · delete). These reveal ON TOP of an already-tinted row and
    over the timestamp, so "ghost pill" is the wrong call — transparent + a hairline is
@@ -583,7 +583,7 @@ body[data-theme-family='cute']
   border-radius: var(--r-btn);
 }
 body[data-theme-family='cute'] .btn {
-  padding: 7px 12px;
+  padding: 6px 12px;
   font-weight: 550;
 }
 body[data-theme-family='cute'] .btn:hover {
@@ -638,7 +638,7 @@ body[data-theme-family='cute'] :is(.chip, .tag, .gchip, .ghrepo, .pagent) {
   background: transparent;
 }
 body[data-theme-family='cute'] .chip {
-  padding: 3px 10px;
+  padding: 2px 10px;
 }
 body[data-theme-family='cute'] .chipbtn:hover {
   background: var(--accentSoft);
@@ -773,7 +773,7 @@ body[data-theme-family='cute'] .abody.bubble {
 }
 body[data-theme-family='cute'] .abody.bubble .mmetarow.footer {
   margin: 10px -20px -18px;
-  padding: 9px 18px;
+  padding: 8px 18px;
   border-top: 1px solid var(--border);
 }
 /* The user's own message: an accent-tinted bubble. `--bgSubtle` is near-white on an
@@ -784,7 +784,7 @@ body[data-theme-family='cute'] .abody.bubble .mmetarow.footer {
 body[data-theme-family='cute'] .mu {
   border-radius: var(--r-panel);
   border-bottom-right-radius: var(--r-sm);
-  padding: 11px 15px;
+  padding: 10px 14px;
   background: var(--accentSoft);
   border-color: var(--accentBorder);
   color: var(--text);
@@ -850,7 +850,7 @@ body[data-theme-family='cute'] .codeblock {
 body[data-theme-family='cute'] .codeblock pre {
   border: 0 !important;
   border-radius: 0 !important;
-  padding: 13px 14px !important;
+  padding: 12px 14px !important;
   background: var(--codeBg) !important;
   /* Safety net for LIGHT mode: the block is dark but `--text` is dark too, so any code
      that is NOT carrying Shiki's inline token colors — the first paint before the
@@ -888,14 +888,14 @@ body[data-theme-family='cute'] :is(.codecopy, .codewrap):hover {
 /* Prose rhythm (§9): headings get air, bullets breathe, inline code is a soft chip. */
 body[data-theme-family='cute'] .mdinline :is(h1, h2, h3, h4, h5) {
   font-weight: 600;
-  margin: 20px 0 9px;
+  margin: 20px 0 8px;
   letter-spacing: -0.008em;
 }
 body[data-theme-family='cute'] .mdinline :is(ul, ol) {
   padding-left: 20px;
 }
 body[data-theme-family='cute'] .mdinline li {
-  margin: 5px 0;
+  margin: 4px 0;
 }
 /* Inline code = a RAISED chip, derived from the text color rather than a surface
    token. `--bgSubtle` is DARKER than the card it sits on in the dark variant, so a
@@ -912,10 +912,10 @@ body[data-theme-family='cute'] .mdinline :not(pre) > code:not(.filelink) {
   background: color-mix(in srgb, var(--text) 8%, transparent);
   border-color: color-mix(in srgb, var(--text) 13%, transparent);
   color: var(--text);
-  padding: 1px 5px;
+  padding: 1px 4px;
 }
 body[data-theme-family='cute'] .mdinline :is(th, td) {
-  padding: 7px 12px;
+  padding: 6px 12px;
 }
 body[data-theme-family='cute'] .mdinline table {
   border-radius: var(--r-sm);
@@ -951,7 +951,7 @@ body[data-theme-family='cute'] .cbox:focus-within {
 }
 body[data-theme-family='cute'] .cbar {
   margin-top: 10px;
-  gap: 7px;
+  gap: 6px;
 }
 body[data-theme-family='cute'] :is(.att, .uatt .a1, .attmore) {
   border-radius: var(--r-sm);
@@ -984,10 +984,13 @@ body[data-theme-family='cute'] .gterm {
   background: var(--termBg);
   box-shadow: var(--shadow-md);
 }
+/* The terminal heads recolour their hairline. It is an inset box-shadow rather than a
+   border-bottom (see GlobalTerminalHost.vue) so the fixed-height bar keeps an EVEN content
+   box; overriding it with a border here would put the line back into layout. */
 body[data-theme-family='cute'] .gterm-head {
   height: 32px;
   background: var(--termBgHead);
-  border-bottom: 1px solid var(--termBorder);
+  box-shadow: inset 0 -1px 0 var(--termBorder);
   color: var(--termText);
 }
 body[data-theme-family='cute'] .gterm-title {
@@ -1016,7 +1019,7 @@ body[data-theme-family='cute'] .tsr {
 }
 body[data-theme-family='cute'] .tsr-head {
   background: var(--termBgHead);
-  border-bottom: 1px solid var(--termBorder);
+  box-shadow: inset 0 -1px 0 var(--termBorder);
   color: var(--termText);
 }
 body[data-theme-family='cute'] .tsr-row {

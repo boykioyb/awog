@@ -1226,7 +1226,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   align-items: center;
   gap: 8px;
   margin: 0 14px 8px;
-  padding: 7px 11px;
+  padding: 6px 10px;
   border: 1px solid var(--accentBorder);
   border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
@@ -1351,7 +1351,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 .dropzone-inner {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   padding: 12px 18px;
   font-weight: 600;
   color: var(--accent);
@@ -1388,8 +1388,8 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 .selquote {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
+  gap: 4px;
+  padding: 4px 10px;
   /* A two-word label is one label — never break it across lines. */
   white-space: nowrap;
   color: var(--text);
@@ -1456,7 +1456,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 }
 .npinput {
   width: 100%;
-  padding: 6px 9px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   background: var(--bgInput);

@@ -392,7 +392,7 @@ async function onCopyPath(): Promise<void> {
   border: 0;
   color: var(--textDim);
   cursor: pointer;
-  padding: 3px 4px;
+  padding: 2px 4px;
   border-radius: var(--r-sm);
   font-size: 1em;
   overflow: hidden;

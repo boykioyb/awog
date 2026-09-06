@@ -194,15 +194,19 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   border-left: 1px solid var(--border);
   background: var(--bgPanel);
 }
+/* Hairline as an INSET SHADOW, not a border: a 1px border eats a pixel of the CONTENT
+   box under `box-sizing: border-box`, leaving an odd height (30 - 1 = 29) that puts every
+   vertically centred child on a half pixel. A shadow takes no layout space. Inset rather
+   than outset so the next sibling's background cannot paint over the line. */
 .tsr-head {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex: 0 0 auto;
   height: 30px;
   padding: 0 8px 0 10px;
   color: var(--textDim);
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 .tsr-head-t {
   font-size: 12px;
@@ -275,7 +279,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 9px;
+  padding: 8px 8px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgEl);
@@ -288,7 +292,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   cursor: pointer;
 }
 .tsr-name {

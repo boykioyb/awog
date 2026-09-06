@@ -159,7 +159,7 @@ watch(
 .sfpp-head {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
 }
 .sfpp-icn {
   width: var(--icon-md);
@@ -175,7 +175,7 @@ watch(
 .sfpp-crumbs {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   flex-wrap: wrap;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
@@ -185,7 +185,7 @@ watch(
   background: transparent;
   color: var(--accent);
   cursor: pointer;
-  padding: 1px 3px;
+  padding: 1px 2px;
   border-radius: var(--r-xs);
   /* mono-ok: remote path segment */
   font-family: var(--code);
@@ -210,9 +210,9 @@ watch(
 .sfpp-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   width: 100%;
-  padding: 7px 10px;
+  padding: 6px 10px;
   border: none;
   background: transparent;
   color: var(--text);

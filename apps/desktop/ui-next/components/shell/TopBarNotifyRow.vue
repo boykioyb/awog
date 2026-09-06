@@ -97,7 +97,7 @@ const hoverText = computed(() => {
   grid-template-columns: 6px 13px minmax(0, 1fr);
   column-gap: 6px;
   align-items: start;
-  padding: 7px 6px 7px 4px;
+  padding: 6px 6px 6px 4px;
   border-radius: var(--r-sm);
   overflow: hidden;
 }

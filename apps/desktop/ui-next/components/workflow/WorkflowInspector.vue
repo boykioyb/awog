@@ -197,7 +197,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
 .wfi-agent {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
@@ -256,7 +256,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
   background: var(--bgInput);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  padding: 6px 9px;
+  padding: 6px 8px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--text);
@@ -326,7 +326,7 @@ const onGateAuto = (e: Event) => patchGate({ auto: (e.target as HTMLInputElement
 .wfi-hint {
   font-size: var(--fs-xs);
   color: var(--textDim);
-  margin-top: 5px;
+  margin-top: 4px;
   margin-left: 22px;
   line-height: 1.5;
 }

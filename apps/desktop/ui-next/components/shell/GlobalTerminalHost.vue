@@ -397,6 +397,10 @@ function onResize(ev: PointerEvent): void {
 .gterm-rsz:hover {
   background: var(--accentDim);
 }
+/* Hairline as an INSET SHADOW, not a border: a 1px border eats a pixel of the CONTENT
+   box under `box-sizing: border-box`, leaving an odd height (30 - 1 = 29) that puts every
+   vertically centred child on a half pixel. A shadow takes no layout space. Inset rather
+   than outset so the next sibling's background cannot paint over the line. */
 .gterm-head {
   flex: 0 0 auto;
   display: flex;
@@ -404,13 +408,13 @@ function onResize(ev: PointerEvent): void {
   gap: 8px;
   height: 30px;
   padding: 0 8px 0 10px;
-  border-bottom: 1px solid var(--border);
+  box-shadow: inset 0 -1px 0 var(--border);
   background: var(--bgPanel);
 }
 /* Collapsed: the header is the whole dock, so its bottom border is redundant and
    the whole bar becomes a click target to expand. */
 .gterm--collapsed .gterm-head {
-  border-bottom: 0;
+  box-shadow: none;
 }
 .gterm-head--clickable {
   cursor: pointer;

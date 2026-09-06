@@ -155,7 +155,7 @@ Ngoại lệ **không đụng**: xterm tự vẽ scrollbar DOM riêng ([Workspac
 
 ### W8 — Guard & tài liệu
 
-- `scripts/check-design-tokens.mjs` (Node thuần, **không thêm dep** → không cần ADR cho dep) nối vào `pnpm lint`. Fail khi: `border-radius: <px>` không phải `var(--r-*)`/`50%` (R1), `font-size: <rem>` không phải `var(--fs-*)` (R2), `var(--code)` ở file ngoài allowlist (R3), `line-height` là hệ số lẻ / px lẻ (R4). Allowlist đặt trong chính script.
+- `scripts/check-design-tokens.mjs` (Node thuần, **không thêm dep** → không cần ADR cho dep) nối vào `pnpm lint`. Fail khi: `border-radius: <px>` không phải `var(--r-*)`/`50%` (R1), `font-size: <rem>` không phải `var(--fs-*)` (R2), `var(--code)` ở file ngoài allowlist (R3), `line-height` là hệ số lẻ / px lẻ (R4), cỡ icon px lẻ (R5), `padding`/`margin`/`gap` px lẻ ngoài ±1px (R6). Allowlist đặt trong chính script.
 - Cập nhật [.claude/rules/nuxt-vue.md](../../.claude/rules/nuxt-vue.md) + [docs/coding/nuxt-frontend.md](../coding/nuxt-frontend.md).
 - **Dọn tài liệu chết:** [ui-design-system.md](./ui-design-system.md) + [ADR 0041](../decisions/0041-in-house-design-system-shadcn-style.md) trỏ vào `apps/desktop/ui/` đã bị xoá → đánh dấu Superseded hoặc viết lại cho `ui-next`.
 - **ADR mới (0079)** cho quyết định thang token + native window chrome.
@@ -198,6 +198,82 @@ Kết quả học: **102 class icon**. Heuristic loại đúng các bẫy `width
 
 Cần mắt người sau khi land: NavRail, list session, composer, top bar, status bar — xem §7.
 
+### W10 — Spacing: khử số lẻ (P8a)
+
+Sau P7a (leading) + P7b (icon), phần nửa pixel còn lại rơi vào **spacing**. Scan: **2397 declaration** `padding`/`margin`/`gap` có px, trong **246 file**; chỉ 34% nằm trên lưới 4pt, **918 con số là lẻ** (`8px` ×461 · `6px` ×357 · `10px` ×344 · `12px` ×248 · `9px` ×215 · `7px` ×188 · `4px` ×216 · `5px` ×134 · `11px` ×136 · `3px` ×111 …). 30 giá trị padding + 19 giá trị gap khác nhau — không có nhịp nào.
+
+**Cố ý đi một bước vừa phải, KHÔNG nhảy thẳng lên lưới 4pt.** Ép `9 → 12` dịch **3px** và làm wrap/overflow ở hàng trăm chỗ không ai review nổi. Đợt này chỉ **khử số lẻ**, mỗi giá trị dịch **tối đa 1px**:
+
+| lẻ | → chẵn | lẻ | → chẵn |
+|---:|---:|---:|---:|
+| 3 | 2 | 11 | 10 |
+| 5 | 4 | 13 | 12 |
+| 7 | 6 | 15 | 14 |
+| 9 | 8 | 17 | 16 |
+
+Làm tròn **XUỐNG** (chật hơn): thu một khoảng cách thì không bao giờ gây overflow, nới thì có. **`±1px` giữ nguyên** (69 site) — 1px là nudge quang học hoặc bù chiều dày hairline, không phải nhịp, và cả `0` lẫn `2` đều sai.
+
+Codemod [`scripts/codemod-spacing.mjs`](../../apps/desktop/ui-next/scripts/codemod-spacing.mjs) (dùng lại `scripts/lib/css-sites.mjs`) + guard **R6**. Chỉ đụng `padding*` / `margin*` / `gap` / `row-gap` / `column-gap`; **không** đụng `width`/`height`/`top`/`left`/`inset`/`transform` — đó là **hình dạng**, không phải nhịp. Shorthand giữ nguyên số lượng giá trị (`padding: 7px 9px` → `6px 8px`).
+
+Kết quả: **753 site / 169 file**, 849 con số đổi, **48 → 39 giá trị** khác nhau, **918 → 69 số lẻ** (toàn bộ là ±1px). Hệ quả density: mọi control lấy chiều cao từ padding **thấp đi 2px** — `.btn` 34 → 32, `.ni` (hàng NavRail) 36 → 34, `.li` 66 → 64. Tất cả đều **chẵn**, tất cả đều đo được (xem §6).
+
+**KHÔNG token hoá spacing lần này.** `--sp-*` là đợt sau, khi đã biết bộ giá trị còn lại là gì.
+
+### W11 — Leading phải CHẴN ở mọi base (P8b)
+
+P7a khai `--lh-*` bằng `calc(var(--font-size-base) + Npx)` ⇒ **nguyên** ở mọi base, nhưng **chẵn/lẻ đổi theo base**: `--lh-md = base + 7` ra 20 ở base 13 (chẵn ✓) nhưng **19 / 21 / 23** ở base 12 / 14 / 16. Hộp dòng lẻ thì icon **chẵn** căn giữa lại rơi vào nửa pixel (`(19 − 16) / 2 = 1.5`) — đúng cái P7b vừa khử. Bảo đảm cũ chỉ đúng ở base 13 và 15.
+
+Sửa bằng `round()` của CSS (Chrome 125+; Electron 33 = Chromium 130):
+
+```
+--lh-md: round(up, calc(var(--font-size-base) * 1.5), 2px);
+```
+
+Hệ số chọn sao cho **base 13 giữ đúng giá trị cũ**: `xs 1.2 · sm 1.35 · md 1.5 · lg 1.6 · xl 1.8 · 2xl 2.1 · prose 1.65`.
+
+**Đã verify `round()` thật sự resolve, không giả định**: `CSS.supports('line-height','round(up, 19.5px, 2px)')` → `true`, và `getComputedStyle` trên element gắn token, đọc từ **CSS đã build** (`.output/public/_nuxt/entry.*.css`) trong Electron 33 — không phải một data-URL viết tay:
+
+| base | `--lh-xs` | `--lh-sm` | `--lh-md` | `--lh-lg` | `--lh-xl` | `--lh-2xl` | `--lh-prose` |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 12 | 16 | 18 | 18 | 20 | 22 | 26 | 20 |
+| **13** | **16** | **18** | **20** | **22** | **24** | **28** | **22** |
+| 14 | 18 | 20 | 22 | 24 | 26 | 30 | 24 |
+| 15 | 18 | 22 | 24 | 24 | 28 | 32 | 26 |
+| 16 | 20 | 22 | 24 | 26 | 30 | 34 | 28 |
+| 18 | 22 | 26 | 28 | 30 | 34 | 38 | 30 |
+
+42/42 ô chẵn — `round(…, 2px)` bảo đảm điều đó bằng cấu tạo, bảng chỉ là bằng chứng nó chạy. Hàng base 13 (in đậm) trùng khít giá trị của P7a ⇒ mặc định không đổi hình.
+
+Đánh đổi: thang chuyển từ **offset** sang **tỉ lệ**, nên ở base 18 hộp dòng cao hơn bản offset ~2–3px (md 28 thay vì 25). Chấp nhận: leading *nên* giãn theo cỡ chữ, và base 18 là mức Appearance ít dùng nhất.
+
+### W12 — Hairline không được ăn vào layout box (P8c)
+
+18 element lỗi thật còn lại sau P7b đều cùng một pattern: **thanh cao cố định + `border-bottom: 1px` + con căn giữa**. Vì `* { box-sizing: border-box }` nên border ăn mất 1px của **content box** (44 → 43) và mọi con căn giữa rơi vào nửa pixel: `(43 − 28) / 2 = 7.5`. Đo được 11 hộp + 7 SVG root đúng ở toạ độ đó, đều trong top bar (`.shelltgl`, `.ntf`, `.ntf-btn`, `.icn`).
+
+Sửa: vẽ đường kẻ bằng **`box-shadow: inset 0 -1px 0 <màu>`** — shadow không chiếm chỗ trong layout nên content box giữ số chẵn. **`inset` chứ không outset**: shadow outset bị **background của sibling kế tiếp** vẽ đè (thứ tự cây trong thuật toán paint), tức là mất hẳn đường kẻ; inset vẽ trong padding box nên chỉ có **con của chính nó** mới che được, và ở cả 6 rule dưới đây con cao nhất là 32px trong hộp ≥ 30px có padding — không chạm mép dưới.
+
+| Rule | Chiều cao | content box trước → sau |
+|---|---:|---|
+| `.top` ([prototype.css](../../apps/desktop/ui-next/assets/css/prototype.css)) | 44 (52 macOS · 46 cute) | 43 → **44** (51 → **52** · 45 → **46**) |
+| `.dh` ([prototype.css](../../apps/desktop/ui-next/assets/css/prototype.css)) | 50 (54 cute) | 49 → **50** (53 → **54**) |
+| `.edtop` ([EditorTopBar.vue](../../apps/desktop/ui-next/components/editor/EditorTopBar.vue)) | min 44 | 27 → **28** (trừ `padding: 8px 14px`) |
+| `.gterm-head` ([GlobalTerminalHost.vue](../../apps/desktop/ui-next/components/shell/GlobalTerminalHost.vue)) | 30 | 29 → **30** |
+| `.tsr-head` ([TerminalSnippetsRail.vue](../../apps/desktop/ui-next/components/shell/TerminalSnippetsRail.vue)) | 30 | 29 → **30** |
+| `body[…='cute'] .gterm-head` ([theme-cute.css](../../apps/desktop/ui-next/assets/css/theme-cute.css)) | 32 | 31 → **32** |
+| `body[…='cute'] .tsr-head` ([theme-cute.css](../../apps/desktop/ui-next/assets/css/theme-cute.css)) | 30 | 29 → **30** |
+| `.gterm--collapsed .gterm-head` | — | `border-bottom: 0` → `box-shadow: none` |
+
+Hai override trong `theme-cute.css` **bắt buộc** đi cùng: chúng khai lại `border-bottom` với màu terminal, để nguyên thì theme Cute vừa mất fix vừa có hai đường kẻ.
+
+Đo lại trên CSS đã build trong Electron 33: `.top` content box **44** (con `.btn` cao 32 ở `top = 6`, trước là 5.5), `.dh` content box **50** (`top = 9`, trước 8.5).
+
+**Phạm vi hẹp lại có chủ đích.** Chỉ rule vừa có `height`/`min-height` **cố định**, vừa có `border-top`/`border-bottom` 1px, **và** căn giữa con theo trục dọc. **Không** migrate toàn bộ border của app sang box-shadow — đó là thay đổi khác, rủi ro cao.
+
+Hai rule tìm thấy nhưng **cố ý để lại**, cần quyết định riêng:
+
+- **`.stabs`** ([SessionTabBar.vue](../../apps/desktop/ui-next/components/session/SessionTabBar.vue)) — `align-items: stretch`, không phải `center`, nên nằm ngoài tiêu chí. Nó *có* cùng lỗi (tab con cao 37 − 2px border = 35, chữ 20px ⇒ 7.5), nhưng `.stab.on` có **nền accent trải hết chiều cao** nên inset shadow sẽ bị nó che, còn outset thì bị nội dung phía dưới che. Cần một cách khác (`::after` tuyệt đối, hoặc `min-height: 39px`).
+- **`.oshead, .oscorner`** ([OfficeSheetView.vue](../../apps/desktop/ui-next/components/common/OfficeSheetView.vue)) — ô `<th>` sticky, căn giữa bằng `vertical-align` mặc định chứ không phải `align-items`, và còn `border-right` trên trục kia. Đường kẻ ở đây là **lưới bảng tính**, đổi sang shadow rủi ro hơn lợi (26 → 25, lệch 3.5px cho hộp dòng 18px).
+
 ## 5. Thứ tự thi công
 
 | Phase | Workstream | Trạng thái | File đụng | Commit |
@@ -208,6 +284,7 @@ Cần mắt người sau khi land: NavRail, list session, composer, top bar, sta
 | **P3** | W5 (mono triage) | ✅ — 85 giữ / 167 đổi | 113 | `a8a04c0` |
 | **P4** | W8 (guard + docs + ADR) | ✅ — guard nối vào `pnpm lint` | 7 | `a49a68f` + `b323405` |
 | **P7b** | W9 (icon scale + guard R5) | ✅ — 1482 declaration / 169 file | 169 | — |
+| **P8** | W10 + W11 + W12 (spacing / leading chẵn / hairline) | ✅ — 753 site spacing, 42/42 ô leading chẵn, 8 rule hairline | 176 | — |
 | **P5** *(chưa làm, cần ADR riêng)* | Vibrancy / translucency | ⬜ | toàn bộ thang màu | — |
 
 Mỗi phase = 1 commit riêng theo [.claude/rules/git-commit.md](../../.claude/rules/git-commit.md). P2 tách 2 commit (radius / type).
@@ -217,8 +294,9 @@ Mỗi phase = 1 commit riêng theo [.claude/rules/git-commit.md](../../.claude/r
 Chạy sau mỗi phase, trong `apps/desktop/ui-next/`:
 
 ```bash
-node scripts/check-design-tokens.mjs                    # R1–R5, phải 0 vi phạm
+node scripts/check-design-tokens.mjs                    # R1–R6, phải 0 vi phạm
 node scripts/codemod-icon-scale.mjs --dry-run           # phải 0 site (idempotent)
+node scripts/codemod-spacing.mjs --dry-run              # phải 0 site (idempotent)
 grep -rhoE 'border-radius: *[0-9]+px' components layouts pages assets/css | sort | uniq -c
 grep -rhoE 'font-size: *[0-9.]+rem'   components layouts pages assets/css | sort | uniq -c
 grep -rc 'var(--code)' components layouts pages assets/css | grep -v ':0$'

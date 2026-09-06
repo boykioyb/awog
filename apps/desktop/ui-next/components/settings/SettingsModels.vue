@@ -495,7 +495,7 @@ const onOauthConnected = (account: ProviderAccount) => {
 .smadvtoggle {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   background: transparent;
   border: none;
   color: var(--textDim);
