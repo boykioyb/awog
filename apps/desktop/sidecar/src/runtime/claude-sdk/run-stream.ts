@@ -93,18 +93,38 @@ const DEFAULT_BACKGROUND_WAIT_MS = 15 * 60_000
 // continuation), end the turn rather than sit until the cap. Any message cancels it.
 const BACKGROUND_GRACE_MS = 45_000
 
+// How long we wait, after `result`, for the CLI's authoritative `session_state_changed:
+// idle` before closing stdin ourselves. `result` is NOT turn-over: the CLI can deliver
+// it and then wake the model again (a task notification — including the one it raises
+// for background work ORPHANED by the previous turn's CLI process, which was never in
+// this process's live set). Closing on `result` cut those continuations off; see the
+// closeInput comment for what that costs. Short, because on a genuinely finished turn
+// this is dead time before the reply is released.
+const IDLE_SETTLE_MS = 4_000
+
+// After the wait cap fires we ask the CLI to stop its own background tasks and wait
+// for their notifications, so the turn ends through the normal `idle` path instead of
+// having stdin yanked mid-flight. This is the backstop if that never lands.
+const STOP_TASKS_DEADLINE_MS = 15_000
+
+// Backstop for a close deferred behind an in-flight tool call (see closeInput):
+// long enough that a genuinely slow command finishes and short enough that a call
+// which will never answer can't hold the session lock indefinitely.
+const DEFER_CLOSE_MAX_MS = 5 * 60_000
+
 // The CLI's task_type vocabulary, VERBATIM (`system/background_tasks_changed` +
 // `task_started`): `local_bash` = Bash(run_in_background), `local_agent` = a Task
-// subagent, `local_workflow` = a Workflow run. These are the three kinds the user
-// is actually waiting on, so they — and only they — park the turn.
+// subagent, `local_workflow` = a Workflow run.
 //
-// Getting a name wrong here is NOT cosmetic. With waitingCount() stuck at 0 we
-// close the CLI's stdin on `result` while background work is still live, and that
-// stdin is also the control stream carrying PreToolUse hook callbacks: every later
-// tool call of the turn comes back as `toolDenialKind: 'cancelled'` with the CLI's
-// canned "The user doesn't want to take this action right now…" text, so the
-// subagent reports a phantom "temporary system error" instead of its findings and
-// the woken main agent loses its tools too. Verified against CLI 2.1.218.
+// These names are a FALLBACK only. `background_tasks_changed` carries an `ambient`
+// flag per task ("True for tasks that are not activity … hosts should exclude them
+// from activity indicators") — that flag is the CLI's own answer to "is the user
+// waiting on this?", so it decides whenever present and this list is consulted only
+// for a task we learned from a `task_started` edge (no flag there) or from an older
+// CLI that omits it. Guessing the vocabulary is how this broke before: a name that
+// doesn't match leaves waitingCount() at 0, we close stdin while work is live, and
+// since stdin is also the control stream carrying PreToolUse hook callbacks every
+// later tool call comes back as `toolDenialKind: 'cancelled'`.
 const WAITABLE_TASK_TYPES = new Set(['local_bash', 'local_agent', 'local_workflow'])
 // Known types we deliberately don't wait for: ambient/housekeeping work the CLI
 // runs on its own, and work whose lifetime is not the turn's. Listed so an actually
@@ -600,6 +620,11 @@ export async function runStreamClaude(
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
     hooks: { PreToolUse: [{ hooks: [makePreToolUseHook(gate)] }] },
+    // AWOG DOES render a per-task stop control (SessionBackgroundChips → the bg
+    // registry → Query.stopTask), so say so: the CLI fails closed on absence and
+    // would kill every background task on an interrupt. With it declared, a cancel
+    // ends only the current turn and tasks are stopped one at a time from the chip.
+    perTaskStopAffordance: true,
     // Honour the agent's tool whitelist (Claude Code subagent `tools:` field).
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
     ...(args.disabledTools ? { disallowedTools: args.disabledTools } : {}),
@@ -646,30 +671,37 @@ export async function runStreamClaude(
   //
   // The CLI holds the turn open for background subagents/shells and wakes the
   // model when one finishes (`system/task_notification`). That only works while
-  // its stdin is open, so we decide when to close: on the turn's `result` we let
-  // the session end ONLY when no background task is live; otherwise we keep
-  // consuming and the model's woken continuation streams into this same turn.
+  // its stdin is open, so we decide when to close — and the ONE authoritative
+  // signal for "the turn is over" is `session_state_changed: idle`, which the CLI
+  // documents as firing after the held-back result flushes and its background loop
+  // exits. `result` is merely "a reply was produced"; the CLI can and does wake the
+  // model again afterwards. So `result` only arms a short settle timer (any further
+  // message cancels it) — it never closes stdin directly.
   //
   // `background_tasks_changed` is a LEVEL signal (replace the set wholesale); the
   // task_started/task_notification bookends are the fallback for a CLI that
   // doesn't emit the level. The set starts empty because this query owns a fresh
   // CLI process.
-  // id → task_type. We only PARK the turn for work the user is actually waiting on
-  // (a background shell, a subagent, a workflow). Ambient/housekeeping tasks the CLI
+  // id → task. We only PARK the turn for work the user is actually waiting on (a
+  // background shell, a subagent, a workflow). Ambient/housekeeping tasks the CLI
   // runs on its own (monitor/dream/scan) must never hold a turn open — that would
   // add the wait to EVERY turn — and neither must work that outlives the turn by
-  // design (a remote agent, a teammate).
-  const liveBackground = new Map<string, string>()
+  // design (a remote agent, a teammate). The CLI's own `ambient` flag answers that
+  // when we have it; the type list is the fallback (see WAITABLE_TASK_TYPES).
+  const liveBackground = new Map<string, { type: string; ambient?: boolean }>()
+  const isWaitable = (t: { type: string; ambient?: boolean }): boolean =>
+    t.ambient !== undefined ? !t.ambient : WAITABLE_TASK_TYPES.has(t.type)
   const waitingCount = (): number => {
     let n = 0
-    for (const type of liveBackground.values()) if (WAITABLE_TASK_TYPES.has(type)) n += 1
+    for (const t of liveBackground.values()) if (isWaitable(t)) n += 1
     return n
   }
   // Unknown types are reported once per turn: they mean the CLI's task vocabulary
-  // moved and this list needs updating — a silent miss is expensive (see the
-  // WAITABLE_TASK_TYPES comment).
+  // moved and the fallback list needs updating. Only worth saying when the CLI gave
+  // us no `ambient` flag — with the flag the name doesn't decide anything.
   const unknownTypesSeen = new Set<string>()
-  const noteTaskType = (type: string): void => {
+  const noteTaskType = (type: string, ambient?: boolean): void => {
+    if (ambient !== undefined) return
     if (WAITABLE_TASK_TYPES.has(type) || AMBIENT_TASK_TYPES.has(type)) return
     if (unknownTypesSeen.has(type)) return
     unknownTypesSeen.add(type)
@@ -679,25 +711,100 @@ export async function runStreamClaude(
     })
   }
   let closed = false
+  // This turn has produced at least one `result` — the point from which an `idle`
+  // state report means "this turn is over" rather than "the CLI is not busy yet".
+  let sawResult = false
   // Parked = the turn's result already arrived and we are only still here for
   // background work.
   let parked = false
   let waitTimer: NodeJS.Timeout | undefined
   let graceTimer: NodeJS.Timeout | undefined
-  const closeInput = (reason: string): void => {
-    if (closed) return
-    closed = true
+  let idleTimer: NodeJS.Timeout | undefined
+  const clearTimers = (): void => {
     if (waitTimer) clearTimeout(waitTimer)
     if (graceTimer) clearTimeout(graceTimer)
+    if (idleTimer) clearTimeout(idleTimer)
+    if (deferTimer) clearTimeout(deferTimer)
+    waitTimer = graceTimer = idleTimer = deferTimer = undefined
+  }
+  // Tool calls the CLI has announced but not yet answered. Closing stdin under one
+  // of these is what produces a PHANTOM DENIAL: stdin is the control stream, so the
+  // CLI aborts the in-flight call with reason 'background' and hands the model its
+  // canned "The user doesn't want to take this action right now…" text — which the
+  // model reasonably reads as the user refusing, and derails onto. So a deferrable
+  // close waits for the call to answer; only an abort or the stream ending cuts in.
+  const inFlightTools = new Set<string>()
+  let pendingClose: string | undefined
+  let deferTimer: NodeJS.Timeout | undefined
+  const closeInput = (reason: string, opts?: { force?: boolean }): void => {
+    if (closed) return
+    if (!opts?.force && inFlightTools.size > 0) {
+      if (pendingClose) return
+      pendingClose = reason
+      log.info('claude-sdk deferring close until tool calls answer', {
+        sessionId: args.sessionId,
+        reason,
+        inFlight: inFlightTools.size,
+      })
+      // Backstop: a call that never answers must not hold the session lock for the
+      // rest of time. Generous, because forcing past it cancels a call that IS
+      // still running — the thing the defer exists to avoid.
+      deferTimer = setTimeout(() => {
+        log.warn('claude-sdk close deferred too long — forcing', {
+          sessionId: args.sessionId,
+          reason,
+          inFlight: inFlightTools.size,
+        })
+        closeInput(`${reason} (defer cap)`, { force: true })
+      }, DEFER_CLOSE_MAX_MS)
+      return
+    }
+    closed = true
+    clearTimers()
     log.info('claude-sdk closing input', { sessionId: args.sessionId, reason })
     prompt.close()
   }
-  // Hard cap so a wedged background task can't hold the turn (and the session
-  // lock) forever. Honours the per-turn wallclock budget when the caller set one.
+  // A deferred close fires as soon as the last announced tool call is answered.
+  const flushPendingClose = (): void => {
+    if (!pendingClose || inFlightTools.size > 0) return
+    const reason = pendingClose
+    pendingClose = undefined
+    closeInput(`${reason} (tools settled)`)
+  }
+  // `result` is not turn-over. Wait a beat for `session_state_changed: idle`; if the
+  // CLI wakes the model instead, the next message cancels this and the continuation
+  // streams into the same turn.
+  const armIdleSettle = (): void => {
+    if (idleTimer || closed) return
+    idleTimer = setTimeout(() => closeInput('result, no idle signal'), IDLE_SETTLE_MS)
+  }
+  // Hard cap so a wedged background task can't hold the turn (and the session lock)
+  // forever. Honours the per-turn wallclock budget when the caller set one. We don't
+  // yank stdin: ask the CLI to stop its own tasks (it is the only thing that can) and
+  // let the resulting notifications take us to `idle` the normal way; the deadline is
+  // the backstop if that never lands.
   const waitCapMs = args.budget?.maxWallclockMs ?? DEFAULT_BACKGROUND_WAIT_MS
   const armWaitCap = (): void => {
     if (waitTimer || closed) return
-    waitTimer = setTimeout(() => closeInput('background wait cap reached'), waitCapMs)
+    waitTimer = setTimeout(() => {
+      const stopping = [...liveBackground.entries()].filter(([, t]) => isWaitable(t))
+      log.info('claude-sdk background wait cap reached — stopping tasks', {
+        sessionId: args.sessionId,
+        tasks: stopping.length,
+      })
+      for (const [taskId] of stopping) {
+        void q.stopTask(taskId).catch((err: unknown) => {
+          log.warn('claude-sdk stopTask failed (wait cap)', {
+            taskId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
+      }
+      waitTimer = setTimeout(
+        () => closeInput('background wait cap reached'),
+        STOP_TASKS_DEADLINE_MS,
+      )
+    }, waitCapMs)
   }
   // Every parked task settled but the CLI didn't wake the model (it skips ambient
   // tasks, and a failed task may produce no continuation). Give it a short grace
@@ -710,7 +817,9 @@ export async function runStreamClaude(
       BACKGROUND_GRACE_MS,
     )
   }
-  const onAbort = (): void => closeInput('aborted')
+  // A user cancel is the one close that cannot wait for a tool call to answer —
+  // cancelling IS the point, and the partial reply is persisted as canceled.
+  const onAbort = (): void => closeInput('aborted', { force: true })
   args.abortController?.signal.addEventListener('abort', onAbort, { once: true })
 
   // Mirror the CLI's background work into AWOG's bg registry so the session shows
@@ -723,7 +832,12 @@ export async function runStreamClaude(
     if (msg.type !== 'system') return
     const m = msg as {
       subtype?: string
-      tasks?: { task_id: string; task_type?: string; description?: string }[]
+      tasks?: {
+        task_id: string
+        task_type?: string
+        description?: string
+        ambient?: boolean
+      }[]
       task_id?: string
       tool_use_id?: string
       task_type?: string
@@ -738,13 +852,14 @@ export async function runStreamClaude(
         liveBackground.clear()
         for (const t of m.tasks ?? []) {
           const type = t.task_type ?? 'unknown'
-          liveBackground.set(t.task_id, type)
-          noteTaskType(type)
+          const entry = { type, ...(t.ambient !== undefined ? { ambient: t.ambient } : {}) }
+          liveBackground.set(t.task_id, entry)
+          noteTaskType(type, t.ambient)
           // This level signal is the ONLY place background and foreground work differ
           // (a foreground subagent emits the same task_* bookends) — the adapter needs
           // it to label the row honestly.
           adapter.markBackgroundTask(t.task_id)
-          if (mirrorSessionId && WAITABLE_TASK_TYPES.has(type)) {
+          if (mirrorSessionId && isWaitable(entry)) {
             registerExternalBackground({
               sessionId: mirrorSessionId,
               shellId: t.task_id,
@@ -755,9 +870,10 @@ export async function runStreamClaude(
         break
       case 'task_started': {
         // A Task-tool subagent may arrive without task_type; subagent_type says it.
+        // No `ambient` flag rides this edge, so the type list decides here.
         if (m.task_id) {
           const type = m.task_type ?? (m.subagent_type ? 'local_agent' : 'unknown')
-          liveBackground.set(m.task_id, type)
+          liveBackground.set(m.task_id, { type })
           noteTaskType(type)
           // A shell has no progress events — remember which tool_use announced it so
           // we can pick its output path out of the matching tool_result.
@@ -786,7 +902,10 @@ export async function runStreamClaude(
       case 'session_state_changed':
         // Authoritative turn-over signal: fires once the held-back result has
         // flushed AND the background loop has exited — nothing left to wait for.
-        if (m.state === 'idle') closeInput('session idle')
+        // Only after this turn produced its `result`: a resumed CLI can report
+        // itself idle before it has even picked up our prompt, and acting on that
+        // would close stdin at the start of the turn.
+        if (m.state === 'idle' && sawResult) closeInput('session idle')
         break
       default:
         break
@@ -862,6 +981,23 @@ export async function runStreamClaude(
     }
   }
 
+  // Announced-but-unanswered tool calls, so a close can wait for them (see
+  // closeInput). `tool_use` blocks ride the assistant message; the matching
+  // `tool_result` comes back on a user message. A subagent's calls count too —
+  // its stdin is the same control stream.
+  const trackToolFlight = (msg: SDKMessage): void => {
+    const content = (msg as { message?: { content?: unknown } }).message?.content
+    if (!Array.isArray(content)) return
+    for (const raw of content) {
+      const block = raw as { type?: string; id?: string; tool_use_id?: string }
+      if (msg.type === 'assistant' && block.type === 'tool_use' && block.id) {
+        inFlightTools.add(block.id)
+      } else if (msg.type === 'user' && block.type === 'tool_result' && block.tool_use_id) {
+        inFlightTools.delete(block.tool_use_id)
+      }
+    }
+  }
+
   const q = query({ prompt: prompt.stream, options })
   // Stop affordance parity with the Pi path: a chip's stop button goes through
   // sessions.backgroundKill → the registry → here, since only the CLI can stop
@@ -880,17 +1016,27 @@ export async function runStreamClaude(
   try {
     for await (const msg of q) {
       // Any message is activity: the CLI is alive and working, so a pending
-      // "settled but nothing followed" grace window no longer applies.
+      // "settled but nothing followed" grace window no longer applies — and
+      // neither does a post-`result` settle timer, since the CLI just proved the
+      // turn wasn't over (it woke the model, or is about to say `idle` itself).
       if (graceTimer) {
         clearTimeout(graceTimer)
         graceTimer = undefined
       }
+      if (idleTimer) {
+        clearTimeout(idleTimer)
+        idleTimer = undefined
+      }
       adapter.handle(msg)
       trackBackground(msg)
+      trackToolFlight(msg)
       trackShellOutputPath(msg)
       if (msg.type === 'result') {
+        sawResult = true
         const waiting = waitingCount()
-        if (waiting === 0) closeInput('turn complete')
+        // NOT a close: `result` says a reply was produced, not that the turn is
+        // over. Wait for `session_state_changed: idle` (or the settle timer).
+        if (waiting === 0) armIdleSettle()
         else {
           parked = true
           log.info('claude-sdk turn parked on background work', {
@@ -902,13 +1048,15 @@ export async function runStreamClaude(
         }
       }
       armGrace()
+      flushPendingClose()
     }
   } catch (err) {
     throw mapClaudeErrorToRpc(err)
   } finally {
     // Never leave the generator parked (it would keep the CLI process alive) or a
-    // timer pending, whichever way this turn ended.
-    closeInput('turn ended')
+    // timer pending, whichever way this turn ended. The stream is over here, so
+    // nothing can answer an in-flight call any more — force past the defer.
+    closeInput('turn ended', { force: true })
     stopOutputPoll()
     args.abortController?.signal.removeEventListener('abort', onAbort)
     // The CLI process dies with the turn, so any task still mirrored as running
@@ -1007,6 +1155,7 @@ export async function runStreamClaude(
       output_tokens: acc.outputTokens,
       cache_read_tokens: acc.cacheReadTokens,
       cache_creation_tokens: acc.cacheWriteTokens,
+      ...(acc.contextTokens > 0 ? { context_tokens: acc.contextTokens } : {}),
     },
     stopReason: acc.stopReason,
     contextChars,

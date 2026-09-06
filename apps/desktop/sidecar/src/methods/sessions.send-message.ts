@@ -173,6 +173,8 @@ const Params = z.object({
       memoryEnabled: z.boolean().optional(),
       memoryAutoWrite: z.boolean().optional(),
       memoryBudgetChars: z.number().int().positive().max(40_000).optional(),
+      agentsCatalogEnabled: z.boolean().optional(),
+      skillsCatalogEnabled: z.boolean().optional(),
     })
     .optional(),
   // Working folder dragged into the session (absolute on-disk path). Takes
@@ -526,49 +528,56 @@ async function buildBulkLoad(
   // Custom agents — name + compact description of the in-scope agents (Task
   // tool's subagent menu). Best-effort: a listing failure just omits the block.
   const projectIds = projectId ? [projectId] : []
-  try {
-    const { agents } = await listAgents(projectIds)
-    if (agents.length > 0) {
-      const lines = agents.map((a) => {
-        const line = compactLine(a.name, a.description)
-        result.customAgentsList.push({ label: a.name, chars: line.length })
-        return line
+  // Both catalogues are opt-OUT (Settings → Sessions → Context injection). They ride
+  // in the cached system prefix, but the prefix is re-read on EVERY request of every
+  // turn, so a user who never delegates to a subagent pays for the menu each time.
+  if (contextConfig?.agentsCatalogEnabled !== false) {
+    try {
+      const { agents } = await listAgents(projectIds)
+      if (agents.length > 0) {
+        const lines = agents.map((a) => {
+          const line = compactLine(a.name, a.description)
+          result.customAgentsList.push({ label: a.name, chars: line.length })
+          return line
+        })
+        const block = `<available_agents>\n${lines.join('\n')}\n</available_agents>`
+        blocks.push(block)
+        result.customAgentsChars = block.length
+      }
+    } catch (err) {
+      log.warn('failed to list agents for bulk load', {
+        err: err instanceof Error ? err.message : String(err),
       })
-      const block = `<available_agents>\n${lines.join('\n')}\n</available_agents>`
-      blocks.push(block)
-      result.customAgentsChars = block.length
     }
-  } catch (err) {
-    log.warn('failed to list agents for bulk load', {
-      err: err instanceof Error ? err.message : String(err),
-    })
   }
 
   // Skills — name + compact description of the in-scope skills.
-  try {
-    const { skills } = await listSkills(projectIds)
-    if (skills.length > 0) {
-      const lines = skills.map((s) => {
-        const line = compactLine(s.name, s.description)
-        result.skillsList.push({ label: s.name, chars: line.length })
-        return line
+  if (contextConfig?.skillsCatalogEnabled !== false) {
+    try {
+      const { skills } = await listSkills(projectIds)
+      if (skills.length > 0) {
+        const lines = skills.map((s) => {
+          const line = compactLine(s.name, s.description)
+          result.skillsList.push({ label: s.name, chars: line.length })
+          return line
+        })
+        const block =
+          `<available_skills>\n${lines.join('\n')}\n` +
+          // The composer inserts `@skill:<id>` when the user picks a skill from the
+          // `@` menu. Without saying what the token means, the model sees an
+          // unexplained string and answers around it instead of applying the skill
+          // the user explicitly pointed at (same reasoning as `@wiki:` — see
+          // wiki/inject.ts FRAMING).
+          `When the user's message contains \`@skill:<id>\`, they are pointing you at that skill on purpose — follow it for this task.\n` +
+          `</available_skills>`
+        blocks.push(block)
+        result.skillsChars = block.length
+      }
+    } catch (err) {
+      log.warn('failed to list skills for bulk load', {
+        err: err instanceof Error ? err.message : String(err),
       })
-      const block =
-        `<available_skills>\n${lines.join('\n')}\n` +
-        // The composer inserts `@skill:<id>` when the user picks a skill from the
-        // `@` menu. Without saying what the token means, the model sees an
-        // unexplained string and answers around it instead of applying the skill
-        // the user explicitly pointed at (same reasoning as `@wiki:` — see
-        // wiki/inject.ts FRAMING).
-        `When the user's message contains \`@skill:<id>\`, they are pointing you at that skill on purpose — follow it for this task.\n` +
-        `</available_skills>`
-      blocks.push(block)
-      result.skillsChars = block.length
     }
-  } catch (err) {
-    log.warn('failed to list skills for bulk load', {
-      err: err instanceof Error ? err.message : String(err),
-    })
   }
 
   // Wiki (ADR 0073) — a TABLE OF CONTENTS of the user's own documentation, never
@@ -1208,6 +1217,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         outputTokens: opts.result.usage.output_tokens,
         cacheReadTokens: opts.result.usage.cache_read_tokens,
         cacheWriteTokens: opts.result.usage.cache_creation_tokens,
+        // Measured window occupancy of the turn's last request — what the gauge
+        // and auto-compact read after a reload (contextChars can't see tool
+        // schemas or the tool results the loop accumulated).
+        ...(opts.result.usage.context_tokens !== undefined
+          ? { contextTokens: opts.result.usage.context_tokens }
+          : {}),
         ...(costUsd !== undefined ? { costUsd } : {}),
         ...(opts.result.contextChars ? { contextChars: opts.result.contextChars } : {}),
       }

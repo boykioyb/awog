@@ -207,10 +207,24 @@ Composer chips popover có **Mode** chip gồm 4 mode (Ask / Accept Edits / Plan
 Chips chia **2 hàng** quanh ô nhập. Component [`SessionChipsPopover.vue`](../../apps/desktop/ui/components/session/SessionChipsPopover.vue) nhận prop `only?: ChipKind[]` để lọc chip nào render; composer render component **2 lần** (trên + dưới).
 
 - **Hàng trên ô nhập:** **Mode** (Ask / Accept Edits / Plan / Execute + "Tools · X/Y" row) và **MCP** (whitelist per-session over enabled servers).
+  - **Session mới mặc định KHÔNG gắn server nào** (SỬA 2026-09-06): `mcpServerIds = []` thay vì `undefined` (= tất cả). Lý do: mỗi server đang gắn gửi **toàn bộ schema tool** trong **MỌI request của MỌI lượt** — đo trên session thật, session có gắn server mang **~37k token/request** nhiều hơn session không gắn, trả cho cả ~8–20 request mà một lượt agentic tạo ra, dù model không gọi tool nào của nó. Gắn giờ là lựa chọn tường minh: chip **MCP** ở composer (per-session) hoặc **LLM defaults của project** (`llmDefaults.mcpServerIds`, áp cho mọi session mới trong project). Session cũ giữ nguyên `undefined` (= tất cả) như trước.
 - **Hàng dưới ô nhập:** **Account** + **Model**. Chip **Connection/Provider** đã bỏ — account đã ngụ ý provider (hiện chỉ Anthropic hoạt động). Bên phải hàng là **context status** = vòng ring + `%`; tên model nằm trong tooltip (tránh trùng với Model chip).
 - **Model** — gộp Effort. Label = `Claude Opus 4.8 · High` (effort chỉ khi model hỗ trợ thinking). Popover: section MODELS + section EFFORT (Low…Max, disabled+greyed trên `maxLevel` của model).
 - **Attach (📎):** nằm cạnh nút **Send** bên trong ô nhập (không còn ở toolbar). Hai cách thêm file: click 📎 (file picker) hoặc **kéo-thả từ trình quản lý file OS** vào composer — overlay "Drop files to attach" hiện khi đang kéo (chỉ kích hoạt khi drag mang `Files`; depth counter chống flicker). Tauri window đặt `dragDropEnabled: false` để webview nhận drop HTML5 chuẩn (`File` object) thay vì native file-drop của Tauri; cả 2 đường đi chung helper `addFiles`.
 - **Preview ảnh:** ảnh đọc thành **base64 data URL** (`FileReader.readAsDataURL`) — **không** dùng blob object URL. Data URL render ngay (thumbnail composer + message + `AttachmentLightbox`) và **sống sót qua persist/reload JSONL** (blob URL chết theo page). File khác chỉ lưu metadata. Đánh đổi: data URL embed inline làm JSONL phình ~33% theo kích thước ảnh — ảnh lớn nên cân nhắc lưu ra `.awog/attachments/` qua sidecar (roadmap).
+
+### Nạp context mỗi lượt (Settings → Sessions → "Nạp context")
+
+Hai catalogue bulk-load trở thành **opt-out** (2026-09-06, mặc định vẫn BẬT), đi qua `contextConfig` mỗi lượt như wiki/memory ([ADR 0073](../decisions/0073-wiki-as-llm-context-source.md) D-12):
+
+| Công tắc | Tắt thì mất gì | Cỡ đo được |
+|---|---|---|
+| `agentsCatalogEnabled` | Block `<available_agents>` — model **vẫn có** tool `Task`, chỉ là không được đưa sẵn thực đơn | ~3,3k char (~0,8k token) |
+| `skillsCatalogEnabled` | Block `<available_skills>` — `@skill:<id>` **vẫn chạy**, chỉ bỏ phần liệt kê | ~5,8k char (~1,5k token) |
+
+Chúng nằm trong prefix được cache, nhưng prefix bị **đọc lại ở mọi request của mọi lượt**, nên người không bao giờ uỷ thác subagent vẫn trả tiền cho thực đơn đó ~8–20 lần mỗi lượt.
+
+**Mặc định model cho session mới (2026-09-06):** `claude-sonnet-5` + thinking `medium` (trước: `claude-opus-5` + `high`). Cùng lý do nhân bội như trên — model được chọn nhân với số request của vòng lặp agentic, và cả hai đổi được ngay ở composer cho lượt cần mạnh. **Chỉ áp cho cài mới**: `settings.json` đã có giá trị thì đổi ở **Settings → Defaults**.
 
 ### Per-session account (multi-account)
 

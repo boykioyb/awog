@@ -18,7 +18,7 @@ import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
 import {
   contextLimitFor,
-  contextTokensFromChars,
+  contextTokensFromUsage,
   estimateContextTokens,
 } from '~/utils/context-window'
 import { slugSessionId } from '~/utils/session-slug'
@@ -319,6 +319,8 @@ type EngineMessage = {
     outputTokens?: number
     cacheReadTokens?: number
     cacheWriteTokens?: number
+    // Measured window occupancy of that turn's last request (see SessionUsage).
+    contextTokens?: number
     costUsd?: number
     contextChars?: ContextChars
   }
@@ -360,6 +362,10 @@ interface SendMessageResult {
     output_tokens: number
     cache_read_tokens?: number
     cache_creation_tokens?: number
+    // Measured context-window occupancy: prompt size of the turn's LAST request
+    // (input + cacheRead + cacheWrite of that one request). Drives the gauge +
+    // auto-compact — see SessionUsage.contextTokens.
+    context_tokens?: number
     // Cost of THIS turn in USD (sidecar-computed via activity/pricing.ts). Summed
     // into the session's cumulative SessionUsage.cost. Absent → model has no price.
     cost_usd?: number
@@ -467,7 +473,8 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // Context-window usage percentage (0..100) for a session. Mirrors
   // useSessionContextUsage: occupancy = the assembled prompt content the model sees
-  // (the engine's per-segment breakdown, contextTokensFromChars) over the SELECTED
+  // (the engine's MEASURED last-request prompt size, else the per-segment char
+  // breakdown — contextTokensFromUsage) over the SELECTED
   // model's window — NOT the API usage total, which double-counts the cached prefix
   // and adds output, inflating the gauge past 100%. Shared by the auto-compact
   // trigger + quota guard.
@@ -476,7 +483,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   // back to the SAME text-only estimate the panel shows, never to 0: reading 0% there
   // is what left auto-compact blind on exactly the sessions whose gauge looked full.
   function usagePct(s: Session): number {
-    const used = contextTokensFromChars(s.usage?.contextChars) || estimateContextTokens(s.msgs)
+    const used = contextTokensFromUsage(s.usage) || estimateContextTokens(s.msgs)
     if (!used) return 0
     const max = s.usage?.max ?? contextLimitFor(modelIdFromDisplay(s.model))
     if (!max) return 0
@@ -1114,6 +1121,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       total: input + output + cacheRead + cacheWrite,
     }
     if (cc) usage.contextChars = cc
+    if (last.contextTokens) usage.contextTokens = last.contextTokens
     if (cost > 0) usage.cost = cost
     return usage
   }
@@ -1316,7 +1324,15 @@ export const useSessionsStore = defineStore('sessions', () => {
   // → first account on the provider → any account. Preferring the active account
   // matters because a custom endpoint speaking the Anthropic/OpenAI protocol lives in
   // that provider's bucket and would otherwise win over the real subscription.
-  // mcpServerIds: undefined = all enabled servers (default); [id…] = whitelist.
+  // mcpServerIds: [] = none attached (the DEFAULT for a new session); [id…] =
+  // whitelist; undefined = every enabled server (legacy sessions only).
+  //
+  // Why new sessions start empty: every attached server ships its full tool SCHEMA
+  // on EVERY request of every turn. Measured on real sessions, sessions with servers
+  // attached carried ~37k more tokens per request than sessions without — paid on
+  // each of the ~8-20 requests an agentic turn makes, whether or not the model ever
+  // calls one of those tools. Attaching is now an explicit per-session choice
+  // (composer MCP picker), or a project-wide one via the project's LLM defaults.
   function defaultsForNewSession(projectId?: string): {
     acct: ReturnType<typeof accountById>
     model: string
@@ -1328,7 +1344,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const provider = ld?.provider ?? g.provider
     const modelId = ld?.modelId ?? g.modelId
     const level = ld?.level ?? g.thinkingLevel
-    const mcpServerIds = ld?.mcpServerIds
+    const mcpServerIds = ld?.mcpServerIds ?? []
     if (!useIpc) return { acct: undefined, model: 'Opus 5', level, mcpServerIds }
     const wantProvider = PROVIDER_DISPLAY[provider] ?? 'Anthropic'
     const inProvider = accounts.value.filter((a) => a.provider === wantProvider)
@@ -3448,6 +3464,12 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (typeof res?.historyChars === 'number' && s.usage?.contextChars) {
         s.usage.contextChars = { ...s.usage.contextChars, history: res.historyChars }
       }
+      // The MEASURED occupancy (last request's prompt size) describes the PRE-cut
+      // context and cannot be recomputed client-side, so leaving it would pin the
+      // gauge at its old height and re-arm auto-compact on the very next turn. Drop
+      // it: the gauge falls back to the char estimate until the next turn reports a
+      // fresh measurement against the cut context.
+      if (s.usage) delete s.usage.contextTokens
       return 'compacted'
     } catch (err) {
       console.warn('[sessions] compact failed', err)
@@ -3473,6 +3495,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     // panel keeps itemising if a later result omits it).
     const cc = contextChars ?? prev?.contextChars
     if (cc) usage.contextChars = cc
+    // Measured occupancy of this turn's last request; keep the previous turn's when
+    // a run reports none (compact-only run, immediate error) so the gauge never
+    // silently drops back to the char estimate.
+    const ctxTok = u.context_tokens ?? prev?.contextTokens
+    if (ctxTok) usage.contextTokens = ctxTok
     // Cost is CUMULATIVE across turns (unlike the token figures above, which are a
     // per-turn context-window snapshot). Sum this turn's cost onto the prior total;
     // omit entirely when neither side has a priced figure (UI then shows "n/a").

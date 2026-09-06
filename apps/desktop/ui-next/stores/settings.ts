@@ -181,6 +181,13 @@ export interface ContextSettings {
   // OFF: an agent silently accumulating facts about the user is opt-in.
   memoryAutoWrite: boolean
   memoryBudgetChars: number
+  // Inject the <available_agents> / <available_skills> catalogues into every turn.
+  // Default ON (the model is told what it can delegate to / apply). Turning one off
+  // does not remove a capability: the Task tool and `@skill:<id>` still work — only
+  // the up-front listing is dropped, which is ~1-2k tokens re-read on every request
+  // of every turn.
+  agentsCatalogEnabled: boolean
+  skillsCatalogEnabled: boolean
 }
 
 export interface TranslateSettings {
@@ -284,13 +291,17 @@ Rules:
 - Describe only changes observable in the diff. Do not invent intent beyond the evidence.
 `
 
+// Sonnet + medium thinking, not Opus + high: a new session should default to what
+// routine work costs least, and the model + thinking level are one click away in the
+// composer for the turns that need more. An agentic turn re-reads its whole prompt on
+// every tool call, so the model choice multiplies across ~8-20 requests per turn.
 const DEFAULT_DEFAULTS: SessionDefaults = {
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   instructions: '',
   provider: 'anthropic',
-  modelId: 'claude-opus-5',
+  modelId: 'claude-sonnet-5',
   mode: 'ask',
-  thinkingLevel: 'high',
+  thinkingLevel: 'medium',
 }
 
 const DEFAULT_GIT: GitSettings = {
@@ -354,6 +365,8 @@ const DEFAULT_CONTEXT: ContextSettings = {
   memoryEnabled: true,
   memoryAutoWrite: false,
   memoryBudgetChars: 4000,
+  agentsCatalogEnabled: true,
+  skillsCatalogEnabled: true,
 }
 
 const DEFAULT_TRANSLATE: TranslateSettings = {
@@ -805,6 +818,8 @@ export const useSettingsStore = defineStore('settings', () => {
     if (context.memoryBudgetChars !== DEFAULT_CONTEXT.memoryBudgetChars) {
       out.memoryBudgetChars = context.memoryBudgetChars
     }
+    if (!context.agentsCatalogEnabled) out.agentsCatalogEnabled = false
+    if (!context.skillsCatalogEnabled) out.skillsCatalogEnabled = false
     return out
   }
   const setWorkspacePath = (path: string) => {

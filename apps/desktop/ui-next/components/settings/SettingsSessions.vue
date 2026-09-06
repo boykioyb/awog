@@ -71,6 +71,22 @@
       />
     </SettingsField>
 
+    <div class="sech">{{ t('settingsSessions.context.heading') }}</div>
+
+    <SettingsField
+      :name="t('settingsSessions.context.agentsCatalog.name')"
+      :desc="t('settingsSessions.context.agentsCatalog.desc')"
+    >
+      <SettingsTog v-model="agentsCatalog" />
+    </SettingsField>
+
+    <SettingsField
+      :name="t('settingsSessions.context.skillsCatalog.name')"
+      :desc="t('settingsSessions.context.skillsCatalog.desc')"
+    >
+      <SettingsTog v-model="skillsCatalog" />
+    </SettingsField>
+
     <div class="sech">{{ t('settingsSessions.quota.heading') }}</div>
 
     <SettingsField
@@ -160,6 +176,17 @@ const pasteThreshold = computed<number>({
   get: () => settings.sessions.pasteThreshold,
   set: (v) => settings.updateSessions({ pasteThreshold: v }),
 })
+
+// Context-injection switches live in settings.context (they travel to the engine as
+// contextConfig on every turn), not in settings.sessions — hence their own proxies.
+const contextToggle = (key: 'agentsCatalogEnabled' | 'skillsCatalogEnabled') =>
+  computed<boolean>({
+    get: () => settings.context[key],
+    set: (v) => settings.updateContext({ [key]: v }),
+  })
+
+const agentsCatalog = contextToggle('agentsCatalogEnabled')
+const skillsCatalog = contextToggle('skillsCatalogEnabled')
 
 const quotaEnabled = computed<boolean>({
   get: () => settings.quota.enabled,

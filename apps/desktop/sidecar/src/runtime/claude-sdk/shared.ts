@@ -80,6 +80,14 @@ export function buildSdkEnv(cred: Credential): Record<string, string> {
   // adapter's TodoWrite hook — so opt back in explicitly. AWOG's own allow/deny
   // filter (allowedTools / disallowedTools) still decides per agent.
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1'
+  // `system/session_state_changed` is the CLI's AUTHORITATIVE turn-over signal
+  // ("'idle' fires after heldBackResult flushes and the bg-agent do-while exits"),
+  // and it is emitted only behind this env flag. run-stream needs it: without it
+  // the only end-of-turn hint is `result`, which is NOT turn-over — the CLI can
+  // deliver a result and then wake the model again (a task notification), and
+  // closing stdin at `result` cancels every tool call in that continuation with the
+  // CLI's canned "The user doesn't want to take this action right now…" text.
+  env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = '1'
   if (cred.kind === 'oauth') {
     env.CLAUDE_CODE_OAUTH_TOKEN = cred.accessToken
   } else {

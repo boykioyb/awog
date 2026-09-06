@@ -662,6 +662,7 @@ export async function runStreamPi(
       output_tokens: acc.outputTokens,
       cache_read_tokens: acc.cacheReadTokens,
       cache_creation_tokens: acc.cacheWriteTokens,
+      ...(acc.contextTokens > 0 ? { context_tokens: acc.contextTokens } : {}),
     },
     stopReason: acc.stopReason,
     contextChars,

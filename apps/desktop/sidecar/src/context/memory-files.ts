@@ -207,7 +207,24 @@ export async function loadMemoryFiles(cwd: string | undefined): Promise<MemoryFi
     // eslint-disable-next-line no-await-in-loop
     const content = await expandImports(abs, roots, new Set<string>(), 0)
     if (content === undefined) continue
-    const trimmed = content.length > MAX_FILE_CHARS ? content.slice(0, MAX_FILE_CHARS) : content
+    // Over the cap the tail is dropped — SAY SO, in the block and in the log. A
+    // silent cut mid-sentence reads to the model as a complete instruction file, so
+    // whatever sits past the cut (often the security / testing / troubleshooting
+    // sections at the end) is not merely absent, it is invisibly absent: the model
+    // answers as if those rules did not exist and nobody can tell why.
+    let trimmed = content
+    if (content.length > MAX_FILE_CHARS) {
+      trimmed =
+        `${content.slice(0, MAX_FILE_CHARS)}\n\n` +
+        `[TRUNCATED: this file is ${content.length} characters after import expansion; ` +
+        `only the first ${MAX_FILE_CHARS} are shown. Everything below the cut is MISSING ` +
+        `from your context — say so rather than assuming the file ends here.]`
+      log.warn('memory files: file over cap, tail dropped from the prompt', {
+        label,
+        chars: content.length,
+        capChars: MAX_FILE_CHARS,
+      })
+    }
     if (trimmed.trim().length === 0) continue
     files.push({ label, content: trimmed })
   }

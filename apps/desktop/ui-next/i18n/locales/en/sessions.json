@@ -137,7 +137,7 @@
   "sessions.detail.cat.skills": "Skills",
   "sessions.detail.cat.memoryFiles": "Memory files",
   "sessions.detail.cat.messages": "Messages",
-  "sessions.detail.cat.other": "Other (cache + overhead)",
+  "sessions.detail.cat.other": "Tools + tool results",
   "sessions.detail.cat.freeSpace": "Free space",
   "sessions.detail.cat.memoryFilesSection": "Memory files",
   "sessions.detail.cat.agentsSection": "Custom agents",

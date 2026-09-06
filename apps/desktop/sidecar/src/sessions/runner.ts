@@ -268,6 +268,13 @@ export interface RunStreamResult {
     output_tokens: number
     cache_read_tokens: number
     cache_creation_tokens: number
+    // MEASURED context-window occupancy: the prompt size of the turn's LAST
+    // request (input + cacheRead + cacheWrite of that request). The three fields
+    // above are the turn TOTAL on the Claude SDK path (summed over every request
+    // the agentic loop made), so they cannot answer "how full is the window" —
+    // this can. Drives the context gauge + the auto-compact trigger; absent when
+    // no request reported usage (compact-only run, immediate error).
+    context_tokens?: number
   }
   stopReason: string | null
   // Per-segment char sizes of the turn's assembled prompt, itemised the way

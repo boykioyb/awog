@@ -300,6 +300,14 @@ export interface SessionMessage {
     outputTokens: number
     cacheReadTokens?: number
     cacheWriteTokens?: number
+    // MEASURED context-window occupancy: the prompt size of the LAST provider
+    // request of this turn (input + cacheRead + cacheWrite of that one request —
+    // the three buckets are disjoint, so their sum IS the prompt the model read).
+    // Unlike `contextChars` this counts what the char breakdown cannot see: tool
+    // SCHEMAS (SDK built-ins + MCP servers) and the tool RESULTS the loop
+    // accumulated during the turn. The gauge + auto-compact prefer it; absent on
+    // turns persisted before it shipped (they fall back to contextChars).
+    contextTokens?: number
     // Cost of THIS turn in USD, computed at finalize from usage + modelUsed via
     // activity/pricing.ts (single source of truth). Persisted so the session's
     // cumulative cost stays stable even if the price table changes later. Absent
@@ -1672,4 +1680,11 @@ export interface ContextConfig {
   // a model that quietly accumulates claims about the user is opt-in only.
   memoryAutoWrite?: boolean | undefined
   memoryBudgetChars?: number | undefined
+  // Inject the <available_agents> catalogue (name + one-line description of every
+  // in-scope agent, for the Task tool's subagent menu). Default true. Off = the
+  // model still HAS the Task tool, it just isn't handed the menu up front.
+  agentsCatalogEnabled?: boolean | undefined
+  // Inject the <available_skills> catalogue. Default true. Off = skills invoked
+  // explicitly via `@skill:<id>` still work; only the up-front listing is dropped.
+  skillsCatalogEnabled?: boolean | undefined
 }

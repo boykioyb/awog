@@ -37,6 +37,10 @@ interface Accumulator {
   // chat gets. See SessionContextStatus.
   cacheReadTokens: number
   cacheWriteTokens: number
+  // Prompt size of the LAST request of the turn (input + cacheRead + cacheWrite of
+  // that request). See SessionMessage.usage.contextTokens — this is the measured
+  // context-window occupancy, tool schemas and tool results included.
+  contextTokens: number
   stopReason: string | null
   // Provider-supplied error detail when stopReason === 'error'. Pi swallows a
   // mid-stream provider failure into a graceful `error` stop (it does NOT throw),
@@ -92,6 +96,7 @@ export function createEventAdapter(
     outputTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
+    contextTokens: 0,
     stopReason: null,
   }
   const announcedTools = new Set<string>()
@@ -261,6 +266,11 @@ export function createEventAdapter(
           acc.outputTokens = last.usage.output
           acc.cacheReadTokens = last.usage.cacheRead
           acc.cacheWriteTokens = last.usage.cacheWrite
+          // Measured occupancy of the last request. Subagent runs have their OWN
+          // context, so only the main turn's number describes THIS session.
+          if (!parentId) {
+            acc.contextTokens = last.usage.input + last.usage.cacheRead + last.usage.cacheWrite
+          }
           acc.stopReason = last.stopReason
           // Provider error cause (present only on stopReason 'error'). Kept so the
           // caller can surface it instead of finalizing an empty reply.

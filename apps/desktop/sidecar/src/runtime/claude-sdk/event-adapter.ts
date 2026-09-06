@@ -39,11 +39,25 @@ export interface ClaudeAccumulator {
   // in cacheRead — the UI sums all four for true context-window occupancy.
   cacheReadTokens: number
   cacheWriteTokens: number
+  // Prompt size of the LAST request of the turn (input + cacheRead + cacheWrite of
+  // that ONE request). The `result` message's usage is the turn TOTAL — summed over
+  // every request the loop made — so it says nothing about how full the window is;
+  // this does. See SessionMessage.usage.contextTokens.
+  contextTokens: number
   stopReason: string | null
   errorMessage?: string
   // Latest SDK session id seen this turn — the caller persists it so the next
   // turn resumes the same SDK session (conversation history + native compaction).
   sdkSessionId?: string
+}
+
+// Anthropic per-request usage block, as it rides on an `assistant` SDK message
+// and on the final `result`. Narrowed to the four fields we read.
+interface RequestUsage {
+  input_tokens?: number
+  output_tokens?: number
+  cache_read_input_tokens?: number
+  cache_creation_input_tokens?: number
 }
 
 // Content-block / stream-event fields we read, narrowed from the SDK's Beta
@@ -62,6 +76,45 @@ interface ContentBlock {
 
 function toInputRecord(input: unknown): Record<string, unknown> {
   return typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+}
+
+// ── The CLI's canned "cancelled" tool result ────────────────────────────────
+//
+// The CLI returns this text (with `toolDenialKind: 'cancelled'`) for a call whose
+// abort signal carried reason `background` — its checkpoint/adopt path, reached
+// when the CLI is torn down while a call is in flight. Nobody refused anything,
+// but the sentence says the user did, and a model that reads it stops working and
+// starts asking who denied it. On THIS path a real denial can only come from
+// AWOG's PreToolUse gate (which always sends its own reason) or a project hook
+// (likewise), so this exact string is never a genuine refusal — rewrite it for the
+// transcript. Prefix match: the CLI may append its "the user's next message may
+// contain a correction" note.
+//
+// Scope: this is what the USER sees. The model still receives the CLI's original
+// text — the tool result is minted inside the CLI subprocess — so the real fix is
+// upstream in run-stream (don't close stdin under an in-flight call); this only
+// stops the transcript from repeating the lie.
+const CLI_CANCELLED_TEXT =
+  "The user doesn't want to take this action right now. STOP what you are doing and wait for the user to tell you how to proceed."
+const CANCELLED_REWRITE =
+  'Tool call cancelled: the Claude CLI process was torn down while this call was in flight. Nobody denied it — re-run it if it is still needed.'
+
+// Rewrite the canned text wherever it sits (a bare string, or the text blocks of a
+// structured result), leaving any other content untouched.
+function rewriteCancelledContent(content: unknown): unknown {
+  if (typeof content === 'string') {
+    return content.startsWith(CLI_CANCELLED_TEXT) ? CANCELLED_REWRITE : content
+  }
+  if (!Array.isArray(content)) return content
+  let changed = false
+  const out = content.map((raw) => {
+    const b = raw as { type?: string; text?: string }
+    if (b.type !== 'text' || typeof b.text !== 'string') return raw
+    if (!b.text.startsWith(CLI_CANCELLED_TEXT)) return raw
+    changed = true
+    return { ...b, text: CANCELLED_REWRITE }
+  })
+  return changed ? out : content
 }
 
 export interface ClaudeEventAdapter {
@@ -154,6 +207,7 @@ export function createClaudeEventAdapter(
     outputTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
+    contextTokens: 0,
     stopReason: null,
   }
   // toolCallId → { name, input } captured on the tool_use block so the matching
@@ -368,7 +422,7 @@ export function createClaudeEventAdapter(
           toolUseId: block.tool_use_id,
           toolName: meta.name,
           toolInput: meta.input,
-          content: block.content,
+          content: rewriteCancelledContent(block.content),
           isError: failed,
         }),
       ),
@@ -442,8 +496,22 @@ export function createClaudeEventAdapter(
         // Tool calls from the full assistant message (complete input). Text is
         // streamed via stream_event text_delta above, so text blocks are ignored
         // here to avoid double-counting.
-        const m = msg as { message?: { content?: unknown }; parent_tool_use_id?: string | null }
+        const m = msg as {
+          message?: { content?: unknown; usage?: RequestUsage }
+          parent_tool_use_id?: string | null
+        }
         const parentId = m.parent_tool_use_id ?? undefined
+        // Per-REQUEST usage (the raw Anthropic block). Each assistant message is one
+        // request, so the last one seen carries the turn's peak prompt size. Subagent
+        // (Task) messages run in their OWN context — skip them, or a subagent's small
+        // window would read as this session's occupancy.
+        if (!parentId && m.message?.usage) {
+          const u = m.message.usage
+          acc.contextTokens =
+            (u.input_tokens ?? 0) +
+            (u.cache_read_input_tokens ?? 0) +
+            (u.cache_creation_input_tokens ?? 0)
+        }
         const content = m.message?.content
         if (Array.isArray(content)) {
           for (const raw of content as ContentBlock[]) {

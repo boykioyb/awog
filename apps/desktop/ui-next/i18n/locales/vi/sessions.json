@@ -137,7 +137,7 @@
   "sessions.detail.cat.skills": "Kỹ năng",
   "sessions.detail.cat.memoryFiles": "Tệp bộ nhớ",
   "sessions.detail.cat.messages": "Tin nhắn",
-  "sessions.detail.cat.other": "Khác (cache + overhead)",
+  "sessions.detail.cat.other": "Tool + kết quả tool",
   "sessions.detail.cat.freeSpace": "Còn trống",
   "sessions.detail.cat.memoryFilesSection": "Tệp bộ nhớ",
   "sessions.detail.cat.agentsSection": "Agent tuỳ biến",
