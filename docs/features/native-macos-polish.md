@@ -58,6 +58,7 @@ App đọc như một trang web đặt trong khung Electron chứ chưa như m�
 CSS đi kèm:
 - `.top` ([app-shell.css:168](../../apps/desktop/ui-next/assets/css/app-shell.css)) → `-webkit-app-region: drag`; **mọi** con tương tác (`button`, `input`, `.kbd`, `.shelltgl`, `TopBarNotifications`) → `no-drag`.
 - `.side` ([app-shell.css:131](../../apps/desktop/ui-next/assets/css/app-shell.css)) → `padding-top` +28px khi `body[data-platform='darwin']:not([data-fullscreen])`.
+- **Bẫy rail thu gọn:** `.side.collapsed` rộng 58px ([prototype.css:608](../../apps/desktop/ui-next/assets/css/prototype.css)) trong khi 3 đèn chạy tới x=66 → đèn straddle đường phân cách rail/main và tràn lên top bar. Trên macOS nới rail thu gọn lên 78px để đèn nằm trọn trong rail — giữ **một** quy tắc duy nhất cho cả shell: *đèn luôn ngồi trên rail*.
 - **Bẫy compact mode (≤1100px):** NavRail thu thành drawer, `.side` không còn ở cột trái → đèn giao thông đè lên `.top`. Ở compact, inset phải chuyển sang `padding-left` của `.top`. Xem `.app.compact .side` ([app-shell.css:222](../../apps/desktop/ui-next/assets/css/app-shell.css)).
 - `.top` height 44px → 52px trên macOS (toolbar thật ~52px).
 
@@ -206,6 +207,7 @@ Codemod không bắt được lỗi thị giác. Duyệt tối thiểu: NavRail,
 
 **Chưa verify bằng mắt** (không agent nào chạy được app) — xem §7:
 - `trafficLightPosition {x:14,y:15}` với `.top` 52px, và `padding-left: 82px` ở compact mode — số suy ra, chưa đo pixel.
+- ~~Rail thu gọn: đèn tràn ra ngoài~~ — **đã sửa** (`558d5ba`): rail thu gọn nới lên 78px trên macOS, đã đo đủ 4 nhánh (mở rộng / thu gọn / fullscreen / non-darwin).
 - Windows/Linux `env(titlebar-area-width)` chưa test trên máy thật.
 - Căn cột số sau khi bỏ mono: Cost tab, Activity, usage ring, Git sidebar (`↑2 / ↓33`).
 - Va chạm radius lồng nhau ở 9 file từng có 12px ngoài + 10px trong.
