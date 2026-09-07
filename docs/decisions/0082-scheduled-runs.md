@@ -198,3 +198,80 @@ bị nuốt mất.
 - [ADR 0070](0070-share-claude-home-for-config.md) — dữ liệu AWOG-only ở `.awog`
 - [ADR 0027](0027-tauri-vs-electron-revisit.md) — Electron main là chủ vòng đời
 - [.claude/rules/security.md](../../.claude/rules/security.md) — 8 invariant
+
+---
+
+## Đính chính 2026-09-07 — agent tự hẹn giờ thức dậy (gói #14)
+
+**Bối cảnh.** AWOG chỉ có wake **phản ứng**: một lệnh nền chạy xong thì phiên được đánh thức
+([ADR 0066](0066-session-background-exec-and-wake.md)). Với thứ không phát tín hiệu — một deploy 10
+phút, một job CI của người khác, một hạn mức chờ reset — agent chỉ còn hai lựa chọn tệ: poll trong
+cùng một lượt (đốt token, giữ lượt mở hàng phút) hoặc bỏ dở và mong người dùng nhớ.
+
+### Quyết định 1 — lời hẹn là một mục lịch ONE-SHOT, không phải hàng đợi thứ hai
+
+Hạ tầng của ADR này đã đủ dùng: store một-file-một-lịch, bộ đếm giờ 30 giây ở Electron main, mốc
+**tuyệt đối** nên ngủ máy / đổi giờ mùa không sai, chính sách chạy bù. Nên thêm đúng hai biến thể
+vào union sẵn có thay vì một cơ chế song song:
+
+- `ScheduleTrigger` thêm `{ kind: 'once', at }` — `computeNextRun` trả `null` khi mốc đã qua, và
+  chính cái `null` đó làm nó không lặp;
+- `ScheduleJob` thêm `{ kind: 'session-wakeup', sessionId, note, armedAt }`.
+
+Không timer riêng, không file hàng đợi riêng, không đường tick thứ hai để lệch.
+
+**Cả hai biến thể đóng với UI.** `schedules.upsert` từ chối chúng và `schedules.list` lọc chúng ra.
+Lý do cụ thể, không phải sạch sẽ hình thức: trang Lịch chạy diễn đạt `trigger` bằng một switch chỉ
+biết ba dạng lặp, nên một biểu thức `once` lọt vào danh sách sẽ **làm hỏng cả trang**. Hệ quả chấp
+nhận: người dùng **không có** hàng nào để bấm huỷ — họ huỷ bằng cách nhắn tiếp vào phiên (xem QĐ 3).
+
+### Quyết định 2 — tới giờ thì XẾP HÀNG, không tự chạy lượt LLM
+
+Đây là điểm dễ làm sai nhất. Lời hẹn **không** khởi động lượt nào: sidecar chỉ phát
+`session.inbox-message` — đúng kênh mà tin liên phiên (`sessions/inbox.ts`) và theo dõi PR
+(`github/pr-watch.ts`) đang dùng — rồi renderer hiện chip cho **người dùng bấm giao**.
+
+Ba lý do, không bỏ được cái nào: (1) một lượt tiêu tiền của họ; (2) phiên đích có thể đang chạy dở
+và repo giữ bất biến "một phiên chỉ chạy 1 lượt tại một thời điểm"; (3) đánh thức là **gợi ý**, chứ
+người vắng mặt vài giờ thì thứ họ cần khi quay lại có thể đã khác.
+
+Hệ quả đẹp kèm theo: **vòng lặp "agent tự hẹn lại vô hạn" không tồn tại về mặt cấu trúc.** Đặt hẹn
+phải xảy ra trong một lượt, mà một lượt chỉ bắt đầu khi người dùng bấm — nên chuỗi hẹn dài bao nhiêu
+cũng có đúng bấy nhiêu lần con người đồng ý. Các trần dưới đây là hàng rào cho lỗi/lạm dụng **trong
+phạm vi một lượt**, không phải thứ duy nhất chặn vòng lặp.
+
+Vì lời nhắc đi bằng đường hộp thư, nó phải chọn một `origin` trong ba giá trị renderer biết. Chọn
+**`external`** + `fromSessionId: null` (khuôn của pr-watch, nguồn tự xưng tên trong `preview`):
+lời nhắc không đến từ phiên nào khác, và trong ba giá trị thì đây là giá trị **ít tin cậy nhất** —
+đoán lệch về phía ít tin cậy là an toàn. Sự thật đầy đủ ("đây là ghi chú của **chính bạn** đọc lại,
+không phải chỉ thị mới của người dùng") nằm trong lời dẫn của khối, chứ không dựa vào nhãn.
+
+### Quyết định 3 — trần cứng, và lời hẹn mồ côi tự dọn
+
+Trần: **60 giây** ≤ khoảng hẹn ≤ **6 giờ**; **2** lời hẹn mỗi lượt; **3** lời hẹn còn chờ mỗi phiên;
+**500** ký tự cho lời nhắc. Giá trị ngoài khoảng bị **kẹp** và kết quả **nói rõ đã kẹp** — clamp im
+lặng thì model hứa với người dùng một mốc không có thật.
+
+Dọn (tất cả trong `tickWakeup`, không cần ai gọi lúc phiên bị xoá): phiên đã xoá/lưu trữ ⇒ xoá ngay
+ở tick kế tiếp; người dùng đã gửi tin mới **sau `armedAt`** ⇒ cuộc trò chuyện đã đi tiếp, xoá; trễ
+hơn 60 phút ⇒ khoảnh khắc đã qua, xoá. Mốc so sánh là **`armedAt`** chứ không phải `updatedAt` của
+phiên: lượt đang đặt hẹn tự nó ghi tiếp vào phiên sau thời điểm đó, nên so bằng `updatedAt` thì lời
+hẹn nào cũng tự huỷ ngay khi vừa đặt.
+
+### Quyết định 4 — nói thật về giới hạn ngay trong mô tả tool
+
+Bộ đếm giờ sống trong Electron main, nên **app phải đang mở**. Mô tả tool nói thẳng điều đó cùng với
+"tới giờ không có gì tự chạy" và "sẽ bị huỷ nếu người dùng nhắn tiếp", kèm chỉ thị **đừng hứa với
+người dùng một mốc cố định**. Model không suy ra được những điều này từ tên tool, và một lời hứa nó
+không giữ được thì người trả giá là người dùng.
+
+### Việc cần làm tiếp
+
+1. **Chip hộp thư ở UI.** `stores/sessions.ts` đã xếp hàng + `deliverInbox()`, nhưng chưa component
+   nào gọi `pendingInboxFor` — nên lời nhắc tới nơi mà chưa ai bấm giao được. Đây là chặn cuối của
+   cả gói #14 lẫn gói #17 (file thuộc agent khác).
+2. **Nhánh Claude SDK.** Tool mới nằm ở toolset Pi (`runtime/tools/index.ts`). Phiên chạy
+   `provider === 'anthropic'` đi đường `runtime/claude-sdk/` ([ADR 0058](0058-claude-agent-sdk-vs-pi-runtime-revisit.md))
+   nên chưa thấy `schedule_wakeup` — cần bắc cầu như wiki/memory đã làm.
+3. **Cho người dùng thấy lời hẹn đang chờ** (một dòng nhỏ trong phiên, không phải một hàng trong
+   trang Lịch chạy) để họ huỷ tường minh thay vì chỉ huỷ gián tiếp bằng cách nhắn tiếp.

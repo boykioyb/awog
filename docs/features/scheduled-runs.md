@@ -222,3 +222,72 @@ npx vitest@2 run src/schedules/__tests__/
 
 33 test: parser `HH:MM`, `computeNextRun` cho cả ba dạng, hai ca DST (nhảy tiến / lùi lại), ngày 25
 tiếng, vắt tháng, vắt tuần, chính sách chạy bù, và biên L1 của schema (id traversal, trường lạ bị gỡ).
+
+---
+
+## Đính chính 2026-09-07 — agent tự hẹn giờ thức dậy (gói #14)
+
+Tool `schedule_wakeup` cho **agent** tự đặt một lời hẹn quay lại phiên đang mở. Nó **dùng lại toàn
+bộ hạ tầng ở trên** (store lịch, bộ đếm giờ 30 giây ở Electron main, mốc tuyệt đối nên ngủ máy/đổi
+giờ mùa không sai) chứ không dựng hàng đợi thứ hai: một lời hẹn **là** một `Schedule` với
+
+```jsonc
+{
+  "trigger": { "kind": "once", "at": "2026-09-07T12:10:00.000Z" },
+  "job": { "kind": "session-wakeup", "sessionId": "ses-…", "note": "…", "armedAt": "…" }
+}
+```
+
+Lý do và các đánh đổi: [ADR 0082 § Đính chính](../decisions/0082-scheduled-runs.md).
+
+### Nó KHÔNG chạy lượt LLM nào
+
+Tới giờ, sidecar chỉ đặt một lời nhắc vào **hộp thư của phiên** (`session.inbox-message` — cùng kênh
+với tin liên phiên và theo dõi PR); renderer hiện chip, **người dùng bấm giao** thì mới có một lượt.
+Chờ hẹn không tốn một xu, và bất biến "một phiên chỉ chạy 1 lượt tại một thời điểm" không bị đụng.
+
+### Trần
+
+| Trần | Giá trị | Vì sao |
+|---|---|---|
+| Khoảng hẹn tối thiểu | 60 giây | Tick 30 giây ⇒ dưới một phút là hứa hão; hẹn 5 giây chính là vòng lặp poll cần thay thế |
+| Khoảng hẹn tối đa | 6 giờ | Xa hơn thì xác suất app còn mở quá thấp; "sáng mai" là một lịch `daily` do người dùng đặt |
+| Số lần hẹn mỗi **lượt** | 2 | Đếm trong closure của toolset (dựng lại mỗi lượt) |
+| Số lời hẹn **còn chờ** mỗi phiên | 3 | Đếm từ store ⇒ đúng cả sau khi sidecar khởi động lại |
+| Độ dài lời nhắc | 500 ký tự | Một-hai câu, không phải bản tóm tắt hội thoại |
+
+Giá trị ngoài khoảng bị **kẹp** (không từ chối) và kết quả trả về **nói rõ đã kẹp** — clamp im lặng
+thì model tưởng mình được 10 giây rồi hứa với người dùng như vậy.
+
+### Lời hẹn tự dọn khi nào
+
+Ba đường, đều nằm trong `tickWakeup`, đều lười (không ai phải gọi lúc phiên bị xoá):
+
+| Tình huống | Kết quả |
+|---|---|
+| Phiên đã xoá / đã lưu trữ | Xoá ngay ở tick kế tiếp (tra một `Set`, không hydrate transcript nào) |
+| Người dùng gửi tin mới **sau** `armedAt` | Cuộc trò chuyện đã đi tiếp ⇒ xoá, không đánh thức. Kiểm khi **tới giờ**, mốc so là `armedAt` chứ **không** phải `updatedAt` (lượt đang đặt hẹn tự nó ghi tiếp vào phiên) |
+| Trễ hơn 60 phút (app đóng cả buổi) | Khoảnh khắc đã qua ⇒ xoá |
+
+Lời hẹn **không** hiện ở trang Lịch chạy: `schedules.list` lọc bỏ (`job.kind === 'session-wakeup'`
+hoặc `trigger.kind === 'once'`), và `schedules.upsert` **từ chối** cả hai biến thể — người dùng
+không tạo tay được, và trang không phải diễn đạt một biểu thức nó không biết.
+
+### Bảo mật
+
+Tham số chỉ có **số + văn bản** (không path, không lệnh, không id file), `sessionId` lấy từ
+`ToolFilter` của lượt nên model không hẹn giùm phiên khác được. `note` đi qua `redactString()`
+**trước khi** ghi xuống `~/.awog/schedules/*.json`, và khối giao đi mang hàng rào **nonce sinh lúc
+đánh thức** — file lịch là dữ liệu L1, một bản bị sửa tay không tự đóng hàng rào được.
+
+### File
+
+| Path | Vai trò |
+|---|---|
+| `apps/desktop/sidecar/src/schedules/wakeup.ts` | Trần · đặt hẹn · dọn mồ côi · dựng khối giao đi |
+| `apps/desktop/sidecar/src/runtime/tools/wakeup-tool.ts` | Tool `schedule_wakeup` (chat session only) |
+
+```bash
+cd apps/desktop/sidecar
+npx vitest@2 run src/schedules/__tests__/wakeup.test.ts   # 23 test: trần, huỷ, giao, hàng rào
+```

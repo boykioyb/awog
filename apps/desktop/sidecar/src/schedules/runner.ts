@@ -16,8 +16,10 @@ import { dispatch } from '../transport/rpc.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { activeSessionIds } from '../sessions/runner.js'
+import { listSessionSummaries } from '../sessions/store.js'
 import { loadTask } from '../tasks/store.js'
 import { CATCH_UP_THRESHOLD_MS, computeNextRun, isDue } from './cron.js'
+import { tickWakeup } from './wakeup.js'
 import { listSchedules, loadSchedule, saveSchedule } from './store.js'
 
 // Trần chi tiêu MẶC ĐỊNH cho một lượt chạy theo lịch. Lượt này chạy khi không có
@@ -326,6 +328,12 @@ async function fire(
 export async function runScheduleNow(id: string): Promise<ScheduleRun> {
   const schedule = await loadSchedule(id)
   if (!schedule) throw new Error(`Schedule not found: ${id}`)
+  // Lời hẹn của agent (gói #14) không phải thứ "chạy" được: nó chỉ đặt một lời
+  // nhắc vào hộp thư đúng một lần, đúng giờ của nó. Chặn ở đây thay vì để `fire`
+  // mở một dòng lịch sử rồi không làm gì.
+  if (schedule.job.kind === 'session-wakeup') {
+    throw new Error(`Schedule ${id} is an agent wake-up; it cannot be run on demand.`)
+  }
   const busy = await busyReason(schedule)
   if (busy) {
     log.info('schedules: manual run skipped (overlap)', { id, reason: busy })
@@ -348,10 +356,30 @@ export async function tickSchedules(): Promise<TickResult> {
   if (tickInFlight) return { checked: 0, fired: [], skipped: [] }
   tickInFlight = true
   const result: TickResult = { checked: 0, fired: [], skipped: [] }
+  // Phiên còn sống (chưa xoá, chưa lưu trữ) — nạp NHIỀU NHẤT một lần cho cả tick,
+  // và chỉ khi thật sự có lời hẹn cần kiểm.
+  let liveSessions: Set<string> | null = null
+  const liveSessionIds = async (): Promise<Set<string>> => {
+    if (!liveSessions) {
+      const summaries = await listSessionSummaries()
+      liveSessions = new Set(summaries.filter((s) => !s.archived).map((s) => s.id))
+    }
+    return liveSessions
+  }
   try {
     const schedules = await listSchedules()
     result.checked = schedules.length
     for (const schedule of schedules) {
+      // Lời hẹn agent tự đặt (gói #14) đi đường riêng: không lịch sử chạy, không
+      // chặn chạy chồng, không trần chi tiêu — vì nó KHÔNG chạy lượt LLM nào. Tới
+      // giờ thì đặt một lời nhắc vào hộp thư của phiên rồi tự xoá mình.
+      if (schedule.job.kind === 'session-wakeup') {
+        // eslint-disable-next-line no-await-in-loop
+        const outcome = await tickWakeup(schedule, Date.now(), await liveSessionIds())
+        if (outcome === 'delivered') result.fired.push(schedule.id)
+        else if (outcome !== 'pending') result.skipped.push(schedule.id)
+        continue
+      }
       // eslint-disable-next-line no-await-in-loop
       await reconcileInterrupted(schedule)
       if (!schedule.enabled) continue

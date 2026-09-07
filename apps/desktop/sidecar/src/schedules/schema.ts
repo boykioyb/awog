@@ -24,6 +24,11 @@ export const MAX_INTERVAL_MINUTES = 7 * 24 * 60
 // Số lần chạy giữ lại trong lịch sử (mới nhất đứng đầu).
 export const MAX_RUN_HISTORY = 20
 
+// Độ dài lời nhắc agent tự viết cho mình (job `session-wakeup`, gói #14). Đủ cho
+// "build #482 đang chạy, xem log ở /tmp/build.log rồi báo kết quả", không đủ để
+// nhét một bản tóm tắt hội thoại vào một file lịch.
+export const MAX_WAKEUP_NOTE_LEN = 500
+
 // Biểu thức lịch. Union rời rạc thay vì chuỗi cron 5 trường: mỗi biến thể tự mô
 // tả, validate được bằng zod, và render ra câu tiếng người mà không cần parser
 // ngược (xem ADR 0082 — "vì sao không dùng node-cron").
@@ -42,6 +47,15 @@ export const ScheduleTriggerSchema = z.discriminatedUnion('kind', [
     weekdays: z.array(z.number().int().min(0).max(6)).min(1).max(7),
     time: z.string().regex(TIME_OF_DAY_RE),
   }),
+  // MỘT lần duy nhất, tại một mốc tuyệt đối (ISO). Không lặp: `computeNextRun`
+  // trả null sau khi đã qua mốc, và chủ của nó tự xoá mình khi chạy xong.
+  //
+  // KHÔNG có trên UI và người dùng không tạo được (schedules.upsert từ chối) —
+  // đây là hình của lời hẹn agent tự đặt qua tool `schedule_wakeup` (gói #14).
+  // Chuỗi chỉ kiểm độ dài ở đây: một thành viên của discriminatedUnion không
+  // gắn `.refine` được (thành ZodEffects), nên tính hợp lệ của mốc do
+  // `computeNextRun` quyết (Date.parse hỏng ⇒ null ⇒ không bao giờ tới hạn).
+  z.object({ kind: z.literal('once'), at: z.string().max(40) }),
 ])
 
 // Thiết lập LLM chụp lại tại thời điểm tạo lịch. Sidecar KHÔNG đọc settings.json
@@ -87,6 +101,20 @@ export const ScheduleJobSchema = z.discriminatedUnion('kind', [
     projectId: z.string().min(1).max(200),
     title: z.string().min(1).max(200),
     description: z.string().max(20_000).default(''),
+  }),
+  // Lời hẹn agent tự đặt cho CHÍNH phiên nó đang chạy (gói #14).
+  //
+  // Khác hai loại trên ở điểm quan trọng nhất: nó KHÔNG chạy lượt LLM nào. Tới
+  // giờ, runner chỉ đặt một lời nhắc vào hộp thư của phiên (`session.inbox-message`)
+  // rồi tự xoá mình; người dùng bấm giao thì mới có một lượt. Vì thế nó không có
+  // `settings`, không có `budget` và không sinh dòng lịch sử chạy nào.
+  z.object({
+    kind: z.literal('session-wakeup'),
+    sessionId: z.string().min(1).max(200),
+    note: z.string().min(1).max(MAX_WAKEUP_NOTE_LEN),
+    // Mốc ĐẶT hẹn. Là cách nhận ra "cuộc trò chuyện đã đi tiếp": có tin của người
+    // dùng SAU mốc này ⇒ lời hẹn hết ý nghĩa và tự huỷ (schedules/wakeup.ts).
+    armedAt: z.string().max(40),
   }),
 ])
 

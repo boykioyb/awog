@@ -57,6 +57,14 @@ export function computeNextRun(trigger: ScheduleTrigger, fromMs: number): number
     return fromMs + trigger.everyMinutes * MS_PER_MINUTE
   }
 
+  // Một lần duy nhất: mốc CHƯA qua thì đó là mốc kế tiếp, đã qua thì KHÔNG CÒN
+  // mốc nào nữa (null). Chính cái null đó là thứ làm `once` không lặp — sau khi
+  // chạy, `reanchorAfterRun` neo `nextRunAt` về null thay vì một mốc mới.
+  if (trigger.kind === 'once') {
+    const at = Date.parse(trigger.at)
+    return Number.isFinite(at) && at > fromMs ? at : null
+  }
+
   const time = parseTimeOfDay(trigger.time)
   if (!time) return null
   const weekdays = trigger.kind === 'weekly' ? new Set(trigger.weekdays) : null

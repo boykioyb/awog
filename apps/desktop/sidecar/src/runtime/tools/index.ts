@@ -35,6 +35,7 @@ import { createMonitorTool } from './monitor-tool.js'
 import { createDevServerTool } from './dev-server-tool.js'
 import { createReadTerminalTool } from './read-terminal-tool.js'
 import { createSessionMessagingTools } from './session-tools.js'
+import { createWakeupTool } from './wakeup-tool.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
@@ -229,6 +230,11 @@ export function createAwogToolDefinitions(
     ...(filter.chatSession
       ? createSessionMessagingTools({ sessionId: filter.chatSession.sessionId })
       : []),
+    // schedule_wakeup: agent tự hẹn quay lại phiên này sau N giây (gói #14). Cùng
+    // điều kiện `chatSession` và cùng lý do như hai tool trên: tới giờ nó chỉ ĐẶT
+    // một lời nhắc vào hộp thư cho NGƯỜI DÙNG bấm giao, mà task/subagent không có
+    // người đó. Không chạy lượt nào, không tiêu tiền trong lúc chờ.
+    ...(filter.chatSession ? [createWakeupTool({ sessionId: filter.chatSession.sessionId })] : []),
     // Model-initiated transcript surfaces (mark_chapter / send_user_file /
     // suggest_task / suggest_followups). Chat sessions only, for the same reason
     // as read_terminal: they address a user who is reading the transcript, and a

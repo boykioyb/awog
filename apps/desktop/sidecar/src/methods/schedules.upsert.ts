@@ -26,6 +26,18 @@ const Params = z.object({
 register('schedules.upsert', async (raw) => {
   const params = Params.parse(raw)
 
+  // Hai biến thể của gói #14 KHÔNG mở cho UI. `session-wakeup` là lời hẹn agent tự
+  // đặt qua tool `schedule_wakeup` — nó tự dọn theo diễn biến của phiên, nên một
+  // bản do người dùng tạo tay sẽ không có gì bảo đảm. `once` chỉ tồn tại để chở
+  // lời hẹn đó; để nó lọt vào danh sách UI thì trang Lịch chạy phải diễn đạt một
+  // dạng biểu thức nó không biết. Chặn cả hai ngay tại biên.
+  if (params.job.kind === 'session-wakeup') {
+    throw new RpcError(-32602, 'Agent wake-ups are created by the agent, not from the UI')
+  }
+  if (params.trigger.kind === 'once') {
+    throw new RpcError(-32602, 'One-shot schedules are reserved for agent wake-ups')
+  }
+
   // Fail fast ở biên: lịch chỉ mang ID, sidecar tự resolve ra đường dẫn khi chạy.
   // Kiểm ngay lúc lưu để người dùng biết liền, thay vì im lặng tới 3 giờ sáng.
   const { projectId } = params.job

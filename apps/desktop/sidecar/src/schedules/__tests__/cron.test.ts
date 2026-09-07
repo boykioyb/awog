@@ -213,3 +213,23 @@ describe('reanchorAfterRun — chính sách chạy bù', () => {
     expect(due + 6 * HOUR - due > CATCH_UP_THRESHOLD_MS).toBe(true) // vừa ngủ dậy
   })
 })
+
+describe('once — mốc một lần duy nhất (lời hẹn agent tự đặt, gói #14)', () => {
+  const at = '2026-09-07T12:10:00.000Z'
+
+  it('trả đúng mốc khi nó còn ở phía trước', () => {
+    expect(computeNextRun({ kind: 'once', at }, Date.parse(at) - 60_000)).toBe(Date.parse(at))
+  })
+
+  it('KHÔNG lặp: qua mốc rồi thì không còn mốc nào nữa', () => {
+    expect(computeNextRun({ kind: 'once', at }, Date.parse(at))).toBeNull()
+    expect(computeNextRun({ kind: 'once', at }, Date.parse(at) + 1)).toBeNull()
+    // Đây chính là thứ neo `nextRunAt` về null sau khi lời hẹn đã đánh thức.
+    expect(reanchorAfterRun({ kind: 'once', at }, Date.parse(at) + 1000)).toBeNull()
+  })
+
+  it('mốc hỏng (file bị sửa tay) thành null, không thành NaN', () => {
+    expect(computeNextRun({ kind: 'once', at: 'tomorrow-ish' }, Date.now())).toBeNull()
+    expect(computeNextRun({ kind: 'once', at: '' }, Date.now())).toBeNull()
+  })
+})
