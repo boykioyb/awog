@@ -1,6 +1,6 @@
 # Parity với Claude Code Desktop — bản đồ 46 hạng mục
 
-**Trạng thái:** đang thực thi · **Cập nhật:** 2026-09-06
+**Trạng thái:** đang thực thi · **Cập nhật:** 2026-09-07
 
 Tài liệu này là *bản đồ*, không phải spec. Mỗi hạng mục có spec/ADR riêng khi được làm — cột cuối trỏ tới đó.
 
@@ -8,7 +8,7 @@ Tài liệu này là *bản đồ*, không phải spec. Mỗi hạng mục có s
 
 Toàn bộ 46 hạng mục dưới đây đến từ một lần audit đối chiếu **code thật** của AWOG với bề mặt tính năng của Claude Code Desktop (tool model được cấp, RPC, UI, cấu hình). `CLAUDE.md` và `docs/features/*.md` **không** được dùng làm nguồn kết luận — chỉ dùng để định vị file, rồi xác nhận lại bằng `path:line`. Vài chỗ tài liệu cũ lệch với code; những chỗ đó ghi rõ trong cột Ghi chú.
 
-Ký hiệu: **✅ xong** · **🟡 một phần** · **⬜ chưa** · ⚠️ đụng bề mặt bảo mật, cần infosec.
+Ký hiệu: **✅ xong** · **🟡 một phần** · **⬜ chưa** · **❌ đã quyết định không làm** (có ADR nêu lý do) · ⚠️ đụng bề mặt bảo mật, cần infosec.
 
 ---
 
@@ -41,7 +41,7 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 |---|---|---|---|
 | 13 | Lịch chạy / cron | ✅ | [ADR 0082](../decisions/0082-scheduled-runs.md). Union rời rạc thay cron string (validate được bằng zod, render ngược ra tiếng người). DST xử lý bằng dựng lại `Date` local chứ không cộng ms. Quá hạn ⇒ chạy bù **đúng một lần**. Chỉ cho mode `execute`/`plan` — `ask` sẽ park hộp xin quyền ở nơi không cửa sổ nào thấy. **Luôn có trần chi tiêu**, bỏ trống ≠ vô hạn |
 | 14 | Agent tự hẹn giờ thức dậy | ⬜ | Chỉ có wake *phản ứng* khi job nền xong |
-| 15 | Workflow bằng script + cache theo hash input | ⬜ | ⚠️ đụng invariant #8 (no eval trên payload workspace) ⇒ **bắt buộc ADR + sandbox trước khi code** |
+| 15 | Workflow bằng script + cache theo hash input | ❌ | [ADR 0085](../decisions/0085-workflow-as-script.md) — **Rejected** (script) · **Deferred** (cache), kèm điều kiện mở lại đo được. Lý do gọn: (1) **cache là cái giá của script, không phải phần thưởng** — nó tồn tại để bù cho việc call stack JS không checkpoint được, mà AWOG đã có frontier bền vững trên `events.log`; (2) hộp cát cho *ngôn ngữ* không phải hộp cát cho *năng lực* — thứ nguy hiểm (`agent()` có tool ghi + shell) nằm trong hộp theo thiết kế, nên `node:vm` (vốn **không** phải ranh giới an toàn) lẫn isolate thật đều không mua được gì; (3) 0 workflow trên đĩa, 3 task từ trước tới nay ⇒ chưa có ca thật nào chạm giới hạn của DAG. Nhu cầu thật (fan-out động, rẽ nhánh theo verdict) nếu xuất hiện sẽ giải bằng primitive **khai báo** `forEach`/`when`, ADR riêng |
 | 16 | Worktree riêng cho node song song | ✅ | [ADR 0081](../decisions/0081-task-node-worktree-isolation.md). Trước đó 4 node song song ghi chung `project.path` và auto-commit đua nhau — lỗi tranh chấp thật |
 | 17 | Session nhắn cho session | ✅ | Hộp thư + người dùng bấm, **không** tự khởi động lượt. 3 trần chặn vòng lặp; số hop đếm lúc **gửi** nên cắt được cả khi chưa ai bấm giao. Tin từ phiên A là L1 với phiên B — hàng rào nonce sinh SAU khi bên gửi viết xong |
 | 18 | Trigger Task/Workflow từ xa | ⬜ | ⚠️ `tasks.*` bị loại khỏi allowlist gateway — **mở rộng allowlist ⇒ infosec re-audit bắt buộc** |
@@ -101,8 +101,9 @@ Những cái này **không phải** thiếu tính năng — là code sai đang c
 | `parsePorcelainV2` phụ thuộc thứ tự dòng ⇒ `detachedAt` **không bao giờ** được điền (git phát `branch.oid` trước `branch.head`), cảnh báo detached HEAD mất phần sha | `git/parser.ts` | ✅ |
 | Test `discoverGitRepos` dựng `.git` rỗng rồi mong nó là repo — mâu thuẫn với chính helper `makeRepo` của nó; source đúng, test sai | `git/__tests__/discover.test.ts` | ✅ |
 | Mode `execute` từ xa bỏ qua permission park | `electron/src/remote-gateway-policy.ts` | ⬜ ⚠️ |
+| Trust của hook tier project lưu ở `{project}/.awog/.trust.json` — **trong repo**. Ai commit được `.awog/hooks/evil.json` thì cũng commit được trust của nó. Cùng lớp với F1 bên dưới, phát hiện khi viết [ADR 0085](../decisions/0085-workflow-as-script.md) §3 | `hooks/store.ts:129` | ⬜ ⚠️ |
 
-Dòng cuối là **ghi chú do chính repo tự viết trong code**, không phải kết luận của lần audit này. Nó nằm ngoài phạm vi đợt vừa rồi và cần infosec xử lý riêng.
+Hai dòng cuối nằm ngoài phạm vi các đợt vừa rồi và cần infosec xử lý riêng. Dòng `remote-gateway-policy.ts` là **ghi chú do chính repo tự viết trong code**, không phải kết luận của lần audit này.
 
 ## Audit bảo mật sau khi ship (2026-09-07)
 
@@ -121,6 +122,8 @@ Một lượt infosec chạy trên đúng phần vừa thêm đã **chặn merge
 | F9–F14 | Low/Med | Chi phí matcher nhân số luật; cache theo `mtime+size`; `run_in_background` không nằm trong subject của luật; chưa có UI xem/thu hồi luật | 🟡 F9 xong, còn lại vào backlog |
 
 **Điều đáng rút ra:** F1 sinh ra *từ chính bản vá* của một lỗ hổng khác. Luật cũ hỏng vì khoá theo tên tool; luật mới khoá theo nội dung đúng như thiết kế, nhưng việc đặt tier project **trong repo** đã lặng lẽ biến cấu hình quyền thành thứ người lạ ghi được. Sửa một lỗ ở tầng logic mà không xét lại tầng lưu trữ là cách tạo ra lỗ tiếp theo.
+
+Bài học đó đã được nâng thành **luật đứng** ở [ADR 0085](../decisions/0085-workflow-as-script.md) D-4: *tier nằm trong repo không bao giờ mang mã thực thi, và không bao giờ tự mang bản ghi trust của chính nó.* Áp luật đó ngược lại repo thì lộ ngay `hooks/store.ts:129` (xem bảng bug ở trên).
 
 ## Một lớp bug lặp lại: tool bắc cầu đổi tên
 
@@ -145,6 +148,7 @@ Mỗi tool bắc sang nhánh Claude SDK đổi tên `foo` → `mcp__<server>__fo
 - `resolveSessionProjectPath` cache theo vòng đời sidecar — phiên bị trỏ sang project khác sẽ đọc cache cũ.
 - **Thẻ xin quyền phải lách qua store.** `PermBlock` không mang `suggestions`, và `setPermission()` không có tham số `scope`, nên `useSessionPermissionRule.ts` phải (a) tự `sc.onEvent` ở **module load** — vì chính event đó tạo ra perm block nên listener mở trong `setup()` luôn trễ một tick — và (b) gọi RPC hai lượt trong cùng một block đồng bộ. Lượt hai là no-op có chủ ý (`resolvePermissionRequest` đã xoá entry), nhưng **thứ tự đồng bộ là điều kiện đúng đắn**: `await` trước khi gọi store có thể khiến store trả lời nhầm prompt kế tiếp. Dọn đúng: thêm `suggestion?: { rule, ruleKind }` vào `PermBlock` (`useSessionsData.ts`), điền trong handler `session.permission-request` (`stores/sessions.ts` — event **đã** mang `suggestions`), và thêm `scope` + trả `savedScopes` cho `setPermission`. Khi đó xoá được cả listener riêng lẫn lượt RPC trùng.
 - Nhánh Claude SDK: job nền external không có file log ⇒ vĩnh viễn chỉ có metadata, kể cả sau khi có `sessions.backgroundRead`.
+- `rerunPhase` invalidate hạ nguồn theo **topology**, không theo fingerprint đầu vào ([ADR 0085](../decisions/0085-workflow-as-script.md) phần Bối cảnh). Hôm nay nó biểu hiện thành *chạy lại nhiều hơn cần* (tốn tiền, có trần chặn) chứ không phải bỏ sót ⇒ ghi nhận là nợ, không phải lỗi.
 
 ## Thứ tự đề xuất cho đợt sau
 
@@ -152,4 +156,4 @@ Mỗi tool bắc sang nhánh Claude SDK đổi tên `foo` → `mcp__<server>__fo
 2. **#13 cron** — hạng mục duy nhất mở ra loại use-case mới hoàn toàn (agent chạy khi không ai ngồi máy). Task engine JSONL restart-safe đã hợp sẵn.
 3. **#43 hợp nhất settings** — chặn trước, vì #41/#46 đều phụ thuộc nó.
 4. **#2 browser** và **#5 codegraph** — đắt, làm khi đã hết việc rẻ.
-5. **#15 workflow script** — ADR + sandbox trước, code sau.
+5. ~~**#15 workflow script**~~ — **đã đóng** bằng [ADR 0085](../decisions/0085-workflow-as-script.md) (Rejected/Deferred). Không nằm trong hàng đợi nữa; muốn mở lại phải thoả điều kiện §5 của ADR.
