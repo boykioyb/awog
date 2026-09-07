@@ -1,12 +1,8 @@
 <template>
   <footer class="statusbar">
-    <!-- Plan-usage donuts pinned to the LEFT edge, followed by the user's custom
-         status line (docs/features/statusline.md) — a template of {variable}
-         placeholders, off by default; the button opens its editor either way. -->
+    <!-- Plan-usage donuts pinned to the LEFT edge. -->
     <div class="sb-cluster sb-usage">
       <StatusUsage />
-      <span class="sb-div" />
-      <StatusLineCustom :session="active" />
     </div>
 
     <!-- Session-context chips hug the RIGHT; shown only while viewing a session
@@ -67,7 +63,6 @@
 // Global status bar (VSCode-style footer), mounted once in the default layout. Left
 // edge shows per-account plan-usage donuts; the right edge surfaces the ACTIVE
 // session's git branch (quick-switch), context-window usage, a project-modal opener,
-// the user's custom status line (StatusLineCustom, left cluster),
 // the model/account/effort/style config chips, and the Files panel toggle — moved
 // out of the SessionDetail header so they are reachable from a fixed spot. Those
 // session items render only on the Sessions route with an open session. The global

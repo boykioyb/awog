@@ -12,7 +12,7 @@ import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
 //      account/auth IPC actions. The API key never reaches the renderer — only
 //      the safe view (fingerprint, label, models, baseURL).
 //   2. SYNCED preference slices — defaults/git/sessions/quota/autoUpdate/
-//      appearance/pet/github*/notifications/translate/context/keymap/statusline.
+//      appearance/pet/github*/notifications/translate/context/keymap.
 //      Truth is `~/.awog/settings.json` (sidecar, `settings.*` RPC). localStorage
 //      keeps a copy purely as a synchronous boot cache so the first paint doesn't
 //      flash defaults while the async read is in flight.
@@ -217,14 +217,6 @@ export interface TranslateSettings {
 // sensible width / height for each.
 export type WorkspaceDockSide = 'left' | 'right' | 'bottom'
 export type WorkspaceDock = Record<string, WorkspaceDockSide>
-
-// Custom status line (docs/features/statusline.md). `template` is a plain string
-// with `{variable}` placeholders resolved against a FIXED table — never a script:
-// running user-supplied code in the renderer would break security invariant 8.
-export interface StatusLineSettings {
-  enabled: boolean
-  template: string
-}
 
 export interface WorkspacePanelLayout {
   dock: WorkspaceDock
@@ -431,13 +423,6 @@ export const PET_REMINDER_CHOICES = [0, 15, 30, 60] as const
 // line is opt-in. The seed template shows the four things people ask for first and
 // demonstrates the `|` segment separator (a segment whose variables all resolve
 // empty is dropped, so no dangling dividers when there is no session).
-export const DEFAULT_STATUS_LINE_TEMPLATE = '{project} | {branch} | {model} | {contextPct}'
-
-const DEFAULT_STATUS_LINE: StatusLineSettings = {
-  enabled: false,
-  template: DEFAULT_STATUS_LINE_TEMPLATE,
-}
-
 // Workspace panel: per-view dock side. Default every view to the right column;
 // Terminal docks at the bottom (full-width under the chat) by default.
 const DEFAULT_WORKSPACE_PANEL: WorkspacePanelLayout = {
@@ -486,7 +471,6 @@ interface SyncedShape {
   translate: TranslateSettings
   context: ContextSettings
   keymap: KeymapBlob
-  statusline: StatusLineSettings
 }
 
 const SYNCED_KEYS: readonly (keyof SyncedShape)[] = [
@@ -504,7 +488,6 @@ const SYNCED_KEYS: readonly (keyof SyncedShape)[] = [
   'translate',
   'context',
   'keymap',
-  'statusline',
 ]
 
 // Machine-local view state — never written to settings.json (a panel width from a
@@ -646,10 +629,6 @@ export const useSettingsStore = defineStore('settings', () => {
   // Opaque here on purpose: useKeymap owns the combo schema + its validation, this
   // store only carries the blob to and from disk (SoC — no key-binding logic here).
   const keymap = ref<KeymapBlob>({ ...persisted.keymap })
-  const statusline = reactive<StatusLineSettings>({
-    ...DEFAULT_STATUS_LINE,
-    ...persisted.statusline,
-  })
 
   // Bumped whenever a persisted slice is saved (see the watch below). Lets the
   // Settings modal render a debounced "saved" toast without re-declaring the
@@ -675,7 +654,6 @@ export const useSettingsStore = defineStore('settings', () => {
     translate: { ...translate },
     context: { ...context },
     keymap: { ...keymap.value },
-    statusline: { ...statusline },
   })
 
   // --- settings.json sync (user tier) ---------------------------------------
@@ -730,7 +708,6 @@ export const useSettingsStore = defineStore('settings', () => {
     if (isObj(blob.translate)) Object.assign(translate, blob.translate)
     if (isObj(blob.context)) Object.assign(context, blob.context)
     if (isObj(blob.keymap)) keymap.value = { ...blob.keymap }
-    if (isObj(blob.statusline)) Object.assign(statusline, blob.statusline)
   }
 
   // Read the user tier once per app session, then push the merged snapshot back so
@@ -783,7 +760,6 @@ export const useSettingsStore = defineStore('settings', () => {
       translate,
       context,
       keymap,
-      statusline,
     ],
     () => {
       if (typeof window === 'undefined') return
@@ -1059,8 +1035,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const updatePet = (patch: Partial<PetSettings>) => Object.assign(pet, patch)
   const updateTranslate = (patch: Partial<TranslateSettings>) => Object.assign(translate, patch)
   const updateContext = (patch: Partial<ContextSettings>) => Object.assign(context, patch)
-  const updateStatusline = (patch: Partial<StatusLineSettings>) => Object.assign(statusline, patch)
-  const resetStatusline = () => Object.assign(statusline, DEFAULT_STATUS_LINE)
   // Whole-blob replace: useKeymap owns the schema and always hands over the full
   // binding set, so a field merge would keep stale ids alive after a reset.
   const setKeymap = (blob: KeymapBlob) => {
@@ -1142,7 +1116,6 @@ export const useSettingsStore = defineStore('settings', () => {
     translate,
     context,
     keymap,
-    statusline,
     savedTick,
     layerProjectId,
     projectLayer,
@@ -1177,8 +1150,6 @@ export const useSettingsStore = defineStore('settings', () => {
     updatePet,
     updateTranslate,
     updateContext,
-    updateStatusline,
-    resetStatusline,
     setKeymap,
     contextConfig,
     // layered settings (user ← project)
