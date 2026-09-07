@@ -49,7 +49,7 @@ import {
   parsePermissionRule,
   suggestRuleText,
 } from '../sessions/permission-rules.js'
-import { BROWSER_TOOL_NAME, isMutatingBrowserAction } from './tools/browser-tool.js'
+import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
 import { log } from '../util/logger.js'
@@ -107,7 +107,10 @@ function isWikiMutatingTool(name: string): boolean {
 // browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
 // screenshot/extract are read-only (don't gate). Decided per-call from args.
 function isGatedTool(name: string, args: unknown): boolean {
-  if (name === BROWSER_TOOL_NAME) return isMutatingBrowserAction(args)
+  // Khớp CẢ HAI cách gọi tên: tên trần của nhánh Pi và tên bắc cầu của nhánh
+  // Claude SDK (`mcp__awogbrowser__browser_tool`). Chỉ so tên trần thì lời gọi bắc
+  // cầu lọt qua cổng — kể cả trong plan mode, nơi đã hứa là read-only.
+  if (isBrowserToolName(name)) return isMutatingBrowserAction(args)
   return (
     WRITE_TOOLS.has(name) ||
     EXEC_TOOLS.has(name) ||
