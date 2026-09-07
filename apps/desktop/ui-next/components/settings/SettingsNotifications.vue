@@ -22,6 +22,16 @@
       </div>
     </SettingsField>
 
+    <!-- Kênh của TIẾN TRÌNH MAIN: sống độc lập với cửa sổ renderer, nên chỉ hiện
+         khi có bridge Electron (browser dev không có gì để bật). -->
+    <SettingsField
+      v-if="hasMainNotify"
+      :name="t('settingsNotify.whenClosed.name')"
+      :desc="whenClosedDesc"
+    >
+      <SettingsTog v-model="notifyWhenClosed" />
+    </SettingsField>
+
     <div class="sech">{{ t('settings.notifications.sources.heading') }}</div>
 
     <SettingsField
@@ -45,7 +55,7 @@
 // (channel + toast placement) plus the on/off switch of each source. What each
 // source actually watches stays in its own panel: GitHub polling (account,
 // interval, projects, connection check) lives in Settings → Git.
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import { pushActionToast } from '~/composables/useActionToasts'
 import { previewNativeNotification, type GhNativeProbe } from '~/composables/useGhNotifications'
@@ -99,6 +109,40 @@ const toastPosition = computed<string>({
   set: (value) => {
     store.notifications.toastPosition = value as ToastPosition
     previewToast()
+  },
+})
+
+// ── Thông báo phát từ tiến trình main (ADR 0084) ────────────────────────────
+// Công tắc này KHÔNG nằm trong store settings: renderer chết theo cửa sổ, nên nó
+// không thể tự báo lúc cửa sổ đã đóng — main giữ pref của riêng nó và trả lời qua
+// bridge. Kiểu khai tại chỗ vì `types/awog-bridge.d.ts` do phần khác giữ (việc gộp
+// vào đó là dọn dẹp sau, không đổi hành vi).
+type MainNotifyPrefs = { whenClosed: boolean }
+type MainNotifyBridge = {
+  getNotifyPrefs?: () => Promise<MainNotifyPrefs>
+  setNotifyPrefs?: (prefs: MainNotifyPrefs) => Promise<MainNotifyPrefs>
+}
+const notifyBridge = (typeof window !== 'undefined' ? window.awog : undefined) as
+  | MainNotifyBridge
+  | undefined
+const hasMainNotify = !!notifyBridge?.getNotifyPrefs
+const whenClosed = ref(true)
+onMounted(async () => {
+  if (!notifyBridge?.getNotifyPrefs) return
+  try {
+    whenClosed.value = (await notifyBridge.getNotifyPrefs()).whenClosed
+  } catch {
+    // Bridge cũ / main chưa đăng ký handler → giữ mặc định, không kêu.
+  }
+})
+const whenClosedDesc = computed(
+  () => `${t('settingsNotify.whenClosed.desc')} ${t('settingsNotify.whenClosed.reach')}`,
+)
+const notifyWhenClosed = computed<boolean>({
+  get: () => whenClosed.value,
+  set: (value) => {
+    whenClosed.value = value
+    void notifyBridge?.setNotifyPrefs?.({ whenClosed: value })
   },
 })
 

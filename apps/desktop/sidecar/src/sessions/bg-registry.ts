@@ -322,6 +322,14 @@ function finalize(state: LiveShell, forced?: BgShellStatus): void {
   // subscribes to this event and, per the autoContinueOnBackground setting,
   // either auto-starts a continuation turn or surfaces a "Continue" card. No
   // sidecar-side turn primitive is needed — sessions are renderer-driven.
+  //
+  // WHEN NO WINDOW IS OPEN there is no such subscriber, and this event used to be
+  // lost outright. It no longer is: Electron main PARKS it and replays it verbatim
+  // on this same channel once a renderer subscribes again, and notifies the user at
+  // OS level in the meantime (electron/src/wake.ts, ADR 0084). Nothing changes here
+  // — emitting once, with `wake`, stays the whole contract of this module. Still
+  // NOT covered: a shell that exits while the entire app is down (reload adopts it
+  // as read, see reloadBackgroundShells) — the user finds it as a chip on reopen.
   emit('session.background-done', {
     sessionId: state.meta.sessionId,
     shellId: state.meta.shellId,

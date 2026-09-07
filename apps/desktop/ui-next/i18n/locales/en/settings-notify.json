@@ -1,0 +1,5 @@
+{
+  "settingsNotify.whenClosed.name": "Notify with the window closed",
+  "settingsNotify.whenClosed.desc": "Sent by the app itself, not by the UI window: a background command that finishes, a turn that settles or a permission gate still reaches you after you close the window. Turn this off and those events stay silent until you reopen AWOG.",
+  "settingsNotify.whenClosed.reach": "Desktop only. Phones are notified while the Remote app is connected over the tailnet — AWOG sends nothing to an outside push service."
+}

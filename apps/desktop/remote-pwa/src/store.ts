@@ -640,6 +640,17 @@ function onGatewayEvent(evt: GatewayEvent): void {
         status: 'done',
         exitCode: p.exitCode ?? null,
       })
+      // Việc nền là thứ người dùng đi làm chuyện khác trong lúc chờ — đúng lúc màn
+      // hình đang tắt/PWA ở nền. Cùng cổng như 'lượt xong': chỉ khi trang đang ẩn,
+      // và `notify()` tự lo secure-context + quyền (không có thì rung).
+      if (document.hidden) {
+        const ok = p.status === 'exited' && (p.exitCode ?? null) === 0
+        void notify({
+          title: ok ? 'Việc nền xong' : 'Việc nền lỗi',
+          body: p.command,
+          tag: `bg-${p.shellId}`,
+        })
+      }
       return
     }
     case 'session.message.done': {

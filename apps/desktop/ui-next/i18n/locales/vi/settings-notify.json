@@ -1,0 +1,5 @@
+{
+  "settingsNotify.whenClosed.name": "Báo cả khi đã đóng cửa sổ",
+  "settingsNotify.whenClosed.desc": "Do chính app gửi chứ không phải cửa sổ UI: lệnh nền chạy xong, lượt kết thúc hay cổng xin quyền vẫn tới được bạn sau khi bạn đóng cửa sổ. Tắt đi thì những việc đó im lặng cho tới lúc bạn mở AWOG lại.",
+  "settingsNotify.whenClosed.reach": "Chỉ trên máy tính. Điện thoại nhận được khi app Remote còn kết nối trong tailnet — AWOG không gửi gì ra dịch vụ push bên ngoài."
+}

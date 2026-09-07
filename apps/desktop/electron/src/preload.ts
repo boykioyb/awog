@@ -38,6 +38,9 @@ type TrayCommand =
   | { kind: 'session'; engineId: string }
   | { kind: 'task'; id: string }
 type TrayModel = { macTitle: string; tooltip: string; unreadCount: number }
+// Công tắc của thông báo OS phát từ tiến trình main (notify.ts, ADR 0084). Main
+// giữ pref này của riêng nó vì nó không đọc được settings bên renderer.
+type NotifyPrefs = { whenClosed: boolean }
 // Desktop pet (docs/features/desktop-pet.md). Same shape as pet-window.ts — this
 // preload is sandboxed and cannot import main-process modules, so the types are
 // mirrored here (as the tray ones are).
@@ -110,6 +113,10 @@ const awog = {
   onEvent(handler: (event: EngineEvent) => void): () => void {
     const listener = (_e: unknown, event: EngineEvent): void => handler(event)
     ipcRenderer.on('engine:event', listener)
+    // Báo cho main biết renderer này đã sẵn sàng nhận sự kiện, để nó giao lại
+    // những gì đã park lúc không cửa sổ nào mở (wake.ts, ADR 0084). Fire-and-forget:
+    // main tự lọc cửa sổ chính và tự chống phát lại nhiều lần.
+    ipcRenderer.send('engine:subscribed')
     return () => ipcRenderer.removeListener('engine:event', listener)
   },
 
@@ -223,12 +230,25 @@ const awog = {
   onTrayCommand(handler: (cmd: TrayCommand) => void): () => void {
     const listener = (_e: unknown, cmd: TrayCommand): void => handler(cmd)
     ipcRenderer.on('tray:command', listener)
+    // Người dùng bấm thông báo OS lúc cửa sổ đang đóng: main để dành đích đến,
+    // ta kéo về ĐÚNG lúc handler vừa gắn nên không có cửa sổ đua nào (wake.ts).
+    ipcRenderer
+      .invoke('wake:drainRoute')
+      .then((cmd: TrayCommand | null) => {
+        if (cmd) handler(cmd)
+      })
+      .catch(() => undefined)
     return () => ipcRenderer.removeListener('tray:command', listener)
   },
   // Popover window forwards a clicked item; main relays it to the main window.
   sendTrayCommand: (cmd: TrayCommand): void => {
     ipcRenderer.send('tray:navigate', cmd)
   },
+
+  // Thông báo OS phát từ main — đọc/ghi công tắc ở Settings → Thông báo.
+  getNotifyPrefs: (): Promise<NotifyPrefs> => ipcRenderer.invoke('notify:getPrefs'),
+  setNotifyPrefs: (prefs: NotifyPrefs): Promise<NotifyPrefs> =>
+    ipcRenderer.invoke('notify:setPrefs', prefs),
 
   // Desktop pet (desktop-pet). MAIN WINDOW side: push the prefs main acts on
   // (create/resize/move) + the status model, take back the pet's clicks and the

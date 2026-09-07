@@ -5,6 +5,8 @@ import { registerIpc } from './ipc'
 import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
 import { loadShellEnv } from './shell-env'
 import { registerMediaProtocol } from './media'
+import { registerNotifyIpc } from './notify'
+import { installWakeBridge } from './wake'
 import { startRemoteGateway, stopRemoteGateway } from './remote-gateway'
 import { petWindow, type PetCommand, type PetPrefs, type PetStatus } from './pet-window'
 import { trayPopover } from './popover'
@@ -135,6 +137,10 @@ if (!gotLock) {
     // media:// stream protocol for in-app video/audio preview (must run post-ready).
     registerMediaProtocol()
     registerIpc(getWindow)
+    // Đánh thức khi cửa sổ đã đóng (ADR 0084): giữ hàng đợi wake ở main + thông
+    // báo OS từ main. Cài TRƯỚC khi mở cửa sổ để không bỏ sót sự kiện nào.
+    registerNotifyIpc()
+    installWakeBridge({ getWindow, showWindow })
     // Mobile Remote Control (ADR 0067): WS gateway bound to the tailnet only.
     // Fail-closed — a no-op when Tailscale isn't up.
     startRemoteGateway(getWindow)
