@@ -22,7 +22,7 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | 2 | Browser: a11y tree · console · network · viewport · multi-tab | 🟡 | 5 → 14 action. `snapshot` trả cây role/name + ref cho từng phần tử tương tác (click theo ref, không theo pixel), xuyên shadow root, che input password. Hàng rào chống injection vẽ theo **ai kiểm soát chuỗi** — `<title>`, URL sau redirect, response header đều nằm TRONG hàng rào. Header credential bị bỏ **ngay ở Electron main**, không qua nổi biên tiến trình. Cầu sang nhánh SDK **chưa commit được** (kẹt file phiên khác đang sửa) |
 | 3 | Dev server từ file cấu hình + đọc log server | ⬜ | Thay thế thô hiện nay: `Bash(run_in_background)` + `BashOutput` |
 | 4 | `read_terminal` — đọc PTY người dùng tự gõ | ✅ | Ring buffer trong `terminal/manager.ts`; gate `chatSession` nên **có cả trong plan mode** (read-only, và lập kế hoạch chính là lúc cần đọc terminal nhất) |
-| 5 | Codegraph — index symbol + call path | ⬜ | Hiện chỉ ripgrep + glob |
+| 5 | Codegraph — index symbol + call path | ✅ | Không thêm dependency, không dùng TS compiler API. Masking pass giữ **nguyên độ dài byte + vị trí newline** nên mọi offset regex vẫn map ra `path:line` thật. Đo trên repo này: cold 881ms/1148 file, warm 106ms, index 2.68MB. `refs useTheme` ra 10 file trong khi `rg -l` ra 12 — 2 file thừa chỉ nhắc tên trong comment. Giới hạn được **nói cho model biết**, nên câu trả lời luôn là "không có tham chiếu đã index", không bao giờ là "không ai gọi" |
 | 6 | Monitor / wait-for-condition | ✅ | Tool `monitor` **không nhận `command`** — lệnh phải khởi động trước bằng `Bash(run_in_background)`, và đó mới là chỗ qua cổng quyền; thêm `command` sẽ là cửa sau thật vì `monitor` không nằm trong `EXEC_TOOLS`. **Đính chính brief cũ**: `AMBIENT_TASK_TYPES` không phải nguyên nhân — tiến trình CLI có vòng đời bằng đúng một lượt, đóng stdin là mọi việc nền chết theo |
 | 7a | Subagent chọn model lúc gọi (Pi) | ✅ | TIER đóng (opus/sonnet/haiku/fable), không phải model id tự do — prompt là L1, id bịa sẽ làm provider trả 400 giữa lượt |
 | 7b | Subagent chạy nền (Pi) | ✅ | Vòng đời = đúng bằng lượt cha, **cố ý không** dùng mô hình sống-qua-lượt của ADR 0066: background shell là tiến trình OS, còn subagent sống sau lượt sẽ gọi tool khi không còn lượt nào để hỏi quyền |
@@ -40,15 +40,15 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | # | Hạng mục | TT | Ghi chú |
 |---|---|---|---|
 | 13 | Lịch chạy / cron | ✅ | [ADR 0082](../decisions/0082-scheduled-runs.md). Union rời rạc thay cron string (validate được bằng zod, render ngược ra tiếng người). DST xử lý bằng dựng lại `Date` local chứ không cộng ms. Quá hạn ⇒ chạy bù **đúng một lần**. Chỉ cho mode `execute`/`plan` — `ask` sẽ park hộp xin quyền ở nơi không cửa sổ nào thấy. **Luôn có trần chi tiêu**, bỏ trống ≠ vô hạn |
-| 14 | Agent tự hẹn giờ thức dậy | ⬜ | Chỉ có wake *phản ứng* khi job nền xong |
+| 14 | Agent tự hẹn giờ thức dậy | ⬜ | Chỉ có wake *phản ứng* khi job nền xong. Lịch chạy (#13) phủ phần lớn nhu cầu thực tế |
 | 15 | Workflow bằng script + cache theo hash input | ❌ | [ADR 0085](../decisions/0085-workflow-as-script.md) — **Rejected** (script) · **Deferred** (cache), kèm điều kiện mở lại đo được. Lý do gọn: (1) **cache là cái giá của script, không phải phần thưởng** — nó tồn tại để bù cho việc call stack JS không checkpoint được, mà AWOG đã có frontier bền vững trên `events.log`; (2) hộp cát cho *ngôn ngữ* không phải hộp cát cho *năng lực* — thứ nguy hiểm (`agent()` có tool ghi + shell) nằm trong hộp theo thiết kế, nên `node:vm` (vốn **không** phải ranh giới an toàn) lẫn isolate thật đều không mua được gì; (3) 0 workflow trên đĩa, 3 task từ trước tới nay ⇒ chưa có ca thật nào chạm giới hạn của DAG. Nhu cầu thật (fan-out động, rẽ nhánh theo verdict) nếu xuất hiện sẽ giải bằng primitive **khai báo** `forEach`/`when`, ADR riêng |
 | 16 | Worktree riêng cho node song song | ✅ | [ADR 0081](../decisions/0081-task-node-worktree-isolation.md). Trước đó 4 node song song ghi chung `project.path` và auto-commit đua nhau — lỗi tranh chấp thật |
 | 17 | Session nhắn cho session | ✅ | Hộp thư + người dùng bấm, **không** tự khởi động lượt. 3 trần chặn vòng lặp; số hop đếm lúc **gửi** nên cắt được cả khi chưa ai bấm giao. Tin từ phiên A là L1 với phiên B — hàng rào nonce sinh SAU khi bên gửi viết xong |
 | 18 | Trigger Task/Workflow từ xa | ⬜ | ⚠️ `tasks.*` bị loại khỏi allowlist gateway — **mở rộng allowlist ⇒ infosec re-audit bắt buộc** |
-| 19 | Watch PR cụ thể + CI check runs → đẩy vào phiên | ⬜ | Hiện chỉ poll notifications → native notification, không đọc CI, không có đường vào session |
-| 20 | Push notification thật | ⬜ | Hiện chỉ tới được khi PWA còn kết nối tailnet |
+| 19 | Watch PR + CI check runs → đẩy vào phiên | ✅ | Một `gh api graphql` cho cả danh sách, mọi giá trị đi bằng variable. **Cố ý không** gọi `postSessionMessage()` — nhánh đó đóng khung "người dùng chuyển tiếp cho bạn", mà log CI không phải thứ người dùng đưa. Dấu vân tay persist ra đĩa nên mở lại app không phát lại CI hôm qua |
+| 20 | Push notification thật | ❌ | **Từ chối** ([ADR 0084](../decisions/0084-wake-when-no-window-and-push-scope.md)): payload mã hoá nhưng **metadata thì không** — bên thứ ba biết máy này vừa xong việc lúc nào, tần suất nào. Đúng thứ invariant #5 cấm, và phá mô hình tailnet-only của ADR 0067. Phần khả thi đã làm: thông báo phát từ **tiến trình main** nên sống độc lập với cửa sổ |
 | 21 | Ngân sách cấp Task | ✅ | Trước đó `types/shared.ts` tự nhận "closes the budget per task invariant" nhưng `node-runner.ts` không hề có budget — code không khớp lời hứa |
-| 22 | Auto-wake khi cửa sổ UI đóng | ⬜ | Wake hiện renderer-driven ⇒ đóng UI là hết wake |
+| 22 | Auto-wake khi cửa sổ UI đóng | ✅ | Main park wake rồi phát lại **nguyên văn** trên cùng kênh khi renderer subscribe lại ⇒ không có nhánh code thứ hai. Cố ý **không** drain trong `preload.onEvent`: ~10 module cùng subscribe ở đó, module nào đăng ký trước sẽ nuốt mất wake mà không xử lý |
 
 ## C. Phiên & transcript
 
@@ -76,12 +76,12 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | 37 | Marketplace tìm plugin/skill | ⬜ | Đường vào duy nhất hiện nay: tự dán URL |
 | 38 | MCP registry động + gợi ý theo ngữ cảnh | ✅ | Registry chính thức của MCP. `redirect: 'manual'` + kiểm tra **từng IP** sau `dns.lookup` (chặn DNS rebinding). `command` suy từ allowlist cứng — `runtimeHint` do registry cấp bị **bỏ qua**. Cache 24h, degrade offline 4 mức đã đo thật |
 | 39 | Luật quyền theo pattern lệnh + 3 tầng | ✅ ⚠️ | [ADR 0080](../decisions/0080-command-scoped-permission-rules.md). Đây là **lỗ hổng**, không phải thiếu tính năng: "always allow" cho `git status` từng mở khoá **mọi lệnh Bash** trong phiên |
-| 40 | Tự đề xuất allowlist từ lịch sử | ⬜ | Cần quét transcript đếm tần suất bị hỏi |
+| 40 | Tự đề xuất allowlist từ lịch sử | ✅ | Chỉ đề xuất từ lời gọi người dùng **đã đồng ý** (step `done`), không bao giờ từ lời gọi bị từ chối. Nội dung luật **không đến từ UI** — park server-side dưới id ngẫu nhiên, renderer chỉ gửi lại id + tầng |
 | 41 | Statusline tuỳ biến | ✅ | Template trên bảng 12 biến, **không chạy script** — chạy script người dùng nhập từ settings là vi phạm invariant #8 |
 | 42 | Output style do người dùng tự viết | ✅ | Store 2 tier `.awog/styles/<id>.md`, 3 RPC, Settings → Styles, chọn được trong picker, bản của user **đè** bản dựng sẵn cùng id. Id lạ không còn degrade im lặng — sidecar log `warn` nêu rõ lượt đó chạy KHÔNG style |
 | 43 | Settings phân tầng + hợp nhất storage | ✅ | 2 tầng user→project, merge sâu 2 cấp, UI cho biết giá trị đến từ tầng nào. Bằng chứng cho "setting ở localStorage là setting giả": remote gateway đọc `defaults.provider` từ file mà UI **chưa bao giờ ghi** ⇒ mọi phiên tạo từ điện thoại rơi về model cứng |
 | 44 | `/init` quét repo sinh CLAUDE.md | ✅ | Quét qua `git ls-files` (tôn trọng `.gitignore` miễn phí), ngân sách 4000 file / 20k ký tự. **Không bao giờ ghi đè** file có sẵn — trả nháp để người dùng tự trộn |
-| 45 | Skill eval / doctor | ⬜ | Không có eval harness nào |
+| 45 | Skill eval / doctor | ✅ | Doctor 17 luật tĩnh, 0 đồng, đọc `SKILL.md` **RAW** (store trả `null` cho file thiếu `name`/`description` — đúng file cần soi nhất). Eval kích hoạt có trần calls/USD/wallclock, và tổng đã tiêu đo bằng usage thật sau khi thêm `completePiWithUsage` |
 | 46 | Keymap: thêm action, đồng bộ | ✅ | 6 → 14 action, bindings theo người dùng qua settings. Chord **không làm** (kéo theo máy trạng thái + phát hiện xung đột 2 tầng, ngoài phạm vi) |
 
 ---
