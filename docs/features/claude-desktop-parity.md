@@ -101,7 +101,7 @@ Những cái này **không phải** thiếu tính năng — là code sai đang c
 | `parsePorcelainV2` phụ thuộc thứ tự dòng ⇒ `detachedAt` **không bao giờ** được điền (git phát `branch.oid` trước `branch.head`), cảnh báo detached HEAD mất phần sha | `git/parser.ts` | ✅ |
 | Test `discoverGitRepos` dựng `.git` rỗng rồi mong nó là repo — mâu thuẫn với chính helper `makeRepo` của nó; source đúng, test sai | `git/__tests__/discover.test.ts` | ✅ |
 | Mode `execute` từ xa bỏ qua permission park | `electron/src/remote-gateway-policy.ts` | ⬜ ⚠️ |
-| Trust của hook tier project lưu ở `{project}/.awog/.trust.json` — **trong repo**. Ai commit được `.awog/hooks/evil.json` thì cũng commit được trust của nó. Cùng lớp với F1 bên dưới, phát hiện khi viết [ADR 0085](../decisions/0085-workflow-as-script.md) §3 | `hooks/store.ts:129` | ⬜ ⚠️ |
+| Trust của hook tier project lưu ở `{project}/.awog/.trust.json` — **trong repo**. Ai commit được `.awog/hooks/evil.json` thì cũng commit được trust của nó. Cùng lớp với F1, phát hiện khi viết [ADR 0085](../decisions/0085-workflow-as-script.md) §3 | `hooks/store.ts` | ✅ Chuyển sang `~/.awog/hook-trust/<băm đường dẫn>`, file cũ **không nạp, không migrate**. Cố ý lệch ADR 0080 F2 ở một điểm: file hỏng ⇒ coi như rỗng chứ không cấm ghi đè — mất luật là mất DENY (fail-**open**), mất trust là hook không chạy (fail-**closed**) |
 
 Hai dòng cuối nằm ngoài phạm vi các đợt vừa rồi và cần infosec xử lý riêng. Dòng `remote-gateway-policy.ts` là **ghi chú do chính repo tự viết trong code**, không phải kết luận của lần audit này.
 
