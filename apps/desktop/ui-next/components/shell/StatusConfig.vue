@@ -80,10 +80,8 @@
         <span class="sb-cfg-lbl">{{ styleName }}</span>
       </button>
       <div v-if="openChip === 'style'" class="smenu stylemenu sb-menu" @click.stop>
-        <template v-for="(grp, gi) in RESPONSE_STYLES" :key="grp.key">
-          <div class="palg" :class="{ first: gi === 0 }">
-            {{ t(`sessions.style.group.${grp.key}`) }}
-          </div>
+        <template v-for="(grp, gi) in styleGroups" :key="grp.key">
+          <div class="palg" :class="{ first: gi === 0 }">{{ grp.label }}</div>
           <div
             v-for="row in grp.rows"
             :key="row.slug"
@@ -93,15 +91,23 @@
           >
             <Icon :name="row.icon" class="styicon" />
             <div class="stytext">
-              <div class="nm2">{{ t(`sessions.style.${row.slug}.name`) }}</div>
-              <div class="sd2">{{ t(`sessions.style.${row.slug}.hint`) }}</div>
+              <div class="nm2">
+                <span class="stynm">{{ row.name }}</span>
+                <span
+                  v-if="row.overridesBuiltIn"
+                  class="tag styover"
+                  :title="t('settingsStyles.overrides.hint')"
+                >
+                  {{ t('settingsStyles.overrides.tag') }}
+                </span>
+              </div>
+              <div v-if="row.hint" class="sd2">{{ row.hint }}</div>
             </div>
             <button
+              v-if="row.desc"
               class="styinfo"
               type="button"
-              :aria-label="
-                t('sessions.style.infoLabel', { name: t(`sessions.style.${row.slug}.name`) })
-              "
+              :aria-label="t('sessions.style.infoLabel', { name: row.name })"
               :aria-expanded="infoSlug === row.slug"
               @click.stop="toggleInfo(row.slug)"
             >
@@ -164,7 +170,7 @@ const {
   selectThink,
   activeStyleId,
   styleName,
-  RESPONSE_STYLES,
+  styleGroups,
   noMd,
   selectStyle,
   toggleNoMd,
@@ -189,10 +195,18 @@ function pickStyle(slug: string) {
 }
 
 // ── Style description popover ──
-// Which style row's info card is open (one at a time), or null.
+// Which style row's info card is open (one at a time), or null. Text comes off the
+// row itself (i18n for built-ins, the file's frontmatter/directive for a style the
+// user wrote) — never from an i18n key built out of the id, which would miss for
+// every user style.
 const infoSlug = ref<string | null>(null)
-const infoName = computed(() => (infoSlug.value ? t(`sessions.style.${infoSlug.value}.name`) : ''))
-const infoDesc = computed(() => (infoSlug.value ? t(`sessions.style.${infoSlug.value}.desc`) : ''))
+const infoRow = computed(() =>
+  infoSlug.value
+    ? styleGroups.value.flatMap((g) => g.rows).find((r) => r.slug === infoSlug.value)
+    : undefined,
+)
+const infoName = computed(() => infoRow.value?.name ?? '')
+const infoDesc = computed(() => infoRow.value?.desc ?? '')
 function toggleInfo(slug: string) {
   infoSlug.value = infoSlug.value === slug ? null : slug
 }
@@ -262,6 +276,30 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: 0;
   background: transparent;
   text-align: left;
+}
+/* Style rows: a user-written style brings a free-form name + description from its
+   file, so the name line truncates and the hint clamps to two lines — the 272px
+   menu must not stretch because someone wrote a long title. */
+.stylemenu .mi.sty .nm2 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.stynm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.styover {
+  flex: none;
+}
+.stylemenu .mi.sty .sd2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .sb-mi-name {
   overflow: hidden;

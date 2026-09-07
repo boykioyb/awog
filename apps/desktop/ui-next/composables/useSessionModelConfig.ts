@@ -1,5 +1,6 @@
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { THINKING_LEVELS } from '~/composables/useSessionsData'
+import { isUserStyleId, useOutputStyles } from '~/composables/useOutputStyles'
 import type { Session, ThinkingLevel } from '~/composables/useSessionsData'
 import type { AccountOption } from '~/composables/useAccounts'
 
@@ -11,11 +12,37 @@ import type { AccountOption } from '~/composables/useAccounts'
 // Models with no reasoning support — the effort chip hides for these.
 const NO_THINK = new Set(['Haiku 4.5', 'GPT-4.1'])
 
-// Response-style catalog. `id` is the engine contract (sent via store.setStyle —
-// never translate it); `slug` derives the i18n name/hint keys; `icon` is a lucide
-// sprite glyph. Mirrors the (now-removed) composer catalog.
-export type StyleRow = { id: string; slug: string; icon: string }
-export type StyleGroup = { key: string; rows: StyleRow[] }
+// Built-in response-style catalog. `id` is the engine contract (sent via
+// store.setStyle — never translate it); `slug` derives the i18n name/hint keys;
+// `icon` is a lucide sprite glyph. Mirrors the (now-removed) composer catalog.
+// Styles the USER writes are NOT here: they live on disk and arrive async via
+// useOutputStyles — see `styleGroups` below.
+type StyleRow = { id: string; slug: string; icon: string }
+type StyleGroup = { key: string; rows: StyleRow[] }
+
+// One row as the picker renders it — built-in and user-written styles collapse to
+// the same shape so the menu template stays free of "which kind is this" branches
+// (built-in names come from i18n, user names from the file's frontmatter).
+export type StylePickerRow = {
+  // Engine id: a STYLE_DIRECTIVES key, or the file name of a user style.
+  slug: string
+  icon: string
+  name: string
+  hint: string
+  desc: string
+  // Style của người dùng trùng id một style dựng sẵn ⇒ bản của họ được dùng.
+  // Nói ra ngay trên hàng, y như Settings → Phong cách.
+  overridesBuiltIn: boolean
+}
+export type StylePickerGroup = { key: string; label: string; rows: StylePickerRow[] }
+
+// Icon dùng chung cho mọi style người dùng tự viết (file trên đĩa không mang icon).
+const USER_STYLE_ICON = 'palette'
+// Card mô tả rộng 230px — directive có thể dài tới 8000 ký tự, cắt bớt để nó
+// không tràn khỏi màn hình khi style không có `description`.
+const MAX_STYLE_DESC = 240
+const clampDesc = (text: string): string =>
+  text.length > MAX_STYLE_DESC ? `${text.slice(0, MAX_STYLE_DESC).trimEnd()}…` : text
 const RESPONSE_STYLES: StyleGroup[] = [
   {
     key: 'default',
@@ -73,15 +100,25 @@ const REMOVED_STYLE_SLUGS = new Set(['git-log', 'git log'])
 // stored/sent the label as `responseStyle`, so we translate it back here.
 const SLUG_BY_LABEL = new Map(ALL_STYLE_ROWS.map((r) => [r.id, r.slug]))
 
-// Canonicalize a stored/selected style value to the ENGINE SLUG (a STYLE_DIRECTIVES
-// key in the sidecar), or 'Default' for no-style. THE engine only knows slugs
-// ('pirate', 'hacker-80s', …), so this is what must be sent as `responseStyle`.
-// Accepts: a slug (passthrough), a display label (the identity the UI wrongly
+// Canonicalize a stored/selected style value to the ENGINE ID (a STYLE_DIRECTIVES
+// key in the sidecar, or the file name of a style the user wrote), or 'Default'
+// for no-style. The engine only knows ids ('pirate', 'hacker-80s', 'my-haiku'…),
+// so this is what must be sent as `responseStyle`.
+// Accepts: a built-in slug (passthrough), the id of a user style (WP12 —
+// checked FIRST, see below), a display label (the identity the UI wrongly
 // persisted before this fix → mapped back so old sessions round-trip), or the
-// Default/Normal sentinels. An unknown value passes through and degrades to
-// "no style" in the sidecar rather than erroring.
+// Default/Normal sentinels. An unknown value still passes through: the sidecar
+// resolves it and logs LOUDLY when it cannot, which beats this layer quietly
+// rewriting the user's choice to "no style".
 export function normalizeStyleSlug(value: string | undefined | null): string {
   if (!value || value === 'Default' || value === 'Normal' || value === 'normal') return 'Default'
+  // A style the user wrote outranks every legacy rule below — its id is what the
+  // sidecar resolves first, and nothing stops them from naming a file after a
+  // slug we once shipped and later removed ('git-log'). Checking this first is
+  // what keeps such a style from being degraded to Default behind their back.
+  // Before the list loads this is false, and the value falls through to the
+  // passthrough on the last line — still not a silent degrade.
+  if (isUserStyleId(value)) return value
   if (REMOVED_STYLE_SLUGS.has(value)) return 'Default'
   if (STYLE_SLUGS.has(value)) return value
   return SLUG_BY_LABEL.get(value) ?? value
@@ -92,6 +129,7 @@ export function useSessionModelConfig(session: () => Session) {
   const store = useSessionsStore()
   const { providerOf } = useSessionsData()
   const { accounts, accountById, modelsForAccount } = useAccounts()
+  const { stylesForProject, stylesScanned, ensureStylesLoaded } = useOutputStyles()
 
   // ── Model ──
   const selectedModel = computed(() => session().model || 'Opus 5')
@@ -148,18 +186,73 @@ export function useSessionModelConfig(session: () => Session) {
   }
 
   // ── Response style + no-markdown ──
-  // Identity is the engine SLUG throughout (matches the sidecar STYLE_DIRECTIVES +
-  // the persisted `responseStyle`); the display label comes from i18n. 'Default'
-  // (no style) surfaces as the 'normal' row for highlight/label purposes.
+  // Identity is the engine ID throughout (matches the sidecar STYLE_DIRECTIVES +
+  // the persisted `responseStyle`); the display label comes from i18n for built-ins
+  // and from the file's frontmatter for user styles. 'Default' (no style) surfaces
+  // as the 'normal' row for highlight/label purposes.
   const activeStyleId = computed(() => {
     const slug = normalizeStyleSlug(session().style)
     return slug === 'Default' ? 'normal' : slug
   })
+
+  // Styles the user wrote, scoped to THIS session's project (global tier + this
+  // project's tier only — a style living in another project's repo must not show
+  // up here, it would not resolve at turn time either).
+  const projectId = computed(() => session().project || '')
+  const userStyles = computed<StylePickerRow[]>(() =>
+    stylesForProject(projectId.value).map((s) => ({
+      slug: s.id,
+      icon: USER_STYLE_ICON,
+      name: s.name || s.id,
+      hint: s.description,
+      desc: s.description || clampDesc(s.body),
+      overridesBuiltIn: STYLE_SLUGS.has(s.id),
+    })),
+  )
+  // Warm the list as soon as a session is on screen (and again if it moves to
+  // another project) so the picker is already complete by the time it is opened.
+  // Deliberately not awaited: the menu renders the built-ins meanwhile.
+  watch(projectId, (id) => void ensureStylesLoaded(id ? [id] : []), { immediate: true })
+
+  const styleGroups = computed<StylePickerGroup[]>(() => {
+    const mine = userStyles.value
+    // Same id ⇒ the user's file wins at turn time, so the built-in row must GO:
+    // two identical-looking rows where only one has any effect is a trap.
+    const shadowed = new Set(mine.filter((r) => r.overridesBuiltIn).map((r) => r.slug))
+    const groups: StylePickerGroup[] = []
+    for (const g of RESPONSE_STYLES) {
+      const rows = g.rows
+        .filter((r) => !shadowed.has(r.slug))
+        .map<StylePickerRow>((r) => ({
+          slug: r.slug,
+          icon: r.icon,
+          name: t(`sessions.style.${r.slug}.name`),
+          hint: t(`sessions.style.${r.slug}.hint`),
+          desc: t(`sessions.style.${r.slug}.desc`),
+          overridesBuiltIn: false,
+        }))
+      if (rows.length) groups.push({ key: g.key, label: t(`sessions.style.group.${g.key}`), rows })
+      // Right below Normal/Auto: close to the top (the user's own styles are what
+      // they reach for) without pushing the default off the first screen.
+      if (g.key === 'default' && mine.length) {
+        groups.push({ key: 'mine', label: t('settingsStyles.mine.heading'), rows: mine })
+      }
+    }
+    return groups
+  })
+
   const styleName = computed(() => {
     const slug = normalizeStyleSlug(session().style)
     if (slug === 'Default') return t('sessions.style.normal.name')
-    // Known slug → localized name; an unknown legacy value shows raw (no missing key).
-    return STYLE_SLUGS.has(slug) ? t(`sessions.style.${slug}.name`) : slug
+    // User style first — mirrors the sidecar's resolve order for a shadowed id.
+    const mine = userStyles.value.find((r) => r.slug === slug)
+    if (mine) return mine.name
+    if (STYLE_SLUGS.has(slug)) return t(`sessions.style.${slug}.name`)
+    // Scanned this project and still nothing: the file was deleted or renamed on
+    // disk (or belongs to another project). Say so — a bare id reads like a working
+    // selection, and the turn will run with no style at all. Until the scan covers
+    // this project, show the raw id rather than accusing a style that may well exist.
+    return stylesScanned(projectId.value) ? t('settingsStyles.picker.missing', { id: slug }) : slug
   })
   const noMd = computed(() => session().noMarkdown ?? false)
   // Receives the row's SLUG. 'normal' collapses to the 'Default' no-style sentinel.
@@ -185,7 +278,7 @@ export function useSessionModelConfig(session: () => Session) {
     selectThink,
     activeStyleId,
     styleName,
-    RESPONSE_STYLES,
+    styleGroups,
     noMd,
     selectStyle,
     toggleNoMd,

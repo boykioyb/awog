@@ -11,6 +11,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'workspace', labelKey: 'settings.nav.workspace', icon: 'folder' },
   { id: 'wiki', labelKey: 'settings.nav.wiki', icon: 'book' },
   { id: 'memory', labelKey: 'settings.nav.memory', icon: 'brain' },
+  { id: 'styles', labelKey: 'settingsStyles.nav', icon: 'text' },
   { id: 'git', labelKey: 'settings.nav.git', icon: 'git' },
   { id: 'devices', labelKey: 'settings.nav.devices', icon: 'smartphone' },
   { id: 'notifications', labelKey: 'settings.nav.notifications', icon: 'alert' },
