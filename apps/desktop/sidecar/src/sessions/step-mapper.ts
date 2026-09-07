@@ -10,14 +10,21 @@ import type {
   SessionQuestion,
   SessionQuestionAnswer,
   SessionQuestionOption,
+  SessionSharedFile,
   SessionStep,
   SessionStepDetail,
   SessionStepStatus,
   SessionStepTool,
+  SessionSurface,
 } from '../types/shared.js'
 import { countDone, parseTodos } from '../runtime/todos.js'
 import { buildUnifiedDiff } from '../runtime/tools/text-diff.js'
 import { unwrapMcpToolCall, MCP_DESCRIBE_TOOL } from '../runtime/tools/mcp-tools.js'
+import {
+  SURFACE_MCP_SERVER,
+  SURFACE_TOOL_NAMES,
+  takeResolvedSurface,
+} from '../runtime/tools/surface-tools.js'
 
 // Cap for inline previews and one-line labels — kept small so step payloads stay
 // light over stdio and the collapsed row never bloats.
@@ -63,6 +70,13 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   ExitPlanMode: 'task',
   EnterPlanMode: 'task',
   AskUserQuestion: 'task',
+  // Surface tools. These normally become a `kind: 'surface'` step (see
+  // surfaceFromToolCall below); the mapping here is what a REFUSED call falls back
+  // to, so the failure renders as a recognisable row instead of a bare tool name.
+  mark_chapter: 'task',
+  send_user_file: 'save',
+  suggest_task: 'task',
+  suggest_followups: 'task',
 }
 
 function pickStepTool(toolName: string): SessionStepTool {
@@ -179,6 +193,14 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
     }
     case 'TodoWrite':
       return 'Todos'
+    case 'mark_chapter':
+      return 'Chapter'
+    case 'send_user_file':
+      return 'Share files'
+    case 'suggest_task':
+      return 'Suggest task'
+    case 'suggest_followups':
+      return 'Follow-ups'
     case 'ExitPlanMode':
       return 'Exit plan'
     case 'EnterPlanMode':
@@ -240,6 +262,145 @@ export function stepFromTodos(id: string, todos: unknown): SessionStep {
   return step
 }
 
+// ── Model-initiated surfaces (runtime/tools/surface-tools.ts) ──────────────────
+// A surface tool call renders as a CARD in the transcript (chapter divider, file
+// cards, suggestion chip, follow-up chips), not as a tool row — so it is mapped to
+// a `kind: 'surface'` step at BOTH edges of the call: from the call input on start
+// (the card appears immediately) and from the tool's `details.surface` on end (the
+// authoritative payload, e.g. the file list that survived path validation). Both
+// carry the same step id, so the UI upserts one block.
+//
+// A REFUSED call (budget guard / bad paths — details.isError) is not a surface at
+// all: it falls through to the generic tool row, which is what renders the error.
+const surfaceToolNames: ReadonlySet<string> = new Set<string>(SURFACE_TOOL_NAMES)
+
+// The Claude SDK path bridges the same four tools through an in-process MCP server
+// (claude-sdk/surface-sdk-server.ts), so a call arrives as
+// `mcp__awogsurfaces__mark_chapter` there and as `mark_chapter` on Pi. Fold the
+// bridged form back to the bare name ONCE, next to the mcp_call unwrap, instead of
+// listing both spellings in surfaceToolNames + humanLabel + TOOL_NAME_MAP (which is
+// what wiki/memory had to do). The suffix must be one of ours: an unrelated MCP
+// server that happened to be named `awogsurfaces` still renders as an MCP row.
+const SURFACE_BRIDGE_PREFIX = `mcp__${SURFACE_MCP_SERVER}__`
+
+function unbridgeSurfaceToolName(name: string): string {
+  if (!name.startsWith(SURFACE_BRIDGE_PREFIX)) return name
+  const bare = name.slice(SURFACE_BRIDGE_PREFIX.length)
+  return surfaceToolNames.has(bare) ? bare : name
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+}
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+function asStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.map(asString).filter((s) => s.length > 0)
+}
+function asSharedFiles(value: unknown): SessionSharedFile[] {
+  if (!Array.isArray(value)) return []
+  const out: SessionSharedFile[] = []
+  for (const entry of value) {
+    const rec = asRecord(entry)
+    const path = asString(rec.path)
+    if (!path) continue
+    const file: SessionSharedFile = { path, name: asString(rec.name) || path }
+    if (typeof rec.size === 'number') file.size = rec.size
+    out.push(file)
+  }
+  return out
+}
+
+// The surface a call SHOWS, derived from the tool input. Used on tool_execution_start
+// (and as the fallback when a result carries no details). `send_user_file` yields an
+// EMPTY file list here on purpose: the paths are validated inside the tool, and a card
+// must never point at a path that was refused.
+function surfaceFromInput(toolName: string, input: Record<string, unknown>): SessionSurface | null {
+  if (toolName === 'mark_chapter') {
+    const title = asString(input.title)
+    if (!title) return null
+    const summary = asString(input.summary)
+    return { kind: 'chapter', title, ...(summary ? { summary } : {}) }
+  }
+  if (toolName === 'send_user_file') {
+    const caption = asString(input.caption)
+    return { kind: 'files', files: [], ...(caption ? { caption } : {}) }
+  }
+  if (toolName === 'suggest_task') {
+    const title = asString(input.title)
+    const prompt = asString(input.prompt)
+    if (!title || !prompt) return null
+    return { kind: 'suggestion', title, prompt, tldr: asString(input.tldr) }
+  }
+  if (toolName === 'suggest_followups') {
+    const options = asStrings(input.options)
+    if (options.length === 0) return null
+    return { kind: 'followups', options }
+  }
+  return null
+}
+
+// Same derivation, at the RESULT edge. The difference is `send_user_file`: an
+// empty file list is fine while the call is RUNNING (the card is a placeholder
+// that fills in), but a finished call showing a card with no files is worse than
+// no card at all — so it falls through to a plain tool row instead.
+function resultSurfaceFromInput(
+  toolName: string,
+  input: Record<string, unknown>,
+): SessionSurface | null {
+  const surface = surfaceFromInput(toolName, input)
+  if (surface && surface.kind === 'files' && surface.files.length === 0) return null
+  return surface
+}
+
+// The authoritative surface from the tool result's `details` side channel.
+function surfaceFromDetails(details: unknown): SessionSurface | null {
+  const surface = asRecord(details).surface
+  if (surface === undefined) return null
+  const rec = asRecord(surface)
+  if (rec.kind === 'chapter') {
+    const title = asString(rec.title)
+    if (!title) return null
+    const summary = asString(rec.summary)
+    return { kind: 'chapter', title, ...(summary ? { summary } : {}) }
+  }
+  if (rec.kind === 'files') {
+    const files = asSharedFiles(rec.files)
+    if (files.length === 0) return null
+    const caption = asString(rec.caption)
+    return { kind: 'files', files, ...(caption ? { caption } : {}) }
+  }
+  if (rec.kind === 'suggestion') {
+    const title = asString(rec.title)
+    const prompt = asString(rec.prompt)
+    if (!title || !prompt) return null
+    return { kind: 'suggestion', title, prompt, tldr: asString(rec.tldr) }
+  }
+  if (rec.kind === 'followups') {
+    const options = asStrings(rec.options)
+    if (options.length === 0) return null
+    return { kind: 'followups', options }
+  }
+  return null
+}
+
+function surfaceLabel(surface: SessionSurface): string {
+  if (surface.kind === 'chapter') return surface.title
+  if (surface.kind === 'files') return 'Shared files'
+  if (surface.kind === 'suggestion') return surface.title
+  return 'Follow-ups'
+}
+
+export function stepFromSurface(
+  id: string,
+  surface: SessionSurface,
+  status: SessionStepStatus,
+): SessionStep {
+  return { id, kind: 'surface', label: surfaceLabel(surface), status, surface }
+}
+
 export interface ToolUseInfo {
   id: string
   name: string
@@ -250,7 +411,13 @@ export function stepFromToolUse(rawInfo: ToolUseInfo): SessionStep {
   // Unwrap a proxy mcp_call into its underlying mcp__server__tool identity + real
   // args so it renders like a direct MCP call, not a bare "mcp_call" (ADR 0051).
   const { name, input } = unwrapMcpToolCall(rawInfo.name, rawInfo.input)
-  const info: ToolUseInfo = { ...rawInfo, name, input }
+  const info: ToolUseInfo = { ...rawInfo, name: unbridgeSurfaceToolName(name), input }
+  // Surface tools render as their card from the first event on, so the user never
+  // sees a generic tool row flip into a card mid-turn.
+  if (surfaceToolNames.has(info.name)) {
+    const surface = surfaceFromInput(info.name, info.input)
+    if (surface) return stepFromSurface(info.id, surface, 'running')
+  }
   const tool = pickStepTool(info.name)
   const target = pickTarget(info.name, info.input)
   const stats = pickDiffStats(info.name, info.input)
@@ -345,7 +512,26 @@ export function stepFromToolResult(rawInfo: ToolResultInfo): SessionStep {
   // Same proxy unwrap as stepFromToolUse (ADR 0051): render mcp_call as its
   // underlying mcp__server__tool with real args.
   const { name, input } = unwrapMcpToolCall(rawInfo.toolName, rawInfo.toolInput)
-  const info: ToolResultInfo = { ...rawInfo, toolName: name, toolInput: input }
+  const info: ToolResultInfo = {
+    ...rawInfo,
+    toolName: unbridgeSurfaceToolName(name),
+    toolInput: input,
+  }
+  // A successful surface call: prefer the validated payload the tool reported over
+  // the raw input. A FAILED one (budget guard, no usable path) is deliberately NOT
+  // a surface — it falls through and renders as an error row.
+  //
+  // Three sources, most authoritative first. `details` is the Pi path; the Claude
+  // SDK bridges MCP results down to text + isError and has no such channel, so the
+  // server parks the validated payload for takeResolvedSurface to claim. The raw
+  // input is the last resort and is not always usable — see resultSurfaceFromInput.
+  if (surfaceToolNames.has(info.toolName) && !info.isError) {
+    const surface =
+      surfaceFromDetails(info.details) ??
+      takeResolvedSurface(info.toolName, info.toolInput) ??
+      resultSurfaceFromInput(info.toolName, info.toolInput)
+    if (surface) return stepFromSurface(info.toolUseId, surface, 'done')
+  }
   const status: SessionStepStatus = info.isError ? 'error' : 'done'
   const tool = pickStepTool(info.toolName)
   const target = pickTarget(info.toolName, info.toolInput)

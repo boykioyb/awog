@@ -128,6 +128,25 @@
             </button>
           </div>
         </div>
+        <!-- Model-initiated surfaces (#24/#26/#27/#34). They ride in as blocks like a
+             gate does, but each renders its own card; the gate card is the fallback. -->
+        <SessionChapterMark
+          v-else-if="g.type === 'gate' && g.gate.kind === 'chapter'"
+          :block="g.gate"
+        />
+        <SessionSharedFiles
+          v-else-if="g.type === 'gate' && g.gate.kind === 'files'"
+          :block="g.gate"
+        />
+        <SessionTaskSuggestion
+          v-else-if="g.type === 'gate' && g.gate.kind === 'suggestion'"
+          :block="g.gate"
+        />
+        <SessionFollowupSuggestions
+          v-else-if="g.type === 'gate' && g.gate.kind === 'followups'"
+          :block="g.gate"
+          :is-last="isLastMessage"
+        />
         <SessionGateCard v-else :block="g.gate" />
       </template>
       <!-- Action footer INSIDE the card (craft ResponseCard footer): HIDDEN while
@@ -310,6 +329,12 @@ const tokLabel = computed(() => {
 const { CIRCLED } = useSessionsData()
 const { scrollToMessage } = useSessionScroll()
 const msgIndex = computed(() => props.msgIndex)
+
+// Follow-up chips (#34) are an offer about what to ask NEXT, so they belong to the
+// end of the conversation only — an older turn's chips would send the session
+// somewhere it has already been. Computed here (the item knows its own index)
+// rather than in the chip, which then stays a dumb renderer.
+const isLastMessage = computed(() => props.msgIndex === (store.active?.msgs.length ?? 0) - 1)
 
 // ── Streaming indicator + time (mirrors the old flow) ───────────────────────────
 // While the turn streams, the byline shows a live "Streaming… {elapsed}" ticker

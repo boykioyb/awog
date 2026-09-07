@@ -1,0 +1,124 @@
+// Model-initiated transcript surfaces on the Claude SDK path
+// (docs/features/session-model-surfaces.md §4).
+//
+// One in-process SDK MCP server keyed `awogsurfaces` → the SDK exposes
+// `mcp__awogsurfaces__mark_chapter` / `_send_user_file` / `_suggest_task` /
+// `_suggest_followups`. The handlers are the SAME functions the Pi AgentTools call
+// (runtime/tools/surface-tools.ts), so the budgets, the refusal texts, the path
+// validation and the per-session ledger are one implementation — which is the
+// point: a user on an Anthropic account and a user on any other provider must get
+// the same transcript, and two copies of an abuse guard drift apart.
+//
+// Only the parameter SCHEMAS are declared twice (TypeBox there, zod here); the
+// descriptions — guard layer 1, the policy the model actually reads — are the
+// shared SURFACE_TOOL_TEXT constants.
+//
+// NAMING: our tool names (`mark_chapter`, …) do NOT start with `mcp_`. That prefix
+// is reserved by Anthropic and a custom tool using it makes an OAuth turn 400 (the
+// repo already paid for that once, with `mcp_describe`/`mcp_call`). The `mcp__`
+// namespace the SDK prepends to a bridged MCP tool is the API's own convention and
+// is unaffected — same as `mcp__awogwiki__*`.
+
+import { z } from 'zod'
+import {
+  createSdkMcpServer,
+  tool,
+  type McpSdkServerConfigWithInstance,
+} from '@anthropic-ai/claude-agent-sdk'
+import {
+  SURFACE_MCP_SERVER,
+  SURFACE_TOOL_TEXT,
+  createSurfaceTurnCounters,
+  rememberResolvedSurface,
+  runMarkChapter,
+  runSendUserFile,
+  runSuggestTask,
+  runSuggestFollowups,
+  type SurfaceRunResult,
+} from '../tools/surface-tools.js'
+
+// A refused call (budget guard, no usable path) has no surface. It must come back
+// flagged `isError` — that is what makes step-mapper render it as a failed row
+// instead of a chapter that never happened, and what tells the model it was
+// refused (the guards report failure in a return field, not by throwing).
+function finish(
+  toolName: string,
+  args: Record<string, unknown>,
+  result: SurfaceRunResult,
+): { content: { type: 'text'; text: string }[]; isError?: boolean } {
+  if (result.surface) {
+    // The Claude SDK gives a tool result no `details` side channel, so park the
+    // VALIDATED payload for step-mapper to claim (surface-tools.ts explains the
+    // correlation and its limits). Without this a `send_user_file` card would fall
+    // back to the raw arguments, i.e. an empty file list.
+    rememberResolvedSurface(toolName, args, result.surface)
+  }
+  return {
+    content: [{ type: 'text', text: result.text }],
+    ...(result.surface ? {} : { isError: true }),
+  }
+}
+
+export function buildSurfaceToolsSdkServer(
+  // Session the turn belongs to — key of the per-session abuse ledger.
+  sessionId: string,
+  // The session's workspace root: the only directory send_user_file may hand out.
+  cwd: string,
+): McpSdkServerConfigWithInstance {
+  // Guard layer 2. This server is rebuilt inside runStream, i.e. once per turn, so
+  // these counters are exactly "per reply" — the same property the Pi factory
+  // relies on.
+  const turn = createSurfaceTurnCounters()
+
+  return createSdkMcpServer({
+    name: SURFACE_MCP_SERVER,
+    version: '1.0.0',
+    // Four small schemas, and the model has no reason to go looking for them: it
+    // does not tool-search for "how do I offer follow-ups", it either sees the tool
+    // at the moment a phase ends or the surface never happens. Deferring them
+    // behind tool search would leave the feature advertised and unused, which is
+    // the failure mode this whole PR exists to fix.
+    alwaysLoad: true,
+    tools: [
+      tool(
+        'mark_chapter',
+        SURFACE_TOOL_TEXT.markChapter.description,
+        {
+          title: z.string().describe(SURFACE_TOOL_TEXT.markChapter.title),
+          summary: z.string().optional().describe(SURFACE_TOOL_TEXT.markChapter.summary),
+        },
+        async (args) => finish('mark_chapter', args, runMarkChapter(args, sessionId, turn)),
+      ),
+      tool(
+        'send_user_file',
+        SURFACE_TOOL_TEXT.sendUserFile.description,
+        {
+          files: z.array(z.string()).describe(SURFACE_TOOL_TEXT.sendUserFile.files),
+          caption: z.string().optional().describe(SURFACE_TOOL_TEXT.sendUserFile.caption),
+        },
+        // Both safety layers live in runSendUserFile: assertInsideWorkspace
+        // (invariant #2) AND a mandatory stat. A path outside the workspace or one
+        // that does not exist never becomes a card — it is reported back instead.
+        async (args) => finish('send_user_file', args, await runSendUserFile(args, cwd)),
+      ),
+      tool(
+        'suggest_task',
+        SURFACE_TOOL_TEXT.suggestTask.description,
+        {
+          title: z.string().describe(SURFACE_TOOL_TEXT.suggestTask.title),
+          tldr: z.string().describe(SURFACE_TOOL_TEXT.suggestTask.tldr),
+          prompt: z.string().describe(SURFACE_TOOL_TEXT.suggestTask.prompt),
+        },
+        async (args) => finish('suggest_task', args, runSuggestTask(args, sessionId, turn)),
+      ),
+      tool(
+        'suggest_followups',
+        SURFACE_TOOL_TEXT.suggestFollowups.description,
+        {
+          options: z.array(z.string()).describe(SURFACE_TOOL_TEXT.suggestFollowups.options),
+        },
+        async (args) => finish('suggest_followups', args, runSuggestFollowups(args, turn)),
+      ),
+    ],
+  })
+}

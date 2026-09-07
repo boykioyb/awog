@@ -110,9 +110,17 @@ type EngineTodo = {
   activeForm?: string
 }
 
+// Payload of an engine `kind: 'surface'` step — what the model handed to the user
+// in one surface-tool call (sidecar types/shared.ts SessionSurface).
+type EngineSurface =
+  | { kind: 'chapter'; title: string; summary?: string }
+  | { kind: 'files'; files: { path: string; name: string; size?: number }[]; caption?: string }
+  | { kind: 'suggestion'; title: string; prompt: string; tldr: string }
+  | { kind: 'followups'; options: string[] }
+
 type EngineStep = {
   id: string
-  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer'
+  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer' | 'surface'
   label: string
   tool?: string
   target?: string
@@ -130,6 +138,7 @@ type EngineStep = {
   steerText?: string
   parentId?: string
   todos?: EngineTodo[]
+  surface?: EngineSurface
 }
 
 type SessionChunkPayload = { sessionId: string; messageId: string; delta: string }
@@ -779,6 +788,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (step.kind === 'steer') {
       return { kind: 'steer', text: step.steerText ?? step.label }
     }
+    // Model-initiated surface (mark_chapter / send_user_file / suggest_task /
+    // suggest_followups) → the card block that renders it. A surface step with no
+    // payload is a malformed/partial event: drop it rather than render an empty card.
+    if (step.kind === 'surface') return surfaceToBlock(step)
     // TodoWrite (`note`) → a carrier block holding the checklist. It is NOT rendered
     // inline (SessionMessageItem skips todo blocks → no empty "(no output)" step);
     // the docked SessionTodoPanel scans the transcript for the latest one. Always
@@ -807,6 +820,56 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (step.status) block.status = step.status
     if (step.children?.length) block.sub = engineSubAgent(step)
     return block
+  }
+
+  // Engine surface step → the ui block that renders its card. Null when the payload
+  // is missing or empty — a chapter with no title / a suggestion with no prompt has
+  // nothing to show, and an empty card would be worse than no card.
+  function surfaceToBlock(step: EngineStep): AssistantBlock | null {
+    const s = step.surface
+    if (!s) return null
+    if (s.kind === 'chapter') {
+      if (!s.title) return null
+      return {
+        kind: 'chapter',
+        title: s.title,
+        ...(s.summary ? { summary: s.summary } : {}),
+        eid: step.id,
+      }
+    }
+    if (s.kind === 'files') {
+      // Re-validated because a step can come from a JSONL file on disk, not only
+      // from the live engine event (a truncated/legacy record must not crash the
+      // whole transcript render).
+      const files = Array.isArray(s.files) ? s.files : []
+      // While the call runs the list is legitimately empty (the tool is validating
+      // the paths) — keep the block so the row upserts in place when it lands.
+      if (files.length === 0 && step.status !== 'running') return null
+      return {
+        kind: 'files',
+        files: files.map((f) => ({
+          path: f.path,
+          name: f.name,
+          ...(f.size != null ? { size: f.size } : {}),
+        })),
+        ...(s.caption ? { caption: s.caption } : {}),
+        ...(step.status ? { status: step.status } : {}),
+        eid: step.id,
+      }
+    }
+    if (s.kind === 'suggestion') {
+      if (!s.title || !s.prompt) return null
+      return {
+        kind: 'suggestion',
+        title: s.title,
+        prompt: s.prompt,
+        tldr: s.tldr ?? '',
+        eid: step.id,
+      }
+    }
+    const options = Array.isArray(s.options) ? s.options : []
+    if (options.length === 0) return null
+    return { kind: 'followups', options, eid: step.id }
   }
 
   // Engine TodoItem[] → ui Todo[]: carry the 3-state status; `done` mirrors completed.

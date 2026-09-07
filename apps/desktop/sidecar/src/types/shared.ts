@@ -627,6 +627,30 @@ export interface SessionQuestionAnswer {
   selected: string[]
 }
 
+// Model-initiated transcript surfaces (kind === 'surface'), emitted from the
+// runtime/tools/surface-tools.ts calls. These are things the model hands to the
+// USER rather than work it did: a chapter marker, a set of files to open, an
+// out-of-scope task suggestion, clickable follow-up prompts. They ride on the
+// same step channel as every other step, so they persist in the JSONL transcript
+// and re-hydrate on reload for free. See docs/features/session-model-surfaces.md.
+export interface SessionSharedFile {
+  // Workspace-RELATIVE path (the UI resolves it against the session cwd before
+  // reading, gated again by assertInsideWorkspace).
+  path: string
+  name: string
+  size?: number
+}
+export type SessionSurface =
+  // mark_chapter — a phase boundary in the session (divider + jump menu).
+  | { kind: 'chapter'; title: string; summary?: string }
+  // send_user_file — files the model hands over, shown as openable cards. Empty
+  // while the call is still running (paths are validated inside the tool).
+  | { kind: 'files'; files: SessionSharedFile[]; caption?: string }
+  // suggest_task — out-of-scope work, one click away from its own session.
+  | { kind: 'suggestion'; title: string; prompt: string; tldr: string }
+  // suggest_followups — 2–3 clickable next prompts under the last reply.
+  | { kind: 'followups'; options: string[] }
+
 export type SessionStepDetail =
   // Edit/MultiEdit: `diff` is a unified diff (git-style) the UI renders in
   // split/unified mode; `content` (optional) is the full file after the edit,
@@ -639,7 +663,7 @@ export type SessionStepDetail =
 
 export interface SessionStep {
   id: string
-  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer'
+  kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer' | 'surface'
   tool?: SessionStepTool
   label: string
   target?: string
@@ -669,6 +693,11 @@ export interface SessionStep {
   // then a read-only record. See docs/features/ask-user-question.md.
   questions?: SessionQuestion[]
   answers?: SessionQuestionAnswer[]
+  // Surface step (kind === 'surface'): what the model handed to the user in this
+  // call — chapter marker / shared files / task suggestion / follow-up prompts.
+  // The whole payload lives in one discriminated field instead of a fifth batch
+  // of flat optionals on this interface.
+  surface?: SessionSurface
   // Steer step (kind === 'steer'): the user's mid-turn instruction injected via
   // getSteeringMessages. Holds the steered text so the UI renders it inline as a
   // user-note in the agent timeline at the point it landed. See

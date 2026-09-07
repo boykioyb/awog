@@ -186,8 +186,22 @@ const TOOL_GROUPS: [string, string[]][] = [
   ['Exec', ['Bash', 'BashOutput', 'KillShell', 'read_terminal']],
   ['Web', ['WebFetch', 'WebSearch']],
   ['Agent', ['Task', 'TodoWrite', 'ExitPlanMode']],
+  // Model-initiated surfaces: chapters, file cards, task suggestions, follow-ups.
+  // Off here means the model can still answer, it just cannot put cards in the
+  // transcript — useful for anyone who finds them noisy.
+  ['Surfaces', ['mark_chapter', 'send_user_file', 'suggest_task', 'suggest_followups']],
 ]
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
+
+// Nhánh Claude SDK bắc 4 bề mặt qua MCP nên ở đó chúng mang tên
+// `mcp__awogsurfaces__<tool>`, và `disabledTools` được truyền THẲNG thành
+// `disallowedTools`. Tắt bằng tên trần thôi thì chỉ tắt ở nhánh Pi — công tắc
+// trông như đã tắt trong khi model vẫn gọi được. Ghi cả hai dạng tên.
+const SURFACE_TOOLS = ['mark_chapter', 'send_user_file', 'suggest_task', 'suggest_followups']
+const TOOL_ALIASES: Record<string, string[]> = Object.fromEntries(
+  SURFACE_TOOLS.map((tl) => [tl, [`mcp__awogsurfaces__${tl}`]]),
+)
+const namesFor = (tl: string): string[] => [tl, ...(TOOL_ALIASES[tl] ?? [])]
 
 const cfgTab = ref<'General' | 'Tools'>('General')
 const toolQ = ref('')
@@ -200,8 +214,9 @@ const toolsOn = computed(() => {
 })
 function toggleTool(tl: string) {
   const disabled = new Set(props.session.disabledTools ?? [])
-  if (disabled.has(tl)) disabled.delete(tl)
-  else disabled.add(tl)
+  const names = namesFor(tl)
+  if (disabled.has(tl)) for (const n of names) disabled.delete(n)
+  else for (const n of names) disabled.add(n)
   store.setDisabledTools(props.session.id, [...disabled])
 }
 const total = computed(() => ALL_TOOLS.length)

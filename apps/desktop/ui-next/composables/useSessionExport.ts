@@ -60,6 +60,18 @@ function blockToMd(b: AssistantBlock): string {
     }
     case 'perm':
       return `- _permission:_ \`${b.tool}\` ${b.target} (${b.status ?? 'pending'})`
+    // Model-initiated surfaces: they are part of the transcript on disk, so an
+    // export that drops them is not the same conversation the user read.
+    case 'chapter':
+      return `## ${b.title}${b.summary ? `\n\n_${b.summary}_` : ''}`
+    case 'files': {
+      const items = b.files.map((file) => `- \`${file.path}\``).join('\n')
+      return `**📎 Shared files**${b.caption ? ` — ${b.caption}` : ''}\n\n${items}`
+    }
+    case 'suggestion':
+      return `**💡 Suggested follow-up task — ${b.title}**\n\n${b.tldr}`
+    case 'followups':
+      return `_Suggested next:_ ${b.options.map((o) => `"${o}"`).join(' · ')}`
     case 'steer':
       return quote(`✋ _Steering:_ ${b.text.trim()}`)
     case 'error':

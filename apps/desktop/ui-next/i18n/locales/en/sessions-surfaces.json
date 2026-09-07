@@ -1,0 +1,10 @@
+{
+  "sessionsSurfaces.chapters.tooltip": "Chapters in this session",
+  "sessionsSurfaces.chapters.title": "Chapters",
+  "sessionsSurfaces.files.open": "Open {path}",
+  "sessionsSurfaces.files.preparing": "Preparing files…",
+  "sessionsSurfaces.suggestion.start": "Start",
+  "sessionsSurfaces.suggestion.startTitle": "Start this in a new session",
+  "sessionsSurfaces.suggestion.dismiss": "Dismiss this suggestion",
+  "sessionsSurfaces.followups.use": "Put this in the composer"
+}

@@ -35,6 +35,7 @@ import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } fr
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createSourceTools } from './source-tools.js'
+import { createSurfaceTools } from './surface-tools.js'
 import { createWikiTools } from './wiki-tools.js'
 import { createMemoryTools } from './memory-tools.js'
 import { createTodoWriteTool } from './builtin-stubs.js'
@@ -206,6 +207,13 @@ export function createAwogToolDefinitions(
     // rather than `backgroundExec` so it survives plan mode: it is read-only, and
     // planning is when the user's own terminal output is most worth reading.
     ...(filter.chatSession ? [createReadTerminalTool(cwd)] : []),
+    // Model-initiated transcript surfaces (mark_chapter / send_user_file /
+    // suggest_task / suggest_followups). Chat sessions only, for the same reason
+    // as read_terminal: they address a user who is reading the transcript, and a
+    // task run / subagent has none — there, their schemas would be pure token cost.
+    ...(filter.chatSession
+      ? createSurfaceTools(cwd, { sessionId: filter.chatSession.sessionId })
+      : []),
     createGrepTool(cwd),
     createGlobTool(cwd),
     createNotebookReadTool(cwd),

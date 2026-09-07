@@ -146,6 +146,36 @@ export type PermBlock = {
 export type SteerBlock = { kind: 'steer'; text: string }
 export type ErrorBlock = { kind: 'error'; text: string }
 
+// ── Model-initiated surfaces (docs/features/session-model-surfaces.md) ──────────
+// Four things the model hands to the USER rather than work it did. They arrive on
+// the ordinary step channel (engine `kind: 'surface'` steps), so they persist in
+// the transcript and re-hydrate on reload like any other block.
+
+// One file the model shared — `path` is workspace-relative; the click resolves it
+// through useFilePreview (fs.readFile, gated by assertInsideWorkspace).
+export type SharedFile = { path: string; name: string; size?: number }
+// A phase boundary: divider in the transcript + an entry in the chapter menu.
+export type ChapterBlock = { kind: 'chapter'; title: string; summary?: string; eid?: string }
+// Files handed over as openable cards. `files` is empty only while the call is
+// still running (paths are validated inside the tool).
+export type FilesBlock = {
+  kind: 'files'
+  files: SharedFile[]
+  caption?: string
+  eid?: string
+  status?: 'running' | 'done' | 'error'
+}
+// Out-of-scope work parked as a chip: one click starts it in its own session.
+export type SuggestionBlock = {
+  kind: 'suggestion'
+  title: string
+  prompt: string
+  tldr: string
+  eid?: string
+}
+// Clickable next prompts, shown under the LAST reply until the user types.
+export type FollowupsBlock = { kind: 'followups'; options: string[]; eid?: string }
+
 export type AssistantBlock =
   | ThinkingBlock
   | TextBlock
@@ -155,6 +185,10 @@ export type AssistantBlock =
   | PermBlock
   | SteerBlock
   | ErrorBlock
+  | ChapterBlock
+  | FilesBlock
+  | SuggestionBlock
+  | FollowupsBlock
 
 // A slash-command invocation shown compactly in the user bubble (`/name args`).
 // `text` still holds the expanded body (what the model receives + persists); this

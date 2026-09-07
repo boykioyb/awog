@@ -60,6 +60,8 @@ import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
 import { buildWikiToolsSdkServer } from './wiki-sdk-server.js'
 import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
+import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
+import { SURFACE_MCP_SERVER } from '../tools/surface-tools.js'
 import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
 import { listHosts } from '../../ssh/store.js'
 import {
@@ -579,6 +581,14 @@ export async function runStreamClaude(
           }),
         }
       : {}),
+    // Model-initiated transcript surfaces (docs/features/session-model-surfaces.md)
+    // → mcp__awogsurfaces__mark_chapter / _send_user_file / _suggest_task /
+    // _suggest_followups. Unconditional HERE and absent from invoke.ts on purpose:
+    // this file IS the chat path, and these four address a user reading a
+    // transcript — the same reason the Pi side gates them on ToolFilter.chatSession.
+    // Same shared handlers, so a chapter or a file card behaves identically on
+    // either runtime; step-mapper maps the bridged names back to the bare ones.
+    [SURFACE_MCP_SERVER]: buildSurfaceToolsSdkServer(args.sessionId, args.cwd ?? process.cwd()),
   }
   const claudeBinary = resolveClaudeBinary()
 

@@ -1,0 +1,10 @@
+{
+  "sessionsSurfaces.chapters.tooltip": "Các chương trong phiên này",
+  "sessionsSurfaces.chapters.title": "Chương",
+  "sessionsSurfaces.files.open": "Mở {path}",
+  "sessionsSurfaces.files.preparing": "Đang chuẩn bị tệp…",
+  "sessionsSurfaces.suggestion.start": "Bắt đầu",
+  "sessionsSurfaces.suggestion.startTitle": "Bắt đầu việc này trong phiên mới",
+  "sessionsSurfaces.suggestion.dismiss": "Bỏ qua gợi ý này",
+  "sessionsSurfaces.followups.use": "Đưa vào ô soạn tin"
+}

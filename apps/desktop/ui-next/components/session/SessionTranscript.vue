@@ -19,6 +19,11 @@
         <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
     </Transition>
+    <!-- Chapter menu (#24): only once the model marked at least two phases — a
+         table of contents with one entry is noise, not navigation. -->
+    <Transition name="fadepop">
+      <SessionChapterNav v-if="chapters.length > 1" :chapters="chapters" />
+    </Transition>
     <div ref="msgsEl" class="msgs" @scroll="onScroll">
       <SessionTranscriptSkeleton v-if="loading && !messages.length" />
       <SessionWelcome v-else-if="!messages.length" />
@@ -86,6 +91,7 @@
 // they scroll up to read history it leaves their position alone. Floating
 // jump-to-top / jump-to-bottom controls overlay the bottom-right.
 import { questionAnswered, type SessionMessage } from '~/composables/useSessionsData'
+import type { ChapterEntry } from './SessionChapterNav.vue'
 
 const props = defineProps<{
   messages: SessionMessage[]
@@ -120,6 +126,20 @@ const parked = computed(() => {
 })
 const working = computed(() => !!lastAssistant.value?.streaming && !parked.value)
 const workingStartedAt = computed(() => lastAssistant.value?.startedAt)
+
+// ── Chapters (#24) ──
+// Every chapter block in the transcript, tagged with the ABSOLUTE index of the
+// message it sits in — that index is what the jump contract takes. Derived from the
+// same `messages` the transcript renders, so a chapter is listed whether or not its
+// turn is currently inside the render window.
+const chapters = computed<ChapterEntry[]>(() => {
+  const out: ChapterEntry[] = []
+  props.messages.forEach((m, i) => {
+    if (m.role !== 'assistant') return
+    for (const b of m.blocks) if (b.kind === 'chapter') out.push({ title: b.title, msgIndex: i })
+  })
+  return out
+})
 
 // Fold-all toggle: alternates collapse/expand on every click. Steps & clusters are
 // collapsed by default, so the button starts in "collapsed" — first click expands.

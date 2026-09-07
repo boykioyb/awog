@@ -44,6 +44,28 @@
                 <div class="merr-msg">{{ g.text }}</div>
               </div>
               <!-- Gates render read-only here (3.d) — answer / approve in the transcript. -->
+              <!-- Model-initiated surfaces (#24/#26/#27/#34): the transcript renders
+                   these as their own cards, so the read-only overlay must too — the
+                   gate-card fallback draws nothing for them. Follow-ups are the one
+                   exception: they are an affordance for the live composer, which is
+                   not reachable from here, so they stay hidden on purpose. -->
+              <SessionChapterMark
+                v-else-if="g.type === 'gate' && g.gate.kind === 'chapter'"
+                :block="g.gate"
+              />
+              <SessionSharedFiles
+                v-else-if="g.type === 'gate' && g.gate.kind === 'files'"
+                :block="g.gate"
+              />
+              <SessionTaskSuggestion
+                v-else-if="g.type === 'gate' && g.gate.kind === 'suggestion'"
+                :block="g.gate"
+              />
+              <SessionFollowupSuggestions
+                v-else-if="g.type === 'gate' && g.gate.kind === 'followups'"
+                :block="g.gate"
+                :is-last="false"
+              />
               <SessionGateCard v-else :block="g.gate" />
             </template>
           </div>
