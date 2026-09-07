@@ -183,7 +183,7 @@ const TOOL_GROUPS: [string, string[]][] = [
   ['File', ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit']],
   // read_terminal reads the tail of a PTY the USER typed in — off here means the
   // model cannot see the user's terminals at all.
-  ['Exec', ['Bash', 'BashOutput', 'KillShell', 'read_terminal']],
+  ['Exec', ['Bash', 'BashOutput', 'KillShell', 'monitor', 'read_terminal']],
   ['Web', ['WebFetch', 'WebSearch']],
   ['Agent', ['Task', 'TodoWrite', 'ExitPlanMode']],
   // Model-initiated surfaces: chapters, file cards, task suggestions, follow-ups.
