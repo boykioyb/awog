@@ -33,12 +33,16 @@ Thumbs.db
 # AWOG local runtime state (dogfooding AWOG on its own repo).
 # .trust.json records per-machine hook trust grants — never share it.
 .awog/.trust.json
+# Thư mục nháp của agent (quy ước scratchpad) — không bao giờ commit.
+.awog/scratch/
 
 # Playwright-MCP runtime artifacts (console logs, page snapshots)
 .playwright-mcp/
 
-# Local work checklists (personal, not shared)
-tasks/
+# Local work checklists (personal, not shared).
+# Neo vào gốc repo: pattern không neo sẽ khớp MỌI thư mục tên `tasks`,
+# kể cả `apps/desktop/sidecar/src/tasks/` (source thật) — xem ADR 0081.
+/tasks/
 
 # Sprite-cutter working output (frames, GIFs, contact sheets) — regenerate with the
 # command in tools/sprite-cutter/README.md.
