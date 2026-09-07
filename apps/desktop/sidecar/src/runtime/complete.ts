@@ -80,8 +80,21 @@ async function resolveForRun(args: RunRef): Promise<{
   return { account, settings, model, getApiKey }
 }
 
-// Pure-text one-shot. No tools — the model just generates and we return text.
-export async function completePi(args: CompleteArgs): Promise<string> {
+// Kết quả one-shot kèm số đo thật của lượt gọi.
+export interface CompleteResult {
+  text: string
+  modelUsed: string
+  usage: { inputTokens: number; outputTokens: number }
+}
+
+// Pure-text one-shot kèm usage. Không tool — model chỉ sinh văn bản.
+//
+// Vì sao có bản này: `completePi` chỉ trả `string`, nên MỌI caller muốn biết
+// lượt đó tốn bao nhiêu đều phải tự ƯỚC LƯỢNG bằng `chars / 4`. Kiểm định skill
+// (`skills/eval.ts`) chạy tới 20 lượt liên tiếp và áp trần chi tiêu lên chính con
+// số ước lượng đó — tức là một trần đo bằng thước đoán. Provider đã trả usage
+// thật trên assistant message; chỉ là chưa ai chuyển nó ra ngoài.
+export async function completePiWithUsage(args: CompleteArgs): Promise<CompleteResult> {
   const { account, settings, model, getApiKey } = await resolveForRun(args)
   const apiKey = await getApiKey(settings.provider)
   if (!apiKey) throw new RpcError(-32020, 'AUTH_EXPIRED: re-authenticate via Settings')
@@ -100,10 +113,19 @@ export async function completePi(args: CompleteArgs): Promise<string> {
     if (result.stopReason === 'error') {
       throw new RpcError(-32021, `model error: ${result.errorMessage ?? 'unknown'}`)
     }
-    return concatText(result)
+    return {
+      text: concatText(result),
+      modelUsed: result.model ?? settings.modelId,
+      usage: { inputTokens: result.usage.input, outputTokens: result.usage.output },
+    }
   } catch (err) {
     throw mapErr(err, 'completion')
   }
+}
+
+// Bản chỉ-lấy-text. Giữ nguyên chữ ký cho 17 caller hiện có.
+export async function completePi(args: CompleteArgs): Promise<string> {
+  return (await completePiWithUsage(args)).text
 }
 
 // Streaming pure-text one-shot. Same shape as completePi but forwards each text

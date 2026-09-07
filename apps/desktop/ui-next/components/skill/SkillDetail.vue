@@ -6,6 +6,14 @@
       <span class="tag mono">/{{ skill.id }}</span>
       <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
       <span style="flex: 1" />
+      <button
+        class="iconbtn skd-act"
+        :class="{ on: showCheck }"
+        :title="showCheck ? t('skillsEval.close') : t('skillsEval.open')"
+        @click="showCheck = !showCheck"
+      >
+        <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      </button>
       <button class="iconbtn skd-act" :title="t('skills.detail.edit')" @click="emit('edit')">
         <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
@@ -38,6 +46,15 @@
         </span>
       </div>
 
+      <!-- Bảng kiểm tra remount theo skill: state (doctor + ca kiểm) thuộc về
+           đúng skill đang mở, đổi skill là nạp lại từ đầu. -->
+      <SkillCheckPanel
+        v-if="showCheck"
+        :key="skillKey"
+        :skill="skill"
+        :project-ids="projects.map((p) => p.id)"
+      />
+
       <LibraryMarkdownBody
         :title="t('skills.detail.instructions')"
         :content="skill.body ?? ''"
@@ -56,8 +73,9 @@
 // prototype CSS (.dh header + .dscroll body, matching agents/connections detail
 // markup). Header actions (edit / duplicate / delete) emit to the page;
 // LibraryMarkdownBody renders the SKILL.md body with an LLM-edit trigger.
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
+import SkillCheckPanel from '~/components/skill/SkillCheckPanel.vue'
 import type { Skill } from '~/stores/skills'
 
 const props = defineProps<{
@@ -73,6 +91,13 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Bảng kiểm tra mặc định đóng: mở ra là chạy chẩn đoán, và eval thì tốn tiền.
+const showCheck = ref(false)
+
+const skillKey = computed(
+  () => `${props.skill.source}|${props.skill.projectId ?? ''}|${props.skill.id}`,
+)
 
 const isProject = computed(() => props.skill.source === 'project')
 
@@ -115,6 +140,12 @@ const hasMetaChips = computed(
 .skd-act {
   width: 28px;
   height: 28px;
+}
+/* Nút đang bật = accent-tint (không dùng nền xám --bgActive). */
+.skd-act.on {
+  color: var(--accent);
+  border-color: var(--accentBorder);
+  background: var(--accentDim);
 }
 .skd-danger:hover {
   color: var(--danger);
