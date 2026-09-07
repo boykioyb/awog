@@ -84,6 +84,12 @@ export function parsePorcelainV2(stdout: string): PorcelainParsed {
   }
   if (!stdout) return parsed
 
+  // `# branch.oid` LUÔN đi trước `# branch.head` trong porcelain v2, nên không thể
+  // quyết định detachedAt ngay tại dòng oid (lúc đó `detached` vẫn còn false —
+  // đó chính là bug khiến cảnh báo detached HEAD mất phần sha). Giữ oid lại rồi
+  // kết luận sau vòng lặp, khi đã đọc xong cả hai dòng.
+  let branchOid = ''
+
   // Split on NUL but iterate token-by-token because `2` records consume two.
   const tokens = stdout.split('\0')
   let i = 0
@@ -103,8 +109,7 @@ export function parsePorcelainV2(stdout: string): PorcelainParsed {
           parsed.branch = head
         }
       } else if (rest.startsWith('branch.oid ')) {
-        const oid = rest.slice('branch.oid '.length).trim()
-        if (parsed.detached && oid !== '(initial)') parsed.detachedAt = oid.slice(0, 7)
+        branchOid = rest.slice('branch.oid '.length).trim()
       } else if (rest.startsWith('branch.upstream ')) {
         parsed.upstream = rest.slice('branch.upstream '.length).trim()
       } else if (rest.startsWith('branch.ab ')) {
@@ -196,6 +201,10 @@ export function parsePorcelainV2(stdout: string): PorcelainParsed {
     }
 
     i += 1
+  }
+  // Repo mới chưa có commit nào báo oid là `(initial)` — không phải sha để hiện.
+  if (parsed.detached && branchOid && branchOid !== '(initial)') {
+    parsed.detachedAt = branchOid.slice(0, 7)
   }
   return parsed
 }

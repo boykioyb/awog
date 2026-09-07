@@ -33,7 +33,10 @@ async function makeDir(rel: string): Promise<void> {
 
 describe('discoverGitRepos', () => {
   it('returns the root itself when it is a repo', async () => {
-    await mkdir(join(root, '.git'), { recursive: true })
+    // Phải qua `makeRepo` chứ không chỉ `mkdir('.git')`: `isGitRepo` nhận diện
+    // repo bằng `.git/HEAD` (đúng — một thư mục `.git` rỗng không phải repo), nên
+    // bản cũ của test này dựng một thứ không phải repo rồi mong nó là repo.
+    await makeRepo('.')
     const repos = await discoverGitRepos(root)
     expect(repos).toHaveLength(1)
     expect(repos[0]).toMatchObject({ relativePath: '.', isRoot: true, path: root })
