@@ -44,6 +44,18 @@ Quy tắc:
 | `Read` / `Grep` / `Glob` (chỉ có nghĩa khi DENY) | `file_path` / `path` | `path` | ✓ |
 | còn lại (`RunWorkflow`, `WebFetch`, source/wiki/browser, `mcp__*`…) | — | `bare` | ✓ |
 
+### Lệnh chạy nền không ăn theo luật của bản foreground
+
+`Bash({ command, run_in_background: true })` để lại một tiến trình **sống lâu hơn lượt** (`sessions/bg-registry.ts` giữ shell cho lượt sau đọc output). Cùng một chuỗi lệnh, hai hệ quả khác nhau — nên luật xử lý bất đối xứng:
+
+| | Lời gọi foreground | Lời gọi `run_in_background: true` |
+|---|---|---|
+| Luật `allow` khớp | cho qua | **vẫn hỏi** |
+| Luật `deny` khớp | chặn | **chặn** |
+| Nút "Always allow" | có | **không hiện** |
+
+Cố ý **không** mã hoá cờ vào văn bản luật (`Bash(npm run dev &background)`): mọi sigil bịa thêm đều đụng độ với một chuỗi lệnh thật viết y hệt và bắt người đọc luật học thêm một quy ước. Giá phải trả là dev server chạy nền bị hỏi mỗi lần — chấp nhận được, vì chiều hỏng ở đây luôn là "hỏi thêm", không phải "cấp thêm".
+
 ## Lệnh ghép luôn phải hỏi
 
 Nếu lệnh chứa bất kỳ ký tự nào trong ``; & | ` $ < > ( ) { } \ !`` hoặc ký tự điều khiển (xuống dòng, CR, NUL…) thì:
@@ -100,6 +112,15 @@ Validate theo **từng entry**: một entry sai cú pháp (kể cả typo `"acti
 
 Khi ghi mà file hiện tại **không parse được**, sidecar **từ chối ghi đè** và ném lỗi nêu đường dẫn — đè lên file hỏng là xoá vĩnh viễn guardrail người dùng đã viết. Lượt chat không bị treo (RPC bắt lỗi này), chỉ là "không lưu được luật" cho tới khi người dùng tự sửa file. Lúc ghi, các entry đang có được giữ **nguyên văn**, kể cả entry hỏng.
 
+### Cache đọc file
+
+Cổng quyền chạy trên **mọi** lời gọi tool nên file luật được cache trong tiến trình:
+
+- Trong **1 giây** kể từ lần `stat` gần nhất, không `stat` lại ⇒ một chuỗi lời gọi tool liên tiếp không nện đĩa. Đổi lại, sửa file có độ trễ hiệu lực **≤ 1s**.
+- Ngoài cửa sổ đó, cache chỉ được dùng lại khi **danh tính file** `(dev, ino, mtimeMs, ctimeMs, size)` không đổi. Khoá cũ `(mtimeMs, size)` bỏ sót một lần ghi giữ nguyên kích thước trong cùng mili-giây và phục vụ bản cũ **vô thời hạn** — nguy hiểm nhất khi người dùng vừa **gỡ** một luật `allow`.
+- Quá **5 giây** kể từ lần đọc thật gần nhất thì đọc lại bất kể danh tính (lưới an toàn cuối).
+- Cố ý **không băm nội dung**: đo trên file 500 luật (62 KB), đọc + parse + validate mất 0,28 ms còn một `stat` mất 0,010 ms — băm mỗi lời gọi tool đắt hơn ~28× cho mỗi tầng, đúng thứ cache sinh ra để tránh.
+
 Đây là cách duy nhất hiện tại để tạo luật `deny` hoặc luật có ký tự đại diện: sửa tay file. Nút "Always allow" **chỉ** sinh luật nguyên văn, không bao giờ sinh `*`.
 
 ## Luồng đồng ý
@@ -109,7 +130,15 @@ Khi ghi mà file hiện tại **không parse được**, sidecar **từ chối g
    `{ type: 'addRule', toolName, rule: 'Bash(git status)', ruleKind: 'command', action: 'allow', destination: 'session', sessionId }`.
    UI **hiển thị `rule`** — đó là thứ người dùng đang cấp.
 3. UI gọi `sessions.permission` với `{ requestId, decision, alwaysAllow?, scope? }`. `scope` ∈ `session | project | user`, vắng ⇒ `session`.
-4. Sidecar ghi luật (lấy nội dung **từ suggestion đã park**, không từ payload UI) rồi trả `{ resolved, savedScopes }`. Xin `project` mà phiên không thuộc project nào ⇒ hạ về `session` và nói rõ trong `savedScopes`.
+4. Sidecar ghi luật (lấy nội dung **từ suggestion đã park**, không từ payload UI) rồi trả `{ resolved, savedScopes, ruleSkipped }`. Xin `project` mà phiên không thuộc project nào ⇒ hạ về `session` và nói rõ trong `savedScopes`.
+
+### Khi người dùng sửa tham số trước khi đồng ý (`updatedInput`)
+
+`sessions.permission` nhận được `updatedInput` — người dùng có quyền sửa lệnh/đường dẫn trước khi bấm đồng ý. Ba ràng buộc:
+
+- **Validate ở biên và ở sink.** Phải là object thuần, ≤ 64 khoá, và **không** chứa `__proto__` / `constructor` / `prototype` (khoá `__proto__` do `JSON.parse` sinh ra được, và `Object.assign` sẽ đi vào setter prototype thay vì định nghĩa một khoá). Payload sai ⇒ RPC trả `Invalid params`; tới được sink ⇒ **chặn** lời gọi.
+- **Luật DENY được tra lại trên args ĐÃ ghi đè.** Quyết định ban đầu tính trên args gốc, nên nếu không tra lại thì duyệt `ls` rồi ghi đè thành `rm -rf /` là đi thẳng qua luật `deny` của chính người dùng.
+- **`alwaysAllow` + `updatedInput`: chỉ nhớ khi ghi đè không đụng chủ thể của luật.** Sidecar sinh lại văn bản luật từ args đã ghi đè bằng đúng hàm mà nút "Always allow" dùng rồi so nguyên văn. Trùng (vd chỉ đổi `timeout`) ⇒ ghi luật. Lệch (đổi lệnh, đổi đường dẫn, bật `run_in_background`) ⇒ **không ghi gì**, lượt này vẫn chạy, lần sau vẫn hỏi, và trả `ruleSkipped: true`. Nội dung luật vì thế **không bao giờ** đến từ payload UI: payload chỉ có thể làm mất một lần ghi nhớ, không bao giờ tạo ra luật mới.
 
 ## Thẻ xin quyền trên UI
 
@@ -179,3 +208,16 @@ Bị hỏi đi hỏi lại cùng một lệnh dẫn tới **bấm bừa** — n�
 - Chuỗi i18n của thẻ xin quyền (`sessionsPerm.hint.project`) còn nói "ghi vào `.awog/permission-rules.json` của dự án" — sai kể từ bản vá F1, cần đổi thành "ghi trong AWOG home, chỉ áp trên máy này".
 - Đánh giá có trần cứng 1500 luật mỗi lần; vượt trần ⇒ hỏi (không bao giờ tự cho qua).
 - Cổng SSH (ADR 0064) giữ allowance riêng theo `(phiên, host, tool)`, không đi qua hệ luật này.
+- Lệnh chạy nền (`run_in_background: true`) không bao giờ nhớ được ⇒ bị hỏi mỗi lần (xem trên).
+- Sửa file luật có độ trễ hiệu lực ≤ 1s (cửa sổ không-`stat`), tối đa 5s trong trường hợp hệ thống tệp trả về danh tính trùng.
+- UI chưa hiện `ruleSkipped`: khi vừa sửa tham số vừa bấm "Always allow", thẻ xin quyền chỉ thấy `savedScopes` rỗng chứ chưa nói rõ lý do.
+
+## Quyền file của worktree
+
+Checkout của worktree nằm ở `~/.awog/tasks/<id>/worktrees/<slug>` và `~/.awog/session-worktrees/…`; file bên trong do **git** tạo theo `umask` (thường `0644`), không phải `0600`. **Cố ý không siết** — bảo mật ở đây do **thư mục** giữ:
+
+- `~/.awog` và các thư mục owner/worktree đều được tạo với `mode: 0o700`, mà trên POSIX muốn mở một file thì phải có quyền `x` trên **mọi** thư mục trên đường đi ⇒ người dùng khác trên cùng máy không vào được, dù file con là `0644`. (`umask` chỉ **bớt** bit, nên `0700` không bao giờ nới thành `0755`.)
+- Nội dung worktree là bản sao mã nguồn của chính người dùng; bản gốc trong repo cũng đang mang mode theo `umask`. Siết bản sao không tăng bí mật thật, lại làm lệch kỳ vọng của git/editor/script build chạy trên cây đó.
+- Ép `0600` phải đổi `umask` toàn tiến trình (ảnh hưởng mọi file sidecar ghi) hoặc `chmod` đệ quy sau mỗi checkout (đắt, và đua với git).
+
+Điều **phải giữ**: mọi nơi tạo thư mục owner/worktree tiếp tục truyền `mode: 0o700`. Quên mode ở một đường tạo mới ⇒ kết luận này mất hiệu lực.

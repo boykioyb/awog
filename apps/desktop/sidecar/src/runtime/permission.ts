@@ -5,7 +5,8 @@
 // RunNonStreamArgs and is invoked here, so the UI permission RPC + parking
 // machinery is reused unchanged. We translate the result:
 //   behavior 'allow' → return undefined (let the tool run); if updatedInput is
-//     present, mutate the validated args in place (Pi executes with `args`).
+//     present, validate it, re-check it against DENY rules, then mutate the
+//     validated args in place (Pi executes with `args`). See F13 below.
 //   behavior 'deny'  → return { block: true, reason: message } so the loop emits
 //     an error tool result instead of executing.
 //
@@ -29,6 +30,10 @@
 // tools, `WebFetch`, `Task`, SSH tools and `mcp__*` tools included. Only the DENY
 // half is consumed that early; ALLOW keeps its old position (it only ever skips a
 // prompt, and no non-gated tool prompts anyway).
+//
+// An ALLOW rule also never covers a DETACHED call — `Bash(run_in_background: true)`
+// leaves a process running past the turn, so it is asked every time even when the
+// same command string is approved for the foreground (F12). DENY still covers it.
 //
 // Contract: beforeToolCall must NOT throw. Any error → fail safe = block, so a
 // bug can never silently let an unapproved write through.
@@ -171,6 +176,51 @@ function sourceIdOfTool(name: string): string | null {
   return sep > 0 ? rest.slice(0, sep) : null
 }
 
+// ─── Approved argument override (`updatedInput`) ────────────────────────────
+// Answering a prompt may carry `updatedInput`: the user edited the tool's args
+// before approving. That is the user's own call to make, but it is L1 data from
+// the UI payload and it lands in a mutation sink, so it gets two guards (F13):
+//
+//  1. Shape. `__proto__` / `constructor` / `prototype` are refused outright —
+//     `target['__proto__'] = v` walks the prototype setter instead of defining a
+//     key, i.e. prototype pollution rather than an arg override. A key cap keeps
+//     an absurd payload out of the sink.
+//  2. Rules. The decision above was made against the ORIGINAL args, so the
+//     overridden args are re-checked against DENY rules before they are applied
+//     (see promptViaUi) — otherwise approving `ls` and overriding the command
+//     would walk straight past a `Bash(rm -rf /)` deny rule.
+const UNSAFE_TOOL_ARG_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
+const MAX_TOOL_ARG_KEYS = 64
+
+// Validated at the RPC boundary (methods/sessions.permission.ts) AND at this
+// sink, on purpose: the RPC rejects a hostile payload loudly, the sink can never
+// be reached by one even if another caller appears.
+export function isSafeToolInputOverride(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  // `Object.keys` sees an own `__proto__` produced by JSON.parse, which is
+  // exactly the shape this rejects.
+  const keys = Object.keys(value)
+  if (keys.length > MAX_TOOL_ARG_KEYS) return false
+  return !keys.some((key) => UNSAFE_TOOL_ARG_KEYS.has(key))
+}
+
+// The tool name a DENY rule matched for these args, or null when nothing denies
+// them. Checks the bridged SSH alias too (`mcp__<server>__ssh_exec` → `ssh_exec`),
+// mirroring the main gate so one rule holds on both runtimes.
+async function deniedToolName(
+  toolName: string,
+  args: unknown,
+  sessionId: string | undefined,
+): Promise<string | null> {
+  const scoped = sessionId ? { sessionId } : {}
+  if ((await evaluatePermissionRules({ toolName, args, ...scoped })) === 'deny') return toolName
+  const bare = sshToolName(toolName)
+  if (bare && bare !== toolName) {
+    if ((await evaluatePermissionRules({ toolName: bare, args, ...scoped })) === 'deny') return bare
+  }
+  return null
+}
+
 export type BeforeToolCall = (
   context: BeforeToolCallContext,
   signal?: AbortSignal,
@@ -252,6 +302,14 @@ export function makeBeforeToolCall(
     const toolName = context.toolCall.name
     const toolUseId = context.toolCall.id
 
+    // A DENY rule is a hard guardrail the user wrote down on purpose, so it beats
+    // EVERY relaxation below — execute mode, auto-approve, accept-edits, the SSH
+    // gate's own 'auto' mode, and an approved argument override alike.
+    const denyBlock = (name: string): BeforeToolCallResult => ({
+      block: true,
+      reason: `Blocked by a permission rule you configured for ${name}. Remove that rule from your permission rules under ~/.awog to change this.`,
+    })
+
     // Defer to the UI permission prompt (park) and translate the answer. Shared by
     // the general gated path and the SSH-tool path. `forceRemember` = remember on
     // the FIRST approval regardless of an "always allow" click (SSH 'session' mode);
@@ -302,10 +360,25 @@ export function makeBeforeToolCall(
           if (sessionId && forceRemember) allowSessionTool(sessionId, rememberKey)
           // Apply an approved input override by mutating the validated args object
           // in place — Pi executes the tool with `context.args`.
-          if (result.updatedInput && context.args && typeof context.args === 'object') {
+          const hasOverride = result.updatedInput !== undefined
+          if (hasOverride && context.args && typeof context.args === 'object') {
+            // The rules above were evaluated against the ORIGINAL args. The user
+            // may rewrite them, but a DENY rule must survive that rewrite — else
+            // approving `ls` and overriding the command past a `Bash(rm -rf /)`
+            // deny rule is a one-click bypass of the user's own guardrail (F13).
+            if (!isSafeToolInputOverride(result.updatedInput)) {
+              log.warn('runtime beforeToolCall: rejected an unsafe input override; blocking', {
+                toolName,
+              })
+              return { block: true, reason: 'Rejected an unsafe argument override — blocked.' }
+            }
+            const denied = await deniedToolName(toolName, result.updatedInput, sessionId)
+            if (denied) return denyBlock(denied)
             const target = context.args as Record<string, unknown>
             for (const key of Object.keys(target)) delete target[key]
-            Object.assign(target, result.updatedInput)
+            for (const [key, value] of Object.entries(result.updatedInput)) {
+              target[key] = value
+            }
           }
           return undefined
         }
@@ -345,13 +418,6 @@ export function makeBeforeToolCall(
       ...(sessionId ? { sessionId } : {}),
     })
 
-    // A DENY rule is a hard guardrail the user wrote down on purpose, so it beats
-    // EVERY relaxation below — execute mode, auto-approve, accept-edits, and the
-    // SSH gate's own 'auto' mode alike.
-    const denyBlock = (name: string): BeforeToolCallResult => ({
-      block: true,
-      reason: `Blocked by a permission rule you configured for ${name}. Remove that rule from your permission rules under ~/.awog to change this.`,
-    })
     if (ruleDecision === 'deny') return denyBlock(toolName)
 
     // SSH tools (ADR 0064 P2): act on the session's LINKED remote host. Gating is

@@ -41,6 +41,15 @@
 // F9 — Matcher tái sử dụng buffer DP (không cấp phát theo token), cache token
 //   hoá pattern, quét MỘT lượt thay vì hai, và có trần công việc mỗi lần đánh
 //   giá (vượt trần ⇒ 'ask', không bao giờ 'allow').
+//
+// F11 — Cache file luật khoá theo DANH TÍNH file `(dev, ino, mtimeMs, ctimeMs,
+//   size)` thay vì chỉ `(mtimeMs, size)`. Sửa file giữ nguyên kích thước trong
+//   cùng một mili-giây trước đây phục vụ bản CŨ vô thời hạn — nguy hiểm nhất
+//   theo chiều THU HỒI (gỡ một luật allow mà gate không thấy).
+//
+// F12 — Cờ `run_in_background` của `Bash` đổi hệ quả của lệnh (tiến trình
+//   detached sống lâu hơn lượt) nên KHÔNG được ăn theo luật ALLOW viết cho bản
+//   foreground. Luật DENY thì vẫn khớp — bật một cờ không được phép lách rào.
 
 import { createHash, randomBytes } from 'node:crypto'
 import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
@@ -216,6 +225,30 @@ export function ruleSubject(toolName: string, args: unknown): RuleSubject | null
     return { kind, value: path }
   }
   return null
+}
+
+// ─── Lời gọi "detached" (F12) ────────────────────────────────────────────────
+// `Bash({ command, run_in_background: true })` chạy lệnh tách rời: nó SỐNG LÂU
+// HƠN lượt (sessions/bg-registry.ts giữ shell lại để lượt sau đọc output), khác
+// hẳn cùng chuỗi lệnh đó chạy foreground — cùng một `npm run dev`, một bên tắt
+// khi lượt kết thúc, một bên ở lại.
+//
+// Chủ thể của luật vẫn CHỈ là chuỗi lệnh, cố ý: nhét cờ vào văn bản luật phải
+// bịa thêm cú pháp (`Bash(npm run dev &background)`), mà mọi cú pháp bịa thêm
+// đều đụng độ với một chuỗi lệnh thật viết y hệt và bắt người đọc luật học một
+// quy ước nữa. Thay vào đó bất đối xứng theo hành động:
+//   ALLOW — không áp cho lời gọi detached ⇒ luôn hỏi lại (và không có nút
+//           "Always allow", vì không có luật nào an toàn để nhớ).
+//   DENY  — vẫn áp ⇒ thêm một cờ không bao giờ lách được rào chắn.
+const DETACHED_ARG_KEYS: Record<string, string> = {
+  Bash: 'run_in_background',
+}
+
+export function isDetachedCall(toolName: string, args: unknown): boolean {
+  const key = DETACHED_ARG_KEYS[toolName]
+  if (!key) return false
+  const bag = args && typeof args === 'object' ? (args as Record<string, unknown>) : null
+  return bag?.[key] === true
 }
 
 // MỌI chủ thể mà một luật có thể khớp cho lời gọi này. Với tool đọc (Read/Grep/
@@ -401,6 +434,9 @@ export function matchesPattern(pattern: string, value: string, kind: PermissionR
 // tham số…) ⇒ UI không hiện nút.
 export function suggestRuleText(toolName: string, args: unknown): string | null {
   if (!TOOL_NAME_RE.test(toolName) || toolName.length > MAX_TOOL_NAME) return null
+  // Lời gọi detached không có luật nào an toàn để nhớ: luật chỉ mô tả chuỗi
+  // lệnh, mà thứ được cấp ở đây là một tiến trình sống lâu hơn lượt (F12).
+  if (isDetachedCall(toolName, args)) return null
   const subject = ruleSubject(toolName, args)
   if (!subject) return null
   // Chủ thể chứa `*` thật (vd `git add *`) sẽ bị đọc thành ký tự đại diện nếu
@@ -411,6 +447,21 @@ export function suggestRuleText(toolName: string, args: unknown): string | null 
   // Đi qua đúng parser mà tầng lưu trữ dùng: nếu luật sinh ra không parse được
   // thì thà không gợi ý còn hơn ghi xuống một luật không bao giờ khớp.
   return parsePermissionRule(text) ? text : null
+}
+
+// Luật đã park có còn mô tả ĐÚNG tham số sắp chạy không, sau khi người dùng ghi
+// đè tham số (`updatedInput`) lúc trả lời (F13).
+//
+// Cổng quyền sinh luật từ args GỐC rồi mới áp `updatedInput`, nên nếu không
+// kiểm tra thì "Always allow" có thể ghi xuống một luật mô tả lệnh người dùng
+// ĐÃ ĐỌC trong khi thứ thật sự chạy là lệnh khác. Sinh lại văn bản luật từ args
+// đã ghi đè bằng ĐÚNG hàm mà nút "Always allow" dùng rồi so nguyên văn:
+//   - trùng ⇒ ghi đè không đụng tới chủ thể của luật ⇒ nhớ được;
+//   - lệch (đổi lệnh, đổi đường dẫn, bật `run_in_background`, thiếu tham số) ⇒
+//     KHÔNG nhớ gì cả, lần sau vẫn hỏi.
+// Chiều hỏng luôn là "hỏi thêm", không bao giờ là "cấp thêm".
+export function ruleMatchesOverriddenInput(rule: ParsedPermissionRule, input: unknown): boolean {
+  return suggestRuleText(rule.toolName, input) === rule.text
 }
 
 // ─── Tầng session (bộ nhớ tiến trình) ────────────────────────────────────────
@@ -511,13 +562,46 @@ interface FileCacheEntry {
   // Lần cuối thực sự `stat` file. Trong TTL thì bỏ qua stat luôn — cổng quyền
   // giờ chạy trên MỌI lời gọi tool (F3) nên không được đọc đĩa mỗi lần.
   checkedAt: number
-  mtimeMs: number
-  size: number
+  // Lần cuối thực sự ĐỌC + parse file (mốc của trần tuổi cache).
+  loadedAt: number
+  identity: string
   rules: ParsedPermissionRule[]
 }
 
 const FILE_CACHE = new Map<string, FileCacheEntry>()
 const STAT_TTL_MS = 1000
+// Trần tuổi của một mục cache: quá hạn thì đọc lại file BẤT KỂ danh tính có đổi
+// hay không (F11). Chỉ là lưới an toàn cho trường hợp hệ thống tệp trả về danh
+// tính y hệt cho hai nội dung khác nhau; chi phí là một lần đọc + parse mỗi 5s
+// cho mỗi file luật đang được dùng.
+const MAX_CACHE_AGE_MS = 5000
+
+interface FileIdentityStat {
+  dev: number
+  ino: number
+  mtimeMs: number
+  ctimeMs: number
+  size: number
+}
+
+// Danh tính của một file trên đĩa (F11).
+//
+// Trước đây khoá cache là `(mtimeMs, size)`. Hai lần ghi trong cùng một
+// mili-giây, ra cùng số byte (đổi `Bash(aaa)` thành `Bash(bbb)`, gỡ một luật rồi
+// thêm một luật dài bằng…) cho ra CÙNG khoá ⇒ gate phục vụ bản cũ vô thời hạn.
+// Nguy hiểm nhất theo chiều thu hồi: người dùng gỡ một luật `allow` mà cổng
+// quyền không bao giờ thấy.
+//
+// Thêm `dev + ino` và `ctimeMs` khép lỗ đó bằng hai cơ chế độc lập:
+//   - Ghi kiểu atomic-rename (đường ghi DUY NHẤT của AWOG, và cũng là cách hầu
+//     hết editor lưu file) tạo file mới ⇒ **ino luôn đổi**, không phụ thuộc đồng hồ.
+//   - Ghi đè tại chỗ (`>>`, `sed -i` không backup) buộc POSIX cập nhật **ctime**
+//     ⇒ đổi ngay cả khi mtime bị `utimes` giả lại y hệt và kích thước không đổi.
+// Cố ý KHÔNG băm nội dung: cache này nằm trên đường nóng của mọi lời gọi tool,
+// băm mỗi lần là đọc cả file mỗi lần — đúng thứ cache sinh ra để tránh.
+function fileIdentity(st: FileIdentityStat): string {
+  return `${st.dev}:${st.ino}:${st.mtimeMs}:${st.ctimeMs}:${st.size}`
+}
 
 type RawRuleFile =
   | { status: 'missing' }
@@ -560,18 +644,18 @@ async function readRawRuleFile(file: string): Promise<RawRuleFile> {
 async function loadRuleFile(file: string): Promise<ParsedPermissionRule[]> {
   const now = Date.now()
   const cached = FILE_CACHE.get(file)
+  // Cửa sổ "không stat" 1s: một chuỗi lời gọi tool liên tiếp không nện đĩa. Đổi
+  // lại, một thay đổi trên đĩa chậm hiệu lực TỐI ĐA 1s — có trần và biết trước,
+  // khác hẳn lỗ hổng F11 (chậm vô thời hạn).
   if (cached && now - cached.checkedAt < STAT_TTL_MS) return cached.rules
-  let mtimeMs = 0
-  let size = 0
+  let identity: string
   try {
-    const st = await stat(file)
-    mtimeMs = st.mtimeMs
-    size = st.size
+    identity = fileIdentity(await stat(file))
   } catch {
     FILE_CACHE.delete(file)
     return []
   }
-  if (cached && cached.mtimeMs === mtimeMs && cached.size === size) {
+  if (cached && cached.identity === identity && now - cached.loadedAt < MAX_CACHE_AGE_MS) {
     cached.checkedAt = now
     return cached.rules
   }
@@ -585,7 +669,7 @@ async function loadRuleFile(file: string): Promise<ParsedPermissionRule[]> {
   } else if (raw.status === 'ok') {
     rules = parseRawEntries(raw.entries, file)
   }
-  FILE_CACHE.set(file, { checkedAt: now, mtimeMs, size, rules })
+  FILE_CACHE.set(file, { checkedAt: now, loadedAt: now, identity, rules })
   return rules
 }
 
@@ -741,6 +825,9 @@ export async function evaluatePermissionRules(query: RuleQuery): Promise<Permiss
   try {
     const subjects = matchSubjects(query.toolName, query.args)
     if (!subjects) return 'ask'
+    // Lời gọi detached: quét vẫn chạy đủ (để DENY còn hiệu lực) nhưng ALLOW
+    // không được chốt — cùng chuỗi lệnh, khác hệ quả (F12).
+    const detached = isDetachedCall(query.toolName, query.args)
 
     const tiers: ParsedPermissionRule[][] = []
     tiers.push(query.sessionId ? getSessionRules(query.sessionId) : [])
@@ -774,7 +861,7 @@ export async function evaluatePermissionRules(query: RuleQuery): Promise<Permiss
         }
         if (!matchRule(rule, subjects, query.toolName)) continue
         if (rule.action === 'deny') return 'deny'
-        allowed = true
+        if (!detached) allowed = true
       }
     }
     return allowed ? 'allow' : 'ask'

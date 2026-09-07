@@ -200,11 +200,65 @@ Cổng quyền giờ chạy trên **mọi** lời gọi tool (F3) nên chi phí 
 - Trần cứng `MAX_RULES_PER_EVAL = 1500` luật cho mỗi lần đánh giá; vượt trần ⇒ `'ask'` (không bao giờ `'allow'` từ một lượt quét dở dang). Tầng session cũng nhận trần 500 luật như tầng file.
 - Đọc file có thêm TTL 1s trên `stat` (vẫn kiểm `mtime + size`), nên một chuỗi lời gọi tool liên tiếp không nện đĩa.
 
+### F11 — cache file luật khoá theo `(mtimeMs, size)` phục vụ bản cũ vô thời hạn
+
+**Sai ở đâu.** `loadRuleFile()` coi hai file là "y hệt" khi trùng `(mtimeMs, size)`. Một lần ghi giữ nguyên kích thước trong cùng một mili-giây (đổi `Bash(aaa)` thành `Bash(bbb)`, gỡ một luật rồi thêm một luật dài bằng, `sed -i` một ký tự) cho ra **cùng khoá** ⇒ cổng quyền phục vụ bản cũ **vô thời hạn**, tới khi có lần ghi khác. Chiều nguy hiểm là **thu hồi**: người dùng gỡ một luật `allow` và tưởng nó đã hết hiệu lực.
+
+TTL 1s **không** che lỗ này — nó là thứ khác: TTL bỏ qua `stat` trong 1s để một chuỗi lời gọi tool liên tiếp không nện đĩa, tức nó *thêm* một khoảng trễ **có trần và biết trước** (≤ 1s). Lỗ hổng ở đây là trễ **vô hạn**.
+
+**Vá.** Khoá cache đổi thành danh tính file `(dev, ino, mtimeMs, ctimeMs, size)`:
+
+- Ghi kiểu **atomic-rename** — đường ghi duy nhất của AWOG, và cũng là cách hầu hết editor lưu file — tạo file mới ⇒ **`ino` luôn đổi**, không phụ thuộc đồng hồ.
+- Ghi **đè tại chỗ** buộc POSIX cập nhật **`ctime`**, thứ userland không giả được bằng `utimes` ⇒ vẫn phát hiện dù `mtime` bị đặt lại y hệt và kích thước không đổi.
+- Thêm trần tuổi `MAX_CACHE_AGE_MS = 5000`: quá hạn thì đọc lại bất kể danh tính, nên phần dư (hệ thống tệp trả về danh tính trùng cho hai nội dung) chỉ còn trễ ≤ 5s thay vì vô hạn.
+
+**Không băm nội dung** — cache này nằm trên đường nóng của **mọi** lời gọi tool, băm mỗi lần là đọc cả file mỗi lần, đúng thứ cache sinh ra để tránh. Đo trên file kịch bản xấu nhất (500 luật, 62 KB): đọc + `JSON.parse` + zod theo từng entry mất **0,28 ms**, một `stat` trần mất **0,010 ms**. Băm-mỗi-lần đắt hơn ~28× trên mỗi lời gọi tool × 3 tầng; trần tuổi 5s thì chỉ tốn 0,28 ms mỗi 5s cho mỗi file đang dùng.
+
+### F12 — `run_in_background` không nằm trong chủ thể của luật
+
+**Sai ở đâu.** `ruleSubject` cho `Bash` chỉ lấy `command`, nên `Bash(npm run dev)` được duyệt ở dạng foreground cũng tự động duyệt luôn `Bash({ command: 'npm run dev', run_in_background: true })` — cùng chuỗi lệnh, khác hệ quả: bản detached được `sessions/bg-registry.ts` giữ lại và **sống lâu hơn lượt**.
+
+**Quyết định: hỏi lại, KHÔNG nhét cờ vào văn bản luật.** Chủ thể của luật vẫn chỉ là chuỗi lệnh; thay vào đó bất đối xứng theo hành động:
+
+- **ALLOW không áp** cho lời gọi detached ⇒ luôn hỏi, và `suggestRuleText` trả `null` nên không có nút "Always allow" (không có luật nào an toàn để nhớ).
+- **DENY vẫn áp** ⇒ bật một cờ không bao giờ lách được rào chắn `Bash(rm -rf /)`.
+
+Vì sao không mã hoá cờ vào luật (`Bash(npm run dev &background)` hay tiền tố `background:`): mọi cú pháp bịa thêm đều **đụng độ** với một chuỗi lệnh thật viết y hệt, bắt người đọc luật học thêm một quy ước, và mở rộng ngữ pháp — thứ ADR này cố ý giữ nhỏ để audit được. Giá phải trả: dev server chạy nền bị hỏi mỗi lần. Chấp nhận được vì đó là lời gọi *hiếm và đáng đọc* (nó để lại một tiến trình chạy tiếp), và chiều hỏng luôn là "hỏi thêm", không phải "cấp thêm". Nếu về sau việc hỏi trở nên phiền thật thì mở rộng đúng một bậc: thêm **field** `background: true` cho entry luật (dữ liệu, không phải cú pháp trong chuỗi), chứ không phải sigil trong pattern.
+
+### F13 — `updatedInput` không được validate, và "Always allow" không biết mình đang nhớ args nào
+
+**Sai ở đâu.** `sessions.permission` nhận `updatedInput` (người dùng sửa tham số trước khi đồng ý) dưới dạng `z.record(z.unknown())` rồi `runtime/permission.ts` áp nó **sau** khi luật đã được đánh giá. Ba hệ quả:
+
+1. **Luật DENY bị lách.** Quyết định tính trên args gốc; duyệt `ls` rồi ghi đè `command` thành `rm -rf /` là đi thẳng qua luật `Bash(rm -rf /)` action `deny` — rào chắn cứng của chính người dùng, bị gỡ bằng một cú bấm.
+2. **`alwaysAllow` + `updatedInput` mơ hồ**: luật park mô tả args **gốc**, thứ sắp chạy là args **đã ghi đè** ⇒ ghi luật cũ xuống đĩa là nhớ một câu người dùng đã đọc trong khi cấp cho một câu khác.
+3. **Prototype pollution**: `Object.assign(target, updatedInput)` với khoá `__proto__` (do `JSON.parse` sinh ra được) đi vào **setter** prototype chứ không định nghĩa một khoá.
+
+**Vá.**
+
+- **DENY được tra lại trên args ĐÃ ghi đè** trước khi áp (`deniedToolName`, tính cả tên trần của tool SSH bắc cầu). Khớp ⇒ block, y như mọi nhánh khác.
+- **Từ chối kết hợp khi ghi đè đụng tới luật.** `ruleMatchesOverriddenInput` sinh lại văn bản luật từ args đã ghi đè bằng **đúng** `suggestRuleText` mà nút "Always allow" dùng rồi so **nguyên văn**: trùng ⇒ nhớ (một `timeout` khác không đụng chủ thể của luật); lệch ⇒ **không nhớ gì**, lượt này vẫn chạy, lần sau vẫn hỏi. Nội dung luật do đó vẫn **không bao giờ** đến từ payload UI (ADR mục 5) — payload chỉ có quyền làm mất một lần ghi nhớ, không bao giờ tạo ra một luật mới. RPC trả thêm `ruleSkipped: boolean` để UI nói thật thay vì im lặng.
+- **Validate ở BIÊN và ở SINK.** `isSafeToolInputOverride` (khai ở `runtime/permission.ts`, dùng chung) từ chối `__proto__` / `constructor` / `prototype`, mảng, non-object và > 64 khoá. Ở RPC nó chạy qua `z.custom` trên giá trị **thô** (nên thấy được khoá `__proto__` của `JSON.parse`) và trả lỗi `Invalid params`; ở sink, ghi đè được áp bằng vòng lặp gán từng khoá thay vì `Object.assign`, và payload không hợp lệ ⇒ **block**.
+
+Đường Remote Gateway vẫn cắt sạch `updatedInput` + `alwaysAllow` (F7 của lượt audit trước) — bản vá này là hàng phòng thủ cho đường renderer nội bộ.
+
+### F14 — quyền file trong worktree (ghi nhận, KHÔNG sửa code)
+
+Checkout của worktree nằm ở `~/.awog/tasks/<id>/worktrees/<slug>` (và `~/.awog/session-worktrees/…`); file bên trong do **git** tạo theo `umask` của tiến trình (thường `0644`), không phải `0600`.
+
+**Kết luận: không đổi code.** Bảo mật ở đây do **thư mục** giữ, không phải bit của từng file:
+
+- `~/.awog` được tạo `0o700` và `ownerDir()`/`worktreeRoot()` trong `tasks/worktree.ts` cũng `mkdir(..., { mode: 0o700 })`. Trên POSIX, muốn mở một file thì phải có quyền `x` trên **mọi** thư mục trên đường đi ⇒ một người dùng khác trên cùng máy không vào nổi, dù file con là `0644`. (`mode` chỉ bị `umask` **bớt** bit, nên `0700` không bao giờ nới rộng thành `0755`.)
+- Nội dung worktree là **bản sao mã nguồn của chính người dùng**, mà bản gốc trong repo cũng đang mang mode theo `umask`. Siết riêng bản sao không tăng bí mật thật sự, nhưng lại làm lệch kỳ vọng của git/editor/script build chạy trên cây đó.
+- Ép `0600` sẽ phải hoặc đổi `umask` **toàn tiến trình** (ảnh hưởng mọi thứ sidecar ghi, kể cả file của repo người dùng), hoặc `chmod` đệ quy sau mỗi lần checkout (đắt, và đua với chính git). Cả hai đều đắt hơn giá trị thu được.
+
+Điều **phải giữ**: mọi nơi tạo thư mục owner/worktree phải tiếp tục truyền `mode: 0o700`. Nếu sau này có đường nào tạo các thư mục đó mà quên mode (hoặc chúng được tạo sẵn với mode rộng hơn), kết luận này mất hiệu lực và phải xét lại.
+
 ### Việc còn lại sau đính chính
 
 - UI (`i18n/locales/*/sessions-perm.json`) còn nói tầng project ghi vào `.awog/permission-rules.json` **của dự án** — sai từ bản vá này. Cần đổi chuỗi thành "ghi trong AWOG home, chỉ áp trên máy này" (file thuộc sở hữu agent khác, chưa sửa trong gói này).
 - ~~Vẫn chưa có trang xem/thu hồi luật đã lưu~~ — **đã xong 2026-09-07**: Settings → Quyền liệt kê cả 3 tầng, hiện nguyên văn luật, xoá theo cặp (nguyên văn, action) nên gỡ một `allow` không bao giờ kéo theo `deny` cùng tên; entry không parse được vẫn được liệt kê (đó chính là thứ trước đây bắt buộc sửa tay), file hỏng toàn phần báo riêng vì mọi DENY trong đó đang vô hiệu. Xem [permission-rules.md](../features/permission-rules.md).
 - Luật cho tool bắc cầu MCP vẫn phải viết đúng tên đang chạy (`mcp__<id>__<tool>`); chỉ nhóm SSH được đối chiếu thêm tên trần.
+- UI chưa đọc `ruleSkipped` của `sessions.permission` (F13): khi người dùng vừa sửa tham số vừa bấm "Always allow", thẻ xin quyền nên nói rõ "không lưu luật vì tham số đã bị sửa" thay vì chỉ hiện `savedScopes` rỗng.
 
 ## Tham chiếu
 

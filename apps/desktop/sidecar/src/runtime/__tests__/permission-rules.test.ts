@@ -3,8 +3,8 @@
 //
 // Run với vitest: `npx vitest run src/runtime/__tests__/permission-rules.test.ts`
 // (vitest chưa nằm trong devDeps của sidecar — xem git/__tests__/discover.test.ts).
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type { BeforeToolCallContext } from '@earendil-works/pi-agent-core'
@@ -16,6 +16,7 @@ import {
   escalatesPrivilege,
   evaluatePermissionRules,
   hasShellOperator,
+  isDetachedCall,
   listRulesInFile,
   listSessionRuleTiers,
   matchesPattern,
@@ -23,6 +24,7 @@ import {
   persistRule,
   projectRuleFile,
   removeSessionRule,
+  ruleMatchesOverriddenInput,
   ruleSubject,
   saveRuleToFile,
   scanHistoryToolCalls,
@@ -31,7 +33,13 @@ import {
   userRuleFile,
   type HistoryToolCall,
 } from '../../sessions/permission-rules.js'
-import { makeBeforeToolCall } from '../permission.js'
+import { isSafeToolInputOverride, makeBeforeToolCall } from '../permission.js'
+import type { CanUseTool } from '../permission-types.js'
+import { parkPermissionRequest } from '../../sessions/permissions.js'
+import { dispatch } from '../../transport/rpc.js'
+// Import CÓ TÁC DỤNG PHỤ: đăng ký `sessions.permission` vào registry RPC để test
+// gọi được qua `dispatch` (đúng đường mà UI đi), thay vì dựng lại logic của nó.
+import '../../methods/sessions.permission.js'
 
 // Helper: luật đã parse (ném nếu văn bản luật không hợp lệ — test nào cần "không
 // hợp lệ" thì gọi parsePermissionRule trực tiếp).
@@ -44,6 +52,15 @@ function rule(text: string, action: 'allow' | 'deny' = 'allow') {
 // Quyết định cho một lời gọi Bash trong phiên `sessionId`.
 function askBash(sessionId: string, command: string, projectPath: string | null = null) {
   return evaluatePermissionRules({ toolName: 'Bash', args: { command }, sessionId, projectPath })
+}
+
+// Hook chỉ đọc toolCall.name / toolCall.id / args; dựng nguyên AgentContext
+// trong test là vô ích nên chỉ cung cấp đúng phần đó.
+function toolCtx(name: string, args: Record<string, unknown>): BeforeToolCallContext {
+  return {
+    toolCall: { id: 'tc-1', name, arguments: args },
+    args,
+  } as unknown as BeforeToolCallContext
 }
 
 describe('parsePermissionRule', () => {
@@ -527,15 +544,6 @@ describe('makeBeforeToolCall — a DENY rule beats every early return (F3)', () 
   let home: string
   let originalHome: string | undefined
 
-  // Hook chỉ đọc toolCall.name / toolCall.id / args; dựng nguyên AgentContext
-  // trong test là vô ích nên chỉ cung cấp đúng phần đó.
-  function toolCtx(name: string, args: Record<string, unknown>): BeforeToolCallContext {
-    return {
-      toolCall: { id: 'tc-1', name, arguments: args },
-      args,
-    } as unknown as BeforeToolCallContext
-  }
-
   beforeEach(async () => {
     home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
     originalHome = process.env.HOME
@@ -977,5 +985,316 @@ describe('scanHistoryToolCalls / suggestRulesFromHistory', () => {
     await saveRuleToFile(userRuleFile(), rule('Bash(pnpm test)', 'deny'))
     const second = await suggestRulesFromHistory()
     expect(second.suggestions).toEqual([])
+  })
+})
+
+// ─── F11 — cache file luật phải thấy một lần ghi đè "vô hình" ────────────────
+describe('rule file cache notices a same-size, same-mtime rewrite (F11)', () => {
+  let home: string
+  let originalHome: string | undefined
+  const sessionId = 'ses-test-f11'
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = home
+    clearSessionRules(sessionId)
+  })
+
+  afterEach(async () => {
+    vi.useRealTimers()
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+    clearSessionRules(sessionId)
+    await rm(home, { recursive: true, force: true })
+  })
+
+  it('serves the new rules after a rewrite that keeps (mtime, size) identical', async () => {
+    const file = userRuleFile()
+    await mkdir(dirname(file), { recursive: true })
+    // Điều kiện dựng lại lỗ hổng: hai nội dung KHÁC nhau, CÙNG số byte…
+    const docA = JSON.stringify({ version: 1, rules: [{ rule: 'Bash(aaa)' }] })
+    const docB = JSON.stringify({ version: 1, rules: [{ rule: 'Bash(bbb)' }] })
+    expect(docB.length).toBe(docA.length)
+    // …và CÙNG mtime, giả lại bằng utimes nên không phụ thuộc độ phân giải đồng hồ.
+    const stampSec = 1_700_000_000
+
+    await writeFile(file, docA)
+    await utimes(file, stampSec, stampSec)
+    await expect(askBash(sessionId, 'aaa')).resolves.toBe('allow')
+
+    await writeFile(file, docB)
+    await utimes(file, stampSec, stampSec)
+    const st = await stat(file)
+    expect(st.mtimeMs).toBe(stampSec * 1000)
+    expect(st.size).toBe(docA.length)
+
+    // Vượt TTL 1s của `stat`, nhưng CHƯA tới trần tuổi cache — nên thứ bắt được
+    // thay đổi ở đây phải là danh tính file, không phải cái trần đó.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(Date.now() + 2000))
+    await expect(askBash(sessionId, 'bbb')).resolves.toBe('allow')
+    // Luật cũ đã bị gỡ khỏi file ⇒ phải hết hiệu lực. Đây là chiều nguy hiểm của
+    // lỗ hổng: thu hồi một luật mà cổng quyền không bao giờ thấy.
+    await expect(askBash(sessionId, 'aaa')).resolves.toBe('ask')
+  })
+})
+
+// ─── F12 — `run_in_background` đổi hệ quả của cùng một chuỗi lệnh ────────────
+describe('a detached command is not covered by the foreground rule (F12)', () => {
+  const sessionId = 'ses-test-f12'
+  let home: string
+  let originalHome: string | undefined
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = home
+    clearSessionRules(sessionId)
+  })
+
+  afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+    clearSessionRules(sessionId)
+    await rm(home, { recursive: true, force: true })
+  })
+
+  const askDetached = (command: string) =>
+    evaluatePermissionRules({
+      toolName: 'Bash',
+      args: { command, run_in_background: true },
+      sessionId,
+      projectPath: null,
+    })
+
+  it('flags only an explicit `true`', () => {
+    expect(isDetachedCall('Bash', { command: 'x', run_in_background: true })).toBe(true)
+    expect(isDetachedCall('Bash', { command: 'x', run_in_background: false })).toBe(false)
+    expect(isDetachedCall('Bash', { command: 'x', run_in_background: 'true' })).toBe(false)
+    expect(isDetachedCall('Bash', { command: 'x' })).toBe(false)
+    // Tool khác không có khái niệm này ở đây (Task tự có cổng riêng).
+    expect(isDetachedCall('Write', { file_path: '/a', run_in_background: true })).toBe(false)
+  })
+
+  it('asks again even though the same command string is allowed', async () => {
+    addSessionRule(sessionId, rule('Bash(npm run dev)'))
+    await expect(askBash(sessionId, 'npm run dev')).resolves.toBe('allow')
+    await expect(askDetached('npm run dev')).resolves.toBe('ask')
+  })
+
+  it('still honours a DENY rule — a flag never opens a guardrail', async () => {
+    addSessionRule(sessionId, rule('Bash(rm -rf /)', 'deny'))
+    await expect(askDetached('rm -rf /')).resolves.toBe('deny')
+  })
+
+  it('offers no "Always allow" button for a detached call', () => {
+    expect(suggestRuleText('Bash', { command: 'npm run dev' })).toBe('Bash(npm run dev)')
+    expect(suggestRuleText('Bash', { command: 'npm run dev', run_in_background: true })).toBeNull()
+  })
+
+  it('routes a detached call to the prompt in the gate', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(npm run dev)'))
+    // Không có canUseTool ⇒ nhánh hỏi fail-safe thành block. Đó chính là bằng
+    // chứng lời gọi detached ĐI TỚI chỗ hỏi thay vì được luật ALLOW cho qua.
+    const hook = makeBeforeToolCall(undefined, 'ask')
+    await expect(hook(toolCtx('Bash', { command: 'npm run dev' }))).resolves.toBeUndefined()
+    await expect(
+      hook(toolCtx('Bash', { command: 'npm run dev', run_in_background: true })),
+    ).resolves.toMatchObject({ block: true })
+  })
+})
+
+// ─── F13 — tham số bị ghi đè lúc đồng ý ─────────────────────────────────────
+describe('isSafeToolInputOverride (F13)', () => {
+  it('accepts a plain arg bag', () => {
+    expect(isSafeToolInputOverride({ command: 'ls' })).toBe(true)
+    expect(isSafeToolInputOverride({})).toBe(true)
+  })
+
+  it('refuses prototype keys and non-objects', () => {
+    expect(isSafeToolInputOverride(JSON.parse('{"__proto__":{"x":1}}'))).toBe(false)
+    expect(isSafeToolInputOverride({ constructor: 1 })).toBe(false)
+    expect(isSafeToolInputOverride({ prototype: 1 })).toBe(false)
+    expect(isSafeToolInputOverride(['a'])).toBe(false)
+    expect(isSafeToolInputOverride(null)).toBe(false)
+    expect(isSafeToolInputOverride('x')).toBe(false)
+  })
+
+  it('refuses an absurd number of keys', () => {
+    const bag: Record<string, unknown> = {}
+    for (let i = 0; i < 65; i += 1) bag[`k${i}`] = i
+    expect(isSafeToolInputOverride(bag)).toBe(false)
+  })
+})
+
+describe('ruleMatchesOverriddenInput (F13)', () => {
+  it('accepts an override that leaves the rule subject alone', () => {
+    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'git status' })).toBe(
+      true,
+    )
+    // Tham số không tham gia vào luật (timeout) thì không ảnh hưởng.
+    expect(
+      ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'git status', timeout: 500 }),
+    ).toBe(true)
+    expect(
+      ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/a.ts' }),
+    ).toBe(true)
+  })
+
+  it('rejects an override that changes what will actually run', () => {
+    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'rm -rf /' })).toBe(false)
+    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), {})).toBe(false)
+    expect(
+      ruleMatchesOverriddenInput(rule('Bash(npm run dev)'), {
+        command: 'npm run dev',
+        run_in_background: true,
+      }),
+    ).toBe(false)
+    expect(
+      ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/secrets.ts' }),
+    ).toBe(false)
+  })
+})
+
+describe('an approved input override cannot walk past a DENY rule (F13)', () => {
+  let home: string
+  let originalHome: string | undefined
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = home
+  })
+
+  afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+    await rm(home, { recursive: true, force: true })
+  })
+
+  function approveWith(updatedInput: Record<string, unknown>): CanUseTool {
+    return async () => ({ behavior: 'allow', updatedInput })
+  }
+
+  it('blocks when the OVERRIDDEN args match a deny rule', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(rm -rf /)', 'deny'))
+    const hook = makeBeforeToolCall(approveWith({ command: 'rm -rf /' }), 'ask')
+    // Args gốc vô hại ⇒ quyết định ban đầu là "hỏi", người dùng đồng ý kèm ghi
+    // đè. Luật DENY vẫn phải thắng.
+    await expect(hook(toolCtx('Bash', { command: 'ls' }))).resolves.toMatchObject({ block: true })
+  })
+
+  it('applies a harmless override', async () => {
+    const args = { command: 'ls' }
+    const hook = makeBeforeToolCall(approveWith({ command: 'ls -la' }), 'ask')
+    await expect(hook(toolCtx('Bash', args))).resolves.toBeUndefined()
+    expect(args).toEqual({ command: 'ls -la' })
+  })
+
+  it('refuses a prototype-polluting override instead of applying it', async () => {
+    const hostile = JSON.parse('{"__proto__":{"polluted":true},"command":"ls"}') as Record<
+      string,
+      unknown
+    >
+    const args = { command: 'ls' }
+    const hook = makeBeforeToolCall(approveWith(hostile), 'ask')
+    await expect(hook(toolCtx('Bash', args))).resolves.toMatchObject({ block: true })
+    expect(args).toEqual({ command: 'ls' })
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+})
+
+describe('sessions.permission — alwaysAllow + updatedInput (F13)', () => {
+  let home: string
+  let originalHome: string | undefined
+  const sessionId = 'ses-test-f13-rpc'
+  let seq = 0
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = home
+    clearSessionRules(sessionId)
+  })
+
+  afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+    clearSessionRules(sessionId)
+    await rm(home, { recursive: true, force: true })
+  })
+
+  // Đúng shape mà runtime/permission.ts park cho nút "Always allow".
+  function park(ruleText: string): string {
+    seq += 1
+    const requestId = `req-f13-${seq}`
+    void parkPermissionRequest(requestId, [
+      {
+        type: 'addRule',
+        toolName: 'Bash',
+        destination: 'session',
+        rule: ruleText,
+        ruleKind: 'command',
+        action: 'allow',
+        sessionId,
+      },
+    ])
+    return requestId
+  }
+
+  it('remembers the rule when the override does not touch its subject', async () => {
+    const requestId = park('Bash(git status)')
+    await expect(
+      dispatch('sessions.permission', {
+        requestId,
+        decision: 'allow',
+        alwaysAllow: true,
+        updatedInput: { command: 'git status', timeout: 500 },
+      }),
+    ).resolves.toMatchObject({ resolved: true, savedScopes: ['session'], ruleSkipped: false })
+    await expect(askBash(sessionId, 'git status')).resolves.toBe('allow')
+  })
+
+  it('saves NOTHING when the override changes the command', async () => {
+    const requestId = park('Bash(git status)')
+    await expect(
+      dispatch('sessions.permission', {
+        requestId,
+        decision: 'allow',
+        alwaysAllow: true,
+        updatedInput: { command: 'rm -rf /' },
+      }),
+    ).resolves.toMatchObject({ resolved: true, savedScopes: [], ruleSkipped: true })
+    // Không luật nào được ghi — kể cả luật người dùng vừa đọc trên màn hình.
+    await expect(askBash(sessionId, 'git status')).resolves.toBe('ask')
+    await expect(askBash(sessionId, 'rm -rf /')).resolves.toBe('ask')
+  })
+
+  it('saves nothing when the override makes the command detached', async () => {
+    const requestId = park('Bash(npm run dev)')
+    await expect(
+      dispatch('sessions.permission', {
+        requestId,
+        decision: 'allow',
+        alwaysAllow: true,
+        updatedInput: { command: 'npm run dev', run_in_background: true },
+      }),
+    ).resolves.toMatchObject({ savedScopes: [], ruleSkipped: true })
+    await expect(askBash(sessionId, 'npm run dev')).resolves.toBe('ask')
+  })
+
+  it('rejects a prototype-polluting payload at the RPC boundary', async () => {
+    const requestId = park('Bash(git status)')
+    const params = JSON.parse(
+      JSON.stringify({ requestId, decision: 'allow' }).slice(0, -1) +
+        ',"updatedInput":{"__proto__":{"polluted":true},"command":"ls"}}',
+    ) as unknown
+    await expect(dispatch('sessions.permission', params)).rejects.toThrow(/Invalid params/)
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+    // Yêu cầu vẫn còn park (chưa ai trả lời) ⇒ dọn bằng một lượt trả lời hợp lệ.
+    await expect(
+      dispatch('sessions.permission', { requestId, decision: 'deny' }),
+    ).resolves.toMatchObject({ resolved: true })
   })
 })
