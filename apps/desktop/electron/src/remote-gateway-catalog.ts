@@ -6,6 +6,8 @@
 // hand it on-disk paths, account labels and the whole settings blob. Composing
 // here keeps the remote allowlist (F4) free of read-everything methods.
 
+import type { RemotePolicy } from './remote-gateway-policy'
+
 type EngineRequest = (method: string, params: unknown) => Promise<unknown>
 
 export interface RemoteProject {
@@ -38,15 +40,68 @@ export interface RemoteProviderEntry {
   activeAccountId: string | null
 }
 
+// A workflow the phone may start a task from — NAME ONLY. The DAG itself (node
+// prompts, skill ids, edges) stays on the desktop: the phone picks a workflow by
+// id, it never gets to read or compose one.
+export interface RemoteWorkflow {
+  id: string
+  name: string
+  projectId?: string
+  nodeCount: number
+}
+
+// What this gateway will currently let the phone do. `unattended` is the desktop's
+// opt-in (Settings → Devices): with it OFF the ungated agent modes are clamped to
+// `ask` and `tasks.create` is refused, so the PWA must label those affordances
+// instead of letting a tap fail.
+export interface RemoteCapabilities {
+  unattended: boolean
+}
+
 export interface RemoteBootstrap {
   projects: RemoteProject[]
   // Only providers the desktop actually has an account for — a phone can't pick
   // a model nothing can run.
   providers: RemoteProviderEntry[]
   defaults: { provider: string; modelId: string; level: string }
+  workflows: RemoteWorkflow[]
+  capabilities: RemoteCapabilities
 }
 
-const LOCAL_METHODS = new Set(['remote.bootstrap'])
+// ─── Tasks (#18) ────────────────────────────────────────────────────────────
+// The sidecar's Task carries `workflowSnapshot` plus every run's full trace and
+// message list — megabytes, and none of it is what a phone renders. These two
+// shapes are the whole remote view of a task: enough to watch progress, approve a
+// phase and stop a runaway, nothing more.
+
+export interface RemoteTaskSummary {
+  id: string
+  title: string
+  projectId: string
+  status: string
+  createdAt: string
+  workflowId: string
+  waitingApproval: string | null
+  phaseCount: number
+  donePhaseCount: number
+}
+
+export interface RemoteTaskPhase {
+  nodeId: string
+  status: string
+  skillName: string
+  runCount: number
+  // Tail of the latest run's output — the phone shows it under the phase row.
+  lastOutput?: string
+}
+
+export interface RemoteTaskDetail extends RemoteTaskSummary {
+  description: string
+  currentNodeId: string | null
+  phases: RemoteTaskPhase[]
+}
+
+const LOCAL_METHODS = new Set(['remote.bootstrap', 'remote.tasks', 'remote.task'])
 
 export function isLocalMethod(method: string): boolean {
   return LOCAL_METHODS.has(method)
@@ -56,7 +111,14 @@ const PROVIDERS = ['anthropic', 'openai', 'google'] as const
 const MAX_MODELS_PER_PROVIDER = 60
 const CACHE_TTL_MS = 60_000
 
-let cached: { at: number; value: RemoteBootstrap } | null = null
+const MAX_TASKS = 100
+const MAX_WORKFLOWS = 100
+const MAX_OUTPUT_CHARS = 4_000
+
+// The heavy half of the bootstrap (projects + model catalog + workflow names).
+// `capabilities` is NOT cached — it mirrors a switch the user can flip at any
+// moment, and a stale "you may run unattended" is exactly the wrong thing to show.
+let cached: { at: number; value: Omit<RemoteBootstrap, 'capabilities'> } | null = null
 
 async function safe<T>(p: Promise<T>, fallback: T): Promise<T> {
   try {
@@ -141,25 +203,148 @@ async function loadDefaults(request: EngineRequest): Promise<RemoteBootstrap['de
   }
 }
 
-async function buildBootstrap(request: EngineRequest): Promise<RemoteBootstrap> {
+// Workflow NAMES across the tiers the desktop can see: global + every registered
+// project. Node prompts are dropped here — see RemoteWorkflow.
+async function loadWorkflows(
+  request: EngineRequest,
+  projects: RemoteProject[],
+): Promise<RemoteWorkflow[]> {
+  const { workflows } = await safe(
+    request('workflows.list', { projectIds: projects.map((p) => p.id) }) as Promise<{
+      workflows: { id: string; name?: string; projectId?: string; nodes?: unknown[] }[]
+    }>,
+    { workflows: [] },
+  )
+  return workflows.slice(0, MAX_WORKFLOWS).map((w) => ({
+    id: w.id,
+    name: w.name ?? w.id,
+    ...(w.projectId ? { projectId: w.projectId } : {}),
+    nodeCount: Array.isArray(w.nodes) ? w.nodes.length : 0,
+  }))
+}
+
+async function buildBootstrap(
+  request: EngineRequest,
+): Promise<Omit<RemoteBootstrap, 'capabilities'>> {
   const [projects, buckets, defaults] = await Promise.all([
     loadProjects(request),
     accountBuckets(request),
     loadDefaults(request),
   ])
-  const providers = await Promise.all(
-    buckets.map(async (b) => ({ ...b, models: await modelsFor(request, b.provider) })),
+  const [providers, workflows] = await Promise.all([
+    Promise.all(buckets.map(async (b) => ({ ...b, models: await modelsFor(request, b.provider) }))),
+    loadWorkflows(request, projects),
+  ])
+  return { projects, providers, defaults, workflows }
+}
+
+// ─── Tasks (#18) ────────────────────────────────────────────────────────────
+
+type RawRun = { status?: unknown; output?: unknown }
+type RawPhase = { nodeId?: unknown; status?: unknown; skillName?: unknown; runs?: RawRun[] }
+type RawTask = {
+  id?: unknown
+  title?: unknown
+  projectId?: unknown
+  status?: unknown
+  createdAt?: unknown
+  workflowId?: unknown
+  description?: unknown
+  currentNodeId?: unknown
+  waitingApproval?: unknown
+  phases?: Record<string, RawPhase>
+}
+
+function str(v: unknown, fallback = ''): string {
+  return typeof v === 'string' ? v : fallback
+}
+
+function phaseRows(task: RawTask): RawPhase[] {
+  const phases = task.phases
+  return phases && typeof phases === 'object' ? Object.values(phases) : []
+}
+
+function summarize(task: RawTask): RemoteTaskSummary {
+  const rows = phaseRows(task)
+  return {
+    id: str(task.id),
+    title: str(task.title, '(không tên)'),
+    projectId: str(task.projectId),
+    status: str(task.status, 'queued'),
+    createdAt: str(task.createdAt),
+    workflowId: str(task.workflowId),
+    waitingApproval: typeof task.waitingApproval === 'string' ? task.waitingApproval : null,
+    phaseCount: rows.length,
+    donePhaseCount: rows.filter((p) => p.status === 'completed').length,
+  }
+}
+
+function detail(task: RawTask): RemoteTaskDetail {
+  return {
+    ...summarize(task),
+    description: str(task.description).slice(0, MAX_OUTPUT_CHARS),
+    currentNodeId: typeof task.currentNodeId === 'string' ? task.currentNodeId : null,
+    phases: phaseRows(task).map((p) => {
+      const runs = Array.isArray(p.runs) ? p.runs : []
+      const last = runs.length > 0 ? runs[runs.length - 1] : undefined
+      const output = str(last?.output)
+      return {
+        nodeId: str(p.nodeId),
+        status: str(p.status, 'pending'),
+        skillName: str(p.skillName),
+        runCount: runs.length,
+        // Tail, not head: the end of a run is what says how it went. `trace` and
+        // `messages` are dropped entirely.
+        ...(output ? { lastOutput: output.slice(-MAX_OUTPUT_CHARS) } : {}),
+      }
+    }),
+  }
+}
+
+async function loadTasks(request: EngineRequest): Promise<{ tasks: RemoteTaskSummary[] }> {
+  const { tasks } = await safe(
+    request('tasks.list', {}) as Promise<{ tasks: RawTask[] }>,
+    { tasks: [] },
   )
-  return { projects, providers, defaults }
+  return { tasks: tasks.slice(0, MAX_TASKS).map(summarize) }
+}
+
+// Params are L1: only `id` is read, and it must be a plain string. Everything the
+// sidecar returns is field-picked by `detail` before it reaches the wire.
+async function loadTask(
+  request: EngineRequest,
+  params: unknown,
+): Promise<{ task: RemoteTaskDetail | null }> {
+  const id = params && typeof params === 'object' ? (params as { id?: unknown }).id : undefined
+  if (typeof id !== 'string' || id.length === 0) throw new Error('missing/invalid field: id')
+  const { task } = (await request('tasks.get', { id })) as { task: RawTask | null }
+  return { task: task ? detail(task) : null }
+}
+
+async function bootstrap(request: EngineRequest, policy: RemotePolicy): Promise<RemoteBootstrap> {
+  const now = Date.now()
+  if (!cached || now - cached.at >= CACHE_TTL_MS) {
+    cached = { at: now, value: await buildBootstrap(request) }
+  }
+  return { ...cached.value, capabilities: { unattended: policy.unattended } }
 }
 
 // Dispatch a gateway-local method. `isLocalMethod` gates the call site, so an
 // unknown name here is a programming error, not a remote input.
-export async function handleLocalMethod(method: string, request: EngineRequest): Promise<unknown> {
-  if (method !== 'remote.bootstrap') throw new Error(`no local handler: ${method}`)
-  const now = Date.now()
-  if (cached && now - cached.at < CACHE_TTL_MS) return cached.value
-  const value = await buildBootstrap(request)
-  cached = { at: now, value }
-  return value
+export async function handleLocalMethod(
+  method: string,
+  params: unknown,
+  request: EngineRequest,
+  policy: RemotePolicy,
+): Promise<unknown> {
+  switch (method) {
+    case 'remote.bootstrap':
+      return await bootstrap(request, policy)
+    case 'remote.tasks':
+      return await loadTasks(request)
+    case 'remote.task':
+      return await loadTask(request, params)
+    default:
+      throw new Error(`no local handler: ${method}`)
+  }
 }

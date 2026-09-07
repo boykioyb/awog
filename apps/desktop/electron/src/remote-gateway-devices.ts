@@ -23,7 +23,15 @@ type StoredDevice = RemoteDevice & { tokenHash: string }
 
 // On-disk shape. `enabled` is the user's opt-in for the whole gateway — remote
 // control must never open a port unasked, so a missing/corrupt file reads as OFF.
-type StoreFile = { enabled: boolean; devices: StoredDevice[] }
+//
+// `unattended` is a SECOND, independent opt-in: it decides whether a frame coming
+// from a phone may cause agent work that runs WITHOUT a per-call approval — the
+// ungated agent modes (`execute`, `accept-edits`) and creating a task (task nodes
+// run `mode:'execute'` by construction, see sidecar tasks/node-runner.ts). Default
+// OFF, and it lives HERE (~/.awog/remote-devices.json, mode 0600) rather than in
+// any project file: a record of "what a remote device may run" that travelled with
+// a git repo would be an RCE by clone, the same trap ADR 0080 F1 had to undo.
+type StoreFile = { enabled: boolean; unattended?: boolean; devices: StoredDevice[] }
 
 type Pairing = { code: string; expiresAt: number; used: boolean }
 
@@ -59,6 +67,9 @@ export class DeviceStore {
 
   private enabled = false
 
+  // Xem chú thích ở StoreFile: công tắc "chạy không cần duyệt từ xa", mặc định TẮT.
+  private unattended = false
+
   // One active pairing challenge at a time (the UI shows one QR/code). Regenerating
   // replaces it, invalidating the previous code.
   private pairing: Pairing | null = null
@@ -72,22 +83,31 @@ export class DeviceStore {
       if (Array.isArray(parsed)) {
         this.devices = parsed as StoredDevice[]
         this.enabled = false
+        this.unattended = false
         return
       }
       const file = (parsed ?? {}) as Partial<StoreFile>
       this.devices = Array.isArray(file.devices) ? file.devices : []
       this.enabled = file.enabled === true
+      // `=== true` chứ không truthy: một file cũ/hỏng không bao giờ được bật hộ
+      // người dùng cái công tắc nguy hiểm nhất của gateway.
+      this.unattended = file.unattended === true
     } catch {
       // missing/corrupt → start empty + disabled (fail-safe, not fail-open)
       this.devices = []
       this.enabled = false
+      this.unattended = false
     }
   }
 
   private async persist(): Promise<void> {
     try {
       await mkdir(join(homedir(), '.awog'), { recursive: true })
-      const file: StoreFile = { enabled: this.enabled, devices: this.devices }
+      const file: StoreFile = {
+        enabled: this.enabled,
+        unattended: this.unattended,
+        devices: this.devices,
+      }
       await writeFile(STORE_FILE, JSON.stringify(file, null, 2), { mode: 0o600 })
     } catch (err) {
       log.error('remote-devices persist failed', {
@@ -102,6 +122,21 @@ export class DeviceStore {
 
   async setEnabled(on: boolean): Promise<void> {
     this.enabled = on
+    // Tắt điều khiển từ xa cũng hạ luôn công tắc "không cần duyệt". Bật lại
+    // gateway sau này là một hành động bình thường; khôi phục im lặng quyền chạy
+    // không duyệt thì không — người dùng phải bật lại một cách có ý thức.
+    if (!on) this.unattended = false
+    await this.persist()
+  }
+
+  isUnattended(): boolean {
+    // Không bao giờ báo "cho phép" khi gateway đang tắt: một giá trị sót trong
+    // file không được biến thành quyền khi không có gì đang lắng nghe.
+    return this.enabled && this.unattended
+  }
+
+  async setUnattended(on: boolean): Promise<void> {
+    this.unattended = on
     await this.persist()
   }
 

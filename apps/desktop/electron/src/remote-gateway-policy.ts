@@ -8,8 +8,8 @@
 //        every dangerous field (workspacePath/systemPrompt/history/…), force
 //        autoApprove=false, and PIN provider/model/account/project from the
 //        session's own persisted settings — never from the phone. The agent MODE
-//        is the one setting a phone does choose freely (all four desktop modes) —
-//        see REMOTE_ALLOWED_MODES for what `execute` costs.
+//        a phone may ask for is clamped to the GATED modes unless the desktop user
+//        turned the unattended switch on — see UNGATED_MODES.
 //   F3 — git.* is "read-only" but takes a `workspaceRoot`; unrestricted that reads
 //        ANY repo on disk. We force workspaceRoot = a known project's path.
 //   F2 — event egress allowlist (which engine events may reach a phone at all).
@@ -62,16 +62,38 @@ const BESPOKE = [
   'sessions.upsert',
   'sessions.delete',
   'sessions.generateTitle',
+  // #18 — driving a Task/Workflow from the phone. Only the ACTIONS are here; the
+  // READS are gateway-local (`remote.tasks` / `remote.task`, see the catalog),
+  // because a raw `tasks.get` hands a phone the whole DAG snapshot plus every
+  // run's trace + messages. Deliberately NOT opened: `tasks.rerunPhase`,
+  // `tasks.discuss`, `tasks.delete`, `tasks.rename` — not needed to trigger or
+  // supervise a run, and every extra name is extra surface.
+  'tasks.create',
+  'tasks.approvePhase',
+  'tasks.cancel',
+  'tasks.pause',
+  'tasks.resume',
 ] as const
 
-// Remote allowlist. NOTE: all `tasks.*` are still EXCLUDED (deferred) to keep the
-// attack surface minimal — adding them requires a fresh infosec pass (spec
-// §Yêu cầu bảo mật, re-audit rule).
+// Remote allowlist (exact-match, default-deny) — validated against the sidecar
+// registry at boot (remote-gateway.ts).
 export const REMOTE_ALLOWLIST: readonly string[] = [...READ_ONLY, ...GIT_SCOPED, ...BESPOKE]
 export const METHOD_ALLOWLIST: ReadonlySet<string> = new Set(REMOTE_ALLOWLIST)
 
 export function isMethodAllowed(method: string): boolean {
   return METHOD_ALLOWLIST.has(method)
+}
+
+// Allowlisted, but ONLY while the desktop's unattended switch is on: a task node
+// runs `mode:'execute'` by construction (sidecar tasks/node-runner.ts:240), so
+// creating a task from a phone starts an agent that never asks for approval — the
+// same power as a remote `execute` turn, wearing a different name. Supervising an
+// EXISTING task (approve/cancel/pause/resume) is not here: those act on a DAG the
+// desktop user authored, which is exactly what ADR 0067 §3 allowlisted.
+const UNATTENDED_ONLY = new Set<string>(['tasks.create'])
+
+export function requiresUnattended(method: string): boolean {
+  return UNATTENDED_ONLY.has(method)
 }
 
 // --- F2: event egress allowlist -------------------------------------------
@@ -113,23 +135,71 @@ export function eventSessionId(payload: unknown): string | null {
 // block continuing any session that already spent more — hijacking the user's own
 // budget config. Leave `budget` unset → the turn uses the session's own budget.
 
-// Modes a REMOTE turn may run in — all four the desktop offers.
+// Modes a REMOTE turn may run in.
 //
-// ⚠ This is a DELIBERATE relaxation of the original F-1 clamp (which allowed only
-// `ask`/`plan`), made on 2026-08-30 at the user's explicit direction: the phone was
-// missing `execute`, and mode parity with the desktop was chosen over the clamp.
-// Know what it costs. `execute` skips the permission park entirely (sidecar
-// runtime/permission.ts: `if (mode === 'execute') return undefined`, BEFORE the
-// autoApprove check), so a remote `execute` turn runs Bash/Write with no approval
-// card — full RCE reachable over the tailnet, and forcing `autoApprove:false` below
-// does NOT hold it back. `accept-edits` is narrower: Write/Edit auto-allow, Bash
-// still parks. `ask`/`plan` keep every mutating tool gated as before.
+// ⚠ 2026-09-07 — this is the fix for the hole the previous note described. From
+// 2026-08-30 to today the gateway accepted all four desktop modes from a phone,
+// and the note right here said what that cost: `execute` skips the permission park
+// outright (sidecar runtime/permission.ts — `if (mode === 'execute') return
+// undefined`), so a remote turn ran Bash/Write with no approval card. That is full
+// RCE reachable by anything holding a device token on the tailnet, and forcing
+// `autoApprove:false` never held it back.
 //
-// The remaining defences are unchanged: tailnet-only bind + fail-closed, opt-in
-// toggle (default OFF), device pairing, the method allowlist, per-method param-pick,
-// and gateway rate limits (F8). Mode is now the user's choice, so the PWA labels
-// the ungated modes as such (remote-pwa/src/catalog.ts AGENT_MODES).
-const REMOTE_ALLOWED_MODES = new Set(['ask', 'plan', 'accept-edits', 'execute'])
+// The rule now: a REMOTE origin may not cause a mutation nobody approved. Both
+// UNGATED modes are clamped to `ask` unless the person at the DESKTOP turned the
+// unattended switch on (Settings → Devices; default OFF, stored in
+// ~/.awog/remote-devices.json, never in a project file).
+//   • `execute`      — no gate at all. The RCE case.
+//   • `accept-edits` — Write/Edit auto-allow (Bash still parks). Narrower, but
+//     still an unapproved write chosen by a remote origin, and a write to the
+//     right file is a delayed exec. Same switch, same reason.
+// `ask` / `plan` stay open to every paired phone.
+//
+// What the user loses with the switch off: nothing they cannot do in one more tap.
+// The turn still runs; each mutating call parks and the approval card is delivered
+// to BOTH the desktop and the phone (session.permission-request is on the event
+// egress list), so the human reads the exact command before it runs — and an
+// "Always allow" now only ever grants that exact command (ADR 0080), not the tool.
+const GATED_MODES = ['ask', 'plan'] as const
+const UNGATED_MODES = ['accept-edits', 'execute'] as const
+const REMOTE_ALLOWED_MODES = new Set<string>([...GATED_MODES, ...UNGATED_MODES])
+
+export function isUngatedMode(mode: string): boolean {
+  return (UNGATED_MODES as readonly string[]).includes(mode)
+}
+
+// The mode a remote turn actually runs in. Applied to BOTH the phone's per-turn
+// choice and the mode inherited from the session's persisted settings: the origin
+// of THIS turn is a phone either way, and a desktop-set `execute` must not become
+// a remote blank cheque. Unknown string ⇒ `ask` (the set widens, the field never
+// becomes free-form).
+export function clampRemoteMode(raw: unknown, fallback: string, unattended: boolean): string {
+  const requested = typeof raw === 'string' ? raw : fallback
+  if (!REMOTE_ALLOWED_MODES.has(requested)) return 'ask'
+  if (isUngatedMode(requested) && !unattended) return 'ask'
+  return requested
+}
+
+// The mode to PERSIST on a session (`sessions.upsert`). Different question from
+// the one above: this value also governs the DESKTOP user's next turn, so a phone
+// must never raise it into an ungated mode — but it must not quietly LOWER a mode
+// the desktop set either (editing a title from the phone would otherwise knock a
+// session out of `execute`). Switch off + ungated asked for ⇒ the request is
+// ignored and the stored mode stands.
+export function clampPersistedMode(raw: unknown, current: string, unattended: boolean): string {
+  const requested = typeof raw === 'string' ? raw : current
+  if (!REMOTE_ALLOWED_MODES.has(requested)) return 'ask'
+  if (isUngatedMode(requested) && !unattended) {
+    return REMOTE_ALLOWED_MODES.has(current) ? current : 'ask'
+  }
+  return requested
+}
+
+// What the gateway is allowed to do for a given frame. One field today (the
+// unattended switch); it is a record so a future per-device policy has a seam.
+export type RemotePolicy = {
+  unattended: boolean
+}
 
 // Strip fields a phone must not supply on attachments — notably `path` (a desktop
 // filesystem path the phone has no business referencing). Bound the count too.
@@ -327,13 +397,6 @@ async function resolveChoice(
   return out
 }
 
-// An unrecognized mode string still falls back to the gated default — the relaxation
-// widens the allowed SET, it does not make the field free-form.
-function clampMode(raw: unknown, fallback: string): string {
-  const mode = typeof raw === 'string' ? raw : fallback
-  return REMOTE_ALLOWED_MODES.has(mode) ? mode : 'ask'
-}
-
 function toEngineSettings(s: ResolvedSettings, mode: string): SessionSettingsLike {
   return {
     provider: s.provider,
@@ -363,6 +426,7 @@ function newSessionId(): string {
 async function buildUpsert(
   request: EngineRequest,
   raw: unknown,
+  policy: RemotePolicy,
 ): Promise<Record<string, unknown>> {
   const p = asObject(raw)
   const phoneSettings = p.settings && typeof p.settings === 'object' ? asObject(p.settings) : {}
@@ -398,7 +462,13 @@ async function buildUpsert(
     // the pinned accountId — an account belongs to one provider.
     const nextSettings: Record<string, unknown> = {
       ...session.settings,
-      ...toEngineSettings(merged, clampMode(phoneSettings.mode, session.settings.mode)),
+      // Clamped here too: `sessions.upsert` PERSISTS the mode, so an unclamped
+      // phone write would leave the session in `execute` and make the DESKTOP
+      // user's next turn ungated as well — privilege escalation by persistence.
+      ...toEngineSettings(
+        merged,
+        clampPersistedMode(phoneSettings.mode, session.settings.mode, policy.unattended),
+      ),
     }
     if (!merged.accountId) delete nextSettings.accountId
     if (!merged.responseStyle) delete nextSettings.responseStyle
@@ -435,8 +505,76 @@ async function buildUpsert(
       invitedAgentIds: [],
       pendingAgentIds: [],
       messages: [],
-      settings: toEngineSettings(chosen, clampMode(phoneSettings.mode, 'ask')),
+      settings: toEngineSettings(
+        chosen,
+        clampPersistedMode(phoneSettings.mode, 'ask', policy.unattended),
+      ),
     },
+  }
+}
+
+// --- #18: Task / Workflow control ------------------------------------------
+//
+// A task node runs with `mode:'execute'` and no permission gate (sidecar
+// tasks/node-runner.ts) — that is the whole point of a task: unattended work. So
+// the phone's reach over tasks is split in two:
+//   • SUPERVISE an existing task (approve/cancel/pause/resume) — allowed for any
+//     paired device. The DAG and the prompt were authored on the desktop; the
+//     phone only says "go on" / "stop", which is what ADR 0067 §3 allowlisted.
+//   • CREATE a task — needs the unattended switch (UNATTENDED_ONLY above). Here
+//     the phone writes the prompt, so it decides WHAT runs ungated.
+//
+// Cost is capped by the engine's own per-task budget (sidecar tasks/budget.ts:
+// $20 / 1500 tool calls / 4h by default, event-sourced so it survives a restart)
+// plus an hourly cap on task starts at the gateway.
+
+// Ids the phone may reference. Charset-bounded because they end up in a path
+// segment on the sidecar side (tasks/store.ts `sanitizeChild`).
+const TASK_ID_RE = /^[A-Za-z0-9._-]{1,64}$/
+const MAX_NODE_ID_CHARS = 128
+const MAX_TASK_DESC_CHARS = 20_000
+
+function taskId(p: Record<string, unknown>): string {
+  const id = reqString(p.id, 'id')
+  if (!TASK_ID_RE.test(id)) throw new RemoteRejected('invalid task id')
+  return id
+}
+
+// Same spirit as newSessionId: minted HERE, tagged `phone`, never taken from the
+// client. A client-chosen id would let a phone overwrite an existing task dir.
+function newTaskId(): string {
+  return `tsk-phone-${randomBytes(6).toString('hex')}`
+}
+
+type WorkflowRow = { id: string; name?: string }
+
+// Build the `tasks.create` payload. Everything security-relevant is resolved
+// server-side: the project must be REGISTERED, the workflow must be one the
+// desktop can already see for that project, the id is minted here, and `source`
+// is pinned to `manual` (the github/jira variants carry a repo/url/connectionId
+// the phone has no business asserting). Git auto-commit fields are omitted on
+// purpose so the task uses the engine's defaults rather than a phone's opinion.
+async function buildTaskCreate(
+  request: EngineRequest,
+  raw: unknown,
+): Promise<Record<string, unknown>> {
+  const p = asObject(raw)
+  const projectId = reqString(p.projectId, 'projectId')
+  const project = (await projectRows(request)).find((x) => x.id === projectId)
+  if (!project) throw new RemoteRejected('unknown projectId')
+  const workflowId = reqString(p.workflowId, 'workflowId')
+  const { workflows } = (await request('workflows.list', { projectIds: [projectId] })) as {
+    workflows: WorkflowRow[]
+  }
+  const workflow = workflows.find((w) => w.id === workflowId)
+  if (!workflow) throw new RemoteRejected('unknown workflowId')
+  return {
+    id: newTaskId(),
+    title: optString(p.title, MAX_TITLE_CHARS) ?? workflow.name ?? 'Tác vụ từ điện thoại',
+    projectId,
+    workflowId,
+    source: { type: 'manual' },
+    description: optString(p.description, MAX_TASK_DESC_CHARS) ?? '',
   }
 }
 
@@ -447,6 +585,7 @@ export async function sanitizeRemoteParams(
   method: string,
   raw: unknown,
   request: EngineRequest,
+  policy: RemotePolicy,
 ): Promise<unknown> {
   if ((READ_ONLY as readonly string[]).includes(method)) {
     // Read-only: forward as-is; sidecar zod re-validates + strips unknown keys.
@@ -481,11 +620,10 @@ export async function sanitizeRemoteParams(
       if (!session) throw new RemoteRejected('session not found')
       const s = session.settings
       const phoneSettings = p.settings && typeof p.settings === 'object' ? asObject(p.settings) : {}
-      // Mode: the phone's choice wins over the session's persisted one, validated
-      // against REMOTE_ALLOWED_MODES (all four desktop modes — see the note there on
-      // why `execute` is no longer clamped away). Unknown string ⇒ gated `ask`.
-      const requestedMode = typeof phoneSettings.mode === 'string' ? phoneSettings.mode : s.mode
-      const mode = REMOTE_ALLOWED_MODES.has(requestedMode) ? requestedMode : 'ask'
+      // Mode: the phone's choice wins over the session's persisted one, then BOTH
+      // go through the clamp — an ungated mode needs the desktop's unattended
+      // switch, whichever side asked for it.
+      const mode = clampRemoteMode(phoneSettings.mode, s.mode, policy.unattended)
       const requestedLevel = optString(phoneSettings.level, 32)
       const level = requestedLevel && LEVELS.has(requestedLevel) ? requestedLevel : s.level
       const attachments = sanitizeAttachments(p.attachments)
@@ -508,8 +646,9 @@ export async function sanitizeRemoteParams(
             ? { responseStyleNoMarkdown: s.responseStyleNoMarkdown }
             : {}),
         },
-        // F1: a phone can never flip the autoApprove flag itself. Note this no longer
-        // guarantees a gated turn — `execute` bypasses the gate upstream of this flag.
+        // F1: a phone can never flip the autoApprove flag itself. With `mode`
+        // clamped above, this once again means what it says: no remote turn runs a
+        // mutating tool without either an approval card or the unattended switch.
         autoApprove: false,
         ...(session.projectId ? { projectId: session.projectId } : {}),
         // Explicitly dropped (never forwarded): workspacePath, contextFolders,
@@ -539,7 +678,7 @@ export async function sanitizeRemoteParams(
       // Shape/caps are the sidecar's zod schema (max 200 items × 2000 chars).
       return pick(asObject(raw), ['sessionId', 'todos'])
     case 'sessions.upsert':
-      return await buildUpsert(request, raw)
+      return await buildUpsert(request, raw, policy)
     case 'sessions.delete': {
       const p = asObject(raw)
       const id = reqString(p.id ?? p.sessionId, 'id')
@@ -564,6 +703,26 @@ export async function sanitizeRemoteParams(
         ...(seed ? { userText: seed } : {}),
       }
     }
+    // --- #18: Task / Workflow control ------------------------------------
+    // Supervising an EXISTING task: one id, charset-bounded, nothing else. The id
+    // addresses a directory the sidecar reads/writes (tasks/store.ts), so it is
+    // bounded here as well as by `sanitizeChild` there — belt and braces, neither
+    // layer may be the only one saying no.
+    case 'tasks.cancel':
+    case 'tasks.pause':
+    case 'tasks.resume':
+      return { id: taskId(asObject(raw)) }
+    case 'tasks.approvePhase': {
+      const p = asObject(raw)
+      return {
+        taskId: taskId({ id: p.taskId }),
+        // nodeId indexes the task's OWN phase map (created from the workflow
+        // snapshot); an unknown id is rejected by the engine.
+        nodeId: reqString(p.nodeId, 'nodeId').slice(0, MAX_NODE_ID_CHARS),
+      }
+    }
+    case 'tasks.create':
+      return await buildTaskCreate(request, raw)
     default:
       // Unreachable if REMOTE_ALLOWLIST and this switch stay in sync — fail closed.
       throw new RemoteRejected(`no sanitizer for method: ${method}`)

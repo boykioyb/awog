@@ -6,6 +6,7 @@ import ConnectionBar from './components/ConnectionBar.vue'
 import PairView from './views/PairView.vue'
 import SessionListView from './views/SessionListView.vue'
 import SessionView from './views/SessionView.vue'
+import TasksView from './views/TasksView.vue'
 
 // Pairing / re-pair takes over the whole screen; otherwise the normal app shows
 // behind a thin connection bar.
@@ -23,6 +24,7 @@ const showPair = computed(
     <template v-else>
       <ConnectionBar />
       <SessionView v-if="route === 'session' && current" />
+      <TasksView v-else-if="route === 'tasks'" />
       <SessionListView v-else />
     </template>
 

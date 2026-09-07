@@ -186,10 +186,57 @@ export interface RemoteProviderEntry {
   activeAccountId: string | null
 }
 
+// Workflow NAMES only — the DAG stays on the desktop (gateway catalog).
+export interface RemoteWorkflow {
+  id: string
+  name: string
+  projectId?: string
+  nodeCount: number
+}
+
+// Cái gateway hiện cho phép. `unattended` = công tắc trên máy desktop
+// (Settings → Devices): TẮT thì mode `execute`/`accept-edits` bị kẹp về `ask` và
+// `tasks.create` bị từ chối, nên UI phải NÓI ra thay vì để người dùng bấm rồi lỗi.
+export interface RemoteCapabilities {
+  unattended: boolean
+}
+
 export interface RemoteBootstrap {
   projects: RemoteProject[]
   providers: RemoteProviderEntry[]
   defaults: { provider: string; modelId: string; level: string }
+  workflows: RemoteWorkflow[]
+  capabilities: RemoteCapabilities
+}
+
+// ─── Tasks (#18) ────────────────────────────────────────────────────────────
+// Field-picked by the gateway (remote-gateway-catalog.ts): no DAG snapshot, no
+// run trace, no messages.
+
+export interface RemoteTaskSummary {
+  id: string
+  title: string
+  projectId: string
+  status: string
+  createdAt: string
+  workflowId: string
+  waitingApproval: string | null
+  phaseCount: number
+  donePhaseCount: number
+}
+
+export interface RemoteTaskPhase {
+  nodeId: string
+  status: string
+  skillName: string
+  runCount: number
+  lastOutput?: string
+}
+
+export interface RemoteTaskDetail extends RemoteTaskSummary {
+  description: string
+  currentNodeId: string | null
+  phases: RemoteTaskPhase[]
 }
 
 // What the session config sheet edits. '' means INHERIT — the gateway resolves it

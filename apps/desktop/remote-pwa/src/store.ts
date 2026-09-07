@@ -30,7 +30,7 @@ import type {
 // is a standalone Vite app). Wires gateway events into the open session and drives
 // reconnect resume via gateway.readySignal.
 
-export type Route = 'list' | 'session'
+export type Route = 'list' | 'session' | 'tasks'
 
 export type Block = { kind: 'text'; text: string } | { kind: 'step'; step: SessionStep }
 

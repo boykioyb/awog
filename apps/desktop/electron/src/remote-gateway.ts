@@ -14,7 +14,9 @@ import {
   eventSessionId,
   isEventForwardable,
   isMethodAllowed,
+  requiresUnattended,
   sanitizeRemoteParams,
+  type RemotePolicy,
 } from './remote-gateway-policy'
 
 // Remote Gateway (mobile-remote-control, ADR 0067). Lives in Electron main — the
@@ -35,6 +37,10 @@ const MAX_SENDS_PER_HOUR = 600
 // Session lifecycle writes (create/rename/delete/checklist/titling). Cheap next to
 // a turn, but still worth a runaway guard — titling is a model call.
 const MAX_WRITES_PER_HOUR = 300
+// Starting a task launches an unattended multi-node run (#18). Far more expensive
+// than a chat turn and it needs no follow-up frame to keep burning, so it gets its
+// own, much tighter window on top of the engine's per-task budget.
+const MAX_TASK_STARTS_PER_HOUR = 10
 const MAX_PAYLOAD_BYTES = 1_000_000 // F-3: cap WS frame size before parse
 const AUTH_DEADLINE_MS = 10_000 // F-2: terminate a socket that never authenticates
 const MAX_UNAUTH_CONNS = 16 // F-2: cap concurrent un-authenticated sockets
@@ -47,7 +53,7 @@ type ConnState = {
   ip: string
   authTimer: ReturnType<typeof setTimeout> | null
 }
-type DeviceBudget = { sends: number[]; writes: number[] }
+type DeviceBudget = { sends: number[]; writes: number[]; taskStarts: number[] }
 
 // Turn-driving calls (feed the model) vs session-lifecycle writes — each gets its
 // own hourly window below.
@@ -57,11 +63,21 @@ const LIFECYCLE_WRITES = new Set([
   'sessions.delete',
   'sessions.updateTodos',
   'sessions.generateTitle',
+  // Supervising a task (#18): cheap frames, but still writes.
+  'tasks.approvePhase',
+  'tasks.cancel',
+  'tasks.pause',
+  'tasks.resume',
 ])
+const TASK_STARTS = new Set(['tasks.create'])
 
 type GatewayStatus = {
   // User opt-in (persisted). False → nothing is listening, whatever the tailnet does.
   enabled: boolean
+  // Second opt-in (persisted, default OFF): may a remote frame start agent work
+  // that runs without a per-call approval — the ungated agent modes and
+  // `tasks.create`. See remote-gateway-policy.ts UNGATED_MODES.
+  unattended: boolean
   tailnet: 'connected' | 'disconnected'
   host: string | null
   port: number
@@ -395,11 +411,17 @@ class RemoteGateway {
       return
     }
     const method = typeof frame.method === 'string' ? frame.method : ''
+    const policy: RemotePolicy = { unattended: this.store.isUnattended() }
     // Gateway-LOCAL method: composed + field-picked here, never forwarded raw
     // (see remote-gateway-catalog.ts). Not on the engine allowlist by design.
     if (isLocalMethod(method)) {
       try {
-        const value = await handleLocalMethod(method, (m, p) => engine.request(m, p))
+        const value = await handleLocalMethod(
+          method,
+          frame.params,
+          (m, p) => engine.request(m, p),
+          policy,
+        )
         this.send(ws, { type: 'rpc-result', id, ok: true, value })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'error'
@@ -409,6 +431,22 @@ class RemoteGateway {
     }
     if (!isMethodAllowed(method)) {
       this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32601, message: 'method not allowed' } })
+      return
+    }
+    // On the allowlist, but it starts work nobody approves call-by-call — refused
+    // outright unless the desktop user turned the unattended switch on. Refused,
+    // not silently downgraded: there is no gated version of "create a task".
+    if (requiresUnattended(method) && !policy.unattended) {
+      this.send(ws, {
+        type: 'rpc-result',
+        id,
+        ok: false,
+        error: {
+          code: -32011,
+          message:
+            'Tính năng chạy không cần duyệt đang TẮT. Bật ở Settings → Devices trên máy desktop.',
+        },
+      })
       return
     }
     const budget = this.budgetFor(state.deviceId)
@@ -428,10 +466,25 @@ class RemoteGateway {
         this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32007, message: 'hourly write limit reached' } })
         return
       }
+    } else if (TASK_STARTS.has(method)) {
+      if (!this.spend(budget, 'taskStarts', MAX_TASK_STARTS_PER_HOUR)) {
+        this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32007, message: 'hourly task limit reached' } })
+        return
+      }
+      // An unattended run started from a phone is worth an entry in the desktop
+      // log — it is the one remote action with no approval card behind it.
+      log.warn('remote-gateway: unattended task start from a paired device', {
+        deviceId: state.deviceId,
+      })
     }
     let params: unknown
     try {
-      params = await sanitizeRemoteParams(method, frame.params, (m, p) => engine.request(m, p))
+      params = await sanitizeRemoteParams(
+        method,
+        frame.params,
+        (m, p) => engine.request(m, p),
+        policy,
+      )
     } catch (err) {
       const message = err instanceof RemoteRejected ? err.message : 'invalid params'
       this.send(ws, { type: 'rpc-result', id, ok: false, error: { code: -32602, message } })
@@ -454,14 +507,18 @@ class RemoteGateway {
   private budgetFor(deviceId: string): DeviceBudget {
     let b = this.budgets.get(deviceId)
     if (!b) {
-      b = { sends: [], writes: [] }
+      b = { sends: [], writes: [], taskStarts: [] }
       this.budgets.set(deviceId, b)
     }
     return b
   }
 
   // Sliding one-hour window: drop stale stamps, then take a slot if one is free.
-  private spend(budget: DeviceBudget, bucket: 'sends' | 'writes', limit: number): boolean {
+  private spend(
+    budget: DeviceBudget,
+    bucket: 'sends' | 'writes' | 'taskStarts',
+    limit: number,
+  ): boolean {
     const now = Date.now()
     const kept = budget[bucket].filter((t) => now - t < 3_600_000)
     if (kept.length >= limit) {
@@ -494,6 +551,7 @@ class RemoteGateway {
     const addr = this.boundAddress ?? findTailnetAddress()
     return {
       enabled: this.store.isEnabled(),
+      unattended: this.store.isUnattended(),
       tailnet: addr ? 'connected' : 'disconnected',
       host: addr,
       port: PORT,
@@ -512,6 +570,17 @@ class RemoteGateway {
     this.emitStatus()
   }
 
+  // The unattended switch (see GatewayStatus). Only ever flipped from the DESKTOP
+  // renderer over IPC — there is no remote frame that reaches this, by design: a
+  // phone must not be able to widen its own powers.
+  private async setUnattended(on: boolean): Promise<void> {
+    if (on && !this.store.isEnabled()) throw new Error('remote control is off')
+    if (on === this.store.isUnattended()) return
+    await this.store.setUnattended(on)
+    log.warn('remote-gateway unattended changed', { unattended: on })
+    this.emitStatus()
+  }
+
   private emitStatus(): void {
     this.getWindow()?.webContents.send('gateway:status-changed', this.status())
   }
@@ -524,6 +593,10 @@ class RemoteGateway {
     ipcMain.handle('gateway:status', () => this.status())
     ipcMain.handle('gateway:setEnabled', async (_e, on: boolean) => {
       await this.setEnabled(on === true)
+      return this.status()
+    })
+    ipcMain.handle('gateway:setUnattended', async (_e, on: boolean) => {
+      await this.setUnattended(on === true)
       return this.status()
     })
     ipcMain.handle('gateway:listDevices', () => this.store.list())

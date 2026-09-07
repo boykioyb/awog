@@ -764,3 +764,112 @@ text ≤100KB) và *writes* (`upsert`/`delete`/`updateTodos`/`generateTitle`, 30
   đường phone⇆gateway), [data-model](../architecture/data-model.md),
   [execution-model](../architecture/execution-model.md).
 - **VISION:** [VISION](../../artifacts/VISION.md) · **MVP scope:** [mvp-scope](../requirements/mvp-scope.md).
+
+## Đính chính 2026-09-07 — chặn mode ungated từ xa (vá lỗ `execute`) + mở #18 (Task/Workflow)
+
+Mục này **ghi đè** hai chỗ ở trên: dòng "đủ 4 mode desktop" trong bảng param-pick, và
+câu "`tasks.*` để P2" trong phần allowlist. Phần trên giữ nguyên làm lịch sử.
+
+### 1. Lỗ hổng: `execute` từ xa = RCE, và chính repo đã biết
+
+Từ 2026-08-30 gateway nhận đủ 4 mode từ điện thoại. Comment ngay tại
+[`remote-gateway-policy.ts`](../../apps/desktop/electron/src/remote-gateway-policy.ts) tự
+mô tả cái giá: `execute` **bỏ qua hoàn toàn** permission park
+(`sidecar/src/runtime/permission.ts` — `if (mode === 'execute') return undefined`, nằm
+TRƯỚC cả nhánh `autoApprove`), nên một lượt chạy từ xa gọi `Bash`/`Write` mà **không có thẻ
+duyệt nào** — "full RCE reachable over the tailnet". Ép `autoApprove:false` không cản được
+vì cổng đã trả về trước khi tới cờ đó.
+
+Bối cảnh đã đổi kể từ lúc quyết định nới: [ADR 0080](../decisions/0080-command-scoped-permission-rules.md)
+làm cho **"Always allow" chỉ còn cấp đúng một lệnh** (không phải cả tool), nên chi phí của
+việc "phải duyệt từng lệnh" thấp hơn hẳn so với lúc user xin parity — và mode `execute` mất
+gần hết lý do tồn tại ở đầu xa.
+
+### 2. Quyết định: hai công tắc, mặc định TẮT cái nguy hiểm
+
+| Mode phone gửi | Công tắc TẮT (mặc định) | Công tắc BẬT |
+|---|---|---|
+| `ask` / `plan` | chạy nguyên | chạy nguyên |
+| `accept-edits` | **kẹp về `ask`** | `accept-edits` |
+| `execute` | **kẹp về `ask`** | `execute` |
+| chuỗi lạ | `ask` | `ask` |
+
+- Kẹp áp cho **cả mode kế thừa** từ `Session.settings.mode`: lượt này do điện thoại khởi
+  xướng, nên một session người dùng đặt `execute` trên desktop cũng không thành tấm séc
+  trắng ở đầu xa.
+- `sessions.upsert` (mode được **lưu**) đi qua một luật riêng, `clampPersistedMode`:
+  điện thoại **không bao giờ nâng** mode lưu lên ungated (nếu không: ghi `execute` vào
+  session rồi lượt kế tiếp **của chính người dùng trên desktop** chạy không duyệt — leo
+  thang quyền bằng đường lưu trữ), nhưng cũng **không âm thầm hạ** (sửa tiêu đề từ điện
+  thoại không được đá session ra khỏi `execute` mà desktop đã đặt). Yêu cầu ungated khi
+  công tắc tắt ⇒ **bỏ qua**, giữ nguyên giá trị đang lưu.
+- `sessions.sendMessage` mang settings **theo lượt** (sidecar không ghi chúng vào header),
+  nên kẹp ở đó không đụng gì tới cấu hình session của người dùng.
+- `accept-edits` bị chặn cùng `execute` (rộng hơn đề bài một chút, cố ý): nó vẫn là **ghi
+  file không ai duyệt** do một origin L1 chọn, và một lần ghi đúng file là exec trả chậm.
+  Muốn đảo lại chỉ cần bỏ nó khỏi `UNGATED_MODES`.
+- **Mất gì khi tắt:** không mất tính năng nào — lượt vẫn chạy, mỗi lời gọi ghi/chạy park
+  lại và thẻ duyệt tới **cả desktop lẫn điện thoại** (`session.permission-request` vốn nằm
+  trong event egress). Người dùng đọc đúng lệnh sắp chạy rồi bấm duyệt, thay vì cấp trước
+  quyền cho mọi lệnh chưa biết. Đắt thêm một lần chạm; rẻ hơn một lần `rm -rf` từ một cái
+  điện thoại để quên trên bàn.
+
+**Công tắc ở đâu:** `unattended` trong `~/.awog/remote-devices.json` (chmod 600, cùng chỗ
+device token). **Không** nằm trong file của project — một bản ghi "thiết bị từ xa được chạy
+gì" mà đi theo git là RCE-bằng-clone, đúng cái bẫy [ADR 0080 F1](../decisions/0080-command-scoped-permission-rules.md#f1--luật-tầng-project-không-được-nằm-trong-repo-critical)
+đã phải gỡ. Chỉ đổi được từ **renderer desktop** qua IPC `gateway:setUnattended`; không có
+frame WS nào chạm tới nó — điện thoại không tự nới quyền cho mình. Tắt điều khiển từ xa
+cũng **hạ luôn** công tắc này (bật lại gateway không âm thầm khôi phục quyền chạy không duyệt).
+
+### 3. #18 — Task/Workflow từ xa
+
+`tasks.*` mở, nhưng **tách đôi theo ai là người viết ra việc sẽ chạy** (node của task chạy
+`mode:'execute'` theo thiết kế — `tasks/node-runner.ts`, nên mọi đường vào đây đều là "chạy
+không duyệt"):
+
+| Nhóm | Method | Điều kiện |
+|---|---|---|
+| Giám sát task **đã có** | `tasks.approvePhase`, `tasks.cancel`, `tasks.pause`, `tasks.resume` | mọi thiết bị đã ghép nối — DAG + đề bài do người dùng viết trên desktop, điện thoại chỉ nói "đi tiếp"/"dừng" (đúng danh sách [ADR 0067 §3](../decisions/0067-mobile-remote-control-transport.md) đã duyệt) |
+| **Tạo** task | `tasks.create` | **cần công tắc `unattended`**; tắt ⇒ trả lỗi `-32011` kèm hướng dẫn, không âm thầm hạ cấp (không có phiên bản "có duyệt" của việc tạo task) |
+| Đọc task | `remote.tasks`, `remote.task` | method **local** của gateway, field-pick |
+| **Không mở** | `tasks.rerunPhase`, `tasks.discuss`, `tasks.delete`, `tasks.rename` | không cần cho #18; mỗi cái tên thừa là một bề mặt thừa |
+
+Param-pick:
+
+| Method | Field từ phone | Ép / bỏ |
+|---|---|---|
+| `tasks.cancel/pause/resume` | `id` (regex `^[A-Za-z0-9._-]{1,64}$`) | mọi field khác bị loại |
+| `tasks.approvePhase` | `taskId`, `nodeId` (≤128 ký tự) | `approvedBy`, `verdict`… bị loại |
+| `tasks.create` | `projectId`, `workflowId`, `title` (≤200), `description` (≤20 000) | **id do gateway đúc** (`tsk-phone-<hex>` — id do client chọn sẽ ghi đè thư mục task đang có); **`source` ép `{type:'manual'}`**; `projectId` phải khớp project ĐÃ ĐĂNG KÝ; `workflowId` phải nằm trong `workflows.list({projectIds:[projectId]})`; **DROP** `autoCommitPerPhase/Scope/MessageTemplate`, `commitCoAuthor` |
+
+**Đọc task không forward thô.** `tasks.get` trả về `workflowSnapshot` + `trace` + `messages`
+của mọi run; phone chỉ cần trạng thái. Hai method local `remote.tasks` / `remote.task`
+(`remote-gateway-catalog.ts`) trả `RemoteTaskSummary` / `RemoteTaskDetail`: id, tiêu đề,
+status, tiến độ phase, và **đuôi** output của run cuối (≤4000 ký tự). Không DAG, không trace,
+không messages.
+
+**Trần ngân sách.** Task chạy không người trực đã có trần của engine
+(`tasks/budget.ts` — mặc định $20 · 1500 tool call · 4 giờ mỗi task, cộng dồn theo
+events.log nên sống sót restart). Gateway thêm cửa sổ riêng **10 lần tạo task / giờ / thiết
+bị** (`sends`/`writes` giữ nguyên; các method giám sát tính vào `writes`). Mỗi lần tạo task
+từ xa ghi một dòng `log.warn` — đây là hành động từ xa duy nhất không có thẻ duyệt phía sau.
+
+**Event:** `task.*` **không** được thêm vào event egress (scope subscription hiện chỉ theo
+`sessionId`). Trang Tasks của PWA làm tươi bằng cách hỏi lại sau mỗi hành động.
+
+### 4. Còn thiếu / phải làm tiếp
+
+- **Chưa có công tắc trên UI desktop.** `gateway:setUnattended` + trường `unattended` trong
+  `gateway:status` đã có ở Electron main, nhưng `electron/src/preload.ts` và
+  `ui-next/components/settings/SettingsDevices.vue` thuộc quyền sở hữu file khác trong đợt
+  này nên chưa nối. Việc còn lại: thêm `setUnattended: (on: boolean) => ipcRenderer.invoke('gateway:setUnattended', on)`
+  vào `preload.ts` (khối `gateway`) + một switch có cảnh báo ở Settings → Devices. **Cho
+  tới lúc đó hệ thống ở trạng thái an toàn nhất**: mode ungated từ xa bị chặn cứng,
+  `tasks.create` từ xa bị từ chối.
+- **infosec re-audit bắt buộc** — đợt này mở rộng allowlist (quy tắc re-audit ở
+  §Yêu cầu bảo mật).
+- Test policy: `apps/desktop/electron/src/__tests__/remote-gateway-policy.test.ts`
+  (`node:test`, không thêm dependency) — chạy bằng
+  `npx tsc -p tsconfig.json && node --test dist/__tests__/*.test.js`. Gói `@awog/desktop`
+  chưa có test runner nên file test cũng bị build vào `dist/`; thêm `'!dist/__tests__/**'`
+  vào `files:` của `electron-builder.yml` khi có người sở hữu file đó.

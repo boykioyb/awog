@@ -156,3 +156,30 @@ Client mất mạng/đổi 4G↔Wi-Fi rồi reconnect: tận dụng **session st
 - Security: [.claude/rules/security.md](../../.claude/rules/security.md) — invariant #1 (key trong sidecar), #4 (IPC boundary), #6 (no public port), #7 (no SSRF), sink `fetch(urlFromUser)` / auth.
 - Code chạm dự kiến: [electron/src/engine.ts](../../apps/desktop/electron/src/engine.ts), [electron/src/ipc.ts](../../apps/desktop/electron/src/ipc.ts), `electron/src/remote-gateway.ts` (mới), [sidecar/src/transport/rpc.ts](../../apps/desktop/sidecar/src/transport/rpc.ts) (dispatch — không đổi).
 - External: [Tailscale](https://tailscale.com/) / [WireGuard](https://www.wireguard.com/).
+
+## Đính chính 2026-09-07 — mode ungated từ xa + `tasks.*`
+
+ADR đã `Accepted` nên phần trên giữ nguyên; mục này ghi hai chỗ thực tế đã lệch khỏi nó và
+bản vá. Chi tiết + bảng param-pick: [spec §Đính chính 2026-09-07](../features/mobile-remote-control.md#đính-chính-2026-09-07--chặn-mode-ungated-từ-xa-vá-lỗ-execute--mở-18-taskworkflow).
+
+**1. F1 đã bị nới quá tay.** Pre-review F1 chốt "với origin remote: ép `autoApprove=false`".
+Bản 2026-08-30 mở đủ 4 mode cho điện thoại, trong đó `execute` **tắt hẳn permission park ở
+runtime** — nghĩa là ép `autoApprove=false` không còn ý nghĩa gì và F1 trên thực tế không
+còn hiệu lực. Nay: `execute` **và** `accept-edits` (hai mode chạy tool không có thẻ duyệt)
+bị kẹp về `ask` trừ khi người dùng bật một công tắc **thứ hai**, tách khỏi công tắc bật
+gateway, mặc định TẮT, lưu ở `~/.awog/remote-devices.json` (không bao giờ trong file
+project — xem [ADR 0080](0080-command-scoped-permission-rules.md) F1), và chỉ đổi được từ
+renderer desktop qua IPC. Kẹp áp cho cả mode kế thừa từ session và cho `sessions.upsert`
+(nếu không, điện thoại ghi được `execute` vào session rồi lượt kế của desktop chạy không duyệt).
+
+**2. `tasks.*` mở một phần (#18).** §3 của ADR này đã allowlist `tasks.*`; bản P1/P2 hoãn
+hết. Nay mở `tasks.approvePhase/cancel/pause/resume` cho mọi thiết bị đã ghép nối (task +
+DAG do người dùng viết trên desktop) và `tasks.create` **chỉ khi** công tắc trên bật (ở đó
+điện thoại mới là người viết đề bài cho một agent chạy ngầm không duyệt). `tasks.get`/`list`
+**không** vào allowlist: đọc đi qua hai method local field-pick (`remote.tasks`,
+`remote.task`) vì bản Task thật mang cả DAG snapshot lẫn trace + messages.
+`tasks.rerunPhase`/`discuss`/`delete`/`rename` vẫn đóng.
+
+**Hệ quả cần theo dõi:** infosec re-audit bắt buộc (mở rộng allowlist); công tắc chưa có UI
+ở Settings → Devices nên tới lúc nối xong, mode ungated từ xa bị chặn cứng và `tasks.create`
+từ xa luôn bị từ chối.

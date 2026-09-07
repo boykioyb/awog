@@ -4,6 +4,7 @@ import {
   AGENT_MODES,
   RESPONSE_STYLES,
   catalogError,
+  isModeAvailable,
   isUngatedMode,
   THINKING_LABELS,
   THINKING_LEVELS,
@@ -34,6 +35,10 @@ const modeHint = computed(() => AGENT_MODES.find((m) => m.id === props.modelValu
 // `accept-edits`/`execute` run tools without asking — the phone is unattended by
 // definition, so the choice gets a standing warning rather than a silent option.
 const modeUngated = computed(() => isUngatedMode(props.modelValue.mode))
+// Công tắc "chạy không cần duyệt" trên desktop đang tắt ⇒ hai mode ungated bị
+// gateway kẹp về `ask`. Nói thẳng ở đây, đừng để người dùng chọn một thứ không
+// chạy (và cũng đừng cho họ tin là agent đang chạy không cần duyệt).
+const modeBlocked = computed(() => !isModeAvailable(props.modelValue.mode))
 
 const defaultAccountLabel = computed(() => {
   const active = activeAccountFor(props.modelValue.provider)
@@ -81,12 +86,23 @@ function target(e: Event): string {
     <label class="field grow">
       <span>Mode</span>
       <select :value="modelValue.mode" @change="patch({ mode: target($event) as AgentMode })">
-        <option v-for="m in AGENT_MODES" :key="m.id" :value="m.id">{{ m.label }}</option>
+        <option
+          v-for="m in AGENT_MODES"
+          :key="m.id"
+          :value="m.id"
+          :disabled="!isModeAvailable(m.id)"
+        >
+          {{ m.label }}{{ isModeAvailable(m.id) ? '' : ' · đã tắt' }}
+        </option>
       </select>
     </label>
   </div>
 
-  <p class="mode-hint" :class="{ warn: modeUngated }">
+  <p v-if="modeBlocked" class="mode-hint warn">
+    ⚠ Mode này bị chặn cho thiết bị từ xa. Bật "chạy không cần duyệt" ở Settings →
+    Devices trên máy desktop, hoặc dùng Ask và duyệt từng lệnh ngay tại đây.
+  </p>
+  <p v-else class="mode-hint" :class="{ warn: modeUngated }">
     <template v-if="modeUngated">⚠ </template>{{ modeHint }}
   </p>
 

@@ -1,6 +1,14 @@
 import { ref } from 'vue'
 import { gateway } from './gateway'
-import type { AgentMode, RemoteAccount, RemoteBootstrap, RemoteModel, RemoteProject } from './types'
+import type {
+  AgentMode,
+  RemoteAccount,
+  RemoteBootstrap,
+  RemoteCapabilities,
+  RemoteModel,
+  RemoteProject,
+  RemoteWorkflow,
+} from './types'
 
 // Desktop catalog the phone needs to label rows and offer "New session": the
 // project list, the model catalog per usable provider, and the desktop's own
@@ -14,6 +22,10 @@ export const defaults = ref<RemoteBootstrap['defaults']>({
   modelId: 'claude-opus-5',
   level: 'high',
 })
+export const workflows = ref<RemoteWorkflow[]>([])
+// Mặc định KHÔNG cho — một bản desktop cũ không trả `capabilities` thì UI phải
+// đoán về phía chặt, không phải phía mở.
+export const capabilities = ref<RemoteCapabilities>({ unattended: false })
 
 // Why the catalog is empty, if it is. A phone talking to a desktop whose Electron
 // main predates `remote.bootstrap` gets "method not allowed" here — silently
@@ -54,6 +66,8 @@ export async function loadCatalog(force = false): Promise<void> {
     projects.value = data.projects
     providers.value = data.providers
     defaults.value = data.defaults
+    workflows.value = data.workflows ?? []
+    capabilities.value = { unattended: data.capabilities?.unattended === true }
     byId.value = new Map(data.projects.map((p) => [p.id, p]))
     catalogError.value = null
     loaded = true
@@ -103,6 +117,22 @@ export function modeLabel(id: string): string {
 
 export function isUngatedMode(id: string): boolean {
   return AGENT_MODES.find((m) => m.id === id)?.ungated ?? false
+}
+
+// Mode nào điện thoại thật sự chọn được lúc này. Gateway kẹp `execute`/
+// `accept-edits` về `ask` khi công tắc trên desktop đang tắt (remote-gateway-
+// policy.ts), nên chọn được mà không chạy được là nói dối người dùng.
+export function isModeAvailable(id: string): boolean {
+  return !isUngatedMode(id) || capabilities.value.unattended
+}
+
+// Workflow của một project + workflow global (không gắn project nào).
+export function workflowsFor(projectId: string): RemoteWorkflow[] {
+  return workflows.value.filter((w) => !w.projectId || w.projectId === projectId)
+}
+
+export function workflowName(id: string): string {
+  return workflows.value.find((w) => w.id === id)?.name ?? id
 }
 
 // Thinking levels — mirrors ThinkingLevel in ui-next/types/index.ts (the sidecar

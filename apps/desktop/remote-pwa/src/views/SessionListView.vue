@@ -11,6 +11,7 @@ import {
   openSessionById,
   runSearch,
   searchLoading,
+  route,
   searchResults,
   sessionList,
 } from '../store'
@@ -68,6 +69,7 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
         <span v-if="listLoading" class="spin" />
         <span v-else>↻</span>
       </button>
+      <button class="icon" title="Tasks" @click="route = 'tasks'">☰</button>
       <button class="icon" title="Cài đặt" @click="settingsOpen = true">⚙</button>
     </header>
 
