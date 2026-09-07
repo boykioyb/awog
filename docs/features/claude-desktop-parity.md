@@ -33,13 +33,13 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | 9 | Lazy tool loading thật | ⬜ | Pi: proxy 2 meta-tool khi ≥6KB (all-or-nothing). SDK: có tool-search native nhưng AWOG **chủ động tắt** bằng `alwaysLoad: true` ⇒ bật nhiều MCP là đốt token turn-1 |
 | 10 | Quy ước scratchpad | ✅ | `.awog/scratch/`, wire đủ **4 điểm append** + subagent; `.gitignore` đã bỏ qua |
 | 11 | Tool `KillShell` | ✅ | UI đã quảng cáo tool này từ lâu trong khi runtime Pi không có — model bật được dev server mà không tắt được |
-| 12 | Đọc PDF theo trang | ⬜ | Hiện gửi nguyên file base64 |
+| 12 | Đọc PDF theo trang | 🟡 | Tool `Read` đọc PDF theo khoảng trang (extractor tự viết, không thêm dep; xuống dòng theo toạ độ Y chứ không theo toán tử, nếu không "Java" bị cắt thành "J\nava"). Nhánh Pi được chỉ đúng đường trong ghi chú attachment — trước đó Pi **không gửi byte PDF nào**. Còn lại: nhánh Claude SDK vẫn nhét cả `document` block, bỏ nó đi là đánh đổi (mất đọc bố cục/ảnh gốc) ⇒ **tech-lead quyết** |
 
 ## B. Điều phối & tự động hoá
 
 | # | Hạng mục | TT | Ghi chú |
 |---|---|---|---|
-| 13 | Lịch chạy / cron | ⬜ | Không có store lịch, không có scheduler ở Electron main. `tasks/scheduler.ts` là DAG scheduler, **không phải** time scheduler |
+| 13 | Lịch chạy / cron | ✅ | [ADR 0082](../decisions/0082-scheduled-runs.md). Union rời rạc thay cron string (validate được bằng zod, render ngược ra tiếng người). DST xử lý bằng dựng lại `Date` local chứ không cộng ms. Quá hạn ⇒ chạy bù **đúng một lần**. Chỉ cho mode `execute`/`plan` — `ask` sẽ park hộp xin quyền ở nơi không cửa sổ nào thấy. **Luôn có trần chi tiêu**, bỏ trống ≠ vô hạn |
 | 14 | Agent tự hẹn giờ thức dậy | ⬜ | Chỉ có wake *phản ứng* khi job nền xong |
 | 15 | Workflow bằng script + cache theo hash input | ⬜ | ⚠️ đụng invariant #8 (no eval trên payload workspace) ⇒ **bắt buộc ADR + sandbox trước khi code** |
 | 16 | Worktree riêng cho node song song | ✅ | [ADR 0081](../decisions/0081-task-node-worktree-isolation.md). Trước đó 4 node song song ghi chung `project.path` và auto-commit đua nhau — lỗi tranh chấp thật |
@@ -55,17 +55,17 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | # | Hạng mục | TT | Ghi chú |
 |---|---|---|---|
 | 23 | Tìm kiếm xuyên tất cả phiên | ✅ | RPC `sessions.search` **đã tồn tại và chạy được** từ trước, docstring còn ghi "Backs the UI's Cmd+K search palette" — nhưng caller duy nhất là remote-PWA. Desktop chỉ lọc tiêu đề. Gap rẻ nhất cả repo |
-| 24 | Chương + mục lục transcript | ⬜ | Hạ tầng neo `eid` (ADR 0074/0075) dùng lại được nguyên |
+| 24 | Chương + mục lục transcript | ✅ | 3 lớp chống lạm dụng: chính sách trong description · 1 chương/lượt · ledger per-session chặn trùng tiêu đề + trần 10 |
 | 25 | Widget inline do model sinh | ⬜ | Bubble hiện chỉ render mermaid + markdown |
-| 26 | Card "model gửi file cho user" | ⬜ | Attachment hiện một chiều user→model |
-| 27 | Chip "việc ngoài phạm vi" | ⬜ | Đã có session↔task link (ADR 0055) làm nền |
+| 26 | Card "model gửi file cho user" | ✅ | `assertInsideWorkspace` + `stat` bắt buộc; path ngoài workspace không thành card mà báo lại model |
+| 27 | Chip "việc ngoài phạm vi" | ✅ | Cờ bỏ qua theo `eid` trong localStorage — chip nằm trong transcript **trên đĩa** nên cờ chỉ trong component sẽ sống lại sau reload, trông y như model lải nhải |
 | 28 | Archive phiên | ✅ | Trước chỉ có `delete` (vĩnh viễn) + `pinned` |
 | 29 | Xem log sự kiện thô của phiên | ✅ | Dòng JSONL hỏng trả về `kind: 'malformed'` thay vì làm sập RPC — đó là giá trị chính của công cụ debug |
 | 30 | Export JSON | ✅ | Sidecar vẫn tự sở hữu đường ghi (`.awog/exports/`), không nhận path từ UI |
 | 31 | Render cell `.ipynb` trong bubble | ⬜ | Lệch 2 đầu: model **đã có** `NotebookRead`/`NotebookEdit`, UI không render `.ipynb` |
 | 32 | Chip diff-stat + Create PR ở thanh trạng thái | ✅ | `git.status` có field `additions/deletions` nhưng `parsePorcelainV2` **chưa bao giờ điền** ⇒ phải cộng từ `git.diff` |
 | 33 | Xem output job nền | ✅ | Kèm RPC `sessions.backgroundRead` |
-| 34 | Follow-up do model gợi ý | ⬜ | Hiện chỉ có starter tĩnh lúc màn hình trống |
+| 34 | Follow-up do model gợi ý | ✅ | Model tự phát qua tool. **Cố ý chọn cách phủ kém hơn**: heuristic dẫn xuất từ văn bản sẽ bịa lời cho model — cùng họ lỗi confabulation repo đang chống |
 | 35 | Artifact có URL/version/bình luận | ⬜ | **Khuyến nghị không làm** — trái local-first. Dừng ở export file |
 
 ## D. Cấu hình & hệ sinh thái
@@ -74,13 +74,13 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 |---|---|---|---|
 | 36 | Plugin có version + update | ✅ | So **3 phía bằng git blob SHA-1** (baseline `.install.json` · đĩa · nguồn): nguồn đổi ⇒ `status`, người dùng sửa ⇒ `localModified`, **cả hai ⇒ xung đột, bắt chọn tay**. Áp dụng dựng bundle ở thư mục tạm rồi `rename` nên hỏng giữa chừng không để lại trạng thái nửa vời. Update cũ = `rm -rf` ghi đè mù |
 | 37 | Marketplace tìm plugin/skill | ⬜ | Đường vào duy nhất hiện nay: tự dán URL |
-| 38 | MCP registry động + gợi ý theo ngữ cảnh | ⬜ | Catalog hiện **hard-code 11 entry, no I/O** ⇒ không cập nhật được nếu không release app mới |
+| 38 | MCP registry động + gợi ý theo ngữ cảnh | ✅ | Registry chính thức của MCP. `redirect: 'manual'` + kiểm tra **từng IP** sau `dns.lookup` (chặn DNS rebinding). `command` suy từ allowlist cứng — `runtimeHint` do registry cấp bị **bỏ qua**. Cache 24h, degrade offline 4 mức đã đo thật |
 | 39 | Luật quyền theo pattern lệnh + 3 tầng | ✅ ⚠️ | [ADR 0080](../decisions/0080-command-scoped-permission-rules.md). Đây là **lỗ hổng**, không phải thiếu tính năng: "always allow" cho `git status` từng mở khoá **mọi lệnh Bash** trong phiên |
 | 40 | Tự đề xuất allowlist từ lịch sử | ⬜ | Cần quét transcript đếm tần suất bị hỏi |
 | 41 | Statusline tuỳ biến | ⬜ | — |
 | 42 | Output style do người dùng tự viết | ✅ | Store 2 tier `.awog/styles/<id>.md`, 3 RPC, Settings → Styles, chọn được trong picker, bản của user **đè** bản dựng sẵn cùng id. Id lạ không còn degrade im lặng — sidecar log `warn` nêu rõ lượt đó chạy KHÔNG style |
 | 43 | Settings phân tầng + hợp nhất storage | ⬜ | Settings hiện chia đôi giữa `~/.awog/settings.json` ("dumb blob") và **một key localStorage** ⇒ keymap không theo được máy khác |
-| 44 | `/init` quét repo sinh CLAUDE.md | ⬜ | Hiện chỉ ĐỌC CLAUDE.md, không sinh |
+| 44 | `/init` quét repo sinh CLAUDE.md | ✅ | Quét qua `git ls-files` (tôn trọng `.gitignore` miễn phí), ngân sách 4000 file / 20k ký tự. **Không bao giờ ghi đè** file có sẵn — trả nháp để người dùng tự trộn |
 | 45 | Skill eval / doctor | ⬜ | Không có eval harness nào |
 | 46 | Keymap: thêm action, chord, đồng bộ | ⬜ | Có `useKeymap` nhưng cứng 7 action, localStorage-only |
 

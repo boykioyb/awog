@@ -286,7 +286,7 @@ function configKeyOf(server: ResolvedMcpServer): string {
     return `http:${server.url}:${names}${authFingerprint(server.headers)}`
   }
   if (isStdioServer(server)) {
-    const args = (server.args ?? []).join(' ')
+    const args = (server.args ?? []).join('\0')
     const envKeys = Object.keys(server.env ?? {}).sort().join(',')
     return `stdio:${server.command}:${args}:${envKeys}`
   }
