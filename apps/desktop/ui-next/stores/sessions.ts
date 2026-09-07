@@ -250,6 +250,50 @@ const isBgReadPayload = (raw: unknown): raw is BackgroundReadPayload => {
   return typeof p.sessionId === 'string' && typeof p.shellId === 'string'
 }
 
+// ─── Nhắn tin giữa các phiên (docs/features/session-messaging.md) ─────────────
+// Một tin đang chờ trong hộp thư của MỘT phiên. `block` là khối văn bản hoàn chỉnh
+// do sidecar dựng sẵn (lời dẫn + hàng rào nonce + thân tin đã khử bí mật) — renderer
+// không tự ghép hàng rào, chỉ quyết định KHI NÀO đưa nó vào một lượt.
+export type PendingInboxMessage = {
+  id: string
+  // Phiên gửi, hoặc null khi chính người dùng gửi từ một bề mặt khác.
+  fromSessionId: string | null
+  fromTitle: string
+  at: string
+  preview: string
+  block: string
+}
+// Một mục danh bạ từ `sessions.listAgents` — đủ để chọn đích, không có nội dung.
+export type SessionMessagingTarget = {
+  id: string
+  title: string
+  projectId: string | null
+  busy: boolean
+  updatedAt: string
+  sentByYouRecently: number
+}
+// Payload của `session.inbox-message`. `sessionId` là phiên NHẬN (cổng sở hữu
+// trong subscribe() lọc theo đúng field này), `messageId` là id của tin.
+type InboxMessagePayload = {
+  sessionId: string
+  messageId: string
+  fromSessionId: string | null
+  fromTitle: string
+  at: string
+  preview: string
+  block: string
+}
+const isInboxPayload = (raw: unknown): raw is InboxMessagePayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return (
+    typeof p.sessionId === 'string' &&
+    typeof p.messageId === 'string' &&
+    typeof p.block === 'string' &&
+    typeof p.preview === 'string'
+  )
+}
+
 // Terminal "turn finished" event (sidecar emits it right before returning the
 // sessions.sendMessage result). We only need the ids to clear the streaming
 // indicator; text/stopReason ride along so the byline can settle authoritatively.
@@ -2736,6 +2780,78 @@ export const useSessionsStore = defineStore('sessions', () => {
     delete pendingWakes.value[engineId]
   }
 
+  // ─── Hộp thư giữa các phiên (docs/features/session-messaging.md) ───────────
+  // Tin từ một phiên khác KHÔNG tự chạy một lượt: nó nằm ở đây cho tới khi NGƯỜI
+  // DÙNG bấm giao. Hai lý do, không thể bỏ cái nào: (1) một lượt LLM tiêu tiền của
+  // họ, (2) phiên đích có thể đang chạy dở một lượt và repo giữ bất biến "một phiên
+  // chỉ chạy 1 lượt tại một thời điểm" — chen ngang chính là con đường tới lỗi
+  // dual-finalize. Đích đang bận ⇒ tin cứ nằm chờ, `canDeliverInbox` trả false.
+  //
+  // Hàng đợi sống trong renderer, giống `pendingWakes`: reload là mất chip (sổ cái
+  // chống-lặp bên sidecar thì không, nó vẫn chặn vòng lặp như thường).
+  const pendingInbox = ref<Record<string, PendingInboxMessage[]>>({})
+  const pendingInboxFor = (engineId: string): PendingInboxMessage[] =>
+    pendingInbox.value[engineId] ?? []
+
+  // Giao được ngay chưa? Chỉ khi phiên đích thực sự rảnh.
+  function canDeliverInbox(engineId: string): boolean {
+    const s = byEngineId(engineId)
+    if (!s) return false
+    if (s.status === 'streaming' || s.status === 'awaiting' || s.compacting) return false
+    return !s.queue?.length
+  }
+
+  // Mỗi `block` đã tự chứa lời dẫn + hàng rào riêng của nó, nên nhiều tin chỉ việc
+  // nối lại — không có lớp bọc thứ hai nào ở renderer.
+  function buildInboxPrompt(msgs: PendingInboxMessage[]): string {
+    return msgs.map((m) => m.block).join('\n\n')
+  }
+
+  // Người dùng bấm "Giao cho agent": đưa TẤT CẢ tin đang chờ vào một lượt duy nhất.
+  function deliverInbox(engineId: string): void {
+    const s = byEngineId(engineId)
+    const msgs = pendingInbox.value[engineId]
+    if (!s || !msgs?.length || !canDeliverInbox(engineId)) return
+    delete pendingInbox.value[engineId]
+    void sendMessage(s.id, buildInboxPrompt(msgs))
+  }
+
+  function dismissInboxMessage(engineId: string, messageId: string): void {
+    const list = pendingInbox.value[engineId]
+    if (!list) return
+    const kept = list.filter((m) => m.id !== messageId)
+    if (kept.length) pendingInbox.value[engineId] = kept
+    else delete pendingInbox.value[engineId]
+  }
+
+  function dismissInbox(engineId: string): void {
+    delete pendingInbox.value[engineId]
+  }
+
+  // Người dùng gửi một tin sang phiên khác. Ném lỗi ra ngoài (khác các action
+  // "bắn rồi quên" ở trên) để UI nói được vì sao không gửi được: đích đã xoá / đã
+  // lưu trữ / tin quá dài.
+  async function postToSession(engineId: string, text: string): Promise<void> {
+    if (!useIpc) throw new SidecarUnavailableError()
+    await sc.request('sessions.postMessage', { sessionId: engineId, text })
+  }
+
+  // Danh bạ cho bộ chọn đích. Hỏi engine chứ không lọc danh sách phiên tại chỗ:
+  // "đang chạy một lượt" là thứ chỉ sidecar biết chắc (một phiên đã pop-out sang
+  // cửa sổ khác không hề streaming trong renderer NÀY).
+  async function listMessagingTargets(engineId?: string): Promise<SessionMessagingTarget[]> {
+    if (!useIpc) return []
+    try {
+      const res = await sc.request<{ sessions: SessionMessagingTarget[] }>('sessions.listAgents', {
+        ...(engineId ? { sessionId: engineId } : {}),
+      })
+      return res.sessions
+    } catch (err) {
+      console.warn('[sessions] listAgents failed', err)
+      return []
+    }
+  }
+
   // ── Session popout windows (docs/features/session-popout-window.md) ─────────
   // A session can be popped out into its own OS window. That is a HAND-OFF, not a
   // mirror: exactly ONE renderer owns a session at a time, so a handed-off session is
@@ -2938,6 +3054,25 @@ export const useSessionsStore = defineStore('sessions', () => {
             exitCode: null,
             read: false,
           })
+          return
+        }
+        if (evt.type === 'session.inbox-message') {
+          if (!isInboxPayload(evt.payload)) return
+          const p = evt.payload
+          // Chỉ xếp hàng + hiện chip. KHÔNG tự khởi động lượt: xem ghi chú ở
+          // pendingInbox — tiền của người dùng, và phiên đích có thể đang chạy dở.
+          const list = pendingInbox.value[p.sessionId] ?? []
+          list.push({
+            id: p.messageId,
+            fromSessionId: p.fromSessionId,
+            fromTitle: p.fromTitle,
+            at: p.at,
+            preview: p.preview,
+            block: p.block,
+          })
+          pendingInbox.value[p.sessionId] = list
+          const target = byEngineId(p.sessionId)
+          if (target && activeId.value !== target.id) target.unread = true
           return
         }
         if (evt.type === 'session.background-read') {
@@ -4316,6 +4451,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     pendingWakesFor,
     continueFromBackground,
     dismissBackgroundWakes,
+    // nhắn tin giữa các phiên (docs/features/session-messaging.md)
+    pendingInboxFor,
+    canDeliverInbox,
+    deliverInbox,
+    dismissInboxMessage,
+    dismissInbox,
+    postToSession,
+    listMessagingTargets,
     // project tabs (VSCode-style)
     openProjectTabs,
     activeTab,

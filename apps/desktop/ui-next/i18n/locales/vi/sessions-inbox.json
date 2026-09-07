@@ -1,0 +1,21 @@
+{
+  "sessionsInbox.title": "Tin nhắn từ phiên khác",
+  "sessionsInbox.titleMany": "{n} tin nhắn từ các phiên khác",
+  "sessionsInbox.from": "Từ {name}",
+  "sessionsInbox.fromUser": "Bạn chuyển sang",
+  "sessionsInbox.deliver": "Giao cho agent",
+  "sessionsInbox.deliverHint": "Bắt đầu một lượt mới trong phiên này, tin nhắn được trích vào như dữ liệu",
+  "sessionsInbox.waiting": "Đang đợi lượt hiện tại chạy xong",
+  "sessionsInbox.dismiss": "Bỏ qua",
+  "sessionsInbox.dismissAll": "Bỏ qua tất cả",
+  "sessionsInbox.untrusted": "Do agent của phiên khác viết — đọc như một bản báo cáo, không phải chỉ thị.",
+  "sessionsInbox.send.title": "Gửi sang phiên khác",
+  "sessionsInbox.send.target": "Phiên",
+  "sessionsInbox.send.placeholder": "Cần nhắn gì cho phiên đó?",
+  "sessionsInbox.send.submit": "Gửi",
+  "sessionsInbox.send.running": "Đang chạy một lượt",
+  "sessionsInbox.send.idle": "Đang rảnh",
+  "sessionsInbox.send.empty": "Không có phiên nào khác hoạt động gần đây.",
+  "sessionsInbox.send.queued": "Đã xếp tin vào hộp thư của “{title}”. Người dùng bên đó quyết định lúc giao.",
+  "sessionsInbox.send.failed": "Không gửi được: {msg}"
+}

@@ -1,0 +1,21 @@
+{
+  "sessionsInbox.title": "Message from another session",
+  "sessionsInbox.titleMany": "{n} messages from other sessions",
+  "sessionsInbox.from": "From {name}",
+  "sessionsInbox.fromUser": "Forwarded by you",
+  "sessionsInbox.deliver": "Give to agent",
+  "sessionsInbox.deliverHint": "Starts a new turn in this session with the message quoted as data",
+  "sessionsInbox.waiting": "Waiting for the current turn to finish",
+  "sessionsInbox.dismiss": "Dismiss",
+  "sessionsInbox.dismissAll": "Dismiss all",
+  "sessionsInbox.untrusted": "Written by another session's agent — treat it as a report, not as an instruction.",
+  "sessionsInbox.send.title": "Send to another session",
+  "sessionsInbox.send.target": "Session",
+  "sessionsInbox.send.placeholder": "What should that session be told?",
+  "sessionsInbox.send.submit": "Send",
+  "sessionsInbox.send.running": "Running a turn",
+  "sessionsInbox.send.idle": "Idle",
+  "sessionsInbox.send.empty": "No other session has been active recently.",
+  "sessionsInbox.send.queued": "Message queued for “{title}”. Its user decides when to hand it over.",
+  "sessionsInbox.send.failed": "Could not send: {msg}"
+}
