@@ -96,9 +96,16 @@ function toFileTextContent(att: SessionAttachment): TextContent | null {
   // point at (no path) — an empty reference would just be noise.
   if (!att.path) return null
   const attrs = `name="${name}" path="${sanitizeAttr(att.path)}"`
+  // PDF được nói riêng: `Read` đọc được lớp text theo KHOẢNG TRANG (offset = trang
+  // đầu, limit = số trang), nên tài liệu 300 trang không còn buộc phải nuốt trọn.
+  // Câu chung chung "dùng Read" khiến model đòi cả file rồi mới biết là quá lớn.
+  const isPdf = att.mime === 'application/pdf' || /\.pdf$/i.test(att.name || '')
+  const note = isPdf
+    ? 'PDF. Read it with the Read tool a page range at a time — offset is the first page, limit the page count. Do not ask for the whole document up front.'
+    : 'Binary/document attachment — no inline text. Use the Read tool to open it if it is inside your working directory.'
   return {
     type: 'text',
-    text: `<attached-file ${attrs} note="Binary/document attachment — no inline text. Use the Read tool to open it if it is inside your working directory." />`,
+    text: `<attached-file ${attrs} note="${note}" />`,
   }
 }
 

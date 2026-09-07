@@ -17,6 +17,7 @@ import { clampForLlm } from './output-budget.js'
 import { runGrep, type GrepOutputMode } from './search-backend.js'
 import { gateError, statForGate, type ReadRegistry } from './read-registry.js'
 import { sortByMtime, walkGlob } from './glob-backend.js'
+import { extractPdfText, PDF_MAX_BYTES } from './pdf-text.js'
 
 // Caps mirror the fs.* RPC methods so the runtime can't push pathological
 // payloads through the model/IPC path.
@@ -31,6 +32,13 @@ const READ_HARD_MAX_BYTES = 8 * 1024 * 1024
 // Base64 inflates by ~4/3; keep the encoded image comfortably under the 5MB most
 // providers accept for an inline image part.
 const IMAGE_MAX_BYTES = 3_500_000
+// PDF đọc THEO TRANG: `offset` là trang đầu, `limit` là số trang. Một PDF 300
+// trang gửi nguyên file sẽ nuốt trọn cửa sổ ngữ cảnh, nên mặc định chỉ trả về
+// một cửa sổ nhỏ kèm vị trí trang tiếp theo — giống hệt cách Read phân trang
+// theo dòng với file text.
+const PDF_DEFAULT_PAGE_LIMIT = 10
+const PDF_MAX_PAGE_LIMIT = 50
+const PDF_MAX_OUTPUT_CHARS = 48 * 1024
 const WRITE_MAX_BYTES = 8 * 1024 * 1024
 const GLOB_TIMEOUT_MS = 15_000
 const GREP_MAX_LINES = 500
@@ -75,8 +83,12 @@ function normalizeDir(path: string): string {
 // "nothing there" as a fact about the file. Decode first, slice lines second.
 const ReadParams = Type.Object({
   file_path: Type.String({ description: 'Absolute or workspace-relative file path to read.' }),
-  offset: Type.Optional(Type.Number({ description: '1-based line to start from.' })),
-  limit: Type.Optional(Type.Number({ description: 'Max number of lines to return.' })),
+  offset: Type.Optional(
+    Type.Number({ description: '1-based line to start from. For a PDF: the 1-based first PAGE.' }),
+  ),
+  limit: Type.Optional(
+    Type.Number({ description: 'Max number of lines to return. For a PDF: number of PAGES.' }),
+  ),
 })
 
 const IMAGE_MIME_BY_EXT: Record<string, string> = {
@@ -128,6 +140,7 @@ export function createReadTool(cwd: string, reads: ReadRegistry): AgentTool<type
       '- `file_path` must resolve inside the working directory; absolute or workspace-relative.',
       `- Returns at most ${READ_DEFAULT_LINE_LIMIT} lines per call. When a file is longer the result says so and gives you the next \`offset\` — pass \`offset\`/\`limit\` to walk it, or better, Grep to find the region you actually need instead of paging through the whole file.`,
       '- Images (png/jpg/gif/webp) come back as an image you can actually look at. Other binary files return a placeholder, not their bytes.',
+      `- PDFs come back as extracted TEXT, a page range at a time: \`offset\` is the first page and \`limit\` the number of pages (default ${PDF_DEFAULT_PAGE_LIMIT}, max ${PDF_MAX_PAGE_LIMIT}). Read the range you need instead of the whole document — a long PDF read end to end costs the same context as the file itself. Scanned PDFs have no text layer and say so; there is no OCR.`,
       '- Read a file BEFORE you Edit or overwrite it. Both refuse to run against a file you have not read, and against one that changed on disk since you read it.',
       '- Do NOT re-read a file to check that a Write or Edit landed. A failed write returns an error, so a call that succeeded quietly did what it said.',
     ].join('\n'),
@@ -153,6 +166,51 @@ export function createReadTool(cwd: string, reads: ReadRegistry): AgentTool<type
           content: [{ type: 'image', data: bytes.toString('base64'), mimeType: imageMime }],
           details: { path: params.file_path },
         }
+      }
+
+      // PDF: trả về LỚP TEXT của một khoảng trang, không phải bytes. Trước đây
+      // nhánh này rơi xuống "[binary file — contents omitted]", nên cách duy
+      // nhất để model thấy nội dung PDF là đính kèm cả file mỗi lượt.
+      if (ext === '.pdf') {
+        if (st.size > PDF_MAX_BYTES) {
+          throw new Error(`PDF too large to read (${st.size} bytes > ${PDF_MAX_BYTES}).`)
+        }
+        const bytes = await readFile(abs)
+        reads.markRead(abs, { mtimeMs: st.mtimeMs, size: st.size })
+        const firstPage = Math.max(1, Math.trunc(params.offset ?? 1))
+        const pageLimit = Math.min(
+          Math.max(1, Math.trunc(params.limit ?? PDF_DEFAULT_PAGE_LIMIT)),
+          PDF_MAX_PAGE_LIMIT,
+        )
+        const pdf = extractPdfText(bytes, firstPage, firstPage + pageLimit - 1)
+        if (pdf.totalPages === 0) {
+          return textResult(`[PDF: ${pdf.note ?? 'no readable pages'}]`, { path: params.file_path })
+        }
+        if (firstPage > pdf.totalPages) {
+          return textResult(`[no page ${firstPage} — this PDF has ${pdf.totalPages} page(s)]`, {
+            path: params.file_path,
+          })
+        }
+        const lines: string[] = []
+        for (const page of pdf.pages) {
+          lines.push(`--- page ${page.page} of ${pdf.totalPages} ---`)
+          lines.push(page.text.length > 0 ? page.text : '[no text on this page]')
+        }
+        const clamped = clampForLlm(lines, {
+          maxTotalChars: PDF_MAX_OUTPUT_CHARS,
+          maxLineChars: READ_MAX_LINE_CHARS,
+          hint: 'read fewer pages per call',
+        })
+        const lastShown = pdf.pages[pdf.pages.length - 1]?.page ?? firstPage
+        const notes: string[] = []
+        if (pdf.note) notes.push(pdf.note)
+        if (lastShown < pdf.totalPages) {
+          notes.push(
+            `Showing pages ${firstPage}-${lastShown} of ${pdf.totalPages}. Continue with offset ${lastShown + 1}.`,
+          )
+        }
+        const suffix = notes.length > 0 ? `\n\n${notes.join(' ')}` : ''
+        return textResult(clamped.text + suffix, { path: params.file_path })
       }
 
       // Read at most READ_HARD_MAX_BYTES so a pathological file can't blow the
