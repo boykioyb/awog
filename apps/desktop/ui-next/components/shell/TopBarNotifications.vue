@@ -218,6 +218,64 @@ const visible = computed(() => (filter.value === 'watched' ? watchedItems.value 
 const badge = computed(() => (unreadCount.value > 99 ? '99+' : String(unreadCount.value)))
 // Is there anything the "watched" filter would actually hide?
 const hasUnwatched = computed(() => watchedItems.value.length < items.value.length)
+// KHAI TRƯỚC `visibleTabs` một cách CÓ CHỦ Ý: `watch(visibleTabs, …)` bên dưới đọc
+// source ngay lúc setup để lấy giá trị đầu, nên nó chạm `prRows` trong cùng lượt
+// chạy `<script setup>`. Khai sau sẽ ném TDZ ("Cannot access before initialization")
+// — lỗi runtime mà typecheck không thấy vì thứ tự khai báo `const` là chuyện lúc chạy.
+// ─── Tab PR: theo dõi CI + review của từng PR (usePrWatch) ─────────────────
+// Hàng của tab này là hợp của hai nguồn: PR ĐANG theo dõi (có trạng thái CI), và
+// PR xuất hiện trong hộp thư nhưng chưa theo dõi (ứng viên để bấm bật). Nguồn thứ
+// hai chính là lối vào của tính năng — không có nó thì không có chỗ nào để bắt đầu
+// theo dõi một PR từ đây.
+type PrRow = {
+  key: string
+  repo: string
+  number: number
+  title: string
+  url: string
+  watched: boolean
+  item: PrWatchItem | null
+  sessionLabel: string
+}
+
+// Tiêu đề phiên đang gắn với một PR. Phiên bị xoá thì sidecar đã gỡ liên kết ở
+// vòng poll kế tiếp, nên chỗ này chỉ cần lo trường hợp chưa kịp gỡ.
+function sessionLabelFor(engineId: string | null): string {
+  if (!engineId) return ''
+  return sessions.sessions.find((sn) => sn.engineId === engineId)?.title ?? ''
+}
+
+const prRows = computed<PrRow[]>(() => {
+  const rows: PrRow[] = watchedPrs.value.map((item) => ({
+    key: item.id,
+    repo: item.repo,
+    number: item.number,
+    title: item.title || `#${item.number}`,
+    url: item.url,
+    watched: true,
+    item,
+    sessionLabel: sessionLabelFor(item.sessionId),
+  }))
+  const seen = new Set(rows.map((r) => r.key))
+  for (const n of items.value) {
+    if (n.type !== 'PullRequest' || n.number == null) continue
+    const key = `${n.repo.toLowerCase()}#${n.number}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    rows.push({
+      key,
+      repo: n.repo,
+      number: n.number,
+      title: n.title,
+      url: n.url,
+      watched: false,
+      item: null,
+      sessionLabel: '',
+    })
+  }
+  return rows
+})
+
 // Tab nào đáng hiện. 'watched' chỉ khi nó thực sự giấu bớt được cái gì; 'prs' chỉ
 // khi có PR để nói tới (đang theo dõi, hoặc có PR trong hộp thư để bắt đầu theo dõi).
 const visibleTabs = computed<InboxTab[]>(() => {
@@ -292,60 +350,6 @@ const checkedLabel = computed(() =>
     ? t('github.inbox.checked', { when: formatRelativeAgo(lastFetchedAt.value, t, now.value) })
     : t('github.inbox.neverChecked'),
 )
-
-// ─── Tab PR: theo dõi CI + review của từng PR (usePrWatch) ─────────────────
-// Hàng của tab này là hợp của hai nguồn: PR ĐANG theo dõi (có trạng thái CI), và
-// PR xuất hiện trong hộp thư nhưng chưa theo dõi (ứng viên để bấm bật). Nguồn thứ
-// hai chính là lối vào của tính năng — không có nó thì không có chỗ nào để bắt đầu
-// theo dõi một PR từ đây.
-type PrRow = {
-  key: string
-  repo: string
-  number: number
-  title: string
-  url: string
-  watched: boolean
-  item: PrWatchItem | null
-  sessionLabel: string
-}
-
-// Tiêu đề phiên đang gắn với một PR. Phiên bị xoá thì sidecar đã gỡ liên kết ở
-// vòng poll kế tiếp, nên chỗ này chỉ cần lo trường hợp chưa kịp gỡ.
-function sessionLabelFor(engineId: string | null): string {
-  if (!engineId) return ''
-  return sessions.sessions.find((sn) => sn.engineId === engineId)?.title ?? ''
-}
-
-const prRows = computed<PrRow[]>(() => {
-  const rows: PrRow[] = watchedPrs.value.map((item) => ({
-    key: item.id,
-    repo: item.repo,
-    number: item.number,
-    title: item.title || `#${item.number}`,
-    url: item.url,
-    watched: true,
-    item,
-    sessionLabel: sessionLabelFor(item.sessionId),
-  }))
-  const seen = new Set(rows.map((r) => r.key))
-  for (const n of items.value) {
-    if (n.type !== 'PullRequest' || n.number == null) continue
-    const key = `${n.repo.toLowerCase()}#${n.number}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    rows.push({
-      key,
-      repo: n.repo,
-      number: n.number,
-      title: n.title,
-      url: n.url,
-      watched: false,
-      item: null,
-      sessionLabel: '',
-    })
-  }
-  return rows
-})
 
 const prBusy = ref(false)
 
