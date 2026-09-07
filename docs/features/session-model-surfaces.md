@@ -1,12 +1,12 @@
 # Bề mặt do model chủ động đưa ra trong transcript
 
-Bốn thứ model **tự đưa cho người dùng** thay vì mô tả bằng văn xuôi: **chương** (#24), **card file** (#26), **chip việc ngoài phạm vi** (#27), **gợi ý câu tiếp** (#34). Cả bốn dùng chung một seam nên làm chung một gói.
+Năm thứ model **tự đưa cho người dùng** thay vì mô tả bằng văn xuôi: **chương** (#24), **card file** (#26), **chip việc ngoài phạm vi** (#27), **gợi ý câu tiếp** (#34), **findings có cấu trúc** (#8). Cả năm dùng chung một seam nên làm chung một gói.
 
 Liên quan: [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md) (AgentTool của Pi), [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md) (dual runtime), [ADR 0071](../decisions/0071-senior-engineer-prompt-core.md) (chính sách nằm trong mô tả tool), [ADR 0074](../decisions/0074-session-message-anchor-and-transcript-navigation.md) + [ADR 0075](../decisions/0075-transcript-surface-scoping.md) (hợp đồng nhảy tới message), [ADR 0055](../decisions/0055-session-task-link.md) (việc sinh ra từ chat).
 
 ## 1. Seam chung
 
-Không có kênh IPC mới, không có store mới, không có RPC mới. Cả bốn tool trả về một payload `SessionSurface` trên `details`; [step-mapper.ts](../../apps/desktop/sidecar/src/sessions/step-mapper.ts) biến nó thành **một step `kind: 'surface'`** — đi đúng đường mà mọi step khác đã đi:
+Không có kênh IPC mới, không có store mới, không có RPC mới. Cả năm tool trả về một payload surface trên `details`; [step-mapper.ts](../../apps/desktop/sidecar/src/sessions/step-mapper.ts) biến nó thành **một step `kind: 'surface'`** — đi đúng đường mà mọi step khác đã đi:
 
 ```
 tool call → AgentToolResult.details.surface
@@ -30,7 +30,7 @@ Cùng `step.id` ⇒ UI upsert một block. Lời gọi **bị từ chối** (`de
 
 ## 2. Bốn tool
 
-Tất cả đều **chỉ có trong chat session** (Pi: gate `ToolFilter.chatSession`; Claude SDK: server chỉ nối trong `run-stream.ts`, không nối trong `invoke.ts`). Task run và subagent không có người đọc transcript, ở đó 4 schema này chỉ là tiền token. File: [runtime/tools/surface-tools.ts](../../apps/desktop/sidecar/src/runtime/tools/surface-tools.ts).
+Tất cả đều **chỉ có trong chat session** (Pi: gate `ToolFilter.chatSession`; Claude SDK: server chỉ nối trong `run-stream.ts`, không nối trong `invoke.ts`). Task run và subagent không có người đọc transcript, ở đó những schema này chỉ là tiền token. File: [runtime/tools/surface-tools.ts](../../apps/desktop/sidecar/src/runtime/tools/surface-tools.ts).
 
 | Tool | Tham số | Hiển thị |
 |---|---|---|
@@ -38,6 +38,7 @@ Tất cả đều **chỉ có trong chat session** (Pi: gate `ToolFilter.chatSes
 | `send_user_file` | `files: string[]`, `caption?` | card file bấm mở được |
 | `suggest_task` | `title`, `prompt`, `tldr` | chip "việc ngoài phạm vi", bấm là mở phiên mới |
 | `suggest_followups` | `options: string[]` (2–3) | chip câu tiếp dưới câu trả lời cuối |
+| `report_findings` | `findings: Finding[]`, `scope?` | danh sách findings nặng-trước, mỗi dòng mở đúng file |
 
 ### #24 — Chương + mục lục
 
@@ -75,23 +76,49 @@ Tất cả đều **chỉ có trong chat session** (Pi: gate `ToolFilter.chatSes
 
 Vòng đời: chips **chỉ hiện ở message CUỐI** (`isLastMessage` tính ở `SessionMessageItem`) và **biến mất ngay khi người dùng gõ** (`store.active.draft` không rỗng). Bấm → `store.seedComposer(text)` (composer của phiên hiện tại đang mount, không có race) → người dùng đọc/sửa rồi gửi; không bao giờ tự gửi lượt.
 
-## 3. Chống lạm dụng chương (và gợi ý)
+### #8 — Findings có cấu trúc
+
+Agent `code-reviewer` và skill `review-pr` trả **văn xuôi**: model biết chính xác `file:line` rồi lại gói nó vào một đoạn văn, và người dùng phải tự đọc, tự grep, tự mở. `report_findings` cắt bước đó.
+
+**Schema một finding** (`SessionFinding` trong [surface-tools.ts](../../apps/desktop/sidecar/src/runtime/tools/surface-tools.ts)):
+
+| Trường | Bắt buộc | Ý nghĩa |
+|---|---|---|
+| `file` | ✓ | path file chứa lỗi. Model gửi absolute hoặc relative; sidecar trả về **relative theo workspace** khi hợp lệ |
+| `line` | | số dòng **1-based**. Bỏ khi lỗi không nằm ở một dòng cụ thể (vd thiếu hẳn một file). Số không nguyên / < 1 bị bỏ, dòng hạ xuống mức file |
+| `severity` | ✓ | `blocker` \| `major` \| `minor` — **tập đóng**. Giá trị lạ ⇒ **bỏ dòng**, không ép về mặc định: xếp nhầm một "critical" thành minor là báo cáo sai, tệ hơn là mất dòng |
+| `summary` | ✓ | một câu gọi tên lỗi |
+| `failure` | ✓ | **ca hỏng cụ thể**: input/state nào kích hoạt và khi đó thực sự xảy ra gì. Đây mới là giá trị của dòng — "chỗ này có vẻ không an toàn" thì không phải finding |
+| `verdict` | | **model đã kiểm chứng thế nào**: test đã chạy, call path đã lần, dòng đã đọc. Vắng ⇒ UI nói thẳng "model không nói đã kiểm chứng bằng cách nào" thay vì im lặng cho qua |
+| `linkable` | (sidecar đặt) | `true` chỉ khi path qua được `assertInsideWorkspace` **và** `stat` ra file thường |
+
+Cộng thêm `scope?` cấp danh sách ("PR #128", "module auth").
+
+**Path là L1** (model sinh), nên đi đúng đường của card file: `assertInsideWorkspace` + `stat`. Một khác biệt **có chủ đích** so với `send_user_file`: path hỏng **không** làm mất finding — chỉ mất *link*. Card file là lời hứa "bấm là mở được" nên không có file thì không có card; còn finding thì **chữ mới là nội dung**, cái link chỉ là tiện. Dòng vẫn hiện, chỉ không phải link, và model được báo path nào không mở được.
+
+**UI** ([SessionFindings.vue](../../apps/desktop/ui-next/components/session/SessionFindings.vue)): một card, sắp **nặng trước** (`blocker` → `major` → `minor`, ổn định trong cùng bậc nên thứ tự model viết được giữ), mỗi dòng = chip severity + summary + `file:line` + ca hỏng + verdict. Bấm `file:line` đi qua `useFilePreview().open(path)` → `usePreview()` → `PreviewModal`, đúng quy ước "mọi lần đọc file đi qua một modal preview chung".
+
+> **Hạn chế đã biết — mở FILE, chưa nhảy tới DÒNG.** `PreviewRef` ([usePreview.ts](../../apps/desktop/ui-next/composables/usePreview.ts)) **không có** trường số dòng, và thêm vào thì phải sửa `usePreview` + `PreviewModal` + viewer Monaco — nằm ngoài phạm vi sở hữu file của gói này. Hiện tại số dòng vẫn **hiện trên hàng** (và copy được, `file:line` đúng dạng dán vào editor), tooltip nói rõ "chỉ mở tệp, chưa nhảy tới dòng". Muốn đóng: thêm `line?: number` vào `PreviewRef`, cho `PreviewModal` truyền xuống `MonacoEditor` rồi `revealLineInCenter` — một thay đổi riêng, không thuộc gói này.
+
+## 3. Chống lạm dụng chương, gợi ý và findings
 
 Vấn đề thiết kế ở đây là *tiết chế*, không phải *năng lực*: một model đánh dấu mỗi tool call một chương biến điều hướng thành nhiễu. Ba lớp, rẻ trước:
 
-| Lớp | Cơ chế | Chương | Gợi ý việc |
-|---|---|---|---|
-| 1. Chính sách | ghi ngay trong `description` (ADR 0071): ngân sách, "đánh dấu chuyển pha, không phải mỗi bước", "không chắc thì đừng gọi" | 3–8 chương/phiên | ≤ 1/lượt, vài cái/phiên |
-| 2. Per-turn | biến đếm trong closure của factory — toolset **rebuild mỗi lượt** nên một `let` chính là "một lần mỗi câu trả lời" | 1 | 1 |
-| 3. Per-session | ledger module-level keyed theo `sessionId` (đúng khuôn `read-registry.ts`): chặn **trùng tiêu đề** (chuẩn hoá lower/space) + trần tổng | 10 | 6 |
+| Lớp | Cơ chế | Chương | Gợi ý việc | Findings |
+|---|---|---|---|---|
+| 1. Chính sách | ghi ngay trong `description` (ADR 0071): ngân sách, "đánh dấu chuyển pha, không phải mỗi bước", "không chắc thì đừng gọi" | 3–8 chương/phiên | ≤ 1/lượt, vài cái/phiên | chỉ báo cái **đã kiểm chứng**; nghi ngờ chưa truy / góp ý style **không phải** finding; gọi **một lần** sau khi review xong, không phải mỗi file |
+| 2. Per-turn | biến đếm trong closure của factory — toolset **rebuild mỗi lượt** nên một `let` chính là "một lần mỗi câu trả lời" | 1 | 1 | 1 lời gọi/lượt **+ trần 8 dòng/lời gọi** |
+| 3. Per-session | ledger module-level keyed theo `sessionId` (đúng khuôn `read-registry.ts`): chặn **trùng tiêu đề** (chuẩn hoá lower/space) + trần tổng | 10 | 6 | 20 dòng/phiên, chặn **trùng** theo `file:line:summary` |
 
 Lớp 2 và 3 trả lời bằng **kết quả bình thường có `isError`** (`tool-error.ts`) chứ không throw: model đọc được lý do và tự sửa hành vi, còn hàng trong transcript hiện thành lỗi thay vì thành một chương chưa từng tồn tại. `suggest_followups` cũng bị chặn ở lớp 2 (một lần/lượt).
+
+Riêng `report_findings`, lớp 2 **từ chối cả lời gọi** khi vượt 8 dòng thay vì cắt bớt: cắt im lặng khiến model tin nó đã báo hết, và quyết định "dòng nào đáng" là việc của người review, không phải của cái `slice()`. Lớp 3 thì ngược lại — **bỏ dòng trùng, giữ phần còn lại**, vì một dòng trùng lẫn trong danh sách mới không làm hỏng cả danh sách.
 
 Ledger là **guard, không phải nguồn sự thật**: restart sidecar thì reset, tệ nhất là một phiên resume được đánh thêm vài chương. Bản ghi thật của "đã đánh dấu gì" là transcript đã persist.
 
 ## 4. Hai runtime, một hiện thực
 
-Cả hai nhánh đều **có đủ 4 tool**. Khác biệt duy nhất là *đường dây*, không phải hành vi:
+Bốn tool đầu có đủ ở **cả hai nhánh**; `report_findings` hiện **chỉ có ở nhánh Pi** — xem §6. Với bốn tool đầu, khác biệt duy nhất là *đường dây*, không phải hành vi:
 
 | | Pi (`provider !== 'anthropic'`) | Claude SDK (`provider === 'anthropic'`) |
 |---|---|---|
@@ -103,7 +130,7 @@ Cả hai nhánh đều **có đủ 4 tool**. Khác biệt duy nhất là *đư�
 | Kênh trả payload đã validate | `details.surface` | *(không có)* → handoff, xem dưới |
 | Render step `kind:'surface'` | chung `step-mapper` | chung `step-mapper` |
 
-**Chỉ schema bị khai hai lần** (hai runtime nói hai thư viện schema khác nhau). Mọi thứ còn lại — ngân sách, câu từ chối, ledger per-session, validate path — là **một hiện thực** trong [`surface-tools.ts`](../../apps/desktop/sidecar/src/runtime/tools/surface-tools.ts): `runMarkChapter` / `runSendUserFile` / `runSuggestTask` / `runSuggestFollowups`. Hai nhánh không thể trôi khác nhau vì không có bản thứ hai để trôi.
+**Chỉ schema bị khai hai lần** (hai runtime nói hai thư viện schema khác nhau). Mọi thứ còn lại — ngân sách, câu từ chối, ledger per-session, validate path — là **một hiện thực** trong [`surface-tools.ts`](../../apps/desktop/sidecar/src/runtime/tools/surface-tools.ts): `runMarkChapter` / `runSendUserFile` / `runSuggestTask` / `runSuggestFollowups` / `runReportFindings`. Hai nhánh không thể trôi khác nhau vì không có bản thứ hai để trôi.
 
 Nối ở `run-stream.ts` (chat) và **cố ý không nối ở `invoke.ts`** (task node): task không có ai đọc transcript, đúng lý do mà nhánh Pi gate bằng `chatSession`.
 
@@ -144,12 +171,33 @@ Hệ quả (theo hướng tốt, hiếm gặp ở nhánh này): **phiên cũ t�
 
 ## 5. Đã làm / chưa làm
 
-**Đã:** 4 tool trên **cả hai runtime** (Pi + Claude SDK, §4) + 3 lớp guard dùng chung, `SessionSurface` trong `types/shared.ts`, map ở `step-mapper.ts` (nhận cả tên trần lẫn tên bridge), fold ở `stores/sessions.ts`, 5 component (`SessionChapterMark`, `SessionChapterNav`, `SessionSharedFiles`, `SessionTaskSuggestion`, `SessionFollowupSuggestions`), i18n en+vi (`sessionsSurfaces.*`).
+**Đã:** 4 tool đầu trên **cả hai runtime** (Pi + Claude SDK, §4) + `report_findings` trên nhánh Pi (§6), 3 lớp guard dùng chung, `SessionSurface` trong `types/shared.ts`, map ở `step-mapper.ts` (nhận cả tên trần lẫn tên bridge), fold ở `stores/sessions.ts`, 6 component (`SessionChapterMark`, `SessionChapterNav`, `SessionSharedFiles`, `SessionTaskSuggestion`, `SessionFollowupSuggestions`, `SessionFindings`), i18n en+vi (`sessionsSurfaces.*`).
+
+**Ba bề mặt hiển thị, findings phủ đủ cả ba:** transcript ([SessionMessageItem.vue](../../apps/desktop/ui-next/components/session/SessionMessageItem.vue)), overlay fullscreen một lượt ([SessionTurnFullscreen.vue](../../apps/desktop/ui-next/components/session/SessionTurnFullscreen.vue)), export markdown/HTML ([useSessionExport.ts](../../apps/desktop/ui-next/composables/useSessionExport.ts)). Bốn surface land trước **sót đúng hai chỗ sau** ở lần đầu — không vẽ gì trong fullscreen, biến mất khỏi export — và đã được vá; findings làm đủ cả ba ngay từ đầu vì đó là bài học vừa trả giá. Ngoài app còn **Remote PWA** (`StepRow.vue`), chưa biết `kind: 'surface'` cho **bất kỳ** surface nào.
 
 **Chưa (cố ý, ngoài phạm vi sở hữu file của gói này):**
 
-- **Bảng Tools của session** (`SessionConfigPopover.vue`): `TOOL_GROUPS` là danh sách cứng nên 4 tool mới chưa tắt/bật được từ UI. Bản thân `disabledTools` **vẫn lọc theo tên**, nên chỉ cần thêm 4 chuỗi vào một nhóm mới ("Surfaces") là xong — nhưng nhớ **cả hai dạng tên**: nhánh Pi lọc `mark_chapter`, nhánh Claude SDK truyền thẳng xuống `disallowedTools` nên phải là `mcp__awogsurfaces__mark_chapter`.
-- **Export markdown** (`useSessionExport.blockToMd`): 4 block mới rơi vào `default: ''` ⇒ không xuất hiện trong bản export. Vô hại, nhưng nên bổ sung một dòng cho mỗi loại.
-- **Fullscreen một lượt** (`SessionTurnFullscreen.vue`): các block này rơi vào nhánh `SessionGateCard` chung nên **không vẽ gì** trong overlay fullscreen; trong transcript thì đầy đủ. Sửa bằng đúng 4 nhánh `v-else-if` như trong `SessionMessageItem.vue`.
+- **Bảng Tools của session** (`SessionConfigPopover.vue`): `TOOL_GROUPS` là danh sách cứng nên 5 tool này chưa tắt/bật được từ UI. Bản thân `disabledTools` **vẫn lọc theo tên**, nên chỉ cần thêm 5 chuỗi vào một nhóm mới ("Surfaces") là xong — nhưng nhớ **cả hai dạng tên**: nhánh Pi lọc `mark_chapter`, nhánh Claude SDK truyền thẳng xuống `disallowedTools` nên phải là `mcp__awogsurfaces__mark_chapter`.
 - **Remote PWA**: `StepRow.vue` chưa biết `kind:'surface'` ⇒ hiện thành hàng step chung.
+- **Nhảy tới đúng DÒNG khi bấm một finding** — `usePreview` không mang số dòng; xem hộp cảnh báo ở §2 (#8) để biết đường đóng.
 - `fmtSize` trong `SessionSharedFiles.vue` là **bản sao thứ ba** (đã có ở `SessionAttachmentsModal`, `SessionWorkspacePanel`) — Rule of Three: nâng lên `utils/` trong một thay đổi riêng.
+
+## 6. Nợ kỹ thuật của `report_findings` — 2 khoản, có đường đóng
+
+### 6.1. Nhánh Claude SDK chưa có `report_findings`
+
+`runtime/claude-sdk/` đang bị một luồng công việc song song sửa nên gói này **không đụng vào**. Hệ quả nói thẳng: người dùng chạy provider `anthropic` **không có tool này**, model không thấy nó, và review vẫn ra văn xuôi như trước. Người dùng provider khác (nhánh Pi) có đủ.
+
+Thân xử lý đã sẵn sàng dùng chung — `runReportFindings` không biết gì về runtime, `SURFACE_TOOL_TEXT.reportFindings` là chính sách chung, `step-mapper` nhận cả tên trần lẫn tên `mcp__awogsurfaces__*`, và `report_findings` **đã** có trong `SURFACE_TOOL_NAMES`. Bắc cầu là 3 bước cơ học, tất cả trong [`claude-sdk/surface-sdk-server.ts`](../../apps/desktop/sidecar/src/runtime/claude-sdk/surface-sdk-server.ts):
+
+1. `import { runReportFindings } from '../tools/surface-tools.js'`;
+2. thêm một `tool('report_findings', SURFACE_TOOL_TEXT.reportFindings.description, { … }, …)` với schema **zod** phản chiếu `FindingsParams` (TypeBox) — `findings: z.array(z.object({ file, line: z.number().optional(), severity: z.enum(['blocker','major','minor']), summary, failure, verdict: z.string().optional() }))` + `scope: z.string().optional()`, mỗi trường `.describe(SURFACE_TOOL_TEXT.reportFindings.<field>)`;
+3. handler `async (args) => finish('report_findings', args, await runReportFindings(args, cwd, sessionId, turn))` — `finish` đã lo `rememberResolvedSurface`, và `SURFACE_KEY_FIELDS.report_findings` đã khai (`keyPart` serialise mảng object, nếu không thì mọi lời gọi trùng key).
+
+Không phải sửa gì ở `step-mapper`, UI, i18n hay `run-stream.ts`.
+
+### 6.2. Biến thể `findings` chưa nằm trong `SessionSurface`
+
+`types/shared.ts` cũng thuộc luồng song song nói trên, nên `SessionFindingsSurface` tạm khai trong `surface-tools.ts` và cả gói nói bằng union rộng hơn `SurfacePayload`. Có **đúng một** chỗ ép kiểu xuống `SessionStep.surface`: `asStepSurface()` trong [`step-mapper.ts`](../../apps/desktop/sidecar/src/sessions/step-mapper.ts). Hình dạng trên dây và trong JSONL không đổi (đằng nào cũng là JSON), nên đây thuần tuý là nợ *kiểu*, không phải nợ *hành vi*.
+
+Đóng khi `shared.ts` rảnh: chuyển `SessionFinding` + `SessionFindingsSurface` sang `shared.ts`, thêm `| SessionFindingsSurface` vào union `SessionSurface`, rồi xoá `SurfacePayload` + `asStepSurface`.

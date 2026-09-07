@@ -66,6 +66,10 @@
                 :block="g.gate"
                 :is-last="false"
               />
+              <SessionFindings
+                v-else-if="g.type === 'gate' && g.gate.kind === 'findings'"
+                :block="g.gate"
+              />
               <SessionGateCard v-else :block="g.gate" />
             </template>
           </div>

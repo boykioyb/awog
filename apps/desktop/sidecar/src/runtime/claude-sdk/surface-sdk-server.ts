@@ -34,6 +34,7 @@ import {
   runSendUserFile,
   runSuggestTask,
   runSuggestFollowups,
+  runReportFindings,
   type SurfaceRunResult,
 } from '../tools/surface-tools.js'
 
@@ -118,6 +119,35 @@ export function buildSurfaceToolsSdkServer(
           options: z.array(z.string()).describe(SURFACE_TOOL_TEXT.suggestFollowups.options),
         },
         async (args) => finish('suggest_followups', args, runSuggestFollowups(args, turn)),
+      ),
+      tool(
+        'report_findings',
+        SURFACE_TOOL_TEXT.reportFindings.description,
+        {
+          findings: z
+            .array(
+              z.object({
+                file: z.string().describe(SURFACE_TOOL_TEXT.reportFindings.file),
+                line: z.number().optional().describe(SURFACE_TOOL_TEXT.reportFindings.line),
+                // Tập ĐÓNG, khớp bản TypeBox của nhánh Pi. Giá trị lạ bị loại cả
+                // dòng chứ không ép về mặc định — xếp một lỗi chặn xuống `minor`
+                // là báo cáo sai, tệ hơn không báo.
+                severity: z
+                  .enum(['blocker', 'major', 'minor'])
+                  .describe(SURFACE_TOOL_TEXT.reportFindings.severity),
+                summary: z.string().describe(SURFACE_TOOL_TEXT.reportFindings.summary),
+                failure: z.string().describe(SURFACE_TOOL_TEXT.reportFindings.failure),
+                verdict: z.string().optional().describe(SURFACE_TOOL_TEXT.reportFindings.verdict),
+              }),
+            )
+            .describe(SURFACE_TOOL_TEXT.reportFindings.findings),
+          scope: z.string().optional().describe(SURFACE_TOOL_TEXT.reportFindings.scope),
+        },
+        // Ba lớp guard + `assertInsideWorkspace` + `stat` nằm trong runReportFindings,
+        // dùng chung với nhánh Pi. Chỉ schema tồn tại hai bản (TypeBox vs zod), vì
+        // hai runtime nói hai thư viện schema khác nhau.
+        async (args) =>
+          finish('report_findings', args, await runReportFindings(args, cwd, sessionId, turn)),
       ),
     ],
   })

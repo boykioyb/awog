@@ -10,6 +10,7 @@
 // deliberately self-styled — it can't reference the app's CSS theme vars off-app.
 
 import { ref } from 'vue'
+import { findingLocation, sortFindings } from '~/composables/useSessionsData'
 import type { AssistantBlock, Session } from '~/composables/useSessionsData'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
 import { useSidecar } from '~/composables/useSidecar'
@@ -72,6 +73,13 @@ function blockToMd(b: AssistantBlock): string {
       return `**💡 Suggested follow-up task — ${b.title}**\n\n${b.tldr}`
     case 'followups':
       return `_Suggested next:_ ${b.options.map((o) => `"${o}"`).join(' · ')}`
+    case 'findings': {
+      const rows = sortFindings(b.findings).map((f) => {
+        const verdict = f.verdict ? `\n  _Verified: ${f.verdict}_` : ''
+        return `- **[${f.severity}]** \`${findingLocation(f)}\` — ${f.summary}\n  ${f.failure}${verdict}`
+      })
+      return `**🔎 Findings${b.scope ? ` — ${b.scope}` : ''}**\n\n${rows.join('\n')}`
+    }
     case 'steer':
       return quote(`✋ _Steering:_ ${b.text.trim()}`)
     case 'error':

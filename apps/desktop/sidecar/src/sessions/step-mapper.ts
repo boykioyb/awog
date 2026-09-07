@@ -25,6 +25,11 @@ import {
   SURFACE_TOOL_NAMES,
   takeResolvedSurface,
 } from '../runtime/tools/surface-tools.js'
+import type {
+  FindingSeverity,
+  SessionFinding,
+  SurfacePayload,
+} from '../runtime/tools/surface-tools.js'
 
 // Cap for inline previews and one-line labels — kept small so step payloads stay
 // light over stdio and the collapsed row never bloats.
@@ -78,6 +83,7 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   send_user_file: 'save',
   suggest_task: 'task',
   suggest_followups: 'task',
+  report_findings: 'search',
 }
 
 function pickStepTool(toolName: string): SessionStepTool {
@@ -314,11 +320,47 @@ function asSharedFiles(value: unknown): SessionSharedFile[] {
   return out
 }
 
+// A findings list off the wire (either the model's raw call arguments or a
+// persisted step re-read from JSONL) narrowed back to the payload shape. `linkable`
+// is NOT trusted from the input edge: only the tool knows whether the path survived
+// assertInsideWorkspace + stat, so a row derived from arguments is never a link.
+const FINDING_SEVERITIES: readonly FindingSeverity[] = ['blocker', 'major', 'minor']
+
+function asFindings(value: unknown, trustLinkable: boolean): SessionFinding[] {
+  if (!Array.isArray(value)) return []
+  const out: SessionFinding[] = []
+  for (const entry of value) {
+    const rec = asRecord(entry)
+    const file = asString(rec.file)
+    const summary = asString(rec.summary)
+    const failure = asString(rec.failure)
+    // `find` rather than a chain of `!==`: it NARROWS, so the severity lands in
+    // the payload without a cast.
+    const severity = FINDING_SEVERITIES.find((s) => s === asString(rec.severity))
+    if (!file || !summary || !failure || !severity) continue
+    const line =
+      typeof rec.line === 'number' && Number.isInteger(rec.line) && rec.line >= 1
+        ? rec.line
+        : undefined
+    const verdict = asString(rec.verdict)
+    out.push({
+      file,
+      ...(line !== undefined ? { line } : {}),
+      severity,
+      summary,
+      failure,
+      ...(verdict ? { verdict } : {}),
+      linkable: trustLinkable && rec.linkable === true,
+    })
+  }
+  return out
+}
+
 // The surface a call SHOWS, derived from the tool input. Used on tool_execution_start
 // (and as the fallback when a result carries no details). `send_user_file` yields an
 // EMPTY file list here on purpose: the paths are validated inside the tool, and a card
 // must never point at a path that was refused.
-function surfaceFromInput(toolName: string, input: Record<string, unknown>): SessionSurface | null {
+function surfaceFromInput(toolName: string, input: Record<string, unknown>): SurfacePayload | null {
   if (toolName === 'mark_chapter') {
     const title = asString(input.title)
     if (!title) return null
@@ -340,6 +382,15 @@ function surfaceFromInput(toolName: string, input: Record<string, unknown>): Ses
     if (options.length === 0) return null
     return { kind: 'followups', options }
   }
+  if (toolName === 'report_findings') {
+    // Same shape as `send_user_file`: the arguments are enough to draw the list
+    // immediately, but every path is still unvalidated here, so no row is a link
+    // until the tool's own payload lands at the result edge.
+    const findings = asFindings(input.findings, false)
+    if (findings.length === 0) return null
+    const scope = asString(input.scope)
+    return { kind: 'findings', findings, ...(scope ? { scope } : {}) }
+  }
   return null
 }
 
@@ -350,14 +401,14 @@ function surfaceFromInput(toolName: string, input: Record<string, unknown>): Ses
 function resultSurfaceFromInput(
   toolName: string,
   input: Record<string, unknown>,
-): SessionSurface | null {
+): SurfacePayload | null {
   const surface = surfaceFromInput(toolName, input)
   if (surface && surface.kind === 'files' && surface.files.length === 0) return null
   return surface
 }
 
 // The authoritative surface from the tool result's `details` side channel.
-function surfaceFromDetails(details: unknown): SessionSurface | null {
+function surfaceFromDetails(details: unknown): SurfacePayload | null {
   const surface = asRecord(details).surface
   if (surface === undefined) return null
   const rec = asRecord(surface)
@@ -384,22 +435,49 @@ function surfaceFromDetails(details: unknown): SessionSurface | null {
     if (options.length === 0) return null
     return { kind: 'followups', options }
   }
+  if (rec.kind === 'findings') {
+    const findings = asFindings(rec.findings, true)
+    if (findings.length === 0) return null
+    const scope = asString(rec.scope)
+    return { kind: 'findings', findings, ...(scope ? { scope } : {}) }
+  }
   return null
 }
 
-function surfaceLabel(surface: SessionSurface): string {
+function surfaceLabel(surface: SurfacePayload): string {
   if (surface.kind === 'chapter') return surface.title
   if (surface.kind === 'files') return 'Shared files'
   if (surface.kind === 'suggestion') return surface.title
+  if (surface.kind === 'findings') {
+    const n = surface.findings.length
+    return n === 1 ? '1 finding' : `${n} findings`
+  }
   return 'Follow-ups'
+}
+
+// The ONE place `findings` crosses into the `SessionStep.surface` field. The
+// variant is declared in runtime/tools/surface-tools.ts rather than in the
+// `SessionSurface` union of types/shared.ts, because that file belongs to a
+// parallel workstream and this package must not touch it — the wire format and
+// the persisted JSONL are identical either way (both are just JSON). Fold the
+// variant into `SessionSurface` and delete this function when shared.ts is free;
+// docs/features/session-model-surfaces.md §6 carries the three steps.
+function asStepSurface(surface: SurfacePayload): SessionSurface {
+  return surface as SessionSurface
 }
 
 export function stepFromSurface(
   id: string,
-  surface: SessionSurface,
+  surface: SurfacePayload,
   status: SessionStepStatus,
 ): SessionStep {
-  return { id, kind: 'surface', label: surfaceLabel(surface), status, surface }
+  return {
+    id,
+    kind: 'surface',
+    label: surfaceLabel(surface),
+    status,
+    surface: asStepSurface(surface),
+  }
 }
 
 export interface ToolUseInfo {

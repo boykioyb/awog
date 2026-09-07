@@ -147,6 +147,10 @@
           :block="g.gate"
           :is-last="isLastMessage"
         />
+        <SessionFindings
+          v-else-if="g.type === 'gate' && g.gate.kind === 'findings'"
+          :block="g.gate"
+        />
         <SessionGateCard v-else :block="g.gate" />
       </template>
       <!-- Action footer INSIDE the card (craft ResponseCard footer): HIDDEN while

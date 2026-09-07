@@ -179,6 +179,21 @@ function commitMaxMinutes() {
 // SDK path (the Pi path has no search backend and deliberately does not advertise
 // one — see sidecar runtime/tools/index.ts), and turning off a tool the current
 // runtime doesn't have is simply a no-op.
+// Nhánh Claude SDK bắc 4 bề mặt qua MCP nên ở đó chúng mang tên
+// `mcp__awogsurfaces__<tool>`, và `disabledTools` được truyền THẲNG thành
+// `disallowedTools`. Tắt bằng tên trần thôi thì chỉ tắt ở nhánh Pi — công tắc
+// trông như đã tắt trong khi model vẫn gọi được. Ghi cả hai dạng tên.
+const SURFACE_TOOLS = [
+  'mark_chapter',
+  'send_user_file',
+  'suggest_task',
+  'suggest_followups',
+  'report_findings',
+]
+// KHAI TRƯỚC `TOOL_GROUPS`: đó là một `const` cấp module, chạy NGAY lúc nạp file,
+// nên nó đọc `SURFACE_TOOLS` trong cùng lượt đánh giá. Khai sau sẽ ném TDZ — đúng
+// lỗi vừa vá ở `TopBarNotifications.vue`, chỉ khác là ở cấp module thay vì setup.
+
 const TOOL_GROUPS: [string, string[]][] = [
   ['File', ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit']],
   // read_terminal reads the tail of a PTY the USER typed in — off here means the
@@ -189,15 +204,10 @@ const TOOL_GROUPS: [string, string[]][] = [
   // Model-initiated surfaces: chapters, file cards, task suggestions, follow-ups.
   // Off here means the model can still answer, it just cannot put cards in the
   // transcript — useful for anyone who finds them noisy.
-  ['Surfaces', ['mark_chapter', 'send_user_file', 'suggest_task', 'suggest_followups']],
+  ['Surfaces', SURFACE_TOOLS],
 ]
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
 
-// Nhánh Claude SDK bắc 4 bề mặt qua MCP nên ở đó chúng mang tên
-// `mcp__awogsurfaces__<tool>`, và `disabledTools` được truyền THẲNG thành
-// `disallowedTools`. Tắt bằng tên trần thôi thì chỉ tắt ở nhánh Pi — công tắc
-// trông như đã tắt trong khi model vẫn gọi được. Ghi cả hai dạng tên.
-const SURFACE_TOOLS = ['mark_chapter', 'send_user_file', 'suggest_task', 'suggest_followups']
 const TOOL_ALIASES: Record<string, string[]> = Object.fromEntries(
   SURFACE_TOOLS.map((tl) => [tl, [`mcp__awogsurfaces__${tl}`]]),
 )

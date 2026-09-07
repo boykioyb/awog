@@ -1,10 +1,11 @@
-// Model-initiated transcript surfaces — the four tools with which the model hands
+// Model-initiated transcript surfaces — the five tools with which the model hands
 // something to the USER instead of doing work (docs/features/session-model-surfaces.md):
 //
 //   mark_chapter       phase boundary → divider + jump menu in the transcript
 //   send_user_file     workspace files → openable cards (shared PreviewModal)
 //   suggest_task       out-of-scope work → one-click new session, dismissible
 //   suggest_followups  2–3 clickable next prompts under the last reply
+//   report_findings    review findings → severity-sorted list, each row opens its file
 //
 // They share one seam: each call carries a `SessionSurface` payload that
 // step-mapper turns into a `kind: 'surface'` step, so the surfaces persist in the
@@ -16,13 +17,16 @@
 // cost there.
 //
 // Abuse control is the design problem here, not capability — a model that marks a
-// chapter per tool call turns navigation into noise. Three layers, cheapest first:
+// chapter per tool call turns navigation into noise, and one that reports every
+// suspicion as a finding turns review into a triage queue. Three layers, cheapest
+// first:
 //   1. the tool DESCRIPTION states the budget (3–8 chapters, one suggestion per
-//      reply) in policy terms (ADR 0071);
+//      reply, a handful of VERIFIED findings) in policy terms (ADR 0071);
 //   2. a PER-TURN counter — the toolset is rebuilt every turn, so one counter
-//      object per turn is exactly "once per reply";
+//      object per turn is exactly "once per reply" — plus, for findings, a cap on
+//      how many rows one call may carry;
 //   3. a PER-SESSION ledger (module-level, keyed by session id like read-registry)
-//      that caps the total and refuses a repeat of a title already marked.
+//      that caps the total and refuses a repeat of a title/finding already shown.
 // Layers 2+3 answer with a normal result flagged `isError` (tool-error.ts), so the
 // model reads why it was refused and the row renders as a failure rather than as a
 // chapter that never happened.
@@ -48,6 +52,12 @@ const MAX_CHAPTERS_PER_SESSION = 10
 const MAX_SUGGESTIONS_PER_SESSION = 6
 const MAX_FILES_PER_CALL = 10
 const MAX_FOLLOWUPS = 3
+// Findings: the tightest budget of the five, because this is the surface that
+// rots fastest. A review that reports 8 verified defects is a review; a table of
+// 40 "this might be a problem" rows costs the user more to triage than reading
+// the diff themselves, so the caps are set where triage is still cheap.
+const MAX_FINDINGS_PER_CALL = 8
+const MAX_FINDINGS_PER_SESSION = 20
 
 // Field clamps. The model writes these; the transcript renders them as plain text
 // (never HTML), and the prompt for a spawned session is capped so one suggestion
@@ -57,16 +67,27 @@ const SUMMARY_MAX = 240
 const TLDR_MAX = 200
 const PROMPT_MAX = 4_000
 const FOLLOWUP_MAX = 120
+const SCOPE_MAX = 80
+// A finding is read in a list, so both of its texts are one-liners in practice.
+// `failure` gets more room than `summary` because it must name the concrete case
+// (input/state → observed behaviour), which is the whole value of the row.
+const FINDING_SUMMARY_MAX = 160
+const FINDING_FAILURE_MAX = 400
+const FINDING_VERDICT_MAX = 200
+const FINDING_PATH_MAX = 300
 
-// The four tool names, and the in-process MCP server the Claude SDK path bridges
-// them through. Single source of truth: step-mapper recognises both the bare name
-// (Pi) and `mcp__awogsurfaces__<name>` (Claude SDK) from these.
+// The tool names, and the in-process MCP server the Claude SDK path bridges them
+// through. Single source of truth: step-mapper recognises both the bare name (Pi)
+// and `mcp__awogsurfaces__<name>` (Claude SDK) from these. `report_findings` is
+// listed here even though the SDK server does not expose it yet (that file is
+// owned by a parallel workstream) — the bridged spelling simply never arrives.
 export const SURFACE_MCP_SERVER = 'awogsurfaces'
 export const SURFACE_TOOL_NAMES = [
   'mark_chapter',
   'send_user_file',
   'suggest_task',
   'suggest_followups',
+  'report_findings',
 ] as const
 
 // Every string the model reads about these tools. Shared by the TypeBox schemas
@@ -123,6 +144,36 @@ export const SURFACE_TOOL_TEXT = {
       'Two or three short next prompts, written as the USER would type them ("Run the tests", ' +
       '"Show me the diff for auth.ts"). Max 3.',
   },
+  reportFindings: {
+    description:
+      'Report the defects a REVIEW found as a structured list instead of describing them in prose: ' +
+      'each row carries file + line + severity, sorts worst-first, and opens the file when clicked, ' +
+      'so the user never has to go hunting for a location you already know. ' +
+      'Report only what you VERIFIED — you read the code and can name the input or state that breaks ' +
+      'it. A suspicion you did not chase, a style preference, a "consider extracting this" are not ' +
+      'findings; leave them in your prose or use suggest_task. A typical review has a handful of rows ' +
+      `(max ${MAX_FINDINGS_PER_CALL} per call, ${MAX_FINDINGS_PER_SESSION} per session): a long table of ` +
+      '"might be a problem" costs the user more to triage than reading the diff themselves, and is ' +
+      'worse than no table at all. Call it ONCE, after you finish reviewing — not per file. ' +
+      'A clean review calls nothing and says so in prose.',
+    findings:
+      `The verified defects, worst first. Max ${MAX_FINDINGS_PER_CALL} per call — if you have more, ` +
+      'report only the ones that matter most and say so in your reply.',
+    file: 'Path of the file the defect is IN, inside the workspace (absolute or workspace-relative).',
+    line: 'The 1-based line where the defect is. Omit only for a defect with no single line (e.g. a missing file).',
+    severity:
+      'blocker = wrong behaviour, data loss, or a security hole users will hit; ' +
+      'major = a real bug on a narrower path, or a contract the code breaks; ' +
+      'minor = a genuine defect with low impact. If it is a preference, it is not a finding at all.',
+    summary: 'One line naming the defect, e.g. "Cancel leaves the lock held".',
+    failure:
+      'The CONCRETE broken case: the input or state that triggers it and what actually happens then. ' +
+      'Not "this could be unsafe" — "when `paths` is empty the loop writes an empty commit".',
+    verdict:
+      'How you CHECKED this one — the test you ran, the call path you traced, the line you read that ' +
+      'proves it. Omit it if you did not verify it; do not write "verified" without saying how.',
+    scope: 'Optional one line naming what you reviewed, e.g. "PR #128" or "the auth module".',
+  },
 } as const
 
 function clamp(text: string, max: number): string {
@@ -150,6 +201,10 @@ function normaliseTitle(title: string): string {
 interface SurfaceLedger {
   chapters: string[]
   suggestions: string[]
+  // Identity of every finding already reported, `file:line:summary` normalised.
+  // Re-reporting the same defect in a later turn is the noisiest failure mode of
+  // this surface, so the ledger drops the repeat rather than the whole call.
+  findings: string[]
 }
 const MAX_LEDGERS = 64
 const ledgers = new Map<string, SurfaceLedger>()
@@ -157,7 +212,7 @@ const ledgers = new Map<string, SurfaceLedger>()
 function getLedger(sessionId: string): SurfaceLedger {
   const existing = ledgers.get(sessionId)
   if (existing) return existing
-  const created: SurfaceLedger = { chapters: [], suggestions: [] }
+  const created: SurfaceLedger = { chapters: [], suggestions: [], findings: [] }
   ledgers.set(sessionId, created)
   if (ledgers.size > MAX_LEDGERS) {
     const oldest = ledgers.keys().next()
@@ -174,23 +229,62 @@ export interface SurfaceTurnCounters {
   chapters: number
   suggestions: number
   followups: number
+  findings: number
 }
 
 export function createSurfaceTurnCounters(): SurfaceTurnCounters {
-  return { chapters: 0, suggestions: 0, followups: 0 }
+  return { chapters: 0, suggestions: 0, followups: 0, findings: 0 }
 }
+
+// ── Findings payload ───────────────────────────────────────────────────────────
+//
+// Declared HERE, not in types/shared.ts next to `SessionSurface`, on purpose: that
+// file is being edited by a parallel workstream and this package must not touch
+// it. `SurfacePayload` is therefore the widened union everything in this package
+// speaks, and `step-mapper.ts` holds the ONE bridging cast down to
+// `SessionStep.surface`. Fold `SessionFindingsSurface` into the `SessionSurface`
+// union and delete both when shared.ts is free again — see
+// docs/features/session-model-surfaces.md §6.
+export type FindingSeverity = 'blocker' | 'major' | 'minor'
+
+export interface SessionFinding {
+  // Workspace-RELATIVE path when the model named a real workspace file, otherwise
+  // the raw string it wrote (clamped). Never an absolute path we resolved: the UI
+  // resolves it against the session cwd exactly like a shared-file card.
+  file: string
+  // 1-based. Absent for a defect with no single line.
+  line?: number
+  severity: FindingSeverity
+  summary: string
+  failure: string
+  // Present only when the model said HOW it checked this one.
+  verdict?: string
+  // false ⇒ the path is not a readable workspace file (outside the root, missing,
+  // a directory). The row still renders — the TEXT is the finding — but it is not
+  // a link, because a link that opens nothing is worse than plain text.
+  linkable: boolean
+}
+
+export interface SessionFindingsSurface {
+  kind: 'findings'
+  findings: SessionFinding[]
+  scope?: string
+}
+
+// Every surface payload this package can produce.
+export type SurfacePayload = SessionSurface | SessionFindingsSurface
 
 // What a surface call did: the text the model reads, plus the surface the user now
 // sees (absent = refused, and the row renders as an error rather than as a card).
 export interface SurfaceRunResult {
   text: string
-  surface?: SessionSurface
+  surface?: SurfacePayload
 }
 
 function refused(text: string): SurfaceRunResult {
   return { text }
 }
-function shown(text: string, surface: SessionSurface): SurfaceRunResult {
+function shown(text: string, surface: SurfacePayload): SurfaceRunResult {
   return { text, surface }
 }
 
@@ -214,7 +308,7 @@ function shown(text: string, surface: SessionSurface): SurfaceRunResult {
 //     not degrade to an empty card) — the map is bounded and evicts oldest-first;
 //   - a miss is not a failure: step-mapper falls back to the call arguments.
 const MAX_RESOLVED_SURFACES = 32
-const resolvedSurfaces = new Map<string, SessionSurface>()
+const resolvedSurfaces = new Map<string, SurfacePayload>()
 
 // The declared parameters of each tool, in a fixed order. Only these take part in
 // the key, so an extra field the model invented (dropped by one schema layer, kept
@@ -224,11 +318,27 @@ const SURFACE_KEY_FIELDS: Record<string, readonly string[]> = {
   send_user_file: ['files', 'caption'],
   suggest_task: ['title', 'tldr', 'prompt'],
   suggest_followups: ['options'],
+  report_findings: ['findings', 'scope'],
 }
 
 function keyPart(value: unknown): string {
   if (typeof value === 'string') return value
-  if (Array.isArray(value)) return value.map((entry) => asText(entry)).join('')
+  if (Array.isArray(value)) {
+    // `report_findings` passes an array of OBJECTS, so a string-only join would
+    // collapse every one of its calls onto the same key. Serialise the non-string
+    // entries instead; an entry that cannot be serialised contributes nothing,
+    // which is a miss — and a miss is not a failure (see above).
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') return entry
+        try {
+          return JSON.stringify(entry) ?? ''
+        } catch {
+          return ''
+        }
+      })
+      .join('')
+  }
   return ''
 }
 
@@ -241,7 +351,7 @@ function surfaceCallKey(toolName: string, args: Record<string, unknown>): string
 export function rememberResolvedSurface(
   toolName: string,
   args: Record<string, unknown>,
-  surface: SessionSurface,
+  surface: SurfacePayload,
 ): void {
   const key = surfaceCallKey(toolName, args)
   if (!key) return
@@ -255,7 +365,7 @@ export function rememberResolvedSurface(
 export function takeResolvedSurface(
   toolName: string,
   args: Record<string, unknown>,
-): SessionSurface | undefined {
+): SurfacePayload | undefined {
   const key = surfaceCallKey(toolName, args)
   return key ? resolvedSurfaces.get(key) : undefined
 }
@@ -446,6 +556,178 @@ export function runSuggestFollowups(
   )
 }
 
+// ── report_findings ────────────────────────────────────────────────────────────
+
+export interface ReportFindingsArgs {
+  findings?: unknown
+  scope?: unknown
+}
+
+// Severity is a closed set. An unrecognised value is NOT coerced to a default:
+// silently filing a "critical" as a minor would misreport the review, so the row
+// is dropped and the model is told which value it should have used.
+const SEVERITIES: readonly FindingSeverity[] = ['blocker', 'major', 'minor']
+
+function asSeverity(value: unknown): FindingSeverity | null {
+  const raw = asText(value).trim().toLowerCase()
+  // `find` rather than `includes`: it NARROWS, so no cast is needed to hand the
+  // value back as a FindingSeverity.
+  return SEVERITIES.find((s) => s === raw) ?? null
+}
+
+// 1-based line, or undefined. A float / 0 / negative is not a line number; the
+// model wrote something else and the row degrades to file-level rather than
+// pointing at a line that does not exist.
+function asLine(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) return undefined
+  return value
+}
+
+// Identity of a finding for the per-session ledger: same file, same line, same
+// summary ⇒ the same defect, however the prose around it was reworded.
+function findingKey(f: SessionFinding): string {
+  return `${f.file}\u0001${f.line ?? 0}\u0001${normaliseTitle(f.summary)}`
+}
+
+// The path the row points at. Same rule as a shared-file card (invariant #2:
+// resolve, stay inside the root, then confirm it is a real file) with one
+// deliberate difference: a path that fails does NOT drop the finding. The finding
+// is TEXT the user needs to read; only the LINK is withheld, because a link that
+// opens nothing is worse than plain text.
+async function resolveFindingPath(
+  cwd: string,
+  given: string,
+): Promise<{ file: string; linkable: boolean }> {
+  const raw = given.trim().slice(0, FINDING_PATH_MAX)
+  if (!raw) return { file: '', linkable: false }
+  let abs: string
+  try {
+    abs = assertInsideWorkspace(cwd, raw)
+  } catch {
+    return { file: raw, linkable: false }
+  }
+  try {
+    const st = await stat(abs)
+    if (!st.isFile()) return { file: raw, linkable: false }
+  } catch {
+    return { file: raw, linkable: false }
+  }
+  const rel = relative(cwd, abs)
+  return { file: rel && !rel.startsWith('..') ? rel : basename(abs), linkable: true }
+}
+
+// One row, validated. Returns null when the row carries no finding: no location,
+// no defect named, or no failure case — the three things that separate a finding
+// from an opinion.
+async function toFinding(cwd: string, raw: unknown): Promise<SessionFinding | null> {
+  const rec = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
+  const summary = clamp(asText(rec.summary), FINDING_SUMMARY_MAX)
+  const failure = clamp(asText(rec.failure), FINDING_FAILURE_MAX)
+  const severity = asSeverity(rec.severity)
+  if (!summary || !failure || !severity) return null
+  const { file, linkable } = await resolveFindingPath(cwd, asText(rec.file))
+  if (!file) return null
+  const line = asLine(rec.line)
+  const verdict = clamp(asText(rec.verdict), FINDING_VERDICT_MAX)
+  return {
+    file,
+    ...(line !== undefined ? { line } : {}),
+    severity,
+    summary,
+    failure,
+    ...(verdict ? { verdict } : {}),
+    linkable,
+  }
+}
+
+export async function runReportFindings(
+  args: ReportFindingsArgs,
+  cwd: string,
+  sessionId: string,
+  turn: SurfaceTurnCounters,
+): Promise<SurfaceRunResult> {
+  const rows = Array.isArray(args.findings) ? args.findings : []
+  if (rows.length === 0) return refused('Rejected: no findings were given.')
+  // Guard layer 2a — one findings list per reply. A review that reports per file
+  // produces N lists the user has to read as one; make it triage before it calls.
+  if (turn.findings >= 1) {
+    return refused(
+      'Rejected: you already reported findings in this reply. Report a review ONCE, as a single ' +
+        'list — if you found something after the fact, put it in your prose.',
+    )
+  }
+  // Guard layer 2b — the per-call cap. Refused rather than truncated on purpose:
+  // silently dropping rows would let the model believe it reported all of them,
+  // and the triage decision (which ones matter) belongs to the reviewer.
+  if (rows.length > MAX_FINDINGS_PER_CALL) {
+    return refused(
+      `Rejected: ${rows.length} findings in one call is past the point where a list helps. Report ` +
+        `at most ${MAX_FINDINGS_PER_CALL} — the ones you verified and would block on — and cover ` +
+        'the rest in your reply.',
+    )
+  }
+  const parsed: SessionFinding[] = []
+  for (const row of rows) {
+    // eslint-disable-next-line no-await-in-loop -- at most MAX_FINDINGS_PER_CALL stats, and each
+    // one gates whether the NEXT row is a duplicate; the parallel version buys nothing here.
+    const finding = await toFinding(cwd, row)
+    if (finding) parsed.push(finding)
+  }
+  if (parsed.length === 0) {
+    return refused(
+      'Rejected: no usable finding. Each one needs a file, a `severity` of blocker/major/minor, a ' +
+        '`summary` naming the defect and a `failure` describing the case that breaks.',
+    )
+  }
+  // Guard layer 3 — the per-session ledger: drop a defect already reported (a
+  // reworded repeat reads as a new problem), then trim to what is left of the
+  // session budget.
+  const ledger = getLedger(sessionId)
+  const seen = new Set(ledger.findings)
+  const fresh: SessionFinding[] = []
+  let repeats = 0
+  for (const finding of parsed) {
+    const key = findingKey(finding)
+    if (seen.has(key)) {
+      repeats += 1
+      continue
+    }
+    seen.add(key)
+    fresh.push(finding)
+  }
+  const budget = MAX_FINDINGS_PER_SESSION - ledger.findings.length
+  if (budget <= 0) {
+    return refused(
+      `Rejected: this session already reported ${MAX_FINDINGS_PER_SESSION} findings, which is more ` +
+        'than anyone will act on. Stop listing and summarise what matters in your reply.',
+    )
+  }
+  if (fresh.length === 0) {
+    return refused(
+      `Rejected: all ${repeats} of these were already reported in this session. The user still sees ` +
+        'the earlier list — do not repeat it.',
+    )
+  }
+  const shownFindings = fresh.slice(0, budget)
+  const dropped = fresh.length - shownFindings.length
+  turn.findings += 1
+  for (const finding of shownFindings) ledger.findings.push(findingKey(finding))
+  const scope = clamp(asText(args.scope), SCOPE_MAX)
+  const notLinkable = shownFindings.filter((f) => !f.linkable).map((f) => f.file)
+  const notes = [
+    repeats > 0 ? ` ${repeats} duplicate(s) of earlier findings were dropped.` : '',
+    dropped > 0 ? ` ${dropped} did not fit the per-session budget and were dropped.` : '',
+    notLinkable.length > 0
+      ? ` Not openable (not a workspace file, shown as plain text): ${notLinkable.join(', ')}.`
+      : '',
+  ].join('')
+  return shown(
+    `Shown to the user as ${shownFindings.length} finding(s), worst first, each opening its file.` +
+      `${notes} Do not repeat the list in your text — summarise the verdict instead.`,
+    { kind: 'findings', findings: shownFindings, ...(scope ? { scope } : {}) },
+  )
+}
+
 // ── Pi AgentTools ──────────────────────────────────────────────────────────────
 // Thin wrappers: schema + the shared runner. The Claude SDK path wraps the same
 // runners in runtime/claude-sdk/surface-sdk-server.ts.
@@ -453,7 +735,7 @@ export function runSuggestFollowups(
 // Every tool here reports the same two things: what the user now sees (`surface`,
 // read by step-mapper) and whether the call actually did anything.
 export interface SurfaceToolDetails {
-  surface?: SessionSurface
+  surface?: SurfacePayload
   isError?: boolean
 }
 
@@ -482,6 +764,28 @@ const SuggestParams = Type.Object({
 
 const FollowupParams = Type.Object({
   options: Type.Array(Type.String(), { description: SURFACE_TOOL_TEXT.suggestFollowups.options }),
+})
+
+const FindingsParams = Type.Object({
+  findings: Type.Array(
+    Type.Object({
+      file: Type.String({ description: SURFACE_TOOL_TEXT.reportFindings.file }),
+      line: Type.Optional(Type.Number({ description: SURFACE_TOOL_TEXT.reportFindings.line })),
+      severity: Type.Union(
+        [Type.Literal('blocker'), Type.Literal('major'), Type.Literal('minor')],
+        {
+          description: SURFACE_TOOL_TEXT.reportFindings.severity,
+        },
+      ),
+      summary: Type.String({ description: SURFACE_TOOL_TEXT.reportFindings.summary }),
+      failure: Type.String({ description: SURFACE_TOOL_TEXT.reportFindings.failure }),
+      verdict: Type.Optional(
+        Type.String({ description: SURFACE_TOOL_TEXT.reportFindings.verdict }),
+      ),
+    }),
+    { description: SURFACE_TOOL_TEXT.reportFindings.findings },
+  ),
+  scope: Type.Optional(Type.String({ description: SURFACE_TOOL_TEXT.reportFindings.scope })),
 })
 
 function createMarkChapterTool(
@@ -538,13 +842,29 @@ function createSuggestFollowupsTool(turn: SurfaceTurnCounters): AgentTool<typeof
   }
 }
 
+function createReportFindingsTool(
+  cwd: string,
+  sessionId: string,
+  turn: SurfaceTurnCounters,
+): AgentTool<typeof FindingsParams> {
+  return {
+    name: 'report_findings',
+    label: 'Findings',
+    description: SURFACE_TOOL_TEXT.reportFindings.description,
+    parameters: FindingsParams,
+    async execute(_id, params): Promise<AgentToolResult<SurfaceToolDetails>> {
+      return toAgentResult(await runReportFindings(params, cwd, sessionId, turn))
+    },
+  }
+}
+
 export interface CreateSurfaceToolsOptions {
   // Session the turn belongs to — the key of the per-session abuse ledger.
   sessionId: string
 }
 
-// The four tools, for a chat turn. `cwd` is the session's workspace root: the only
-// directory send_user_file may hand out.
+// The five tools, for a chat turn. `cwd` is the session's workspace root: the only
+// directory send_user_file may hand out and the only one a finding may link into.
 export function createSurfaceTools(cwd: string, opts: CreateSurfaceToolsOptions): AgentTool[] {
   // Built once per turn with the toolset ⇒ this IS the per-reply guard.
   const turn = createSurfaceTurnCounters()
@@ -553,5 +873,6 @@ export function createSurfaceTools(cwd: string, opts: CreateSurfaceToolsOptions)
     createSendUserFileTool(cwd),
     createSuggestTaskTool(opts.sessionId, turn),
     createSuggestFollowupsTool(turn),
+    createReportFindingsTool(cwd, opts.sessionId, turn),
   ] as AgentTool[]
 }
