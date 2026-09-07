@@ -254,9 +254,15 @@ const isBgReadPayload = (raw: unknown): raw is BackgroundReadPayload => {
 // Một tin đang chờ trong hộp thư của MỘT phiên. `block` là khối văn bản hoàn chỉnh
 // do sidecar dựng sẵn (lời dẫn + hàng rào nonce + thân tin đã khử bí mật) — renderer
 // không tự ghép hàng rào, chỉ quyết định KHI NÀO đưa nó vào một lượt.
+// Nguồn của tin — do sidecar nói ra, KHÔNG suy từ `fromSessionId === null`. Theo
+// dõi PR cũng gửi `fromSessionId: null` nhưng nội dung là của người ngoài (tiêu đề
+// PR, review, log CI), nên suy ngược sẽ gán nhãn "bạn chuyển tiếp" cho đúng thứ
+// đáng ngờ nhất.
+export type InboxOrigin = 'session' | 'user' | 'external'
 export type PendingInboxMessage = {
   id: string
-  // Phiên gửi, hoặc null khi chính người dùng gửi từ một bề mặt khác.
+  origin: InboxOrigin
+  // Phiên gửi, hoặc null khi người dùng gửi từ bề mặt khác / khi nguồn là external.
   fromSessionId: string | null
   fromTitle: string
   at: string
@@ -277,6 +283,7 @@ export type SessionMessagingTarget = {
 type InboxMessagePayload = {
   sessionId: string
   messageId: string
+  origin?: InboxOrigin
   fromSessionId: string | null
   fromTitle: string
   at: string
@@ -3064,6 +3071,9 @@ export const useSessionsStore = defineStore('sessions', () => {
           const list = pendingInbox.value[p.sessionId] ?? []
           list.push({
             id: p.messageId,
+            // Sidecar cũ (chưa có field) ⇒ suy tối thiểu, và mặc định về 'session'
+            // chứ không phải 'user': đoán nhầm theo hướng ÍT tin cậy hơn thì an toàn.
+            origin: p.origin ?? (p.fromSessionId === null ? 'external' : 'session'),
             fromSessionId: p.fromSessionId,
             fromTitle: p.fromTitle,
             at: p.at,

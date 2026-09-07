@@ -28,6 +28,7 @@ import {
 } from './fs-tools.js'
 import { createNotebookEditTool, createNotebookReadTool } from './notebook-tools.js'
 import { createBashTool } from './bash-tool.js'
+import { createCodeIndexTool } from './code-index-tool.js'
 import { createBashOutputTool } from './bash-output-tool.js'
 import { createKillShellTool } from './kill-shell-tool.js'
 import { createMonitorTool } from './monitor-tool.js'
@@ -228,6 +229,12 @@ export function createAwogToolDefinitions(
       : []),
     createGrepTool(cwd),
     createGlobTool(cwd),
+    // Chỉ mục symbol + đồ thị import (docs/features/code-index.md). Trả lời
+    // "ai gọi cái này" / "sửa file này thì vỡ gì" — thứ Grep không làm được vì
+    // nó khớp CHUỖI chứ không khớp symbol, và không lần được `./x.js` → `x.ts`,
+    // alias `~/`, hay component Nuxt auto-import. Chỉ ĐỌC, và chỉ mục được dựng
+    // LƯỜI ở lần gọi đầu tiên — model không dùng thì không tốn gì.
+    createCodeIndexTool(cwd),
     createNotebookReadTool(cwd),
     createNotebookEditTool(cwd),
     // Graceful stubs for Claude Code built-ins the OAuth model emits but AWOG

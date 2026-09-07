@@ -28,6 +28,7 @@ import {
   setGhInboxError,
   type GhNotification,
 } from '~/composables/useGhInbox'
+import { pollPrWatch } from '~/composables/usePrWatch'
 import { useProjectModal } from '~/composables/useProjectModal'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
@@ -272,6 +273,13 @@ async function poll(): Promise<void> {
       .filter((n) => store.get(n.id) !== n.updatedAt)
     for (const n of fresh) store.set(n.id, n.updatedAt)
     writeSeen()
+
+    // Cùng nhịp, cùng một lần "thức dậy": danh sách PR đang theo dõi (usePrWatch)
+    // đi nhờ tick này thay vì có timer riêng — hai vòng lặp thì chỉ nhân đôi lưu
+    // lượng tới cùng một API. Đặt TRƯỚC cổng seed bên dưới: lần poll đầu của máy
+    // im lặng với hộp thư, nhưng danh sách PR thì vẫn cần được nạp. Nó tự nuốt lỗi
+    // và tự áp sàn nhịp bên sidecar, nên không kéo theo hộp thư được.
+    await pollPrWatch()
 
     // Very first poll on this machine establishes the baseline silently.
     if (!seeded) {

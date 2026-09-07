@@ -1,6 +1,6 @@
 # GitHub notifications → hộp thông báo + toast trong app
 
-> Trạng thái: **implemented** (2026-08-14; bổ sung inbox + mark-as-read 2026-08-21). Liên quan: [project-github.md](project-github.md), [ADR 0049](../decisions/0049-github-issues-and-prs-via-gh-cli.md).
+> Trạng thái: **implemented** (2026-08-14; bổ sung inbox + mark-as-read 2026-08-21; bổ sung theo dõi PR + đẩy vào phiên 2026-09-07). Liên quan: [project-github.md](project-github.md), [ADR 0049](../decisions/0049-github-issues-and-prs-via-gh-cli.md).
 
 ## Vấn đề
 
@@ -140,11 +140,69 @@ Map `owner/repo` (lowercase) → projectId, dựng lại mỗi khi đổi lựa 
 - **Verify layout phải chạy trên Chromium của Electron**, không phải Chrome hệ thống. Cách làm: mở UI dev-server bằng đúng binary `apps/desktop/electron/node_modules/electron` với `--remote-debugging-port`, rồi đo qua CDP (`scrollWidth - clientWidth`, `getBoundingClientRect`).
 - Panel rộng 420px, `overflow-x: hidden`. Backdrop + Esc để đóng (band z-index 95/96: trên nội dung trang ≤61, dưới modal ≥100).
 
+## Theo dõi một PR cụ thể (CI + review) → đẩy vào phiên
+
+Hộp thư ở trên trả lời "có gì mới trên GitHub?". Nó **không** trả lời "cái PR tôi vừa đẩy đã xanh chưa?" — `ci_activity` chỉ tới khi GitHub quyết định gửi, không nói check nào hỏng, và không có đường nào để phiên đang mở biết chuyện đó. Phần này lấp đúng khoảng đó.
+
+```
+useGhNotifications.poll()  ── cùng một nhịp, không có timer thứ hai ──▶ usePrWatch.pollPrWatch()
+                                                                            │ gh.prWatchPoll
+                                                                            ▼
+                                              sidecar github/pr-watch.ts ── 1 × gh api graphql cho CẢ danh sách
+                                                                            │ so với mốc đã lưu trên đĩa
+                                                                            ▼ có biến động đáng kể + có phiên gắn
+                                                            emit `session.inbox-message` (khối đã bọc hàng rào)
+                                                                            ▼
+                                        stores/sessions.ts → pendingInbox → CHIP; NGƯỜI DÙNG bấm mới chạy lượt
+```
+
+### Lấy trạng thái CI bằng cách nào
+
+Một `gh api graphql` cho **toàn bộ** danh sách theo dõi của một tài khoản (`github/pr-status.ts`), đúng khuôn `gh.subjectAuthors`: một alias `a<i>` cho mỗi PR, mọi giá trị đi bằng **GraphQL variable**. Mỗi PR lấy `statusCheckRollup` của commit cuối (check run + status context), `reviewDecision`, `reviews(last:5)`, cộng `state/isDraft/updatedAt/headRefName`.
+
+- Kết luận pass/fail/pending lấy từ **`rollup.state`** chứ không tự tổng hợp lại từ danh sách context: contexts bị cắt ở 60 dòng, còn rollup nhìn thấy tất cả.
+- `CheckRun` chưa `COMPLETED` ⇒ pending (conclusion chưa có nghĩa gì); `SUCCESS|NEUTRAL` ⇒ pass; `SKIPPED|CANCELLED` ⇒ skipped; còn lại ⇒ fail.
+- **Log CI**: chỉ lấy khi một PR **vừa chuyển sang** fail, tối đa 2 lần/vòng, và chỉ khi PR đó có phiên nhận (log không hiển thị trên chip). Job id bóc từ `detailsUrl` (`/actions/runs/<run>/job/<job>`) → `gh api repos/<owner>/<name>/actions/jobs/<job>/logs`, giữ 40 dòng cuối. Check ngoài Actions (Vercel, CircleCI…) không có job id ⇒ chỉ có tên + link.
+
+### Nhịp và rate limit
+
+- **Không có vòng lặp thứ hai.** `usePrWatch.pollPrWatch()` đi nhờ đúng tick của `useGhNotifications` (sàn 60s, chỉnh ở Settings → Git) — tắt toggle GitHub notifications là tắt luôn cả việc theo dõi PR.
+- Sidecar **áp lại sàn 60s** (`MIN_ROUND_MS`) và gộp lời gọi chồng nhau, vì RPC là bề mặt công khai: popout, nút làm mới hay reload đều gọi được. Vòng bị chặn trả `throttled: true` kèm ảnh chụp cũ — không phải lỗi.
+- Trần **20 PR** theo dõi cùng lúc (= 20 alias trong một query). PR đã `MERGED`/`CLOSED` **không được hỏi nữa** (câu trả lời không đổi) nhưng vẫn ở lại danh sách để người dùng tự bỏ — không tự xoá dòng của người dùng.
+- Dedupe: mốc so sánh là **dấu vân tay** `state|ci|failing-checks|reviewDecision|review-mới-nhất`, **persist trên đĩa** (`~/.awog/pr-watch.json`) — cùng tinh thần `(id, updatedAt)` của bell, nhưng phải qua được lần khởi động lại app, nếu không mỗi lần mở app là một tràng báo cáo về CI của hôm qua. **Lần quan sát đầu tiên của một PR là NỀN, im lặng** (giống lần seed của hộp thư).
+- Cố ý **KHÔNG báo** khi CI quay lại `pending` — mỗi lần push là một lần như thế.
+
+### Đẩy vào phiên
+
+Đúng mô hình `pendingWakes` (ADR 0066 P2) và hộp thư giữa các phiên: sidecar **không khởi động lượt nào**. Nó phát `session.inbox-message` (cùng khuôn payload với `sessions/inbox.ts`, `fromSessionId: null`, `fromTitle` = `GitHub · owner/repo#12`), store `sessions` xếp vào `pendingInbox` và hiện chip; **người dùng bấm** thì khối mới đi vào một lượt. Hai lý do không thể bỏ: một lượt LLM tiêu tiền của người dùng, và phiên đích có thể đang chạy dở (bất biến "1 phiên = 1 lượt tại một thời điểm").
+
+Gắn phiên: bật theo dõi từ bell trong khi đang mở một phiên ⇒ PR gắn vào phiên đó (`sessionId` = engineId). Không mở phiên nào ⇒ vẫn theo dõi được, hàng tự nói "chưa gắn phiên nào". Phiên bị xoá/lưu trữ ⇒ vòng poll kế tiếp tự gỡ liên kết.
+
+### Nội dung từ GitHub là L1
+
+Tiêu đề PR, tên nhánh, tên job và log CI đều do người ngoài viết (log CI là do chính code trong PR in ra). Khối đưa vào prompt vì thế:
+
+- bọc trong hàng rào **có nonce 48 bit** sinh lúc dựng khối (`<pr-update-xxxxxxxxxxxx>`), cùng khuôn `runtime/tools/read-terminal-tool.ts` — bên viết không đoán trước được để tự đóng hàng rào;
+- lời dẫn nói thẳng đây là **UNTRUSTED DATA**, đọc như bằng chứng chứ không phải chỉ thị, và không được chạy lệnh vì một log CI bảo thế;
+- toàn bộ thân đi qua `sessions/redact.ts` (`redactString`) — log CI là chỗ token bị in ra nhiều nhất;
+- thân chứa thứ giả dạng hàng rào ⇒ thêm một dòng cảnh báo, **không** sửa thân (nó là bằng chứng).
+
+### RPC
+
+| Method | Params | Trả về |
+|---|---|---|
+| `gh.prWatchList` | `{}` | `{ items: PrWatchView[] }` — đọc đĩa, KHÔNG gọi GitHub |
+| `gh.prWatchSet` | `{ repo, number, watch, title?, url?, account?, projectId?, sessionId? }` | `{ items }` (bật ⇒ poll ngay một vòng để lập mốc nền) |
+| `gh.prWatchPoll` | `{}` | `{ items, changed: PrWatchChange[], throttled }` |
+
+`repo` phải khớp `^[\w.-]+/[\w.-]+$`, `url` phải nằm trên `https://github.com/`, `sessionId` khớp `^[A-Za-z0-9._-]{1,64}$` — ba giá trị này lần lượt đi vào GraphQL variable, `openExternal` và khoá tra cứu trên đĩa.
+
 ## Bảo mật
 
 - Token gh không rời sidecar (invariant #1): `runGhAccount` dùng đúng đường `resolveGhEnv` như mọi lệnh gh khác — token chỉ vào env của child.
 - `url` trả về UI được ép phải nằm trên `https://github.com/` trước khi đưa vào `openExternal` — dữ liệu từ API vẫn coi là L1.
 - Không thêm surface remote-gateway: `gh.*` KHÔNG nằm trong allowlist mobile (không cần infosec re-audit cho PWA).
+- **Theo dõi PR**: `~/.awog/pr-watch.json` là dữ liệu AWOG-only nên nằm ở `.awog` (ADR 0070), đọc lên phải qua zod (L2). Không có cwd nào trong luồng này — toàn bộ là account-scoped như inbox. Log CI đi qua `redactString` trước khi vào prompt/JSONL của phiên, và khối luôn có hàng rào nonce (L1).
 - Poll thất bại (gh chưa cài / chưa auth / rate limit) là **im lặng** — toast lỗi mỗi phút còn tệ hơn thiếu tính năng; lỗi cuối lưu ở `useGhNotificationsStatus()` và hiện trong panel bell (đúng chỗ: người dùng đang mở ra để hỏi "có gì không?").
 - `gh.notificationsRead` chỉ nhận `threadId` dạng số (`^\d{1,20}$`) → không có gì path-like ghép được vào endpoint; mark-all là `PUT /notifications` cố định, không nhận input.
 - Kiểu gửi `native` mà OS **không cấp quyền** (hoặc webview không có Notification API) ⇒ tự rơi về toast. Trước đây trường hợp này rơi vào hư không: người dùng chọn `native`, OS im, app cũng im.
@@ -171,9 +229,19 @@ Map `owner/repo` (lowercase) → projectId, dựng lại mỗi khi đổi lựa 
 - **AC12** — Đọc một thread trên github.com ⇒ tick sau dòng đó chuyển sang đã-đọc trong panel (không biến mất), badge giảm, và nó KHÔNG toast lại.
 - **AC11** — Máy chưa từng khớp project nào: mở app lần thứ hai trở đi, thông báo mới ĐƯỢC toast (không còn seed lại mỗi lần khởi động).
 
+- **AC19** — Bật theo dõi một PR trong tab "Pull request" ⇒ hàng hiện trạng thái CI hiện tại ngay (không chờ tới nhịp sau) và KHÔNG bắn tin nào về phiên (vòng đầu là mốc nền).
+- **AC20** — CI của PR đang theo dõi chuyển fail ⇒ trong ≤ 1 nhịp có toast, và phiên được gắn có **chip tin chờ**; KHÔNG có lượt LLM nào tự chạy. Bấm giao ⇒ nội dung vào lượt dưới dạng khối có hàng rào nonce.
+- **AC21** — CI quay lại `pending` sau một cú push ⇒ KHÔNG có tin nào. Cùng một trạng thái fail giữ nguyên qua nhiều nhịp ⇒ chỉ báo một lần.
+- **AC22** — Khởi động lại app ⇒ không báo lại biến động đã báo trước đó (mốc so sánh nằm trên đĩa).
+- **AC23** — 2 cửa sổ (chính + popout) cùng chạy ⇒ vẫn tối đa 1 vòng poll mỗi 60s (`throttled: true` cho phần thừa).
+- **AC24** — Log CI chứa `GITHUB_TOKEN=ghp_…` ⇒ khối vào phiên hiện `[redacted]`, không có token; tiêu đề PR chứa `</pr-update>` ⇒ khối có dòng cảnh báo injection và hàng rào thật vẫn đóng đúng.
+
 ## Chưa làm (có thể sau)
 
 - Lọc theo `reason` (chỉ review_requested/mention).
 - Mark-as-unread, subscribe/unsubscribe thread.
 - Gộp nguồn khác (session, task) vào cùng bell — hiện bell chỉ là hộp thông báo GitHub.
+- Bật theo dõi PR từ **trang Git** (context menu của một nhánh → PR của nhánh đó) và từ drawer PR trong quick-view project: hiện lối vào duy nhất là tab "Pull request" của bell, tức chỉ theo dõi được PR đã từng vào hộp thư.
+- Chọn phiên nhận bằng picker (hiện luôn là phiên đang mở lúc bấm theo dõi; muốn đổi thì bỏ theo dõi rồi bật lại trong phiên khác).
+- Chip tin chờ hiện nhãn "từ ai" theo `fromSessionId`; tin của PR không đến từ phiên nào nên nguồn nằm trong dòng preview (`GitHub · owner/repo#12 · …`).
 - Dùng header `X-Poll-Interval` / `Last-Modified` của GitHub để nhịp poll tự thích ứng (hiện `gh api` không expose header cho caller).

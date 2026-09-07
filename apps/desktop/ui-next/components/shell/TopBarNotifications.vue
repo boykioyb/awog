@@ -58,71 +58,96 @@
            allowed to toast). The filter is only OFFERED when it would change the
            list: two tabs showing the same count taught the user nothing except that
            one of them was pointless. -->
-      <div v-if="hasUnwatched" class="ntf-tabs">
+      <div v-if="visibleTabs.length > 1" class="ntf-tabs">
         <button
-          v-for="tab in TABS"
+          v-for="tab in visibleTabs"
           :key="tab"
           class="ntf-tab"
           :class="{ on: filter === tab }"
           type="button"
-          :title="t(`github.inbox.tabHint.${tab}`)"
+          :title="tabHint(tab)"
           @click="filter = tab"
         >
-          {{ t(`github.inbox.tab.${tab}`) }}
-          <span class="ntf-tab-n tnum">
-            {{ tab === 'all' ? items.length : watchedItems.length }}
-          </span>
+          {{ tabLabel(tab) }}
+          <span class="ntf-tab-n tnum">{{ tabCount(tab) }}</span>
         </button>
       </div>
 
       <div class="ntf-body">
-        <p v-if="error" class="ntf-note err">{{ error }}</p>
-        <p v-else-if="!enabled" class="ntf-note">{{ t('github.inbox.off') }}</p>
-        <p v-else-if="!watchedProjectCount" class="ntf-note">{{ t('github.inbox.noWatched') }}</p>
+        <!-- Tab "PR" là một danh sách KHÁC (theo dõi CI + review của từng PR), nên
+             nó thay cả thân panel chứ không lọc danh sách thông báo. -->
+        <template v-if="filter === 'prs'">
+          <p v-if="prError" class="ntf-note err">{{ prError }}</p>
+          <!-- Rỗng là một KHẲNG ĐỊNH ("không có PR nào để theo dõi") — đừng nói nó
+               cạnh một lỗi, chỗ mà sự thật là "không biết". -->
+          <p v-else-if="!prRows.length" class="ntf-note">{{ t('ghWatch.empty') }}</p>
+          <GitPrWatchRow
+            v-for="row in prRows"
+            :key="row.key"
+            :repo="row.repo"
+            :number="row.number"
+            :title="row.title"
+            :watched="row.watched"
+            :item="row.item"
+            :session-label="row.sessionLabel"
+            :busy="prBusy"
+            @open="openPrExternal(row.url)"
+            @toggle="(watch) => onTogglePrWatch(row, watch)"
+          />
+        </template>
+        <template v-else>
+          <p v-if="error" class="ntf-note err">{{ error }}</p>
+          <p v-else-if="!enabled" class="ntf-note">{{ t('github.inbox.off') }}</p>
+          <p v-else-if="!watchedProjectCount" class="ntf-note">{{ t('github.inbox.noWatched') }}</p>
 
-        <!-- The empty state is a CLAIM ("your inbox is clear") — never make it next
+          <!-- The empty state is a CLAIM ("your inbox is clear") — never make it next
              to an error, where the truth is "we don't know". -->
-        <p v-if="loading && !visible.length" class="ntf-note">{{ t('github.inbox.loading') }}</p>
-        <p v-else-if="!visible.length && !error" class="ntf-note">
-          {{ filter === 'watched' ? t('github.inbox.emptyWatched') : t('github.inbox.empty') }}
-        </p>
-        <!-- Grouped by repo: one inbox is usually 3 repos deep, so printing the
+          <p v-if="loading && !visible.length" class="ntf-note">{{ t('github.inbox.loading') }}</p>
+          <p v-else-if="!visible.length && !error" class="ntf-note">
+            {{ filter === 'watched' ? t('github.inbox.emptyWatched') : t('github.inbox.empty') }}
+          </p>
+          <!-- Grouped by repo: one inbox is usually 3 repos deep, so printing the
              owner/repo on every row spent the widest column on the least
              informative text. The header carries it once and sticks while its rows
              scroll; a group whose project isn't watched reads dimmer (it never
              would have interrupted you). -->
-        <div v-for="g in groups" :key="g.repo" class="ntf-grp">
-          <!-- The whole header is the collapse toggle (bigger target than a lone
+          <div v-for="g in groups" :key="g.repo" class="ntf-grp">
+            <!-- The whole header is the collapse toggle (bigger target than a lone
                chevron). A collapsed group keeps its unread dot + count visible, so
                folding a noisy repo away never hides that it has something new. -->
-          <button
-            class="ntf-grp-head"
-            type="button"
-            :aria-expanded="!isCollapsed(g.repo)"
-            :title="isCollapsed(g.repo) ? t('github.inbox.expand') : t('github.inbox.collapse')"
-            @click="toggleGroup(g.repo)"
-          >
-            <Icon name="chev-right" class="ntf-grp-chev" :class="{ open: !isCollapsed(g.repo) }" />
-            <span class="ntf-grp-name" :title="g.repo">{{ g.name }}</span>
-            <span v-if="g.owner" class="ntf-grp-owner">{{ g.owner }}</span>
-            <!-- Names the reason this group is dimmed, instead of leaving the user to
+            <button
+              class="ntf-grp-head"
+              type="button"
+              :aria-expanded="!isCollapsed(g.repo)"
+              :title="isCollapsed(g.repo) ? t('github.inbox.expand') : t('github.inbox.collapse')"
+              @click="toggleGroup(g.repo)"
+            >
+              <Icon
+                name="chev-right"
+                class="ntf-grp-chev"
+                :class="{ open: !isCollapsed(g.repo) }"
+              />
+              <span class="ntf-grp-name" :title="g.repo">{{ g.name }}</span>
+              <span v-if="g.owner" class="ntf-grp-owner">{{ g.owner }}</span>
+              <!-- Names the reason this group is dimmed, instead of leaving the user to
                  infer it from an opacity value. -->
-            <span v-if="!g.watched" class="ntf-grp-tag">{{ t('github.inbox.notWatched') }}</span>
-            <span v-if="g.unread" class="ntf-grp-dot" />
-            <span class="ntf-grp-n tnum">{{ g.items.length }}</span>
-          </button>
-          <template v-if="!isCollapsed(g.repo)">
-            <TopBarNotifyRow
-              v-for="n in g.items"
-              :key="n.id"
-              :item="n"
-              :author="authorOf(n)"
-              @open="onOpen"
-              @external="onExternal"
-              @read="onRead"
-            />
-          </template>
-        </div>
+              <span v-if="!g.watched" class="ntf-grp-tag">{{ t('github.inbox.notWatched') }}</span>
+              <span v-if="g.unread" class="ntf-grp-dot" />
+              <span class="ntf-grp-n tnum">{{ g.items.length }}</span>
+            </button>
+            <template v-if="!isCollapsed(g.repo)">
+              <TopBarNotifyRow
+                v-for="n in g.items"
+                :key="n.id"
+                :item="n"
+                :author="authorOf(n)"
+                @open="onOpen"
+                @external="onExternal"
+                @read="onRead"
+              />
+            </template>
+          </div>
+        </template>
       </div>
 
       <div class="ntf-foot">
@@ -152,8 +177,16 @@ import {
   openNotification,
   useGhNotificationsStatus,
 } from '~/composables/useGhNotifications'
+import { pushActionToast } from '~/composables/useActionToasts'
+import {
+  refreshPrWatch,
+  togglePrWatch,
+  useWatchedPrs,
+  type PrWatchItem,
+} from '~/composables/usePrWatch'
 import { useSettingsModal } from '~/composables/useSettingsModal'
 import { useSidecar } from '~/composables/useSidecar'
+import { useSessionsStore } from '~/stores/sessions'
 import { useSettingsStore } from '~/stores/settings'
 import { formatRelativeAgo } from '~/utils/relative-time'
 
@@ -162,8 +195,9 @@ import { formatRelativeAgo } from '~/utils/relative-time'
 // current, so opening the panel costs nothing. This component owns only the popover
 // and routes each row through the poller's own open path.
 
-const TABS = ['all', 'watched'] as const
-type InboxTab = (typeof TABS)[number]
+// 'prs' = danh sách PR đang theo dõi CI/review (usePrWatch), không phải một bộ lọc
+// của hộp thư — nó thay cả thân panel.
+type InboxTab = 'all' | 'watched' | 'prs'
 
 const { t } = useI18n()
 const now = useNow()
@@ -172,6 +206,8 @@ const { openSettings } = useSettingsModal()
 const { confirm } = useConfirm()
 const { items, loading, error, lastFetchedAt, unreadCount, authorOf } = useGhInbox()
 const { watchedProjectCount } = useGhNotificationsStatus()
+const { items: watchedPrs, lastError: prError } = useWatchedPrs()
+const sessions = useSessionsStore()
 
 const open = ref(false)
 const filter = ref<InboxTab>('all')
@@ -182,11 +218,30 @@ const visible = computed(() => (filter.value === 'watched' ? watchedItems.value 
 const badge = computed(() => (unreadCount.value > 99 ? '99+' : String(unreadCount.value)))
 // Is there anything the "watched" filter would actually hide?
 const hasUnwatched = computed(() => watchedItems.value.length < items.value.length)
+// Tab nào đáng hiện. 'watched' chỉ khi nó thực sự giấu bớt được cái gì; 'prs' chỉ
+// khi có PR để nói tới (đang theo dõi, hoặc có PR trong hộp thư để bắt đầu theo dõi).
+const visibleTabs = computed<InboxTab[]>(() => {
+  const tabs: InboxTab[] = ['all']
+  if (hasUnwatched.value) tabs.push('watched')
+  if (prRows.value.length) tabs.push('prs')
+  return tabs
+})
 // If the filter stops being offered while it is active, fall back to Everything —
 // otherwise the list silently keeps filtering with no control on screen.
-watch(hasUnwatched, (has) => {
-  if (!has) filter.value = 'all'
+watch(visibleTabs, (tabs) => {
+  if (!tabs.includes(filter.value)) filter.value = 'all'
 })
+
+function tabLabel(tab: InboxTab): string {
+  return tab === 'prs' ? t('ghWatch.tab') : t(`github.inbox.tab.${tab}`)
+}
+function tabHint(tab: InboxTab): string {
+  return tab === 'prs' ? t('ghWatch.tabHint') : t(`github.inbox.tabHint.${tab}`)
+}
+function tabCount(tab: InboxTab): number {
+  if (tab === 'prs') return prRows.value.length
+  return tab === 'all' ? items.value.length : watchedItems.value.length
+}
 
 // Group the visible list by repo, keeping the newest-first order: a group takes the
 // position of its newest item, rows inside stay in list order. Map preserves
@@ -238,11 +293,100 @@ const checkedLabel = computed(() =>
     : t('github.inbox.neverChecked'),
 )
 
+// ─── Tab PR: theo dõi CI + review của từng PR (usePrWatch) ─────────────────
+// Hàng của tab này là hợp của hai nguồn: PR ĐANG theo dõi (có trạng thái CI), và
+// PR xuất hiện trong hộp thư nhưng chưa theo dõi (ứng viên để bấm bật). Nguồn thứ
+// hai chính là lối vào của tính năng — không có nó thì không có chỗ nào để bắt đầu
+// theo dõi một PR từ đây.
+type PrRow = {
+  key: string
+  repo: string
+  number: number
+  title: string
+  url: string
+  watched: boolean
+  item: PrWatchItem | null
+  sessionLabel: string
+}
+
+// Tiêu đề phiên đang gắn với một PR. Phiên bị xoá thì sidecar đã gỡ liên kết ở
+// vòng poll kế tiếp, nên chỗ này chỉ cần lo trường hợp chưa kịp gỡ.
+function sessionLabelFor(engineId: string | null): string {
+  if (!engineId) return ''
+  return sessions.sessions.find((sn) => sn.engineId === engineId)?.title ?? ''
+}
+
+const prRows = computed<PrRow[]>(() => {
+  const rows: PrRow[] = watchedPrs.value.map((item) => ({
+    key: item.id,
+    repo: item.repo,
+    number: item.number,
+    title: item.title || `#${item.number}`,
+    url: item.url,
+    watched: true,
+    item,
+    sessionLabel: sessionLabelFor(item.sessionId),
+  }))
+  const seen = new Set(rows.map((r) => r.key))
+  for (const n of items.value) {
+    if (n.type !== 'PullRequest' || n.number == null) continue
+    const key = `${n.repo.toLowerCase()}#${n.number}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    rows.push({
+      key,
+      repo: n.repo,
+      number: n.number,
+      title: n.title,
+      url: n.url,
+      watched: false,
+      item: null,
+      sessionLabel: '',
+    })
+  }
+  return rows
+})
+
+const prBusy = ref(false)
+
+// Bật/tắt theo dõi. Khi BẬT, PR được gắn vào PHIÊN ĐANG MỞ (nếu có): đó là câu trả
+// lời cho "đẩy sự kiện vào phiên nào" mà không cần thêm một cái picker — người
+// dùng đang làm việc trong phiên nào thì CI của PR đó về phiên ấy. Không có phiên
+// nào mở ⇒ vẫn theo dõi được, chỉ là không ai nhận tin (hàng tự nói ra điều đó).
+async function onTogglePrWatch(row: PrRow, watchIt: boolean): Promise<void> {
+  prBusy.value = true
+  try {
+    await togglePrWatch({
+      repo: row.repo,
+      number: row.number,
+      watch: watchIt,
+      title: row.title,
+      url: row.url,
+      account: settings.githubAccount || undefined,
+      sessionId: watchIt ? (sessions.active?.engineId ?? null) : null,
+    })
+  } catch (err) {
+    // Trần danh sách / gh không sẵn sàng: nói ra, đừng để cái công tắc bật hụt im lặng.
+    pushActionToast(err instanceof Error ? err.message : t('ghWatch.toggleFailed'), 'error')
+  } finally {
+    prBusy.value = false
+  }
+}
+
+function openPrExternal(url: string): void {
+  if (url) void useSidecar().openExternal(url)
+}
+
 // Opening pulls a fresh list: the panel is a deliberate "what do I have right now?"
 // question, and the poll interval can be up to 10 minutes wide.
 function toggle(): void {
   open.value = !open.value
-  if (open.value) void refreshGhInbox()
+  if (open.value) {
+    void refreshGhInbox()
+    // Đọc từ đĩa, không gọi GitHub (gh.prWatchList) — mở panel không được phép
+    // biến thành một request mạng nữa.
+    void refreshPrWatch()
+  }
 }
 function close(): void {
   open.value = false
