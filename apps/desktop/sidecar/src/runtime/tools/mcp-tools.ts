@@ -82,11 +82,19 @@ const MCP_RESULT_MAX_CHARS = 64 * 1024
 export const MCP_DESCRIBE_TOOL = 'mcpDescribe'
 export const MCP_CALL_TOOL = 'mcpCall'
 
-// Switch from direct typed MCP tools to the proxy meta-tools once a turn's ALLOWED
-// MCP schemas would add more than this many bytes to context (name + description +
-// JSON schema, summed). ~6KB ≈ 1.5–2k tokens. Below it, direct tools' better
-// ergonomics win; at/over it, progressive disclosure saves the per-turn cost.
-const MCP_PROXY_THRESHOLD_BYTES = 6_000
+// Ngân sách byte schema MCP (name + description + JSON schema, cộng dồn) được
+// phép nằm TRỰC TIẾP trong prompt mỗi lượt. ~6KB ≈ 1.5–2k token.
+//
+// Trước đây con số này là một CÔNG TẮC all-or-nothing: tổng schema vượt ngưỡng ⇒
+// MỌI server chui sau meta-tool. Nên chỉ cần một server béo (Playwright ~20KB) là
+// ba server tí hon bên cạnh cũng mất luôn tool trực tiếp, dù chúng gần như miễn
+// phí. Nay nó là NGÂN SÁCH: chọn lọc từng server (selectDirectMcpServers).
+const MCP_DIRECT_BUDGET_BYTES = 6_000
+
+// Trần cho MỘT server trong chế độ trực tiếp = nửa ngân sách. Không có nó, một
+// server 5.9KB nuốt gần trọn ngân sách và đẩy tất cả phần còn lại ra sau meta-tool
+// — đúng cái bệnh vừa chữa, chỉ đổi thủ phạm.
+const MCP_DIRECT_SERVER_MAX_BYTES = 3_000
 
 // Minimal transport contract both StdioMcpClient and HttpMcpClient satisfy —
 // lets handshake/list/call work without branching on transport.
@@ -555,12 +563,16 @@ interface ServerTools {
 
 // Build the MCP toolset for a turn (ADR 0051). Lists every reachable server's
 // tools (cached across a session's turns when poolKey is set), filters by
-// `allowed`, then picks ONE of two shapes:
-//   - under MCP_PROXY_THRESHOLD_BYTES of allowed schema → synthesize direct typed
-//     tools (mcp__<id>__<tool>) exactly as before. Common case, best ergonomics.
-//   - at/over the threshold → expose two meta-tools (mcp_describe + mcp_call) and
-//     return a compact `catalog` string for the system prompt, so N full schemas
-//     don't sit in context every turn (progressive disclosure).
+// `allowed`, then splits the servers against a schema BUDGET
+// (selectDirectMcpServers):
+//   - server lọt ngân sách → tool trực tiếp có kiểu (mcp__<id>__<tool>), đúng như
+//     cũ. Ergonomics tốt nhất: model thấy schema, gọi một phát.
+//   - server còn lại → nạp theo yêu cầu: hai meta-tool (mcpDescribe + mcpCall) +
+//     một `catalog` gọn cho system prompt, nên N schema đầy đủ không ngồi trong
+//     context mỗi lượt (progressive disclosure).
+// Không server nào bị hoãn ⇒ KHÔNG có meta-tool, KHÔNG có catalog (đường đi phổ
+// biến nhất giữ nguyên byte-for-byte). Hoãn TẤT CẢ ⇒ đúng hành vi cũ khi vượt
+// ngưỡng. Ở giữa là cái mới: trực tiếp + hoãn cùng tồn tại trong một lượt.
 // Defensive per-server: a connect/list failure is captured as an McpLoadFailure
 // (no secrets) and that server is skipped — never fails the whole turn.
 export async function createMcpToolDefinitions(
@@ -589,29 +601,72 @@ export async function createMcpToolDefinitions(
     if (tools.length > 0) perServer.push({ serverId: r.serverId, server: r.server, tools })
   }
 
-  const totalBytes = perServer.reduce(
-    (sum, s) => sum + s.tools.reduce((n, t) => n + schemaBytes(t), 0),
-    0,
+  const directIds = selectDirectMcpServers(
+    perServer.map((s) => ({
+      serverId: s.serverId,
+      bytes: s.tools.reduce((n, t) => n + schemaBytes(t), 0),
+    })),
   )
+  const direct = perServer.filter((s) => directIds.has(s.serverId))
+  const deferred = perServer.filter((s) => !directIds.has(s.serverId))
 
-  // Under threshold: direct typed tools — unchanged behaviour, no catalog.
-  if (totalBytes < MCP_PROXY_THRESHOLD_BYTES) {
-    const tools = perServer.flatMap((s) =>
-      s.tools.map((t) => synthTool(s.serverId, s.server, t, signal, poolKey)),
-    )
-    return { tools, failures }
-  }
+  const tools = direct.flatMap((s) =>
+    s.tools.map((t) => synthTool(s.serverId, s.server, t, signal, poolKey)),
+  )
+  // Mọi server đều vừa ngân sách: không trả meta-tool nào cả — nếu trả, hai schema
+  // meta-tool + catalog lại là chi phí thuần cho một lượt vốn chẳng cần hoãn gì.
+  if (deferred.length === 0) return { tools, failures }
 
-  // At/over threshold: progressive disclosure via meta-tools + a catalog block.
+  // Có server bị hoãn ⇒ thêm meta-tool + catalog. Meta-tool nhìn thấy TOÀN BỘ
+  // perServer (không chỉ phần hoãn): `allowed` vẫn là cửa duy nhất, còn model lỡ
+  // gọi mcpCall cho một tool đang có sẵn trực tiếp thì chạy được luôn thay vì ăn
+  // một lỗi vô nghĩa. Catalog chỉ liệt kê phần hoãn — phần trực tiếp đã tự hiện.
   return {
-    tools: createMcpProxyTools(perServer, allowed, signal, poolKey),
+    tools: [...tools, ...createMcpProxyTools(perServer, allowed, signal, poolKey)],
     failures,
-    catalog: buildMcpCatalog(perServer),
+    catalog: buildMcpCatalog(deferred, direct.length),
   }
 }
 
+// Chọn server nào được giữ TRỰC TIẾP trong ngân sách schema của lượt. Hàm thuần,
+// export để test (không phụ thuộc transport/IPC).
+//
+// Tiêu chí — rẻ trước, có trần từng server, thứ tự tất định:
+//  1. Bỏ ngay server tự nó vượt MCP_DIRECT_SERVER_MAX_BYTES. Một server béo được
+//     hoãn là ĐÚNG: nó cũng chính là server tốn nhiều token nhất khi nạp thẳng.
+//  2. Duyệt từ RẺ NHẤT tới đắt nhất, cộng dồn tới hết ngân sách. Greedy theo
+//     kích thước là cách tối đa hoá SỐ server giữ được ergonomics trực tiếp trên
+//     mỗi byte tiêu — đúng thứ ta muốn mua, vì một server nhỏ (3–4 tool) hầu như
+//     miễn phí còn phải đi qua describe→call thì đắt gấp đôi về số lượt.
+//  3. Bằng điểm thì so serverId để thứ tự TẤT ĐỊNH giữa các lượt. Bộ tool đổi
+//     giữa chừng sẽ phá prompt cache của provider, nên tính ổn định ở đây là tiền
+//     thật, không phải sự sạch sẽ hình thức.
+//
+// Cố ý KHÔNG dùng "server đang dùng nhiều" cho v1: nó cần đếm lượt gọi sống qua
+// nhiều turn, và chính việc thăng hạng một server giữa session lại làm đổi bộ
+// tool ⇒ phá cache đúng lúc model vừa bắt đầu dùng nó. Kích thước là tín hiệu
+// tất định, có sẵn ngay tại chỗ, và tương quan trực tiếp với thứ ta đang tiết kiệm.
+export function selectDirectMcpServers(
+  candidates: { serverId: string; bytes: number }[],
+): Set<string> {
+  const direct = new Set<string>()
+  const ordered = [...candidates].sort(
+    (a, b) => a.bytes - b.bytes || a.serverId.localeCompare(b.serverId),
+  )
+  let spent = 0
+  for (const c of ordered) {
+    // Danh sách tăng dần nên cái đầu tiên không lọt thì mọi cái sau cũng không:
+    // dừng luôn, khỏi cần duyệt tiếp.
+    if (c.bytes > MCP_DIRECT_SERVER_MAX_BYTES) break
+    if (spent + c.bytes > MCP_DIRECT_BUDGET_BYTES) break
+    direct.add(c.serverId)
+    spent += c.bytes
+  }
+  return direct
+}
+
 // Approx per-turn context cost of one MCP tool (name + description + JSON schema)
-// — what the direct path would spend. Drives the direct-vs-proxy threshold only.
+// — what the direct path would spend. Drives the direct-vs-deferred split only.
 function schemaBytes(tool: RawMcpTool): number {
   const schema = tool.inputSchema ? JSON.stringify(tool.inputSchema).length : 2
   const desc = typeof tool.description === 'string' ? tool.description.length : 0
@@ -780,9 +835,13 @@ const callParams = Type.Object({
 
 // Compact <mcp-tools> catalog: server + tool names + one-line descriptions, NO
 // schemas. Appended to the system prompt so the model knows what exists and how to
-// reach it (mcp_describe → mcp_call) without paying for every schema each turn.
-function buildMcpCatalog(perServer: ServerTools[]): string {
-  const lines = perServer.map((s) => {
+// reach it (mcpDescribe → mcpCall) without paying for every schema each turn.
+//
+// Chỉ liệt kê phần BỊ HOÃN. `directCount` > 0 nghĩa là lượt này còn có server nạp
+// thẳng: nói rõ ra, kẻo model tưởng mọi thứ mcp__* đều phải đi vòng qua meta-tool
+// và bỏ qua đúng những tool đang nằm sẵn trước mặt nó.
+function buildMcpCatalog(deferred: ServerTools[], directCount: number): string {
+  const lines = deferred.map((s) => {
     const tools = s.tools
       .map((t) => {
         const d = typeof t.description === 'string' ? t.description.replace(/\s+/g, ' ').trim() : ''
@@ -792,11 +851,15 @@ function buildMcpCatalog(perServer: ServerTools[]): string {
       .join('; ')
     return `- ${s.serverId}: ${tools}`
   })
+  const mixedNote =
+    directCount > 0
+      ? '\nThe other MCP servers attached to this session are already loaded as ordinary `mcp__<server>__<tool>` tools with full schemas — call those directly, they are not listed here.'
+      : ''
   return `<mcp-tools>
 These MCP tools are available, but their full input schemas are NOT shown inline to save context. To use one:
 1. Call \`${MCP_DESCRIBE_TOOL}\` with { server, tool } to get its JSON input schema.
 2. Call \`${MCP_CALL_TOOL}\` with { server, tool, arguments } to run it.
-
+${mixedNote}
 ${lines.join('\n')}
 </mcp-tools>`
 }

@@ -74,11 +74,18 @@ export function buildSdkEnv(cred: Credential): Record<string, string> {
   // Inheriting the ambient value (if the user set one) keeps the subprocess and
   // claudeHome() in agreement — see util/path.ts.
   //
-  // SDK 0.3.233 dropped TodoWrite/TodoRead from the DEFAULT tool surface on
-  // opus 4.8 / sonnet 5 / fable 5 / mythos 5 and newer. AWOG's session checklist
-  // (ADR 0069) is built on that built-in — Session.todos is persisted from the
-  // adapter's TodoWrite hook — so opt back in explicitly. AWOG's own allow/deny
-  // filter (allowedTools / disallowedTools) still decides per agent.
+  // CLI 2.1.233 dropped the todo/task-tracking tools from the DEFAULT tool surface
+  // on opus 4.8 / sonnet 5 / fable 5 / mythos 5 and newer, and this flag brings them
+  // back. AWOG's session checklist (ADR 0069) is built on them, so opt in explicitly;
+  // AWOG's own allow/deny filter (allowedTools / disallowedTools) still decides per
+  // agent.
+  //
+  // What comes back is NOT TodoWrite. Measured against CLI 2.1.263, the flag adds
+  // exactly TaskCreate, TaskGet, TaskList and TaskUpdate — the per-item successors —
+  // while TodoWrite stays absent on those models. So the checklist on this path is
+  // replayed from those calls (claude-sdk/task-checklist.ts) and the nudge names them
+  // (TASK_CHECKLIST_PROMPT); asking for TodoWrite here earns only
+  // "No such tool available: TodoWrite" and a wasted round-trip.
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1'
   // `system/session_state_changed` is the CLI's AUTHORITATIVE turn-over signal
   // ("'idle' fires after heldBackResult flushes and the bg-agent do-while exits"),
@@ -97,19 +104,69 @@ export function buildSdkEnv(cred: Credential): Record<string, string> {
   return env
 }
 
+// ── Nạp tool theo yêu cầu trên nhánh Claude SDK ─────────────────────────────
+//
+// CLI có tool-search sẵn: mặc định nó HOÃN tool của MCP server, chỉ kéo vào prompt
+// khi model đi tìm. `alwaysLoad: true` là công tắc TẮT chính cơ chế đó. Bản trước
+// bật cứng cho mọi server người dùng gắn, nên gắn nhiều MCP là đốt token ngay
+// turn-1 — và còn một cái giá ít ai để ý: theo chính doc của SDK, `alwaysLoad`
+// "blocks startup until the server is connected (capped at the standard 5s connect
+// timeout)", tức mỗi server bật cờ này có thể cộng tới 5s vào lượt đầu.
+//
+// Nay là chính sách TỪNG SERVER, chỉ dựa trên thứ biết được từ config (nhánh này
+// không tự list tool — SDK sở hữu kết nối, khác nhánh Pi nơi ta đo được byte
+// schema thật). Ba luật, mỗi luật một lý do:
+//
+//  S1 (mặc định) — HOÃN. Cứ để tool-search của CLI làm việc của nó.
+//  S2 (ngoại lệ) — bộ gắn NHỎ (≤ SDK_ALWAYS_LOAD_MAX_SERVERS) thì nạp thẳng.
+//     Gắn 1–2 server là ý định rõ ràng ("tôi gắn Playwright để dùng ngay"), chi
+//     phí token bị chặn trên bởi đúng 1–2 server, và hoãn ở đây chỉ đổi lấy một
+//     vòng tool-search ở gần như mọi lượt. Con số 2 ánh xạ thô sang ngân sách
+//     6KB của nhánh Pi (≈2 server cỡ trung), nên hai runtime tiêu xấp xỉ cùng một
+//     lượng context cho MCP ở turn-1: Pi đo bằng byte vì đo được, SDK ước bằng số
+//     server vì không đo được.
+//  S3 (chặn) — KHÔNG BAO GIỜ nạp thẳng một server có `timeoutMs` lớn hơn trần
+//     connect 5s của SDK. Người dùng đã tự khai server này cần lâu hơn thế mới
+//     đưa được danh sách tool (`npx -y …` cold start): bật `alwaysLoad` chỉ chắc
+//     chắn thêm tới 5s chờ chết vào turn-1 mà vẫn không kịp có tool. Hoãn nó đi,
+//     tool-search nhặt lên khi server đã sống.
+//
+// Server MCP in-process của CHÍNH AWOG (`awog`, `awogsurfaces`, `awogwiki`,
+// `awogmemory`, `awogssh`) KHÔNG đi qua hàm này — chúng được dựng bằng
+// createSdkMcpServer ở claude-sdk/run-stream.ts. Bảng chính sách cho từng cái nằm
+// trong docs/features/agent-tools-parity.md; file đó ngoài quyền sở hữu của gói
+// này nên chưa áp.
+const SDK_ALWAYS_LOAD_MAX_SERVERS = 2
+const SDK_CONNECT_CAP_MS = 5_000
+
+// Server này có được nạp thẳng ở turn-1 không (S1/S2/S3 ở trên). Thuần + export
+// để test.
+export function alwaysLoadExternalMcp(
+  cfg: { timeoutMs?: number },
+  attachedCount: number,
+): boolean {
+  if (attachedCount > SDK_ALWAYS_LOAD_MAX_SERVERS) return false
+  if (typeof cfg.timeoutMs === 'number' && cfg.timeoutMs > SDK_CONNECT_CAP_MS) return false
+  return true
+}
+
 // Convert AWOG's already-resolved MCP set (whitelist-intersected + secrets
 // expanded upstream) into the SDK's `options.mcpServers` shape so the SDK spawns
 // / connects them natively (ADR 0058: MCP is the SDK's own mechanism, NOT a
-// custom tool). `alwaysLoad` so an explicitly-attached server's tools are present
-// at turn-1 instead of deferred behind tool-search. http/sse URLs pass the same
+// custom tool). `alwaysLoad` is now decided per server by alwaysLoadExternalMcp
+// instead of being pinned on. http/sse URLs pass the same
 // SSRF guard as the Pi path before we hand them to the SDK (invariant #7); a
 // server failing the guard is dropped with a warning rather than blocking the turn.
 export async function toSdkMcpServers(
   mcp: McpServersConfig | undefined,
 ): Promise<NonNullable<Options['mcpServers']> | undefined> {
   if (!mcp) return undefined
+  const entries = Object.entries(mcp)
   const out: NonNullable<Options['mcpServers']> = {}
-  for (const [name, cfg] of Object.entries(mcp)) {
+  for (const [name, cfg] of entries) {
+    // Đếm theo bộ ĐÃ GẮN, không theo bộ sống sót sau SSRF guard: quyết định phải
+    // tất định theo config, chứ không đổi tuỳ vào việc một URL có bị chặn hay không.
+    const always = alwaysLoadExternalMcp(cfg, entries.length)
     if (cfg.type === 'stdio') {
       out[name] = {
         type: 'stdio',
@@ -117,7 +174,7 @@ export async function toSdkMcpServers(
         ...(cfg.args ? { args: cfg.args } : {}),
         ...(cfg.env ? { env: cfg.env } : {}),
         ...(cfg.timeoutMs ? { timeout: cfg.timeoutMs } : {}),
-        alwaysLoad: true,
+        ...(always ? { alwaysLoad: true } : {}),
       }
     } else {
       try {
@@ -134,7 +191,7 @@ export async function toSdkMcpServers(
         url: cfg.url,
         ...(cfg.headers ? { headers: cfg.headers } : {}),
         ...(cfg.timeoutMs ? { timeout: cfg.timeoutMs } : {}),
-        alwaysLoad: true,
+        ...(always ? { alwaysLoad: true } : {}),
       }
     }
   }

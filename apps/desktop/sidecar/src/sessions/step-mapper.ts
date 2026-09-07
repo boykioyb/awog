@@ -60,6 +60,7 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   BashOutput: 'terminal',
   KillShell: 'terminal',
   read_terminal: 'terminal',
+  monitor: 'terminal',
   Glob: 'find-files',
   Grep: 'search',
   WebSearch: 'search',

@@ -30,7 +30,9 @@ import { createNotebookEditTool, createNotebookReadTool } from './notebook-tools
 import { createBashTool } from './bash-tool.js'
 import { createBashOutputTool } from './bash-output-tool.js'
 import { createKillShellTool } from './kill-shell-tool.js'
+import { createMonitorTool } from './monitor-tool.js'
 import { createReadTerminalTool } from './read-terminal-tool.js'
+import { createSessionMessagingTools } from './session-tools.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
@@ -191,14 +193,19 @@ export function createAwogToolDefinitions(
     createEditTool(cwd, reads),
     createMultiEditTool(cwd, reads),
     createBashTool(cwd, filter.backgroundExec),
-    // BashOutput + KillShell: poll / stop a background shell (ADR 0066). Sessions
-    // only (paired with Bash's run_in_background), and only when backgroundExec is
-    // set. KillShell was advertised by the session Tools panel long before it
-    // existed as a tool — the model could start a dev server but not stop it.
+    // BashOutput + KillShell + monitor: poll / stop / WAIT ON a background shell
+    // (ADR 0066). Sessions only (paired with Bash's run_in_background), and only
+    // when backgroundExec is set. KillShell was advertised by the session Tools
+    // panel long before it existed as a tool — the model could start a dev server
+    // but not stop it. `monitor` is the missing "wait until" primitive: without it
+    // the model burns one provider round-trip per BashOutput poll. None of the
+    // three spawns anything, so they inherit the permission decision made on the
+    // `Bash` call that started the shell (monitor-tool.ts).
     ...(filter.backgroundExec
       ? [
           createBashOutputTool(filter.backgroundExec.sessionId),
           createKillShellTool(filter.backgroundExec.sessionId),
+          createMonitorTool(filter.backgroundExec.sessionId),
         ]
       : []),
     // read_terminal: read the tail of a PTY the USER is typing in (ADR 0019
@@ -207,6 +214,11 @@ export function createAwogToolDefinitions(
     // rather than `backgroundExec` so it survives plan mode: it is read-only, and
     // planning is when the user's own terminal output is most worth reading.
     ...(filter.chatSession ? [createReadTerminalTool(cwd)] : []),
+    // Nhắn giữa các phiên (list_sessions / send_session_message). Chat session
+    // only: một task/subagent không có người ngồi đọc hộp thư để bấm giao.
+    ...(filter.chatSession
+      ? createSessionMessagingTools({ sessionId: filter.chatSession.sessionId })
+      : []),
     // Model-initiated transcript surfaces (mark_chapter / send_user_file /
     // suggest_task / suggest_followups). Chat sessions only, for the same reason
     // as read_terminal: they address a user who is reading the transcript, and a
