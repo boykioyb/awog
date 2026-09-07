@@ -9,6 +9,7 @@ import { startRemoteGateway, stopRemoteGateway } from './remote-gateway'
 import { petWindow, type PetCommand, type PetPrefs, type PetStatus } from './pet-window'
 import { trayPopover } from './popover'
 import { setupTray, updateTray, type TrayCommand, type TrayModel } from './tray'
+import { startScheduler, stopScheduler } from './scheduler'
 import { setupUpdater } from './updater'
 import { createMainWindow, registerAppProtocolScheme } from './window'
 
@@ -138,6 +139,9 @@ if (!gotLock) {
     // Fail-closed — a no-op when Tailscale isn't up.
     startRemoteGateway(getWindow)
     setupUpdater(getWindow)
+    // Scheduled runs (ADR 0082): nhịp 30s so `nextRunAt`. Lịch chỉ chạy khi
+    // app còn chạy — giới hạn cố ý, ghi rõ trong doc + trên trang Schedules.
+    startScheduler()
     registerLogTailIpc(getWindow)
     openMainWindow()
     setupTrayBridge()
@@ -159,6 +163,7 @@ if (!gotLock) {
   app.on('before-quit', () => {
     browser.close()
     petWindow.close()
+    stopScheduler()
     stopRemoteGateway()
     engine.stop()
   })

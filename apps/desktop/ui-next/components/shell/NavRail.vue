@@ -106,6 +106,7 @@ const groups = computed<NavGroup[]>(() => [
       },
       { to: '/tasks', icon: 'tasks', label: 'nav.tasks' },
       { to: '/workflows', icon: 'workflows', label: 'nav.workflows' },
+      { to: '/schedules', icon: 'clock', label: 'nav.schedules' },
     ],
   },
   {
