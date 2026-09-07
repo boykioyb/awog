@@ -1,38 +1,64 @@
-// Cô lập working tree cho node chạy song song (ADR 0081).
+// Cô lập working tree cho một lượt chạy agent (ADR 0081, tổng quát hoá ở gói #7c).
 //
-// Vấn đề: scheduler chạy tới CONCURRENCY_CAP node cùng lúc, nhưng trước đây mọi
-// node đều lấy `project.path` làm cwd — hai agent sửa cùng một cây làm việc, rồi
-// `git add -A` của node này quét luôn file dở dang của node kia. Đây là tranh
-// chấp thật, không phải thiếu tính năng.
+// Vấn đề gốc: scheduler chạy tới CONCURRENCY_CAP node cùng lúc, nhưng trước đây
+// mọi node đều lấy `project.path` làm cwd — hai agent sửa cùng một cây làm việc,
+// rồi `git add -A` của node này quét luôn file dở dang của node kia. Đây là tranh
+// chấp thật, không phải thiếu tính năng. Subagent chat song song (ADR 0083 §b)
+// có ĐÚNG tranh chấp đó, chỉ khác chủ sở hữu.
 //
-// Mô hình "first-claim shared, phần còn lại vào worktree":
-//   • Node ĐẦU TIÊN in-flight của một project giữ cây làm việc gốc (`project.path`)
-//     → DAG tuần tự (đại đa số) chạy y hệt như trước: không mất node_modules,
-//       không tốn thêm một lần checkout, không đổi hành vi auto-commit.
-//   • Node in-flight THỨ HAI trở đi được cấp một `git worktree` riêng, branch
-//     riêng `awog/task/<taskId>/<nodeId>-vN`, checkout tại HEAD lúc cấp phát.
-//     Agent + auto-commit của node đó chỉ nhìn thấy cây của chính nó.
-//   • Khi task "ráo" (không còn node nào chạy), engine gọi integrateTaskBranches()
-//     để merge các branch node về nhánh hiện tại của repo — trước khi phát đợt
-//     node kế tiếp, nên node hạ nguồn luôn thấy kết quả của các node song song.
+// ── Khoá theo OWNER, không khoá theo task ───────────────────────────────────
+// Mọi đường của module này (thư mục checkout, neo nhánh, tiền tố branch, VÀ
+// sweeper) đi qua một khoá duy nhất:
 //
-// Danh sách branch cần merge được DERIVE TỪ GIT (`for-each-ref` theo prefix), không
-// giữ trong bộ nhớ → sống sót qua restart. Checkout mồ côi (sidecar chết giữa
-// chừng) được dọn ở boot bằng sweepOrphanWorktrees(); branch thì GIỮ LẠI vì nó là
-// công sức của agent, chỉ xoá sau khi merge thành công.
+//   WorkspaceOwner = { kind: 'task' | 'session', id }
+//
+//   | | thư mục owner | tiền tố branch |
+//   |---|---|---|
+//   | task    | `~/.awog/tasks/<taskId>/`                | `awog/task/<taskId>/`    |
+//   | session | `~/.awog/session-worktrees/<sessionId>/` | `awog/session/<sessionId>/` |
+//
+// Checkout nằm ở `<ownerDir>/worktrees/<slug>`, neo nhánh ở `<ownerDir>/worktree-base`,
+// repo đã cấp worktree ở `<ownerDir>/worktree-repo`. Layout của `task` giữ NGUYÊN
+// như ADR 0081 nên không cần migration; `session` chỉ là một owner thứ hai cùng
+// hình dạng. `sweepOrphanWorktrees()` quét `listOwners()` — CẢ HAI loại — nên
+// không có loại owner nào rơi ra ngoài lưới dọn mồ côi.
+//
+// ── Ba chính sách cấp phát ──────────────────────────────────────────────────
+//   • `shared`      — không bao giờ cô lập (node Task tắt auto-commit per-phase).
+//   • `first-claim` — node in-flight ĐẦU TIÊN của project giữ cây gốc, phần còn
+//     lại vào worktree riêng. DAG tuần tự (đại đa số) chạy y hệt như trước.
+//   • `always`      — luôn cô lập (subagent chat): cây gốc đang là cwd của chính
+//     lượt cha, không có chuyện "giành chỗ đầu tiên".
+//
+// ── Gộp kết quả: CHỈ Task ───────────────────────────────────────────────────
+// `integrateTaskBranches()` nhận `taskId` (không nhận owner) — cố ý: merge vào
+// nhánh người dùng đang checkout là hành động Task đã có công tắc (auto-commit
+// per-phase) và có điểm ráo để chạy. Một lượt chat KHÔNG có công tắc nào như thế,
+// nên branch của subagent chỉ được cô lập và giao lại cho người dùng, không bao
+// giờ tự merge. Ràng buộc đó là KIỂU, không phải quy ước: không có cách nào gọi
+// hàm merge cho một owner `session`.
+//
+// Danh sách branch cần merge được DERIVE TỪ GIT (`for-each-ref` theo prefix),
+// không giữ trong bộ nhớ → sống sót qua restart.
 //
 // Degrade an toàn: không phải git repo / git < 2.20 / `worktree add` fail ⇒ quay
-// về dùng chung `project.path` như cũ và log rõ ràng. Task vẫn chạy.
+// về dùng chung cây gốc như cũ và log rõ ràng. Lượt chạy vẫn tiếp tục.
 //
-// Hai lưới an toàn chống mất dữ liệu (đính chính F8 của ADR 0081):
-//   • KHÔNG xoá mù. Trước khi bỏ một checkout (release cuối node-run, hoặc sweep
-//     ở boot) ta hỏi `git status --porcelain`. Còn thay đổi ⇒ commit WIP lên
-//     chính branch của node; commit WIP cũng hỏng ⇒ GIỮ NGUYÊN checkout và báo
-//     lên UI. Không có đường nào xoá một cây còn việc chưa lưu.
+// Hai lưới an toàn chống mất dữ liệu (đính chính F8 của ADR 0081) — áp cho MỌI
+// owner:
+//   • KHÔNG xoá mù. Trước khi bỏ một checkout (release cuối lượt, hoặc sweep ở
+//     boot) ta hỏi `git status --porcelain`. Còn thay đổi ⇒ commit WIP lên chính
+//     branch của lượt đó; commit WIP cũng hỏng ⇒ GIỮ NGUYÊN checkout và báo lên
+//     UI. Không có đường nào xoá một cây còn việc chưa lưu.
 //   • Merge phải hạ cánh ĐÚNG nhánh. Nhánh đang checkout lúc cấp worktree đầu
-//     tiên được ghi xuống `~/.awog/tasks/<taskId>/worktree-base`; lúc ráo, HEAD
-//     lệch nhánh đó (người dùng tự `git checkout` giữa chừng) ⇒ KHÔNG merge, báo
-//     conflict để engine pause. AWOG không checkout hộ người dùng.
+//     tiên được ghi xuống `<ownerDir>/worktree-base`; lúc ráo, HEAD lệch nhánh đó
+//     (người dùng tự `git checkout` giữa chừng) ⇒ KHÔNG merge, báo conflict để
+//     engine pause. AWOG không checkout hộ người dùng.
+//
+// Branch rỗng thì không để lại rác: lúc release ta thử `git branch -d` (KHÔNG
+// bao giờ `-D`). Git tự từ chối xoá branch còn commit chưa nằm trong HEAD, nên
+// đây là guarantee của git chứ không phải phán đoán của AWOG: cô lập một lượt
+// chỉ-đọc không để lại dấu vết nào, còn một lượt có sửa file thì branch còn nguyên.
 
 import { mkdir, readdir, readFile, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -44,7 +70,7 @@ import { suppressEchoFor } from '../git/watcher.js'
 import { assertValidBranchName } from '../git/ref-validate.js'
 import { loadProject } from '../projects/store.js'
 import { log } from '../util/logger.js'
-import { sanitizeChild } from '../util/path.js'
+import { awogHome, sanitizeChild } from '../util/path.js'
 import { listTaskIds, loadTask, taskDir } from './store.js'
 
 // `git worktree` tồn tại từ 2.5 nhưng `worktree list --porcelain` + `remove` chỉ
@@ -52,21 +78,45 @@ import { listTaskIds, loadTask, taskDir } from './store.js'
 // nên không phải giải thích cho người dùng thêm một ngưỡng thứ hai.
 const MIN_GIT_VERSION = '2.20'
 const WORKTREES_DIR = 'worktrees'
-// Prefix branch: nhận diện được bằng mắt, và là khoá để tìm lại branch cần merge
-// sau restart. Không được đổi mà không viết migration.
-const BRANCH_PREFIX = 'awog/task'
+// Nhà của owner loại `session`. Nằm cạnh `tasks/` chứ không nằm TRONG nó: một
+// thư mục con của `~/.awog/tasks/` sẽ bị `listTaskIds()` (và mọi thứ đọc store
+// Task) nhìn thấy như một task ma.
+const SESSION_OWNERS_DIR = 'session-worktrees'
+// Gốc namespace branch: nhận diện được bằng mắt, và là khoá để tìm lại branch
+// cần merge sau restart. Không được đổi mà không viết migration.
+const BRANCH_ROOT = 'awog'
 // `worktree add` phải checkout cả cây — repo lớn có thể lâu hơn 30s mặc định.
 const WORKTREE_TIMEOUT_MS = 120_000
 const REPO_LOCK_TIMEOUT_MS = 60_000
-// Nhánh mà task neo vào, ghi lúc cấp worktree ĐẦU TIÊN. Nằm trong thư mục task
+// Nhánh mà owner neo vào, ghi lúc cấp worktree ĐẦU TIÊN. Nằm trong thư mục owner
 // của AWOG (không đụng `.git/config` của người dùng) và bền qua restart — merge
 // ở điểm ráo phải đối chiếu với nó.
 const BASE_BRANCH_FILE = 'worktree-base'
+// Repo đã cấp worktree cho owner này. Sweeper ở boot cần nó để `worktree prune`
+// đúng repo — với owner `session` thì đây là nguồn DUY NHẤT (một phiên chat không
+// bắt buộc thuộc project nào).
+const REPO_FILE = 'worktree-repo'
 // Độ dài tối đa của stderr git đưa lên UI (đã qua sanitizeStderr trước khi cắt).
 const DETAIL_MAX_LEN = 500
 
-export interface NodeWorkspace {
-  // cwd cho agent + cho auto-commit của node.
+// Ai sở hữu checkout này. `task` = một node của Task Execution Engine (ADR 0081);
+// `session` = một subagent trong một lượt chat (ADR 0083 §c).
+export interface WorkspaceOwner {
+  kind: 'task' | 'session'
+  id: string
+}
+
+// Cách cấp phát cây làm việc cho một lượt chạy.
+export type IsolationPolicy =
+  // Không bao giờ cô lập — dùng chung cây gốc (node Task tắt auto-commit per-phase).
+  | 'shared'
+  // Lượt in-flight đầu tiên của project giữ cây gốc, phần còn lại vào worktree.
+  | 'first-claim'
+  // Luôn cô lập — cây gốc đã có chủ (lượt chat cha) nên không giành.
+  | 'always'
+
+export interface IsolatedWorkspace {
+  // cwd cho agent + cho auto-commit của lượt chạy.
   cwd: string
   // true = worktree riêng; false = dùng chung cây gốc của project.
   isolated: boolean
@@ -86,7 +136,9 @@ export type ReleaseStatus = 'clean' | 'rescued' | 'retained'
 
 export interface ReleaseOutcome {
   status: ReleaseStatus
-  // Branch của node (chỉ khi isolated).
+  // Branch của lượt chạy — CHỈ set khi nó còn tồn tại sau release, tức là nó mang
+  // commit chưa nằm trong HEAD. Branch rỗng đã bị `git branch -d` dọn ⇒ không có
+  // gì để nói với người dùng.
   branch?: string
   // Đường dẫn checkout được giữ lại (chỉ khi 'retained').
   path?: string
@@ -103,17 +155,17 @@ export interface IntegrationOutcome {
   detail?: string
 }
 
-// Node đang giữ cây gốc của mỗi project. Claim đặt ĐỒNG BỘ ở đầu
-// acquireNodeWorkspace nên hai node dispatch trong cùng một tick không thể cùng
+// Lượt chạy đang giữ cây gốc của mỗi project. Claim đặt ĐỒNG BỘ ở đầu
+// acquireWorkspace nên hai lượt dispatch trong cùng một tick không thể cùng
 // nhận cây gốc (giống cách git/mutex.ts claim đồng bộ).
 const sharedClaims = new Map<string, string>()
 
-// Ký tự an toàn cho tên branch + tên thư mục. Id nội bộ (taskId/nodeId) về lý
-// thuyết là do AWOG sinh, nhưng nodeId đến từ workflow snapshot người dùng sửa
-// được ⇒ vẫn coi là L1 và chuẩn hoá trước khi ghép vào ref/path.
+// Ký tự an toàn cho tên branch + tên thư mục. Id nội bộ (taskId/nodeId/sessionId)
+// về lý thuyết là do AWOG sinh, nhưng nodeId đến từ workflow snapshot người dùng
+// sửa được ⇒ vẫn coi là L1 và chuẩn hoá trước khi ghép vào ref/path.
 function safeSegment(raw: string): string {
   const cleaned = raw.replace(/[^A-Za-z0-9._-]/g, '-').replace(/^[-.]+/, '')
-  return cleaned.length > 0 ? cleaned.slice(0, 64) : 'node'
+  return cleaned.length > 0 ? cleaned.slice(0, 64) : 'run'
 }
 
 // Repo root chứa `dir`, hoặc null khi `dir` không nằm trong repo git nào.
@@ -127,12 +179,24 @@ async function resolveRepoRoot(dir: string): Promise<string | null> {
   }
 }
 
-function worktreeRoot(taskId: string): string {
-  return join(taskDir(taskId), WORKTREES_DIR)
+// Thư mục AWOG của owner. Task tái dùng đúng thư mục task sẵn có (không migration);
+// session có nhà riêng cạnh `tasks/`.
+function ownerDir(owner: WorkspaceOwner): string {
+  return owner.kind === 'task'
+    ? taskDir(owner.id)
+    : join(awogHome(), SESSION_OWNERS_DIR, sanitizeChild(owner.id))
 }
 
-function baseBranchFile(taskId: string): string {
-  return join(taskDir(taskId), BASE_BRANCH_FILE)
+function worktreeRoot(owner: WorkspaceOwner): string {
+  return join(ownerDir(owner), WORKTREES_DIR)
+}
+
+function baseBranchFile(owner: WorkspaceOwner): string {
+  return join(ownerDir(owner), BASE_BRANCH_FILE)
+}
+
+function repoFile(owner: WorkspaceOwner): string {
+  return join(ownerDir(owner), REPO_FILE)
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -155,72 +219,75 @@ async function currentBranch(repoRoot: string): Promise<string | null> {
   }
 }
 
-async function readBaseBranch(taskId: string): Promise<string | null> {
+async function readTrimmed(path: string): Promise<string | null> {
   try {
-    const name = (await readFile(baseBranchFile(taskId), 'utf8')).trim()
-    return name.length > 0 ? name : null
+    const value = (await readFile(path, 'utf8')).trim()
+    return value.length > 0 ? value : null
   } catch {
     return null
   }
 }
 
-// Ghi neo MỘT LẦN cho mỗi đợt cô lập, TRƯỚC khi branch node đầu tiên tồn tại —
-// không bao giờ có branch chờ merge mà thiếu neo. Neo được xoá khi mọi branch
-// của task đã merge xong, nên lần resume sau (có thể trên nhánh khác) neo lại
-// đúng nhánh lúc đó.
-async function rememberBaseBranch(taskId: string, branch: string): Promise<void> {
-  if (await readBaseBranch(taskId)) return
-  await mkdir(taskDir(taskId), { recursive: true, mode: 0o700 })
-  await writeFile(baseBranchFile(taskId), `${branch}\n`, { encoding: 'utf8', mode: 0o600 })
+async function readBaseBranch(owner: WorkspaceOwner): Promise<string | null> {
+  return readTrimmed(baseBranchFile(owner))
 }
 
-async function clearBaseBranch(taskId: string): Promise<void> {
-  await rm(baseBranchFile(taskId), { force: true }).catch(() => undefined)
+// Ghi neo MỘT LẦN cho mỗi đợt cô lập, TRƯỚC khi branch đầu tiên tồn tại — không
+// bao giờ có branch chờ merge mà thiếu neo. Neo được xoá khi mọi branch của owner
+// đã merge xong, nên lần resume sau (có thể trên nhánh khác) neo lại đúng nhánh
+// lúc đó. Ghi kèm repo root để sweeper ở boot biết prune ở đâu.
+async function rememberAnchor(
+  owner: WorkspaceOwner,
+  branch: string,
+  repoRoot: string,
+): Promise<void> {
+  await mkdir(ownerDir(owner), { recursive: true, mode: 0o700 })
+  await writeFile(repoFile(owner), `${repoRoot}\n`, { encoding: 'utf8', mode: 0o600 })
+  if (await readBaseBranch(owner)) return
+  await writeFile(baseBranchFile(owner), `${branch}\n`, { encoding: 'utf8', mode: 0o600 })
 }
 
-// Prefix branch của MỘT task — cũng là namespace `for-each-ref` quét khi tìm
-// branch cần merge.
-function branchPrefix(taskId: string): string {
-  return `${BRANCH_PREFIX}/${safeSegment(taskId)}/`
+async function clearBaseBranch(owner: WorkspaceOwner): Promise<void> {
+  await rm(baseBranchFile(owner), { force: true }).catch(() => undefined)
+}
+
+// Prefix branch của MỘT owner — cũng là namespace `for-each-ref` quét khi tìm
+// branch cần merge. `awog/task/<id>/` giữ nguyên như ADR 0081.
+function branchPrefix(owner: WorkspaceOwner): string {
+  return `${BRANCH_ROOT}/${owner.kind}/${safeSegment(owner.id)}/`
 }
 
 export interface AcquireArgs {
-  taskId: string
-  nodeId: string
-  version: number
-  // `project.path` — cây làm việc gốc, do sidecar đọc từ projects store (KHÔNG
-  // nhận path từ payload UI).
+  owner: WorkspaceOwner
+  // Nhãn lá của checkout + branch: `<nodeId>-vN` với Task, id subagent với chat.
+  slug: string
+  // Cây làm việc gốc — `project.path` (Task) hoặc cwd của phiên (chat). Do sidecar
+  // đọc từ store / cấu hình phiên, KHÔNG nhận path từ payload UI.
   projectPath: string
-  // Node này CÓ commit vào cây của nó khi xong không (auto-commit per-phase bật
-  // + scope 'workspace')? Nếu không thì worktree là bẫy mất dữ liệu: thay đổi
-  // chưa commit sẽ biến mất cùng checkout, và cũng chẳng có commit nào để merge
-  // về. Trường hợp đó ta giữ nguyên hành vi cũ (dùng chung cây gốc).
-  canCommit: boolean
+  policy: IsolationPolicy
 }
 
-// Cấp workspace cho một node-run. Luôn trả về một workspace dùng được: nhánh
+// Cấp workspace cho một lượt chạy. Luôn trả về một workspace dùng được: nhánh
 // degrade rơi về `projectPath` y như hành vi cũ.
-export async function acquireNodeWorkspace(args: AcquireArgs): Promise<NodeWorkspace> {
-  const { taskId, nodeId, version, projectPath } = args
-  const holder = `${taskId}:${nodeId}:v${version}`
+export async function acquireWorkspace(args: AcquireArgs): Promise<IsolatedWorkspace> {
+  const { owner, slug, projectPath, policy } = args
+  const holder = `${owner.kind}:${owner.id}:${slug}`
 
   // Claim đồng bộ — không await trước dòng này.
-  if (!sharedClaims.has(projectPath)) {
+  if (policy === 'first-claim' && !sharedClaims.has(projectPath)) {
     sharedClaims.set(projectPath, holder)
     return { cwd: projectPath, isolated: false, claimKey: projectPath }
   }
 
-  const degrade = (reason: string): NodeWorkspace => {
-    log.warn('task node worktree unavailable — sharing the project tree', {
-      taskId,
-      nodeId,
-      version,
+  const degrade = (reason: string): IsolatedWorkspace => {
+    log.warn('isolated worktree unavailable — sharing the project tree', {
+      owner: holder,
       reason,
     })
     return { cwd: projectPath, isolated: false, claimKey: '' }
   }
 
-  if (!args.canCommit) return degrade('per-phase-auto-commit-off')
+  if (policy === 'shared') return degrade('isolation-not-requested')
   const repoRoot = await resolveRepoRoot(projectPath)
   if (!repoRoot) return degrade('not-a-git-repo')
   if (!(await gitAtLeast(MIN_GIT_VERSION))) return degrade(`git-older-than-${MIN_GIT_VERSION}`)
@@ -230,13 +297,13 @@ export async function acquireNodeWorkspace(args: AcquireArgs): Promise<NodeWorks
   const base = await currentBranch(repoRoot)
   if (!base) return degrade('detached-head')
 
-  const slug = sanitizeChild(`${safeSegment(nodeId)}-v${version}`)
-  const dir = join(worktreeRoot(taskId), slug)
-  const branch = `${branchPrefix(taskId)}${slug}`
+  const leaf = sanitizeChild(safeSegment(slug))
+  const dir = join(worktreeRoot(owner), leaf)
+  const branch = `${branchPrefix(owner)}${leaf}`
   try {
     assertValidBranchName(branch)
-    await mkdir(worktreeRoot(taskId), { recursive: true, mode: 0o700 })
-    await rememberBaseBranch(taskId, base)
+    await mkdir(worktreeRoot(owner), { recursive: true, mode: 0o700 })
+    await rememberAnchor(owner, base, repoRoot)
     // Serialise với auto-commit + Git Manager trên cùng repo: `worktree add` ghi
     // vào `.git` (refs + metadata) nên không được chạy song song với một mutator.
     await withWorkspaceLock(
@@ -253,21 +320,25 @@ export async function acquireNodeWorkspace(args: AcquireArgs): Promise<NodeWorks
     return degrade(err instanceof Error ? err.message : String(err))
   }
 
-  log.info('task node running in an isolated worktree', { taskId, nodeId, version, branch })
+  log.info('run isolated in its own worktree', { owner: holder, branch })
   return { cwd: dir, isolated: true, branch, repoRoot, claimKey: '' }
 }
 
 type RescueResult =
-  { kind: 'clean' } | { kind: 'rescued'; files: number } | { kind: 'retained'; detail: string }
+  | { kind: 'clean' }
+  | { kind: 'rescued'; files: number }
+  | { kind: 'retained'; detail: string }
 
-// `canCommit` chỉ nói auto-commit ĐƯỢC BẬT, không nói commit ĐÃ XẢY RA: node fail
-// giữa chừng, hook `pre-commit` chặn, `add` trượt… đều để lại một cây còn việc mà
-// không có commit nào. Xoá checkout lúc đó là mất trắng, không hồi lại được.
+// Auto-commit BẬT chỉ nói commit ĐƯỢC PHÉP, không nói commit ĐÃ XẢY RA: lượt chạy
+// fail giữa chừng, hook `pre-commit` chặn, `add` trượt… đều để lại một cây còn
+// việc mà không có commit nào. Xoá checkout lúc đó là mất trắng, không hồi lại
+// được. Với subagent chat thì còn chắc chắn hơn: chat KHÔNG có auto-commit, nên
+// lưới này là đường duy nhất giữ lại việc agent vừa làm.
 //
 // Nên trước mọi lần bỏ checkout: còn thay đổi ⇒ gom vào MỘT commit WIP trên chính
-// branch của node (branch vẫn được integrateTaskBranches() merge về như thường).
-// Commit rescue cố tình bỏ qua hook và ký GPG — nó là lưới an toàn, không phải
-// commit "đẹp"; để một hook chặn nó thì lại quay về đúng chỗ mất dữ liệu.
+// branch của lượt chạy. Commit rescue cố tình bỏ qua hook và ký GPG — nó là lưới
+// an toàn, không phải commit "đẹp"; để một hook chặn nó thì lại quay về đúng chỗ
+// mất dữ liệu.
 async function rescueDirtyCheckout(dir: string, branch: string): Promise<RescueResult> {
   const fail = (raw: string): RescueResult => ({
     kind: 'retained',
@@ -296,7 +367,7 @@ async function rescueDirtyCheckout(dir: string, branch: string): Promise<RescueR
 
   const add = await runGit(dir, ['add', '-A'], { throwOnNonZero: false })
   if (add.code !== 0) return fail(add.stderr || add.stdout)
-  const message = `WIP: rescued uncommitted work from task node branch ${branch}`
+  const message = `WIP: rescued uncommitted work from branch ${branch}`
   const commit = await runGit(dir, ['commit', '--no-verify', '--no-gpg-sign', '-m', message], {
     throwOnNonZero: false,
   })
@@ -304,14 +375,26 @@ async function rescueDirtyCheckout(dir: string, branch: string): Promise<RescueR
   return { kind: 'rescued', files }
 }
 
-// Nhả workspace khi node-run kết thúc (thành công hay không). Cây sạch ⇒ checkout
-// bị xoá ngay để không tích rác; commit của node vẫn sống trên branch và sẽ được
-// integrateTaskBranches() merge về ở điểm ráo kế tiếp. Cây còn việc chưa lưu ⇒
-// commit WIP trước (xem rescueDirtyCheckout); cứu không được ⇒ KHÔNG xoá gì cả,
-// trả 'retained' để caller báo lên UI.
-export async function releaseNodeWorkspace(
-  taskId: string,
-  ws: NodeWorkspace,
+// Thử bỏ một branch KHÔNG mang việc riêng. `-d` (không bao giờ `-D`) là guarantee
+// của chính git: nó từ chối khi branch còn commit chưa nằm trong HEAD. Nên lượt
+// chỉ-đọc không để lại branch rác, còn lượt có sửa file thì branch còn nguyên và
+// được trả về cho caller báo lên UI. Trả true khi đã xoá.
+async function dropBranchIfContained(repoRoot: string, branch: string): Promise<boolean> {
+  try {
+    const res = await runGit(repoRoot, ['branch', '-d', branch], { throwOnNonZero: false })
+    return res.code === 0
+  } catch {
+    return false
+  }
+}
+
+// Nhả workspace khi lượt chạy kết thúc (thành công hay không). Cây sạch ⇒ checkout
+// bị xoá ngay để không tích rác; commit của lượt vẫn sống trên branch. Cây còn
+// việc chưa lưu ⇒ commit WIP trước (xem rescueDirtyCheckout); cứu không được ⇒
+// KHÔNG xoá gì cả, trả 'retained' để caller báo lên UI.
+export async function releaseWorkspace(
+  owner: WorkspaceOwner,
+  ws: IsolatedWorkspace,
 ): Promise<ReleaseOutcome> {
   if (!ws.isolated) {
     if (ws.claimKey) sharedClaims.delete(ws.claimKey)
@@ -320,8 +403,8 @@ export async function releaseNodeWorkspace(
   const branch = ws.branch ?? ''
   const rescue = await rescueDirtyCheckout(ws.cwd, branch || '(unknown)')
   if (rescue.kind === 'retained') {
-    log.error('node worktree kept — uncommitted work could not be rescued', {
-      taskId,
+    log.error('worktree kept — uncommitted work could not be rescued', {
+      owner: `${owner.kind}:${owner.id}`,
       dir: ws.cwd,
       branch,
       detail: rescue.detail,
@@ -334,13 +417,14 @@ export async function releaseNodeWorkspace(
     }
   }
   if (rescue.kind === 'rescued') {
-    log.warn('node left uncommitted work — committed as WIP before releasing the worktree', {
-      taskId,
+    log.warn('run left uncommitted work — committed as WIP before releasing the worktree', {
+      owner: `${owner.kind}:${owner.id}`,
       branch,
       files: rescue.files,
     })
   }
   const repoRoot = ws.repoRoot
+  let branchKept = branch.length > 0
   try {
     if (repoRoot) {
       await withWorkspaceLock(
@@ -351,13 +435,16 @@ export async function releaseNodeWorkspace(
             timeoutMs: WORKTREE_TIMEOUT_MS,
           })
           await runGit(repoRoot, ['worktree', 'prune'], { throwOnNonZero: false })
+          // Sau `remove` mới xoá được: git từ chối bỏ branch còn checkout ở một
+          // linked worktree.
+          if (branch) branchKept = !(await dropBranchIfContained(repoRoot, branch))
         },
         { timeoutMs: REPO_LOCK_TIMEOUT_MS },
       )
     }
   } catch (err) {
     log.warn('worktree remove failed (sweeper will retry at boot)', {
-      taskId,
+      owner: `${owner.kind}:${owner.id}`,
       dir: ws.cwd,
       err: err instanceof Error ? err.message : String(err),
     })
@@ -367,14 +454,14 @@ export async function releaseNodeWorkspace(
   await rm(ws.cwd, { recursive: true, force: true }).catch(() => undefined)
   return {
     status: rescue.kind === 'rescued' ? 'rescued' : 'clean',
-    ...(branch ? { branch } : {}),
+    ...(branchKept && branch ? { branch } : {}),
   }
 }
 
-// Liệt kê branch node còn tồn của một task — nguồn sự thật là git, nên restart
-// không làm mất dấu công việc đã commit trong worktree.
-async function listTaskBranches(repoRoot: string, taskId: string): Promise<string[]> {
-  const prefix = branchPrefix(taskId)
+// Liệt kê branch còn tồn của một owner — nguồn sự thật là git, nên restart không
+// làm mất dấu công việc đã commit trong worktree.
+async function listOwnerBranches(repoRoot: string, owner: WorkspaceOwner): Promise<string[]> {
+  const prefix = branchPrefix(owner)
   const res = await runGit(
     repoRoot,
     ['for-each-ref', '--format=%(refname:short)', `refs/heads/${prefix}`],
@@ -387,8 +474,13 @@ async function listTaskBranches(repoRoot: string, taskId: string): Promise<strin
     .filter((l) => l.startsWith(prefix))
 }
 
-// Merge mọi branch node của task về nhánh hiện tại của repo. CHỈ được gọi khi
+// Merge mọi branch node của MỘT TASK về nhánh hiện tại của repo. CHỈ được gọi khi
 // task đã ráo (không node nào đang chạy) — lúc đó cây gốc không có ai ghi vào.
+//
+// Nhận `taskId` chứ không nhận `WorkspaceOwner`: merge vào cây làm việc của người
+// dùng là hành động của Task (có công tắc auto-commit per-phase, có điểm ráo).
+// Một lượt chat không có công tắc nào như thế nên branch của subagent KHÔNG bao
+// giờ đi qua đây — ràng buộc bằng kiểu, không bằng quy ước.
 //
 // Conflict ⇒ `merge --abort`, GIỮ branch, báo lên caller. Engine dừng task có
 // trật tự để người dùng tự merge; AWOG không đoán hộ khi hai node song song sửa
@@ -397,11 +489,12 @@ export async function integrateTaskBranches(
   taskId: string,
   projectPath: string,
 ): Promise<IntegrationOutcome[]> {
+  const owner: WorkspaceOwner = { kind: 'task', id: taskId }
   const repoRoot = await resolveRepoRoot(projectPath)
   if (!repoRoot) return []
   let branches: string[]
   try {
-    branches = await listTaskBranches(repoRoot, taskId)
+    branches = await listOwnerBranches(repoRoot, owner)
   } catch (err) {
     log.warn('listing task node branches failed', {
       taskId,
@@ -412,7 +505,7 @@ export async function integrateTaskBranches(
   if (branches.length === 0) {
     // Không còn gì chờ merge ⇒ nhả neo, để đợt cô lập sau neo lại đúng nhánh
     // người dùng đang đứng lúc đó.
-    await clearBaseBranch(taskId)
+    await clearBaseBranch(owner)
     return []
   }
 
@@ -420,7 +513,7 @@ export async function integrateTaskBranches(
   // lúc task chạy thì HEAD không còn là nhánh task đã neo — merge lúc đó đổ commit
   // của agent xuống nhầm nhánh. Lệch ⇒ không merge, báo conflict để engine pause;
   // AWOG không checkout hộ người dùng.
-  const expected = await readBaseBranch(taskId)
+  const expected = await readBaseBranch(owner)
   if (expected) {
     const head = await currentBranch(repoRoot)
     if (head !== expected) {
@@ -453,7 +546,7 @@ export async function integrateTaskBranches(
     outcomes.push(outcome)
     if (outcome.status === 'conflict') break // dừng ở conflict đầu tiên
   }
-  if (outcomes.every((o) => o.status === 'merged')) await clearBaseBranch(taskId)
+  if (outcomes.every((o) => o.status === 'merged')) await clearBaseBranch(owner)
   return outcomes
 }
 
@@ -503,39 +596,55 @@ async function mergeOne(
   }
 }
 
-// Dọn checkout mồ côi ở boot: sidecar chết giữa node-run để lại thư mục worktree
-// + metadata trong `.git`. Đây cũng là một đường xoá hàng loạt, nên nó đi qua
-// ĐÚNG lưới an toàn của release: cây nào còn việc chưa lưu thì commit WIP trước,
-// cứu không được thì giữ nguyên (lần boot sau thử lại). Xong mới `worktree prune`.
-// Branch KHÔNG bị xoá — đó là commit của agent; integrateTaskBranches() sẽ merge
-// khi task được resume.
-export async function sweepOrphanWorktrees(): Promise<number> {
-  let taskIds: string[]
+// Mọi owner có thể còn checkout trên đĩa. Sweeper PHẢI quét đủ cả hai loại —
+// bỏ sót một loại là đẻ lại đúng lỗi mồ côi mà ADR 0081 vừa vá, chỉ dưới một cái
+// tên khác.
+async function listOwners(): Promise<WorkspaceOwner[]> {
+  const owners: WorkspaceOwner[] = []
   try {
-    taskIds = await listTaskIds()
+    for (const id of await listTaskIds()) owners.push({ kind: 'task', id })
   } catch (err) {
     log.warn('worktree sweep: listing tasks failed', {
       err: err instanceof Error ? err.message : String(err),
     })
-    return 0
   }
+  try {
+    for (const id of await readdir(join(awogHome(), SESSION_OWNERS_DIR))) {
+      owners.push({ kind: 'session', id })
+    }
+  } catch {
+    /* chưa phiên chat nào dùng worktree */
+  }
+  return owners
+}
+
+// Dọn checkout mồ côi ở boot: sidecar chết giữa lượt chạy để lại thư mục worktree
+// + metadata trong `.git`. Đây cũng là một đường xoá hàng loạt, nên nó đi qua
+// ĐÚNG lưới an toàn của release: cây nào còn việc chưa lưu thì commit WIP trước,
+// cứu không được thì giữ nguyên (lần boot sau thử lại). Xong mới `worktree prune`
+// và thử bỏ branch rỗng bằng `git branch -d` (git tự từ chối branch còn việc).
+// Branch còn commit KHÔNG bị xoá — đó là công sức của agent; task merge nó ở điểm
+// ráo, còn phiên chat thì để người dùng tự lấy.
+export async function sweepOrphanWorktrees(): Promise<number> {
+  const owners = await listOwners()
   let removed = 0
-  for (const taskId of taskIds) {
-    const root = worktreeRoot(taskId)
+  for (const owner of owners) {
+    const root = worktreeRoot(owner)
     let entries: string[]
     try {
       // eslint-disable-next-line no-await-in-loop
       entries = await readdir(root)
     } catch {
-      continue // task không dùng worktree
+      continue // owner không dùng worktree
     }
+    const swept: string[] = []
     for (const entry of entries) {
       const dir = join(root, entry)
       // eslint-disable-next-line no-await-in-loop
       const rescue = await rescueDirtyCheckout(dir, entry)
       if (rescue.kind === 'retained') {
         log.error('orphan worktree kept — uncommitted work could not be rescued', {
-          taskId,
+          owner: `${owner.kind}:${owner.id}`,
           dir,
           detail: rescue.detail,
         })
@@ -543,35 +652,50 @@ export async function sweepOrphanWorktrees(): Promise<number> {
       }
       if (rescue.kind === 'rescued') {
         log.warn('orphan worktree had uncommitted work — committed as WIP before sweeping', {
-          taskId,
+          owner: `${owner.kind}:${owner.id}`,
           dir,
           files: rescue.files,
         })
       }
       // eslint-disable-next-line no-await-in-loop
       await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+      swept.push(entry)
       removed += 1
     }
     // Chỉ xoá thư mục cha khi đã rỗng — checkout giữ lại phải sống sót.
     // eslint-disable-next-line no-await-in-loop
     await rmdir(root).catch(() => undefined)
     // eslint-disable-next-line no-await-in-loop
-    const repoRoot = await repoRootOfTask(taskId)
+    const repoRoot = await repoRootOfOwner(owner)
     if (!repoRoot) continue
     try {
       // eslint-disable-next-line no-await-in-loop
       await runGit(repoRoot, ['worktree', 'prune'], { throwOnNonZero: false })
+      const prefix = branchPrefix(owner)
+      for (const entry of swept) {
+        // eslint-disable-next-line no-await-in-loop
+        await dropBranchIfContained(repoRoot, `${prefix}${safeSegment(entry)}`)
+      }
     } catch {
       /* prune là dọn dẹp cơ hội — thất bại không chặn boot */
     }
   }
-  if (removed > 0) log.info('swept orphan task worktrees', { removed })
+  if (removed > 0) log.info('swept orphan worktrees', { removed })
   return removed
 }
 
-async function repoRootOfTask(taskId: string): Promise<string | null> {
+// Repo đã cấp worktree cho owner. Nguồn chính là file neo `worktree-repo` (ghi
+// lúc acquire, đúng cho cả hai loại owner); owner `task` của bản trước bản vá này
+// chưa có file đó nên fall back về project của task.
+async function repoRootOfOwner(owner: WorkspaceOwner): Promise<string | null> {
+  const remembered = await readTrimmed(repoFile(owner))
+  if (remembered) {
+    const root = await resolveRepoRoot(remembered)
+    if (root) return root
+  }
+  if (owner.kind !== 'task') return null
   try {
-    const task = await loadTask(taskId)
+    const task = await loadTask(owner.id)
     if (!task) return null
     const project = await loadProject(task.projectId)
     if (!project?.path) return null

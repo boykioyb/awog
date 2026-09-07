@@ -4,7 +4,7 @@
 //   status (completed | waiting_approval) or failed.
 //
 // Working tree (ADR 0081): the node does NOT hard-code `project.path` any more.
-// acquireNodeWorkspace gives the first in-flight node of a project the shared tree
+// acquireWorkspace gives the first in-flight node of a project the shared tree
 // and every concurrent sibling its own `git worktree` + branch, so two parallel
 // agents can't overwrite each other's edits or sweep each other's files into an
 // auto-commit. The engine merges those branches back when the task drains.
@@ -32,7 +32,7 @@ import {
   formatDuration,
 } from './trace-mapper.js'
 import { recordToolCall } from './budget.js'
-import { acquireNodeWorkspace, releaseNodeWorkspace } from './worktree.js'
+import { acquireWorkspace, releaseWorkspace } from './worktree.js'
 import { loadTask } from './store.js'
 import { taskArtifactsDir } from './store.js'
 import {
@@ -45,7 +45,7 @@ import {
   emitTrace,
   emitWorktree,
 } from './emit.js'
-import type { NodeWorkspace } from './worktree.js'
+import type { IsolatedWorkspace } from './worktree.js'
 import type { InvokeToolUse } from '../sdk/invoke.js'
 import type {
   SessionSettings,
@@ -145,7 +145,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
   const { taskId, version, node, task } = ctx
   const startedMs = Date.now()
   const rootId = `tr-${node.id}-v${version}`
-  let workspace: NodeWorkspace | null = null
+  let workspace: IsolatedWorkspace | null = null
 
   try {
     const project = await loadProject(task.projectId)
@@ -159,12 +159,13 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     // per-phase, hoặc scope 'artifacts-only' ⇒ dùng chung cây gốc như trước.
     const commitsPerPhase =
       task.autoCommitPerPhase !== false && (task.autoCommitScope ?? 'workspace') === 'workspace'
-    workspace = await acquireNodeWorkspace({
-      taskId,
-      nodeId: node.id,
-      version,
+    workspace = await acquireWorkspace({
+      owner: { kind: 'task', id: taskId },
+      slug: `${node.id}-v${version}`,
       projectPath: project.path,
-      canCommit: commitsPerPhase,
+      // Tắt auto-commit per-phase ⇒ node không commit ⇒ không có gì mang về nhánh
+      // chính, giữ hành vi cũ (dùng chung cây gốc).
+      policy: commitsPerPhase ? 'first-claim' : 'shared',
     })
     const cwd = workspace.cwd
     if (workspace.isolated && workspace.branch) {
@@ -449,7 +450,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     // thì checkout còn nguyên trên đĩa và phải nói cho người dùng biết nó ở đâu,
     // đừng để chuyện mất-hay-không-mất chìm trong log.
     if (workspace) {
-      const released = await releaseNodeWorkspace(taskId, workspace)
+      const released = await releaseWorkspace({ kind: 'task', id: taskId }, workspace)
       if (released.status === 'retained' && released.branch) {
         // Path đi lên UI cũng đi qua sanitizer như stderr: home thành `~`,
         // vẫn cd được mà không rải path tuyệt đối vào event log.

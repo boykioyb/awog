@@ -370,6 +370,12 @@ export async function runStreamPi(
       // anything still running, so a session never carries a live subagent into
       // its next turn (one turn at a time stays true).
       allowBackground: true,
+      // ADR 0083 §c: a chat subagent may ask for `isolation: "worktree"` — its own
+      // checkout + branch, so parallel subagents can't overwrite each other. It
+      // ISOLATES ONLY: nothing is merged back into the user's tree from a chat
+      // turn (subagents/worktree-lease.ts explains why). Needs the session id —
+      // that is the owner key the boot sweeper scans.
+      allowIsolation: true,
       ...(args.sessionId ? { sessionId: args.sessionId } : {}),
       // `subagent_type: "fork"` replays a capped tail of this transcript into the
       // subagent (task-tool.ts trims it).
@@ -646,8 +652,10 @@ export async function runStreamPi(
     throw mapErrorToRpc(err)
   } finally {
     // The turn is over: nothing it spawned may still be running (ADR 0083). Also
-    // releases the UI's "stop this subagent" hook for this session.
-    subagents?.disposeAll()
+    // releases the UI's "stop this subagent" hook for this session, and every
+    // isolated worktree it leased — awaited, because releasing runs the rescue
+    // commit that puts a subagent's uncommitted work on its branch.
+    await subagents?.disposeAll()
   }
 
   // Pi swallows a mid-stream abort into a graceful stopReason 'aborted' instead

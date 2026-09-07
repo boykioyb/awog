@@ -26,8 +26,10 @@
 //     `SendMessage`. Turn-scoped lifetime (subagents/registry.ts) — chat only.
 //   - `subagent_type: "fork"`: a general-purpose subagent that also inherits a
 //     CAPPED slice of the parent transcript, not just the parent's config.
-// Isolation (`isolation: "worktree"`) is deliberately NOT implemented here — see
-// ADR 0083 §c.
+//   - `isolation: "worktree"`: the subagent gets its own `git worktree` + branch
+//     instead of sharing the session's working tree (ADR 0083 §c, shipped in #7c).
+//     Chat only, and it ISOLATES ONLY — AWOG never merges that branch back into
+//     the user's tree from a chat turn; see subagents/worktree-lease.ts.
 
 import {
   runAgentLoop,
@@ -70,6 +72,7 @@ import {
 } from '../subagents/model-tier.js'
 import { SubagentRegistry, type SubagentSnapshot } from '../subagents/registry.js'
 import { trimForkHistory } from '../subagents/fork-history.js'
+import { WorktreeLeases } from '../subagents/worktree-lease.js'
 import {
   clearExternalKiller,
   registerExternalBackground,
@@ -96,6 +99,13 @@ const TASK_OUTPUT_DEFAULT_WAIT_MS = 120_000
 const TASK_OUTPUT_MAX_WAIT_MS = 600_000
 // `subagent_type` that means "same job, my context" instead of a named agent.
 const FORK_SUBAGENT_TYPE = 'fork'
+// `isolation` values we accept. `remote` (Claude SDK) has no meaning in AWOG —
+// there is no remote executor — so it is not offered.
+const ISOLATION_WORKTREE = 'worktree'
+const ISOLATION_NONE = 'none'
+// Trần chờ subagent dừng hẳn sau khi lượt cha abort, trước khi nhả worktree của
+// nó. Đủ để một vòng lặp bị abort unwind, ngắn để một vòng lặp lì không treo lượt.
+const SUBAGENT_DRAIN_TIMEOUT_MS = 10_000
 
 const TaskParams = Type.Object({
   description: Type.String({
@@ -140,6 +150,15 @@ const TaskParams = Type.Object({
         'Optional short name for this subagent. Makes it addressable by name in TaskOutput / TaskStop / SendMessage.',
     }),
   ),
+  // Plain string for the same reason as `model`: a union would hard-fail in the
+  // schema validator BEFORE execute() runs, surfacing as an unactionable error
+  // instead of a readable list of valid values.
+  isolation: Type.Optional(
+    Type.String({
+      description:
+        'Set to "worktree" to run this subagent in its own git worktree on its own branch, leaving your working tree untouched. Use it when several subagents edit files at the same time. Default "none" (shares the current working tree).',
+    }),
+  ),
 })
 
 interface TaskDetails {
@@ -151,6 +170,8 @@ interface TaskDetails {
   background?: boolean
   // Model the subagent actually ran on (after tier resolution).
   model?: string
+  // Branch of the isolated worktree it ran in (ADR 0083 §c), when isolated.
+  branch?: string
   isError?: true
 }
 
@@ -210,9 +231,16 @@ export interface TaskToolDeps {
   // that can never be collected — the Claude SDK branch forces tasks synchronous
   // for exactly this reason (runtime/claude-sdk/shared.ts).
   allowBackground?: boolean
-  // Session id, ONLY to mirror background subagents as UI chips via the shared
-  // background registry (same list the Claude SDK branch feeds). Absent → no chips.
+  // Session id. Two uses, both chat-only: mirroring background subagents as UI
+  // chips via the shared background registry (same list the Claude SDK branch
+  // feeds), and being the OWNER id of an isolated worktree (tasks/worktree.ts).
+  // Absent → no chips and no isolation.
   sessionId?: string
+  // May a subagent ask for `isolation: "worktree"`? Chat only. A task node already
+  // runs in its own worktree and its branch is merged back at the drain point
+  // (ADR 0081); nesting a second, never-merged worktree inside it would silently
+  // drop the subagent's edits from the node's commit.
+  allowIsolation?: boolean
   // The parent session transcript, used by `subagent_type: "fork"`. A capped tail
   // is replayed into the fork's context; absent → a fork degrades to a plain
   // general-purpose subagent.
@@ -232,7 +260,7 @@ function matchAgent(agents: Agent[], subagentType: string): Agent | undefined {
 
 // Render the available-subagents menu into the tool description so the model
 // picks a valid `subagent_type`. Empty list → a note that none are configured.
-function describeTool(agents: Agent[], allowBackground: boolean): string {
+function describeTool(agents: Agent[], allowBackground: boolean, allowIsolation: boolean): string {
   const intro =
     'Launch a specialized AWOG subagent to handle a focused, multi-step task autonomously. ' +
     'The subagent runs with its own system prompt, tools, and MCP servers, then returns its final message as the result. ' +
@@ -241,15 +269,18 @@ function describeTool(agents: Agent[], allowBackground: boolean): string {
   const background = allowBackground
     ? '\n\nSet `run_in_background: true` to keep working while it runs — then collect its result with `TaskOutput` before you finish your turn (background subagents are stopped when the turn ends). Give it a `name` to address it later with `TaskOutput`, `TaskStop` or `SendMessage`.'
     : ''
+  const isolation = allowIsolation
+    ? '\n\nSet `isolation: "worktree"` when a subagent will EDIT files while other work is happening at the same time: it then gets its own checkout on its own branch, so nothing it writes can collide with yours or another subagent\'s. Its changes stay on that branch — the working tree is not modified and nothing is merged for you; report the branch name so the user can merge it. Leave it out for read-only or one-at-a-time work: a fresh checkout has no node_modules, no .env and no build cache.'
+    : ''
   if (agents.length === 0) {
-    return `${intro}${background}\n\n(No named subagents are configured in this workspace — calling this runs a general-purpose subagent that inherits the current agent, tools, and model.)`
+    return `${intro}${background}${isolation}\n\n(No named subagents are configured in this workspace — calling this runs a general-purpose subagent that inherits the current agent, tools, and model.)`
   }
   const menu = agents
     .map(
       (a) => `- ${a.name}: ${a.description?.split('\n')[0]?.trim() || a.role || 'general-purpose'}`,
     )
     .join('\n')
-  return `${intro}${background}\n\nAvailable subagent_type values:\n${menu}`
+  return `${intro}${background}${isolation}\n\nAvailable subagent_type values:\n${menu}`
 }
 
 // Union the parent turn's resolved MCP servers with the subagent's own. Returns
@@ -310,6 +341,10 @@ interface PreparedSubagent {
 interface PrepareOptions {
   tier?: SubagentModelTier
   fork: boolean
+  // Working tree for this subagent: the session/task cwd, or an isolated worktree
+  // leased for this one run (ADR 0083 §c). Drives BOTH its fs/bash sandbox root
+  // and its orientation block, so it never reads one tree and writes another.
+  cwd: string
 }
 
 // Resolve a subagent's config + credential + model and build its Task-free
@@ -376,7 +411,7 @@ async function prepareSubagent(
   // agent's allowedTools and the session denylist. NO Task tool (depth = 1) and
   // NO plan.
   const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
-    deps.cwd,
+    opts.cwd,
     mcpServers,
     apiSources,
     {
@@ -408,7 +443,7 @@ async function prepareSubagent(
   // text survives being reused. A subagent asked for a PR body or a release note
   // gets quoted verbatim by the parent, so hard-wrapped prose lands straight in the
   // final message — and nested subagent steps render in the transcript anyway.
-  const subContextBlock = await buildOneShotContextBlock(deps.cwd)
+  const subContextBlock = await buildOneShotContextBlock(opts.cwd)
   const subAppend =
     [
       subContextBlock,
@@ -513,23 +548,25 @@ function withNotes(text: string, notes: string[]): string {
 // Build the `Task` AgentTool for one parent turn. The returned tool is added at
 // the top level only (run-stream / invoke) — never to a subagent's toolset.
 //
-// `registry` is optional so the task path (runtime/invoke.ts) keeps its existing
-// one-argument call: it gets a registry that allows no background run, which is
-// exactly what a one-shot node needs.
+// `registry` and `leases` are optional so the task path (runtime/invoke.ts) keeps
+// its existing one-argument call: it gets a registry that allows no background run
+// and no worktree leases, which is exactly what a one-shot node needs.
 export function createTaskTool(
   deps: TaskToolDeps,
   registry: SubagentRegistry = new SubagentRegistry({
     maxBackground: 0,
     backgroundTimeoutMs: 0,
   }),
+  leases?: WorktreeLeases,
 ): AgentTool<typeof TaskParams, TaskDetails> {
   let spawned = 0
   const canBackground = deps.allowBackground === true && registry.maxBackground > 0
+  const canIsolate = leases !== undefined
 
   return {
     name: 'Task',
     label: 'Task',
-    description: describeTool(deps.agents, canBackground),
+    description: describeTool(deps.agents, canBackground, canIsolate),
     parameters: TaskParams,
     // Intentionally NOT marked sequential: when the model spawns several Task
     // calls in one turn they fan out in parallel (the parent loop runs with
@@ -561,6 +598,18 @@ export function createTaskTool(
       // A fork is the parent, continued: running it on a different model would
       // make it a different agent. Same rule as the Claude SDK branch.
       if (isFork) tier = undefined
+
+      // Isolation is a REQUEST too. A bad value bounces so the model can retry;
+      // an unavailable one degrades to the shared tree with a note (the work still
+      // has to happen), exactly like run_in_background.
+      const rawIsolation = params.isolation?.trim().toLowerCase()
+      if (rawIsolation && rawIsolation !== ISOLATION_WORKTREE && rawIsolation !== ISOLATION_NONE) {
+        return textResult(
+          `Unknown isolation "${params.isolation}". Valid values: "${ISOLATION_WORKTREE}", "${ISOLATION_NONE}". Omit it to share the current working tree.`,
+          { ...details, isError: true as const },
+        )
+      }
+      const wantsWorktree = rawIsolation === ISOLATION_WORKTREE
 
       // Resolve the target. A *named* type must match an in-scope agent, else we
       // bounce so the model can fix a typo'd name. An *omitted* type is not an
@@ -614,12 +663,38 @@ export function createTaskTool(
         )
       }
 
+      // Worktree lease. Acquired BEFORE prepareSubagent because the checkout is
+      // the subagent's fs/bash sandbox root — building its toolset against the
+      // shared tree and then moving it would let it read one tree and write
+      // another. Released at the end of the parent turn (disposeAll), never here:
+      // a SendMessage follow-up keeps running in the same checkout.
+      let cwd = deps.cwd
+      let branch: string | undefined
+      if (wantsWorktree) {
+        if (!canIsolate || !leases) {
+          notes.push(
+            'Worktree isolation is not available here, so this subagent ran in the shared working tree.',
+          )
+        } else {
+          const lease = await leases.acquire(toolCallId)
+          cwd = lease.cwd
+          branch = lease.branch
+          if (lease.note) notes.push(lease.note)
+        }
+      }
+      if (branch) {
+        details.branch = branch
+        notes.push(
+          `It ran in an isolated worktree on branch "${branch}"; the working tree was not touched and nothing was merged. Any files it changed are committed to that branch when this turn ends — report the branch name so the user can \`git merge ${branch}\` if they want the changes.`,
+        )
+      }
+
       try {
         const prepared = await prepareSubagent(
           deps,
           toolCallId,
           agent,
-          { ...(tier ? { tier } : {}), fork: isFork },
+          { ...(tier ? { tier } : {}), fork: isFork, cwd },
           signal,
         )
         if (prepared.note) notes.push(prepared.note)
@@ -837,9 +912,13 @@ function createSendMessageTool(
 export interface SubagentToolset {
   // Task + its control tools, ready to push into the parent toolset.
   tools: AgentTool[]
-  // MUST be called when the parent turn ends (success, error or cancel): a
-  // background subagent may not outlive the turn that spawned it.
-  disposeAll: () => void
+  // MUST be awaited when the parent turn ends (success, error or cancel): a
+  // background subagent may not outlive the turn that spawned it, and every
+  // isolated worktree has to be released through the rescue net (uncommitted work
+  // is committed as WIP on the subagent's branch) before the turn is reported
+  // done. Awaited, not fire-and-forget: the branch a user is told to merge must
+  // exist by the time they read the message.
+  disposeAll: () => Promise<void>
 }
 
 // Build the full subagent toolset for a CHAT turn (ADR 0083): `Task` plus the
@@ -878,7 +957,15 @@ export function createSubagentTools(deps: TaskToolDeps): SubagentToolset {
       : {}),
   })
 
-  const tools: AgentTool[] = [createTaskTool(deps, registry)]
+  // Worktree leases (ADR 0083 §c). Only chat, and only with a session id: the id
+  // is the OWNER key that the boot sweeper scans, so without it a checkout could
+  // be orphaned with nobody to clean it up.
+  const leases =
+    deps.allowIsolation && sessionId
+      ? new WorktreeLeases({ kind: 'session', id: sessionId }, deps.cwd)
+      : undefined
+
+  const tools: AgentTool[] = [createTaskTool(deps, registry, leases)]
   if (deps.allowBackground) {
     tools.push(createTaskOutputTool(registry), createTaskStopTool(registry))
     tools.push(createSendMessageTool(registry))
@@ -887,9 +974,15 @@ export function createSubagentTools(deps: TaskToolDeps): SubagentToolset {
 
   return {
     tools,
-    disposeAll: (): void => {
+    disposeAll: async (): Promise<void> => {
       registry.abortAll()
       if (sessionId && deps.allowBackground) clearExternalKiller(sessionId)
+      if (leases) {
+        // Abort chỉ phát tín hiệu — đợi vòng lặp dừng hẳn trước khi đụng vào cây
+        // của nó, kẻo `git status` chạy đua với một tool call đang ghi dở.
+        await registry.drain(SUBAGENT_DRAIN_TIMEOUT_MS)
+        await leases.releaseAll()
+      }
     },
   }
 }

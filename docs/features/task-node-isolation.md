@@ -1,6 +1,8 @@
 # Cô lập node Task song song + ngân sách cho Task
 
-> Quyết định kiến trúc: [ADR 0081](../decisions/0081-task-node-worktree-isolation.md). Nền tảng: [Task Execution Engine](task-execution-engine.md) ([ADR 0024](../decisions/0024-task-execution-engine-ipc-contract.md)).
+> Quyết định kiến trúc: [ADR 0081](../decisions/0081-task-node-worktree-isolation.md) (+ đính chính "khoá theo owner" ở cuối ADR). Nền tảng: [Task Execution Engine](task-execution-engine.md) ([ADR 0024](../decisions/0024-task-execution-engine-ipc-contract.md)).
+>
+> `tasks/worktree.ts` **không còn khoá theo `taskId`**: nó khoá theo `WorkspaceOwner = { kind: 'task' | 'session', id }`. Node Task là owner `task` (mọi hành vi dưới đây giữ nguyên); subagent chat là owner `session` — xem [Subagent Task tool](subagent-task-tool.md#worktree-cô-lập-cho-subagent-adr-0083-c).
 
 Tài liệu này mô tả **hành vi đã ship** ở tầng sidecar. Chưa có UI cho phần cấu hình — mọi thứ chỉnh bằng biến môi trường hoặc mặc định.
 
@@ -19,6 +21,23 @@ Song song đó, node Task chạy **không có trần** chi phí / tool call / th
 |---|---|
 | Node **đầu tiên** đang chạy của project | Cây gốc `project.path` — **y hệt trước đây** |
 | Node đang chạy **thứ 2, 3, 4** | Worktree riêng `~/.awog/tasks/<taskId>/worktrees/<nodeId>-vN`, branch `awog/task/<taskId>/<nodeId>-vN`, checkout tại `HEAD` |
+
+Đường dẫn/branch trên là **owner `task`** của bảng chung dưới đây; đổi `kind` là đổi cả bốn thứ cùng lúc (thư mục, neo nhánh, tiền tố branch, sweeper):
+
+| `owner.kind` | Thư mục owner | Tiền tố branch |
+|---|---|---|
+| `task` | `~/.awog/tasks/<taskId>/` | `awog/task/<taskId>/` |
+| `session` | `~/.awog/session-worktrees/<sessionId>/` | `awog/session/<sessionId>/` |
+
+Owner `session` **không** nằm trong `~/.awog/tasks/` — một thư mục con ở đó sẽ bị `listTaskIds()` nhìn thấy như một task ma.
+
+Chính sách cấp phát (`AcquireArgs.policy`):
+
+| policy | Ai dùng | Hành vi |
+|---|---|---|
+| `first-claim` | Node Task có commit | Lượt in-flight đầu tiên của project giữ cây gốc, phần còn lại vào worktree |
+| `shared` | Node Task tắt auto-commit per-phase | Không bao giờ cô lập |
+| `always` | Subagent chat | Luôn cô lập (cây gốc là cwd của chính lượt cha) |
 
 Nhờ vậy DAG tuần tự (đại đa số) **không đổi hành vi**: giữ nguyên `node_modules`, `.env`, thư mục build; không tốn thêm một lần checkout.
 
@@ -53,8 +72,9 @@ AWOG **không** tự giải quyết conflict: hai node song song sửa cùng m�
 | Khi nào | Làm gì |
 |---|---|
 | Node xong (kể cả fail) | **Hỏi `git status --porcelain` trước** (xem "Không xoá mù" bên dưới). Cây sạch ⇒ xoá checkout (`git worktree remove --force` + `worktree prune`, rồi `rm -rf` cho chắc). **Branch giữ lại** để merge |
+| Node xong, branch **rỗng** | `git branch -d` ngay lúc release. `-d` (không bao giờ `-D`) là guarantee của **git**: nó từ chối xoá branch còn commit chưa nằm trong HEAD ⇒ lượt chỉ-đọc không để lại branch rác, lượt có sửa file thì branch còn nguyên. `ReleaseOutcome.branch` vì thế **chỉ** có khi branch thật sự sống sót |
 | Merge thành công | `git branch -d` |
-| Sidecar khởi động lại | `sweepOrphanWorktrees()` chạy đầu `resumeOnBoot()`: **từng** checkout còn sót dưới `~/.awog/tasks/*/worktrees/` đi qua đúng lưới an toàn của release, rồi mới xoá + `git worktree prune`. **Branch giữ lại**, sẽ merge ở điểm ráo đầu tiên sau khi task resume |
+| Sidecar khởi động lại | `sweepOrphanWorktrees()` chạy đầu `resumeOnBoot()` và quét **cả hai loại owner** (`listOwners()` = mọi task + mọi thư mục dưới `~/.awog/session-worktrees/`): **từng** checkout còn sót đi qua đúng lưới an toàn của release, rồi mới xoá + `git worktree prune` + thử `git branch -d`. Repo để prune đọc từ file neo `<ownerDir>/worktree-repo` (ghi lúc acquire; owner `task` cũ chưa có file này thì fall back về project của task). **Branch còn commit giữ lại** |
 
 #### Không xoá mù (lưới an toàn chống mất dữ liệu)
 
@@ -76,7 +96,7 @@ Không cô lập được thì **quay về hành vi cũ** (dùng chung `project.
 
 | `reason` | Nghĩa là |
 |---|---|
-| `per-phase-auto-commit-off` | Task tắt auto-commit per-phase hoặc dùng scope `artifacts-only` ⇒ node không commit ⇒ worktree sẽ **mất dữ liệu** khi xoá checkout |
+| `isolation-not-requested` | `policy: 'shared'` — Task tắt auto-commit per-phase hoặc dùng scope `artifacts-only` ⇒ node không commit ⇒ không có gì mang về nhánh chính |
 | `not-a-git-repo` | Project không nằm trong repo git |
 | `git-older-than-2.20` | Git quá cũ (cùng ngưỡng Git Manager) |
 | `detached-head` | Repo đang ở HEAD detached ⇒ không có nhánh nào để neo merge |
@@ -125,12 +145,13 @@ Kênh sidecar-event tương ứng: `task.budget.exceeded`, `task.worktree`. UI c
 
 | Path | Vai trò |
 |---|---|
-| [`tasks/worktree.ts`](../../apps/desktop/sidecar/src/tasks/worktree.ts) | Cấp/nhả worktree, merge branch về, dọn mồ côi |
+| [`tasks/worktree.ts`](../../apps/desktop/sidecar/src/tasks/worktree.ts) | Cấp/nhả worktree **theo owner**, merge branch về (chỉ Task), dọn mồ côi (mọi owner) |
+| [`runtime/subagents/worktree-lease.ts`](../../apps/desktop/sidecar/src/runtime/subagents/worktree-lease.ts) | Vòng đời lease của owner `session` — nhả hết khi lượt chat kết thúc |
 | [`tasks/budget.ts`](../../apps/desktop/sidecar/src/tasks/budget.ts) | Trần cost/tool-call/wallclock cấp task |
 | [`tasks/node-runner.ts`](../../apps/desktop/sidecar/src/tasks/node-runner.ts) | Lấy cwd từ worktree, đếm tool call, nhả workspace ở `finally` |
 | [`tasks/engine.ts`](../../apps/desktop/sidecar/src/tasks/engine.ts) | Merge ở điểm ráo, pause khi chạm trần/conflict, sweep lúc boot |
 | [`git/runner.ts`](../../apps/desktop/sidecar/src/git/runner.ts) | `gitVersion()` / `gitAtLeast()` dùng chung |
-| [`tasks/__tests__/worktree.test.ts`](../../apps/desktop/sidecar/src/tasks/__tests__/worktree.test.ts) | Test vòng đời (chờ vitest được wire vào sidecar) |
+| [`tasks/__tests__/worktree.test.ts`](../../apps/desktop/sidecar/src/tasks/__tests__/worktree.test.ts) | 17 test trên repo git thật (`npx vitest@2 run`) — cả hai loại owner |
 
 ## 6. Chưa làm
 

@@ -152,3 +152,73 @@ Không chọn "tự `git checkout` về nhánh đã neo rồi merge": cây làm 
 ### Kiểm chứng
 
 `src/tasks/__tests__/worktree.test.ts` mở rộng, chạy trên repo git **thật** trong thư mục tạm: node fail còn thay đổi chưa commit ⇒ việc lên branch (kể cả khi repo có hook `pre-commit` luôn fail); `.git/objects` chỉ đọc ⇒ `retained`, sweep **không** xoá, sửa xong thì lượt sweep sau cứu và dọn; HEAD đổi sang nhánh khác/detached ⇒ không merge, nhánh người dùng không nhúc nhích, branch còn nguyên, về đúng nhánh thì merge lại bình thường; `detail` của merge lỗi không còn path tuyệt đối.
+
+---
+
+## Đính chính (2026-09-07) — khoá theo **owner**, và ranh giới merge cho chat
+
+ADR này giữ nguyên trạng thái **Accepted**; phần dưới **mở rộng** phạm vi module từ "node Task" sang "một lượt chạy agent bất kỳ", theo đúng đề xuất ở [ADR 0083 §c](0083-pi-subagent-parity.md) ("Việc cần làm tiếp" mục 1). Đây là **chuẩn hiện hành** cho [`tasks/worktree.ts`](../../apps/desktop/sidecar/src/tasks/worktree.ts).
+
+### A. Khoá theo owner, không khoá theo task
+
+Bản gốc khoá `taskId` ở **bốn** chỗ độc lập: thư mục checkout (`~/.awog/tasks/<taskId>/worktrees/`), neo nhánh (`.../worktree-base`), tiền tố branch (`awog/task/<taskId>/`) và **sweeper** (`sweepOrphanWorktrees()` quét `listTaskIds()`). Subagent trong một phiên chat ([ADR 0083](0083-pi-subagent-parity.md)) có **đúng** tranh chấp mà ADR này vá — hai agent song song sửa chung một cây — nhưng không có `taskId`.
+
+Mượn `sessionId` làm `taskId` là đường **sai**, và ADR 0083 đã nêu đúng vì sao: nó đẻ thư mục task ma trong store Task, và để lại checkout mồ côi mà không sweeper nào quét.
+
+**Quyết định:** một khoá duy nhất cho cả bốn chỗ.
+
+```ts
+WorkspaceOwner = { kind: 'task' | 'session'; id: string }
+```
+
+| `kind` | Thư mục owner | Tiền tố branch |
+|---|---|---|
+| `task` | `~/.awog/tasks/<taskId>/` | `awog/task/<taskId>/` |
+| `session` | `~/.awog/session-worktrees/<sessionId>/` | `awog/session/<sessionId>/` |
+
+Layout của `task` **không đổi một ký tự** ⇒ không cần migration, checkout/branch có sẵn trên đĩa vẫn được nhận diện. Owner `session` nằm **cạnh** `tasks/`, cố ý không nằm trong: một thư mục con ở đó sẽ bị `listTaskIds()` (và mọi thứ đọc store Task) nhìn thấy như một task.
+
+**Sweeper quét cả hai loại.** `listOwners()` = `listTaskIds()` ∪ `readdir(~/.awog/session-worktrees)`. Bỏ sót một loại chính là đẻ lại lỗi mồ côi dưới một cái tên mới, nên đây là phần không được phép "làm sau". Sweeper cần repo root để `worktree prune`; với owner `session` không có `task.projectId` để tra ngược, nên acquire ghi thêm `<ownerDir>/worktree-repo`. Owner `task` tạo trước bản vá này chưa có file đó ⇒ fall back về project của task như cũ.
+
+`acquireNodeWorkspace(args)` / `releaseNodeWorkspace(taskId, ws)` đổi thành `acquireWorkspace({ owner, slug, projectPath, policy })` / `releaseWorkspace(owner, ws)`; `NodeWorkspace` → `IsolatedWorkspace`. Cờ boolean `canCommit` thành một enum nói đúng ý:
+
+| `policy` | Ai dùng | Hành vi |
+|---|---|---|
+| `first-claim` | Node Task có commit | Lượt in-flight đầu tiên của project giữ cây gốc, phần còn lại vào worktree (**hành vi cũ**) |
+| `shared` | Node Task tắt auto-commit per-phase | Không bao giờ cô lập (`reason: isolation-not-requested`) |
+| `always` | Subagent chat | Luôn cô lập — cây gốc là cwd của chính lượt cha, không có chuyện giành chỗ |
+
+### B. Ranh giới sản phẩm — chat **chỉ cô lập, KHÔNG tự merge**
+
+ADR 0083 §c dừng lại đúng chỗ: `integrateTaskBranches()` merge vào nhánh người dùng **đang checkout**, và làm việc đó từ một lượt chat nghĩa là AWOG tự tạo branch + commit + merge vào repo của họ mà không ai bật một công tắc nào.
+
+**Quyết định: subagent chat được worktree + branch, KHÔNG bao giờ được merge.** Cây làm việc của người dùng không nhúc nhích một byte; tool result nêu tên branch, người dùng tự `git merge` khi muốn.
+
+Ràng buộc này là **kiểu, không phải quy ước**: `integrateTaskBranches(taskId, projectPath)` cố ý **không** nhận `WorkspaceOwner` — nó tự dựng owner `task` bên trong. Không có cách nào gọi hàm merge cho một owner `session`. Một quy ước ("nhớ đừng gọi cho session") sẽ hỏng ở lần refactor thứ hai.
+
+Vì sao Task được mà chat không: Task **có** công tắc (auto-commit per-phase là thứ người dùng bật, và ADR này đã lấy nó làm điều kiện cấp worktree) và **có** điểm ráo — thời điểm chắc chắn không ai đang ghi vào cây gốc — để merge. Lượt chat không có cả hai: người dùng có thể đang tự sửa file trong editor ngay lúc đó.
+
+Ba hệ quả trực tiếp của "không merge":
+
+1. **Lưới F8a trở thành đường sống duy nhất.** Chat không có auto-commit ⇒ gần như mọi subagent có sửa file sẽ kết thúc với một cây bẩn. Commit `WIP: rescued…` lúc release vì thế không còn là trường hợp hiếm mà là đường chính; không có nó thì cô lập subagent = mất trắng việc nó vừa làm.
+2. **Branch rỗng phải tự biến mất.** Không merge thì không có ai gọi `git branch -d` sau này, và một subagent chỉ-đọc sẽ để lại rác vĩnh viễn. Lúc release ta thử `git branch -d` (**không bao giờ** `-D`): git tự từ chối branch còn commit chưa nằm trong HEAD, nên đây là guarantee của git chứ không phải phán đoán của AWOG. `ReleaseOutcome.branch` do đó **chỉ** được set khi branch thật sự sống sót — tức là khi có thứ để nói với người dùng. Áp cho **cả hai** owner: với Task nó chỉ thay một lần merge no-op bằng một lần xoá tại chỗ.
+3. **Nhả worktree phải chờ subagent chết hẳn.** `abortAll()` chỉ *phát* tín hiệu; vòng lặp pi unwind bất đồng bộ nên một tool call đang bay vẫn ghi được file. `disposeAll()` của toolset vì thế thành `async`: `abortAll()` → `registry.drain(10s)` → nhả worktree; và `run-stream.ts` **await** nó. Không await thì lượt được báo xong trước khi branch tồn tại — người dùng đọc "merge branch X" rồi không thấy X đâu.
+
+Trần: **4** checkout cô lập sống cùng lúc trong một lượt (bằng trần subagent nền và trần scheduler của Task — một mô hình duy nhất cho "AWOG tự fan-out rộng bao nhiêu"), mỗi checkout là một bản sao cây làm việc thật.
+
+Đã cân nhắc và **từ chối**:
+
+- **Auto-merge sau công tắc mới ở Settings.** Thêm một công tắc cho hành vi chưa ai xin là YAGNI, và công tắc đó phải trả lời tiếp "merge lúc nào?" — lượt chat không có điểm ráo nào để trả lời.
+- **Cô lập MỌI subagent (không cần model xin).** Từ chối vì đúng lý do ADR này đã từ chối "worktree cho mọi node": checkout sạch không có `node_modules`/`.env`/cache, mà đa số subagent chat là "đọc X rồi báo cáo". Mặc định giữ nguyên hành vi hôm nay; `isolation: "worktree"` là lựa chọn tại call site.
+- **Giữ checkout để người dùng vào lấy file (thay vì commit lên branch).** Đúng bằng phương án (b) đã bị từ chối ở F8a: việc "đã cứu" nhưng nằm trong một thư mục dưới `~/.awog` thì vẫn vô hình.
+
+### Kiểm chứng
+
+`src/tasks/__tests__/worktree.test.ts` — **17 test** trên repo git **thật** trong thư mục tạm (`npx vitest@2 run`, 380/380 test của sidecar xanh). Ngoài 10 test cũ của ADR 0081 (giữ nguyên kịch bản, chỉ đổi sang API owner) có thêm 7:
+
+- owner `session` cô lập với `policy: 'always'`, branch `awog/session/<id>/<slug>`, checkout dưới `~/.awog/session-worktrees/…` và **không** đẻ thư mục nào trong `~/.awog/tasks/`;
+- subagent chỉ-đọc ⇒ release trả `branch: undefined` và `git branch --list` rỗng;
+- subagent có sửa file ⇒ việc lên branch qua commit WIP, `HEAD` của người dùng **không đổi**, `git status` sạch, file **không** xuất hiện trong cây của họ, và một `git merge` do người dùng gõ lấy được về;
+- degrade sạch khi cwd không phải git repo, và khi HEAD detached;
+- sweeper ở boot dọn **đồng thời** một checkout session mồ côi (cứu việc dở lên branch + `worktree prune` đúng repo nhờ file neo) và một checkout task mồ côi;
+- checkout session mồ côi chỉ-đọc ⇒ sweeper dọn cả branch.

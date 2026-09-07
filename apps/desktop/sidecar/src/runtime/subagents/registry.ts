@@ -282,6 +282,26 @@ export class SubagentRegistry {
     return true
   }
 
+  // Chờ mọi subagent thật sự dừng, có trần. Gọi SAU `abortAll()` khi lượt cha còn
+  // phải dọn tài nguyên dùng chung với subagent (worktree cô lập): abort chỉ PHÁT
+  // tín hiệu, vòng lặp pi unwind bất đồng bộ, nên một tool call đang bay vẫn có
+  // thể ghi file sau đó. Dọn checkout trong lúc đó là chạy đua với một cây ghi dở.
+  // Có trần vì một vòng lặp lì không được phép treo `finally` của lượt.
+  async drain(timeoutMs: number): Promise<void> {
+    const pending = [...this.entries.values()].filter((e) => e.snap.status === 'running')
+    if (pending.length === 0) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const expired = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs)
+      timer.unref?.()
+    })
+    try {
+      await Promise.race([Promise.allSettled(pending.map((e) => e.settled)), expired])
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
   // Hết lượt cha ⇒ không còn gì của lượt này được phép sống.
   abortAll(): void {
     for (const e of this.entries.values()) {

@@ -1,6 +1,6 @@
 # 0083 — Ngang bằng khả năng subagent giữa nhánh Pi và nhánh Claude SDK
 
-- **Trạng thái:** Accepted (mục §c để Proposed — xem "Việc cần làm tiếp")
+- **Trạng thái:** Accepted (§c ban đầu để Proposed, **đã giải quyết 2026-09-07** — xem đính chính ở cuối)
 - **Ngày:** 2026-09-07
 - **Người quyết định:** developer (gói #7a–7e), theo [ADR 0030](0030-subagent-task-tool.md) + [ADR 0058](0058-claude-agent-sdk-vs-pi-runtime-revisit.md)
 
@@ -61,7 +61,7 @@ Lý do **không** chọn mô hình "sống qua lượt" (kiểu background shell
 
 Subagent nền được soi thành **chip nền** qua chính `sessions/bg-registry.ts` (đường `registerExternalBackground` mà nhánh Claude SDK đã dùng) ⇒ người dùng thấy một danh sách duy nhất và bấm dừng được. Bản đồng bộ **không** tạo chip (sinh/tắt trong cùng một tool call, chip chỉ là nhiễu).
 
-### §c. Worktree cô lập — **KHÔNG** làm ở bản này
+### §c. Worktree cô lập — **KHÔNG** làm ở bản này *(đã đảo — xem đính chính cuối file)*
 
 Xem "Phương án đã cân nhắc" và "Việc cần làm tiếp".
 
@@ -110,3 +110,21 @@ Khác biệt có chủ ý so với Claude SDK: bên đó nhắn được cho sub
 - [ADR 0066 — Background exec + wake](0066-session-background-exec-and-wake.md) (mô hình chip nền được tái dùng)
 - [ADR 0081 — Worktree cho node Task](0081-task-node-worktree-isolation.md) (module §c sẽ tổng quát hoá)
 - [Spec: Subagent Task tool](../features/subagent-task-tool.md)
+
+---
+
+## Đính chính (2026-09-07) — §c đã làm, theo đúng lối thoát ADR này đề ra
+
+Ba lý do từ chối ở trên vẫn đúng **với `tasks/worktree.ts` ở dạng cũ**. Lối thoát cũng đã ghi ngay trong ADR này: *tổng quát hoá từ "khoá theo task" sang "khoá theo owner", không fork bản worktree thứ hai.* Đó chính là việc đã làm — chi tiết ở phần đính chính của [ADR 0081](./0081-task-node-worktree-isolation.md).
+
+Ba lý do được xử lý thế nào:
+
+1. **Vòng đời** — khoá đổi thành `{ kind: 'task' | 'session', id }`. Owner `session` nằm ở `~/.awog/session-worktrees/`, **cố ý không** nằm trong `tasks/` vì một thư mục con ở đó sẽ trông như task ma với `listTaskIds()`. Sweeper lúc boot quét **cả hai** loại — đây là phần không được phép hoãn, bỏ qua nó là dựng lại đúng lỗi mồ côi dưới một cái tên mới.
+2. **`canCommit` không thoả** — điều kiện cũ là boolean, nay là chính sách `'shared' | 'first-claim' | 'always'`. Với chat, giá trị cứu dữ liệu không đến từ auto-commit mà từ **rescue**: cây còn bẩn lúc release ⇒ commit `WIP: rescued…` lên nhánh của subagent. Ở chat, rescue là đường **chính**, không phải ngoại lệ hiếm.
+3. **Ranh giới sản phẩm** — giải bằng cách **không merge**. Subagent chat được cô lập nhưng AWOG **không bao giờ** merge vào cây người dùng; tool result nêu tên nhánh để người dùng tự `git merge`. Cưỡng chế **bằng kiểu**: `integrateTaskBranches()` không nhận `WorkspaceOwner`, nó tự dựng owner `task` bên trong — không có đường gọi nhánh merge cho một session.
+
+Lý do Task được merge còn chat thì không: Task có **công tắc người dùng đã bật** (auto-commit per-phase) và có **điểm ráo** — lúc không node nào đang ghi. Một lượt chat không có cả hai; người dùng có thể đang sửa file trong editor ngay lúc đó.
+
+Hệ quả kéo theo, đều đã cài: nhánh rỗng **tự xoá** bằng `git branch -d` (không phải `-D`) — git từ chối xoá nhánh còn commit chưa vào HEAD, nên đó là bảo đảm của git chứ không phải phán đoán của AWOG; và `disposeAll()` phải `async` vì `abortAll()` chỉ **phát tín hiệu**, một tool call đang bay vẫn kịp ghi file sau đó.
+
+Opt-in tại call site: `Task({ isolation: "worktree" })` — khớp `AgentInput` của Claude SDK. Mặc định vẫn dùng chung cwd, vì checkout sạch không có `node_modules`/`.env` và phần lớn subagent chat chỉ đọc.

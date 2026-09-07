@@ -68,7 +68,7 @@ AWOG chọn runtime **theo provider** ([ADR 0058](../decisions/0058-claude-agent
 |---|---|
 | a. Model tại call site | ✅ `model` = TIER đóng, resolve theo account ([model-tier.ts](../../apps/desktop/sidecar/src/runtime/subagents/model-tier.ts)) |
 | b. Chạy nền | ✅ `run_in_background` + `TaskOutput` / `TaskStop` — **chat only, sống đúng bằng lượt cha** |
-| c. Worktree cô lập | ❌ **Chưa làm** — xem [ADR 0083 §c](../decisions/0083-pi-subagent-parity.md) (vòng đời lệch `tasks/worktree.ts` + cần tech-lead chốt ranh giới sản phẩm) |
+| c. Worktree cô lập | ✅ `isolation: "worktree"` — **chat only, chỉ cô lập, KHÔNG tự merge** (xem mục dưới) |
 | d. Fork context | ✅ `subagent_type: "fork"` + trần 60k ký tự ([fork-history.ts](../../apps/desktop/sidecar/src/runtime/subagents/fork-history.ts)) |
 | e. Nhắn tiếp | ✅ `SendMessage({ to, message })` — nối vào **đúng context cũ**, chỉ khi subagent đã xong lượt |
 
@@ -81,6 +81,31 @@ AWOG chọn runtime **theo provider** ([ADR 0058](../decisions/0058-claude-agent
 | `SendMessage` | `to`, `message` | Chạy thêm một lượt trên chính `AgentContext` cũ của subagent → nó thấy lại mọi tool call của lượt trước. Đang chạy → bảo thu bằng `TaskOutput` trước; đã chết → từ chối |
 
 Ba tool này là **một phần của khả năng `Task`**: chỉ đăng ký khi `Task` được phép, theo đúng allowance của `Task`. Tách allowance riêng sẽ đẻ ra trạng thái "spawn được subagent nền nhưng không bao giờ thu được kết quả".
+
+### Worktree cô lập cho subagent ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §c)
+
+`Task({ isolation: "worktree" })` cho subagent **một checkout + một branch riêng** thay vì dùng chung cây làm việc của phiên. Dùng khi nhiều subagent cùng **sửa file** một lúc; bỏ qua với việc chỉ-đọc (checkout sạch không có `node_modules`, `.env`, cache build).
+
+Cơ chế là **đúng module của Task** ([`tasks/worktree.ts`](../../apps/desktop/sidecar/src/tasks/worktree.ts), [ADR 0081](../decisions/0081-task-node-worktree-isolation.md)) đã được tổng quát hoá sang khoá theo owner — **không** có bản worktree thứ hai:
+
+| | Giá trị |
+|---|---|
+| Owner | `{ kind: 'session', id: <sessionId> }` |
+| Thư mục | `~/.awog/session-worktrees/<sessionId>/worktrees/<toolCallId>` |
+| Branch | `awog/session/<sessionId>/<toolCallId>` |
+| Policy | `always` (cây gốc đang là cwd của chính lượt cha, không giành) |
+
+**Chỉ cô lập, không tự merge.** `integrateTaskBranches()` chỉ nhận `taskId` — không có cách nào gọi nó cho owner `session`, đây là ràng buộc **kiểu** chứ không phải quy ước. Lý do: merge vào nhánh người dùng đang checkout là hành động Task đã có công tắc (auto-commit per-phase) và có "điểm ráo" để chạy; một lượt chat không có công tắc nào như thế, nên AWOG không được tự tạo commit rồi merge vào repo của người dùng. Cây làm việc của họ **không nhúc nhích một byte**; tool result nêu tên branch để model báo lại và người dùng tự `git merge`.
+
+Vòng đời + dọn dẹp:
+
+- Lease được cấp **trước** khi dựng toolset của subagent (checkout chính là root sandbox `assertInsideWorkspace` của nó), và **nhả ở cuối lượt cha** — không nhả sớm, vì `SendMessage` phải chạy tiếp trong đúng checkout đó. `disposeAll()` giờ `async`: nó `abortAll()` → chờ subagent dừng hẳn (trần 10s, abort chỉ *phát tín hiệu*, tool call đang bay vẫn ghi được file) → mới nhả worktree.
+- Nhả = đúng lưới an toàn F8a của ADR 0081: còn thay đổi chưa lưu ⇒ `git add -A` + commit `WIP: rescued…` **trên branch của subagent** (chat không có auto-commit, nên đây là đường DUY NHẤT giữ lại việc nó vừa làm); cứu không được ⇒ **không xoá gì**, log `error` kèm đường dẫn.
+- Branch **rỗng** (subagent chỉ đọc) bị `git branch -d` dọn — `-d` chứ không bao giờ `-D`, nên chính git từ chối xoá thứ còn commit. Không tích rác.
+- App chết giữa lượt ⇒ `sweepOrphanWorktrees()` lúc boot bắt được: nó quét `listOwners()` = **cả** task **lẫn** session.
+- Trần: **4** checkout cô lập sống cùng lúc trong một lượt (bằng trần subagent nền + trần scheduler của Task).
+
+Degrade (đều **không** báo lỗi, chỉ ghi note vào tool result — việc vẫn phải xong): task node (`invoke.ts`) không có lease ⇒ chạy chung cây; không phải git repo / git < 2.20 / HEAD detached ⇒ chạy chung cây; chạm trần 4 ⇒ chạy chung cây. Giá trị `isolation` lạ (kể cả `"remote"` của Claude SDK — AWOG không có remote executor) thì **bounce** để model sửa.
 
 ### Vòng đời + trần
 
@@ -124,6 +149,8 @@ Không đổi — hạ tầng đã có sẵn:
 | [runtime/subagents/model-tier.ts](../../apps/desktop/sidecar/src/runtime/subagents/model-tier.ts) | **Mới** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §a) — resolve TIER → model id theo account (hàm thuần) |
 | [runtime/subagents/registry.ts](../../apps/desktop/sidecar/src/runtime/subagents/registry.ts) | **Mới** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §b/§e) — sổ đăng ký subagent theo lượt: nền, trần đồng hồ, stop, nhắn tiếp |
 | [runtime/subagents/fork-history.ts](../../apps/desktop/sidecar/src/runtime/subagents/fork-history.ts) | **Mới** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §d) — cắt đuôi transcript cho `fork` |
+| [runtime/subagents/worktree-lease.ts](../../apps/desktop/sidecar/src/runtime/subagents/worktree-lease.ts) | **Mới** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §c) — lease worktree của một lượt chat; nhả hết ở `disposeAll()` |
+| [tasks/worktree.ts](../../apps/desktop/sidecar/src/tasks/worktree.ts) | Tổng quát hoá sang khoá theo owner (`task` \| `session`); sweeper quét cả hai; `git branch -d` branch rỗng lúc release |
 | [runtime/__tests__/subagents.test.ts](../../apps/desktop/sidecar/src/runtime/__tests__/subagents.test.ts) | **Mới** — test tier / fork-trim / vòng đời registry |
 | [runtime/tools/builtin-stubs.ts](../../apps/desktop/sidecar/src/runtime/tools/builtin-stubs.ts) | **Mới** — stub `TodoWrite`/`WebSearch` (WebFetch tách ra tool thật, [ADR 0042](../decisions/0042-webfetch-tool-ssrf-guarded.md)) |
 | [runtime/tools/web-fetch-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/web-fetch-tool.ts) | **Mới** ([ADR 0042](../decisions/0042-webfetch-tool-ssrf-guarded.md)) — `createWebFetchTool` thật, SSRF-guarded |
@@ -149,4 +176,4 @@ Không đổi — hạ tầng đã có sẵn:
 - Cập nhật chú thích `<mcp-preference>` (subagent **nay có** MCP riêng theo AGENT.md).
 - (Tùy chọn) surface text tổng kết của subagent thành 1 step `note` nested.
 - infosec review path spawn lồng + credential per-subagent (bao gồm prompt quyền của subagent **nền** — nó gọi tool khi người dùng đang đọc thứ khác).
-- **§c worktree cô lập** ([ADR 0083](../decisions/0083-pi-subagent-parity.md)): cần tech-lead chốt "AWOG được tự tạo branch/commit từ một lượt chat không?", rồi tổng quát hoá `tasks/worktree.ts` từ khoá-theo-task sang khoá-theo-owner. **Không** fork bản worktree thứ hai.
+- **§c worktree cô lập:** ✅ đã ship (xem mục trên). Còn lại: **UI chưa có surface** cho branch mà subagent để lại — hiện chỉ có tên branch trong tool result + `log.info`; cần một chỗ trong Workspace Panel liệt kê branch `awog/session/<id>/*` để bấm merge/xoá. Và infosec soi lại đường tạo branch/commit từ một lượt chat (path do sidecar sinh, arg array, không merge — nhưng nó *có* ghi vào `.git` của người dùng).
