@@ -260,6 +260,12 @@ export type SessionUsage = {
   // accumulated — on the Claude SDK path that gap was ~5x, which left auto-compact
   // permanently below its threshold. Absent on turns persisted before it shipped.
   contextTokens?: number
+  // Measured prompt size of the last turn's FIRST request — the standing cost before
+  // that turn's tool loop added anything. Splits the un-itemisable remainder into
+  // "tool schemas + carried-over context" (baseTokens − itemised text) and "tool
+  // results this turn" (contextTokens − baseTokens), which have opposite fixes:
+  // detach MCP servers vs. compact / do less per turn.
+  baseTokens?: number
   // Cumulative cost in USD across all turns of this session. Computed sidecar-side
   // (single source of truth = activity/pricing.ts) from per-turn usage + modelUsed,
   // then summed here. Absent when no priced turn has run (or model has no price → n/a).

@@ -1223,6 +1223,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...(opts.result.usage.context_tokens !== undefined
           ? { contextTokens: opts.result.usage.context_tokens }
           : {}),
+        ...(opts.result.usage.base_tokens !== undefined
+          ? { baseTokens: opts.result.usage.base_tokens }
+          : {}),
         ...(costUsd !== undefined ? { costUsd } : {}),
         ...(opts.result.contextChars ? { contextChars: opts.result.contextChars } : {}),
       }

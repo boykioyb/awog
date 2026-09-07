@@ -2,7 +2,7 @@ import { computed } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
 import { modelIdFromDisplay } from '~/composables/useSessionsData'
 import {
-  contextLimitFor,
+  contextLimitForUsage,
   contextTokensFromUsage,
   estimateContextTokens,
   formatTokenCount,
@@ -31,7 +31,9 @@ type BreakdownKey =
   | 'skills'
   | 'memory'
   | 'msgs'
-  | 'other'
+  | 'toolDefs'
+  | 'results'
+  | 'toolsUnsplit'
 type Breakdown = Record<BreakdownKey, number>
 
 // Palette intentionally avoids --del (red): every category here is benign, so a
@@ -47,11 +49,18 @@ const CAT_META = [
   { key: 'skills', labelKey: 'sessions.detail.cat.skills', color: 'var(--green)' },
   { key: 'memory', labelKey: 'sessions.detail.cat.memoryFiles', color: 'var(--accent)' },
   { key: 'msgs', labelKey: 'sessions.detail.cat.messages', color: 'var(--violet)' },
-  // Everything the char breakdown cannot itemise: tool SCHEMAS (SDK built-ins +
-  // each attached MCP server) and the tool RESULTS the loop accumulated this turn.
-  // Only appears when the engine reported a measured occupancy larger than the
-  // itemised sum — which is the normal case on the Claude SDK path.
-  { key: 'other', labelKey: 'sessions.detail.cat.other', color: 'var(--textDim)' },
+  // The two halves of what the char breakdown cannot itemise, split by the engine's
+  // two measurements (first request vs last request of the turn). They are kept
+  // APART because their fixes are opposite: schemas shrink by detaching MCP servers,
+  // accumulated results shrink by compacting / doing less in one turn.
+  { key: 'toolDefs', labelKey: 'sessions.detail.cat.toolDefs', color: 'var(--textDim)' },
+  { key: 'results', labelKey: 'sessions.detail.cat.toolResults', color: 'var(--textFaint)' },
+  // Same remainder, but from a turn that reported no `baseTokens` (an engine build
+  // before the two-point measurement, or a run that never got a first-request
+  // usage). We cannot tell schemas from results there, so we must not claim to:
+  // labelling an unsplit 192k as "Tool definitions" is a lie on a turn that made 34
+  // tool calls.
+  { key: 'toolsUnsplit', labelKey: 'sessions.detail.cat.toolsUnsplit', color: 'var(--textDim)' },
 ] as const satisfies readonly { key: BreakdownKey; labelKey: string; color: string }[]
 
 export type CatRow = { key: string; label: string; tokens: number; color: string; pct: number }
@@ -84,8 +93,8 @@ export function useSessionContextUsage(session: () => Session) {
   // Context window follows the session's SELECTED model id (retains `-1m`); the
   // provider's base id collapses 1M → 200k, so we derive from the display the user
   // picked, not from usage. Prefer an engine-reported max if one is ever set.
-  const maxTok = computed(
-    () => usage.value?.max ?? contextLimitFor(modelIdFromDisplay(session().model)),
+  const maxTok = computed(() =>
+    contextLimitForUsage(modelIdFromDisplay(session().model), usage.value),
   )
   const tokLabel = computed(() => formatTokenCount(totalTok.value))
   const limitLabel = computed(() => formatTokenCount(maxTok.value))
@@ -111,11 +120,27 @@ export function useSessionContextUsage(session: () => Session) {
         memory: tok(cc.memoryFiles),
         msgs: tok(cc.history),
       }
-      // Rows must sum to the gauge. When the engine measured a bigger prompt than we
-      // can itemise, the difference IS real content (tool schemas + tool results) —
-      // show it rather than letting the bar and the total disagree.
+      // Rows must sum to the gauge. The engine measures TWO prompt sizes per turn:
+      // its first request (`baseTokens` — the standing cost) and its last
+      // (`contextTokens` — the peak). So the un-itemisable remainder splits cleanly:
+      //   toolDefs = base − itemised text  → tool schemas + the runtime's own preset
+      //              (plus context carried over from earlier turns on a resumed run)
+      //   results  = peak − base           → what THIS turn's tool loop added
+      // Without a `baseTokens` (older turn) everything falls into toolDefs rather
+      // than being invented as results — the honest reading of "we don't know yet".
       const sum = Object.values(itemised).reduce((a, b) => a + b, 0)
-      return { ...itemised, other: Math.max(0, totalTok.value - sum) }
+      const remainder = Math.max(0, totalTok.value - sum)
+      const base = usage.value?.baseTokens
+      // No second measurement → one honestly-unlabelled bucket, not a guess.
+      if (!base) {
+        return { ...itemised, toolDefs: 0, results: 0, toolsUnsplit: remainder }
+      }
+      return {
+        ...itemised,
+        toolDefs: Math.max(0, Math.min(base, totalTok.value) - sum),
+        results: Math.max(0, totalTok.value - Math.max(base, sum)),
+        toolsUnsplit: 0,
+      }
     }
     // Fallback before any real turn / in browser-dev: attribute the rough
     // visible-text estimate to Messages (the only segment we can see client-side).
@@ -128,7 +153,9 @@ export function useSessionContextUsage(session: () => Session) {
       skills: 0,
       memory: 0,
       msgs: estTok.value,
-      other: 0,
+      toolDefs: 0,
+      results: 0,
+      toolsUnsplit: 0,
     }
   })
 

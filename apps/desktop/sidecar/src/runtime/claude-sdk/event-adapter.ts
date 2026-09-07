@@ -44,6 +44,10 @@ export interface ClaudeAccumulator {
   // every request the loop made — so it says nothing about how full the window is;
   // this does. See SessionMessage.usage.contextTokens.
   contextTokens: number
+  // Prompt size of the FIRST request of the turn — the standing cost before the tool
+  // loop added anything. `contextTokens - baseTokens` is exactly what this turn's
+  // tool results added. See SessionMessage.usage.baseTokens.
+  baseTokens: number
   stopReason: string | null
   errorMessage?: string
   // Latest SDK session id seen this turn — the caller persists it so the next
@@ -208,6 +212,7 @@ export function createClaudeEventAdapter(
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     contextTokens: 0,
+    baseTokens: 0,
     stopReason: null,
   }
   // toolCallId → { name, input } captured on the tool_use block so the matching
@@ -511,6 +516,8 @@ export function createClaudeEventAdapter(
             (u.input_tokens ?? 0) +
             (u.cache_read_input_tokens ?? 0) +
             (u.cache_creation_input_tokens ?? 0)
+          // First request of the turn: the standing cost before any tool result.
+          if (acc.baseTokens === 0) acc.baseTokens = acc.contextTokens
         }
         const content = m.message?.content
         if (Array.isArray(content)) {

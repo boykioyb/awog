@@ -41,6 +41,10 @@ interface Accumulator {
   // that request). See SessionMessage.usage.contextTokens — this is the measured
   // context-window occupancy, tool schemas and tool results included.
   contextTokens: number
+  // Prompt size of the FIRST request of the turn — the standing cost before this
+  // turn's tool loop added anything. `contextTokens - baseTokens` is therefore
+  // exactly what the loop accumulated. See SessionMessage.usage.baseTokens.
+  baseTokens: number
   stopReason: string | null
   // Provider-supplied error detail when stopReason === 'error'. Pi swallows a
   // mid-stream provider failure into a graceful `error` stop (it does NOT throw),
@@ -97,6 +101,7 @@ export function createEventAdapter(
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
     contextTokens: 0,
+    baseTokens: 0,
     stopReason: null,
   }
   const announcedTools = new Set<string>()
@@ -269,7 +274,15 @@ export function createEventAdapter(
           // Measured occupancy of the last request. Subagent runs have their OWN
           // context, so only the main turn's number describes THIS session.
           if (!parentId) {
-            acc.contextTokens = last.usage.input + last.usage.cacheRead + last.usage.cacheWrite
+            const promptSize = (m: AssistantMessage): number =>
+              m.usage.input + m.usage.cacheRead + m.usage.cacheWrite
+            acc.contextTokens = promptSize(last)
+            // First request of THIS turn = the standing cost (system + tools +
+            // whatever context carried in). Replayed history assistants are stubs
+            // with zeroed usage (context-builder.historyAssistant), so skip those —
+            // a zero would read as "this turn started empty".
+            const first = event.messages.find((m) => isAssistant(m) && promptSize(m) > 0)
+            if (first && isAssistant(first)) acc.baseTokens = promptSize(first)
           }
           acc.stopReason = last.stopReason
           // Provider error cause (present only on stopReason 'error'). Kept so the

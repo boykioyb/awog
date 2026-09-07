@@ -275,6 +275,11 @@ export interface RunStreamResult {
     // this can. Drives the context gauge + the auto-compact trigger; absent when
     // no request reported usage (compact-only run, immediate error).
     context_tokens?: number
+    // Prompt size of the turn's FIRST request — the standing cost (system + tools +
+    // carried-over context) before the tool loop added anything. The difference from
+    // `context_tokens` is exactly what this turn's tool results contributed, which is
+    // what separates "my tool catalogue is too big" from "this turn read too much".
+    base_tokens?: number
   }
   stopReason: string | null
   // Per-segment char sizes of the turn's assembled prompt, itemised the way

@@ -9,18 +9,25 @@ import { providerModelContextWindow } from '~/composables/useProviderModels'
 // the ids it lists (it encodes the base-vs-1m convention that provider metadata
 // doesn't); a fetched model NOT listed here falls back to its catalog metadata
 // (see contextLimitFor). Source: Anthropic public docs.
+// The 200k-base + `-1m`-variant convention below described the Opus 4.6/4.7 era,
+// where 1M needed the `context-1m` beta header. The current generation ships 1M
+// NATIVELY, so the old 200k rows were simply stale — and a stale row here is not
+// cosmetic: it rendered as "217k / 200k · 100%, free space 0" on a request the API
+// had just accepted, and it pins auto-compact to a ceiling that does not exist.
+// Three independent confirmations for `claude-opus-4-8`: a 217,049-token request
+// accepted on this account, Claude Code's own context panel reporting `/1M` for the
+// same account, and Anthropic's current model table. The `-1m` ids are kept (they
+// still resolve) even though they now equal their base. Haiku 4.5 stays at 200k.
 const CONTEXT_WINDOW: Record<string, number> = {
-  // "5" generation. Fable 5 ships a native 1M window (no beta header); Opus 5
-  // mirrors Opus 4.8 — 200k by default, 1M via the `-1m` variant + context-1m beta.
   'claude-fable-5': 1_000_000,
-  'claude-opus-5': 200_000,
+  'claude-opus-5': 1_000_000,
   'claude-opus-5-1m': 1_000_000,
-  'claude-sonnet-5': 200_000,
-  'claude-opus-4-8': 200_000,
+  'claude-sonnet-5': 1_000_000,
+  'claude-opus-4-8': 1_000_000,
   'claude-opus-4-8-1m': 1_000_000,
-  'claude-opus-4-7': 200_000,
-  'claude-opus-4-6': 200_000,
-  'claude-sonnet-4-6': 200_000,
+  'claude-opus-4-7': 1_000_000,
+  'claude-opus-4-6': 1_000_000,
+  'claude-sonnet-4-6': 1_000_000,
   'claude-haiku-4-5': 200_000,
 }
 
@@ -28,21 +35,47 @@ const DEFAULT_WINDOW = 200_000
 
 export function contextLimitFor(modelId: string | undefined): number {
   if (!modelId) return DEFAULT_WINDOW
+  // Fetched catalog metadata, when the provider reports a BIGGER window than the
+  // table below. The table is a cached constant and goes stale the moment a model's
+  // window grows — seen live: a 217,049-token request ACCEPTED on `claude-opus-4-8`
+  // while this table still said 200k, which rendered as "217k / 200k · 100%, free
+  // space 0". Taking the larger value keeps the base-vs-1m convention intact (the
+  // table is only ever raised, never lowered, so a collapsed `-1m` id can't snap
+  // back down) while letting Settings → Models → Fetch correct a stale row.
+  const fetched = providerModelContextWindow(modelId)
   // 1. Exact hardcoded match first so the 1M variant isn't shadowed by the
   //    `claude-opus-4-8` prefix (authoritative for the base-vs-1m convention).
-  if (modelId in CONTEXT_WINDOW) return CONTEXT_WINDOW[modelId] ?? DEFAULT_WINDOW
+  if (modelId in CONTEXT_WINDOW) {
+    const hard = CONTEXT_WINDOW[modelId] ?? DEFAULT_WINDOW
+    return fetched && fetched > hard ? fetched : hard
+  }
   // 2. Fetched catalog metadata — lets a newly-fetched model report its real
   //    window instead of snapping to the default (Provider Model Catalog, Pha 4).
-  const fetched = providerModelContextWindow(modelId)
   if (fetched) return fetched
   // 3. Prefix match (versioned ids like `…-20251001`), else the default.
   const key = Object.keys(CONTEXT_WINDOW).find((k) => modelId.startsWith(k))
   return key ? (CONTEXT_WINDOW[key] ?? DEFAULT_WINDOW) : DEFAULT_WINDOW
 }
 
+// The window to measure occupancy against: the declared limit, floored by the
+// biggest prompt the provider has actually ACCEPTED for this session.
+//
+// A 200-response to an N-token request is proof the window is at least N — so a
+// gauge reading "217k / 200k · 100%, free space 0" is not a full window, it is a
+// wrong denominator. Flooring makes the gauge self-correcting: it can never claim
+// a session is full while the provider keeps accepting bigger prompts, and it
+// stops auto-compact firing forever against a limit that does not exist.
+export function contextLimitForUsage(
+  modelId: string | undefined,
+  usage: { max?: number; contextTokens?: number } | undefined,
+): number {
+  const declared = usage?.max ?? contextLimitFor(modelId)
+  return Math.max(declared, usage?.contextTokens ?? 0)
+}
+
 // Tokens ≈ chars / 4 — the coarse heuristic shared with the usage panel and the
 // engine-side estimate. Good enough for an occupancy gauge.
-const CTX_DIVISOR = 4
+export const CTX_DIVISOR = 4
 
 // Context-window OCCUPANCY in tokens: the size of the prompt the model actually
 // sees, summed from the engine's per-segment char breakdown (÷4 ≈ tokens) the way
