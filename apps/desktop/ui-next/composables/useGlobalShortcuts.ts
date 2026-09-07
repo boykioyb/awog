@@ -5,6 +5,7 @@ import { useGitModal } from '~/composables/useGitModal'
 import { usePrSummaryModal } from '~/composables/usePrSummaryModal'
 import { useGlobalTerminal } from '~/composables/useGlobalTerminal'
 import { useKeymap, type KeymapActionId } from '~/composables/useKeymap'
+import { useSettingsModal } from '~/composables/useSettingsModal'
 import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 
 // App-lifetime global keyboard shortcuts (§9 globals). Mounted once via the
@@ -20,6 +21,11 @@ import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 //   newSession     → new session + jump to Sessions
 //   toggleFiles    → toggle the session Files workspace view (no-op unless a
 //                    session is active)
+//   toggleDiff     → same, for the Diff view
+//   togglePlan     → same, for the Plan view
+//   openSettings   → open the Settings modal
+//   next/prevSession → step through the session list and jump to Sessions
+//   goSessions / goTasks / goProjects → route jumps
 //
 // Esc handling stays in the layout (it also closes the palette / responsive
 // drawers). Matching is done by useKeymap against event.code, so it is layout-
@@ -31,7 +37,23 @@ export function useGlobalShortcuts(): void {
   const gitModal = useGitModal()
   const prSummary = usePrSummaryModal()
   const workspace = useWorkspacePanel()
+  const settingsModal = useSettingsModal()
   const keymap = useKeymap()
+
+  // Step through the session list, wrapping at both ends. Scoped to the whole list
+  // (not the active project tab) so the shortcut behaves the same on every screen;
+  // with no active session it starts from the appropriate end.
+  function cycleSession(delta: 1 | -1): void {
+    const list = sessions.sessions
+    if (list.length === 0) return
+    const idx = list.findIndex((s) => s.id === sessions.activeId)
+    const next =
+      idx < 0 ? (delta > 0 ? 0 : list.length - 1) : (idx + delta + list.length) % list.length
+    const target = list[next]
+    if (!target) return
+    sessions.setActive(target.id)
+    void navigateTo('/sessions')
+  }
 
   const dispatch: Record<KeymapActionId, () => void> = {
     commandPalette: () => palette.toggle(),
@@ -49,6 +71,14 @@ export function useGlobalShortcuts(): void {
       void navigateTo('/sessions')
     },
     toggleFiles: () => workspace.toggleView('Files'),
+    toggleDiff: () => workspace.toggleView('Diff'),
+    togglePlan: () => workspace.toggleView('Plan'),
+    openSettings: () => settingsModal.openSettings(),
+    nextSession: () => cycleSession(1),
+    prevSession: () => cycleSession(-1),
+    goSessions: () => void navigateTo('/sessions'),
+    goTasks: () => void navigateTo('/tasks'),
+    goProjects: () => void navigateTo('/projects'),
   }
 
   function onKeydown(e: KeyboardEvent): void {

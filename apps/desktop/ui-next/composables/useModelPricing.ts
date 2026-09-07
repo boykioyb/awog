@@ -156,7 +156,10 @@ export function useModelPricing() {
     loading.value = true
     error.value = null
     try {
-      await sc.request('settings.set', { modelPricing: overrides.value })
+      // `settings.set` nhận `{ patch }`, không nhận blob trần. Gọi sai hình dạng
+      // ⇒ ZodError, mà lỗi lại bị catch nuốt thành một dòng warn — nên override
+      // giá model trông như đã lưu trong khi thực ra chưa bao giờ chạm đĩa.
+      await sc.request('settings.set', { patch: { modelPricing: overrides.value } })
       await load()
     } catch (err) {
       console.warn('[pricing] settings.set modelPricing failed', err)

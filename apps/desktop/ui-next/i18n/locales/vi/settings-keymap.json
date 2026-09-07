@@ -1,0 +1,13 @@
+{
+  "settingsKeymap.group.global": "Toàn cục",
+  "settingsKeymap.group.session": "Phiên",
+  "settingsKeymap.group.navigate": "Điều hướng",
+  "settingsKeymap.act.openSettings": "Mở Cài đặt",
+  "settingsKeymap.act.toggleDiff": "Bật/tắt Diff (trong phiên)",
+  "settingsKeymap.act.togglePlan": "Bật/tắt Plan (trong phiên)",
+  "settingsKeymap.act.nextSession": "Phiên kế tiếp",
+  "settingsKeymap.act.prevSession": "Phiên trước đó",
+  "settingsKeymap.act.goSessions": "Tới trang Phiên",
+  "settingsKeymap.act.goTasks": "Tới trang Tác vụ",
+  "settingsKeymap.act.goProjects": "Tới trang Dự án"
+}

@@ -62,40 +62,90 @@ Settings panel cung cấp cấu hình workspace, model API key, connector và ap
 }
 ```
 
-## Lưu trữ dữ liệu / Persistence (ADR 0045)
+## Lưu trữ dữ liệu — phân tầng (ADR 0045 + issue #43)
 
-App settings (trừ accounts/API key) persist vào **`~/.awog/settings.json`** —
-đọc/ghi **qua sidecar** (UI không `import fs`, invariant #4). localStorage giữ vai
-trò **cache đọc-nhanh** (chống FOUC theme/appearance); **file là source of truth**.
+> Phần dưới mô tả **ui-next**. `apps/desktop/ui/composables/useSettingsSync.ts` là
+> bản cũ của app tiền-rebuild, không còn dùng.
 
-**Scope file** (toàn bộ trừ accounts): `themeMode`, `appearance`, `defaults`,
-`git`, `autoUpdate`, `composer`, `quotaWarning`, `workspacePath`, `autoApprove`,
-`notificationsEnabled`. **Accounts / API key KHÔNG vào đây** — vẫn ở
-`credentials.json` + OS keychain (invariant #1).
+### Vấn đề
 
-**RPC (sidecar):**
+Trước #43, phần lớn preference của app nằm trong **một key localStorage** (`awog-settings-v1`) của renderer:
 
-| Method | Vai trò |
-|---|---|
-| `settings.get` | Trả object JSON đã lưu (hoặc `{}` nếu chưa có file). Sidecar **dumb** — không coerce/áp default; UI sở hữu schema. |
-| `settings.set({ patch })` | Shallow-merge `patch` (mỗi nhóm = 1 top-level key) → ghi atomic (`.tmp` → `chmod 600` → `rename`), serialize qua mutex. Trả object đã merge. |
+- Không đi theo người dùng: cài lại app / xoá cache là mất sạch.
+- Không export / backup / xem bằng mắt được.
+- **Setting chức năng chỉ lưu localStorage là setting không có tác dụng thật.** Ví dụ đo được: Remote Gateway (Electron main) đọc `settings.get → defaults.{provider,modelId,thinkingLevel}` để quyết định model cho phiên tạo từ điện thoại, nhưng UI chưa bao giờ ghi `defaults` vào `settings.json` ⇒ điện thoại luôn rơi về hằng số `claude-opus-5` / `high`.
+- Không có tầng dự án, và UI không nói được giá trị đang đến từ đâu.
 
-**Đồng bộ (`useSettingsSync`):**
+### Ba nơi lưu và tiêu chí phân chia
 
-1. **Boot** — seed store từ localStorage (sync, không FOUC) → `settings.get` (async).
-   File có data → coerce + distribute vào store (cascade ra localStorage + DOM qua
-   watcher sẵn có) ⇒ **file thắng** khi user sửa tay. File rỗng → seed từ snapshot.
-2. **Ghi** — một deep-watch trên snapshot → debounce 400ms → `settings.set`.
+| Nơi lưu | Là tầng gì | Chứa cái gì |
+|---|---|---|
+| `~/.awog/settings.json` | **user** — đi theo người dùng trên máy này | Mọi preference **có chức năng** hoặc mà người dùng mong còn nguyên sau khi cài lại |
+| `{project}/.awog/settings.json` | **project** — đi theo repo, commit được | Phần dự án muốn ghi đè cho mọi thành viên |
+| `localStorage` | **local** — theo máy + theo renderer, không bao giờ đồng bộ | Trạng thái xem tạm thời + **bản cache** của tầng user để vẽ khung hình đầu tiên |
 
-> File là input **L1** (user có thể sửa tay) → mỗi slice coerce ở biên trước khi
-> đưa vào store. Sidecar/Task có thể đọc thẳng `settings.json` (vd git auto-commit
-> per-phase đang deferred).
+**Tiêu chí quyết định** (áp cho từng field, không phải từng màn hình):
 
-Sidecar: [`settings/store.ts`](../../apps/desktop/sidecar/src/settings/store.ts),
-[`methods/settings.get.ts`](../../apps/desktop/sidecar/src/methods/settings.get.ts),
-[`methods/settings.set.ts`](../../apps/desktop/sidecar/src/methods/settings.set.ts).
-UI: [`composables/useSettingsSync.ts`](../../apps/desktop/ui/composables/useSettingsSync.ts)
-+ các `coerce*` trong từng `useXxxSettings`.
+1. **Engine hoặc main process có đọc nó không?** Có ⇒ `settings.json`. Setting mà sidecar/Electron không thấy thì nó chỉ là một cái công tắc trang trí.
+2. **Người dùng có mong nó còn sau khi cài lại máy/app không?** Có ⇒ `settings.json`.
+3. **Con số này có ý nghĩa trên máy khác không?** Không (chiều rộng panel, toạ độ cửa sổ, đường dẫn tuyệt đối) ⇒ `localStorage`.
+4. **Nó có đổi liên tục theo thao tác không?** (tab đang mở, ô đang chọn, chuỗi tìm kiếm) ⇒ `localStorage`, đừng bắt đĩa chịu.
+
+Áp vào code hiện tại (`stores/settings.ts`):
+
+- **Synced (`settings.json`)** — `defaults`, `git`, `sessions`, `quota`, `autoUpdate`, `appearance`, `pet`, `githubAccount`, `githubAutoFetchMs`, `githubNotify`, `notifications`, `translate`, `context`, `keymap`, `statusline`. Ngoài ra `modelPricing` + `monacoPreviewTheme` đã ghi thẳng vào file này từ trước.
+- **Local-only (`localStorage`)** — `workspacePath` (luôn suy lại từ `app:info`) và `workspacePanel` (dock + chiều rộng/cao — hình học theo màn hình).
+- **Không nằm ở cả hai** — API key / token: chỉ ở `credentials.json` + OS keychain (bất biến an ninh #1). `settings.json` **không bao giờ** chứa secret.
+
+Ngoài store này, các state UI thoáng qua vẫn ở localStorage như cũ (tab session đang mở, bộ lọc danh sách, preset ghi chú ghim…) — đúng tiêu chí 3–4, không cần chuyển.
+
+### Thứ tự ưu tiên (precedence)
+
+```
+mặc định trong code  ←  user (~/.awog/settings.json)  ←  project ({project}/.awog/settings.json)
+```
+
+Phải nhất là **project**. Merge sâu **đúng hai cấp**: `slice` và `slice.field`.
+
+- Cả hai tầng cùng có `git` (object) ⇒ trộn theo từng field, field của project thắng.
+- Giá trị không phải object (string/number/array) ⇒ project thay thế nguyên giá trị.
+- Không đi sâu hơn 2 cấp: dưới nữa là mảng (`projectIds`, `models`) mà trộn mảng thì luôn phải đoán ý.
+
+`settings.resolve` trả về kèm **bản đồ nguồn** `origin`, khoá theo `'git'` hoặc `'git.autoFetchIntervalMs'`, giá trị `'user' | 'project'`. UI hỏi `settings.originOf(path)`; không có trong bản đồ ⇒ `'default'` (đang chạy mặc định của code). Dòng trạng thái tuỳ biến là consumer đầu tiên: popover của nó nói rõ "Đang dùng mẫu của bạn" hay "Dự án này đang ghi đè" và có nút bỏ ghi đè.
+
+**Keymap cố ý chỉ có tầng user.** Phím tắt là thói quen của ngón tay người dùng; một repo không có quyền đổi phím tắt của người mở nó.
+
+### RPC
+
+| Method | Params | Trả về |
+|---|---|---|
+| `settings.get` | *(không có)* hoặc `{ scope?, projectId? }` | Blob **thô** của đúng một tầng. Không params ⇒ tầng user — mặc định này là **hợp đồng**: Remote Gateway gọi `settings.get` với `null`. |
+| `settings.resolve` | `{ projectId? }` | `{ user, project, effective, origin }` |
+| `settings.set` | `{ patch, scope?, projectId? }` | Blob của tầng vừa ghi (`scope` mặc định `'user'`) |
+| `settings.unset` | `{ paths, scope?, projectId? }` | Blob sau khi xoá; `paths` nhận `'statusline'` hoặc `'git.autoFetchIntervalMs'` |
+
+Ghi là read-modify-write, **nối chuỗi theo từng file** nên hai lệnh set song song không đè nhau; ghi qua file tạm + `rename` (atomic) + `chmod 600`. Đường dẫn tầng project **không bao giờ** lấy từ payload UI mà suy từ `projects.json` (`loadProject(projectId).path`) — bất biến an ninh #2/#3.
+
+### Vòng đời trong renderer
+
+1. Boot: `loadPersisted()` đọc localStorage **đồng bộ** để khung hình đầu tiên không nháy giá trị mặc định.
+2. `hydrateFromSidecar()` (đã gọi sẵn ở `layouts/default.vue`) kéo theo `hydrateSettings()` — chạy **một lần** mỗi phiên app: đọc `settings.get`, đắp lên các slice, rồi **đẩy nguyên snapshot ngược lại**.
+3. Mỗi thay đổi: ghi localStorage ngay + đẩy `settings.set` sau **500 ms** debounce (kéo slider/kéo mép panel gộp thành một lần ghi). Trùng nội dung lần trước ⇒ bỏ qua.
+4. Không có sidecar (browser-dev): localStorage là nơi lưu duy nhất, mọi push là no-op.
+
+### Migrate không mất cấu hình
+
+- Chiều duy nhất: **localStorage → settings.json**. Cú đẩy snapshot đầy đủ ở bước 2 chính là phép migrate — không có code migrate riêng để bảo trì.
+- **Không xoá gì khỏi localStorage.** Bản cũ vẫn còn nguyên nên hạ version app xuống bản trước #43 vẫn thấy đủ cấu hình.
+- Thứ tự đắp là `mặc định ← localStorage ← settings.json` nên khi hai bên lệch thì **đĩa thắng**; key chỉ có ở localStorage thì được giữ và đẩy lên đĩa ở cú push đầu tiên.
+- `settings.set` merge theo top-level key, nên các key có sẵn trong `settings.json` mà store không quản (`modelPricing`, `monacoPreviewTheme`) **không bị đụng**.
+- Có log: `[settings] migrating preferences from localStorage → settings.json` (chỉ in khi file đĩa chưa có key nào của store mà localStorage thì có) và `[keymap] migrating bindings from localStorage → settings.json`.
+- Keymap: key cũ `awog-keymap` chỉ được đọc **một lần** để mồi, khi slice trong store còn rỗng; không xoá.
+
+### Còn lại (follow-up)
+
+- Các pane Settings hiện có (Git / Sessions / Defaults / Context…) chưa hiện huy hiệu tầng. Cơ chế đã sẵn (`settings.originOf`, `settings.setProjectOverride`, `settings.clearProjectOverride`); mỗi pane chỉ cần thêm huy hiệu + nút "bỏ ghi đè" — làm ở task của chủ sở hữu từng file.
+- `composables/useModelPricing.ts` gọi `settings.set` **sai hình dạng** (`{ modelPricing }` thay vì `{ patch: { modelPricing } }`) nên override giá đang không được lưu. Lỗi có từ trước #43, đã ghi nhận, chưa sửa (ngoài phạm vi).
 
 ## Bảo mật
 

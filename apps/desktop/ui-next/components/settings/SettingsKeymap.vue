@@ -5,33 +5,36 @@
       :subtitle="t('settings.keymap.sub')"
     />
 
-    <SettingsField v-for="a in KEYMAP_ACTIONS" :key="a.id" :name="t(a.labelKey)">
-      <div class="km-ctrl">
-        <div class="km-row">
-          <template v-if="recording === a.id">
-            <span class="km-cap on">{{ t('settings.keymap.recording') }}</span>
-            <button class="btn sm" @click="cancelRecord">{{ t('common.cancel') }}</button>
-          </template>
-          <template v-else>
-            <kbd class="km-cap">{{ formatCombo(bindings[a.id]) }}</kbd>
-            <button class="btn sm" @click="startRecord(a.id)">
-              <Icon name="edit" />
-              {{ t('settings.keymap.rebind') }}
-            </button>
-            <button
-              v-if="!isDefault(a.id)"
-              class="iconbtn"
-              style="width: 28px; height: 28px"
-              :title="t('settings.keymap.reset')"
-              @click="resetBinding(a.id)"
-            >
-              <Icon name="refresh" />
-            </button>
-          </template>
+    <template v-for="g in KEYMAP_GROUPS" :key="g">
+      <div class="km-group">{{ t(`settingsKeymap.group.${g}`) }}</div>
+      <SettingsField v-for="a in actionsOf(g)" :key="a.id" :name="t(a.labelKey)">
+        <div class="km-ctrl">
+          <div class="km-row">
+            <template v-if="recording === a.id">
+              <span class="km-cap on">{{ t('settings.keymap.recording') }}</span>
+              <button class="btn sm" @click="cancelRecord">{{ t('common.cancel') }}</button>
+            </template>
+            <template v-else>
+              <kbd class="km-cap">{{ formatCombo(bindings[a.id]) }}</kbd>
+              <button class="btn sm" @click="startRecord(a.id)">
+                <Icon name="edit" />
+                {{ t('settings.keymap.rebind') }}
+              </button>
+              <button
+                v-if="!isDefault(a.id)"
+                class="iconbtn"
+                style="width: 28px; height: 28px"
+                :title="t('settings.keymap.reset')"
+                @click="resetBinding(a.id)"
+              >
+                <Icon name="refresh" />
+              </button>
+            </template>
+          </div>
+          <div v-if="recording === a.id && error" class="km-err">{{ error }}</div>
         </div>
-        <div v-if="recording === a.id && error" class="km-err">{{ error }}</div>
-      </div>
-    </SettingsField>
+      </SettingsField>
+    </template>
 
     <div class="km-foot">
       <button class="btn sm" @click="resetAll">
@@ -47,16 +50,20 @@
 // user record a new combo per action. Recording captures the next keydown at the
 // window CAPTURE phase with stopPropagation, so the combo being recorded never
 // triggers the app action itself (or the SettingsModal's Esc-to-close). Bindings
-// persist via useKeymap (localStorage); the live global handler reacts immediately.
+// persist via useKeymap into the settings store (~/.awog/settings.json, issue
+// #43); the live global handler reacts immediately.
 import { onBeforeUnmount, ref, watch } from 'vue'
 import {
   KEYMAP_ACTIONS,
+  KEYMAP_GROUPS,
   isModifierKey,
   useKeymap,
   type KeymapActionId,
+  type KeymapGroup,
 } from '~/composables/useKeymap'
 
 const { t } = useI18n()
+const actionsOf = (g: KeymapGroup) => KEYMAP_ACTIONS.filter((a) => a.group === g)
 const {
   bindings,
   formatCombo,
@@ -124,6 +131,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onRecordKey, true))
 </script>
 
 <style scoped>
+.km-group {
+  margin: 16px 0 4px;
+  color: var(--textDim);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.km-group:first-child {
+  margin-top: 4px;
+}
 .km-ctrl {
   display: flex;
   flex-direction: column;

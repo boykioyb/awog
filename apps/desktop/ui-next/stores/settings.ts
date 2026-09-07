@@ -1,17 +1,31 @@
 import { defineStore } from 'pinia'
 import { reactive, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import type { KeymapBlob } from '~/composables/useKeymap'
 import type { PetQuipBucket } from '~/utils/pet-quips'
 import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
 
 // Settings store (ui-next) — ports apps/desktop/ui/stores/settings.ts to the
-// rebuild. Two kinds of state:
+// rebuild. Three kinds of state:
 //   1. providers/accounts — sidecar truth (NOT persisted). Hydrated via
 //      `hydrateFromSidecar` on the Settings page mount; mutated through the
 //      account/auth IPC actions. The API key never reaches the renderer — only
 //      the safe view (fingerprint, label, models, baseURL).
-//   2. local preference slices — defaults/git/sessions/composer/quota/autoUpdate/
-//      appearance/workspacePath. Persisted to a single localStorage key.
+//   2. SYNCED preference slices — defaults/git/sessions/quota/autoUpdate/
+//      appearance/pet/github*/notifications/translate/context/keymap/statusline.
+//      Truth is `~/.awog/settings.json` (sidecar, `settings.*` RPC). localStorage
+//      keeps a copy purely as a synchronous boot cache so the first paint doesn't
+//      flash defaults while the async read is in flight.
+//   3. LOCAL-ONLY view state — workspacePath (re-derived from app:info) and the
+//      workspace panel geometry. Per machine, never synced; localStorage is its
+//      only home.
+// See docs/features/settings.md for the "which tier owns what" criteria.
+//
+// Layers (docs/features/settings.md): user (~/.awog/settings.json) → project
+// ({project}/.awog/settings.json). The store writes the USER tier; the project
+// overlay is loaded on demand (`loadLayers`) and exposed read-only through
+// `projectSlice` / `originOf` so a UI row can say where its value came from.
+//
 // Theme mode + accent + font-size live in `useTheme()` (DOM-applied + persisted
 // separately); locale lives in `useI18n()`. The appearance slice here holds only
 // the extra prefs those two don't own (font family/weight, surface depth, glass…).
@@ -203,6 +217,14 @@ export interface TranslateSettings {
 // sensible width / height for each.
 export type WorkspaceDockSide = 'left' | 'right' | 'bottom'
 export type WorkspaceDock = Record<string, WorkspaceDockSide>
+
+// Custom status line (docs/features/statusline.md). `template` is a plain string
+// with `{variable}` placeholders resolved against a FIXED table — never a script:
+// running user-supplied code in the renderer would break security invariant 8.
+export interface StatusLineSettings {
+  enabled: boolean
+  template: string
+}
 
 export interface WorkspacePanelLayout {
   dock: WorkspaceDock
@@ -405,6 +427,17 @@ const DEFAULT_PET: PetSettings = {
 
 export const PET_REMINDER_CHOICES = [0, 15, 30, 60] as const
 
+// Off by default: the status bar already ships purpose-built chips, so the custom
+// line is opt-in. The seed template shows the four things people ask for first and
+// demonstrates the `|` segment separator (a segment whose variables all resolve
+// empty is dropped, so no dangling dividers when there is no session).
+export const DEFAULT_STATUS_LINE_TEMPLATE = '{project} | {branch} | {model} | {contextPct}'
+
+const DEFAULT_STATUS_LINE: StatusLineSettings = {
+  enabled: false,
+  template: DEFAULT_STATUS_LINE_TEMPLATE,
+}
+
 // Workspace panel: per-view dock side. Default every view to the right column;
 // Terminal docks at the bottom (full-width under the chat) by default.
 const DEFAULT_WORKSPACE_PANEL: WorkspacePanelLayout = {
@@ -428,13 +461,17 @@ const DEFAULT_WORKSPACE_PANEL: WorkspacePanelLayout = {
 // home directory.
 const DEFAULT_WORKSPACE_PATH = ''
 
-// --- persistence (single key; providers excluded — sidecar is their truth) ---
+// --- persistence (providers excluded — sidecar is their truth) ---
+// localStorage holds BOTH kinds under one key: the local-only view state (its
+// only home) and a cache of the synced slices (first-paint seed). settings.json
+// holds the synced slices alone.
 const STORAGE_KEY = 'awog-settings-v1'
 // One-shot marker: flip installs that still carry the old Geist default to System.
 const SANS_NATIVE_MIGRATION_KEY = 'awog-sans-native-v1'
 
-interface PersistShape {
-  workspacePath: string
+// The slices that travel with the user: functional prefs + anything a reinstall
+// should keep. Order = write order in settings.json (cosmetic only).
+interface SyncedShape {
   defaults: SessionDefaults
   git: GitSettings
   sessions: SessionSettings
@@ -442,20 +479,58 @@ interface PersistShape {
   autoUpdate: AutoUpdateSettings
   appearance: AppearanceExtras
   pet: PetSettings
-  workspacePanel: WorkspacePanelLayout
   githubAccount: string
   githubAutoFetchMs: number
   githubNotify: GithubNotifySettings
   notifications: NotificationSettings
   translate: TranslateSettings
   context: ContextSettings
+  keymap: KeymapBlob
+  statusline: StatusLineSettings
 }
+
+const SYNCED_KEYS: readonly (keyof SyncedShape)[] = [
+  'defaults',
+  'git',
+  'sessions',
+  'quota',
+  'autoUpdate',
+  'appearance',
+  'pet',
+  'githubAccount',
+  'githubAutoFetchMs',
+  'githubNotify',
+  'notifications',
+  'translate',
+  'context',
+  'keymap',
+  'statusline',
+]
+
+// Machine-local view state — never written to settings.json (a panel width from a
+// 32" monitor is meaningless on a laptop, and workspacePath is re-derived from
+// app:info on every boot).
+interface LocalShape {
+  workspacePath: string
+  workspacePanel: WorkspacePanelLayout
+}
+
+type PersistShape = SyncedShape & LocalShape
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+// True when this install already had a localStorage blob — the signal that a
+// first hydrate finding an empty settings.json is a MIGRATION, not a fresh install.
+let hadLocalBlob = false
 
 function loadPersisted(): Partial<PersistShape> {
   if (typeof window === 'undefined') return {}
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return {}
+    hadLocalBlob = true
     const parsed = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object') return {}
     const blob = parsed as Partial<PersistShape>
@@ -475,6 +550,22 @@ function loadPersisted(): Partial<PersistShape> {
   } catch {
     return {}
   }
+}
+
+// Debounce for the settings.json write: long enough that dragging a slider or a
+// panel edge collapses into one IPC round-trip, short enough to land before the
+// user can close the window.
+const PUSH_DEBOUNCE_MS = 500
+
+// Precedence, low → high. 'default' (UI built-in) is not a stored tier, so it is
+// only ever returned by `originOf`.
+export type LayerScope = 'user' | 'project'
+
+interface ResolveSettingsResponse {
+  user: Record<string, unknown>
+  project: Record<string, unknown> | null
+  effective: Record<string, unknown>
+  origin: Record<string, string>
 }
 
 interface AccountsListResponse {
@@ -552,6 +643,13 @@ export const useSettingsStore = defineStore('settings', () => {
   })
   const translate = reactive<TranslateSettings>({ ...DEFAULT_TRANSLATE, ...persisted.translate })
   const context = reactive<ContextSettings>({ ...DEFAULT_CONTEXT, ...persisted.context })
+  // Opaque here on purpose: useKeymap owns the combo schema + its validation, this
+  // store only carries the blob to and from disk (SoC — no key-binding logic here).
+  const keymap = ref<KeymapBlob>({ ...persisted.keymap })
+  const statusline = reactive<StatusLineSettings>({
+    ...DEFAULT_STATUS_LINE,
+    ...persisted.statusline,
+  })
 
   // Bumped whenever a persisted slice is saved (see the watch below). Lets the
   // Settings modal render a debounced "saved" toast without re-declaring the
@@ -560,7 +658,113 @@ export const useSettingsStore = defineStore('settings', () => {
   // the initial hydrate from localStorage doesn't tick it).
   const savedTick = ref(0)
 
-  // Persist all preference slices as one blob whenever any of them change.
+  // Snapshot of the slices that belong in settings.json (plain objects — the
+  // reactive proxies would otherwise reach IPC and fail to serialize).
+  const syncedSnapshot = (): SyncedShape => ({
+    defaults: { ...defaults },
+    git: { ...git },
+    sessions: { ...sessions },
+    quota: { ...quota },
+    autoUpdate: { ...autoUpdate },
+    appearance: { ...appearance },
+    pet: { ...pet, quipLines: { ...pet.quipLines } },
+    githubAccount: githubAccount.value,
+    githubAutoFetchMs: githubAutoFetchMs.value,
+    githubNotify: { ...githubNotify, projectIds: [...githubNotify.projectIds] },
+    notifications: { ...notifications },
+    translate: { ...translate },
+    context: { ...context },
+    keymap: { ...keymap.value },
+    statusline: { ...statusline },
+  })
+
+  // --- settings.json sync (user tier) ---------------------------------------
+  // Disk is the truth; the store only pushes AFTER it has read disk once, so a
+  // boot-time cache value can never overwrite a newer file. `lastPushed` keeps
+  // the debounced writer idempotent (the deep watch fires on every drag frame).
+  let hydratedSettings = false
+  let pushTimer: ReturnType<typeof setTimeout> | null = null
+  let lastPushed = ''
+
+  async function pushSynced(): Promise<void> {
+    const sidecar = useSidecar()
+    if (!sidecar.available) return
+    const patch = syncedSnapshot()
+    const json = JSON.stringify(patch)
+    if (json === lastPushed) return
+    lastPushed = json
+    try {
+      await sidecar.request('settings.set', { patch })
+    } catch (err) {
+      // Non-fatal: the localStorage copy still holds the change for this machine.
+      lastPushed = ''
+      console.warn('[settings] settings.set failed', err)
+    }
+  }
+
+  function schedulePush(): void {
+    if (!hydratedSettings) return
+    if (pushTimer) clearTimeout(pushTimer)
+    pushTimer = setTimeout(() => {
+      pushTimer = null
+      void pushSynced()
+    }, PUSH_DEBOUNCE_MS)
+  }
+
+  // Apply a settings.json blob over the in-memory slices. Every slice is checked
+  // for shape first — the file is user-editable, so it is L1 input.
+  function applySynced(blob: Record<string, unknown>): void {
+    if (isObj(blob.defaults)) Object.assign(defaults, blob.defaults)
+    if (!defaults.systemPrompt) defaults.systemPrompt = DEFAULT_SYSTEM_PROMPT
+    if (isObj(blob.git)) Object.assign(git, blob.git)
+    if (isObj(blob.sessions)) Object.assign(sessions, blob.sessions)
+    if (isObj(blob.quota)) Object.assign(quota, blob.quota)
+    if (isObj(blob.autoUpdate)) Object.assign(autoUpdate, blob.autoUpdate)
+    if (isObj(blob.appearance)) Object.assign(appearance, blob.appearance)
+    if (isObj(blob.pet)) Object.assign(pet, blob.pet)
+    if (!PET_SPRITES.includes(pet.sprite)) pet.sprite = PET_SPRITES[0]!
+    if (typeof blob.githubAccount === 'string') githubAccount.value = blob.githubAccount
+    if (typeof blob.githubAutoFetchMs === 'number') githubAutoFetchMs.value = blob.githubAutoFetchMs
+    if (isObj(blob.githubNotify)) Object.assign(githubNotify, blob.githubNotify)
+    if (isObj(blob.notifications)) Object.assign(notifications, blob.notifications)
+    if (isObj(blob.translate)) Object.assign(translate, blob.translate)
+    if (isObj(blob.context)) Object.assign(context, blob.context)
+    if (isObj(blob.keymap)) keymap.value = { ...blob.keymap }
+    if (isObj(blob.statusline)) Object.assign(statusline, blob.statusline)
+  }
+
+  // Read the user tier once per app session, then push the merged snapshot back so
+  // settings.json ends up complete. That single push IS the one-way migration for
+  // installs whose prefs only ever lived in localStorage: nothing is deleted from
+  // localStorage, so a rollback still finds its config.
+  async function hydrateSettings(): Promise<void> {
+    if (hydratedSettings) return
+    const sidecar = useSidecar()
+    if (!sidecar.available) {
+      // Browser-dev: localStorage stays the only store; allow pushes to no-op.
+      hydratedSettings = true
+      return
+    }
+    try {
+      const blob = await sidecar.request<Record<string, unknown>>('settings.get')
+      const known = isObj(blob) ? SYNCED_KEYS.filter((k) => k in blob) : []
+      if (known.length > 0) applySynced(blob)
+      else if (hadLocalBlob) {
+        console.warn('[settings] migrating preferences from localStorage → settings.json')
+      }
+    } catch (err) {
+      console.warn('[settings] settings.get failed', err)
+    } finally {
+      hydratedSettings = true
+    }
+    // Not debounced: the first write should land before the user can change
+    // anything, and it is a no-op when the file already matches.
+    await pushSynced()
+  }
+
+  // Persist all preference slices as one blob whenever any of them change:
+  // localStorage synchronously (boot cache + local-only state) and settings.json
+  // debounced over IPC (the synced slices).
   watch(
     [
       workspacePath,
@@ -578,35 +782,84 @@ export const useSettingsStore = defineStore('settings', () => {
       notifications,
       translate,
       context,
+      keymap,
+      statusline,
     ],
     () => {
       if (typeof window === 'undefined') return
       const blob: PersistShape = {
+        ...syncedSnapshot(),
         workspacePath: workspacePath.value,
-        defaults,
-        git,
-        sessions,
-        quota,
-        autoUpdate,
-        appearance,
-        pet,
         workspacePanel,
-        githubAccount: githubAccount.value,
-        githubAutoFetchMs: githubAutoFetchMs.value,
-        githubNotify,
-        notifications,
-        translate,
-        context,
       }
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(blob))
       } catch {
         // Quota/availability errors are non-fatal — settings stay in memory.
       }
+      schedulePush()
       savedTick.value += 1
     },
     { deep: true },
   )
+
+  // --- project tier (read-only overlay) --------------------------------------
+  // Loaded on demand for ONE project at a time — the layer a settings row needs to
+  // answer "where does this value come from?". Writes go through
+  // setProjectOverride / clearProjectOverride, never through the slices above.
+  const layerProjectId = ref<string | null>(null)
+  const projectLayer = ref<Record<string, unknown>>({})
+  const layerOrigin = ref<Record<string, LayerScope>>({})
+
+  async function loadLayers(projectId: string | null): Promise<void> {
+    const sidecar = useSidecar()
+    layerProjectId.value = projectId
+    if (!sidecar.available || !projectId) {
+      projectLayer.value = {}
+      layerOrigin.value = {}
+      return
+    }
+    try {
+      const res = await sidecar.request<ResolveSettingsResponse>('settings.resolve', { projectId })
+      projectLayer.value = isObj(res.project) ? res.project : {}
+      layerOrigin.value = isObj(res.origin) ? (res.origin as Record<string, LayerScope>) : {}
+    } catch (err) {
+      // A project without a repo/dir still resolves; anything else degrades to
+      // "no overrides" rather than blocking the pane.
+      projectLayer.value = {}
+      layerOrigin.value = {}
+      console.warn('[settings] settings.resolve failed', err)
+    }
+  }
+
+  // Which tier a value comes from. 'default' = neither tier declares it, so the
+  // value on screen is the UI's built-in default.
+  const originOf = (path: string): LayerScope | 'default' => layerOrigin.value[path] ?? 'default'
+
+  // A single field of the loaded project overlay (undefined = not overridden).
+  function projectValue<T>(slice: keyof SyncedShape, field: string): T | undefined {
+    const s = projectLayer.value[slice]
+    if (!isObj(s)) return undefined
+    const v = s[field]
+    return v === undefined ? undefined : (v as T)
+  }
+
+  async function setProjectOverride(
+    projectId: string,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    const sidecar = useSidecar()
+    if (!sidecar.available) return
+    await sidecar.request('settings.set', { patch, scope: 'project', projectId })
+    await loadLayers(projectId)
+  }
+
+  async function clearProjectOverride(projectId: string, paths: string[]): Promise<void> {
+    const sidecar = useSidecar()
+    if (!sidecar.available || paths.length === 0) return
+    await sidecar.request('settings.unset', { paths, scope: 'project', projectId })
+    await loadLayers(projectId)
+  }
 
   // --- getters ---
   const activeAccount = (provider: ProviderName): ProviderAccount | null => {
@@ -659,6 +912,10 @@ export const useSettingsStore = defineStore('settings', () => {
     if (!sidecar.available) return
     if (inFlight) return inFlight
     inFlight = (async () => {
+      // Settings.json comes along for the ride: this is the one call every window
+      // already makes at app lifetime (layouts/default.vue), and hydrateSettings
+      // guards itself to run once.
+      void hydrateSettings()
       try {
         const res = await sidecar.request<AccountsListResponse>('accounts.list')
         ;(Object.keys(providers) as ProviderName[]).forEach((p) => {
@@ -802,6 +1059,13 @@ export const useSettingsStore = defineStore('settings', () => {
   const updatePet = (patch: Partial<PetSettings>) => Object.assign(pet, patch)
   const updateTranslate = (patch: Partial<TranslateSettings>) => Object.assign(translate, patch)
   const updateContext = (patch: Partial<ContextSettings>) => Object.assign(context, patch)
+  const updateStatusline = (patch: Partial<StatusLineSettings>) => Object.assign(statusline, patch)
+  const resetStatusline = () => Object.assign(statusline, DEFAULT_STATUS_LINE)
+  // Whole-blob replace: useKeymap owns the schema and always hands over the full
+  // binding set, so a field merge would keep stale ids alive after a reset.
+  const setKeymap = (blob: KeymapBlob) => {
+    keymap.value = { ...blob }
+  }
 
   // The per-turn payload sessions.sendMessage carries (ADR 0073 D-12). Only the
   // NON-default fields are included so the engine keeps its own defaults for
@@ -877,13 +1141,19 @@ export const useSettingsStore = defineStore('settings', () => {
     notifications,
     translate,
     context,
+    keymap,
+    statusline,
     savedTick,
+    layerProjectId,
+    projectLayer,
     // getters
     activeAccount,
     resolveCreatorAccount,
     isProviderConnected,
     keyFingerprint,
     workspaceDockOf,
+    originOf,
+    projectValue,
     // account/auth actions
     hydrateFromSidecar,
     connectAnthropicOAuth,
@@ -907,7 +1177,15 @@ export const useSettingsStore = defineStore('settings', () => {
     updatePet,
     updateTranslate,
     updateContext,
+    updateStatusline,
+    resetStatusline,
+    setKeymap,
     contextConfig,
+    // layered settings (user ← project)
+    hydrateSettings,
+    loadLayers,
+    setProjectOverride,
+    clearProjectOverride,
     setWorkspacePath,
     hydrateAppPaths,
     setGithubAccount,

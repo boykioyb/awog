@@ -1,0 +1,13 @@
+{
+  "settingsKeymap.group.global": "Global",
+  "settingsKeymap.group.session": "Session",
+  "settingsKeymap.group.navigate": "Navigation",
+  "settingsKeymap.act.openSettings": "Open Settings",
+  "settingsKeymap.act.toggleDiff": "Toggle Diff (in session)",
+  "settingsKeymap.act.togglePlan": "Toggle Plan (in session)",
+  "settingsKeymap.act.nextSession": "Next session",
+  "settingsKeymap.act.prevSession": "Previous session",
+  "settingsKeymap.act.goSessions": "Go to Sessions",
+  "settingsKeymap.act.goTasks": "Go to Tasks",
+  "settingsKeymap.act.goProjects": "Go to Projects"
+}
