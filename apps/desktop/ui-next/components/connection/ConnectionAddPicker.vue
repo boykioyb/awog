@@ -6,49 +6,79 @@
     @close="emit('close')"
   >
     <div class="cap">
-      <!-- Two "how do you want to start" options: hand-build, or describe with AI. -->
-      <div class="cap-quick">
-        <button type="button" class="cap-opt" @click="emit('scratch')">
-          <span class="cap-opt-ic">
-            <Icon name="plus" style="width: var(--icon-md); height: var(--icon-md)" />
-          </span>
-          <span class="cap-opt-tx">
-            <span class="cap-opt-t">{{ t('connections.picker.scratch') }}</span>
-            <span class="cap-opt-s">{{ t('connections.picker.scratchSub') }}</span>
-          </span>
+      <!-- Hai khu: catalog tĩnh có sẵn (luôn dùng được, kể cả offline) và khu
+           Khám phá lấy danh sách động từ MCP Registry (gói #38). Tab Khám phá chỉ
+           được mount khi người dùng bấm vào — không có request nào chạy ngầm. -->
+      <div class="cap-tabs">
+        <button
+          type="button"
+          class="cap-tab"
+          :class="{ on: tab === 'presets' }"
+          @click="tab = 'presets'"
+        >
+          {{ t('connectionsDiscover.tab.presets') }}
         </button>
-        <button type="button" class="cap-opt" @click="emit('ai')">
-          <span class="cap-opt-ic accent">
-            <Icon name="sparkles" style="width: var(--icon-md); height: var(--icon-md)" />
-          </span>
-          <span class="cap-opt-tx">
-            <span class="cap-opt-t">{{ t('connections.picker.ai') }}</span>
-            <span class="cap-opt-s">{{ t('connections.picker.aiSub') }}</span>
-          </span>
+        <button
+          type="button"
+          class="cap-tab"
+          :class="{ on: tab === 'discover' }"
+          @click="openDiscover"
+        >
+          {{ t('connectionsDiscover.tab.discover') }}
         </button>
       </div>
 
-      <!-- Catalog of common providers → pre-filled config. -->
-      <div class="cap-seplbl">{{ t('connections.picker.orPick') }}</div>
-      <div class="cap-grid">
-        <button
-          v-for="p in presets"
-          :key="p.id"
-          type="button"
-          class="cap-card"
-          @click="emit('pick', p.id)"
-        >
-          <SourceAvatar :source="pseudoSource(p)" size="md" />
-          <span class="cap-card-tx">
-            <span class="cap-card-nm">
-              {{ p.name }}
-              <span class="tag cap-card-badge">{{ t('connections.typeBadge.' + p.type) }}</span>
+      <ConnectionDiscoverPanel
+        v-if="discoverMounted"
+        v-show="tab === 'discover'"
+        @pick="emit('pick', $event)"
+      />
+
+      <div v-show="tab === 'presets'" class="cap-presets">
+        <!-- Two "how do you want to start" options: hand-build, or describe with AI. -->
+        <div class="cap-quick">
+          <button type="button" class="cap-opt" @click="emit('scratch')">
+            <span class="cap-opt-ic">
+              <Icon name="plus" style="width: var(--icon-md); height: var(--icon-md)" />
             </span>
-            <span class="cap-card-tl">{{ p.tagline }}</span>
-          </span>
-        </button>
+            <span class="cap-opt-tx">
+              <span class="cap-opt-t">{{ t('connections.picker.scratch') }}</span>
+              <span class="cap-opt-s">{{ t('connections.picker.scratchSub') }}</span>
+            </span>
+          </button>
+          <button type="button" class="cap-opt" @click="emit('ai')">
+            <span class="cap-opt-ic accent">
+              <Icon name="sparkles" style="width: var(--icon-md); height: var(--icon-md)" />
+            </span>
+            <span class="cap-opt-tx">
+              <span class="cap-opt-t">{{ t('connections.picker.ai') }}</span>
+              <span class="cap-opt-s">{{ t('connections.picker.aiSub') }}</span>
+            </span>
+          </button>
+        </div>
+
+        <!-- Catalog of common providers → pre-filled config. -->
+        <div class="cap-seplbl">{{ t('connections.picker.orPick') }}</div>
+        <div class="cap-grid">
+          <button
+            v-for="p in presets"
+            :key="p.id"
+            type="button"
+            class="cap-card"
+            @click="emit('pick', p.id)"
+          >
+            <SourceAvatar :source="pseudoSource(p)" size="md" />
+            <span class="cap-card-tx">
+              <span class="cap-card-nm">
+                {{ p.name }}
+                <span class="tag cap-card-badge">{{ t('connections.typeBadge.' + p.type) }}</span>
+              </span>
+              <span class="cap-card-tl">{{ p.tagline }}</span>
+            </span>
+          </button>
+        </div>
+        <div v-if="!presets.length" class="cap-empty">{{ t('connections.picker.empty') }}</div>
       </div>
-      <div v-if="!presets.length" class="cap-empty">{{ t('connections.picker.empty') }}</div>
     </div>
   </LibraryEntityModal>
 </template>
@@ -59,8 +89,15 @@
 // / AI creator) plus a catalog of common providers. Picking a provider emits its
 // catalog id; the page fetches the pre-filled draft (source.discoverPreset) and
 // seeds ConnectionEditor. Craft-parity "add a known service → pre-filled config".
+//
+// Gói #38 thêm tab "Khám phá": danh sách ĐỘNG lấy từ MCP Registry công khai, để
+// catalog không còn bị đóng băng theo bản release. Cả hai tab dùng CHUNG một
+// đường ra — `pick` mang id (preset tĩnh hoặc `reg:<name>`) và
+// `source.discoverPreset` giải cả hai — nên luồng đồng ý của người dùng không đổi.
+import { ref } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import SourceAvatar from '~/components/connection/SourceAvatar.vue'
+import ConnectionDiscoverPanel from '~/components/connection/ConnectionDiscoverPanel.vue'
 import type { Source, SourcePresetMeta } from '~/stores/connections'
 
 defineProps<{
@@ -76,6 +113,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+
+// Tab Khám phá chỉ mount khi được bấm lần đầu (rồi giữ nguyên bằng v-show): mở
+// picker để chọn preset KHÔNG được kéo theo một lượt gọi mạng nào.
+const tab = ref<'presets' | 'discover'>('presets')
+const discoverMounted = ref(false)
+const openDiscover = () => {
+  tab.value = 'discover'
+  discoverMounted.value = true
+}
 
 // A minimal Source built from the preset meta so SourceAvatar can render the row
 // icon. Presets carry an emoji `icon`, so SourceAvatar's fast path renders it
@@ -103,6 +149,35 @@ function pseudoSource(p: SourcePresetMeta): Source {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+.cap-presets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.cap-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.cap-tab {
+  padding: 6px 11px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--textDim);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.cap-tab:hover {
+  color: var(--text);
+}
+.cap-tab.on {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 .cap-quick {
   display: grid;

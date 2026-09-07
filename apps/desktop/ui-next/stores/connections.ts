@@ -183,6 +183,60 @@ export type SourcePresetMeta = {
   setupHint?: string
 }
 
+// ── Khám phá từ MCP Registry (gói #38) ───────────────────────────────────────
+// Mirror của sidecar sources/registry.ts. Catalog tĩnh (SourcePresetMeta) là 11
+// entry biên dịch cứng; phần dưới đây là danh sách ĐỘNG lấy từ registry công
+// khai, cache có TTL trong ~/.awog, và luôn degrade về cache/rỗng khi offline.
+
+// Cách cài một entry. `unsupported` = AWOG không dựng được lệnh an toàn cho loại
+// package đó ⇒ UI chỉ hiện link repo, KHÔNG có nút cài.
+export type RegistryInstall =
+  | { kind: 'remote'; transport: 'http' | 'sse'; url: string; authType: 'bearer' | 'none' }
+  | { kind: 'stdio'; command: string; args: string[]; envKeys: string[] }
+  | { kind: 'unsupported'; reason: string }
+
+export type RegistryEntry = {
+  id: string
+  name: string
+  title: string
+  description: string
+  version: string
+  updatedAt?: string
+  repositoryUrl?: string
+  install: RegistryInstall
+  // CHỈ LÀ TÊN env var / header entry khai là bí mật — không bao giờ có giá trị.
+  secretFields: string[]
+}
+
+// Dữ liệu đang xem đến từ đâu: mạng, cache trên đĩa, hay chưa có gì. Hiển thị
+// nguyên trạng để người dùng biết mình đang nhìn danh sách nào.
+export type RegistryOrigin = 'network' | 'cache' | 'offline'
+
+export type RegistryResult = {
+  entries: RegistryEntry[]
+  origin: RegistryOrigin
+  fetchedAt: number | null
+  stale: boolean
+  error?: string
+}
+
+// Vì sao một gợi ý xuất hiện. `evidence` là bằng chứng cụ thể đọc từ đĩa (tên
+// file / tên dependency / host git remote) — UI dịch `code` rồi chèn evidence vào.
+export type SourceSuggestionReason = {
+  code: 'file' | 'dependency' | 'gitRemote'
+  keyword: string
+  evidence: string
+}
+
+export type SourceSuggestion = {
+  id: string
+  kind: 'preset' | 'registry'
+  name: string
+  tagline: string
+  type: SourceType
+  reason: SourceSuggestionReason
+}
+
 // Dashboard/agent-picker compat slice — the only shape those surfaces consume.
 export type Connection = {
   id: string
@@ -378,6 +432,30 @@ export const useConnectionsStore = defineStore('connections', () => {
     return sc.request<{ preset: Source; meta: SourcePresetMeta }>('source.discoverPreset', {
       presetId,
     })
+  }
+
+  // Khám phá động từ MCP Registry (gói #38). `query` rỗng ⇒ catalog nền (cache
+  // được, duyệt offline được); có query ⇒ sidecar hỏi thẳng registry và tự lọc
+  // cục bộ khi mạng hỏng. Không có bridge (browser dev) ⇒ 'offline' + rỗng, đúng
+  // như khi mạng chết: tab Khám phá trống nhưng catalog tĩnh vẫn còn nguyên.
+  async function discoverRegistry(
+    opts: { query?: string; refresh?: boolean } = {},
+  ): Promise<RegistryResult> {
+    if (!available.value) return { entries: [], origin: 'offline', fetchedAt: null, stale: true }
+    return sc.request<RegistryResult>('source.discoverRegistry', {
+      ...(opts.query ? { query: opts.query } : {}),
+      ...(opts.refresh ? { refresh: true } : {}),
+    })
+  }
+
+  // Gợi ý theo ngữ cảnh project. Sidecar đọc package.json / .git/config / tên file
+  // mức 1 và trả về kèm bằng chứng; không tìm thấy tín hiệu ⇒ mảng rỗng (không bịa).
+  async function suggestSources(projectPath: string): Promise<SourceSuggestion[]> {
+    if (!available.value || !projectPath) return []
+    const res = await sc.request<{ suggestions: SourceSuggestion[] }>('source.suggestSources', {
+      projectPath,
+    })
+    return Array.isArray(res.suggestions) ? res.suggestions : []
   }
 
   // Create-or-update, keyed by slug. `renameFrom` (the source's previous slug) is
@@ -695,6 +773,8 @@ export const useConnectionsStore = defineStore('connections', () => {
     loadServers: loadSources,
     listPresets,
     discoverPreset,
+    discoverRegistry,
+    suggestSources,
     saveSource,
     deleteSource,
     toggleSource,
