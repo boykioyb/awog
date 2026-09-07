@@ -36,6 +36,7 @@ import {
   ENGINEERING_PROMPT,
   EVIDENCE_PROMPT,
   OUTPUT_SURFACE_PROMPT,
+  SCRATCH_DIR_PROMPT,
   TOOL_DISCIPLINE_PROMPT,
   VERIFY_PROMPT,
 } from '../prompts.js'
@@ -301,6 +302,10 @@ async function spawnSubagent(
       EVIDENCE_PROMPT,
       OUTPUT_SURFACE_PROMPT,
       TOOL_DISCIPLINE_PROMPT,
+      // Scratch-space convention: a subagent writes working files even more
+      // readily than the parent (it dumps intermediate findings), and it has no
+      // conversation to pick up the habit from.
+      SCRATCH_DIR_PROMPT,
       VERIFY_PROMPT,
       // Inherit the parent turn's co-author setting (Pi has no built-in attribution).
       deps.commitCoAuthor === false ? undefined : CO_AUTHOR_INSTRUCTION,

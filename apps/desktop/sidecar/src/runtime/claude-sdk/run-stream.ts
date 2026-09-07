@@ -47,6 +47,7 @@ import {
   EVIDENCE_PROMPT,
   OUTPUT_SURFACE_PROMPT,
   TODO_USAGE_PROMPT,
+  SCRATCH_DIR_PROMPT,
   VERIFY_PROMPT,
 } from '../prompts.js'
 import { buildCurrentStateBlock, collectWorkspaceSnapshot } from '../../context/environment.js'
@@ -400,6 +401,9 @@ export async function runStreamClaude(
   const stylePrompt = buildStylePrompt(
     args.settings.responseStyle,
     args.settings.responseStyleNoMarkdown,
+    // Tier project của style tự viết ({project}/.awog/styles) — không truyền
+    // projectId thì chỉ tier global resolve được.
+    args.projectId,
   )
   const inPlanMode = args.settings.mode === 'plan'
   // PLAN_MODE_PROMPT is NOT appended here — like the response style, it rides on
@@ -433,6 +437,10 @@ export async function runStreamClaude(
     args.systemPromptAppend,
     rulesPrompt,
     VERIFY_PROMPT,
+    // Scratch-space convention: working files go to `.awog/scratch/`, never
+    // beside the user's source. Constant, so it rides the append (frozen on
+    // Claude SDK resume is fine — it never changes).
+    SCRATCH_DIR_PROMPT,
     EVIDENCE_PROMPT,
     OUTPUT_SURFACE_PROMPT,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
@@ -1156,6 +1164,7 @@ export async function runStreamClaude(
       cache_read_tokens: acc.cacheReadTokens,
       cache_creation_tokens: acc.cacheWriteTokens,
       ...(acc.contextTokens > 0 ? { context_tokens: acc.contextTokens } : {}),
+      ...(acc.baseTokens > 0 ? { base_tokens: acc.baseTokens } : {}),
     },
     stopReason: acc.stopReason,
     contextChars,

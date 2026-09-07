@@ -9,13 +9,17 @@
 //               as the session's current checklist, which is what makes it editable
 //               by the user — see sessions/todo-context.ts. Without a sink (tasks,
 //               subagents, one-shot) it stays a pure ACK.
-//   WebSearch — no web-search backend wired (no API key / provider). We return a
-//               clear "not available" so the model proceeds or asks the user.
-//               (WebFetch is now a real tool — see web-fetch-tool.ts, ADR 0042.)
 //
-// Both are added to the BASE toolset (createAwogToolDefinitions) so they exist
-// for chat, tasks, AND subagents, and are filtered by allowedTools /
-// disabledTools uniformly with every other tool.
+// TodoWrite is added to the BASE toolset (createAwogToolDefinitions) so it exists
+// for chat, tasks, AND subagents, and is filtered by allowedTools / disabledTools
+// uniformly with every other tool.
+//
+// A `WebSearch` stub used to live here too: it declared the tool and then always
+// answered "web search is not available". That is a lie told one tool call too
+// late — the model spends a round-trip to learn the tool it was offered does
+// nothing. It is gone; the Pi path simply does not advertise WebSearch, and
+// ENGINEERING_PROMPT (runtime/prompts.ts) says so up front and points at WebFetch
+// instead. (WebFetch is a real tool — see web-fetch-tool.ts, ADR 0042.)
 
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
@@ -78,39 +82,6 @@ export function createTodoWriteTool(
           { type: 'text', text: `Todos updated (${countDone(items)}/${items.length} completed).` },
         ],
         details: { count: items.length },
-      }
-    },
-  }
-}
-
-const WebSearchParams = Type.Object(
-  { query: Type.String({ description: 'The search query.' }) },
-  { additionalProperties: true },
-)
-
-interface WebSearchDetails {
-  // tool-error.ts: the stub never returns results, so every call is a failure to
-  // perform the requested search. Rendering it as a successful step told the user
-  // the search ran when nothing did.
-  isError: true
-}
-
-export function createWebSearchTool(): AgentTool<typeof WebSearchParams, WebSearchDetails> {
-  return {
-    name: 'WebSearch',
-    label: 'Web search',
-    description:
-      'Search the web. NOTE: web access is not available in this environment — calling this returns an unavailability notice, not results.',
-    parameters: WebSearchParams,
-    async execute(): Promise<AgentToolResult<WebSearchDetails>> {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'Web search is not available in this environment. Proceed using the workspace files and your knowledge, or ask the user to provide the information.',
-          },
-        ],
-        details: { isError: true },
       }
     },
   }

@@ -34,6 +34,7 @@ import {
   OUTPUT_SURFACE_PROMPT,
   TODO_USAGE_PROMPT,
   TOOL_DISCIPLINE_PROMPT,
+  SCRATCH_DIR_PROMPT,
   VERIFY_PROMPT,
 } from './prompts.js'
 import { buildOneShotContextBlock } from '../context/environment.js'
@@ -353,6 +354,10 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     TOOL_DISCIPLINE_PROMPT,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
+    // Scratch-space convention: working files go to `.awog/scratch/`, never
+    // beside the user's source. Constant, so it rides the append (frozen on
+    // Claude SDK resume is fine — it never changes).
+    SCRATCH_DIR_PROMPT,
     // Co-author trailer convention (task's `commitCoAuthor` snapshot). Pi has no
     // built-in commit attribution, so append the AWOG instruction unless disabled.
     args.commitCoAuthor === false ? undefined : CO_AUTHOR_INSTRUCTION,

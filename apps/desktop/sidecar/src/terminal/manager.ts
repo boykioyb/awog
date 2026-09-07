@@ -9,7 +9,7 @@
 // string concat), and sensitive env (OAuth/API tokens) is stripped before
 // spawn so an interactive shell cannot `echo` the credential.
 
-import { isAbsolute } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 
@@ -17,6 +17,20 @@ export interface TerminalSessionRef {
   terminalId: string
   sessionId: string
   createdAt: number
+}
+
+// Một terminal đang mở, kèm ngữ cảnh đủ để tool `read_terminal` chọn đúng shell
+// (runtime/tools/read-terminal-tool.ts).
+export interface TerminalBufferRef {
+  terminalId: string
+  sessionId: string
+  workspaceRoot: string
+  createdAt: number
+}
+
+export interface TerminalBufferRead extends TerminalBufferRef {
+  // Output THÔ (còn nguyên escape sequence ANSI) — bên đọc tự làm sạch.
+  text: string
 }
 
 interface PtyProcess {
@@ -46,6 +60,31 @@ interface TerminalRecord {
   workspaceRoot: string
   createdAt: number
   pty: PtyProcess
+  // Ring buffer output (xem RING BUFFER bên dưới).
+  buffer: string
+}
+
+// RING BUFFER — vì sao có:
+// Output của PTY chỉ được stream tới UI qua event `terminal.data`; sidecar không
+// giữ lại gì. Nghĩa là model KHÔNG có cách nào đọc cái shell mà NGƯỜI DÙNG đang
+// gõ (lỗi build vừa hiện, log server đang chạy…). Ta giữ lại phần đuôi output
+// của mỗi terminal để tool `read_terminal` đọc được.
+//
+// Cắt từ ĐẦU (giữ đuôi): phần cuối màn hình mới là phần đáng đọc. Cap tính theo
+// UTF-16 code unit của JS (xấp xỉ byte cho output terminal chủ yếu là ASCII) —
+// đây là hàng rào chống phình bộ nhớ, không phải hạn ngạch chính xác.
+const BUFFER_MAX_CHARS = 64 * 1024
+
+function appendOutput(record: TerminalRecord, chunk: string): void {
+  const next = record.buffer + chunk
+  if (next.length <= BUFFER_MAX_CHARS) {
+    record.buffer = next
+    return
+  }
+  // Cắt tại ranh giới dòng gần nhất để không để lại một dòng cụt ở đầu buffer.
+  const tail = next.slice(next.length - BUFFER_MAX_CHARS)
+  const nl = tail.indexOf('\n')
+  record.buffer = nl >= 0 ? tail.slice(nl + 1) : tail
 }
 
 // Abuse guard only — a host may open several tabs AND split each into panes, so
@@ -153,10 +192,12 @@ class TerminalManager {
       workspaceRoot: params.workspaceRoot,
       createdAt: Date.now(),
       pty: proc,
+      buffer: '',
     }
     this.terminals.set(terminalId, record)
 
     proc.onData((chunk) => {
+      appendOutput(record, chunk)
       emit('terminal.data', { terminalId, sessionId: params.sessionId, chunk })
     })
     proc.onExit(({ exitCode, signal }) => {
@@ -196,6 +237,40 @@ class TerminalManager {
       .map((t) => ({ terminalId: t.terminalId, sessionId: t.sessionId, createdAt: t.createdAt }))
   }
 
+  // Terminal đang mở trong ĐÚNG workspace root này, mới nhất trước.
+  listForWorkspace(workspaceRoot: string): TerminalBufferRef[] {
+    const root = resolve(workspaceRoot)
+    return [...this.terminals.values()]
+      .filter((t) => resolve(t.workspaceRoot) === root)
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((t) => ({
+        terminalId: t.terminalId,
+        sessionId: t.sessionId,
+        workspaceRoot: t.workspaceRoot,
+        createdAt: t.createdAt,
+      }))
+  }
+
+  // Đọc đuôi ring buffer. `lines` > 0 ⇒ chỉ lấy N dòng cuối. null = không có
+  // terminal đó (chưa từng tồn tại, hoặc đã thoát — record bị xoá ở onExit nên
+  // buffer biến mất theo, không giữ lịch sử của shell đã chết).
+  readBuffer(terminalId: string, lines?: number): TerminalBufferRead | null {
+    const record = this.terminals.get(terminalId)
+    if (!record) return null
+    let text = record.buffer
+    if (lines !== undefined && lines > 0) {
+      const parts = text.split('\n')
+      if (parts.length > lines) text = parts.slice(parts.length - lines).join('\n')
+    }
+    return {
+      terminalId: record.terminalId,
+      sessionId: record.sessionId,
+      workspaceRoot: record.workspaceRoot,
+      createdAt: record.createdAt,
+      text,
+    }
+  }
+
   // NO idle-kill. A shell is a user-owned document, not a pooled resource: reaping
   // it after N minutes of silence killed shells the user had simply left open, and
   // worse, killed long-running-but-quiet commands (build/watch/ssh) mid-flight —
@@ -214,6 +289,26 @@ class TerminalManager {
 }
 
 export const terminalManager = new TerminalManager()
+
+// ─── Đọc buffer cho runtime (tool `read_terminal`) ─────────────────────────
+//
+// PHẠM VI = workspace root, KHÔNG phải session id. Khoá gom nhóm PTY do UI cấp
+// là `ses:<Session.id số>` / `global:<project>` / `ssh:<hostId>`, trong khi runtime
+// chỉ biết engine session id (`ses-…`) — hai không gian id khác nhau nên lọc theo
+// session sẽ luôn rỗng. Lọc theo workspace root vừa chạy đúng (bắt được cả tab
+// terminal toàn cục của cùng project, nơi người dùng gõ nhiều nhất) vừa là ranh
+// giới tin cậy đúng: đúng thư mục mà agent vốn đã được Read/Write/Bash.
+
+export function listTerminalsForWorkspace(workspaceRoot: string): TerminalBufferRef[] {
+  return terminalManager.listForWorkspace(workspaceRoot)
+}
+
+export function readTerminalBuffer(
+  terminalId: string,
+  lines?: number,
+): TerminalBufferRead | null {
+  return terminalManager.readBuffer(terminalId, lines)
+}
 
 // Kill child shells with the sidecar (mirrors mcpManager). stdin-close exit
 // also sends SIGHUP to children, so orphan shells are doubly guarded.

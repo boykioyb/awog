@@ -51,6 +51,8 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   NotebookRead: 'read',
   Bash: 'terminal',
   BashOutput: 'terminal',
+  KillShell: 'terminal',
+  read_terminal: 'terminal',
   Glob: 'find-files',
   Grep: 'search',
   WebSearch: 'search',

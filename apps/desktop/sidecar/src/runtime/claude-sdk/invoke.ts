@@ -20,6 +20,7 @@ import {
   EVIDENCE_PROMPT,
   OUTPUT_SURFACE_PROMPT,
   TODO_USAGE_PROMPT,
+  SCRATCH_DIR_PROMPT,
   VERIFY_PROMPT,
 } from '../prompts.js'
 import { isToolAllowed } from '../tools/index.js'
@@ -239,6 +240,10 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     // below: a task node is a fresh one-shot SDK session, never a `resume`, so
     // nothing here can freeze stale.
     VERIFY_PROMPT,
+    // Scratch-space convention: working files go to `.awog/scratch/`, never
+    // beside the user's source. Constant, so it rides the append (frozen on
+    // Claude SDK resume is fine — it never changes).
+    SCRATCH_DIR_PROMPT,
     EVIDENCE_PROMPT,
     OUTPUT_SURFACE_PROMPT,
     todoAllowed ? TODO_USAGE_PROMPT : undefined,

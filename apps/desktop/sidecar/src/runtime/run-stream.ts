@@ -49,6 +49,7 @@ import {
   OUTPUT_SURFACE_PROMPT,
   TODO_USAGE_PROMPT,
   TOOL_DISCIPLINE_PROMPT,
+  SCRATCH_DIR_PROMPT,
   VERIFY_PROMPT,
 } from './prompts.js'
 import { makeConfabulationFollowUp } from './confabulation-guard.js'
@@ -189,6 +190,9 @@ export async function runStreamPi(
       ...(!inPlanMode && args.sessionId
         ? { backgroundExec: { sessionId: args.sessionId } }
         : {}),
+      // "This turn belongs to a chat session" — plan mode included. Carries the
+      // read-only terminal tool, which background exec's gate would wrongly drop.
+      ...(args.sessionId ? { chatSession: { sessionId: args.sessionId } } : {}),
       // Editable checklist: persist every TodoWrite as the session's current
       // checklist so a user edit in the UI has something authoritative to write to
       // and the next turn re-injects it (sessions/todo-context.ts). Sessions only.
@@ -233,6 +237,9 @@ export async function runStreamPi(
   const stylePrompt = buildStylePrompt(
     args.settings.responseStyle,
     args.settings.responseStyleNoMarkdown,
+    // Tier project của style tự viết ({project}/.awog/styles) — không truyền
+    // projectId thì chỉ tier global resolve được.
+    args.projectId,
   )
   // Tell the model — in-band — about any attached MCP server that failed to
   // load, so it doesn't call its absent tools or fabricate their results.
@@ -268,6 +275,10 @@ export async function runStreamPi(
     !inPlanMode && args.sessionId ? BACKGROUND_EXEC_PROMPT : undefined,
     // Always-on: verify, never fabricate (see prompts.ts). Unconditional.
     VERIFY_PROMPT,
+    // Scratch-space convention: working files go to `.awog/scratch/`, never
+    // beside the user's source. Constant, so it rides the append (frozen on
+    // Claude SDK resume is fine — it never changes).
+    SCRATCH_DIR_PROMPT,
     // Co-author trailer convention (Git `commitCoAuthor`). Pi has no built-in
     // commit attribution (unlike the claude_code preset), so append the AWOG
     // instruction only when the setting is on (default; off omits it entirely).
@@ -663,6 +674,7 @@ export async function runStreamPi(
       cache_read_tokens: acc.cacheReadTokens,
       cache_creation_tokens: acc.cacheWriteTokens,
       ...(acc.contextTokens > 0 ? { context_tokens: acc.contextTokens } : {}),
+      ...(acc.baseTokens > 0 ? { base_tokens: acc.baseTokens } : {}),
     },
     stopReason: acc.stopReason,
     contextChars,

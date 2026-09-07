@@ -173,11 +173,17 @@ function commitMaxMinutes() {
   store.setBudget(props.session.id, { maxWallclockMs: mins != null ? mins * 60000 : undefined })
 }
 
-// Built-in Claude Code tools (the toggleable runtime toolset). MCP servers are
+// Built-in tools of the runtime toolset (the toggleable ones). MCP servers are
 // whitelisted from the composer chip — the denylist here is built-ins only.
+// Not every name exists on both runtimes: `WebSearch` is real only on the Claude
+// SDK path (the Pi path has no search backend and deliberately does not advertise
+// one — see sidecar runtime/tools/index.ts), and turning off a tool the current
+// runtime doesn't have is simply a no-op.
 const TOOL_GROUPS: [string, string[]][] = [
   ['File', ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit']],
-  ['Exec', ['Bash', 'BashOutput', 'KillShell']],
+  // read_terminal reads the tail of a PTY the USER typed in — off here means the
+  // model cannot see the user's terminals at all.
+  ['Exec', ['Bash', 'BashOutput', 'KillShell', 'read_terminal']],
   ['Web', ['WebFetch', 'WebSearch']],
   ['Agent', ['Task', 'TodoWrite', 'ExitPlanMode']],
 ]

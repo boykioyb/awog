@@ -29,13 +29,15 @@ import {
 import { createNotebookEditTool, createNotebookReadTool } from './notebook-tools.js'
 import { createBashTool } from './bash-tool.js'
 import { createBashOutputTool } from './bash-output-tool.js'
+import { createKillShellTool } from './kill-shell-tool.js'
+import { createReadTerminalTool } from './read-terminal-tool.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
 import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createSourceTools } from './source-tools.js'
 import { createWikiTools } from './wiki-tools.js'
 import { createMemoryTools } from './memory-tools.js'
-import { createTodoWriteTool, createWebSearchTool } from './builtin-stubs.js'
+import { createTodoWriteTool } from './builtin-stubs.js'
 import { getReadRegistry } from './read-registry.js'
 import type { TodoSink } from './builtin-stubs.js'
 import { createWebFetchTool } from './web-fetch-tool.js'
@@ -88,6 +90,11 @@ export interface ToolFilter {
   // run_in_background silently degrades to synchronous there. Not a filter per se,
   // but threaded here alongside the other per-turn tool-assembly options.
   backgroundExec?: { sessionId: string }
+  // Chat-session marker: set for every chat turn INCLUDING plan mode. Distinct
+  // from `backgroundExec`, which is deliberately off in plan mode because Bash is
+  // blocked there. A read-only tool like `read_terminal` should still be reachable
+  // while planning — that is exactly when "what did the user just run?" matters.
+  chatSession?: { sessionId: string }
   // Wiki tools (ADR 0073). Set ONLY when the wiki actually has a page the LLM may
   // see, so a user who never made a wiki pays zero tokens for its tool schemas.
   // `projectId` scopes the project-tier wiki for the turn.
@@ -183,9 +190,22 @@ export function createAwogToolDefinitions(
     createEditTool(cwd, reads),
     createMultiEditTool(cwd, reads),
     createBashTool(cwd, filter.backgroundExec),
-    // BashOutput: poll a background shell (ADR 0066). Sessions only (paired with
-    // Bash's run_in_background), and only when backgroundExec is set.
-    ...(filter.backgroundExec ? [createBashOutputTool(filter.backgroundExec.sessionId)] : []),
+    // BashOutput + KillShell: poll / stop a background shell (ADR 0066). Sessions
+    // only (paired with Bash's run_in_background), and only when backgroundExec is
+    // set. KillShell was advertised by the session Tools panel long before it
+    // existed as a tool — the model could start a dev server but not stop it.
+    ...(filter.backgroundExec
+      ? [
+          createBashOutputTool(filter.backgroundExec.sessionId),
+          createKillShellTool(filter.backgroundExec.sessionId),
+        ]
+      : []),
+    // read_terminal: read the tail of a PTY the USER is typing in (ADR 0019
+    // terminals). Chat sessions only — a task/subagent has no user watching a
+    // terminal, and its output is not part of their input. Gated on `chatSession`
+    // rather than `backgroundExec` so it survives plan mode: it is read-only, and
+    // planning is when the user's own terminal output is most worth reading.
+    ...(filter.chatSession ? [createReadTerminalTool(cwd)] : []),
     createGrepTool(cwd),
     createGlobTool(cwd),
     createNotebookReadTool(cwd),
@@ -195,7 +215,12 @@ export function createAwogToolDefinitions(
     // TodoWrite persists to Session.todos when the chat runtime supplies a sink,
     // otherwise it is a pure ACK (see builtin-stubs).
     createTodoWriteTool(filter.todoSink),
-    createWebSearchTool(),
+    // NO WebSearch here on purpose: there is no web-search backend on the Pi path,
+    // and a stub that always answers "not available" still costs the model a full
+    // tool call to discover that. Not advertising it is the honest signal; the
+    // absence is stated up front instead, in ENGINEERING_PROMPT (prompts.ts), which
+    // is appended on every Pi surface — chat, tasks, subagents. The Claude SDK path
+    // has a REAL WebSearch and is unaffected.
     // Real fetch over the SSRF-guarded HTTP path (ADR 0042).
     createWebFetchTool(),
     // Embedded-Chromium browser, driven via the reverse host channel (ADR 0043).
