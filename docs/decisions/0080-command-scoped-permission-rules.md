@@ -203,7 +203,7 @@ Cổng quyền giờ chạy trên **mọi** lời gọi tool (F3) nên chi phí 
 ### Việc còn lại sau đính chính
 
 - UI (`i18n/locales/*/sessions-perm.json`) còn nói tầng project ghi vào `.awog/permission-rules.json` **của dự án** — sai từ bản vá này. Cần đổi chuỗi thành "ghi trong AWOG home, chỉ áp trên máy này" (file thuộc sở hữu agent khác, chưa sửa trong gói này).
-- Vẫn chưa có trang xem/thu hồi luật đã lưu — với tầng project băm theo đường dẫn thì nhu cầu này tăng lên, vì người dùng không còn tự đoán ra tên file.
+- ~~Vẫn chưa có trang xem/thu hồi luật đã lưu~~ — **đã xong 2026-09-07**: Settings → Quyền liệt kê cả 3 tầng, hiện nguyên văn luật, xoá theo cặp (nguyên văn, action) nên gỡ một `allow` không bao giờ kéo theo `deny` cùng tên; entry không parse được vẫn được liệt kê (đó chính là thứ trước đây bắt buộc sửa tay), file hỏng toàn phần báo riêng vì mọi DENY trong đó đang vô hiệu. Xem [permission-rules.md](../features/permission-rules.md).
 - Luật cho tool bắc cầu MCP vẫn phải viết đúng tên đang chạy (`mcp__<id>__<tool>`); chỉ nhóm SSH được đối chiếu thêm tên trần.
 
 ## Tham chiếu

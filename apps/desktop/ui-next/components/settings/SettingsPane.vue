@@ -13,6 +13,7 @@
     <SettingsDevices v-else-if="active === 'devices'" />
     <SettingsNotifications v-else-if="active === 'notifications'" />
     <SettingsSessions v-else-if="active === 'sessions'" />
+    <SettingsPermissions v-else-if="active === 'permissions'" />
     <SettingsKeymap v-else-if="active === 'keymap'" />
     <SettingsAbout v-else />
   </div>

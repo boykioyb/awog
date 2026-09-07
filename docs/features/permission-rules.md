@@ -1,7 +1,8 @@
 # Luật quyền (permission rules)
 
 > Quyết định kiến trúc: [ADR 0080](../decisions/0080-command-scoped-permission-rules.md).
-> Code: `apps/desktop/sidecar/src/sessions/permission-rules.ts`, `src/runtime/permission.ts`, `src/methods/sessions.permission.ts`.
+> Code: `apps/desktop/sidecar/src/sessions/permission-rules.ts`, `src/runtime/permission.ts`, `src/methods/sessions.permission.ts`, `src/methods/permissions.*.ts`.
+> UI: [`components/settings/SettingsPermissions.vue`](../../apps/desktop/ui-next/components/settings/SettingsPermissions.vue) + [`composables/usePermissionRules.ts`](../../apps/desktop/ui-next/composables/usePermissionRules.ts).
 
 ## Vấn đề
 
@@ -123,11 +124,58 @@ Khi thẻ còn `pending`, thứ tự đọc là **luật → phạm vi → nút*
 
 Nợ kỹ thuật đã biết: store `sessions` chưa mang `suggestions` từ event xuống `PermBlock` và `setPermission()` chưa có tham số `scope`, nên composable phải tự lắng nghe `session.permission-request` để lấy chuỗi luật và tự gửi lượt trả lời có `scope` (store gửi thêm một lượt nữa — sidecar đã unpark nên đó là no-op, và suggestion đã tiêu thụ nên không thể ghi luật lần hai). Dọn bằng cách thêm `suggestion` vào `PermBlock` + `scope` vào `setPermission`.
 
+## Trang quản lý luật (Settings → Quyền)
+
+Một cơ chế cấp quyền **không thu hồi được** thì không phải cơ chế cấp quyền. Trước bản này, gỡ một luật phải mở file JSON ra sửa tay — mà tên file tầng project là **băm của đường dẫn**, nên người dùng gần như không tìm ra file. Trang này là mặt đọc/ghi của việc đó (F10 của lượt infosec).
+
+Trang gom theo tầng — *Mọi dự án (máy này)* → *Dự án X* → *Phiên Y* — mỗi hàng hiện **nguyên văn** chuỗi luật (font code, chọn/copy được, render bằng text node vì đây là dữ liệu L1) kèm nhãn **Cho phép** / **Từ chối**. Luật `deny` được tô nền + viền `--danger`: nhầm ALLOW với DENY là nhầm giữa "đã cấp quyền" và "đã dựng rào chắn", nên hai thứ đó phải phân biệt được chỉ bằng mắt. Hộp thoại xác nhận lúc thu hồi cũng nói khác nhau: gỡ một ALLOW = "lần sau sẽ hỏi lại", gỡ một DENY = "rào chắn biến mất, lời gọi khớp nó có thể được cho qua".
+
+Trang hiện thêm hai thứ vốn chỉ nằm trong log:
+
+- **Entry không đọc được** (`active: false`) — sai cú pháp nên đang vô hiệu. Hiện ra để xoá được, vì đúng chúng mới là thứ trước đây bắt buộc phải sửa tay.
+- **Tệp luật hỏng toàn phần** — hiện lên đầu trang, vì lúc đó mọi luật trong tệp, **kể cả luật từ chối**, đang không có hiệu lực.
+
+### RPC
+
+| Method | Params | Trả về |
+|---|---|---|
+| `permissions.listRules` | — | `{ rules[], corrupt[], userFile }` |
+| `permissions.deleteRule` | `{ scope, rule, action, projectId?, sessionId? }` | `{ removed }` |
+| `permissions.suggestRules` | `{ minCount?, limit? }` | `{ suggestions[], report }` |
+| `permissions.acceptSuggestion` | `{ id, scope: 'project' \| 'user', projectId? }` | `{ rule, scope }` |
+
+`rules[]` mỗi phần tử: `{ scope, rule, action, active, toolName?, kind?, createdAt?, file?, projectId?, projectName?, sessionId?, sessionTitle? }`. `rule` là **nguyên văn chuỗi trên đĩa** và cũng chính là khoá gửi lại cho `deleteRule`.
+
+Ba điều bắt buộc của `deleteRule`:
+
+- **Khoá là cặp (nguyên văn luật, action)**, so chuỗi tuyệt đối — không glob, không chuẩn hoá. Xoá một `allow` không bao giờ gỡ mất một `deny` cùng tên.
+- **Đường dẫn file không bao giờ đến từ payload UI**: chỉ nhận `projectId`, rồi sidecar tự giải ra đường dẫn qua store project và băm (invariant 2).
+- **Ghi theo đúng tinh thần F2**: rewrite atomic, giữ **nguyên văn** mọi entry không bị xoá (kể cả entry hỏng), giữ field `projectPath` của tệp, không khớp gì thì **không** ghi lại tệp, và tệp hỏng toàn phần thì **ném lỗi** chứ không ghi đè.
+
+## Gợi ý luật từ lịch sử
+
+Bị hỏi đi hỏi lại cùng một lệnh dẫn tới **bấm bừa** — nên "hỏi ít lại" ở đây là một yêu cầu bảo mật, không phải tiện lợi. `permissions.suggestRules` quét transcript đã lưu, đếm lệnh nào chạy đi chạy lại rồi **đề xuất** đúng một luật nguyên văn.
+
+**Tiêu chí đề xuất** (`collectRuleCandidates`, hàm thuần, có test):
+
+- Chỉ đếm lời gọi **đã chạy xong** (`step.status === 'done'`). Lời gọi bị người dùng từ chối kết thúc ở trạng thái lỗi ⇒ không bao giờ lên thành gợi ý. Nói cách khác: chỉ đề xuất ghi nhớ những việc người dùng **đã đồng ý nhiều lần**.
+- Chỉ hai tool suy ngược được từ transcript mà **không mơ hồ**: `Bash` (step `terminal` + detail `terminal`) và `Write` (step `write` + detail `file`). Nhóm `edit` gom cả `Edit`/`MultiEdit`/`NotebookEdit` nên bị bỏ qua — đoán sai tên tool là sinh ra một luật không bao giờ khớp.
+- Ngưỡng mặc định **3 lần** (Rule of Three). Tham số `minCount` chặn dưới ở 2.
+- Luật phải đi qua đúng `suggestRuleText` mà nút "Always allow" dùng ⇒ **lệnh có toán tử shell không bao giờ được đề xuất**, chủ thể chứa `*` cũng không (ngữ pháp không có cơ chế escape), đường dẫn tương đối cũng không.
+- **Luật trần không bao giờ được đề xuất** — một gợi ý luôn là một chuỗi cụ thể.
+- **Lệnh nâng quyền không bao giờ được đề xuất**: token đầu tiên là `sudo` / `doas` / `su` / `pkexec` / `runas` (so khớp theo tên chương trình, nên `sudoku` không dính). Nâng quyền phải là quyết định có ý thức của từng lần chạy. Đây cố ý là một quy tắc **hẹp và kiểm chứng được**, không phải danh sách đen "lệnh nguy hiểm" (thứ luôn thiếu và tạo cảm giác an toàn giả).
+- Ứng viên đã được luật hiện có **phủ** (allow **hoặc** deny) bị loại. Với deny điều này bắt buộc: không bao giờ được rủ người dùng cấp lại thứ họ đã cấm.
+
+**Chỉ đề xuất, không tự tạo.** Người dùng phải bấm, và lượt bấm gửi lên **id của gợi ý đã park** chứ không phải nội dung luật — cùng ràng buộc với `sessions.permission` (ADR 0080 mục 5): nếu nhận văn bản luật từ payload UI thì một payload dựng tay ghi thẳng được `Bash(*)` vào `~/.awog/permission-rules.json`. Park bị xoá mỗi lượt quét mới; id hết hạn ⇒ RPC từ chối và bắt quét lại, để người dùng đọc lại luật trước khi cấp.
+
+**Trần quét** (không chặn UI, không đọc cả ổ đĩa): 60 phiên gần nhất theo `mtime`, ≤ 2 MB/phiên, ≤ 32 MB tổng, ≤ 5000 lời gọi; đọc bằng `fs/promises` (mỗi tệp một `await`). Đụng trần thì `report.truncated = true` và UI **nói rõ** đây không phải toàn bộ lịch sử. Dòng JSONL hỏng bị bỏ đúng dòng đó, không ném.
+
 ## Giới hạn đã biết
 
 - Luật `deny` chỉ khớp lệnh đơn: `foo && rm -rf /` không khớp `Bash(rm -rf /)` — nhưng nó rơi vào "hỏi", không phải "cho qua".
 - Chủ thể chứa `*` thật (vd `git add *`) không được gợi ý làm luật (ngữ pháp không có cơ chế escape).
-- Chưa có trang xem/xoá luật đã lưu ⇒ gỡ một luật `project`/`user` vẫn phải sửa tay file JSON, mà tên file tầng project giờ là băm nên khó tự đoán. Bộ chọn tầng thì đã có trên thẻ xin quyền (xem trên).
+- Gợi ý chỉ rút được từ lời gọi `Bash` và `Write` (transcript không lưu tên tool, xem trên) — `Edit`/`MultiEdit` không bao giờ được đề xuất.
+- Trang quản lý luật ghi được hai tầng bền vững; luật tầng `session` chỉ **xem và thu hồi** được ở đó, muốn thêm thì qua thẻ xin quyền trong phiên.
 - Chuỗi i18n của thẻ xin quyền (`sessionsPerm.hint.project`) còn nói "ghi vào `.awog/permission-rules.json` của dự án" — sai kể từ bản vá F1, cần đổi thành "ghi trong AWOG home, chỉ áp trên máy này".
 - Đánh giá có trần cứng 1500 luật mỗi lần; vượt trần ⇒ hỏi (không bao giờ tự cho qua).
 - Cổng SSH (ADR 0064) giữ allowance riêng theo `(phiên, host, tool)`, không đi qua hệ luật này.

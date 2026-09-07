@@ -16,6 +16,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'devices', labelKey: 'settings.nav.devices', icon: 'smartphone' },
   { id: 'notifications', labelKey: 'settings.nav.notifications', icon: 'alert' },
   { id: 'sessions', labelKey: 'settings.nav.sessions', icon: 'sessions' },
+  { id: 'permissions', labelKey: 'settingsPermissions.nav', icon: 'shield' },
   { id: 'keymap', labelKey: 'settings.nav.keymap', icon: 'commands' },
   { id: 'about', labelKey: 'settings.nav.about', icon: 'alert' },
 ] as const

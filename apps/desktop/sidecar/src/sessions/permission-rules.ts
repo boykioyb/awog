@@ -43,11 +43,12 @@
 //   giá (vượt trần ⇒ 'ask', không bao giờ 'allow').
 
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { z } from 'zod'
 import { awogHome } from '../util/path.js'
 import { log } from '../util/logger.js'
+import { sessionsDir } from './jsonl.js'
 
 // ─── Kiểu ────────────────────────────────────────────────────────────────────
 
@@ -521,7 +522,9 @@ const STAT_TTL_MS = 1000
 type RawRuleFile =
   | { status: 'missing' }
   | { status: 'corrupt'; reason: string }
-  | { status: 'ok'; entries: unknown[] }
+  // `projectPath` là ghi chú trong file (xem F1) — đọc lên CHỈ để ghi lại đúng
+  // như cũ khi rewrite, KHÔNG BAO GIỜ để giải ra đường dẫn file.
+  | { status: 'ok'; entries: unknown[]; projectPath?: string }
 
 // Đọc thô: chỉ đòi hỏi JSON hợp lệ + `rules` là mảng. Từng phần tử để nguyên
 // dạng `unknown` — validate ở tầng trên, theo TỪNG entry.
@@ -543,7 +546,12 @@ async function readRawRuleFile(file: string): Promise<RawRuleFile> {
   if (!parsed || typeof parsed !== 'object') return { status: 'corrupt', reason: 'not an object' }
   const rules = (parsed as { rules?: unknown }).rules
   if (!Array.isArray(rules)) return { status: 'corrupt', reason: '`rules` is not an array' }
-  return { status: 'ok', entries: rules }
+  const projectPath = (parsed as { projectPath?: unknown }).projectPath
+  return {
+    status: 'ok',
+    entries: rules,
+    ...(typeof projectPath === 'string' ? { projectPath } : {}),
+  }
 }
 
 // Đọc + validate file luật. File thiếu / hỏng toàn phần ⇒ mảng rỗng: một file
@@ -804,4 +812,473 @@ export async function persistRule(
   }
   if (ctx.sessionId) addSessionRule(ctx.sessionId, rule)
   return 'session'
+}
+
+// ─── Liệt kê / thu hồi luật (F10) ────────────────────────────────────────────
+//
+// Trước gói này không có đường nào để XEM hay GỠ một luật đã lưu: phải mở file
+// JSON ra sửa tay, mà tên file tầng project là băm của đường dẫn nên người dùng
+// gần như không tìm ra nó. Một cơ chế cấp quyền không thu hồi được thì không
+// phải cơ chế cấp quyền.
+//
+// Hai nguyên tắc của phần này:
+//   1. Đọc theo lối RỘNG hơn lúc đánh giá: một entry mà `parsePermissionRule`
+//      từ chối (typo `"action": "alow"`, luật `Bash` trần…) vẫn được LIỆT KÊ,
+//      đánh dấu `active: false`. Nó vô hiệu lúc gate chạy, nhưng người dùng phải
+//      nhìn thấy để xoá được — nếu không, đúng những entry hỏng là thứ duy nhất
+//      vẫn phải sửa tay.
+//   2. Ghi theo đúng tinh thần F2: giữ NGUYÊN VĂN mọi entry không bị xoá, và
+//      file hỏng toàn phần thì NÉM LỖI chứ không ghi đè.
+
+export interface StoredRuleView {
+  // Nguyên văn chuỗi luật ĐANG NẰM TRÊN ĐĨA — cũng chính là khoá lúc xoá.
+  rule: string
+  action: PermissionRuleAction
+  createdAt?: string
+  // false ⇒ entry này không parse được nên KHÔNG có hiệu lực (chỉ hiện để xoá).
+  active: boolean
+  // Chỉ có khi `active`.
+  toolName?: string
+  kind?: PermissionRuleKind
+}
+
+export type RuleFileListing =
+  | { status: 'missing' }
+  | { status: 'corrupt'; reason: string }
+  | { status: 'ok'; rules: StoredRuleView[] }
+
+// Đọc RỘNG một entry: chỉ đòi `rule` là chuỗi trong giới hạn độ dài. `action`
+// đọc là 'deny' KHI VÀ CHỈ KHI đúng chuỗi 'deny' — mọi thứ khác về 'allow', y
+// hệt cách đánh giá hiểu file (không bao giờ suy diễn ra một DENY không có
+// thật, và cũng không bao giờ bỏ sót một DENY có thật).
+interface LooseRuleEntry {
+  rule: string
+  action: PermissionRuleAction
+  createdAt?: string
+}
+
+function looseEntryView(entry: unknown): LooseRuleEntry | null {
+  if (!entry || typeof entry !== 'object') return null
+  const bag = entry as Record<string, unknown>
+  const rule = bag.rule
+  if (typeof rule !== 'string') return null
+  if (rule.length === 0 || rule.length > MAX_TOOL_NAME + MAX_PATTERN + 2) return null
+  const action: PermissionRuleAction = bag.action === 'deny' ? 'deny' : 'allow'
+  const createdAt = typeof bag.createdAt === 'string' ? bag.createdAt : undefined
+  return { rule, action, ...(createdAt ? { createdAt } : {}) }
+}
+
+// Danh sách luật của MỘT file, dạng hiển thị. Cố ý KHÔNG đi qua `FILE_CACHE`:
+// đây là trang cấu hình, phải đọc trạng thái thật của đĩa ngay tại thời điểm mở.
+export async function listRulesInFile(file: string): Promise<RuleFileListing> {
+  const raw = await readRawRuleFile(file)
+  if (raw.status === 'missing') return { status: 'missing' }
+  if (raw.status === 'corrupt') return { status: 'corrupt', reason: raw.reason }
+  const rules: StoredRuleView[] = []
+  for (const entry of raw.entries) {
+    if (rules.length >= MAX_RULES_PER_FILE) break
+    const view = looseEntryView(entry)
+    if (!view) continue
+    const strict = StoredRuleSchema.safeParse(entry)
+    const parsed = strict.success
+      ? parsePermissionRule(strict.data.rule, strict.data.action ?? 'allow')
+      : null
+    rules.push({
+      rule: view.rule,
+      action: view.action,
+      ...(view.createdAt ? { createdAt: view.createdAt } : {}),
+      active: parsed !== null,
+      ...(parsed ? { toolName: parsed.toolName, kind: parsed.kind } : {}),
+    })
+  }
+  return { status: 'ok', rules }
+}
+
+// Xoá mọi entry có ĐÚNG cặp (nguyên văn luật, action) này khỏi một file.
+//
+// So khớp là so chuỗi nguyên văn — không glob, không chuẩn hoá — nên không có
+// đường nào để một lời gọi xoá lan sang luật khác (đặc biệt: xoá một ALLOW không
+// bao giờ được phép gỡ mất một DENY cùng tên). Entry không khớp được ghi lại
+// NGUYÊN VĂN, kể cả entry hỏng.
+export async function deleteRuleFromFile(
+  file: string,
+  target: { rule: string; action: PermissionRuleAction },
+): Promise<{ removed: number }> {
+  const raw = await readRawRuleFile(file)
+  if (raw.status === 'corrupt') {
+    throw new Error(
+      `Permission rule file is corrupt, refusing to rewrite it (${raw.reason}): ${file}`,
+    )
+  }
+  if (raw.status === 'missing') return { removed: 0 }
+  const kept: unknown[] = []
+  let removed = 0
+  for (const entry of raw.entries) {
+    const view = looseEntryView(entry)
+    if (view && view.rule === target.rule && view.action === target.action) {
+      removed += 1
+      continue
+    }
+    kept.push(entry)
+  }
+  // Không khớp gì ⇒ không rewrite: một thao tác xoá trượt không được phép động
+  // vào file (và không được nuốt mất `version`/`projectPath` của bản gốc).
+  if (removed === 0) return { removed: 0 }
+  await writeRuleFileAtomic(file, kept, raw.projectPath)
+  return { removed }
+}
+
+// Tầng session (bộ nhớ) — liệt kê theo phiên để trang cấu hình hiện được cả các
+// quyền tạm thời, thứ trước đây hoàn toàn vô hình.
+export function listSessionRuleTiers(): { sessionId: string; rules: ParsedPermissionRule[] }[] {
+  const out: { sessionId: string; rules: ParsedPermissionRule[] }[] = []
+  for (const [sessionId, rules] of SESSION_RULES) {
+    if (rules.length > 0) out.push({ sessionId, rules: [...rules] })
+  }
+  return out
+}
+
+export function removeSessionRule(
+  sessionId: string,
+  text: string,
+  action: PermissionRuleAction,
+): number {
+  const list = SESSION_RULES.get(sessionId)
+  if (!list) return 0
+  let removed = 0
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const rule = list[i]
+    if (!rule || rule.text !== text || rule.action !== action) continue
+    list.splice(i, 1)
+    removed += 1
+  }
+  if (list.length === 0) SESSION_RULES.delete(sessionId)
+  return removed
+}
+
+// ─── Gợi ý luật từ lịch sử (#40) ─────────────────────────────────────────────
+//
+// Hỏi đi hỏi lại cùng một lệnh là một vấn đề BẢO MẬT, không chỉ phiền: người bị
+// hỏi quá nhiều sẽ bấm bừa, mà nút bấm bừa ở đây là nút cấp quyền. Nên phần này
+// quét transcript đã lưu, đếm lệnh nào chạy đi chạy lại, rồi ĐỀ XUẤT đúng một
+// luật nguyên văn cho lệnh đó.
+//
+// Bốn ràng buộc cứng:
+//   1. Chỉ ĐỀ XUẤT. Không bao giờ tự ghi. Người dùng phải bấm, và thứ họ bấm
+//      hiện nguyên văn trên màn hình.
+//   2. Chỉ đề xuất luật mà `suggestRuleText` chấp nhận ⇒ lệnh có toán tử shell
+//      KHÔNG BAO GIỜ được đề xuất, và không bao giờ sinh ký tự đại diện.
+//   3. Chỉ đếm lời gọi ĐÃ CHẠY XONG (`status === 'done'`). Lời gọi bị người dùng
+//      từ chối kết thúc ở trạng thái lỗi ⇒ không bao giờ lên thành gợi ý. Nói
+//      cách khác: chỉ đề xuất ghi nhớ những việc người dùng ĐÃ đồng ý nhiều lần.
+//   4. Quét có trần cứng (số phiên, cỡ file, tổng byte, số lời gọi) và đi bằng
+//      fs bất đồng bộ.
+
+// Trần quét. Đủ rộng để bắt được thói quen thật, đủ hẹp để không đọc cả ổ đĩa.
+const SCAN_MAX_SESSIONS = 60
+const SCAN_MAX_FILE_BYTES = 2 * 1024 * 1024
+const SCAN_MAX_TOTAL_BYTES = 32 * 1024 * 1024
+const SCAN_MAX_CALLS = 5000
+
+// Ngưỡng "bị hỏi lặp lại". Rule of Three: một lần là ngẫu nhiên, ba lần là thói
+// quen — và ba lần cũng là lúc người dùng bắt đầu bấm cho xong.
+export const SUGGESTION_MIN_COUNT = 3
+const SUGGESTION_LIMIT = 20
+const SUGGESTION_MAX_PROJECTS = 5
+const MAX_PARKED_SUGGESTIONS = 200
+
+export interface HistoryToolCall {
+  toolName: string
+  args: Record<string, unknown>
+  at?: string
+  projectId?: string
+}
+
+export interface RuleCandidate {
+  rule: string
+  toolName: string
+  kind: PermissionRuleKind
+  count: number
+  lastAt?: string
+  projectIds: string[]
+  // Tham số của lần gọi đầu tiên — chỉ dùng nội bộ để hỏi lại cổng quyền xem
+  // luật này đã được phủ chưa. KHÔNG đi lên UI.
+  args: Record<string, unknown>
+}
+
+export interface HistoryScanReport {
+  sessions: number
+  bytes: number
+  // true khi đụng trần (còn phiên/lời gọi chưa quét). UI phải nói rõ, để người
+  // dùng không hiểu nhầm danh sách này là "toàn bộ lịch sử".
+  truncated: boolean
+}
+
+// Lệnh nâng quyền KHÔNG BAO GIỜ được đề xuất. Nâng quyền phải là quyết định có
+// ý thức của từng lần chạy — đây là quy tắc hẹp và kiểm chứng được (so khớp
+// đúng token đầu tiên), không phải một danh sách đen "lệnh nguy hiểm" (thứ luôn
+// thiếu và tạo cảm giác an toàn giả).
+const PRIVILEGE_COMMANDS = new Set(['sudo', 'doas', 'su', 'pkexec', 'runas'])
+
+export function escalatesPrivilege(command: string): boolean {
+  const first = command.trim().split(/\s+/)[0] ?? ''
+  const base = first.slice(first.lastIndexOf('/') + 1)
+  return PRIVILEGE_COMMANDS.has(base)
+}
+
+// Tên tool suy ngược từ một step đã lưu. Transcript KHÔNG lưu tên tool, chỉ lưu
+// nhóm `tool` + payload `detail`, nên chỉ hai trường hợp suy ngược được mà
+// KHÔNG mơ hồ:
+//   tool 'terminal' + detail 'terminal' ⇒ Bash  (chỉ Bash sinh detail này)
+//   tool 'write'    + detail 'file'     ⇒ Write (chỉ Write map sang 'write')
+// Nhóm 'edit' gom cả Edit/MultiEdit/NotebookEdit nên bỏ qua: đoán sai tên tool
+// là sinh ra một luật không bao giờ khớp — vô dụng và gây hiểu nhầm.
+function historyCallOfStep(
+  step: unknown,
+): { toolName: string; args: Record<string, unknown> } | null {
+  if (!step || typeof step !== 'object') return null
+  const bag = step as Record<string, unknown>
+  if (bag.kind !== 'tool') return null
+  // Chỉ lời gọi CHẠY XONG. 'error' gồm cả trường hợp người dùng từ chối.
+  if (bag.status !== 'done') return null
+  const detail = bag.detail
+  if (!detail || typeof detail !== 'object') return null
+  const d = detail as Record<string, unknown>
+  if (bag.tool === 'terminal' && d.kind === 'terminal' && typeof d.command === 'string') {
+    return { toolName: 'Bash', args: { command: d.command } }
+  }
+  if (bag.tool === 'write' && d.kind === 'file' && typeof d.path === 'string') {
+    return { toolName: 'Write', args: { file_path: d.path } }
+  }
+  return null
+}
+
+// Rút lời gọi tool từ nội dung một file `session.jsonl` (dòng 1 = header).
+function historyCallsOfSessionFile(text: string, cap: number): HistoryToolCall[] {
+  const out: HistoryToolCall[] = []
+  const lines = text.split('\n')
+  let projectId: string | undefined
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]
+    if (!line) continue
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(line)
+    } catch {
+      // Dòng hỏng ⇒ bỏ đúng dòng đó (dữ liệu L1, không tin, không ném).
+      continue
+    }
+    if (!parsed || typeof parsed !== 'object') continue
+    const bag = parsed as Record<string, unknown>
+    if (i === 0) {
+      if (typeof bag.projectId === 'string') projectId = bag.projectId
+      continue
+    }
+    if (bag.role !== 'agent') continue
+    const steps = Array.isArray(bag.steps) ? bag.steps : []
+    const at = typeof bag.at === 'string' ? bag.at : undefined
+    for (const step of steps) {
+      if (out.length >= cap) return out
+      const call = historyCallOfStep(step)
+      if (!call) continue
+      out.push({
+        ...call,
+        ...(at ? { at } : {}),
+        ...(projectId ? { projectId } : {}),
+      })
+    }
+  }
+  return out
+}
+
+// Quét các phiên gần đây nhất. Có trần ở mọi chiều và đi bằng fs bất đồng bộ:
+// mỗi file là một `await` nên vòng lặp sự kiện của sidecar không bị giữ, và
+// tổng khối lượng đọc bị chặn trên bởi SCAN_MAX_TOTAL_BYTES.
+export async function scanHistoryToolCalls(): Promise<{
+  calls: HistoryToolCall[]
+  report: HistoryScanReport
+}> {
+  const empty: HistoryScanReport = { sessions: 0, bytes: 0, truncated: false }
+  const dir = sessionsDir()
+  let entries: string[]
+  try {
+    entries = await readdir(dir)
+  } catch {
+    return { calls: [], report: empty }
+  }
+  const files: { file: string; mtimeMs: number; size: number }[] = []
+  for (const name of entries) {
+    // Không cần lọc "có phải thư mục không": `stat` trên file transcript bên
+    // trong đã là phép lọc chặt hơn (mục nào không có nó thì bỏ qua).
+    const file = resolve(dir, name, 'session.jsonl')
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const st = await stat(file)
+      files.push({ file, mtimeMs: st.mtimeMs, size: st.size })
+    } catch {
+      continue
+    }
+  }
+  files.sort((a, b) => b.mtimeMs - a.mtimeMs)
+  let truncated = files.length > SCAN_MAX_SESSIONS
+  const calls: HistoryToolCall[] = []
+  let bytes = 0
+  let sessions = 0
+  for (const entry of files.slice(0, SCAN_MAX_SESSIONS)) {
+    if (entry.size > SCAN_MAX_FILE_BYTES) {
+      truncated = true
+      continue
+    }
+    if (bytes + entry.size > SCAN_MAX_TOTAL_BYTES) {
+      truncated = true
+      break
+    }
+    let text: string
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      text = await readFile(entry.file, 'utf8')
+    } catch {
+      continue
+    }
+    bytes += entry.size
+    sessions += 1
+    const found = historyCallsOfSessionFile(text, SCAN_MAX_CALLS - calls.length)
+    calls.push(...found)
+    if (calls.length >= SCAN_MAX_CALLS) {
+      truncated = true
+      break
+    }
+  }
+  return { calls, report: { sessions, bytes, truncated } }
+}
+
+// Đếm + xếp hạng. HÀM THUẦN — không đụng đĩa, không đụng cấu hình, nên toàn bộ
+// tiêu chí đề xuất kiểm chứng được bằng test.
+export function collectRuleCandidates(
+  calls: readonly HistoryToolCall[],
+  opts: { minCount?: number; limit?: number } = {},
+): RuleCandidate[] {
+  const minCount = Math.max(1, opts.minCount ?? SUGGESTION_MIN_COUNT)
+  const limit = Math.max(1, opts.limit ?? SUGGESTION_LIMIT)
+  const acc = new Map<string, RuleCandidate>()
+  for (const call of calls) {
+    // Đúng hàm mà nút "Always allow" dùng: lệnh ghép, đường dẫn tương đối, chủ
+    // thể chứa `*` đều rơi ở đây.
+    const text = suggestRuleText(call.toolName, call.args)
+    if (!text) continue
+    const parsed = parsePermissionRule(text)
+    if (!parsed || parsed.pattern === null) continue
+    // Luật trần quá rộng để đề xuất: gợi ý phải luôn là một chuỗi cụ thể.
+    if (parsed.kind === 'bare') continue
+    if (parsed.kind === 'command' && escalatesPrivilege(parsed.pattern)) continue
+    const existing = acc.get(parsed.text)
+    if (existing) {
+      existing.count += 1
+      if (call.at && (!existing.lastAt || call.at > existing.lastAt)) existing.lastAt = call.at
+      if (
+        call.projectId &&
+        !existing.projectIds.includes(call.projectId) &&
+        existing.projectIds.length < SUGGESTION_MAX_PROJECTS
+      ) {
+        existing.projectIds.push(call.projectId)
+      }
+      continue
+    }
+    acc.set(parsed.text, {
+      rule: parsed.text,
+      toolName: parsed.toolName,
+      kind: parsed.kind,
+      count: 1,
+      ...(call.at ? { lastAt: call.at } : {}),
+      projectIds: call.projectId ? [call.projectId] : [],
+      args: call.args,
+    })
+  }
+  return [...acc.values()]
+    .filter((c) => c.count >= minCount)
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count
+      // Mới dùng gần đây hơn thì xếp trước; bằng nhau thì theo thứ tự chữ cái để
+      // danh sách ổn định giữa hai lượt quét.
+      const aAt = a.lastAt ?? ''
+      const bAt = b.lastAt ?? ''
+      if (aAt !== bAt) return aAt < bAt ? 1 : -1
+      return a.rule.localeCompare(b.rule)
+    })
+    .slice(0, limit)
+}
+
+// ─── Park gợi ý ──────────────────────────────────────────────────────────────
+// Cùng ràng buộc với ADR 0080 mục 5: NỘI DUNG luật không bao giờ đến từ payload
+// UI. Lượt quét park luật đã parse dưới một id ngẫu nhiên; lúc người dùng bấm
+// "thêm luật", UI chỉ gửi id + tầng. Một payload dựng tay do đó không ghi được
+// `Bash(*)` vào file luật.
+
+const SUGGESTION_PARK = new Map<string, ParsedPermissionRule>()
+
+export function parkRuleSuggestion(rule: ParsedPermissionRule): string {
+  if (SUGGESTION_PARK.size >= MAX_PARKED_SUGGESTIONS) SUGGESTION_PARK.clear()
+  const id = randomBytes(8).toString('hex')
+  SUGGESTION_PARK.set(id, rule)
+  return id
+}
+
+export function getParkedRuleSuggestion(id: string): ParsedPermissionRule | null {
+  return SUGGESTION_PARK.get(id) ?? null
+}
+
+export function clearParkedRuleSuggestions(): void {
+  SUGGESTION_PARK.clear()
+}
+
+export interface RuleSuggestion {
+  id: string
+  rule: string
+  toolName: string
+  kind: PermissionRuleKind
+  count: number
+  lastAt?: string
+  projectIds: string[]
+}
+
+// Quét lịch sử → đếm → BỎ những luật đã được phủ (đã allow hoặc đã deny) → park.
+//
+// `projectPaths` là bản đồ projectId → đường dẫn tuyệt đối do lớp RPC cấp: hàm
+// này không tự đọc store project (SoC), và bản đồ chỉ dùng để hỏi đúng tầng
+// project khi ứng viên chỉ đến từ MỘT project.
+export async function suggestRulesFromHistory(
+  opts: { projectPaths?: Record<string, string>; minCount?: number; limit?: number } = {},
+): Promise<{ suggestions: RuleSuggestion[]; report: HistoryScanReport }> {
+  const { calls, report } = await scanHistoryToolCalls()
+  const candidates = collectRuleCandidates(calls, {
+    ...(opts.minCount !== undefined ? { minCount: opts.minCount } : {}),
+    ...(opts.limit !== undefined ? { limit: opts.limit } : {}),
+  })
+  clearParkedRuleSuggestions()
+  const suggestions: RuleSuggestion[] = []
+  for (const candidate of candidates) {
+    const only = candidate.projectIds.length === 1 ? candidate.projectIds[0] : undefined
+    const projectPath = (only ? opts.projectPaths?.[only] : undefined) ?? null
+    // eslint-disable-next-line no-await-in-loop
+    const decision = await evaluatePermissionRules({
+      toolName: candidate.toolName,
+      args: candidate.args,
+      projectPath,
+    })
+    // Đã có luật phủ (allow HOẶC deny) ⇒ không đề xuất nữa. Đặc biệt quan trọng
+    // với deny: không bao giờ được rủ người dùng cấp lại thứ họ đã cấm.
+    if (decision !== 'ask') continue
+    const parsed = parsePermissionRule(candidate.rule)
+    if (!parsed) continue
+    suggestions.push({
+      id: parkRuleSuggestion(parsed),
+      rule: candidate.rule,
+      toolName: candidate.toolName,
+      kind: candidate.kind,
+      count: candidate.count,
+      ...(candidate.lastAt ? { lastAt: candidate.lastAt } : {}),
+      projectIds: candidate.projectIds,
+    })
+  }
+  return { suggestions, report }
 }
