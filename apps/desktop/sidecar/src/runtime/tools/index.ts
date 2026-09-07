@@ -32,6 +32,7 @@ import { createCodeIndexTool } from './code-index-tool.js'
 import { createBashOutputTool } from './bash-output-tool.js'
 import { createKillShellTool } from './kill-shell-tool.js'
 import { createMonitorTool } from './monitor-tool.js'
+import { createDevServerTool } from './dev-server-tool.js'
 import { createReadTerminalTool } from './read-terminal-tool.js'
 import { createSessionMessagingTools } from './session-tools.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
@@ -208,6 +209,14 @@ export function createAwogToolDefinitions(
           createKillShellTool(filter.backgroundExec.sessionId),
           createMonitorTool(filter.backgroundExec.sessionId),
         ]
+      : []),
+    // dev_server: các dev server dự án KHAI trong `.awog/dev-servers.json`, gọi
+    // theo TÊN (docs/features/dev-server.md). Cùng điều kiện với ba tool trên vì
+    // nó nói về cùng những background shell đó: list/logs/stop, cộng một `start`
+    // CỐ Ý KHÔNG spawn — nó trả về nguyên văn lệnh để model chạy qua `Bash`, tức
+    // qua đúng cổng quyền (EXEC_TOOLS), vì bản khai nằm trong repo là dữ liệu L1.
+    ...(filter.backgroundExec
+      ? [createDevServerTool(cwd, filter.backgroundExec.sessionId)]
       : []),
     // read_terminal: read the tail of a PTY the USER is typing in (ADR 0019
     // terminals). Chat sessions only — a task/subagent has no user watching a
