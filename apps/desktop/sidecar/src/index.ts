@@ -313,6 +313,9 @@ import './methods/templates.check-update.js'
 import './methods/templates.update.js'
 import './methods/templates.install.js'
 import './methods/templates.delete.js'
+import './methods/templates.marketplace-list.js'
+import './methods/templates.marketplace-inspect.js'
+import './methods/templates.marketplace-install.js'
 
 // Chỉ mục symbol + đồ thị import (docs/features/code-index.md)
 import './methods/code.index.js'

@@ -194,15 +194,63 @@ async function warnLegacyTrustFile(projectPath: string): Promise<void> {
   )
 }
 
-async function readTrustedIds(projectPath: string): Promise<Set<string>> {
+// Băm nội dung file hook. Trust ràng buộc vào ĐÂY, không vào id — xem ghi chú
+// dưới `readTrustedHooks`.
+function hookContentHash(raw: string): string {
+  return createHash('sha256').update(raw, 'utf8').digest('hex').slice(0, 32)
+}
+
+// Đọc file hook trên đĩa rồi băm. Không đọc được ⇒ `null` ⇒ không thể khớp trust
+// ⇒ hook không chạy (fail-closed).
+async function hashHookFile(file: string): Promise<string | null> {
+  try {
+    return hookContentHash(await readFile(file, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+// Trust map: id → băm nội dung ĐÃ ĐƯỢC DUYỆT.
+//
+// Vì sao có băm. Bản trước khoá theo **id**: duyệt `format-on-save` một lần rồi
+// cài đè một bundle mang hook TRÙNG ID (marketplace, template, hay ai đó sửa file
+// trong repo) thì nội dung mới thừa hưởng luôn trust cũ. Bản ghi đồng ý phải ràng
+// buộc vào THỨ NÓ ĐỒNG Ý — cùng bài học với ADR 0080 (luật quyền khoá theo nội
+// dung lệnh, không theo tên tool) và với chính đính chính "trust không nằm trong
+// repo" ở trên. Đây là lần thứ ba cùng một hình dạng lỗi.
+//
+// Bản ghi cũ (`hooks: string[]`, không có băm) KHÔNG được nâng cấp im lặng: không
+// có băm nghĩa là không biết người dùng đã duyệt nội dung nào, nên coi như chưa
+// duyệt và bắt duyệt lại. Nâng cấp mù chính là giữ nguyên lỗ hổng dưới tên khác.
+async function readTrustedHooks(projectPath: string): Promise<Map<string, string>> {
   await warnLegacyTrustFile(projectPath)
   const file = hookTrustFile(projectPath)
-  if (!file) return new Set()
+  if (!file) return new Map()
   try {
     const raw = await readFile(file, 'utf8')
     const obj = JSON.parse(raw) as { hooks?: unknown }
-    const ids = Array.isArray(obj.hooks) ? obj.hooks.filter((x): x is string => typeof x === 'string') : []
-    return new Set(ids)
+    const out = new Map<string, string>()
+    let legacy = 0
+    if (Array.isArray(obj.hooks)) {
+      for (const entry of obj.hooks) {
+        if (typeof entry === 'string') {
+          legacy += 1 // bản cũ chỉ có id — không đủ để tin
+          continue
+        }
+        if (!entry || typeof entry !== 'object') continue
+        const rec = entry as { id?: unknown; hash?: unknown }
+        if (typeof rec.id === 'string' && typeof rec.hash === 'string' && rec.hash.length > 0) {
+          out.set(rec.id, rec.hash)
+        }
+      }
+    }
+    if (legacy > 0) {
+      log.warn(
+        'hooks: legacy trust entries without a content hash IGNORED — re-approve those hooks',
+        { file, count: legacy },
+      )
+    }
+    return out
   } catch (err) {
     // File hỏng ⇒ coi như CHƯA duyệt gì, không ném: hỏng ở đây fail-safe theo
     // chiều đóng (hook không chạy, người dùng duyệt lại), khác file luật quyền
@@ -213,8 +261,32 @@ async function readTrustedIds(projectPath: string): Promise<Set<string>> {
         err: err instanceof Error ? err.message : String(err),
       })
     }
-    return new Set()
+    return new Map()
   }
+}
+
+// Gắn cờ trust cho hook tier project: chỉ tin khi băm nội dung HIỆN TẠI khớp băm
+// đã duyệt. Băm lệch (file bị sửa, hoặc một bundle cài đè hook trùng id) ⇒ về
+// `false` và người dùng phải duyệt lại — đó là toàn bộ mục đích của băm.
+async function applyProjectTrust(
+  hooks: Hook[],
+  dir: string,
+  trusted: Map<string, string>,
+): Promise<void> {
+  await Promise.all(
+    hooks.map(async (h) => {
+      const approved = trusted.get(h.id)
+      if (!approved) {
+        h.trusted = false
+        return
+      }
+      const current = await hashHookFile(join(dir, `${sanitizeChild(h.id)}.json`))
+      h.trusted = current !== null && current === approved
+      if (current !== null && current !== approved) {
+        log.warn('hooks: content changed since it was approved, trust revoked', { id: h.id, dir })
+      }
+    }),
+  )
 }
 
 // Mark project-tier hooks trusted (additive). Global hooks need no entry.
@@ -223,12 +295,28 @@ export async function setHookTrust(projectId: string, hookIds: string[]): Promis
   if (!project) throw new RpcError(-32602, `Project not found: ${projectId}`)
   const file = hookTrustFile(project.path)
   if (!file) throw new RpcError(-32602, `Project path is not absolute: ${projectId}`)
-  const existing = await readTrustedIds(project.path)
-  hookIds.forEach((id) => existing.add(id))
+  const existing = await readTrustedHooks(project.path)
+  // Băm được chốt Ở THỜI ĐIỂM DUYỆT: người dùng đồng ý với nội dung họ vừa đọc,
+  // không phải với cái tên. File không đọc được ⇒ bỏ qua id đó thay vì ghi một
+  // bản ghi trust không ràng buộc vào gì.
+  const dir = projectHooksDir(project.path)
+  for (const id of hookIds) {
+    // eslint-disable-next-line no-await-in-loop
+    const hash = await hashHookFile(join(dir, `${sanitizeChild(id)}.json`))
+    if (!hash) {
+      log.warn('hooks: cannot hash hook file, trust NOT granted', { projectId, id })
+      continue
+    }
+    existing.set(id, hash)
+  }
   await mkdir(dirname(file), { recursive: true, mode: 0o700 })
   // `projectPath` là ghi chú cho người mở thư mục băm; khoá luôn tính lại từ
   // đường dẫn thật lúc đọc, không bao giờ giải ngược từ field này.
-  const doc = { version: 1, projectPath: project.path, hooks: [...existing] }
+  const doc = {
+    version: 2,
+    projectPath: project.path,
+    hooks: [...existing].map(([id, hash]) => ({ id, hash })),
+  }
   const tmp = `${file}.tmp.${process.pid}`
   await writeFile(tmp, JSON.stringify(doc, null, 2), 'utf8')
   await chmod(tmp, 0o600)
@@ -256,10 +344,8 @@ export async function listHooks(
       if (!project) return []
       const dir = projectHooksDir(project.path)
       const native = await listFromDir(dir, 'project', id)
-      const trusted = await readTrustedIds(project.path)
-      native.forEach((h) => {
-        h.trusted = trusted.has(h.id)
-      })
+      const trusted = await readTrustedHooks(project.path)
+      await applyProjectTrust(native, dir, trusted)
       reports.push({ dir, source: 'project', found: native.length, projectId: id })
       return native
     }),
@@ -288,13 +374,10 @@ export async function listEnabledHooksForDispatch(projectId: string | undefined)
   if (!projectId) return global
   const project = await loadProject(projectId)
   if (!project) return global
-  const trusted = await readTrustedIds(project.path)
-  const projHooks = (await listFromDir(projectHooksDir(project.path), 'project', projectId)).filter(
-    (h) => h.enabled,
-  )
-  projHooks.forEach((h) => {
-    h.trusted = trusted.has(h.id)
-  })
+  const trusted = await readTrustedHooks(project.path)
+  const projDir = projectHooksDir(project.path)
+  const projHooks = (await listFromDir(projDir, 'project', projectId)).filter((h) => h.enabled)
+  await applyProjectTrust(projHooks, projDir, trusted)
   return [...global, ...projHooks]
 }
 

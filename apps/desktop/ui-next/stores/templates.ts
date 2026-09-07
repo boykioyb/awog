@@ -89,6 +89,57 @@ export type TemplateUpdateResult =
   | { status: 'conflicts'; conflicts: TemplateEntityDiff[] }
   | { status: 'updated'; version?: string; applied: TemplateEntityChange[] }
 
+// ─── Danh mục (gói #37) ──────────────────────────────────────────────────────
+
+// Một mục trong danh mục AWOG công bố. `kinds` là thứ LISTING KHAI — chỉ để lọc
+// và gắn nhãn; nội dung thật đọc từ bundle ở bước inspect.
+export type MarketplaceEntry = {
+  id: string
+  name: string
+  description: string
+  author: string
+  version: string
+  url: string
+  kinds: ConfigKind[]
+  tags: string[]
+  homepage?: string
+}
+
+// Dữ liệu đang xem đến từ đâu — hiển thị nguyên trạng cho người dùng.
+export type CatalogOrigin = 'network' | 'cache' | 'offline'
+
+export type MarketplaceResult = {
+  entries: MarketplaceEntry[]
+  origin: CatalogOrigin
+  fetchedAt: number | null
+  stale: boolean
+  error?: string
+}
+
+// Nội dung THẬT của một bundle, đọc trước khi ghi bất cứ thứ gì. Đây là dữ liệu
+// của màn hình đồng ý.
+export type MarketplaceInspection = {
+  entryId: string
+  templateId: string
+  name: string
+  description: string
+  version?: string
+  sourceUrl: string
+  sourceRef: string
+  entities: TemplateEntityRef[]
+  fileCount: number
+  totalBytes: number
+  undisclosedKinds: ConfigKind[]
+  alreadyInstalled: boolean
+  // Băm kế hoạch — gửi lại nguyên văn khi cài. UI coi như chuỗi mờ.
+  token: string
+}
+
+export type MarketplaceInstallResult =
+  | { status: 'installed'; template: ProjectTemplate }
+  | { status: 'exists'; templateId: string }
+  | { status: 'changed'; inspection: MarketplaceInspection }
+
 // One entity selected for a new template — kind + id + tier metadata.
 export type TemplateEntitySpec = {
   kind: ConfigKind
@@ -115,6 +166,8 @@ type TemplateCreateResponse = { template: ProjectTemplate }
 type TemplateInstallResponse = { result: TemplateInstallResult }
 type TemplateCheckUpdateResponse = { check: TemplateUpdateCheck }
 type TemplateUpdateResponse = { result: TemplateUpdateResult }
+type MarketplaceInspectResponse = { inspection: MarketplaceInspection }
+type MarketplaceInstallResponse = { result: MarketplaceInstallResult }
 
 // Entity-list RPCs share the `{ projectIds }` param + `{ <kind>s }` response,
 // each item carrying `source` + `projectId`. We resolve a source project's
@@ -254,6 +307,51 @@ export const useTemplatesStore = defineStore('templates', () => {
     return res.result
   }
 
+  // ─── Danh mục (gói #37) ────────────────────────────────────────────────────
+
+  // Duyệt danh mục. Sidecar lo SSRF + cache + validate; ở đây chỉ chuyển tiếp
+  // `origin`/`stale`/`error` để UI nói thật về dữ liệu đang hiển thị. Không có
+  // đường mạng cho browser-dev ⇒ trả danh sách rỗng có lý do.
+  async function marketplaceList(
+    params: { query?: string; refresh?: boolean } = {},
+  ): Promise<MarketplaceResult> {
+    if (!available.value) {
+      return {
+        entries: [],
+        origin: 'offline',
+        fetchedAt: null,
+        stale: true,
+        error: 'sidecar offline',
+      }
+    }
+    return sc.request<MarketplaceResult>('templates.marketplaceList', params)
+  }
+
+  // Đọc nội dung thật của một bundle để dựng màn hình đồng ý. Không ghi gì.
+  async function marketplaceInspect(id: string): Promise<MarketplaceInspection> {
+    if (!available.value) throw new Error('Browsing the catalog requires the desktop app')
+    const res = await sc.request<MarketplaceInspectResponse>('templates.marketplaceInspect', { id })
+    return res.inspection
+  }
+
+  // Cài sau khi người dùng đồng ý. `token` đến từ `marketplaceInspect` — engine
+  // từ chối ghi nếu nguồn đã đổi kể từ lúc đó.
+  async function marketplaceInstall(params: {
+    id: string
+    token: string
+    overwrite?: boolean
+  }): Promise<MarketplaceInstallResult> {
+    if (!available.value) throw new Error('Installing requires the desktop app')
+    const res = await sc.request<MarketplaceInstallResponse>('templates.marketplaceInstall', params)
+    if (res.result.status === 'installed') {
+      const tpl = res.result.template
+      const idx = templates.value.findIndex((t) => t.id === tpl.id)
+      if (idx >= 0) templates.value.splice(idx, 1)
+      templates.value.unshift(tpl)
+    }
+    return res.result
+  }
+
   async function remove(id: string): Promise<void> {
     // Optimistic local removal.
     templates.value = templates.value.filter((tpl) => tpl.id !== id)
@@ -313,6 +411,9 @@ export const useTemplatesStore = defineStore('templates', () => {
     fetchRemote,
     checkUpdate,
     update,
+    marketplaceList,
+    marketplaceInspect,
+    marketplaceInstall,
     remove,
     resolveProjectEntities,
   }

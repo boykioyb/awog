@@ -7,6 +7,10 @@
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.refresh') }}
       </button>
+      <button class="btn sm" @click="openDiscoverDialog">
+        <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        {{ t('templatesDiscover.open') }}
+      </button>
       <button class="btn sm" @click="openFetchDialog">
         <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.fetchGithub') }}
@@ -63,6 +67,13 @@
     <!-- fetch from a public GitHub folder (ADR 0037) -->
     <FetchFromGithubDialog :open="fetchDialogOpen" @close="closeFetchDialog" @fetched="onFetched" />
 
+    <!-- browse the published catalog, then consent, then install (gói #37) -->
+    <TemplateDiscoverDialog
+      :open="discoverDialogOpen"
+      @close="closeDiscoverDialog"
+      @installed="onDiscoverInstalled"
+    />
+
     <TemplateUpdateDialog
       v-if="updateCheck"
       :open="updateDialogOpen"
@@ -105,6 +116,7 @@ import FetchFromGithubDialog from '~/components/templates/FetchFromGithubDialog.
 import InstallTemplateDialog from '~/components/templates/InstallTemplateDialog.vue'
 import SaveAsTemplateDialog from '~/components/templates/SaveAsTemplateDialog.vue'
 import TemplateDetail from '~/components/templates/TemplateDetail.vue'
+import TemplateDiscoverDialog from '~/components/templates/TemplateDiscoverDialog.vue'
 import TemplateUpdateDialog from '~/components/templates/TemplateUpdateDialog.vue'
 import { useTemplatesPage } from '~/composables/useTemplatesPage'
 
@@ -119,15 +131,19 @@ const {
   saveDialogOpen,
   fetchDialogOpen,
   installDialogOpen,
+  discoverDialogOpen,
   installFixedTemplateId,
   openSaveDialog,
   openFetchDialog,
+  openDiscoverDialog,
   openInstallFor,
   closeSaveDialog,
   closeFetchDialog,
+  closeDiscoverDialog,
   closeInstallDialog,
   onSaved,
   onFetched,
+  onDiscoverInstalled,
   onInstalled,
   updateDialogOpen,
   updateCheck,

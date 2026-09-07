@@ -61,6 +61,7 @@ export function useTemplatesPage() {
   const saveDialogOpen = ref(false)
   const fetchDialogOpen = ref(false)
   const installDialogOpen = ref(false)
+  const discoverDialogOpen = ref(false)
 
   const openSaveDialog = () => {
     saveDialogOpen.value = true
@@ -73,6 +74,12 @@ export function useTemplatesPage() {
   }
   const closeFetchDialog = () => {
     fetchDialogOpen.value = false
+  }
+  const openDiscoverDialog = () => {
+    discoverDialogOpen.value = true
+  }
+  const closeDiscoverDialog = () => {
+    discoverDialogOpen.value = false
   }
   const closeInstallDialog = () => {
     installDialogOpen.value = false
@@ -108,6 +115,16 @@ export function useTemplatesPage() {
     } else {
       pushToast(`Nothing imported (${skipped.length} skipped)`, 'error')
     }
+  }
+
+  // Cài từ danh mục xong: bundle đã nằm ở đầu danh sách (store unshift) nên hàng
+  // tự-chọn-đầu của LibraryView rơi đúng vào nó. Mở luôn Install để người dùng
+  // chọn project đích — bước ĐƯA VÀO PROJECT là một quyết định riêng, không phải
+  // hệ quả tự động của việc cài về thư viện.
+  const onDiscoverInstalled = (e: { name: string; templateId: string }) => {
+    pushToast(t('templatesDiscover.installedToast', { name: e.name }), 'success')
+    installFixedTemplateId.value = e.templateId
+    installDialogOpen.value = true
   }
 
   // --- update (WP10) --------------------------------------------------------
@@ -193,15 +210,19 @@ export function useTemplatesPage() {
     saveDialogOpen,
     fetchDialogOpen,
     installDialogOpen,
+    discoverDialogOpen,
     installFixedTemplateId,
     openSaveDialog,
     openFetchDialog,
+    openDiscoverDialog,
     openInstallFor,
     closeSaveDialog,
     closeFetchDialog,
+    closeDiscoverDialog,
     closeInstallDialog,
     onSaved,
     onFetched,
+    onDiscoverInstalled,
     onInstalled,
     // update
     updateDialogOpen,
