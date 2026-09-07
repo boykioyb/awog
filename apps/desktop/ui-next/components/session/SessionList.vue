@@ -291,6 +291,11 @@
           <div v-if="searchTruncated" class="csnote">
             {{ t('sessionsSearch.truncated', { n: hits.length }) }}
           </div>
+          <!-- Phiên đã lưu trữ bị loại khỏi kết quả. Nói ra, nếu không người dùng
+               tìm mãi không thấy mà không hiểu vì sao. -->
+          <div v-if="searchArchivedHidden > 0" class="csnote">
+            {{ t('sessionsSearch.archivedHidden', { n: searchArchivedHidden }) }}
+          </div>
         </template>
         <div v-else class="csnote">{{ t('sessionsSearch.empty', { q: filter.trim() }) }}</div>
       </div>
@@ -475,6 +480,7 @@ const {
   loading: searchLoading,
   error: searchError,
   truncated: searchTruncated,
+  archivedHidden: searchArchivedHidden,
   matchedQuery,
 } = useSessionSearch(() => filter.value)
 

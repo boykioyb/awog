@@ -16,5 +16,6 @@
   "sessionsSearch.archive.show": "Hiện phiên đã lưu trữ",
   "sessionsSearch.archive.badge": "Đã lưu trữ",
   "sessionsSearch.archive.notSaved": "Phiên này chưa được lưu.",
-  "sessionsSearch.archive.failed": "Không đổi được trạng thái lưu trữ."
+  "sessionsSearch.archive.failed": "Không đổi được trạng thái lưu trữ.",
+  "sessionsSearch.archivedHidden": "Còn {n} phiên đã lưu trữ khớp từ khoá — bật “Hiện phiên đã lưu trữ” để thấy."
 }

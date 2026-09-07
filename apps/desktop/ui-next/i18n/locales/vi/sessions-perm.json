@@ -4,7 +4,6 @@
   "sessionsPerm.kind.path": "Khớp đúng đường dẫn này.",
   "sessionsPerm.kind.bare": "Khớp mọi lời gọi tool {tool}.",
   "sessionsPerm.noRule": "Lệnh này có toán tử shell nên không luật nào khớp được — chỉ có thể cho phép một lần.",
-  "sessionsPerm.ruleUnknown": "Không nhận được luật gợi ý cho lượt này — chỉ có thể cho phép một lần.",
   "sessionsPerm.scopeLabel": "Nhớ cho",
   "sessionsPerm.scope.session": "Phiên này",
   "sessionsPerm.scope.project": "Dự án này",

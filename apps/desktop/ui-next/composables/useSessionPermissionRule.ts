@@ -2,165 +2,66 @@
 // "Always allow" button never had: the EXACT rule text about to be granted, and the
 // tier it is written to.
 //
-// WHY A LISTENER OF ITS OWN. The rule text only exists in the
-// `session.permission-request` event's `suggestions[0]` (a PermissionRuleSuggestion:
-// `{ type:'addRule', rule:'Bash(git status)', ruleKind, … }`). The sessions store
-// consumes that event but keeps only `{ toolName, target }` on the PermBlock, so the
-// text is dropped before any component can see it. Until PermBlock carries the
-// suggestion, this module captures it straight off the bridge, keyed by requestId —
-// the id the block already stores as `eid`.
-//
-// It subscribes at MODULE LOAD, not from a component: the event is what CREATES the
-// perm block, so a subscription opened in the card's setup would always land one tick
-// late and miss the very prompt it has to describe. A request whose suggestion was not
-// captured stays `unknown` and the card hides "Always allow" — never a guessed rule
-// text (a rule the user did not actually read is the blind-consent hole ADR 0080 closes,
-// pointed the other way).
+// PURE PRESENTATION. The rule text comes in on the block itself
+// (`PermBlock.suggestion`, filled by the sessions store from the very
+// `session.permission-request` event that creates the block), and the one RPC of the
+// whole flow goes out through `store.setPermission(…, scope)`, which hands back the
+// tiers actually written. This module therefore opens no bridge listener and sends
+// nothing: it formats the offer, owns the tier picker, and reports the outcome.
+// A request whose suggestion the engine could not derive keeps `canAlwaysAllow`
+// false and the card hides "Always allow" — never a guessed rule text (a rule the
+// user did not actually read is the blind-consent hole ADR 0080 closes, pointed the
+// other way).
 //
 // The rule content is NEVER sent back. `sessions.permission` takes a `scope` only and
 // re-reads the rule from the parked suggestion — see the RPC's own comment: accepting
 // rule text from the renderer would let a hand-made payload write `Bash(*)` to
 // ~/.awog/permission-rules.json.
-import { computed, reactive, ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
-import { useSidecar } from '~/composables/useSidecar'
+import type { PermRuleKind, PermRuleScope, PermRuleSuggestion } from '~/composables/useSessionsData'
 
-export type PermissionRuleScope = 'session' | 'project' | 'user'
-export type PermissionRuleKind = 'command' | 'path' | 'bare'
-export type PermissionRuleOffer = { rule: string; kind: PermissionRuleKind }
+// Names Settings → Quyền (usePermissionRules) imports. The declarations live next to
+// PermBlock in useSessionsData — one type, two spellings, no second definition.
+export type PermissionRuleScope = PermRuleScope
+export type PermissionRuleKind = PermRuleKind
 
-// What the card knows about a request:
-//   offered — the engine proposed a rule, so "Always allow" is safe to show
-//   none    — the engine proposed nothing (compound shell command, relative path…)
-//   unknown — no suggestion reached this window (see the module note)
-export type PermissionRuleState = 'offered' | 'none' | 'unknown'
-
-const SCOPES = ['session', 'project', 'user'] as const
-const KINDS = ['command', 'path', 'bare'] as const
-
+const SCOPES: readonly string[] = ['session', 'project', 'user']
 const isScope = (v: unknown): v is PermissionRuleScope =>
-  typeof v === 'string' && (SCOPES as readonly string[]).includes(v)
-const isKind = (v: unknown): v is PermissionRuleKind =>
-  typeof v === 'string' && (KINDS as readonly string[]).includes(v)
-
-// Engine payloads are L1: validate the shape and reject anything that would not
-// render as a single readable line (control characters, absurd length). The sidecar
-// caps a rule at tool(128) + pattern(512); this is the display-side backstop.
-const MAX_RULE_LEN = 700
-// Char-code scan rather than a regex: a control-character class is exactly what
-// eslint's no-control-regex flags, and the loop says what it means.
-function hasControlChar(value: string): boolean {
-  for (let i = 0; i < value.length; i++) {
-    const code = value.charCodeAt(i)
-    if (code < 0x20 || code === 0x7f) return true
-  }
-  return false
-}
-
-// requestId → offer. `null` = the engine explicitly offered no rule.
-const OFFERS = reactive(new Map<string, PermissionRuleOffer | null>())
-// A prompt is answered within seconds; only enough history to survive a few parallel
-// gates. Oldest-first eviction (Map keeps insertion order).
-const MAX_OFFERS = 64
-
-function remember(requestId: string, offer: PermissionRuleOffer | null): void {
-  OFFERS.set(requestId, offer)
-  while (OFFERS.size > MAX_OFFERS) {
-    const oldest = OFFERS.keys().next()
-    if (oldest.done) break
-    OFFERS.delete(oldest.value)
-  }
-}
-
-function offerOf(suggestions: unknown): PermissionRuleOffer | null {
-  if (!Array.isArray(suggestions)) return null
-  for (const raw of suggestions) {
-    if (!raw || typeof raw !== 'object') continue
-    const s = raw as Record<string, unknown>
-    if (s.type !== 'addRule' || typeof s.rule !== 'string') continue
-    const rule = s.rule
-    if (!rule || rule.length > MAX_RULE_LEN || hasControlChar(rule)) continue
-    return { rule, kind: isKind(s.ruleKind) ? s.ruleKind : 'bare' }
-  }
-  return null
-}
-
-let capturing = false
-
-function startCapture(): void {
-  if (capturing) return
-  capturing = true
-  const sc = useSidecar()
-  if (!sc.available) return
-  void sc
-    .onEvent((evt) => {
-      if (evt.type !== 'session.permission-request') return
-      const p = evt.payload
-      if (!p || typeof p !== 'object') return
-      const { requestId, suggestions } = p as Record<string, unknown>
-      if (typeof requestId !== 'string' || !requestId) return
-      remember(requestId, offerOf(suggestions))
-    })
-    .catch(() => {
-      // No bridge / subscribe failed → every request stays `unknown`, which the card
-      // renders as "allow once only". Degraded, never permissive.
-      capturing = false
-    })
-}
-
-// Subscribed here rather than in the composable body — see the module note.
-startCapture()
-
-function savedScopesOf(raw: unknown): PermissionRuleScope[] {
-  if (!raw || typeof raw !== 'object') return []
-  const scopes = (raw as Record<string, unknown>).savedScopes
-  if (!Array.isArray(scopes)) return []
-  return scopes.filter(isScope)
-}
+  typeof v === 'string' && SCOPES.includes(v)
 
 /**
  * Rule + tier state for ONE permission prompt.
  *
- * @param requestId engine request id of the prompt (the PermBlock's `eid`)
+ * @param suggestion the rule the engine offered for this prompt (the PermBlock's
+ *   `suggestion`), or undefined when it offered none.
  * @param projectId project the session is bound to ('' when none) — a rule cannot be
  *   written to a project tier that does not exist, so the option is disabled instead
  *   of silently falling back.
  */
 export function useSessionPermissionRule(
-  requestId: () => string | undefined,
+  suggestion: () => PermRuleSuggestion | undefined,
   projectId: () => string,
 ) {
-  startCapture()
-  const sc = useSidecar()
   const { t } = useI18n()
 
-  const offer = computed<PermissionRuleOffer | null | undefined>(() => {
-    const id = requestId()
-    return id ? OFFERS.get(id) : undefined
-  })
-  const state = computed<PermissionRuleState>(() => {
-    const o = offer.value
-    if (o === undefined) return 'unknown'
-    return o === null ? 'none' : 'offered'
-  })
+  const offer = computed<PermRuleSuggestion | undefined>(() => suggestion())
   // The exact string the user is about to grant. Rendered as a text node, never HTML.
   const rule = computed<string>(() => offer.value?.rule ?? '')
-  const canAlwaysAllow = computed<boolean>(() => state.value === 'offered')
+  const canAlwaysAllow = computed<boolean>(() => offer.value !== undefined)
 
   // What the rule matches, in one sentence — "this exact command" reads very
   // differently from "every Bash call", and that difference is the whole point.
   const ruleMeaning = computed<string>(() => {
     const o = offer.value
     if (!o) return ''
-    if (o.kind === 'bare') return t('sessionsPerm.kind.bare', { tool: o.rule })
-    return t(`sessionsPerm.kind.${o.kind}`)
+    if (o.ruleKind === 'bare') return t('sessionsPerm.kind.bare', { tool: o.rule })
+    return t(`sessionsPerm.kind.${o.ruleKind}`)
   })
   // Why this prompt offers no rule at all.
-  const noRuleReason = computed<string>(() => {
-    if (state.value === 'none') return t('sessionsPerm.noRule')
-    if (state.value === 'unknown') return t('sessionsPerm.ruleUnknown')
-    return ''
-  })
+  const noRuleReason = computed<string>(() =>
+    canAlwaysAllow.value ? '' : t('sessionsPerm.noRule'),
+  )
 
   // Least privilege by default: a remembered rule starts session-scoped.
   const scope = ref<PermissionRuleScope>('session')
@@ -183,7 +84,7 @@ export function useSessionPermissionRule(
     if (isScope(next)) scope.value = next
   }
 
-  // ── Outcome, straight from the RPC ─────────────────────────────────────────
+  // ── Outcome, as reported by the store's RPC ────────────────────────────────
   const savedScopes = ref<PermissionRuleScope[]>([])
   const saveState = ref<'idle' | 'saved' | 'failed'>('idle')
   const requestedScope = ref<PermissionRuleScope | null>(null)
@@ -205,27 +106,13 @@ export function useSessionPermissionRule(
       requestedScope.value !== savedScope.value,
   )
 
-  // Answer the prompt with the chosen tier. Only the scope crosses the boundary; the
-  // rule body comes from the parked suggestion inside the sidecar.
-  async function grantAlways(): Promise<void> {
-    const id = requestId()
-    if (!id || !canAlwaysAllow.value) return
-    requestedScope.value = scope.value
-    if (!sc.available) return
-    try {
-      const res = await sc.request<unknown>('sessions.permission', {
-        requestId: id,
-        decision: 'allow',
-        alwaysAllow: true,
-        scope: scope.value,
-      })
-      savedScopes.value = savedScopesOf(res)
-      saveState.value = savedScopes.value.length > 0 ? 'saved' : 'failed'
-    } catch {
-      // The turn is unblocked either way (the store's own resolve follows); only the
-      // remembering failed, so say that instead of a generic error.
-      saveState.value = 'failed'
-    }
+  // Record what came back from one "Always allow": the tier asked for and the tiers
+  // written. No tier written = the turn still resumed, only the remembering failed,
+  // so that is what the card says instead of a generic error.
+  function recordSave(requested: PermissionRuleScope, written: PermissionRuleScope[]): void {
+    requestedScope.value = requested
+    savedScopes.value = written
+    saveState.value = written.length > 0 ? 'saved' : 'failed'
   }
 
   return {
@@ -240,6 +127,6 @@ export function useSessionPermissionRule(
     savedOk,
     savedMessage,
     savedDowngraded,
-    grantAlways,
+    recordSave,
   }
 }

@@ -4,7 +4,6 @@
   "sessionsPerm.kind.path": "Matches this exact path.",
   "sessionsPerm.kind.bare": "Matches every {tool} call.",
   "sessionsPerm.noRule": "This command contains shell operators, so no rule can match it — it can only be allowed once.",
-  "sessionsPerm.ruleUnknown": "No suggested rule arrived for this request — it can only be allowed once.",
   "sessionsPerm.scopeLabel": "Remember for",
   "sessionsPerm.scope.session": "This session",
   "sessionsPerm.scope.project": "This project",

@@ -139,14 +139,24 @@ Mỗi tool bắc sang nhánh Claude SDK đổi tên `foo` → `mcp__<server>__fo
 
 Đặc điểm khiến nó khó bắt: **typecheck không thấy** (hai chuỗi đều hợp lệ) và **nhánh Pi không thấy** (tên trần vẫn khớp). Quy tắc: mỗi lần bắc thêm một tool sang SDK, tìm mọi nơi so tên tool đó bằng `===` và đổi sang matcher chấp nhận cả hai dạng. Test hồi quy: `runtime/tools/__tests__/bridged-tool-gating.test.ts` (có cả ca ngược — `browser_tool_helper` của bên thứ ba KHÔNG được ăn theo cổng).
 
+## Dọn nợ kỹ thuật (2026-09-07)
+
+Bốn mục nợ đã xử lý xong (gỡ khỏi danh sách bên dưới); ghi lại phần *quyết định*, không ghi lại phần diff.
+
+**Thẻ xin quyền không còn lách qua store.** Luật mà "Always allow" sắp ghi nay đi trên chính `PermBlock.suggestion` — store điền nó ngay trong handler `session.permission-request` (event vốn đã mang `suggestions`, store chỉ đang vứt đi). Nhờ đó `useSessionPermissionRule.ts` bỏ được cả hai chỗ lách: listener tự mở ở module load, và lượt RPC thứ hai. Một lần bấm nay chỉ còn **một** lời gọi `store.setPermission(id, msgIndex, 'allow', true, scope)`; nó trả về đúng tầng sidecar đã ghi (`savedScopes`) cho thẻ hiển thị. Điều kiện đúng đắn về thứ tự nay được giữ theo cách khác: mọi thứ store sở hữu (trạng thái block, `pendingPermission`, trạng thái phiên) settle **đồng bộ** trước `await`, nên lượt sau có park prompt kế tiếp thì cũng không ai trả lời nhầm. `pushRequest` đổi thành trả promise nhưng **nuốt lỗi bên trong** — phần lớn caller không `await`, unhandled rejection sẽ là hồi quy. Nội dung luật vẫn KHÔNG bao giờ đi từ renderer xuống: UI chỉ chọn tầng.
+
+**Chữ ký metadata header** nay gồm `archived`/`archivedAt`/`todos`/`bookmarks`. Riêng cặp `archived` lấy **trọn vẹn theo đĩa** thay vì "copy khi có": bỏ lưu trữ là *xoá hẳn key* (`session-manager.ts`), nên nếu chỉ copy-khi-có thì bản local `archived: true` sẽ hoàn tác đúng thao tác vừa làm bên ngoài. `todos`/`bookmarks` luôn ghi thành mảng (rỗng khi xoá hết) nên copy-khi-có là đủ.
+
+**`sessions.search` loại phiên đã lưu trữ, mặc định.** Lưu trữ nghĩa là "giấu phiên đi mà không xoá", và `sessions.list` đã ẩn nó; nếu tìm kiếm vẫn lôi ra thì thao tác dọn dẹp chỉ có tác dụng một nửa — tệ nhất là ở chỗ dễ bực nhất: phiên vừa cất đi lại chen lên đầu kết quả vì nó mới nhất. Chọn theo `sessions.list` cho một mặc định duy nhất, `includeArchived: true` mở lại. Bẫy ngược ("tìm mãi không thấy vì quên là đã lưu trữ") **không** được bỏ qua bằng cách im lặng: kết quả trả thêm `archivedHidden` — số phiên đã lưu trữ có khớp nhưng bị giấu (cận dưới khi kết quả đã đầy) — đủ để UI mời mở rộng phạm vi. **Chưa có UI đọc field đó** ⇒ xem mục nợ bên dưới.
+
+**`git.checkInstalled`** dùng `gitVersion()`/`gitAtLeast()` của `git/runner.ts`, không tự parse nữa. Đổi lại probe cache theo vòng đời tiến trình: cài git trong lúc app đang chạy thì phải khởi động lại mới hết banner — chấp nhận được cho một phép đo bootstrap (hiện chưa bề mặt nào gọi lại RPC này để thử lần hai).
+
 ## Nợ kỹ thuật ghi nhận, chưa xử lý
 
-- `persistence-queue.ts` chưa đưa `archived` vào chữ ký metadata header — sửa tay `session.jsonl` khi app đang chạy có thể bị ghi đè. Đúng y như `todos`/`bookmarks` hiện nay ⇒ nên gộp sửa một lần.
-- `sessions.search` vẫn tìm cả phiên đã lưu trữ.
 - `sessions.setArchived` + `sessions.listEvents` chưa vào allowlist Remote Gateway (⚠️ cần infosec nếu muốn lên PWA).
-- `methods/git.check-installed.ts` vẫn tự parse `git --version`; đã có `gitVersion()` trong `git/runner.ts` để gom về một chỗ.
+- `sessions.search` đã trả `archivedHidden` nhưng `useSessionSearch.ts` chưa đọc ⇒ người dùng vẫn chưa thấy dòng "còn N phiên trong kho lưu trữ khớp". Việc còn lại thuần hiển thị, không cần đụng sidecar.
+- Comment ở `git/runner.ts` (mục "Version probe") vẫn viết `git.checkInstalled` "keeps its own parse" — đã hết đúng sau lần dọn 2026-09-07.
 - `resolveSessionProjectPath` cache theo vòng đời sidecar — phiên bị trỏ sang project khác sẽ đọc cache cũ.
-- **Thẻ xin quyền phải lách qua store.** `PermBlock` không mang `suggestions`, và `setPermission()` không có tham số `scope`, nên `useSessionPermissionRule.ts` phải (a) tự `sc.onEvent` ở **module load** — vì chính event đó tạo ra perm block nên listener mở trong `setup()` luôn trễ một tick — và (b) gọi RPC hai lượt trong cùng một block đồng bộ. Lượt hai là no-op có chủ ý (`resolvePermissionRequest` đã xoá entry), nhưng **thứ tự đồng bộ là điều kiện đúng đắn**: `await` trước khi gọi store có thể khiến store trả lời nhầm prompt kế tiếp. Dọn đúng: thêm `suggestion?: { rule, ruleKind }` vào `PermBlock` (`useSessionsData.ts`), điền trong handler `session.permission-request` (`stores/sessions.ts` — event **đã** mang `suggestions`), và thêm `scope` + trả `savedScopes` cho `setPermission`. Khi đó xoá được cả listener riêng lẫn lượt RPC trùng.
 - Nhánh Claude SDK: job nền external không có file log ⇒ vĩnh viễn chỉ có metadata, kể cả sau khi có `sessions.backgroundRead`.
 - `rerunPhase` invalidate hạ nguồn theo **topology**, không theo fingerprint đầu vào ([ADR 0085](../decisions/0085-workflow-as-script.md) phần Bối cảnh). Hôm nay nó biểu hiện thành *chạy lại nhiều hơn cần* (tốn tiền, có trần chặn) chứ không phải bỏ sót ⇒ ghi nhận là nợ, không phải lỗi.
 

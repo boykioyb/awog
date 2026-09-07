@@ -133,6 +133,52 @@ export type QuestionBlock = {
 export function questionAnswered(b: QuestionBlock): boolean {
   return b.items.length > 0 && b.items.every((it) => !!it.answer)
 }
+// ── Permission rule offered with a prompt (ADR 0080) ────────────────────────────
+// The tier a remembered rule is written to, and how the sidecar classified the rule.
+// Declared here (next to PermBlock, which carries them) rather than in the gate
+// card's composable, which now only presents them — that composable re-exports both
+// under its old names for Settings → Permissions.
+export type PermRuleScope = 'session' | 'project' | 'user'
+export type PermRuleKind = 'command' | 'path' | 'bare'
+// The rule "Always allow" would create, exactly as the sidecar proposed it
+// (`{ type: 'addRule', rule: 'Bash(git status)', ruleKind }` in the
+// `session.permission-request` event). Absent ⇒ the engine could derive no rule
+// (compound shell command, relative path…) ⇒ the card hides "Always allow" rather
+// than guessing a rule the user never read.
+export type PermRuleSuggestion = { rule: string; ruleKind: PermRuleKind }
+
+const PERM_RULE_KINDS: readonly string[] = ['command', 'path', 'bare']
+// The sidecar caps a rule at tool(128) + pattern(512); this is the display-side backstop.
+const MAX_PERM_RULE_LEN = 700
+
+// Char-code scan rather than a regex: a control-character class is exactly what
+// eslint's no-control-regex flags, and the loop says what it means.
+function hasControlChar(value: string): boolean {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i)
+    if (code < 0x20 || code === 0x7f) return true
+  }
+  return false
+}
+
+// Pick the first usable rule suggestion off an engine payload. The payload is L1:
+// anything that would not render as one readable line (control characters, absurd
+// length) is dropped, which degrades the card to "allow once" — never to a rule
+// shown differently from the one that gets written.
+export function parsePermSuggestion(raw: unknown): PermRuleSuggestion | undefined {
+  if (!Array.isArray(raw)) return undefined
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const s = item as Record<string, unknown>
+    if (s.type !== 'addRule' || typeof s.rule !== 'string') continue
+    const rule = s.rule
+    if (!rule || rule.length > MAX_PERM_RULE_LEN || hasControlChar(rule)) continue
+    const kind = typeof s.ruleKind === 'string' && PERM_RULE_KINDS.includes(s.ruleKind)
+    return { rule, ruleKind: kind ? (s.ruleKind as PermRuleKind) : 'bare' }
+  }
+  return undefined
+}
+
 export type PermBlock = {
   kind: 'perm'
   tool: string
@@ -142,6 +188,11 @@ export type PermBlock = {
   eid?: string
   // See QuestionBlock.cancelled — a parked permission abandoned by a turn cancel.
   cancelled?: boolean
+  // Rule the engine offered for this prompt, carried on the block so the gate card
+  // reads it from its own data. Filled by the sessions store from the event that
+  // CREATES this block — a component-side listener would always open one tick late
+  // and miss the very prompt it has to describe.
+  suggestion?: PermRuleSuggestion
 }
 export type SteerBlock = { kind: 'steer'; text: string }
 export type ErrorBlock = { kind: 'error'; text: string }
@@ -175,6 +226,38 @@ export type SuggestionBlock = {
 }
 // Clickable next prompts, shown under the LAST reply until the user types.
 export type FollowupsBlock = { kind: 'followups'; options: string[]; eid?: string }
+// One structured review finding (#8, report_findings). `file`/`line` are the
+// location the model already knew; the row opens the file through useFilePreview
+// when `linkable` — the sidecar sets that only for a path that survived
+// assertInsideWorkspace + a stat, so a row is never a link that opens nothing.
+export type FindingSeverity = 'blocker' | 'major' | 'minor'
+export type Finding = {
+  file: string
+  line?: number
+  severity: FindingSeverity
+  summary: string
+  failure: string
+  // How the model verified it. Absent = it did not say, and the row says so.
+  verdict?: string
+  linkable?: boolean
+}
+// A review's findings, rendered as one worst-first list.
+export type FindingsBlock = {
+  kind: 'findings'
+  findings: Finding[]
+  scope?: string
+  eid?: string
+}
+// Worst first, stable within a severity so the model's own ordering survives.
+// Display-only: the engine payload keeps the order the model wrote.
+const SEVERITY_RANK: Record<FindingSeverity, number> = { blocker: 0, major: 1, minor: 2 }
+export function sortFindings(findings: Finding[]): Finding[] {
+  return [...findings].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
+}
+// `file:line` as the user reads it — and as they would paste it into an editor.
+export function findingLocation(f: Finding): string {
+  return f.line == null ? f.file : `${f.file}:${f.line}`
+}
 
 export type AssistantBlock =
   | ThinkingBlock
@@ -189,6 +272,7 @@ export type AssistantBlock =
   | FilesBlock
   | SuggestionBlock
   | FollowupsBlock
+  | FindingsBlock
 
 // A slash-command invocation shown compactly in the user bubble (`/name args`).
 // `text` still holds the expanded body (what the model receives + persists); this

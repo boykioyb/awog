@@ -46,6 +46,15 @@ type HeaderMetadataSignature = {
   aboutTaskId: string | undefined
   aboutSshHostId: string | undefined
   aboutGhUrl: string | undefined
+  // Cả ba field dưới đây đều là metadata của header do RPC/người dùng sửa, y hệt
+  // `pinned`: `sessions.setArchived`, `sessions.updateTodos`, `sessions.updateBookmarks`.
+  // Thiếu chúng trong chữ ký ⇒ một lần sửa bên ngoài (watcher, cửa sổ khác, sửa tay
+  // file khi app đang chạy) không được nhận diện là "đĩa đã lệch", nên lần ghi thân
+  // bài tiếp theo lặng lẽ ghi đè cờ lưu trữ / checklist / bookmark vừa đổi.
+  archived: boolean | undefined
+  archivedAt: string | undefined
+  todos: SessionHeader['todos']
+  bookmarks: SessionHeader['bookmarks']
 }
 
 function headerMetadataSignature(header: SessionHeader): string {
@@ -58,6 +67,10 @@ function headerMetadataSignature(header: SessionHeader): string {
     aboutTaskId: header.aboutTaskId,
     aboutSshHostId: header.aboutSshHostId,
     aboutGhUrl: header.aboutGhUrl,
+    archived: header.archived,
+    archivedAt: header.archivedAt,
+    todos: header.todos,
+    bookmarks: header.bookmarks,
   }
   return JSON.stringify(sig)
 }
@@ -66,20 +79,38 @@ function headerMetadataSignature(header: SessionHeader): string {
 // preserving everything else local. Optional fields are copied only when present on
 // disk — exactOptionalPropertyTypes forbids assigning `undefined` to an optional prop,
 // so a disk edit that CLEARS a flag keeps the local value (an accepted minor deviation).
+// EXCEPT archived/archivedAt: xoá key CHÍNH LÀ cách bỏ lưu trữ, nên cặp đó lấy trọn
+// theo đĩa (xem trong thân hàm).
 function mergeHeaderWithExternalMetadata(
   local: SessionHeader,
   disk: SessionHeader,
 ): SessionHeader {
+  // Bỏ lưu trữ = XOÁ HẲN cặp archived/archivedAt khỏi header (session-manager.ts
+  // setArchived), nên "chỉ copy khi đĩa có" sẽ giữ lại `archived: true` của bản local
+  // và hoàn tác đúng thao tác vừa làm bên ngoài. Vì vậy cặp này lấy TRỌN VẸN theo đĩa:
+  // gỡ khỏi bản local trước, rồi chỉ gắn lại khi đĩa thật sự có.
+  const { archived: _localArchived, archivedAt: _localArchivedAt, ...rest } = local
+  const diskArchived: Pick<SessionHeader, 'archived' | 'archivedAt'> = disk.archived
+    ? {
+        archived: true,
+        ...(disk.archivedAt !== undefined ? { archivedAt: disk.archivedAt } : {}),
+      }
+    : {}
   return {
-    ...local,
+    ...rest,
     title: disk.title,
     projectId: disk.projectId,
+    ...diskArchived,
     ...(disk.pinned !== undefined ? { pinned: disk.pinned } : {}),
     ...(disk.disabledTools !== undefined ? { disabledTools: disk.disabledTools } : {}),
     ...(disk.mcpServerIds !== undefined ? { mcpServerIds: disk.mcpServerIds } : {}),
     ...(disk.aboutTaskId !== undefined ? { aboutTaskId: disk.aboutTaskId } : {}),
     ...(disk.aboutSshHostId !== undefined ? { aboutSshHostId: disk.aboutSshHostId } : {}),
     ...(disk.aboutGhUrl !== undefined ? { aboutGhUrl: disk.aboutGhUrl } : {}),
+    // todos/bookmarks luôn được ghi thành MẢNG (rỗng khi xoá hết) chứ không bị xoá
+    // key, nên "copy khi đĩa có" đã diễn tả đủ cả hướng dựng lẫn hướng xoá.
+    ...(disk.todos !== undefined ? { todos: disk.todos } : {}),
+    ...(disk.bookmarks !== undefined ? { bookmarks: disk.bookmarks } : {}),
   }
 }
 

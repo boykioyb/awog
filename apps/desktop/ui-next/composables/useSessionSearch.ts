@@ -55,7 +55,15 @@ export function highlightSnippet(snippet: string, query: string): SnippetPart[] 
   return parts
 }
 
-type SearchResponse = { results?: SessionSearchHit[]; truncated?: boolean }
+type SearchResponse = {
+  results?: SessionSearchHit[]
+  truncated?: boolean
+  // Số PHIÊN đã lưu trữ có khớp nhưng bị giấu. Sidecar mặc định loại chúng khỏi
+  // kết quả (archive = giấu đi, và `sessions.list` cũng đã giấu) — con số này để
+  // người dùng biết mình đang không nhìn thấy hết, thay vì tìm mãi không ra vì
+  // quên là đã lưu trữ. Cận dưới: vòng lặp phía sidecar thoát sớm khi đủ kết quả.
+  archivedHidden?: number
+}
 
 export function useSessionSearch(query: () => string) {
   const sc = useSidecar()
@@ -67,6 +75,7 @@ export function useSessionSearch(query: () => string) {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const truncated = ref(false)
+  const archivedHidden = ref(0)
   // The query the current `results` belong to — highlighting reads THIS, not the
   // live input, so the emphasis can never disagree with the rows on screen.
   const matchedQuery = ref('')
@@ -87,6 +96,7 @@ export function useSessionSearch(query: () => string) {
     results.value = []
     matchedQuery.value = ''
     truncated.value = false
+    archivedHidden.value = 0
     loading.value = false
     error.value = null
   }
@@ -103,12 +113,14 @@ export function useSessionSearch(query: () => string) {
       if (mine !== seq) return
       results.value = Array.isArray(res.results) ? res.results : []
       truncated.value = res.truncated === true
+      archivedHidden.value = typeof res.archivedHidden === 'number' ? res.archivedHidden : 0
       matchedQuery.value = q
     } catch (err) {
       if (mine !== seq) return
       results.value = []
       matchedQuery.value = q
       truncated.value = false
+      archivedHidden.value = 0
       console.warn('[sessions] sessions.search failed', err)
       error.value = t('sessionsSearch.error')
     } finally {
@@ -134,6 +146,7 @@ export function useSessionSearch(query: () => string) {
       results.value = []
       matchedQuery.value = ''
       truncated.value = false
+      archivedHidden.value = 0
       error.value = null
       loading.value = true
       timer = setTimeout(() => {
@@ -146,5 +159,5 @@ export function useSessionSearch(query: () => string) {
 
   onBeforeUnmount(reset)
 
-  return { results, loading, error, truncated, matchedQuery }
+  return { results, loading, error, truncated, archivedHidden, matchedQuery }
 }

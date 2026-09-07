@@ -5,6 +5,7 @@ import {
   MAX_BOOKMARKS,
   modelDisplayName,
   modelIdFromDisplay,
+  parsePermSuggestion,
   PROVIDER_DISPLAY,
   questionAnswered,
 } from '~/composables/useSessionsData'
@@ -27,8 +28,10 @@ import type {
   AssistantBlock,
   AssistantMessage,
   ContextChars,
+  Finding,
   Followup,
   PermBlock,
+  PermRuleScope,
   QuestionBlock,
   QuestionItem,
   QueuedMessage,
@@ -112,11 +115,21 @@ type EngineTodo = {
 
 // Payload of an engine `kind: 'surface'` step — what the model handed to the user
 // in one surface-tool call (sidecar types/shared.ts SessionSurface).
+type EngineFinding = {
+  file: string
+  line?: number
+  severity: string
+  summary: string
+  failure: string
+  verdict?: string
+  linkable?: boolean
+}
 type EngineSurface =
   | { kind: 'chapter'; title: string; summary?: string }
   | { kind: 'files'; files: { path: string; name: string; size?: number }[]; caption?: string }
   | { kind: 'suggestion'; title: string; prompt: string; tldr: string }
   | { kind: 'followups'; options: string[] }
+  | { kind: 'findings'; findings: EngineFinding[]; scope?: string }
 
 type EngineStep = {
   id: string
@@ -198,6 +211,10 @@ type PermissionRequestPayload = {
   input: Record<string, unknown>
   promptSentence?: string
   blockedPath?: string
+  // Rule(s) the engine proposes for "Always allow" (PermissionUpdate[]). Left
+  // `unknown` on purpose: parsePermSuggestion validates the shape at the boundary
+  // — the payload is L1 and a rule string is rendered to the user verbatim.
+  suggestions?: unknown
 }
 
 const isChunk = (raw: unknown): raw is SessionChunkPayload => {
@@ -226,6 +243,18 @@ const isPermissionPayload = (raw: unknown): raw is PermissionRequestPayload => {
     typeof p.messageId === 'string' &&
     typeof p.requestId === 'string' &&
     typeof p.toolName === 'string'
+  )
+}
+// Tiers `sessions.permission` reports it actually wrote the rule to. L1 like every
+// other RPC answer: anything that is not one of the three known tiers is dropped, so
+// the card can only ever name a tier that exists.
+const PERM_RULE_SCOPES: readonly string[] = ['session', 'project', 'user']
+const savedScopesOf = (raw: unknown): PermRuleScope[] => {
+  if (!raw || typeof raw !== 'object') return []
+  const scopes = (raw as Record<string, unknown>).savedScopes
+  if (!Array.isArray(scopes)) return []
+  return scopes.filter(
+    (v): v is PermRuleScope => typeof v === 'string' && PERM_RULE_SCOPES.includes(v),
   )
 }
 const isBgStartedPayload = (raw: unknown): raw is BackgroundStartedPayload => {
@@ -918,9 +947,44 @@ export const useSessionsStore = defineStore('sessions', () => {
         eid: step.id,
       }
     }
+    if (s.kind === 'findings') {
+      // Re-validated here for the same reason the file list is: a step can arrive
+      // from a JSONL file on disk, and one malformed legacy row must not take the
+      // whole transcript render down with it.
+      const findings = (Array.isArray(s.findings) ? s.findings : [])
+        .map(engineFinding)
+        .filter((f): f is Finding => f !== null)
+      if (findings.length === 0) return null
+      return {
+        kind: 'findings',
+        findings,
+        ...(s.scope ? { scope: s.scope } : {}),
+        eid: step.id,
+      }
+    }
     const options = Array.isArray(s.options) ? s.options : []
     if (options.length === 0) return null
     return { kind: 'followups', options, eid: step.id }
+  }
+
+  // One engine finding → the ui block row. Null when the row carries no finding:
+  // an unknown severity or a missing location/summary/failure is a malformed
+  // record, and half a row is worse than none.
+  function engineFinding(raw: EngineFinding): Finding | null {
+    if (!raw || typeof raw !== 'object') return null
+    const { file, summary, failure, severity } = raw
+    if (!file || !summary || !failure) return null
+    if (severity !== 'blocker' && severity !== 'major' && severity !== 'minor') return null
+    const line = typeof raw.line === 'number' && raw.line >= 1 ? raw.line : undefined
+    return {
+      file,
+      ...(line != null ? { line } : {}),
+      severity,
+      summary,
+      failure,
+      ...(raw.verdict ? { verdict: raw.verdict } : {}),
+      linkable: raw.linkable === true,
+    }
   }
 
   // Engine TodoItem[] → ui Todo[]: carry the 3-state status; `done` mirrors completed.
@@ -3038,12 +3102,18 @@ export const useSessionsStore = defineStore('sessions', () => {
                 tw.target = ''
               }
             }
+            // The rule the gate card shows before "Always allow" comes from THIS
+            // event — it exists nowhere else. Park it on the block (rather than
+            // dropping it here, which forced the card to open its own bridge
+            // listener at module load just to see it).
+            const suggestion = parsePermSuggestion(p.suggestions)
             const block: PermBlock = {
               kind: 'perm',
               tool: p.toolName,
               target,
               status: 'pending',
               eid: p.requestId,
+              ...(suggestion ? { suggestion } : {}),
             }
             m.blocks.push(block)
           }
@@ -3192,9 +3262,16 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   // Persistence helpers (fire-and-forget; UI stays optimistic).
-  function pushRequest(method: string, params: unknown): void {
-    if (!useIpc) return
-    sc.request(method, params).catch((err) => console.warn(`[sessions] ${method} failed`, err))
+  // Fire-and-forget RPC. Most callers do not await it, so the rejection is swallowed
+  // HERE (an unhandled rejection would be the regression): the promise it returns
+  // never rejects. Callers that need the answer get the result, or `null` when there
+  // is no bridge / the call failed.
+  function pushRequest<T>(method: string, params: unknown): Promise<T | null> {
+    if (!useIpc) return Promise.resolve(null)
+    return sc.request<T>(method, params).catch((err) => {
+      console.warn(`[sessions] ${method} failed`, err)
+      return null
+    })
   }
   // Human-readable, deterministic engine id (YYMMDD-adjective-noun-tail). MUST stay
   // deterministic + synchronous — the `if (!s.engineId) s.engineId = engineIdFor(s.id)`
@@ -3888,14 +3965,24 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Allow / deny the pending permission prompt. msgIndex optional (the singleton
   // pendingPermission carries the requestId); the block status flips for display.
   // Resolve the pending permission. `alwaysAllow` (allow only) tells the engine to
-  // apply the request's permission suggestions as a session-scoped allowlist so the
-  // same tool stops prompting (sessions.permission `alwaysAllow`).
-  function setPermission(
+  // remember the request's own rule suggestion; `scope` picks the tier it is written
+  // to (session/project/user — ADR 0080), defaulting to the session on the engine
+  // side. The rule TEXT never crosses the boundary: the sidecar re-reads it from the
+  // parked suggestion, so a hand-made payload cannot write a rule of its own.
+  //
+  // Returns the tiers the rule was actually written to (empty when nothing was
+  // remembered — no allowlist asked for, no bridge, or the write failed), which is
+  // what the gate card reports back to the user. Everything the store owns (block
+  // status, pending prompt, session status) is settled SYNCHRONOUSLY before the
+  // await: the resumed turn can park the NEXT prompt while this RPC is in flight,
+  // and a pendingPermission cleared late would answer the wrong one.
+  async function setPermission(
     id: number,
     msgIndex: number,
     decision: 'allow' | 'deny',
     alwaysAllow = false,
-  ) {
+    scope?: PermRuleScope,
+  ): Promise<PermRuleScope[]> {
     const s = byId(id)
     const msg = s?.msgs[msgIndex]
     if (msg && msg.role === 'assistant') {
@@ -3905,17 +3992,18 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (block) block.status = decision === 'allow' ? 'allowed' : 'denied'
     }
     const pending = pendingPermission.value
-    if (!useIpc || !pending) return
+    if (!useIpc || !pending) return []
     pendingPermission.value = null
-    pushRequest('sessions.permission', {
+    const answering = pushRequest<{ savedScopes?: unknown }>('sessions.permission', {
       requestId: pending.requestId,
       decision,
-      ...(alwaysAllow ? { alwaysAllow: true } : {}),
+      ...(alwaysAllow ? { alwaysAllow: true, ...(scope ? { scope } : {}) } : {}),
     })
     // Turn resumes generating → flip status back to streaming (else it stays
     // "awaiting" / shows "Waiting…" even though the model is working again).
     const ss = byId(id)
     if (ss && ss.msgs.some((m) => m.role === 'assistant' && m.streaming)) ss.status = 'streaming'
+    return savedScopesOf(await answering)
   }
 
   // Approve a proposed plan: flip the block to approved + (IPC) send a continuation

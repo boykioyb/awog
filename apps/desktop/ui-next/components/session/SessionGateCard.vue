@@ -343,8 +343,9 @@ const cancelled = computed(
     (props.block.kind === 'question' || props.block.kind === 'perm') &&
     props.block.cancelled === true,
 )
-// Rule text + tier for this prompt (ADR 0080). Keyed by the block's engine request
-// id; the project id decides whether the "This project" tier is even available.
+// Rule text + tier for this prompt (ADR 0080). The rule rides on the block itself
+// (the store fills it from the permission-request event); the project id decides
+// whether the "This project" tier is even available.
 const {
   rule: ruleText,
   ruleMeaning,
@@ -357,34 +358,34 @@ const {
   savedOk,
   savedMessage,
   savedDowngraded,
-  grantAlways,
+  recordSave,
 } = useSessionPermissionRule(
-  () => (props.block.kind === 'perm' ? props.block.eid : undefined),
+  () => (props.block.kind === 'perm' ? props.block.suggestion : undefined),
   () => store.active?.project ?? '',
 )
 const onAllow = (): void => {
   if (!located.value || sessionId.value == null) return
-  store.setPermission(sessionId.value, msgIndex.value, 'allow')
+  void store.setPermission(sessionId.value, msgIndex.value, 'allow')
 }
-// Allow + remember. The scope-carrying answer goes out FIRST (the store's own
-// setPermission has no `scope` param yet, so it can only ever save to the session
-// tier), then the store runs for the local state it owns: block status, pending
-// prompt, session status. Its follow-up RPC is a deliberate no-op — the sidecar
-// already unparked this requestId, so it resolves nothing and, with the suggestion
-// consumed, can no longer persist a second copy of the rule.
-//
-// Order matters and is synchronous on purpose: awaiting the RPC first would leave
-// `pendingPermission` pointing at THIS request while the resumed turn could already
-// have parked the NEXT one, and the store call would then answer the wrong prompt.
-const onAllowAlways = (): void => {
+// Allow + remember, in ONE call: the store answers the prompt with the chosen tier
+// and hands back the tiers the sidecar actually wrote to. Everything read off the
+// store (session id, message index, scope) is read BEFORE the await — the resumed
+// turn may park the next prompt while this one is still in flight.
+const onAllowAlways = async (): Promise<void> => {
   if (!located.value || sessionId.value == null) return
-  const saving = grantAlways()
-  store.setPermission(sessionId.value, msgIndex.value, 'allow')
-  void saving
+  const requested = permScope.value
+  const written = await store.setPermission(
+    sessionId.value,
+    msgIndex.value,
+    'allow',
+    true,
+    requested,
+  )
+  recordSave(requested, written)
 }
 const onDeny = (): void => {
   if (!located.value || sessionId.value == null) return
-  store.setPermission(sessionId.value, msgIndex.value, 'deny')
+  void store.setPermission(sessionId.value, msgIndex.value, 'deny')
 }
 
 // ── Error ─────────────────────────────────────────────────────────────────────

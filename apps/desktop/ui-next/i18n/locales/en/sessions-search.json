@@ -16,5 +16,6 @@
   "sessionsSearch.archive.show": "Show archived sessions",
   "sessionsSearch.archive.badge": "Archived",
   "sessionsSearch.archive.notSaved": "This session has not been saved yet.",
-  "sessionsSearch.archive.failed": "Could not change the archived state."
+  "sessionsSearch.archive.failed": "Could not change the archived state.",
+  "sessionsSearch.archivedHidden": "{n} archived session(s) also match — turn on “Show archived sessions” to see them."
 }

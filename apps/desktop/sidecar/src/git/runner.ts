@@ -200,10 +200,14 @@ export async function runGit(
 // ─── Version probe (shared) ──────────────────────────────────────────────────
 // `git --version` once per process. Callers that need a capability gate (e.g.
 // `git worktree` needs 2.20+) compare against this instead of spawning their own
-// probe. The Git Manager's `git.checkInstalled` RPC keeps its own parse because
-// it also reports the raw string to the UI — this helper is the sidecar-internal
-// boolean gate. Never throws: an absent/unparsable git resolves to '' so every
-// capability check reads as "unsupported" and the caller degrades.
+// probe — including `git.checkInstalled`, which used to carry its own copy of the
+// parse and now reads the raw string off this one. Never throws: an absent or
+// unparsable git resolves to '' so every capability check reads as "unsupported"
+// and the caller degrades.
+//
+// Cached for the LIFETIME OF THE PROCESS: installing git while the app is running
+// will not clear the "git missing" banner until a restart. Acceptable today because
+// nothing re-probes on demand; if a retry button ever appears, this needs a reset.
 let versionProbe: Promise<string> | null = null
 
 const VERSION_RE = /git version (\d+\.\d+(?:\.\d+)?)/
