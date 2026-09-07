@@ -7,11 +7,13 @@
 // global hooks, ~/.awog/hooks/.runs/<projectId>/<id>.jsonl for project hooks
 // (project ids collide across projects — see runLogFile). Append-only, trimmed to
 // RUN_LOG_MAX on read. Project-tier trust decisions →
-// {project.path}/.awog/.trust.json (NOT inside the hook file — a config must not
-// vouch for itself, D-8). env `secret:KEY` refs reuse the MCP keychain helpers.
+// ~/.awog/hook-trust/<sha256(projectPath)>.json (NOT inside the hook file, and
+// NOT inside the repo — see the trust section below, D-8). env `secret:KEY` refs
+// reuse the MCP keychain helpers.
 
-import { mkdir, readdir, readFile, writeFile, chmod, rename, unlink, appendFile } from 'node:fs/promises'
-import { join, dirname } from 'node:path'
+import { mkdir, readdir, readFile, writeFile, chmod, rename, unlink, appendFile, stat } from 'node:fs/promises'
+import { join, dirname, isAbsolute, resolve } from 'node:path'
+import { createHash } from 'node:crypto'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { RpcError } from '../transport/rpc.js'
@@ -125,20 +127,91 @@ async function listFromDir(
 }
 
 // ─── Trust (project tier, D-8) ───────────────────────────────────────────────
+//
+// Bản ghi trust KHÔNG nằm trong repo (đính chính bảo mật 2026-09-07, cùng lớp
+// với finding F1 của ADR 0080).
+//
+// Sai ở đâu. D-8 đúng ý định — "một config không được tự phong tin cho chính
+// nó" — nên trust được tách khỏi hook file. Nhưng nó lại được đặt vào
+// `{project}/.awog/.trust.json`, tức CÙNG REPO với hook nó bảo lãnh
+// (`{project}/.awog/hooks/*.json`). Ai commit được hook độc hại thì commit luôn
+// bản ghi trust cho nó ⇒ clone repo là hook chạy shell không hỏi. Repo tự bảo
+// lãnh cho chính mình, chỉ cao hơn đúng một tầng. `.gitignore` của repo AWOG có
+// che `.awog/.trust.json`, nhưng đó chỉ là dogfooding — repo của người khác
+// không có dòng đó.
+//
+// Vá. Trust chuyển sang AWOG home, khoá theo băm đường dẫn tuyệt đối:
+//   ~/.awog/hook-trust/<sha256(resolve(projectPath)).hex[0..32]>.json
+// Y hệt tầng project của luật quyền (`sessions/permission-rules.ts`) — cố ý
+// không phát minh cách thứ hai:
+//   - ổn định theo đường dẫn (`/p`, `/p/`, `/p/src/..` ⇒ cùng một file);
+//   - tên file an toàn theo cấu tạo (chỉ `[0-9a-f]`) — hàm KHÔNG BAO GIỜ nhận
+//     đường dẫn thô làm tên file ⇒ không có đường path traversal;
+//   - một chiều: liệt kê thư mục không lộ danh sách project. `projectPath` ghi
+//     BÊN TRONG file chỉ để người đọc nhận ra file của dự án nào, không bao giờ
+//     dùng để giải ngược ra đường dẫn.
+// Ngữ nghĩa đổi từ "duyệt cho dự án này, đi theo repo" thành **"duyệt cho dự án
+// này TRÊN MÁY NÀY"**. Đổi tên / di chuyển thư mục project ⇒ khoá khác ⇒ trust
+// cũ hết hiệu lực và hook phải hỏi lại (fail-safe: thà hỏi thừa còn hơn chạy
+// shell của một thư mục khác).
 
-function trustFile(projectPath: string): string {
+const TRUST_DIR_NAME = sanitizeChild('hook-trust')
+
+// null khi đường dẫn không tuyệt đối — caller coi như "chưa duyệt gì" (fail-safe).
+export function hookTrustFile(projectPath: string): string | null {
+  if (!projectPath || !isAbsolute(projectPath)) return null
+  // `resolve` gộp `.`/`..` và bỏ dấu `/` thừa ⇒ nhiều cách viết cùng một project
+  // cho ra cùng một khoá.
+  const normalized = resolve(projectPath)
+  const key = createHash('sha256').update(normalized).digest('hex').slice(0, 32)
+  return join(awogHome(), TRUST_DIR_NAME, `${key}.json`)
+}
+
+// Vị trí CŨ (trong repo) — chỉ còn dùng để cảnh báo, không bao giờ để nạp.
+function legacyTrustFile(projectPath: string): string {
   return join(projectPath, '.awog', TRUST_FILE)
 }
 
-async function readTrustedIds(projectPath: string): Promise<Set<string>> {
+const LEGACY_TRUST_WARNED = new Set<string>()
+
+// Cảnh báo đúng một lần mỗi project mỗi tiến trình nếu còn bản ghi trust cũ nằm
+// trong repo. KHÔNG migrate: chính nội dung đó là thứ không đáng tin (bất kỳ ai
+// commit vào repo cũng ghi được), nên migrate im lặng chỉ là giữ nguyên lỗ hổng
+// dưới một cái tên khác. Ai thật sự muốn giữ quyết định đó phải tự duyệt lại —
+// tức là phải ĐỌC nó.
+async function warnLegacyTrustFile(projectPath: string): Promise<void> {
+  if (LEGACY_TRUST_WARNED.has(projectPath)) return
+  LEGACY_TRUST_WARNED.add(projectPath)
+  const legacy = legacyTrustFile(projectPath)
   try {
-    const raw = await readFile(trustFile(projectPath), 'utf8')
+    await stat(legacy)
+  } catch {
+    return
+  }
+  log.warn(
+    'hooks: in-repo trust file IGNORED (a trust record committed to a repo is untrusted); hook trust now lives in AWOG home — re-approve the hooks to grant it again',
+    { legacy, current: hookTrustFile(projectPath) },
+  )
+}
+
+async function readTrustedIds(projectPath: string): Promise<Set<string>> {
+  await warnLegacyTrustFile(projectPath)
+  const file = hookTrustFile(projectPath)
+  if (!file) return new Set()
+  try {
+    const raw = await readFile(file, 'utf8')
     const obj = JSON.parse(raw) as { hooks?: unknown }
     const ids = Array.isArray(obj.hooks) ? obj.hooks.filter((x): x is string => typeof x === 'string') : []
     return new Set(ids)
   } catch (err) {
+    // File hỏng ⇒ coi như CHƯA duyệt gì, không ném: hỏng ở đây fail-safe theo
+    // chiều đóng (hook không chạy, người dùng duyệt lại), khác file luật quyền
+    // nơi mất nội dung là mất DENY — nên ở đây không cần cấm ghi đè như F2.
     if (!isMissing(err)) {
-      log.warn('hooks: failed to read trust file', { projectPath, err: err instanceof Error ? err.message : String(err) })
+      log.warn('hooks: failed to read trust file, treating the project as untrusted', {
+        file,
+        err: err instanceof Error ? err.message : String(err),
+      })
     }
     return new Set()
   }
@@ -148,12 +221,17 @@ async function readTrustedIds(projectPath: string): Promise<Set<string>> {
 export async function setHookTrust(projectId: string, hookIds: string[]): Promise<void> {
   const project = await loadProject(projectId)
   if (!project) throw new RpcError(-32602, `Project not found: ${projectId}`)
+  const file = hookTrustFile(project.path)
+  if (!file) throw new RpcError(-32602, `Project path is not absolute: ${projectId}`)
   const existing = await readTrustedIds(project.path)
   hookIds.forEach((id) => existing.add(id))
-  const file = trustFile(project.path)
-  await mkdir(join(project.path, '.awog'), { recursive: true })
+  await mkdir(dirname(file), { recursive: true, mode: 0o700 })
+  // `projectPath` là ghi chú cho người mở thư mục băm; khoá luôn tính lại từ
+  // đường dẫn thật lúc đọc, không bao giờ giải ngược từ field này.
+  const doc = { version: 1, projectPath: project.path, hooks: [...existing] }
   const tmp = `${file}.tmp.${process.pid}`
-  await writeFile(tmp, JSON.stringify({ hooks: [...existing] }, null, 2), 'utf8')
+  await writeFile(tmp, JSON.stringify(doc, null, 2), 'utf8')
+  await chmod(tmp, 0o600)
   await rename(tmp, file)
 }
 

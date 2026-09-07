@@ -165,7 +165,9 @@ Payload là JSON với schema cố định per event. Ví dụ `artifact.before-
 
 Recent runs (audit log) → `~/.awog/hooks/.runs/<hook-id>.jsonl` (rolling, giữ 1000 dòng, không commit Git).
 
-Quyết định trust cho hook project-tier → `{project.path}/.awog/.trust.json` ([ADR 0032 D-8](../decisions/0032-hook-execution-engine-ipc-contract.md)).
+Quyết định trust cho hook project-tier → **`~/.awog/hook-trust/<sha256(resolve(project.path))[0..32]>.json`** ([ADR 0032 D-8](../decisions/0032-hook-execution-engine-ipc-contract.md) + [Đính chính 2026-09-07](../decisions/0032-hook-execution-engine-ipc-contract.md#đính-chính-2026-09-07--bản-ghi-trust-không-được-nằm-trong-repo)).
+
+> **Trust KHÔNG nằm trong repo.** Trước 2026-09-07 file này là `{project.path}/.awog/.trust.json` — cùng repo với chính hook nó bảo lãnh, nên ai commit được hook độc hại thì commit luôn bản ghi trust cho nó. Giờ trust sống trong AWOG home, khoá theo băm đường dẫn tuyệt đối của project: nghĩa là **"đã duyệt cho dự án này TRÊN MÁY NÀY"**, không bao giờ đi theo git sang máy người khác. Đổi tên / di chuyển thư mục project ⇒ khoá khác ⇒ hook phải được duyệt lại (fail-safe). File `.trust.json` cũ còn sót trong repo **bị bỏ qua, không migrate** — chỉ `log.warn` một lần mỗi project mỗi tiến trình, nêu cả đường dẫn cũ lẫn mới.
 
 Script tự viết (Node, Python, shell) đặt ở `{project}/.awog/hooks/` — user tự quản, AWOG không tạo template tự động.
 

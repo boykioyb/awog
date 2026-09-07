@@ -31,7 +31,10 @@ Thumbs.db
 .claude/projects/
 
 # AWOG local runtime state (dogfooding AWOG on its own repo).
-# .trust.json records per-machine hook trust grants — never share it.
+# Bản ghi trust của hook ĐÃ chuyển sang `~/.awog/hook-trust/` — giữ dòng dưới chỉ
+# để file cũ (nếu còn) không lọt vào commit. Dòng này che được repo NÀY thôi: mọi
+# project khác của người dùng không có nó, và đó chính là lý do trust không được
+# phép nằm trong repo nữa (xem đính chính ADR 0032).
 .awog/.trust.json
 # Thư mục nháp của agent (quy ước scratchpad) — không bao giờ commit.
 .awog/scratch/
