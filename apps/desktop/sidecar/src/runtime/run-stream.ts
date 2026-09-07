@@ -53,7 +53,7 @@ import {
   VERIFY_PROMPT,
 } from './prompts.js'
 import { makeConfabulationFollowUp } from './confabulation-guard.js'
-import { createTaskTool } from './tools/task-tool.js'
+import { createSubagentTools, type SubagentToolset } from './tools/task-tool.js'
 import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
 import { createSshTools } from './tools/ssh-tools.js'
 import { listHosts } from '../ssh/store.js'
@@ -325,6 +325,9 @@ export async function runStreamPi(
   // agents, so a stray Task call gets a graceful result instead of the
   // "Tool Task not found" error. Pushed BEFORE buildContext so it lands in
   // context.tools.
+  // Held so the turn can stop every background subagent it spawned (ADR 0083):
+  // a subagent may not outlive the turn that started it.
+  let subagents: SubagentToolset | undefined
   const taskAllowed =
     !inPlanMode &&
     isToolAllowed('Task', {
@@ -341,33 +344,42 @@ export async function runStreamPi(
         err: err instanceof Error ? err.message : String(err),
       })
     }
-    tools.push(
-      createTaskTool({
-        agents,
-        cwd: args.cwd ?? process.cwd(),
-        parentSettings: args.settings,
-        // Inherited by a general-purpose subagent when the model omits
-        // subagent_type (craft-style): parent base prompt + tool whitelist.
-        ...(args.systemPrompt ? { parentSystemPrompt: args.systemPrompt } : {}),
-        ...(args.allowedTools ? { parentAllowedTools: args.allowedTools } : {}),
-        ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
-        // Subagent inherits this turn's resolved MCP servers (session whitelist +
-        // secrets already applied) so it can reach the same servers the session can.
-        ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
-        // Same for the session's api sources (ADR 0060 P3): the subagent reaches
-        // every api tool the session can.
-        ...(args.apiSources ? { parentApiSources: args.apiSources } : {}),
-        // Chat subagents reuse the parent permission gate: in 'ask' mode their
-        // writes/exec still prompt the user (depth-1 subagent, same session).
-        beforeToolCall,
-        // Inherit the session's co-author setting for subagent-made commits.
-        ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
-        makeChildSink: (parentToolCallId) => {
-          const child = createEventAdapter(cb, { parentId: parentToolCallId })
-          return { emit: child.handle, text: () => child.result().text }
-        },
-      }),
-    )
+    subagents = createSubagentTools({
+      agents,
+      cwd: args.cwd ?? process.cwd(),
+      parentSettings: args.settings,
+      // Inherited by a general-purpose subagent when the model omits
+      // subagent_type (craft-style): parent base prompt + tool whitelist.
+      ...(args.systemPrompt ? { parentSystemPrompt: args.systemPrompt } : {}),
+      ...(args.allowedTools ? { parentAllowedTools: args.allowedTools } : {}),
+      ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+      // Subagent inherits this turn's resolved MCP servers (session whitelist +
+      // secrets already applied) so it can reach the same servers the session can.
+      ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
+      // Same for the session's api sources (ADR 0060 P3): the subagent reaches
+      // every api tool the session can.
+      ...(args.apiSources ? { parentApiSources: args.apiSources } : {}),
+      // Chat subagents reuse the parent permission gate: in 'ask' mode their
+      // writes/exec still prompt the user (depth-1 subagent, same session).
+      beforeToolCall,
+      // Inherit the session's co-author setting for subagent-made commits.
+      ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
+      // ADR 0083: chat (and only chat) may run a subagent in the background —
+      // the turn stays open while the model does other work and collects it with
+      // TaskOutput. Scoped to this turn: disposeAll() in the finally below stops
+      // anything still running, so a session never carries a live subagent into
+      // its next turn (one turn at a time stays true).
+      allowBackground: true,
+      ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+      // `subagent_type: "fork"` replays a capped tail of this transcript into the
+      // subagent (task-tool.ts trims it).
+      parentHistory: args.history,
+      makeChildSink: (parentToolCallId) => {
+        const child = createEventAdapter(cb, { parentId: parentToolCallId })
+        return { emit: child.handle, text: () => child.result().text }
+      },
+    })
+    tools.push(...subagents.tools)
   }
 
   // RunWorkflow tool (ADR 0055): lets the model spawn a background Task from this
@@ -632,6 +644,10 @@ export async function runStreamPi(
     )
   } catch (err) {
     throw mapErrorToRpc(err)
+  } finally {
+    // The turn is over: nothing it spawned may still be running (ADR 0083). Also
+    // releases the UI's "stop this subagent" hook for this session.
+    subagents?.disposeAll()
   }
 
   // Pi swallows a mid-stream abort into a graceful stopReason 'aborted' instead

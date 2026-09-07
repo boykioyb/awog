@@ -16,7 +16,10 @@ Tool `Task` nhận:
 |---|---|
 | `description` | Nhãn ngắn (3-5 từ) để hiển thị |
 | `prompt` | Toàn bộ việc giao cho subagent (self-contained — subagent chạy autonomous, không hỏi lại) |
-| `subagent_type` | **Tùy chọn.** Tên agent muốn gọi (model chọn từ menu trong `description`). **Bỏ trống** → chạy subagent **general-purpose** kế thừa cấu hình của turn cha |
+| `subagent_type` | **Tùy chọn.** Tên agent muốn gọi (model chọn từ menu trong `description`). **Bỏ trống** → chạy subagent **general-purpose** kế thừa cấu hình của turn cha. `"fork"` → general-purpose **+ đuôi transcript của phiên cha** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §d) |
+| `model` | **Tùy chọn.** TIER model cho lần gọi này: `opus \| sonnet \| haiku \| fable \| inherit`. Thắng model trong AGENT.md. Bỏ qua với `fork`. **Không** nhận model id tự do ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §a) |
+| `run_in_background` | **Tùy chọn, chat only.** `true` → trả về ngay một `task_id`, subagent chạy nền trong lượt; thu kết quả bằng `TaskOutput` ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §b) |
+| `name` | **Tùy chọn.** Tên gọi để địa chỉ hoá subagent trong `TaskOutput` / `TaskStop` / `SendMessage` |
 
 `description` của tool **liệt kê** các agent trong scope (tên + mô tả 1 dòng) để model chọn đúng `subagent_type`.
 
@@ -57,6 +60,35 @@ Tool `Task` nhận:
 
 → Không bao giờ còn `Tool Task not found`, kể cả khi chưa có agent nào.
 
+## Ngang bằng với nhánh Claude SDK ([ADR 0083](../decisions/0083-pi-subagent-parity.md))
+
+AWOG chọn runtime **theo provider** ([ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)). `AgentInput` của Claude Agent SDK có 5 khả năng mà nhánh Pi thiếu; bản này bù 4:
+
+| Khả năng | Nhánh Pi hiện tại |
+|---|---|
+| a. Model tại call site | ✅ `model` = TIER đóng, resolve theo account ([model-tier.ts](../../apps/desktop/sidecar/src/runtime/subagents/model-tier.ts)) |
+| b. Chạy nền | ✅ `run_in_background` + `TaskOutput` / `TaskStop` — **chat only, sống đúng bằng lượt cha** |
+| c. Worktree cô lập | ❌ **Chưa làm** — xem [ADR 0083 §c](../decisions/0083-pi-subagent-parity.md) (vòng đời lệch `tasks/worktree.ts` + cần tech-lead chốt ranh giới sản phẩm) |
+| d. Fork context | ✅ `subagent_type: "fork"` + trần 60k ký tự ([fork-history.ts](../../apps/desktop/sidecar/src/runtime/subagents/fork-history.ts)) |
+| e. Nhắn tiếp | ✅ `SendMessage({ to, message })` — nối vào **đúng context cũ**, chỉ khi subagent đã xong lượt |
+
+### Ba tool đi kèm (chat only)
+
+| Tool | Tham số | Hành vi |
+|---|---|---|
+| `TaskOutput` | `task_id`, `block?` (mặc định true), `timeout?` (mặc định 120s, tối đa 600s) | Thu kết quả subagent nền. Hết giờ mà chưa xong → trả trạng thái `running`, **không** huỷ subagent |
+| `TaskStop` | `task_id` | Dừng một subagent nền. Dừng cái đã xong là vô hại |
+| `SendMessage` | `to`, `message` | Chạy thêm một lượt trên chính `AgentContext` cũ của subagent → nó thấy lại mọi tool call của lượt trước. Đang chạy → bảo thu bằng `TaskOutput` trước; đã chết → từ chối |
+
+Ba tool này là **một phần của khả năng `Task`**: chỉ đăng ký khi `Task` được phép, theo đúng allowance của `Task`. Tách allowance riêng sẽ đẻ ra trạng thái "spawn được subagent nền nhưng không bao giờ thu được kết quả".
+
+### Vòng đời + trần
+
+- Subagent nền **chết khi lượt cha kết thúc** (`disposeAll()` ở `finally` của vòng lặp trong [run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts)), và chết ngay khi người dùng bấm Stop (signal của lượt được nối vào từng subagent). Lý do: một phiên chỉ có **1 lượt tại một thời điểm** — subagent sống qua lượt sẽ gọi tool khi không còn lượt nào để hỏi quyền. Nhánh Claude SDK hứa với model đúng điều này.
+- Trần: 25 spawn/lượt · **4** subagent nền song song · **30 phút** cho một subagent nền · ngân sách lượt (`withTurnBudget`) vẫn đếm tool call của subagent vì nó đi qua đúng `beforeToolCall` của cha.
+- Task node (`invoke.ts`) **luôn chạy subagent đồng bộ**: one-shot, không có chỗ nào thu kết quả nền. Model xin chạy nền ở đó → degrade sang đồng bộ + ghi rõ trong kết quả.
+- Subagent nền hiện thành **chip nền** qua chính `sessions/bg-registry.ts` (đường `registerExternalBackground` nhánh Claude SDK đang dùng) nên người dùng thấy một danh sách duy nhất và bấm dừng được. Bản đồng bộ không tạo chip.
+
 ## Stub các built-in tool khác
 
 Cùng họ lỗi với `Task`: dưới OAuth model còn gọi `TodoWrite`/`WebSearch`/`WebFetch`. Đăng ký stub graceful ([builtin-stubs.ts](../../apps/desktop/sidecar/src/runtime/tools/builtin-stubs.ts)) trong **base toolset** (`createAwogToolDefinitions` → có ở chat + task + subagent, filter theo allowedTools/disabledTools):
@@ -88,14 +120,18 @@ Không đổi — hạ tầng đã có sẵn:
 
 | File | Thay đổi |
 |---|---|
-| [runtime/tools/task-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/task-tool.ts) | **Mới** — `createTaskTool` + `spawnSubagent` |
+| [runtime/tools/task-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/task-tool.ts) | **Mới** — `createTaskTool` + `prepareSubagent`; [ADR 0083](../decisions/0083-pi-subagent-parity.md) thêm `createSubagentTools` (Task + TaskOutput + TaskStop + SendMessage) |
+| [runtime/subagents/model-tier.ts](../../apps/desktop/sidecar/src/runtime/subagents/model-tier.ts) | **Mới** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §a) — resolve TIER → model id theo account (hàm thuần) |
+| [runtime/subagents/registry.ts](../../apps/desktop/sidecar/src/runtime/subagents/registry.ts) | **Mới** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §b/§e) — sổ đăng ký subagent theo lượt: nền, trần đồng hồ, stop, nhắn tiếp |
+| [runtime/subagents/fork-history.ts](../../apps/desktop/sidecar/src/runtime/subagents/fork-history.ts) | **Mới** ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §d) — cắt đuôi transcript cho `fork` |
+| [runtime/__tests__/subagents.test.ts](../../apps/desktop/sidecar/src/runtime/__tests__/subagents.test.ts) | **Mới** — test tier / fork-trim / vòng đời registry |
 | [runtime/tools/builtin-stubs.ts](../../apps/desktop/sidecar/src/runtime/tools/builtin-stubs.ts) | **Mới** — stub `TodoWrite`/`WebSearch` (WebFetch tách ra tool thật, [ADR 0042](../decisions/0042-webfetch-tool-ssrf-guarded.md)) |
 | [runtime/tools/web-fetch-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/web-fetch-tool.ts) | **Mới** ([ADR 0042](../decisions/0042-webfetch-tool-ssrf-guarded.md)) — `createWebFetchTool` thật, SSRF-guarded |
 | [runtime/tools/index.ts](../../apps/desktop/sidecar/src/runtime/tools/index.ts) | Export `isToolAllowed`; thêm stub + WebFetch vào base toolset |
 | [sessions/step-mapper.ts](../../apps/desktop/sidecar/src/sessions/step-mapper.ts) | Thêm `stepFromTodos` (TodoWrite → step `note`) |
 | [runtime/event-adapter.ts](../../apps/desktop/sidecar/src/runtime/event-adapter.ts) | Thêm `parentId` option (stamp step + nén onChunk khi child); special-case TodoWrite |
 | [runtime/invoke.ts](../../apps/desktop/sidecar/src/runtime/invoke.ts) | `createInvokeAdapter(cb, parentId)` + wire Task tool |
-| [runtime/run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts) | Wire Task tool (non-plan), thread `projectId` |
+| [runtime/run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts) | Wire Task tool (non-plan), thread `projectId`; [ADR 0083](../decisions/0083-pi-subagent-parity.md): dùng `createSubagentTools` + `disposeAll()` ở `finally` |
 | [sessions/runner.ts](../../apps/desktop/sidecar/src/sessions/runner.ts) | `RunNonStreamArgs.projectId` |
 | [methods/sessions.send-message.ts](../../apps/desktop/sidecar/src/methods/sessions.send-message.ts) | Truyền `projectId` |
 | [sdk/invoke.ts](../../apps/desktop/sidecar/src/sdk/invoke.ts) | `InvokeArgs.projectIds` + `connectionId` |
@@ -105,11 +141,12 @@ Không đổi — hạ tầng đã có sẵn:
 
 - **API key không rời sidecar:** subagent resolve credential trong sidecar; key không vào step/trace/IPC payload.
 - **Path/Git scope:** subagent fs/bash dùng cùng `cwd = workspaceRoot` + `assertInsideWorkspace`.
-- **Budget:** depth = 1 + cap 25 spawn/turn. Nhiều `Task` trong một turn fan-out **song song** (xem [ADR 0030 §Cập nhật 2026-06-17](../decisions/0030-subagent-task-tool.md#cập-nhật-2026-06-17--song-song-hoá-task)); tool **bên trong** mỗi subagent vẫn chạy tuần tự.
+- **Budget:** depth = 1 + cap 25 spawn/turn + 4 subagent nền song song + 30 phút/subagent nền ([ADR 0083](../decisions/0083-pi-subagent-parity.md) §b). Nhiều `Task` trong một turn fan-out **song song** (xem [ADR 0030 §Cập nhật 2026-06-17](../decisions/0030-subagent-task-tool.md#cập-nhật-2026-06-17--song-song-hoá-task)); tool **bên trong** mỗi subagent vẫn chạy tuần tự.
 - **IPC boundary / no eval / no SSRF:** không phát sinh surface mới (tái dùng tool + MCP hiện có).
 
 ## Việc còn lại
 
 - Cập nhật chú thích `<mcp-preference>` (subagent **nay có** MCP riêng theo AGENT.md).
 - (Tùy chọn) surface text tổng kết của subagent thành 1 step `note` nested.
-- infosec review path spawn lồng + credential per-subagent.
+- infosec review path spawn lồng + credential per-subagent (bao gồm prompt quyền của subagent **nền** — nó gọi tool khi người dùng đang đọc thứ khác).
+- **§c worktree cô lập** ([ADR 0083](../decisions/0083-pi-subagent-parity.md)): cần tech-lead chốt "AWOG được tự tạo branch/commit từ một lượt chat không?", rồi tổng quát hoá `tasks/worktree.ts` từ khoá-theo-task sang khoá-theo-owner. **Không** fork bản worktree thứ hai.

@@ -1,6 +1,6 @@
-// The `Task` subagent tool for the Pi runtime (ADR 0030). Lets the model
-// delegate a focused job to a named AWOG agent, which runs as a nested
-// `runAgentLoop` to completion and returns its final text as the tool result.
+// The `Task` subagent tool for the Pi runtime (ADR 0030, extended by ADR 0083).
+// Lets the model delegate a focused job to a named AWOG agent, which runs as a
+// nested `runAgentLoop` and returns its final text as the tool result.
 //
 // Why this exists: under OAuth the model is conditioned as Claude Code and emits
 // `Task` calls; without this tool the loop returns "Tool Task not found". This
@@ -16,8 +16,26 @@
 //   - Streaming + the permission gate are caller-specific and injected via
 //     `makeChildSink` + `beforeToolCall` so chat (run-stream) and tasks (invoke)
 //     reuse the same core.
+//
+// Parity with the Claude SDK branch (ADR 0083). Its `AgentInput` carries four
+// call-site controls the Pi branch used to lack; three of them live here:
+//   - `model`: a fixed TIER (opus/sonnet/haiku/fable/inherit), never a free-form
+//     id — see subagents/model-tier.ts for why.
+//   - `run_in_background` + `name`: the subagent runs without blocking the tool
+//     call; the model collects it with `TaskOutput` and can follow up with
+//     `SendMessage`. Turn-scoped lifetime (subagents/registry.ts) — chat only.
+//   - `subagent_type: "fork"`: a general-purpose subagent that also inherits a
+//     CAPPED slice of the parent transcript, not just the parent's config.
+// Isolation (`isolation: "worktree"`) is deliberately NOT implemented here — see
+// ADR 0083 §c.
 
-import { runAgentLoop, type AgentEvent, type AgentTool } from '@earendil-works/pi-agent-core'
+import {
+  runAgentLoop,
+  type AgentContext,
+  type AgentEvent,
+  type AgentMessage,
+  type AgentTool,
+} from '@earendil-works/pi-agent-core'
 import { Type, type Message } from '@earendil-works/pi-ai'
 // pi 0.84: runAgentLoop takes the stream function explicitly (see run-stream.ts).
 import { streamSimple } from '@earendil-works/pi-ai/compat'
@@ -26,7 +44,7 @@ import { recordCodexUsageFromHeaders } from '../../providers/openai/usage.js'
 import { confirmOverageOrStop } from '../overage-guard.js'
 import { resolveAgentContext, type ResolvedAgentContext } from '../../tasks/agent-context.js'
 import { log } from '../../util/logger.js'
-import type { Agent, SessionSettings } from '../../types/shared.js'
+import type { Agent, SessionMessage, SessionSettings } from '../../types/shared.js'
 import type { ApiSourcesConfig, McpServersConfig } from '../permission-types.js'
 import { resolveModel } from '../model-resolver.js'
 import { buildContext } from '../context-builder.js'
@@ -44,11 +62,40 @@ import { buildOneShotContextBlock } from '../../context/environment.js'
 import { CO_AUTHOR_INSTRUCTION } from '../../git/co-author.js'
 import { toReasoning } from '../thinking.js'
 import type { BeforeToolCall } from '../permission.js'
+import {
+  isSubagentModelTier,
+  resolveSubagentModel,
+  SUBAGENT_MODEL_TIERS_TEXT,
+  type SubagentModelTier,
+} from '../subagents/model-tier.js'
+import { SubagentRegistry, type SubagentSnapshot } from '../subagents/registry.js'
+import { trimForkHistory } from '../subagents/fork-history.js'
+import {
+  clearExternalKiller,
+  registerExternalBackground,
+  setExternalKiller,
+  settleExternalBackground,
+} from '../../sessions/bg-registry.js'
 
 // Per-turn safety cap on how many subagents a single parent turn may spawn.
 // Prevents a runaway loop from fanning out indefinitely (depth is already
 // capped at 1; this caps breadth).
 const MAX_SUBAGENTS_PER_TURN = 25
+// How many BACKGROUND subagents may run at once. Same number as the background
+// shell cap (sessions/bg-registry.ts) and the task scheduler cap — one mental
+// model for "how wide does AWOG fan out on its own".
+const MAX_BACKGROUND_SUBAGENTS = 4
+// Wall-clock cap for ONE background subagent. It runs with nobody watching it,
+// so it needs a ceiling of its own; the turn budget (withTurnBudget) still caps
+// the turn as a whole. Mirrors the task-budget shape (tasks/budget.ts) at a
+// smaller scale — a background subagent is a helper, not a batch job.
+const BACKGROUND_SUBAGENT_TIMEOUT_MS = 30 * 60 * 1000
+// `TaskOutput({ block: true })` default + maximum wait. The cap matters: a model
+// that asks to block for an hour would otherwise sit on the turn doing nothing.
+const TASK_OUTPUT_DEFAULT_WAIT_MS = 120_000
+const TASK_OUTPUT_MAX_WAIT_MS = 600_000
+// `subagent_type` that means "same job, my context" instead of a named agent.
+const FORK_SUBAGENT_TYPE = 'fork'
 
 const TaskParams = Type.Object({
   description: Type.String({
@@ -69,7 +116,28 @@ const TaskParams = Type.Object({
   subagent_type: Type.Optional(
     Type.String({
       description:
-        'The name of the subagent to launch (see the list of available types above). Omit to run a general-purpose subagent that inherits the current agent, tools, and model.',
+        'The name of the subagent to launch (see the list of available types above). Omit to run a general-purpose subagent that inherits the current agent, tools, and model. Pass "fork" to also inherit the recent conversation.',
+    }),
+  ),
+  // Typed as a plain string (not a union) for the same reason subagent_type is
+  // optional: a schema hard-fail happens BEFORE execute() and surfaces as an
+  // unactionable validator error, while execute() can bounce back a readable
+  // list of valid tiers.
+  model: Type.Optional(
+    Type.String({
+      description: `Optional model tier for this subagent: ${SUBAGENT_MODEL_TIERS_TEXT}. Takes precedence over the agent's own model. Omit to use the agent's model, else the parent's. Ignored for subagent_type "fork" (a fork always runs the parent's model).`,
+    }),
+  ),
+  run_in_background: Type.Optional(
+    Type.Boolean({
+      description:
+        'Run the subagent in the background and return immediately with a task_id. Use it when other work can usefully happen while it runs; collect the result with TaskOutput BEFORE you finish your turn — background subagents do not survive the end of the turn.',
+    }),
+  ),
+  name: Type.Optional(
+    Type.String({
+      description:
+        'Optional short name for this subagent. Makes it addressable by name in TaskOutput / TaskStop / SendMessage.',
     }),
   ),
 })
@@ -77,6 +145,13 @@ const TaskParams = Type.Object({
 interface TaskDetails {
   subagentType: string
   description: string
+  // Address of the spawned subagent within this turn (ADR 0083) — also what the
+  // UI chip is keyed by for a background one.
+  taskId?: string
+  background?: boolean
+  // Model the subagent actually ran on (after tier resolution).
+  model?: string
+  isError?: true
 }
 
 // Caller-injected sink for a single subagent run: receives the nested Pi event
@@ -128,6 +203,20 @@ export interface TaskToolDeps {
   // Build the per-run event sink. `parentToolCallId` is the Task call's id so the
   // sink can tag every nested step/trace with it for UI nesting.
   makeChildSink: (parentToolCallId: string) => SubagentSink
+  // ── ADR 0083 ────────────────────────────────────────────────────────────
+  // May a subagent run in the background (and therefore may TaskOutput /
+  // TaskStop / SendMessage be offered)? Chat only. A task node is a one-shot:
+  // nothing of it survives its end, so a background subagent there is a result
+  // that can never be collected — the Claude SDK branch forces tasks synchronous
+  // for exactly this reason (runtime/claude-sdk/shared.ts).
+  allowBackground?: boolean
+  // Session id, ONLY to mirror background subagents as UI chips via the shared
+  // background registry (same list the Claude SDK branch feeds). Absent → no chips.
+  sessionId?: string
+  // The parent session transcript, used by `subagent_type: "fork"`. A capped tail
+  // is replayed into the fork's context; absent → a fork degrades to a plain
+  // general-purpose subagent.
+  parentHistory?: SessionMessage[]
 }
 
 // Match a model-supplied `subagent_type` to a concrete agent: exact id, then
@@ -143,21 +232,24 @@ function matchAgent(agents: Agent[], subagentType: string): Agent | undefined {
 
 // Render the available-subagents menu into the tool description so the model
 // picks a valid `subagent_type`. Empty list → a note that none are configured.
-function describeTool(agents: Agent[]): string {
+function describeTool(agents: Agent[], allowBackground: boolean): string {
   const intro =
     'Launch a specialized AWOG subagent to handle a focused, multi-step task autonomously. ' +
-    'The subagent runs to completion with its own system prompt, tools, and MCP servers, then returns its final message as the result. ' +
+    'The subagent runs with its own system prompt, tools, and MCP servers, then returns its final message as the result. ' +
     'It cannot launch further subagents. Provide a short `description` and a detailed self-contained `prompt`. ' +
-    'Pass `subagent_type` to pick one of the agents below; omit it to run a general-purpose subagent that inherits the current agent, tools, and model.'
+    'Pass `subagent_type` to pick one of the agents below; omit it to run a general-purpose subagent that inherits the current agent, tools, and model; pass "fork" to run a general-purpose subagent that ALSO inherits the recent conversation (use it when the job only makes sense with what we just discussed).'
+  const background = allowBackground
+    ? '\n\nSet `run_in_background: true` to keep working while it runs — then collect its result with `TaskOutput` before you finish your turn (background subagents are stopped when the turn ends). Give it a `name` to address it later with `TaskOutput`, `TaskStop` or `SendMessage`.'
+    : ''
   if (agents.length === 0) {
-    return `${intro}\n\n(No named subagents are configured in this workspace — calling this runs a general-purpose subagent that inherits the current agent, tools, and model.)`
+    return `${intro}${background}\n\n(No named subagents are configured in this workspace — calling this runs a general-purpose subagent that inherits the current agent, tools, and model.)`
   }
   const menu = agents
     .map(
       (a) => `- ${a.name}: ${a.description?.split('\n')[0]?.trim() || a.role || 'general-purpose'}`,
     )
     .join('\n')
-  return `${intro}\n\nAvailable subagent_type values:\n${menu}`
+  return `${intro}${background}\n\nAvailable subagent_type values:\n${menu}`
 }
 
 // Union the parent turn's resolved MCP servers with the subagent's own. Returns
@@ -203,22 +295,38 @@ function subagentSettings(
   return settings
 }
 
-// Run one subagent end to end: resolve its config + credential + model, build a
-// Task-free toolset, run a nested agent loop streaming through the sink, and
-// return its final text. Throws on credential/model failure — execute() maps it.
-async function spawnSubagent(
+// One prepared subagent: its config is resolved and its toolset built, but no
+// LLM call has happened yet. `run` can be called more than once — the Pi context
+// accumulates, so a follow-up (SendMessage) continues the same conversation
+// instead of starting a stranger with the same name.
+interface PreparedSubagent {
+  label: string
+  modelId: string
+  // Set when a requested model tier could not be honoured (see model-tier.ts).
+  note?: string
+  run: (prompt: string, signal?: AbortSignal) => Promise<string>
+}
+
+interface PrepareOptions {
+  tier?: SubagentModelTier
+  fork: boolean
+}
+
+// Resolve a subagent's config + credential + model and build its Task-free
+// toolset. Throws on credential/model failure — execute() maps it.
+async function prepareSubagent(
   deps: TaskToolDeps,
   parentToolCallId: string,
   agent: Agent | null,
-  prompt: string,
-  signal?: AbortSignal,
-): Promise<string> {
+  opts: PrepareOptions,
+  setupSignal?: AbortSignal,
+): Promise<PreparedSubagent> {
   // A named agent resolves its AGENT.md context. A null agent (the model omitted
-  // `subagent_type`) builds a general-purpose context that inherits the parent
-  // turn: no provider/model/account (so subagentSettings falls back to the
-  // parent) and no own MCP whitelist (the parent's servers arrive via
-  // parentMcpServers below).
-  const label = agent ? agent.name : 'general-purpose'
+  // `subagent_type`, or asked for a fork) builds a general-purpose context that
+  // inherits the parent turn: no provider/model/account (so subagentSettings
+  // falls back to the parent) and no own MCP whitelist (the parent's servers
+  // arrive via parentMcpServers below).
+  const label = agent ? agent.name : opts.fork ? FORK_SUBAGENT_TYPE : 'general-purpose'
   const agentCtx: ResolvedAgentContext = agent
     ? await resolveAgentContext(
         {
@@ -234,8 +342,15 @@ async function spawnSubagent(
         ...(deps.parentAllowedTools ? { allowedTools: deps.parentAllowedTools } : {}),
       }
 
-  const settings = subagentSettings(deps.parentSettings, agentCtx)
-  const { account } = await resolveCredential(settings.provider, settings.accountId)
+  const inherited = subagentSettings(deps.parentSettings, agentCtx)
+  const { account } = await resolveCredential(inherited.provider, inherited.accountId)
+  // Call-site model tier (ADR 0083 §a). Resolved against THIS account so the tier
+  // can only ever land on a model the account really runs; an unhonourable tier
+  // keeps the inherited model and says so in the result.
+  const tiered = opts.tier
+    ? resolveSubagentModel(opts.tier, inherited.modelId, inherited.provider, account)
+    : undefined
+  const settings: SessionSettings = tiered ? { ...inherited, modelId: tiered.modelId } : inherited
   const { model, getApiKey } = resolveModel(settings, account)
 
   // MCP set = the parent turn's resolved servers ∪ the subagent's own
@@ -275,7 +390,7 @@ async function spawnSubagent(
       ...(agentCtx.sourceToolPatterns ? { sourceToolPatterns: agentCtx.sourceToolPatterns } : {}),
       ...(agentCtx.sourceApiEndpoints ? { sourceApiEndpoints: agentCtx.sourceApiEndpoints } : {}),
     },
-    signal,
+    setupSignal,
   )
 
   // Surface attached-but-failed MCP servers to the subagent too, so a delegated
@@ -315,63 +430,106 @@ async function spawnSubagent(
       .filter((p): p is string => typeof p === 'string' && p.length > 0)
       .join('\n\n') || undefined
 
-  const { context, prompt: promptMsg } = buildContext(
-    [],
-    prompt,
-    agentCtx.systemPrompt,
-    subAppend,
-    tools,
-  )
-
+  // A fork replays a capped tail of the parent transcript; every other subagent
+  // starts from an empty history (its prompt is self-contained by contract).
+  const history = opts.fork ? trimForkHistory(deps.parentHistory ?? []) : []
   const reasoning = toReasoning(settings.level, model)
-  const sink = deps.makeChildSink(parentToolCallId)
-  const initialKey = await getApiKey(settings.provider)
 
-  log.info('subagent spawn (pi)', {
-    subagent: label,
-    parentToolCallId,
-    model: settings.modelId,
-    account: account.id,
-    tools: tools.length,
-  })
+  // Built lazily on the first run and REUSED afterwards: pi appends every message
+  // to `context.messages`, so a follow-up prompt continues the same conversation.
+  let context: AgentContext | undefined
 
-  await runAgentLoop(
-    [promptMsg],
-    context,
-    {
-      model,
-      ...(initialKey ? { apiKey: initialKey } : {}),
-      getApiKey,
-      convertToLlm: (messages) => messages as Message[],
-      ...(reasoning ? { reasoning } : {}),
-      beforeToolCall: deps.beforeToolCall,
-      // Capture Codex usage, then fail closed on Anthropic extra-usage: a subagent
-      // is headless (no askUser) so it STOPS rather than silently bill overage.
-      onResponse: async (resp) => {
-        recordCodexUsageFromHeaders(account.id, resp.headers)
-        if (settings.provider === 'anthropic') {
-          await confirmOverageOrStop(resp.headers, 'subagent', undefined, signal, undefined)
-        }
+  const run = async (prompt: string, signal?: AbortSignal): Promise<string> => {
+    let promptMsg: AgentMessage
+    if (context) {
+      promptMsg = { role: 'user', content: prompt, timestamp: Date.now() }
+    } else {
+      const built = buildContext(history, prompt, agentCtx.systemPrompt, subAppend, tools)
+      context = built.context
+      promptMsg = built.prompt
+    }
+    const sink = deps.makeChildSink(parentToolCallId)
+    const initialKey = await getApiKey(settings.provider)
+
+    log.info('subagent run (pi)', {
+      subagent: label,
+      parentToolCallId,
+      model: settings.modelId,
+      account: account.id,
+      tools: tools.length,
+      forkedMessages: history.length,
+    })
+
+    await runAgentLoop(
+      [promptMsg],
+      context,
+      {
+        model,
+        ...(initialKey ? { apiKey: initialKey } : {}),
+        getApiKey,
+        convertToLlm: (messages) => messages as Message[],
+        ...(reasoning ? { reasoning } : {}),
+        beforeToolCall: deps.beforeToolCall,
+        // Capture Codex usage, then fail closed on Anthropic extra-usage: a subagent
+        // is headless (no askUser) so it STOPS rather than silently bill overage.
+        onResponse: async (resp) => {
+          recordCodexUsageFromHeaders(account.id, resp.headers)
+          if (settings.provider === 'anthropic') {
+            await confirmOverageOrStop(resp.headers, 'subagent', undefined, signal, undefined)
+          }
+        },
+        toolExecution: 'sequential',
       },
-      toolExecution: 'sequential',
-    },
-    sink.emit,
-    signal,
-    streamSimple,
-  )
+      sink.emit,
+      signal,
+      streamSimple,
+    )
 
-  return sink.text()
+    return sink.text()
+  }
+
+  return {
+    label,
+    modelId: settings.modelId,
+    ...(tiered?.note ? { note: tiered.note } : {}),
+    run,
+  }
+}
+
+function textResult<D>(
+  text: string,
+  details: D,
+): { content: [{ type: 'text'; text: string }]; details: D } {
+  return { content: [{ type: 'text', text }], details }
+}
+
+// Join the subagent's own output with any operator-level notes (tier fallback,
+// forced-synchronous…). Notes come last so they never displace the answer.
+function withNotes(text: string, notes: string[]): string {
+  if (notes.length === 0) return text
+  return `${text}\n\n(${notes.join(' ')})`
 }
 
 // Build the `Task` AgentTool for one parent turn. The returned tool is added at
 // the top level only (run-stream / invoke) — never to a subagent's toolset.
-export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams, TaskDetails> {
+//
+// `registry` is optional so the task path (runtime/invoke.ts) keeps its existing
+// one-argument call: it gets a registry that allows no background run, which is
+// exactly what a one-shot node needs.
+export function createTaskTool(
+  deps: TaskToolDeps,
+  registry: SubagentRegistry = new SubagentRegistry({
+    maxBackground: 0,
+    backgroundTimeoutMs: 0,
+  }),
+): AgentTool<typeof TaskParams, TaskDetails> {
   let spawned = 0
+  const canBackground = deps.allowBackground === true && registry.maxBackground > 0
 
   return {
     name: 'Task',
     label: 'Task',
-    description: describeTool(deps.agents),
+    description: describeTool(deps.agents, canBackground),
     parameters: TaskParams,
     // Intentionally NOT marked sequential: when the model spawns several Task
     // calls in one turn they fan out in parallel (the parent loop runs with
@@ -380,66 +538,358 @@ export function createTaskTool(deps: TaskToolDeps): AgentTool<typeof TaskParams,
     // under its own parentId, so nested steps stay grouped per Task card.
     async execute(toolCallId, params, signal) {
       const requested = params.subagent_type?.trim()
+      const isFork = requested?.toLowerCase() === FORK_SUBAGENT_TYPE
       const details: TaskDetails = {
         subagentType: requested || 'general-purpose',
         description: params.description,
       }
 
+      // Call-site model tier. A bad value bounces (the model can retry with a
+      // valid tier) instead of silently running the wrong model.
+      let tier: SubagentModelTier | undefined
+      const rawTier = params.model?.trim().toLowerCase()
+      if (rawTier) {
+        if (!isSubagentModelTier(rawTier)) {
+          return textResult(
+            `Unknown model "${params.model}". Valid values: ${SUBAGENT_MODEL_TIERS_TEXT}. Omit it to use the subagent's own model.`,
+            { ...details, isError: true as const },
+          )
+        }
+        // 'inherit' is the default behaviour — no override to apply.
+        if (rawTier !== 'inherit') tier = rawTier
+      }
+      // A fork is the parent, continued: running it on a different model would
+      // make it a different agent. Same rule as the Claude SDK branch.
+      if (isFork) tier = undefined
+
       // Resolve the target. A *named* type must match an in-scope agent, else we
       // bounce so the model can fix a typo'd name. An *omitted* type is not an
-      // error: `agent` stays null and spawnSubagent runs a general-purpose
+      // error: `agent` stays null and prepareSubagent runs a general-purpose
       // subagent inheriting this turn's config (craft `spawn_session` semantics).
       let agent: Agent | null = null
-      if (requested && deps.agents.length > 0) {
+      if (requested && !isFork && deps.agents.length > 0) {
         const matched = matchAgent(deps.agents, requested)
         if (!matched) {
           const names = deps.agents.map((a) => a.name).join(', ')
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Unknown subagent_type "${requested}". Available subagents: ${names}. Retry with one of these, or omit subagent_type to run a general-purpose subagent.`,
-              },
-            ],
+          return textResult(
+            `Unknown subagent_type "${requested}". Available subagents: ${names}. Retry with one of these, or omit subagent_type to run a general-purpose subagent.`,
             details,
-          }
+          )
         }
         agent = matched
       }
-      details.subagentType = agent ? agent.name : 'general-purpose'
+      details.subagentType = isFork ? FORK_SUBAGENT_TYPE : agent ? agent.name : 'general-purpose'
+
+      // A name is an ADDRESS: reusing one would silently redirect a later
+      // SendMessage to the wrong subagent.
+      const name = params.name?.trim()
+      if (name && registry.has(name)) {
+        return textResult(
+          `The name "${name}" is already taken by another subagent in this turn. Pick a different name.`,
+          { ...details, isError: true as const },
+        )
+      }
 
       if (spawned >= MAX_SUBAGENTS_PER_TURN) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Subagent limit reached (${MAX_SUBAGENTS_PER_TURN} per turn). Complete the remaining work yourself instead of delegating further.`,
-            },
-          ],
+        return textResult(
+          `Subagent limit reached (${MAX_SUBAGENTS_PER_TURN} per turn). Complete the remaining work yourself instead of delegating further.`,
           details,
-        }
+        )
       }
       spawned += 1
 
+      // Background is a REQUEST, not a guarantee: a task node has no way to
+      // collect the result, and the concurrency cap is a real ceiling. Degrade to
+      // synchronous (the work still happens) and say why.
+      const notes: string[] = []
+      let background = params.run_in_background === true
+      if (background && !canBackground) {
+        background = false
+        notes.push('Background subagents are not available here, so this one ran synchronously.')
+      }
+      if (background && registry.countRunningBackground() >= registry.maxBackground) {
+        background = false
+        notes.push(
+          `The background subagent limit (${registry.maxBackground}) was already reached, so this one ran synchronously.`,
+        )
+      }
+
       try {
-        const text = await spawnSubagent(deps, toolCallId, agent, params.prompt, signal)
-        return {
-          content: [{ type: 'text', text: text || '(subagent produced no output)' }],
-          details,
+        const prepared = await prepareSubagent(
+          deps,
+          toolCallId,
+          agent,
+          { ...(tier ? { tier } : {}), fork: isFork },
+          signal,
+        )
+        if (prepared.note) notes.push(prepared.note)
+        details.model = prepared.modelId
+
+        const snap = registry.start({
+          label: prepared.label,
+          description: params.description,
+          ...(name ? { name } : {}),
+          prompt: params.prompt,
+          run: prepared.run,
+          background,
+          // Pi hands `execute` the TURN's signal, so cancelling the turn kills a
+          // background subagent immediately instead of waiting for disposeAll().
+          ...(signal ? { parentSignal: signal } : {}),
+        })
+        details.taskId = snap.id
+
+        if (background) {
+          details.background = true
+          const address = name ? `"${snap.id}" (name: "${name}")` : `"${snap.id}"`
+          return textResult(
+            withNotes(
+              `Started subagent "${prepared.label}" in the background as task_id ${address}. ` +
+                `Keep working; collect its result with TaskOutput({ task_id: "${snap.id}", block: true }) before you finish this turn — background subagents are stopped when the turn ends.`,
+              notes,
+            ),
+            details,
+          )
         }
+
+        const final = await registry.settle(snap.id)
+        if (!final || final.status !== 'done') {
+          const why = final?.error ?? 'unknown error'
+          // Surface as a non-fatal tool error so the parent can recover (re-plan
+          // or do the work itself) rather than aborting the whole turn. Flagged per
+          // tool-error.ts so it still RENDERS as an error: a dead subagent must not
+          // look like a completed delegation.
+          return textResult(`Subagent "${prepared.label}" failed: ${why}`, {
+            ...details,
+            isError: true as const,
+          })
+        }
+        const followUp = canBackground
+          ? `\n\n(subagent id: ${snap.id} — reply to it with SendMessage({ to: "${snap.id}", message: "…" }) if you need a follow-up)`
+          : ''
+        return textResult(
+          `${withNotes(final.text || '(subagent produced no output)', notes)}${followUp}`,
+          details,
+        )
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        const who = agent ? agent.name : 'general-purpose'
-        log.warn('subagent run failed', { subagent: who, err: message })
-        // Surface as a non-fatal tool error so the parent can recover (re-plan
-        // or do the work itself) rather than aborting the whole turn. Flagged per
-        // tool-error.ts so it still RENDERS as an error: a dead subagent must not
-        // look like a completed delegation.
-        return {
-          content: [{ type: 'text', text: `Subagent "${who}" failed: ${message}` }],
-          details: { ...details, isError: true },
-        }
+        const who = agent ? agent.name : details.subagentType
+        log.warn('subagent spawn failed', { subagent: who, err: message })
+        return textResult(`Subagent "${who}" failed: ${message}`, {
+          ...details,
+          isError: true as const,
+        })
       }
+    },
+  }
+}
+
+// ─── Control tools for background subagents (ADR 0083 §b + §e) ─────────────
+
+const TaskOutputParams = Type.Object({
+  task_id: Type.String({
+    description: 'The task_id (or name) returned when the subagent was started.',
+  }),
+  block: Type.Optional(
+    Type.Boolean({ description: 'Wait for the subagent to finish (default true).' }),
+  ),
+  timeout: Type.Optional(
+    Type.Number({
+      description: `Max wait in milliseconds when blocking (default ${TASK_OUTPUT_DEFAULT_WAIT_MS}, max ${TASK_OUTPUT_MAX_WAIT_MS}).`,
+    }),
+  ),
+})
+
+interface ControlDetails {
+  taskId: string
+  status?: string
+  isError?: true
+}
+
+function describeSubagent(snap: SubagentSnapshot): string {
+  return snap.name ? `${snap.id} ("${snap.name}", ${snap.label})` : `${snap.id} (${snap.label})`
+}
+
+// Format a settled/running subagent for the model. Text first — the report is
+// what the parent asked for.
+function formatSnapshot(snap: SubagentSnapshot, waitedMs: number): string {
+  switch (snap.status) {
+    case 'running':
+      return `Subagent ${describeSubagent(snap)} is still running after ${Math.round(waitedMs / 1000)}s. Call TaskOutput again to keep waiting, or TaskStop to give up on it.`
+    case 'done':
+      return snap.text || '(subagent produced no output)'
+    case 'stopped':
+      return `Subagent ${describeSubagent(snap)} was stopped: ${snap.error ?? 'no reason recorded'}.`
+    default:
+      return `Subagent ${describeSubagent(snap)} failed: ${snap.error ?? 'unknown error'}.`
+  }
+}
+
+function unknownSubagent(registry: SubagentRegistry, ref: string): string {
+  const known = registry.list().map((s) => describeSubagent(s))
+  const list = known.length > 0 ? known.join(', ') : 'none'
+  return `No subagent "${ref}" in this turn. Known subagents: ${list}.`
+}
+
+function createTaskOutputTool(
+  registry: SubagentRegistry,
+): AgentTool<typeof TaskOutputParams, ControlDetails> {
+  return {
+    name: 'TaskOutput',
+    label: 'Task output',
+    description:
+      'Collect the result of a subagent started with Task({ run_in_background: true }). By default it blocks until the subagent finishes. Always collect a background subagent before you end your turn — it is stopped when the turn ends.',
+    parameters: TaskOutputParams,
+    executionMode: 'sequential',
+    async execute(_id, params) {
+      const ref = params.task_id.trim()
+      if (!registry.has(ref)) {
+        return textResult(unknownSubagent(registry, ref), { taskId: ref, isError: true as const })
+      }
+      const startedAt = Date.now()
+      let snap: SubagentSnapshot | undefined
+      if (params.block === false) {
+        snap = registry.get(ref)
+      } else {
+        const wait = Math.min(
+          Math.max(params.timeout ?? TASK_OUTPUT_DEFAULT_WAIT_MS, 1_000),
+          TASK_OUTPUT_MAX_WAIT_MS,
+        )
+        snap = await registry.waitFor(ref, wait)
+      }
+      if (!snap) {
+        return textResult(unknownSubagent(registry, ref), { taskId: ref, isError: true as const })
+      }
+      const details: ControlDetails = { taskId: snap.id, status: snap.status }
+      const failed = snap.status === 'error' || snap.status === 'stopped'
+      return textResult(formatSnapshot(snap, Date.now() - startedAt), {
+        ...details,
+        ...(failed ? { isError: true as const } : {}),
+      })
+    },
+  }
+}
+
+const TaskStopParams = Type.Object({
+  task_id: Type.String({ description: 'The task_id (or name) of the subagent to stop.' }),
+})
+
+function createTaskStopTool(
+  registry: SubagentRegistry,
+): AgentTool<typeof TaskStopParams, ControlDetails> {
+  return {
+    name: 'TaskStop',
+    label: 'Stop subagent',
+    description:
+      'Stop a background subagent started with Task({ run_in_background: true }). Use it when its work is no longer needed. Stopping an already-finished subagent is harmless.',
+    parameters: TaskStopParams,
+    executionMode: 'sequential',
+    async execute(_id, params) {
+      const ref = params.task_id.trim()
+      if (!registry.stop(ref)) {
+        return textResult(unknownSubagent(registry, ref), { taskId: ref, isError: true as const })
+      }
+      const snap = registry.get(ref)
+      return textResult(`Stopped subagent ${snap ? describeSubagent(snap) : ref}.`, {
+        taskId: snap?.id ?? ref,
+        status: snap?.status ?? 'stopped',
+      })
+    },
+  }
+}
+
+const SendMessageParams = Type.Object({
+  to: Type.String({ description: 'The task_id or name of the subagent to message.' }),
+  message: Type.String({ description: 'The follow-up instruction or question for that subagent.' }),
+})
+
+function createSendMessageTool(
+  registry: SubagentRegistry,
+): AgentTool<typeof SendMessageParams, ControlDetails> {
+  return {
+    name: 'SendMessage',
+    label: 'Send message',
+    description:
+      'Send a follow-up message to a subagent you already ran in this turn, keeping everything it saw and did. Use it to ask for a correction or a deeper pass instead of spawning a fresh subagent that has to rediscover the context. It blocks until the subagent answers, and only works once that subagent has finished its current run (collect it with TaskOutput first).',
+    parameters: SendMessageParams,
+    executionMode: 'sequential',
+    async execute(_id, params, signal) {
+      const ref = params.to.trim()
+      const outcome = await registry.sendMessage(ref, params.message, signal)
+      if (!outcome.ok) {
+        const reason =
+          outcome.reason === 'unknown'
+            ? unknownSubagent(registry, ref)
+            : outcome.reason === 'running'
+              ? `Subagent "${ref}" is still running. Collect it with TaskOutput first, then send your follow-up.`
+              : `Subagent "${ref}" ended as "${outcome.reason}" and cannot be resumed. Start a new one with Task.`
+        return textResult(reason, { taskId: ref, isError: true as const })
+      }
+      const snap = outcome.snap
+      const details: ControlDetails = { taskId: snap.id, status: snap.status }
+      if (snap.status !== 'done') {
+        return textResult(formatSnapshot(snap, 0), { ...details, isError: true as const })
+      }
+      return textResult(snap.text || '(subagent produced no output)', details)
+    },
+  }
+}
+
+export interface SubagentToolset {
+  // Task + its control tools, ready to push into the parent toolset.
+  tools: AgentTool[]
+  // MUST be called when the parent turn ends (success, error or cancel): a
+  // background subagent may not outlive the turn that spawned it.
+  disposeAll: () => void
+}
+
+// Build the full subagent toolset for a CHAT turn (ADR 0083): `Task` plus the
+// control tools that make a background subagent usable. The task path keeps
+// calling createTaskTool directly — a one-shot node has nowhere to collect a
+// background result, so it stays synchronous.
+export function createSubagentTools(deps: TaskToolDeps): SubagentToolset {
+  const sessionId = deps.sessionId
+  const registry = new SubagentRegistry({
+    maxBackground: deps.allowBackground ? MAX_BACKGROUND_SUBAGENTS : 0,
+    backgroundTimeoutMs: BACKGROUND_SUBAGENT_TIMEOUT_MS,
+    // Mirror background subagents as UI chips through the SAME registry the
+    // background shells and the Claude SDK branch use, so the user sees one list
+    // and can stop a runaway subagent from the chip.
+    ...(sessionId
+      ? {
+          onStarted: (snap: SubagentSnapshot): void => {
+            if (!snap.background) return
+            registerExternalBackground({
+              sessionId,
+              shellId: snap.id,
+              command: `Task: ${snap.description}`,
+            })
+          },
+          onSettled: (snap: SubagentSnapshot): void => {
+            if (!snap.background) return
+            settleExternalBackground({
+              sessionId,
+              shellId: snap.id,
+              status: snap.status === 'done' ? 'exited' : 'exited-unknown',
+              exitCode: snap.status === 'done' ? 0 : null,
+              ...(snap.error ? { summary: snap.error } : {}),
+            })
+          },
+        }
+      : {}),
+  })
+
+  const tools: AgentTool[] = [createTaskTool(deps, registry)]
+  if (deps.allowBackground) {
+    tools.push(createTaskOutputTool(registry), createTaskStopTool(registry))
+    tools.push(createSendMessageTool(registry))
+    if (sessionId) setExternalKiller(sessionId, (shellId) => void registry.stop(shellId))
+  }
+
+  return {
+    tools,
+    disposeAll: (): void => {
+      registry.abortAll()
+      if (sessionId && deps.allowBackground) clearExternalKiller(sessionId)
     },
   }
 }
