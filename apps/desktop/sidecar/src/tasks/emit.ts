@@ -5,6 +5,7 @@
 
 import { emit } from '../transport/stdio.js'
 import { appendTaskEvent } from './store.js'
+import type { BudgetBreach } from './budget.js'
 import type {
   PhaseStatus,
   RunStatus,
@@ -186,4 +187,34 @@ export async function emitRunDone(
     ...(approved ? { approvedBy: approved.approvedBy, approvedAt: approved.approvedAt } : {}),
     ...(verdict !== undefined ? { verdict } : {}),
   })
+}
+
+// Ngân sách task chạm trần (ADR 0081 phần B). Ghi vào events.log rồi phát lên UI;
+// engine chịu trách nhiệm chuyển task sang 'paused' ngay sau đó.
+export async function emitBudgetStop(taskId: string, breach: BudgetBreach): Promise<void> {
+  await appendTaskEvent(taskId, {
+    type: 'task.budget',
+    at: now(),
+    dimension: breach.dimension,
+    limit: breach.limit,
+    observed: breach.observed,
+    message: breach.message,
+  })
+  emit('task.budget.exceeded', { taskId, ...breach })
+}
+
+// Vòng đời worktree cô lập của một node (ADR 0081 phần A).
+export async function emitWorktree(
+  taskId: string,
+  action: 'allocated' | 'merged' | 'conflict',
+  branch: string,
+  opts?: { nodeId?: string; version?: number; detail?: string },
+): Promise<void> {
+  const scope = {
+    ...(opts?.nodeId ? { nodeId: opts.nodeId } : {}),
+    ...(opts?.version !== undefined ? { version: opts.version } : {}),
+    ...(opts?.detail ? { detail: opts.detail } : {}),
+  }
+  await appendTaskEvent(taskId, { type: 'task.worktree', at: now(), action, branch, ...scope })
+  emit('task.worktree', { taskId, action, branch, ...scope })
 }

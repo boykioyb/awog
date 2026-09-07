@@ -3,6 +3,12 @@
 //   invokeSdk (streaming trace) → write artifact + git auto-commit → terminal
 //   status (completed | waiting_approval) or failed.
 //
+// Working tree (ADR 0081): the node does NOT hard-code `project.path` any more.
+// acquireNodeWorkspace gives the first in-flight node of a project the shared tree
+// and every concurrent sibling its own `git worktree` + branch, so two parallel
+// agents can't overwrite each other's edits or sweep each other's files into an
+// auto-commit. The engine merges those branches back when the task drains.
+//
 // The artifact summary (the assistant's final message) is the run's `output` and
 // is also written to ~/.awog/tasks/<id>/artifacts/. The real code changes the
 // agent makes via Write/Edit tools live in the PROJECT repo and are captured by
@@ -15,6 +21,7 @@ import { loadSkillByIdAnyTier } from '../skills/store.js'
 import { sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { autoCommitPhase } from '../git/auto-commit.js'
+import { sanitizeStderr } from '../git/error-map.js'
 import { invokeSdk } from '../sdk/invoke.js'
 import { resolveAgentContext } from './agent-context.js'
 import {
@@ -24,6 +31,8 @@ import {
   traceThinkingNode,
   formatDuration,
 } from './trace-mapper.js'
+import { recordToolCall } from './budget.js'
+import { acquireNodeWorkspace, releaseNodeWorkspace } from './worktree.js'
 import { loadTask } from './store.js'
 import { taskArtifactsDir } from './store.js'
 import {
@@ -34,7 +43,9 @@ import {
   emitRunOutputDelta,
   emitRunUsage,
   emitTrace,
+  emitWorktree,
 } from './emit.js'
+import type { NodeWorkspace } from './worktree.js'
 import type { InvokeToolUse } from '../sdk/invoke.js'
 import type {
   SessionSettings,
@@ -134,13 +145,31 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
   const { taskId, version, node, task } = ctx
   const startedMs = Date.now()
   const rootId = `tr-${node.id}-v${version}`
+  let workspace: NodeWorkspace | null = null
 
   try {
     const project = await loadProject(task.projectId)
     if (!project?.path) {
       throw new Error(`Task project has no path: ${task.projectId}`)
     }
-    const cwd = project.path
+    // Cây làm việc của node — cây gốc (node đầu tiên) hoặc worktree riêng. Cùng
+    // một cwd đi vào cả agent lẫn auto-commit, nên commit của node luôn nằm đúng
+    // cây mà node đó đã sửa. Worktree chỉ có nghĩa khi node THẬT SỰ commit kết
+    // quả (đó là thứ duy nhất mang thay đổi quay về nhánh chính): tắt auto-commit
+    // per-phase, hoặc scope 'artifacts-only' ⇒ dùng chung cây gốc như trước.
+    const commitsPerPhase =
+      task.autoCommitPerPhase !== false && (task.autoCommitScope ?? 'workspace') === 'workspace'
+    workspace = await acquireNodeWorkspace({
+      taskId,
+      nodeId: node.id,
+      version,
+      projectPath: project.path,
+      canCommit: commitsPerPhase,
+    })
+    const cwd = workspace.cwd
+    if (workspace.isolated && workspace.branch) {
+      await emitWorktree(taskId, 'allocated', workspace.branch, { nodeId: node.id, version })
+    }
     const connectionId = sourceConnectionId(task)
 
     // Resolve agent + skills + MCP. The task's connection (if any) is unioned
@@ -250,6 +279,18 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
         onToolUse: (use) => {
           if (!toolStarts.has(use.id)) toolStarts.set(use.id, { use, ms: Date.now() })
           void emitTrace(taskId, node.id, version, traceFromToolUse(use), use.parentId ?? rootId)
+          // Ngân sách cấp task (ADR 0081 phần B): mọi tool call của mọi node đổ
+          // vào cùng một bộ đếm. Chạm trần ⇒ cắt lượt ngay tại đây; engine đọc
+          // cờ breach để dừng task có trật tự (phase về pending, task 'paused').
+          const breach = recordToolCall(taskId)
+          if (breach) {
+            log.warn('task budget exceeded — aborting the node turn', {
+              taskId,
+              nodeId: node.id,
+              dimension: breach.dimension,
+            })
+            ctx.abortController.abort()
+          }
         },
         onToolResult: (res) => {
           const start = toolStarts.get(res.id)
@@ -401,5 +442,30 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     await emitRunDone(taskId, node.id, version, 'failed', formatDuration(elapsed))
     await emitPhaseStatus(taskId, node.id, 'failed')
     return { outcome: 'failed' }
+  } finally {
+    // Nhả cây làm việc dù thành công hay hỏng: checkout worktree bị xoá ngay,
+    // branch giữ lại cho engine merge về ở điểm task ráo. Node hỏng giữa chừng
+    // thường để lại thay đổi chưa commit — release commit WIP hộ; cứu không được
+    // thì checkout còn nguyên trên đĩa và phải nói cho người dùng biết nó ở đâu,
+    // đừng để chuyện mất-hay-không-mất chìm trong log.
+    if (workspace) {
+      const released = await releaseNodeWorkspace(taskId, workspace)
+      if (released.status === 'retained' && released.branch) {
+        // Path đi lên UI cũng đi qua sanitizer như stderr: home thành `~`,
+        // vẫn cd được mà không rải path tuyệt đối vào event log.
+        const detail = sanitizeStderr([released.detail, released.path].filter(Boolean).join(' — '))
+        await emitWorktree(taskId, 'conflict', released.branch, {
+          nodeId: node.id,
+          version,
+          ...(detail ? { detail } : {}),
+        }).catch((err: unknown) => {
+          log.warn('emitting retained-worktree event failed', {
+            taskId,
+            nodeId: node.id,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
+      }
+    }
   }
 }

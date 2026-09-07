@@ -15,6 +15,7 @@ import { mkdir, readdir, readFile, appendFile, writeFile, chmod, rename } from '
 import { join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
+import type { BudgetDimension } from './budget.js'
 import type {
   Task,
   TaskMessage,
@@ -43,6 +44,29 @@ export type TaskEvent =
   | { type: 'trace.node'; at: string; nodeId: string; version: number; node: TraceNode; parentId?: string | null }
   | { type: 'message.appended'; at: string; nodeId: string; version: number; message: TaskMessage }
   | { type: 'artifact.written'; at: string; nodeId: string; version: number; path: string; bytes: number; commitSha?: string }
+  // Ngân sách task chạm trần (ADR 0081 phần B). Thuần thông tin: fold không đổi
+  // snapshot, engine mới là nơi chuyển task sang 'paused'. Giữ trong log để trả
+  // lời được câu "vì sao task này dừng" sau khi restart.
+  | {
+      type: 'task.budget'
+      at: string
+      dimension: BudgetDimension
+      limit: number
+      observed: number
+      message: string
+    }
+  // Vòng đời worktree cô lập của một node (ADR 0081 phần A) — cấp phát, merge về,
+  // hoặc conflict phải merge tay. Cũng thuần thông tin.
+  | {
+      type: 'task.worktree'
+      at: string
+      // Chỉ có ở 'allocated'; merge/conflict xảy ra ở cấp task nên chỉ biết branch.
+      nodeId?: string
+      version?: number
+      action: 'allocated' | 'merged' | 'conflict'
+      branch: string
+      detail?: string
+    }
   | { type: 'task.deleted'; at: string }
 
 const TASKS_DIR_NAME = sanitizeChild('tasks')
@@ -224,9 +248,12 @@ function applyEvent(snapshot: Task | null, e: TaskEvent): Task | null {
       break
     }
     case 'artifact.written':
+    case 'task.budget':
+    case 'task.worktree':
       // Informational — recorded in events.log; no snapshot mutation (the run's
-      // output already references the artifact). Kept in the union for the trace
-      // pipeline + UI emit.
+      // output already references the artifact; budget/worktree only explain WHY
+      // the engine did what it did). Kept in the union for the trace pipeline +
+      // UI emit.
       break
     default:
       break
@@ -352,6 +379,17 @@ export async function loadTask(id: string): Promise<Task | null> {
   const snap = await foldFromDisk(id)
   SNAPSHOTS.set(id, snap)
   return snap
+}
+
+// Chỉ id (tên thư mục) — cho các pass bảo trì không cần fold snapshot, ví dụ
+// lượt dọn worktree mồ côi lúc boot.
+export async function listTaskIds(): Promise<string[]> {
+  try {
+    return await readdir(tasksDir())
+  } catch (err) {
+    if (isMissing(err)) return []
+    throw err
+  }
 }
 
 export async function listTasks(): Promise<Task[]> {

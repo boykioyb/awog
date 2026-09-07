@@ -7,6 +7,16 @@
 // up to CONCURRENCY_CAP nodes run at once per task. Schedule calls are serialised
 // per task (a single loop drains a "rescan requested" flag) so two completions
 // can't double-dispatch a node.
+//
+// Two guards sit on top of that loop (ADR 0081):
+//   • Worktree isolation — concurrent nodes get their own checkout+branch
+//     (tasks/worktree.ts). Their branches are merged back at every DRAIN point
+//     (nothing in flight) BEFORE the next wave is dispatched, so a downstream node
+//     always sees what its parallel siblings produced. A merge conflict pauses the
+//     task instead of silently continuing on a half-integrated tree.
+//   • Task budget — cost/tool-call/wallclock caps for the whole task
+//     (tasks/budget.ts). Breaching one pauses the task; a mid-turn abort sends the
+//     node's phase back to 'pending' so a resume re-runs it cleanly.
 
 import { log } from '../util/logger.js'
 import { invokeSdk } from '../sdk/invoke.js'
@@ -18,11 +28,21 @@ import { runNode, type NodeRunResult } from './node-runner.js'
 import { computeRunnable, downstreamOf, settledStatus } from './scheduler.js'
 import { resolveAgentContext } from './agent-context.js'
 import {
+  budgetBreach,
+  checkTaskBudget,
+  claimBudgetReport,
+  clearBudgetWindow,
+  startBudgetWindow,
+} from './budget.js'
+import { integrateTaskBranches, sweepOrphanWorktrees } from './worktree.js'
+import {
+  emitBudgetStop,
   emitMessage,
   emitPhaseStatus,
   emitRunDone,
   emitRunStarted,
   emitTaskStatus,
+  emitWorktree,
 } from './emit.js'
 import type {
   NodeGate,
@@ -145,7 +165,15 @@ function executeRun(
         })
         result = { outcome: 'failed' }
       }
-      if (result.outcome === 'failed') {
+      const breach = budgetBreach(taskId)
+      if (result.outcome === 'failed' && breach) {
+        // Lượt bị chính ngân sách cắt — KHÔNG coi là task hỏng. Trả phase về
+        // 'pending' (đúng đường resume-sau-crash của resumeOnBoot) rồi treo task
+        // ở 'paused' để người dùng nới trần và chạy tiếp.
+        await emitPhaseStatus(taskId, node.id, 'pending')
+        rt.paused = true
+        if (claimBudgetReport(taskId)) await emitBudgetStop(taskId, breach)
+      } else if (result.outcome === 'failed') {
         rt.failed = true
         await markDownstreamFailed(taskId, node.id)
       } else if (node.gate) {
@@ -233,6 +261,7 @@ async function finalize(taskId: string, task: Task): Promise<void> {
   // keeps the runtime so approve can resume.
   if (status === 'completed' || status === 'failed') {
     fireTaskHook('task.after-complete', task, { status, title: task.title })
+    clearBudgetWindow(taskId)
     registry.delete(taskId)
   }
 }
@@ -260,11 +289,49 @@ async function runScheduleLoop(taskId: string): Promise<void> {
   }
 }
 
+// Điểm ráo (không node nào chạy) là lúc DUY NHẤT an toàn để merge branch của các
+// node song song về nhánh chính: cây gốc không có ai đang ghi. Chạy TRƯỚC khi phát
+// đợt kế tiếp nên node hạ nguồn thấy đủ kết quả thượng nguồn. Conflict ⇒ giữ branch
+// và pause task, không đoán hộ người dùng.
+async function integrateBeforeNextWave(taskId: string, task: Task, rt: TaskRuntime): Promise<void> {
+  const project = await loadProject(task.projectId)
+  if (!project?.path) return
+  const outcomes = await integrateTaskBranches(taskId, project.path)
+  for (const o of outcomes) {
+    // eslint-disable-next-line no-await-in-loop
+    await emitWorktree(taskId, o.status, o.branch, o.detail ? { detail: o.detail } : undefined)
+    if (o.status === 'conflict') rt.paused = true
+  }
+}
+
+// Trần ngân sách chạm ⇒ ghi event + dừng phát node mới.
+async function stopIfOverBudget(taskId: string, task: Task, rt: TaskRuntime): Promise<void> {
+  const breach = await checkTaskBudget(task)
+  if (!breach) return
+  rt.paused = true
+  if (claimBudgetReport(taskId)) {
+    await emitBudgetStop(taskId, breach)
+    log.warn('task paused — budget exceeded', {
+      taskId,
+      dimension: breach.dimension,
+      limit: breach.limit,
+      observed: breach.observed,
+    })
+  }
+}
+
 async function scheduleOnce(taskId: string): Promise<void> {
   const rt = registry.get(taskId)
   if (!rt) return
   const task = await loadTask(taskId)
   if (!task) return
+
+  if (rt.inFlight.size === 0 && !rt.failed) {
+    await integrateBeforeNextWave(taskId, task, rt)
+  }
+  if (!rt.failed && !rt.paused) {
+    await stopIfOverBudget(taskId, task, rt)
+  }
 
   // Paused → don't dispatch new nodes (in-flight ones keep running).
   if (!rt.failed && !rt.paused) {
@@ -297,6 +364,7 @@ async function scheduleOnce(taskId: string): Promise<void> {
 
 export function startTask(taskId: string): void {
   ensureRuntime(taskId)
+  startBudgetWindow(taskId)
   void (async () => {
     await emitTaskStatus(taskId, 'running', null)
     requestSchedule(taskId)
@@ -338,6 +406,9 @@ export async function resumeTask(taskId: string): Promise<boolean> {
   const rt = ensureRuntime(taskId)
   rt.paused = false
   rt.failed = false
+  // Resume = một đợt chạy mới: đồng hồ + bộ đếm tool call của ngân sách về 0
+  // (chi phí USD thì không, nó derive từ events.log).
+  startBudgetWindow(taskId)
   await emitTaskStatus(taskId, 'running', null)
   requestSchedule(taskId)
   return true
@@ -481,6 +552,11 @@ export async function discussPhase(
 // On sidecar boot: resume queued/running tasks from their durable frontier.
 // completed/failed/waiting_approval are left untouched (execution-model.md).
 export async function resumeOnBoot(): Promise<void> {
+  // Checkout worktree mồ côi (sidecar chết giữa node-run) — dọn trước khi bất kỳ
+  // task nào chạy lại. Branch được giữ nguyên: đó là commit của agent, sẽ merge
+  // về ở điểm ráo đầu tiên sau khi task resume.
+  await sweepOrphanWorktrees()
+
   let tasks: Task[]
   try {
     tasks = await listTasks()

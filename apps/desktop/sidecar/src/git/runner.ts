@@ -196,3 +196,38 @@ export async function runGit(
     stderrSanitized: sanitized,
   })
 }
+
+// ─── Version probe (shared) ──────────────────────────────────────────────────
+// `git --version` once per process. Callers that need a capability gate (e.g.
+// `git worktree` needs 2.20+) compare against this instead of spawning their own
+// probe. The Git Manager's `git.checkInstalled` RPC keeps its own parse because
+// it also reports the raw string to the UI — this helper is the sidecar-internal
+// boolean gate. Never throws: an absent/unparsable git resolves to '' so every
+// capability check reads as "unsupported" and the caller degrades.
+let versionProbe: Promise<string> | null = null
+
+const VERSION_RE = /git version (\d+\.\d+(?:\.\d+)?)/
+
+export function gitVersion(): Promise<string> {
+  if (!versionProbe) {
+    versionProbe = runGit('', ['--version'], { noWorkspaceCheck: true, timeoutMs: 3_000 })
+      .then((r) => VERSION_RE.exec(r.stdout)?.[1] ?? '')
+      .catch(() => '')
+  }
+  return versionProbe
+}
+
+// True when the installed git is at least `min` ("2.20"). Missing git → false.
+export async function gitAtLeast(min: string): Promise<boolean> {
+  const version = await gitVersion()
+  if (!version) return false
+  const have = version.split('.').map((p) => Number.parseInt(p, 10) || 0)
+  const want = min.split('.').map((p) => Number.parseInt(p, 10) || 0)
+  for (let i = 0; i < Math.max(have.length, want.length); i += 1) {
+    const a = have[i] ?? 0
+    const b = want[i] ?? 0
+    if (a > b) return true
+    if (a < b) return false
+  }
+  return true
+}
