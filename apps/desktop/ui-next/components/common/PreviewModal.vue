@@ -81,7 +81,7 @@
           @close="closeFind"
         />
 
-        <div class="pvbody" :class="bodyClass">
+        <div class="pvbody" :class="[bodyClass, { nbbody: isNotebook }]">
           <!-- status placeholder: workspace file loading / failed / too big / binary.
                Loading shows a spinner; the other states keep the file icon. -->
           <div v-if="statusMessage" class="pvempty">
@@ -189,6 +189,10 @@
               <div ref="mdBody" class="mdbody" :style="{ maxWidth: mdMaxWidth }" @click="onMdClick">
                 <template v-for="(seg, i) in segments" :key="i">
                   <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+                  <pre
+                    v-else-if="seg.type === 'widget'"
+                    class="mmdstream"
+                  ><code>{{ seg.code }}</code></pre>
                   <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
                   <div v-else v-html="seg.html" />
                 </template>
@@ -208,6 +212,11 @@
             <div class="pvename">{{ shownItem.name }}</div>
             <div class="pvehint">{{ t('common.preview.officeEmpty') }}</div>
           </div>
+
+          <!-- .ipynb → parsed cell list (markdown / highlighted code / outputs).
+               NotebookView owns its own windowing so a 500-cell notebook doesn't
+               render at once. -->
+          <NotebookView v-else-if="isNotebook" :source="effectiveText" :truncated="truncated" />
 
           <!-- html render → sandboxed, opaque-origin iframe (allow-scripts but NO
                allow-same-origin: the page's JS runs isolated, can't reach app:// or
@@ -480,6 +489,11 @@ const headerPath = computed(() => {
   if (!it) return ''
   return it.path || it.name
 })
+// .ipynb body: the cell list needs the full body width and its own left-aligned
+// column, so it opts out of `.pvbody`'s centered prose layout. Local to the SFC —
+// the controller's `bodyClass` covers the kinds it already knows about.
+const isNotebook = computed(() => shownItem.value?.kind === 'notebook' && !statusMessage.value)
+
 const absPath = computed(() => {
   const it = shownItem.value
   if (it && hasWorkspaceFile.value && it.workspaceRoot && it.path) {
@@ -707,6 +721,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   align-items: stretch;
   padding: 0;
   overflow: hidden;
+}
+/* Notebook: full-width, left-aligned column that scrolls with the body (NotebookView
+   centers its own reading measure). */
+.pvbody.nbbody {
+  align-items: stretch;
+  padding: 20px 22px 86px;
 }
 /* Folder tree: fill the body, left-aligned, tree manages its own scroll. */
 .pvbody.tree {

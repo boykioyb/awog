@@ -6,7 +6,9 @@
        has arrived (seg.closed); only the trailing, still-open fence shows as plain code
        (avoids flashing mermaid parse errors on the half-typed source). Its code prop is
        byte-stable once closed, so MermaidView mounts once and never re-renders as later
-       text keeps streaming — no per-frame diagram work. -->
+       text keeps streaming — no per-frame diagram work.
+       An ```awog:widget fence follows the SAME streaming rule and renders inside a
+       sandboxed frame (SessionWidgetBlock) — never into this document. -->
   <div
     v-if="!buffering"
     ref="rootEl"
@@ -16,6 +18,12 @@
     <template v-for="(seg, i) in segments" :key="i">
       <MermaidView v-if="seg.type === 'mermaid' && (!streaming || seg.closed)" :code="seg.code" />
       <pre v-else-if="seg.type === 'mermaid'" class="mmdstream"><code>{{ seg.code }}</code></pre>
+      <SessionWidgetBlock
+        v-else-if="seg.type === 'widget' && (!streaming || seg.closed)"
+        :code="seg.code"
+        :lang="widgetLang(seg.code)"
+      />
+      <pre v-else-if="seg.type === 'widget'" class="mmdstream"><code>{{ seg.code }}</code></pre>
       <SessionMarkdownHtml v-else :html="seg.html" :highlights="highlights" />
     </template>
   </div>
@@ -30,6 +38,13 @@ import type { Followup } from '~/composables/useSessionsData'
 
 // A follow-up plus its index in `active.followups` (used for the circled label).
 export type BlockHighlight = { fu: Followup; label: string }
+
+// Widget markup đi vào một khung cách ly; prop `lang` chỉ quyết định cách khung đó
+// bọc nội dung. Nhìn ký tự đầu là đủ — không cần parse, và đoán sai chỉ đổi cách
+// bọc chứ không nới lỏng sandbox.
+function widgetLang(code: string): 'html' | 'svg' {
+  return code.trimStart().startsWith('<svg') ? 'svg' : 'html'
+}
 
 const props = defineProps<{
   text: string

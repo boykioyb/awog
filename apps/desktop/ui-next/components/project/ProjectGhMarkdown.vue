@@ -8,6 +8,7 @@
   <div class="ghmdbody" @click="onMdLinkClick">
     <template v-for="(seg, i) in segments" :key="i">
       <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+      <pre v-else-if="seg.type === 'widget'"><code>{{ seg.code }}</code></pre>
       <div v-else :ref="(el) => setSegHtml(el, seg.html)" class="ghmdseg" />
     </template>
   </div>

@@ -22,6 +22,7 @@ import {
 export type MdSegment =
   | { type: 'html'; html: string }
   | { type: 'mermaid'; code: string; closed: boolean }
+  | { type: 'widget'; code: string; closed: boolean }
 
 const ESC: Record<string, string> = {
   '&': '&amp;',
@@ -384,6 +385,13 @@ export function useMarkdown() {
   // the fix for O(n²) streaming jank. Static callers (preview, library, editor, and
   // finalized transcript messages) omit it → the original single merged run, identical
   // layout, parsed once.
+  // Fence bật widget. CỐ Ý không dùng ```html: model viết ```html để TRÌNH BÀY
+  // code nhiều hơn là để yêu cầu render, nên cướp nó sẽ biến mọi ví dụ HTML trong
+  // chat thành khung render — sai gần như mọi lần. Widget phải được yêu cầu tường
+  // minh. Giữ ```mermaid nguyên vẹn: nó vốn đã là "hãy vẽ cái này".
+  const WIDGET_LANG = 'awog:widget'
+  const isWidgetLang = (lang: string | undefined): boolean => lang?.trim() === WIDGET_LANG
+
   function renderMarkdown(src: string, granular = false): MdSegment[] {
     configure()
     ensureHighlighter()
@@ -413,6 +421,9 @@ export function useMarkdown() {
           flush()
           // Static (non-streaming) render → the fence is always complete.
           segments.push({ type: 'mermaid', code: (tok as Tokens.Code).text, closed: true })
+        } else if (tok.type === 'code' && isWidgetLang((tok as Tokens.Code).lang)) {
+          flush()
+          segments.push({ type: 'widget', code: (tok as Tokens.Code).text, closed: true })
         } else {
           buf.push(tok)
         }
@@ -438,6 +449,13 @@ export function useMarkdown() {
         // streamed in; the trailing, still-open fence stays plain code until it closes.
         const code = tok as Tokens.Code
         segments.push({ type: 'mermaid', code: code.text, closed: isMermaidFenceClosed(code.raw) })
+        continue
+      }
+      if (tok.type === 'code' && isWidgetLang((tok as Tokens.Code).lang)) {
+        // Cùng luật streaming với mermaid: fence chưa đóng thì chưa render — nếu
+        // không, mỗi frame lại dựng lại một iframe từ markup dở dang.
+        const code = tok as Tokens.Code
+        segments.push({ type: 'widget', code: code.text, closed: isMermaidFenceClosed(code.raw) })
         continue
       }
       // Don't cache the last block: while streaming it changes every frame, so caching

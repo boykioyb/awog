@@ -44,6 +44,27 @@ For any request that takes more than a couple of steps, use the \`TodoWrite\` to
 Before you end your turn, reconcile the checklist with what you actually did: mark every item you have genuinely finished as \`completed\`, and do not leave an already-finished item stuck at \`in_progress\`. NEVER mark an item \`completed\` that you did not actually finish — if you stop with work still remaining, leave those items \`pending\` or \`in_progress\` and say what is left. When you pause to wait for the user (a question or an approval gate), leave that item \`in_progress\` until you resume, then mark it \`completed\` once you continue.
 </todo-list>`
 
+// The SAME nudge for the Claude SDK path, where the tool is NOT TodoWrite.
+//
+// CLI 2.1.233 dropped TodoWrite from the tool surface on opus 4.8 / sonnet 5 /
+// fable 5 / mythos 5 and newer, and `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (set in
+// claude-sdk/shared.ts buildSdkEnv) brings back the SUCCESSOR family instead —
+// verified against CLI 2.1.263, where the flag adds exactly TaskCreate, TaskGet,
+// TaskList and TaskUpdate and no TodoWrite. Nudging toward `TodoWrite` there was
+// therefore an instruction to call a tool that does not exist: the model obeyed,
+// the CLI answered "No such tool available: TodoWrite", and the round-trip was
+// spent teaching the model what our own prompt had got wrong.
+//
+// The wording is deliberately explicit that TodoWrite is absent — the model is
+// heavily trained to reach for it and will otherwise try it at least once.
+export const TASK_CHECKLIST_PROMPT = `<todo-list>
+For any request that takes more than a couple of steps, use the task tools to plan and track your work: \`TaskCreate\` one item per step up front, then \`TaskUpdate\` to keep exactly one item \`in_progress\` while you work it and to mark it \`completed\` the moment it is done. The list is shown live to the user as your progress — keep it current. Skip it only for trivial single-step requests. There is no \`TodoWrite\` tool on this surface; do not call it.
+
+Before you end your turn, reconcile the list with what you actually did: mark every item you have genuinely finished as \`completed\`, and do not leave an already-finished item stuck at \`in_progress\`. NEVER mark an item \`completed\` that you did not actually finish — if you stop with work still remaining, leave those items \`pending\` or \`in_progress\` and say what is left. When you pause to wait for the user (a question or an approval gate), leave that item \`in_progress\` until you resume, then mark it \`completed\` once you continue.
+
+When a \`<session_checklist>\` block is present it is the authoritative list and the user may have edited it. If your own tasks disagree with it, call \`TaskList\` for your current ids and then \`TaskUpdate\` / \`TaskCreate\` until the two agree.
+</todo-list>`
+
 // Background-exec nudge (ADR 0066, sessions only). Models trained on Claude Code
 // assume Bash can run in the background and that they'll be "notified when it's
 // done" — but until this feature that was a confabulation (AWOG's Bash was a
@@ -193,6 +214,8 @@ Write each paragraph as ONE unbroken line, however long it runs. Never insert a 
 This holds for everything you write, INCLUDING prose you put inside a fenced block for the user to copy — a PR description, an issue body, a commit message, a release note, a review comment. That is prose in a fence, not source code, and its paragraphs must be single lines too.
 
 A newline must mean a new block, never a continued sentence. So keep every line break that carries meaning: lines of real code, command or tool output, diffs, log excerpts, ASCII art and box drawings, one list item or checklist entry per line, one table row per line, and the line structure of YAML, JSON, TOML, CSV, or any other line-oriented format. Never join those together.
+
+The panel renders two fences live instead of as source. A \`\`\`mermaid fence becomes a diagram. A \`\`\`awog:widget fence becomes a small rendered page — HTML or SVG — for when a picture, a table you want styled, or a tiny interactive demo says it better than prose. It runs sealed off: no network of any kind, no access to the app, and scripts stay off until the reader turns them on, so write it to be useful with CSS alone and treat interactivity as a bonus. Reach for it when the shape of the thing IS the answer; a normal \`\`\`html fence still means "here is markup for you to read", and that is the right choice for showing code.
 </output-surface>`
 
 // Scratch-space convention. Nothing tells the model where to put working files, so

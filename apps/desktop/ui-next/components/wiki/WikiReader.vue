@@ -64,6 +64,7 @@
           </p>
           <template v-for="(seg, i) in segments" :key="i">
             <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+            <pre v-else-if="seg.type === 'widget'"><code>{{ seg.code }}</code></pre>
             <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
             <div v-else v-html="seg.html" />
           </template>

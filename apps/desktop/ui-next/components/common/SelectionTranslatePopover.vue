@@ -40,6 +40,7 @@
           <div v-else class="sttresult" @click="onMdLinkClick">
             <template v-for="(seg, i) in resultSegments" :key="i">
               <pre v-if="seg.type === 'mermaid'" class="sttcode"><code>{{ seg.code }}</code></pre>
+              <pre v-else-if="seg.type === 'widget'"><code>{{ seg.code }}</code></pre>
               <!-- eslint-disable-next-line vue/no-v-html -- sanitized in useMarkdown -->
               <div v-else class="sttmd" v-html="seg.html" />
             </template>

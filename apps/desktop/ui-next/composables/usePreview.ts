@@ -18,7 +18,9 @@ export type PreviewRef = {
   // 'html' renders a sandboxed iframe (render) with a raw (Monaco) toggle;
   // 'video' / 'audio' stream through the media:// protocol (workspace files) or an
   // in-memory `src` (drag-dropped blob); 'doc' (Word) / 'sheet' (Excel) are parsed
-  // from their OOXML bytes (utils/office-*); all other kinds render a single file.
+  // from their OOXML bytes (utils/office-*); 'notebook' (.ipynb) is parsed from its
+  // JSON into cells + outputs (common/NotebookView); all other kinds render a
+  // single file.
   kind:
     | 'image'
     | 'pdf'
@@ -31,6 +33,7 @@ export type PreviewRef = {
     | 'audio'
     | 'doc'
     | 'sheet'
+    | 'notebook'
   // Object URL / data URL for images and PDFs (drag-dropped / inlined files).
   src?: string
   // In-memory source for markdown / text (e.g. drag-dropped files).
@@ -62,12 +65,17 @@ const RE_AUDIO = /\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|weba)$/i
 // keep falling through to the "binary file, open externally" placeholder.
 const RE_DOC = /\.(docx|docm|dotx)$/i
 const RE_SHEET = /\.(xlsx|xlsm|xltx)$/i
+// Jupyter notebooks are JSON on disk; without this they previewed as raw `text`
+// (a wall of JSON in Monaco) even though the model can read/edit them through the
+// NotebookRead / NotebookEdit tools.
+const RE_NOTEBOOK = /\.ipynb$/i
 
 export function previewKindFromPath(path: string): PreviewRef['kind'] {
   if (RE_IMAGE.test(path)) return 'image'
   if (RE_PDF.test(path)) return 'pdf'
   if (RE_MD.test(path)) return 'markdown'
   if (RE_HTML.test(path)) return 'html'
+  if (RE_NOTEBOOK.test(path)) return 'notebook'
   if (RE_VIDEO.test(path)) return 'video'
   if (RE_AUDIO.test(path)) return 'audio'
   if (RE_DOC.test(path)) return 'doc'
@@ -113,6 +121,7 @@ export function previewKindFromAttachment(a: {
   if (a.text == null) return 'file'
   if (RE_MD.test(a.name)) return 'markdown'
   if (RE_HTML.test(a.name)) return 'html'
+  if (RE_NOTEBOOK.test(a.name)) return 'notebook'
   return 'text'
 }
 

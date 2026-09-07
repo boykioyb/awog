@@ -31,6 +31,10 @@
               <div v-else-if="m.text" class="lcp-text lcp-md mdwrap">
                 <template v-for="(seg, si) in segmentsFor(m.text)" :key="si">
                   <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+                  <pre
+                    v-else-if="seg.type === 'widget'"
+                    class="mmdstream"
+                  ><code>{{ seg.code }}</code></pre>
                   <SessionMarkdownHtml v-else :html="seg.html" />
                 </template>
               </div>
@@ -44,6 +48,10 @@
             <div class="lcp-text lcp-md mdwrap">
               <template v-for="(seg, si) in streamingSegments" :key="si">
                 <MermaidView v-if="seg.type === 'mermaid'" :code="seg.code" />
+                <pre
+                  v-else-if="seg.type === 'widget'"
+                  class="mmdstream"
+                ><code>{{ seg.code }}</code></pre>
                 <SessionMarkdownHtml v-else :html="seg.html" />
               </template>
               <span class="lcp-caret">▋</span>
