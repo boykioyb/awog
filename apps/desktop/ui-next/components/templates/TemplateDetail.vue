@@ -9,6 +9,14 @@
         {{ t('templates.detail.entityCount', { n: template.entities.length }) }}
       </span>
       <span style="flex: 1" />
+      <button
+        v-if="template.sourceUrl"
+        class="iconbtn"
+        :title="t('templatesUpdate.check')"
+        @click="emit('check-update')"
+      >
+        <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      </button>
       <button class="btn pri sm" :title="t('templates.detail.install')" @click="emit('install')">
         <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.detail.install') }}
@@ -62,7 +70,9 @@ import {
 
 const props = defineProps<{ template: ProjectTemplate }>()
 
-const emit = defineEmits<{ install: []; delete: [] }>()
+// `check-update` chỉ phát khi bundle có `sourceUrl` — template tự tạo tại chỗ
+// không có nguồn để đối chiếu.
+const emit = defineEmits<{ install: []; delete: []; 'check-update': [] }>()
 
 const { t } = useI18n()
 

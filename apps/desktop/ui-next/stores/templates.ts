@@ -25,14 +25,69 @@ export type TemplateEntityRef = {
 
 // A saved template bundle (mirror of sidecar ProjectTemplate). The store owns
 // its own minimal slice — NOT imported from the sidecar package.
+//
+// `version`/`sourceUrl`/`sourceRef`/`installedAt` only exist on bundles fetched
+// from a source (WP10): they come from the bundle's `.install.json` and are what
+// makes a template a re-installable plugin. A locally exported bundle has none.
 export type ProjectTemplate = {
   id: string
   name: string
   description: string
   createdAt: string
   sourceProjectId?: string
+  version?: string
+  sourceUrl?: string
+  sourceRef?: string
+  installedAt?: string
   entities: TemplateEntityRef[]
 }
+
+// ─── Update from source (WP10) ───────────────────────────────────────────────
+
+// Per-entity verdict of `templates.checkUpdate`, comparing the source against the
+// baseline recorded at install time:
+//   status        — what the SOURCE did (added / changed / removed / unchanged)
+//   localModified — the user edited this entity after installing
+//   conflict      — both at once; the engine refuses to overwrite without a choice
+export type TemplateEntityStatus = 'added' | 'changed' | 'removed' | 'unchanged'
+
+export type TemplateEntityDiff = {
+  kind: ConfigKind
+  id: string
+  status: TemplateEntityStatus
+  localModified: boolean
+  conflict: boolean
+}
+
+export type TemplateUpdateCheck = {
+  id: string
+  hasRemote: boolean
+  hasUpdate: boolean
+  conflicts: number
+  currentVersion?: string
+  remoteVersion?: string
+  sourceUrl?: string
+  sourceRef?: string
+  installedAt?: string
+  checkedAt: string
+  entities: TemplateEntityDiff[]
+}
+
+export type ConflictChoice = 'keepLocal' | 'takeRemote'
+
+export type TemplateUpdateResolution = { kind: ConfigKind; id: string; choice: ConflictChoice }
+
+export type TemplateEntityChange = {
+  kind: ConfigKind
+  id: string
+  action: 'added' | 'updated' | 'removed' | 'keptLocal'
+}
+
+export type TemplateUpdateResult =
+  | { status: 'no-remote' }
+  | { status: 'up-to-date' }
+  | { status: 'conflicts'; conflicts: TemplateEntityDiff[] }
+  | { status: 'updated'; version?: string; applied: TemplateEntityChange[] }
 
 // One entity selected for a new template — kind + id + tier metadata.
 export type TemplateEntitySpec = {
@@ -58,6 +113,8 @@ type TemplatesListResponse = { templates: ProjectTemplate[] }
 type TemplateGetResponse = { template: ProjectTemplate }
 type TemplateCreateResponse = { template: ProjectTemplate }
 type TemplateInstallResponse = { result: TemplateInstallResult }
+type TemplateCheckUpdateResponse = { check: TemplateUpdateCheck }
+type TemplateUpdateResponse = { result: TemplateUpdateResult }
 
 // Entity-list RPCs share the `{ projectIds }` param + `{ <kind>s }` response,
 // each item carrying `source` + `projectId`. We resolve a source project's
@@ -166,6 +223,37 @@ export const useTemplatesStore = defineStore('templates', () => {
     return res
   }
 
+  // Ask a bundle's source whether it has a newer version (WP10). Content is
+  // compared by hash, so a source that forgot to bump its version label is still
+  // detected. Never writes anything.
+  async function checkUpdate(id: string): Promise<TemplateUpdateCheck> {
+    if (!available.value) {
+      return {
+        id,
+        hasRemote: false,
+        hasUpdate: false,
+        conflicts: 0,
+        checkedAt: new Date().toISOString(),
+        entities: [],
+      }
+    }
+    const res = await sc.request<TemplateCheckUpdateResponse>('templates.checkUpdate', { id })
+    return res.check
+  }
+
+  // Re-install a bundle from its source. Entities the user edited locally that
+  // the source also touched need an explicit `keepLocal`/`takeRemote` choice —
+  // without one the engine writes nothing and answers `status: 'conflicts'`.
+  async function update(
+    id: string,
+    resolutions: TemplateUpdateResolution[] = [],
+  ): Promise<TemplateUpdateResult> {
+    if (!available.value) return { status: 'no-remote' }
+    const res = await sc.request<TemplateUpdateResponse>('templates.update', { id, resolutions })
+    if (res.result.status === 'updated') await get(id)
+    return res.result
+  }
+
   async function remove(id: string): Promise<void> {
     // Optimistic local removal.
     templates.value = templates.value.filter((tpl) => tpl.id !== id)
@@ -223,6 +311,8 @@ export const useTemplatesStore = defineStore('templates', () => {
     create,
     install,
     fetchRemote,
+    checkUpdate,
+    update,
     remove,
     resolveProjectEntities,
   }

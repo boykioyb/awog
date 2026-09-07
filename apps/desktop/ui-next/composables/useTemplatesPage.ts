@@ -6,6 +6,8 @@ import {
   useTemplatesStore,
   type ProjectTemplate,
   type TemplateFetchResult,
+  type TemplateUpdateCheck,
+  type TemplateUpdateResult,
 } from '~/stores/templates'
 
 // Page-controller for /templates — owns dialog + delete state + hydrate so
@@ -23,6 +25,7 @@ export function useTemplatesPage() {
   const sc = useSidecar()
   const { projects } = useProjects()
   const { toasts, pushToast, toastColor } = useToasts()
+  const { t } = useI18n()
 
   // Project roster (id + name) for the Save-as / Install pickers.
   const projectList = computed(() => projects.value.map((p) => ({ id: p.id, name: p.name })))
@@ -107,6 +110,52 @@ export function useTemplatesPage() {
     }
   }
 
+  // --- update (WP10) --------------------------------------------------------
+  // Kiểm tra nguồn TRƯỚC khi mở hộp thoại: nếu không có gì đổi thì một toast là
+  // đủ — mở một hộp thoại rỗng chỉ để nói "không có gì" là bắt người dùng đóng
+  // lại một cửa sổ vô nghĩa.
+  const updateDialogOpen = ref(false)
+  const checkingUpdate = ref(false)
+  const updateCheck = ref<TemplateUpdateCheck | null>(null)
+  const updateTemplateName = ref('')
+
+  const openUpdateFor = async (tpl: ProjectTemplate): Promise<void> => {
+    if (checkingUpdate.value) return
+    checkingUpdate.value = true
+    try {
+      const check = await store.checkUpdate(tpl.id)
+      if (!check.hasRemote) {
+        pushToast(t('templatesUpdate.noRemote'), 'info')
+        return
+      }
+      if (!check.hasUpdate) {
+        pushToast(t('templatesUpdate.upToDate'), 'info')
+        return
+      }
+      updateCheck.value = check
+      updateTemplateName.value = tpl.name
+      updateDialogOpen.value = true
+    } catch (err) {
+      pushToast(
+        t('templatesUpdate.checkFailed', { err: err instanceof Error ? err.message : String(err) }),
+        'error',
+      )
+    } finally {
+      checkingUpdate.value = false
+    }
+  }
+
+  const closeUpdateDialog = () => {
+    updateDialogOpen.value = false
+  }
+
+  const onUpdated = (result: TemplateUpdateResult) => {
+    // `keptLocal` không phải thay đổi trên đĩa — đếm nó vào là nói quá việc đã làm.
+    const applied =
+      result.status === 'updated' ? result.applied.filter((a) => a.action !== 'keptLocal') : []
+    pushToast(t('templatesUpdate.applied', { n: applied.length }), 'success')
+  }
+
   const onInstalled = (e: { installed: number; skipped: number }) => {
     pushToast(`Installed ${e.installed}, skipped ${e.skipped}`, 'success')
   }
@@ -154,6 +203,14 @@ export function useTemplatesPage() {
     onSaved,
     onFetched,
     onInstalled,
+    // update
+    updateDialogOpen,
+    checkingUpdate,
+    updateCheck,
+    updateTemplateName,
+    openUpdateFor,
+    closeUpdateDialog,
+    onUpdated,
     // delete
     pendingDelete,
     askDelete,

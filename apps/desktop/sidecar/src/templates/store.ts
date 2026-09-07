@@ -15,12 +15,15 @@
 // colocated siblings + exact format). Security (ADR 0036 D-7): imported hooks
 // land untrusted (no .trust.json), secret values are never copied.
 
+import { randomBytes } from 'node:crypto'
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile, rename } from 'node:fs/promises'
-import { join, resolve, sep } from 'node:path'
+import { dirname, join, resolve, sep } from 'node:path'
+import { z } from 'zod'
 import { awogHome, claudeHome, projectClaudeDir, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { RpcError } from '../transport/rpc.js'
 import { loadProject } from '../projects/store.js'
+import { readInstallMeta, type InstalledTemplate } from './install-meta.js'
 import type {
   ConfigKind,
   ProjectTemplate,
@@ -47,6 +50,35 @@ export function templateDir(id: string): string {
 
 export function manifestFile(id: string): string {
   return join(templateDir(id), 'template.json')
+}
+
+// Thư mục dựng tạm, NẰM CÙNG CHA với bundle thật (rename chỉ atomic trong cùng
+// filesystem) và bắt đầu bằng '.' nên listTemplates() bỏ qua.
+function scratchDir(kind: 'staging' | 'backup', id: string): string {
+  const rand = randomBytes(4).toString('hex')
+  return join(templatesRoot(), `.${kind}-${sanitizeChild(id)}-${process.pid}-${rand}`)
+}
+
+export function stagingDir(id: string): string {
+  return scratchDir('staging', id)
+}
+
+// Thay bundle bằng bản dựng sẵn ở `staging` qua 2 lần rename. Không bao giờ
+// `rm -rf` bản đang dùng trước khi bản mới sẵn sàng: rename thứ 2 hỏng thì bản
+// cũ được trả lại nguyên vẹn, nên không có trạng thái nửa vời.
+export async function swapBundle(staging: string, id: string): Promise<void> {
+  const target = templateDir(id)
+  await mkdir(dirname(target), { recursive: true, mode: 0o700 })
+  const backup = scratchDir('backup', id)
+  const hadOld = await isDir(target)
+  if (hadOld) await rename(target, backup)
+  try {
+    await rename(staging, target)
+  } catch (err) {
+    if (hadOld) await rename(backup, target)
+    throw err
+  }
+  if (hadOld) await rm(backup, { recursive: true, force: true })
 }
 
 async function fileExists(p: string): Promise<boolean> {
@@ -152,31 +184,83 @@ async function entityRoot(
 
 // ─── Public read API ──────────────────────────────────────────────────────────
 
-function parseManifest(raw: string, id: string): ProjectTemplate | null {
+// `template.json` là nội dung L1 (tải từ GitHub hoặc sửa tay) nên entity phải
+// qua schema, không ép kiểu. `file` bị chặn path traversal ngay tại biên: entity
+// nào có path không an toàn thì bị LOẠI, thay vì phó mặc cho isInside() ở dưới.
+export function isSafeBundleRelPath(rel: string): boolean {
+  if (!rel || rel.length > 1024) return false
+  if (rel.includes('\\') || rel.includes('\0')) return false
+  if (rel.startsWith('/')) return false
+  // Ổ đĩa Windows ('C:/…') — join() trên POSIX giữ nguyên nhưng vẫn là path lạ.
+  if (/^[A-Za-z]:/.test(rel)) return false
+  return rel.split('/').every((seg) => seg.length > 0 && seg !== '.' && seg !== '..')
+}
+
+const EntityRefSchema = z.object({
+  kind: z.enum(['agent', 'skill', 'hook', 'rule', 'command']),
+  id: z.string().min(1).max(256),
+  file: z.string().min(1).max(1024).refine(isSafeBundleRelPath, 'unsafe bundle path'),
+})
+
+const ManifestSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(4000).optional(),
+  createdAt: z.string().max(64).optional(),
+  version: z.string().max(120).optional(),
+  sourceProjectId: z.string().max(64).optional(),
+  entities: z.array(z.unknown()).max(1000).optional(),
+})
+
+function parseManifest(raw: string, id: string): InstalledTemplate | null {
+  let json: unknown
   try {
-    const obj = JSON.parse(raw) as Partial<ProjectTemplate>
-    if (typeof obj.name !== 'string') return null
-    return {
-      id,
-      name: obj.name,
-      description: typeof obj.description === 'string' ? obj.description : '',
-      createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : '',
-      ...(typeof obj.sourceProjectId === 'string' ? { sourceProjectId: obj.sourceProjectId } : {}),
-      entities: Array.isArray(obj.entities) ? (obj.entities as TemplateEntityRef[]) : [],
-    }
+    json = JSON.parse(raw)
   } catch {
     return null
   }
+  const parsed = ManifestSchema.safeParse(json)
+  if (!parsed.success) return null
+  const m = parsed.data
+  const entities: TemplateEntityRef[] = []
+  for (const candidate of m.entities ?? []) {
+    const ref = EntityRefSchema.safeParse(candidate)
+    if (ref.success) entities.push(ref.data)
+    else log.warn('templates: dropping invalid entity ref in manifest', { id })
+  }
+  return {
+    id,
+    name: m.name,
+    description: m.description ?? '',
+    createdAt: m.createdAt ?? '',
+    ...(m.version ? { version: m.version } : {}),
+    ...(m.sourceProjectId ? { sourceProjectId: m.sourceProjectId } : {}),
+    entities,
+  }
 }
 
-export async function listTemplates(): Promise<ProjectTemplate[]> {
+// Gắn provenance (`.install.json`) vào template đọc từ manifest. Bundle export
+// tại chỗ không có file này ⇒ không có sourceUrl ⇒ UI ẩn nút cập nhật.
+async function withInstallMeta(tpl: InstalledTemplate): Promise<InstalledTemplate> {
+  const meta = await readInstallMeta(templateDir(tpl.id))
+  if (!meta) return tpl
+  const version = tpl.version ?? meta.version
+  return {
+    ...tpl,
+    ...(version ? { version } : {}),
+    sourceUrl: meta.sourceUrl,
+    sourceRef: meta.sourceRef,
+    installedAt: meta.installedAt,
+  }
+}
+
+export async function listTemplates(): Promise<InstalledTemplate[]> {
   let entries: string[]
   try {
     entries = await readdir(templatesRoot())
   } catch {
     return []
   }
-  const out: ProjectTemplate[] = []
+  const out: InstalledTemplate[] = []
   for (const id of entries) {
     if (id.startsWith('.')) continue
     // eslint-disable-next-line no-await-in-loop
@@ -185,7 +269,8 @@ export async function listTemplates(): Promise<ProjectTemplate[]> {
       // eslint-disable-next-line no-await-in-loop
       const raw = await readFile(manifestFile(id), 'utf8')
       const t = parseManifest(raw, id)
-      if (t) out.push(t)
+      // eslint-disable-next-line no-await-in-loop
+      if (t) out.push(await withInstallMeta(t))
     } catch {
       // skip a template with no/broken manifest
     }
@@ -194,13 +279,15 @@ export async function listTemplates(): Promise<ProjectTemplate[]> {
   return out
 }
 
-export async function getTemplate(id: string): Promise<ProjectTemplate | null> {
+export async function getTemplate(id: string): Promise<InstalledTemplate | null> {
+  let raw: string
   try {
-    const raw = await readFile(manifestFile(id), 'utf8')
-    return parseManifest(raw, id)
+    raw = await readFile(manifestFile(id), 'utf8')
   } catch {
     return null
   }
+  const tpl = parseManifest(raw, id)
+  return tpl ? await withInstallMeta(tpl) : null
 }
 
 // ─── Create (export from `.awog`) ──────────────────────────────────────────────

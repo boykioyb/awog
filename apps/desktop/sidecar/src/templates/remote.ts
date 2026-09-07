@@ -18,14 +18,29 @@
 // Installed hooks still land untrusted (no .trust.json) via the normal install
 // path. Templates never carry secret values — only ${secret:KEY} refs.
 
-import { mkdir, writeFile, rename, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, writeFile, rm, stat } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import { ssrfCheck } from '../mcp/http-client.js'
 import { sanitizeChild } from '../util/path.js'
-import { getTemplate, isInside, manifestFile, slugify, templateDir } from './store.js'
+import {
+  getTemplate,
+  isInside,
+  isSafeBundleRelPath,
+  slugify,
+  stagingDir,
+  swapBundle,
+  templateDir,
+} from './store.js'
+import {
+  baselineFromDisk,
+  entityKeyOf,
+  writeInstallMeta,
+  MANIFEST_NAME,
+  type HashMap,
+} from './install-meta.js'
 import type { ProjectTemplate, TemplateEntityRef, TemplateFetchResult } from '../types/shared.js'
 
 const API_HOST = 'api.github.com'
@@ -40,25 +55,30 @@ const MAX_TOTAL_BYTES = 20 * 1024 * 1024 // 20 MB total
 const MAX_FILES = 500
 const MAX_MANIFEST_BYTES = 256 * 1024 // 256 KB
 const FETCH_TIMEOUT_MS = 20_000
-const MANIFEST_NAME = 'template.json'
 
 const ManifestSchema = z.object({
   id: z.string().min(1).max(120).optional(),
   name: z.string().min(1).max(200),
   description: z.string().max(4000).optional(),
+  // Nhãn phiên bản do tác giả template đặt (semver hay gì cũng được — AWOG chỉ
+  // hiển thị). Việc "có bản mới không" quyết định bằng HASH nội dung, không bằng
+  // chuỗi này, nên nguồn quên bump version vẫn phát hiện được thay đổi.
+  version: z.string().max(120).optional(),
   entities: z
     .array(
       z.object({
         kind: z.enum(['agent', 'skill', 'hook', 'rule', 'command']),
         id: z.string().min(1).max(256),
-        file: z.string().min(1).max(1024),
+        // L1 + invariant #2: chặn traversal ngay tại biên schema, không đợi
+        // isInside() ở lớp ghi. `file` từ nguồn ngoài đi thẳng vào path.join().
+        file: z.string().min(1).max(1024).refine(isSafeBundleRelPath, 'unsafe entity path'),
       }),
     )
     .max(MAX_FILES),
 })
 type RemoteManifest = z.infer<typeof ManifestSchema>
 
-interface RepoRef {
+export interface RepoRef {
   owner: string
   repo: string
   ref: string // branch / tag / sha (single segment)
@@ -69,19 +89,25 @@ interface TreeEntry {
   path: string
   type: string
   size?: number
+  // Git blob SHA-1 — cho phép so nội dung với bản đã cài mà không tải blob.
+  sha?: string
 }
 
 // One file resolved for download (during the plan phase).
-interface PlannedFile {
+export interface PlannedFile {
   repoPath: string // path within the repo
   relPath: string // path within the bundle (= local write path)
   size: number
+  sha: string // git blob SHA-1 từ tree ('' nếu GitHub không trả)
+  entityKey: string // `${kind}/${id}` — file này thuộc entity nào
 }
 
-interface PlannedBundle {
+export interface PlannedBundle {
   localId: string
   name: string
   description: string
+  version?: string
+  bundleDir: string // thư mục bundle trong repo ('' = gốc link)
   entities: TemplateEntityRef[]
   files: PlannedFile[]
   overwriteExisting: boolean
@@ -266,6 +292,14 @@ function discoverBundleDirs(tree: TreeEntry[], dirPath: string): string[] {
   return [...dirs]
 }
 
+// URL chuẩn hoá TRỎ ĐÚNG MỘT bundle — cái được ghi vào `.install.json` để lần
+// sau check update chỉ phải đọc đúng bundle đó, kể cả khi link gốc là registry.
+export function bundleUrl(ref: RepoRef, bundleDir: string): string {
+  const base = `https://github.com/${ref.owner}/${ref.repo}/tree/${encodeURIComponent(ref.ref)}`
+  if (!bundleDir) return base
+  return `${base}/${bundleDir.split('/').map(encodeURIComponent).join('/')}`
+}
+
 function safeRelPath(relPath: string): boolean {
   if (!relPath || relPath.includes('..')) return false
   return relPath.split('/').every((seg) => seg.length > 0 && seg !== '.' && seg !== '..')
@@ -309,7 +343,13 @@ function planBundle(
       }
       if (seenRepoPaths.has(blob.path)) continue
       seenRepoPaths.add(blob.path)
-      files.push({ repoPath: blob.path, relPath, size: blob.size ?? 0 })
+      files.push({
+        repoPath: blob.path,
+        relPath,
+        size: blob.size ?? 0,
+        sha: typeof blob.sha === 'string' ? blob.sha : '',
+        entityKey: entityKeyOf(entity.kind, entity.id),
+      })
       kept = true
     }
     if (kept) keptEntities.push({ kind: entity.kind, id: entity.id, file: entity.file })
@@ -321,6 +361,8 @@ function planBundle(
       localId,
       name: manifest.name,
       description: manifest.description ?? '',
+      ...(manifest.version ? { version: manifest.version } : {}),
+      bundleDir,
       entities: keptEntities,
       files,
       overwriteExisting,
@@ -338,34 +380,107 @@ async function dirExists(p: string): Promise<boolean> {
 
 // ─── Execute: download + write one planned bundle ──────────────────────────
 
-async function writeBundle(ref: RepoRef, bundle: PlannedBundle): Promise<ProjectTemplate> {
-  const localDir = templateDir(bundle.localId)
-  if (bundle.overwriteExisting) await rm(localDir, { recursive: true, force: true })
-  await mkdir(localDir, { recursive: true, mode: 0o700 })
-
-  for (const f of bundle.files) {
+// Tải một tập file đã lên kế hoạch vào `destDir`. Cap được áp trên byte THẬT
+// nhận về (kích thước trong tree chỉ là lời khai của nguồn — L1).
+export async function downloadFilesInto(
+  ref: RepoRef,
+  files: PlannedFile[],
+  destDir: string,
+): Promise<void> {
+  if (files.length > MAX_FILES) throw new RpcError(-32014, `too many files (> ${MAX_FILES})`)
+  let total = 0
+  for (const f of files) {
     // Re-assert path safety at write time (defense in depth, invariant #2).
-    const dest = join(localDir, ...f.relPath.split('/').map(sanitizeChild))
-    if (!isInside(dest, localDir)) throw new RpcError(-32010, `unsafe path: ${f.relPath}`)
+    const dest = join(destDir, ...f.relPath.split('/').map(sanitizeChild))
+    if (!isInside(dest, destDir)) throw new RpcError(-32010, `unsafe path: ${f.relPath}`)
+    // eslint-disable-next-line no-await-in-loop
     const res = await httpGet(rawUrl(ref, f.repoPath), 'application/octet-stream')
     if (!res.ok) throw new RpcError(-32012, `cannot download ${f.repoPath} (HTTP ${res.status})`)
+    // eslint-disable-next-line no-await-in-loop
     const buf = await readCapped(res, MAX_FILE_BYTES, f.repoPath)
-    await mkdir(join(dest, '..'), { recursive: true, mode: 0o700 })
+    total += buf.byteLength
+    if (total > MAX_TOTAL_BYTES)
+      throw new RpcError(-32014, `bundle too large (> ${MAX_TOTAL_BYTES} bytes)`)
+    // eslint-disable-next-line no-await-in-loop
+    await mkdir(dirname(dest), { recursive: true, mode: 0o700 })
+    // eslint-disable-next-line no-await-in-loop
     await writeFile(dest, buf)
   }
+}
 
-  const template: ProjectTemplate = {
-    id: bundle.localId,
-    name: bundle.name,
-    description: bundle.description,
-    createdAt: new Date().toISOString(),
-    entities: bundle.entities,
+// Ghi manifest + `.install.json` vào một thư mục bundle vừa dựng xong.
+export async function finalizeBundleDir(
+  dir: string,
+  template: ProjectTemplate & { version?: string },
+  provenance: {
+    sourceUrl: string
+    sourceRef: string
+    version?: string
+    entities: Record<string, HashMap>
+  },
+): Promise<void> {
+  await writeFile(join(dir, MANIFEST_NAME), JSON.stringify(template, null, 2), 'utf8')
+  await writeInstallMeta(dir, {
+    sourceUrl: provenance.sourceUrl,
+    sourceRef: provenance.sourceRef,
+    installedAt: new Date().toISOString(),
+    ...(provenance.version ? { version: provenance.version } : {}),
+    entities: provenance.entities,
+  })
+}
+
+// Dựng bundle trong thư mục tạm rồi mới đổi chỗ. KHÔNG `rm -rf` bản đang có
+// trước khi tải: mất mạng giữa chừng thì bản cũ còn nguyên.
+async function writeBundle(ref: RepoRef, bundle: PlannedBundle): Promise<void> {
+  const staging = stagingDir(bundle.localId)
+  await mkdir(staging, { recursive: true, mode: 0o700 })
+  try {
+    await downloadFilesInto(ref, bundle.files, staging)
+    const template: ProjectTemplate & { version?: string } = {
+      id: bundle.localId,
+      name: bundle.name,
+      description: bundle.description,
+      createdAt: new Date().toISOString(),
+      ...(bundle.version ? { version: bundle.version } : {}),
+      entities: bundle.entities,
+    }
+    await finalizeBundleDir(staging, template, {
+      sourceUrl: bundleUrl(ref, bundle.bundleDir),
+      sourceRef: ref.ref,
+      ...(bundle.version ? { version: bundle.version } : {}),
+      // Fetch mới: đĩa CHÍNH LÀ nguồn, chưa có sửa đổi cục bộ nào.
+      entities: await baselineFromDisk(staging, bundle.entities),
+    })
+    await swapBundle(staging, bundle.localId)
+  } finally {
+    await rm(staging, { recursive: true, force: true })
   }
-  const file = manifestFile(bundle.localId)
-  const tmp = `${file}.tmp.${process.pid}`
-  await writeFile(tmp, JSON.stringify(template, null, 2), 'utf8')
-  await rename(tmp, file)
-  return template
+}
+
+// ─── Plan đúng MỘT bundle (đường vào của check/update) ─────────────────────
+
+export interface SingleBundlePlan {
+  ref: RepoRef
+  bundle: PlannedBundle
+}
+
+// Giải một `sourceUrl` (luôn trỏ 1 bundle) thành kế hoạch đầy đủ. Ref rỗng ⇒
+// nhánh mặc định được giải LẠI mỗi lần, nên nguồn theo branch tự bám HEAD mới.
+export async function planSingleBundle(url: string): Promise<SingleBundlePlan> {
+  const ref = parseGithubUrl(url)
+  if (!ref.ref) ref.ref = await resolveDefaultBranch(ref)
+  const tree = await fetchTree(ref)
+  const dirs = discoverBundleDirs(tree, ref.dirPath)
+  const bundleDir = dirs.includes(ref.dirPath) ? ref.dirPath : dirs.length === 1 ? dirs[0] : undefined
+  if (bundleDir === undefined)
+    throw new RpcError(-32012, `no ${MANIFEST_NAME} at that folder — the source may have moved`)
+  const manifest = await fetchManifest(ref, bundleDir)
+  const blobByPath = new Map(tree.filter((e) => e.type === 'blob').map((e) => [e.path, e]))
+  const { bundle, reason } = planBundle(bundleDir, manifest, blobByPath, tree, true)
+  if (!bundle) throw new RpcError(-32012, reason ?? 'invalid bundle at source')
+  const oversized = bundle.files.find((f) => f.size > MAX_FILE_BYTES)
+  if (oversized) throw new RpcError(-32014, `${oversized.repoPath} exceeds ${MAX_FILE_BYTES} bytes`)
+  return { ref, bundle }
 }
 
 // ─── Public entry ──────────────────────────────────────────────────────────

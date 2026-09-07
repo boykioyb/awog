@@ -34,7 +34,12 @@
       </template>
 
       <template #detail="{ item: tpl }">
-        <TemplateDetail :template="tpl" @install="openInstallFor(tpl)" @delete="askDelete(tpl)" />
+        <TemplateDetail
+          :template="tpl"
+          @install="openInstallFor(tpl)"
+          @delete="askDelete(tpl)"
+          @check-update="openUpdateFor(tpl)"
+        />
       </template>
     </LibraryView>
 
@@ -57,6 +62,15 @@
 
     <!-- fetch from a public GitHub folder (ADR 0037) -->
     <FetchFromGithubDialog :open="fetchDialogOpen" @close="closeFetchDialog" @fetched="onFetched" />
+
+    <TemplateUpdateDialog
+      v-if="updateCheck"
+      :open="updateDialogOpen"
+      :template-name="updateTemplateName"
+      :check="updateCheck"
+      @close="closeUpdateDialog"
+      @updated="onUpdated"
+    />
 
     <!-- delete confirm -->
     <LibraryConfirmDelete
@@ -91,6 +105,7 @@ import FetchFromGithubDialog from '~/components/templates/FetchFromGithubDialog.
 import InstallTemplateDialog from '~/components/templates/InstallTemplateDialog.vue'
 import SaveAsTemplateDialog from '~/components/templates/SaveAsTemplateDialog.vue'
 import TemplateDetail from '~/components/templates/TemplateDetail.vue'
+import TemplateUpdateDialog from '~/components/templates/TemplateUpdateDialog.vue'
 import { useTemplatesPage } from '~/composables/useTemplatesPage'
 
 const { t } = useI18n()
@@ -114,6 +129,12 @@ const {
   onSaved,
   onFetched,
   onInstalled,
+  updateDialogOpen,
+  updateCheck,
+  updateTemplateName,
+  openUpdateFor,
+  closeUpdateDialog,
+  onUpdated,
   pendingDelete,
   askDelete,
   cancelDelete,
