@@ -30,6 +30,14 @@
         <button
           class="iconbtn"
           style="width: 28px; height: 28px"
+          :title="t('projectsInit.action')"
+          @click="initDocsOpen = true"
+        >
+          <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </button>
+        <button
+          class="iconbtn"
+          style="width: 28px; height: 28px"
           :title="t('projects.detail.saveAsTemplate')"
           @click="emit('save-template')"
         >
@@ -112,6 +120,16 @@
         :open-number="tab === 'prs' ? openNumber : null"
       />
     </template>
+
+    <!-- Sinh CLAUDE.md từ repo. Modal tự chứa (state cục bộ + RPC riêng) nên
+         trang /projects không phải nối thêm dây; chỉ mở ở chế độ đầy đủ vì
+         quick-view là để xem, không phải để ghi file. -->
+    <ProjectInitDocsModal
+      v-if="!compact"
+      :open="initDocsOpen"
+      :project="project"
+      @close="initDocsOpen = false"
+    />
   </div>
 </template>
 
@@ -124,6 +142,7 @@
 // bubble to the page.
 import { computed, ref, watch } from 'vue'
 import ProjectGh from './ProjectGh.vue'
+import ProjectInitDocsModal from './ProjectInitDocsModal.vue'
 import ProjectOverview from './ProjectOverview.vue'
 import type { ProjectRepo, ProjectView } from './data'
 import { useProjectRepos } from '~/composables/useProjectRepos'
@@ -204,6 +223,9 @@ watch(
 )
 
 type Tab = 'overview' | 'issues' | 'prs'
+// Modal sinh tài liệu dự án — state cục bộ, không bubble lên trang.
+const initDocsOpen = ref(false)
+
 const tab = ref<Tab>('overview')
 
 // Which GH tabs have been opened this visit — gates lazy mount (so a tab fetches
