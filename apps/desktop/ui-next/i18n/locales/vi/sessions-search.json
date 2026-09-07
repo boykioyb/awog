@@ -1,0 +1,20 @@
+{
+  "sessionsSearch.section.title": "Trong nội dung phiên",
+  "sessionsSearch.hint": "Bấm một kết quả để mở phiên và nhảy tới đúng tin nhắn đó.",
+  "sessionsSearch.loading": "Đang tìm trong mọi phiên…",
+  "sessionsSearch.empty": "Không có tin nhắn nào khớp “{q}”",
+  "sessionsSearch.truncated": "Chỉ hiện {n} kết quả đầu — hãy thu hẹp từ khoá.",
+  "sessionsSearch.error": "Tìm kiếm thất bại. Thử lại nhé.",
+  "sessionsSearch.role.user": "Bạn",
+  "sessionsSearch.role.agent": "Agent",
+  "sessionsSearch.role.system": "Hệ thống",
+  "sessionsSearch.open.notFound": "Phiên này không còn trong danh sách.",
+  "sessionsSearch.jump.notFound": "Tin nhắn đó không còn trong phiên này.",
+  "sessionsSearch.jump.failed": "Chưa tới được tin nhắn đó. Thử lại nhé.",
+  "sessionsSearch.archive.archive": "Lưu trữ",
+  "sessionsSearch.archive.unarchive": "Bỏ lưu trữ",
+  "sessionsSearch.archive.show": "Hiện phiên đã lưu trữ",
+  "sessionsSearch.archive.badge": "Đã lưu trữ",
+  "sessionsSearch.archive.notSaved": "Phiên này chưa được lưu.",
+  "sessionsSearch.archive.failed": "Không đổi được trạng thái lưu trữ."
+}

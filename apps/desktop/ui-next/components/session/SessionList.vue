@@ -97,6 +97,19 @@
           </div>
         </div>
       </div>
+      <!-- Archived sessions are hidden by default; the toggle pulls them in on first
+           use (store.loadArchivedSessions) and then only filters, so flipping it is
+           instant. Persisted next to group-by / sort-by. -->
+      <div class="csrow arch" @click="toggleShowArchived">
+        <span class="lcbox" :class="{ on: showArchived }">
+          <Icon
+            v-if="showArchived"
+            name="check"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
+        </span>
+        <span class="archlbl">{{ t('sessionsSearch.archive.show') }}</span>
+      </div>
     </div>
 
     <!-- Bulk bar shows whenever select mode is ON — even with 0 selected — so
@@ -244,6 +257,45 @@
       </template>
     </div>
 
+    <!-- Cross-session content search (docs/features/cross-session-search.md). The box
+         above still filters TITLES instantly and locally; this section answers the
+         other half — which transcript, anywhere, contains this text. -->
+    <div v-if="searchOpen" class="csearch">
+      <div class="csh">
+        <Icon name="search" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <span class="csttl">{{ t('sessionsSearch.section.title') }}</span>
+        <span v-if="hits.length" class="cscount">{{ hits.length }}</span>
+      </div>
+      <div class="csbody">
+        <div v-if="searchLoading" class="csnote">{{ t('sessionsSearch.loading') }}</div>
+        <div v-else-if="searchError" class="csnote err">{{ searchError }}</div>
+        <template v-else-if="hits.length">
+          <div class="csnote">{{ t('sessionsSearch.hint') }}</div>
+          <div
+            v-for="h in hits"
+            :key="`${h.sessionId}:${h.messageId}`"
+            class="cshit"
+            @click="openHit(h)"
+          >
+            <div class="cshead">
+              <span class="csname">{{ h.sessionTitle }}</span>
+              <span class="cstime">{{ hitTime(h.at) }}</span>
+            </div>
+            <div class="cssnip">
+              <span class="csrole">{{ t(`sessionsSearch.role.${h.role}`) }}</span>
+              <span v-for="(part, i) in snippetParts(h)" :key="i" :class="{ hl: part.hit }">
+                {{ part.text }}
+              </span>
+            </div>
+          </div>
+          <div v-if="searchTruncated" class="csnote">
+            {{ t('sessionsSearch.truncated', { n: hits.length }) }}
+          </div>
+        </template>
+        <div v-else class="csnote">{{ t('sessionsSearch.empty', { q: filter.trim() }) }}</div>
+      </div>
+    </div>
+
     <div
       v-if="groupMenu || sortMenu"
       style="position: fixed; inset: 0; z-index: 40"
@@ -274,6 +326,18 @@
         <div class="mi" @click="ctxPin">
           <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ ctx.session.pinned ? t('sessions.ctx.unpin') : t('sessions.ctx.pin') }}
+        </div>
+        <!-- Archive: hides the session from the list without deleting it. -->
+        <div class="mi" @click="ctxArchive">
+          <Icon
+            :name="store.isArchived(ctx.session.id) ? 'eye' : 'eye-off'"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
+          {{
+            store.isArchived(ctx.session.id)
+              ? t('sessionsSearch.archive.unarchive')
+              : t('sessionsSearch.archive.archive')
+          }}
         </div>
         <div class="mi" @click="ctxSelect">
           <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -328,6 +392,12 @@
 import type { Session, SortBy } from '~/composables/useSessionsData'
 import { PROJECT_COLOR_DEFAULT } from '~/composables/useProjectColors'
 import { pushActionToast } from '~/composables/useActionToasts'
+import {
+  highlightSnippet,
+  SESSION_SEARCH_MIN_CHARS,
+  useSessionSearch,
+  type SessionSearchHit,
+} from '~/composables/useSessionSearch'
 import { placeMenu } from '~/utils/context-menu'
 
 const props = defineProps<{ sessions: Session[]; activeId: number | null; listWidth: number }>()
@@ -371,13 +441,76 @@ function readSortBy(): SortBy {
   return v && (SORTBY as readonly string[]).includes(v) ? (v as SortBy) : 'updated'
 }
 
+// "Show archived" is a saved preference like group-by / sort-by (same key family).
+// Default OFF: archived sessions stay out of the way until asked for.
+const STORAGE_SHOW_ARCHIVED = 'awog.sessions.filter.showArchived'
+
 const filter = ref('')
 const groupBy = ref(readGroupBy())
 const sortBy = ref<SortBy>(readSortBy())
+const showArchived = ref(localStorage.getItem(STORAGE_SHOW_ARCHIVED) === '1')
 const showFilters = ref(false)
 
 watch(groupBy, (v) => localStorage.setItem(STORAGE_GROUPBY, v))
 watch(sortBy, (v) => localStorage.setItem(STORAGE_SORTBY, v))
+watch(
+  showArchived,
+  (v) => {
+    localStorage.setItem(STORAGE_SHOW_ARCHIVED, v ? '1' : '0')
+    // sessions.list omits archived sessions, so the first "show" needs one extra
+    // pull; afterwards the toggle is pure client-side filtering.
+    if (v) void store.loadArchivedSessions()
+  },
+  { immediate: true },
+)
+function toggleShowArchived() {
+  showArchived.value = !showArchived.value
+}
+
+// ── Cross-session content search ──────────────────────────────────────────────
+// Second, asynchronous half of the search box: `sessions.search` scans every
+// transcript on disk. Debounce + race guard live in the composable.
+const {
+  results: hits,
+  loading: searchLoading,
+  error: searchError,
+  truncated: searchTruncated,
+  matchedQuery,
+} = useSessionSearch(() => filter.value)
+
+const searchOpen = computed(() => filter.value.trim().length >= SESSION_SEARCH_MIN_CHARS)
+
+// Static "3 giờ trước" label for a hit (results are transient — no live ticking
+// like the list rows, which re-render off useNow). Wrapped in a script binding so
+// the template does not depend on a bare auto-import.
+function hitTime(at: string): string {
+  return relativeTime(at)
+}
+
+// Emphasis follows the query the RESULTS belong to, never the live input — while a
+// new query is in flight the rows on screen are already cleared, so the two can't
+// disagree.
+function snippetParts(h: SessionSearchHit) {
+  return highlightSnippet(h.snippet, matchedQuery.value)
+}
+
+// Open the session holding the match and hand the message anchor to the transcript
+// surface (the list column is a sibling of the detail column, so it cannot inject
+// that surface itself — ADR 0075). An archived session is not in the list until it
+// has been pulled in, hence the one retry.
+async function openHit(h: SessionSearchHit) {
+  let opened = await store.openByEngineId(h.sessionId)
+  if (!opened) {
+    await store.loadArchivedSessions()
+    opened = await store.openByEngineId(h.sessionId)
+  }
+  if (!opened) {
+    pushActionToast(t('sessionsSearch.open.notFound'), 'error')
+    return
+  }
+  const s = store.sessions.find((x) => x.engineId === h.sessionId)
+  if (s) store.requestMessageJump(s.id, h.messageId)
+}
 
 // Multi-select mode (§1) lives in the store (the tab context menu also enters it);
 // when on, every row shows its checkbox and a row click toggles selection. The bulk
@@ -434,7 +567,11 @@ const SORT_CMP: Record<SortBy, (a: Session, b: Session) => number> = {
 }
 
 const filtered = computed(() => {
-  const f = props.sessions.filter((s) => s.title.toLowerCase().includes(filter.value.toLowerCase()))
+  const q = filter.value.toLowerCase()
+  // Archived rows are out unless the filter drawer asks for them.
+  const f = props.sessions.filter(
+    (s) => s.title.toLowerCase().includes(q) && (showArchived.value || !store.isArchived(s.id)),
+  )
   const cmp = SORT_CMP[sortBy.value]
   // Pinned-first, then the chosen sort. Applies to the flat list and — since buckets
   // are filled from this order — keeps pinned sessions atop each group too.
@@ -584,6 +721,13 @@ function ctxAutoTitle() {
 function ctxPin() {
   if (ctx.value) store.togglePin(ctx.value.session.id)
   ctx.value = null
+}
+// Archive / un-archive the right-clicked session. Non-destructive: the transcript
+// stays on disk and searchable, the row just leaves the list.
+function ctxArchive() {
+  const s = ctx.value?.session
+  ctx.value = null
+  if (s) void store.setArchived(s.id, !store.isArchived(s.id))
 }
 function ctxSelect() {
   if (ctx.value) {
@@ -806,5 +950,119 @@ function toggleFoldAll() {
   color: var(--textDim);
   min-width: 68px;
   text-align: center;
+}
+/* "Show archived" row in the filter drawer. The shared .lcbox only shows on a row
+   hover / when checked — here it is a standing checkbox, so force it visible. */
+.sfdrawer .csrow.arch {
+  gap: 9px;
+  cursor: pointer;
+  user-select: none;
+}
+.sfdrawer .csrow.arch .lcbox {
+  display: grid;
+}
+.archlbl {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textDim);
+}
+.sfdrawer .csrow.arch:hover .archlbl {
+  color: var(--text);
+}
+/* Content-search section: docked under the (shrinking) list, capped so the list
+   above always keeps some rows, with its own scroll for the hits. */
+.csearch {
+  flex: 0 0 auto;
+  max-height: 46%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bgSubtle);
+}
+.csh {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  color: var(--textMuted);
+}
+.csttl {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 700;
+}
+.cscount {
+  margin-left: auto;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--textFaint);
+}
+.csbody {
+  overflow-y: auto;
+  padding: 0 7px 7px;
+}
+.csnote {
+  padding: 6px 4px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--textFaint);
+}
+.csnote.err {
+  color: var(--danger);
+}
+.cshit {
+  padding: 7px 8px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.cshit:hover {
+  background: var(--bgHover);
+}
+.cshead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.csname {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 550;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cstime {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--textFaint);
+}
+.cssnip {
+  margin-top: 3px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--textDim);
+  /* Two lines of context is enough to recognise the hit; the rest is in the session. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.csrole {
+  color: var(--textFaint);
+  margin-right: 5px;
+}
+.cssnip .hl {
+  background: var(--accentDim);
+  color: var(--text);
+  border-radius: var(--r-xs);
+  font-weight: 650;
 }
 </style>

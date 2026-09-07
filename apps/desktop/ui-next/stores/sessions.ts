@@ -17,7 +17,8 @@ import type { UsageEntry } from '~/composables/useAccountUsage'
 import { useSettingsStore } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
 import {
-  contextLimitFor,
+  CTX_DIVISOR,
+  contextLimitForUsage,
   contextTokensFromUsage,
   estimateContextTokens,
 } from '~/utils/context-window'
@@ -145,6 +146,20 @@ export type BgShellState = {
   // The model already consumed this one's result — a successful chip retires.
   read: boolean
 }
+// Kết quả `sessions.backgroundRead`: output thật đọc từ log của sidecar.
+export type BgShellOutput = {
+  shellId: string
+  status: BgShellStatus
+  exitCode: number | null
+  output: string
+  // Log dài hơn mức cap ⇒ chỉ có phần đuôi; `droppedBytes` là phần đầu bị bỏ.
+  truncated: boolean
+  droppedBytes: number
+  // Job nền của nhánh Claude SDK: chạy trong tiến trình CLI, không có file log ⇒
+  // output luôn rỗng. Rỗng vì bản chất, không phải vì lỗi.
+  external: boolean
+}
+
 // Event payloads for session.background-started / -done / -read.
 type BackgroundStartedPayload = {
   sessionId: string
@@ -321,6 +336,8 @@ type EngineMessage = {
     cacheWriteTokens?: number
     // Measured window occupancy of that turn's last request (see SessionUsage).
     contextTokens?: number
+    // Measured prompt size of that turn's first request (see SessionUsage).
+    baseTokens?: number
     costUsd?: number
     contextChars?: ContextChars
   }
@@ -366,6 +383,8 @@ interface SendMessageResult {
     // (input + cacheRead + cacheWrite of that one request). Drives the gauge +
     // auto-compact — see SessionUsage.contextTokens.
     context_tokens?: number
+    // Prompt size of the turn's FIRST request — see SessionUsage.baseTokens.
+    base_tokens?: number
     // Cost of THIS turn in USD (sidecar-computed via activity/pricing.ts). Summed
     // into the session's cumulative SessionUsage.cost. Absent → model has no price.
     cost_usd?: number
@@ -485,7 +504,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   function usagePct(s: Session): number {
     const used = contextTokensFromUsage(s.usage) || estimateContextTokens(s.msgs)
     if (!used) return 0
-    const max = s.usage?.max ?? contextLimitFor(modelIdFromDisplay(s.model))
+    const max = contextLimitForUsage(modelIdFromDisplay(s.model), s.usage)
     if (!max) return 0
     return Math.min(100, (used / max) * 100)
   }
@@ -1122,6 +1141,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
     if (cc) usage.contextChars = cc
     if (last.contextTokens) usage.contextTokens = last.contextTokens
+    if (last.baseTokens) usage.baseTokens = last.baseTokens
     if (cost > 0) usage.cost = cost
     return usage
   }
@@ -1993,6 +2013,94 @@ export const useSessionsStore = defineStore('sessions', () => {
     clearSelection()
   }
 
+  // ── Archive (docs/features/cross-session-search.md §3) ───────────────────────
+  // Archiving hides a session from the list without deleting anything: the JSONL
+  // stays on disk and the session keeps answering `sessions.get` / `sessions.search`.
+  // `sessions.list` omits archived sessions unless asked (includeArchived), so the
+  // renderer keeps its own id set and filters client-side — flipping the "show
+  // archived" toggle is then instant instead of a refetch.
+  //
+  // The set is keyed by CLIENT id (like selectedIds), so it survives the summary DTO
+  // shape being owned elsewhere; the engine id is only used on the wire.
+  type ArchivedSummaryDto = SessionSummaryDto & { archived?: boolean }
+
+  const archivedIds = ref<Set<number>>(new Set())
+  const isArchived = (id: number): boolean => archivedIds.value.has(id)
+
+  // One-shot: pull the sessions the default list left out and merge the ones we do
+  // not know yet. Called the first time the user asks to see archived sessions.
+  const archivedLoaded = ref(false)
+  async function loadArchivedSessions(): Promise<void> {
+    if (!useIpc || archivedLoaded.value) return
+    archivedLoaded.value = true
+    try {
+      const res = await sc.request<{ sessions: ArchivedSummaryDto[] }>('sessions.list', {
+        includeArchived: true,
+      })
+      const list = Array.isArray(res.sessions) ? res.sessions : []
+      const ids = new Set(archivedIds.value)
+      const added: Session[] = []
+      for (const dto of list) {
+        if (!dto.archived) continue
+        const known = byEngineId(dto.id)
+        const s = known ?? summaryToSession(dto)
+        if (!known) added.push(s)
+        ids.add(s.id)
+      }
+      if (added.length) sessions.value = [...sessions.value, ...added]
+      archivedIds.value = ids
+    } catch (err) {
+      // Retryable: a failed pull must not leave the toggle permanently empty.
+      archivedLoaded.value = false
+      console.warn('[sessions] sessions.list(includeArchived) failed', err)
+    }
+  }
+
+  // Archive / un-archive one session. Optimistic (the row leaves the list at once)
+  // and rolled back when the engine rejects — a silently-kept flag would hide a
+  // session the sidecar still lists on the next start.
+  async function setArchived(id: number, archived: boolean): Promise<void> {
+    const s = byId(id)
+    if (!s) return
+    if (!s.engineId) {
+      pushActionToast(useI18n().t('sessionsSearch.archive.notSaved'), 'info')
+      return
+    }
+    const apply = (on: boolean) => {
+      const next = new Set(archivedIds.value)
+      if (on) next.add(id)
+      else next.delete(id)
+      archivedIds.value = next
+    }
+    apply(archived)
+    if (!useIpc) return
+    try {
+      await sc.request('sessions.setArchived', { id: s.engineId, archived })
+    } catch (err) {
+      apply(!archived)
+      console.warn('[sessions] sessions.setArchived failed', err)
+      pushActionToast(useI18n().t('sessionsSearch.archive.failed'), 'error')
+    }
+  }
+
+  // ── Jump to a message requested from OUTSIDE the transcript ──────────────────
+  // Cross-session search lives in the list column, which is a SIBLING of the detail
+  // column — it cannot inject the transcript surface (ADR 0075), so it hands the
+  // anchor over here and the surface owner picks it up after the session opened.
+  // Anchored on the persisted message id (`eid`), never on an index (ADR 0074 §Q1).
+  const pendingJump = ref<{ sessionId: number; eid: string } | null>(null)
+  function requestMessageJump(sessionId: number, eid: string): void {
+    pendingJump.value = { sessionId, eid }
+  }
+  // Read-and-clear: the anchor is a one-shot navigation, not a state to re-apply on
+  // every re-render. Returns null when the pending jump belongs to another session.
+  function consumeMessageJump(sessionId: number): string | null {
+    const p = pendingJump.value
+    if (!p || p.sessionId !== sessionId) return null
+    pendingJump.value = null
+    return p.eid
+  }
+
   // ── Queue (§2) ───────────────────────────────────────────────────────────────
 
   function enqueue(id: number, text: string, att?: SessionAttachment[], command?: SlashCommandRef) {
@@ -2465,6 +2573,19 @@ export const useSessionsStore = defineStore('sessions', () => {
     } catch (err) {
       console.warn('[sessions] backgroundKill failed', err)
     }
+  }
+
+  // Đọc output thật của một job nền (ADR 0066) — nguồn cho modal "View output".
+  // `markRead: false`: người dùng xem KHÔNG phải model đã đọc, nếu đánh dấu thì
+  // chip bị retire oan. Lỗi ném ra cho người gọi (modal hiện trạng thái lỗi), khác
+  // các action trên vì đây là thao tác người dùng chủ động chờ kết quả.
+  async function readBackgroundOutput(engineId: string, shellId: string): Promise<BgShellOutput> {
+    if (!useIpc) throw new SidecarUnavailableError()
+    return await sc.request<BgShellOutput>('sessions.backgroundRead', {
+      sessionId: engineId,
+      shellId,
+      markRead: false,
+    })
   }
 
   // ─── Reactive wake (ADR 0066 P2) ──────────────────────────────────────────
@@ -3461,15 +3582,27 @@ export const useSessionsStore = defineStore('sessions', () => {
       // `history` bucket for the post-compaction estimate the engine returned so the
       // reduction is visible the instant the checkpoint lands (ADR 0058). Other
       // buckets (system/tools/…) are unchanged by compaction.
+      // Compaction removes exactly ONE thing: transcript. So adjust the measured
+      // occupancy by the transcript it freed and keep everything else — never DROP
+      // the measurement. Dropping it looked reasonable (the number describes the
+      // pre-cut context) but the fallback estimate counts only AWOG's own text, so
+      // the gauge collapsed from 84% to ~12% on a session whose real context barely
+      // moved. That re-armed the auto-compact latch (`pct < 85 - 15`) on every turn,
+      // and each compaction ALSO clears sdkSessionId — so every turn re-seeded a
+      // fresh Claude SDK session and re-wrote the whole ~140k prefix to cache. Seen
+      // live: 25k → one message → 168k, with a summarisation call burnt each round.
+      // Keeping the measurement makes the gauge honest instead: it shows compaction
+      // barely helped, which is the truth when the window is tools, not conversation.
       if (typeof res?.historyChars === 'number' && s.usage?.contextChars) {
+        const beforeChars = s.usage.contextChars.history ?? 0
         s.usage.contextChars = { ...s.usage.contextChars, history: res.historyChars }
+        const freed = Math.max(0, Math.round((beforeChars - res.historyChars) / CTX_DIVISOR))
+        if (s.usage.contextTokens) {
+          s.usage.contextTokens = Math.max(0, s.usage.contextTokens - freed)
+        }
+        // The transcript sits in the standing cost too, so the cut applies to both.
+        if (s.usage.baseTokens) s.usage.baseTokens = Math.max(0, s.usage.baseTokens - freed)
       }
-      // The MEASURED occupancy (last request's prompt size) describes the PRE-cut
-      // context and cannot be recomputed client-side, so leaving it would pin the
-      // gauge at its old height and re-arm auto-compact on the very next turn. Drop
-      // it: the gauge falls back to the char estimate until the next turn reports a
-      // fresh measurement against the cut context.
-      if (s.usage) delete s.usage.contextTokens
       return 'compacted'
     } catch (err) {
       console.warn('[sessions] compact failed', err)
@@ -3500,6 +3633,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     // silently drops back to the char estimate.
     const ctxTok = u.context_tokens ?? prev?.contextTokens
     if (ctxTok) usage.contextTokens = ctxTok
+    const baseTok = u.base_tokens ?? prev?.baseTokens
+    if (baseTok) usage.baseTokens = baseTok
     // Cost is CUMULATIVE across turns (unlike the token figures above, which are a
     // per-turn context-window snapshot). Sum this turn's cost onto the prior total;
     // omit entirely when neither side has a priced figure (UI then shows "n/a").
@@ -4113,6 +4248,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     bgShellsFor,
     loadBackgroundShells,
     killBackgroundShell,
+    readBackgroundOutput,
     // background reactive wake (ADR 0066 P2)
     pendingWakesFor,
     continueFromBackground,
@@ -4185,6 +4321,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     togglePinnedNotePreset,
     setBudget,
     compactSession,
+    // archive (docs/features/cross-session-search.md §3)
+    isArchived,
+    loadArchivedSessions,
+    setArchived,
+    // jump-to-message handoff (list column → transcript surface)
+    pendingJump,
+    requestMessageJump,
+    consumeMessageJump,
     // pin / bulk
     togglePin,
     toggleSelect,

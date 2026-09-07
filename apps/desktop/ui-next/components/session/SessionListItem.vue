@@ -59,6 +59,14 @@
       <span class="smeta">{{ session.model }}</span>
       <!-- Indicators + status badge, grouped on the far right (status rightmost). -->
       <span class="subright">
+        <!-- Archived rows are hidden until the list filter asks for them, so this chip
+             is the ONLY thing telling them apart once they show up
+             (docs/features/cross-session-search.md §3). Deliberately the quietest
+             weight in the row — faint text, no fill, no border — so it never competes
+             with the title. -->
+        <span v-if="archived" class="archchip" :title="t('sessionsSearch.archive.badge')">
+          {{ t('sessionsSearch.archive.badge') }}
+        </span>
         <!-- Popped out into its own OS window: this row is a pointer, the live view
              is over there (docs/features/session-popout-window.md). -->
         <span
@@ -186,6 +194,9 @@ const badgeStyle = computed(() => BADGE_STYLE[props.session.status])
 // session.project holds the engine projectId; show the resolved display name.
 const projName = computed(() => projectName(props.session.project))
 const selected = computed(() => store.selectedIds.has(props.session.id))
+// Archived state lives in the store as a set of client ids, NOT as a field on Session
+// (docs/features/cross-session-search.md §3.2) — read it through the getter.
+const archived = computed(() => store.isArchived(props.session.id))
 
 // Compact item indicators (§1): attachment / pending follow-up / queued counts.
 // Only chips with count > 0 are rendered.
@@ -329,6 +340,16 @@ input.ttl {
   padding: 2px 7px;
   border: 1px solid;
   border-radius: var(--r-xs);
+  font-size: 12px;
+  line-height: 12px;
+  white-space: nowrap;
+}
+/* "Archived" chip: same fixed 12px as the other sub-row chips (a badge must not grow
+   with the Appearance base size), faint text, no fill and no border so it stays a
+   whisper next to the status badge. Sentence case, system font — not a technical tag. */
+.archchip {
+  flex: 0 0 auto;
+  color: var(--textFaint);
   font-size: 12px;
   line-height: 12px;
   white-space: nowrap;

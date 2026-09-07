@@ -57,6 +57,7 @@ AWOG là một **desktop application** đóng gói bằng Electron, với Nuxt 4
 - Render trong Chromium do Electron mang theo (đồng nhất mọi OS — thay webview đa-engine của Tauri).
 - Render mọi editor (agent, skill, workflow, artifact).
 - Quản lý UI state cục bộ bằng Pinia.
+- **Sessions — tìm kiếm xuyên phiên + lưu trữ** ([spec](../features/cross-session-search.md)): cột danh sách lọc tiêu đề tại chỗ, còn nội dung hội thoại tìm qua RPC `sessions.search`; bấm một kết quả mở phiên rồi **nhảy tới đúng message** — neo bằng `eid`, bàn giao qua `store.pendingJump` vì cột danh sách là anh em của cột chi tiết nên không inject được transcript surface ([ADR 0075](../decisions/0075-transcript-surface-scoping.md)). Phiên lưu trữ (`sessions.setArchived`) mặc định ẩn khỏi danh sách, hiện khi bật bộ lọc và mang chip "Đã lưu trữ".
 - `contextIsolation: true` + `sandbox: true` + `nodeIntegration: false`; **không** `import fs`/`child_process`/SDK.
 - Giao tiếp với engine qua `contextBridge` (`window.awog.request/onEvent/openExternal/revealPath/openPath/pickFolder/savePath`); main forward sang engine qua stdio JSON-RPC ([ADR 0008](../decisions/0008-stdio-ipc-for-sidecar.md)).
 

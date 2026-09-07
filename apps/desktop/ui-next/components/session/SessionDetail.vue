@@ -438,6 +438,7 @@ import {
   previewRefFromAttachment,
   usePreview,
 } from '~/composables/usePreview'
+import { pushActionToast } from '~/composables/useActionToasts'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 import { rawMarkdownForSelection } from '~/utils/selection-markdown'
@@ -473,6 +474,85 @@ provideFilePreview(
 // resolves from the PARENT's provides, so a provider can never inject its own entry —
 // it hands the ref to useSessionFind instead.
 const transcriptSurface = provideTranscriptSurface()
+
+// ── Jump to a message asked for from OUTSIDE this surface ────────────────────
+// Cross-session search lives in the list column, a SIBLING of this one, so it cannot
+// inject the transcript surface (ADR 0075) — it parks the anchor in the store and the
+// surface owner (this component) picks it up. `scrollToMessage` already owns the whole
+// two-step contract of ADR 0074 §Q2: grow the render window (`reveal`, the transcript
+// only mounts the last few turns), then query inside THIS transcript's root and flash
+// the row in accent. So there is nothing to do about `windowStart` here.
+const { scrollToMessage } = useSessionScroll(transcriptSurface)
+
+// Popout hand-off: exactly one renderer owns a session, and the window that doesn't
+// renders a placeholder instead of a transcript. It must never swallow the anchor.
+const ownsThisSession = computed(() => !store.isHandedOff(props.session.engineId))
+
+// The consumed anchor, held here until the transcript can actually serve it. The
+// store slot is cleared on the FIRST look (read-and-clear) so a pending jump can never
+// get stuck there — waiting for the transcript happens locally, on a leash.
+const jumpEid = ref<string | null>(null)
+let jumpTimer: ReturnType<typeof setTimeout> | undefined
+// Longest we keep waiting for the transcript to arrive before telling the user it did
+// not (a failed `sessions.get` leaves `loaded` false forever — silence there would read
+// as "the app ignored my click").
+const JUMP_WAIT_MS = 8000
+
+function clearJump() {
+  jumpEid.value = null
+  if (jumpTimer) clearTimeout(jumpTimer)
+  jumpTimer = undefined
+}
+
+// Take the anchor as soon as it is addressed to this session AND this instance is the
+// one on screen. `immediate` matters: the list sets the anchor BEFORE this detail
+// mounts for a session opened for the first time, so a change-only watcher would never
+// see it. Gated on `isActive` because <KeepAlive> keeps other sessions' instances alive
+// and reacting; gated on ownership because of the popout hand-off.
+watch(
+  [() => store.pendingJump, isActive, ownsThisSession],
+  () => {
+    if (!isActive.value || !ownsThisSession.value) return
+    const eid = store.consumeMessageJump(props.session.id)
+    if (!eid) return
+    jumpEid.value = eid
+    if (jumpTimer) clearTimeout(jumpTimer)
+    jumpTimer = setTimeout(() => {
+      if (!jumpEid.value) return
+      clearJump()
+      pushActionToast(t('sessionsSearch.jump.failed'), 'error')
+    }, JUMP_WAIT_MS)
+  },
+  { immediate: true },
+)
+
+// Resolve it once the transcript is both loaded (the message may simply not be in
+// `msgs` yet — reporting "not found" before that is a lie) and mounted (no registered
+// transcript ⇒ every jump returns 'not-found').
+watch(
+  [jumpEid, () => props.session.loaded, () => props.session.msgs.length, transcriptSurface],
+  async () => {
+    const eid = jumpEid.value
+    if (!eid || !props.session.loaded || !transcriptSurface.value) return
+    // Resolve through `eid` and nothing else: a miss NEVER falls back to a neighbouring
+    // index (ADR 0074 §Q1) — landing on the wrong message is the one outcome this
+    // feature may not produce.
+    const i = props.session.msgs.findIndex((m) => m.eid === eid)
+    clearJump()
+    if (i < 0) {
+      pushActionToast(t('sessionsSearch.jump.notFound'), 'error')
+      return
+    }
+    // The transcript re-windows + scrolls to the bottom on (re)activation; let that
+    // settle so the deliberate jump is the LAST scroll, not the one that gets undone.
+    await nextTick()
+    if (transcriptSurface.value && (await scrollToMessage(i)) !== 'ok')
+      pushActionToast(t('sessionsSearch.jump.failed'), 'error')
+  },
+  { flush: 'post' },
+)
+
+onBeforeUnmount(clearJump)
 
 // Header trash → confirm before dropping the session (destructive, no undo).
 async function askRemove() {

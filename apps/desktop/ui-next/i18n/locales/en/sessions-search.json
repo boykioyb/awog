@@ -1,0 +1,20 @@
+{
+  "sessionsSearch.section.title": "In session content",
+  "sessionsSearch.hint": "Click a result to open the session and jump to that message.",
+  "sessionsSearch.loading": "Searching every session…",
+  "sessionsSearch.empty": "No message matches “{q}”",
+  "sessionsSearch.error": "Search failed. Try again.",
+  "sessionsSearch.truncated": "First {n} matches only — narrow the query.",
+  "sessionsSearch.role.user": "You",
+  "sessionsSearch.role.agent": "Agent",
+  "sessionsSearch.role.system": "System",
+  "sessionsSearch.open.notFound": "That session is no longer in the list.",
+  "sessionsSearch.jump.notFound": "That message is no longer in this session.",
+  "sessionsSearch.jump.failed": "Could not reach that message. Try again.",
+  "sessionsSearch.archive.archive": "Archive",
+  "sessionsSearch.archive.unarchive": "Unarchive",
+  "sessionsSearch.archive.show": "Show archived sessions",
+  "sessionsSearch.archive.badge": "Archived",
+  "sessionsSearch.archive.notSaved": "This session has not been saved yet.",
+  "sessionsSearch.archive.failed": "Could not change the archived state."
+}
