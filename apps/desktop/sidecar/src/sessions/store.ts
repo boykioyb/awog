@@ -18,7 +18,12 @@ import type {
   SessionMessage,
   SessionSummary,
 } from '../types/shared.js'
-import { readSessionJsonl, readSessionMessages, sessionFilePath } from './jsonl.js'
+import {
+  readSessionJsonl,
+  readSessionMessages,
+  readSessionRawLines,
+  sessionFilePath,
+} from './jsonl.js'
 import { sessionManager, type SessionMetadataPatch } from './session-manager.js'
 
 // ─── CRUD facade ──────────────────────────────────────────────────────────────
@@ -97,6 +102,22 @@ export async function compactSession(
   if (!known) return
   const { sdkSessionId: _supersededSdk, ...rest } = session
   await sessionManager.saveSession({ ...rest, compaction })
+}
+
+// Archive / un-archive một phiên (WP2). Chỉ đổi metadata trên header: transcript,
+// bookmark, snapshot và attachments đều còn nguyên trên đĩa. Trả về false khi id không
+// tồn tại để RPC báo "Session not found" thay vì im lặng thành công.
+export async function setSessionArchived(id: string, archived: boolean): Promise<boolean> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setArchived(id, archived)
+}
+
+// Đọc thô các dòng JSONL của một phiên (nền cho `sessions.listEvents`). `null` khi
+// file chưa tồn tại. ensureLoaded() chạy trước để migration legacy→format mới đã xong,
+// nếu không ta sẽ đọc đúng file mà app sắp thay thế.
+export async function loadSessionRawLines(id: string): Promise<string[] | null> {
+  await sessionManager.ensureLoaded()
+  return readSessionRawLines(sessionFilePath(id))
 }
 
 // Physically delete a session (file + map entry). Unlike the old logical tombstone,

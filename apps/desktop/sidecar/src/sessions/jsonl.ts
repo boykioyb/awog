@@ -367,6 +367,22 @@ export function readSessionMessages(sessionFile: string): SessionMessage[] {
   return parseMessagesResilient(lines.slice(1), attachmentsDirForFile(sessionFile))
 }
 
+// Đọc THÔ từng dòng của session.jsonl, KHÔNG parse — nền cho `sessions.listEvents`
+// (xem log để debug). Trả `null` khi file chưa tồn tại (phiên mới, chưa flush); mọi
+// lỗi đọc thật (EIO/EACCES/…) vẫn được ném ra để lỗi không bị nguỵ trang thành "phiên
+// rỗng" (cùng nguyên tắc infosec F1 của readSessionMessages). Dòng trống bị bỏ, đúng
+// như đường đọc thường, nên số dòng khớp với chỉ số message.
+export function readSessionRawLines(sessionFile: string): string[] | null {
+  let content: string
+  try {
+    content = readFileSync(sessionFile, 'utf-8')
+  } catch (err) {
+    if (isMissingErr(err)) return null
+    throw err
+  }
+  return content.split('\n').filter(Boolean)
+}
+
 // Read the full session (header + messages) in a single file read. Returns null on
 // missing/corrupt/old-format files so a per-file failure skips that session rather
 // than aborting a whole scan (used by listFullSessions / search).

@@ -112,6 +112,8 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
     status: h.status,
   }
   if (h.pinned !== undefined) summary.pinned = h.pinned
+  if (h.archived !== undefined) summary.archived = h.archived
+  if (h.archivedAt !== undefined) summary.archivedAt = h.archivedAt
   if (h.disabledTools !== undefined) summary.disabledTools = h.disabledTools
   if (h.mcpServerIds !== undefined) summary.mcpServerIds = h.mcpServerIds
   if (h.aboutTaskId !== undefined) summary.aboutTaskId = h.aboutTaskId
@@ -285,6 +287,34 @@ class SessionManager {
     }
     m.header = { ...m.header, ...patch, updatedAt: new Date().toISOString() }
     this.persistSession(m)
+  }
+
+  // Archive / un-archive một phiên: CHỈ đổi metadata của header, không đụng tới
+  // messages, bookmark hay snapshot (xem docs/features/session-lifecycle-ops.md).
+  // Tách khỏi updateMetadata vì bỏ lưu trữ phải XOÁ HẲN hai field — patch kiểu spread
+  // không xoá được key, và `exactOptionalPropertyTypes` cấm gán `undefined` vào field
+  // optional. `updatedAt` cố ý KHÔNG bump: lưu trữ là thao tác dọn dẹp của người dùng,
+  // không phải hoạt động của phiên; bump sẽ ném phiên vừa bỏ lưu trữ lên đầu danh sách
+  // (sắp xếp theo updatedAt) dù nó đã im lặng nhiều tháng.
+  // Trả về false khi id không tồn tại để RPC báo lỗi thay vì im lặng nuốt.
+  async setArchived(id: string, archived: boolean): Promise<boolean> {
+    const m = this.sessions.get(id)
+    if (!m) {
+      log.warn('session-manager: setArchived on unknown session', { id })
+      return false
+    }
+    if (archived) {
+      m.header = { ...m.header, archived: true, archivedAt: new Date().toISOString() }
+    } else {
+      const { archived: _wasArchived, archivedAt: _wasArchivedAt, ...rest } = m.header
+      m.header = rest
+    }
+    this.persistSession(m)
+    // Flush ngay (không chỉ debounce): archive là một hành động rời rạc của người dùng
+    // — thoát app trong cửa sổ 500ms sẽ nuốt mất cờ vừa bật (cùng lý do với
+    // createSession/saveSession, ADR 0062 D-2).
+    await sessionPersistenceQueue.flush(id)
+    return true
   }
 
   // Append (or upsert-by-id) a message and persist. Upsert-by-id matches the

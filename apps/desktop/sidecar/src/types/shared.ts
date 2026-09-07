@@ -308,6 +308,12 @@ export interface SessionMessage {
     // accumulated during the turn. The gauge + auto-compact prefer it; absent on
     // turns persisted before it shipped (they fall back to contextChars).
     contextTokens?: number
+    // Prompt size of the turn's FIRST request. `contextTokens - baseTokens` = what the
+    // tool loop added during this turn; `baseTokens - (the itemised contextChars)` =
+    // tool SCHEMAS + the runtime's own preset prompt. Splitting the two is the whole
+    // point: schemas shrink by detaching MCP servers, accumulated results shrink by
+    // compacting or by doing less in one turn — opposite fixes.
+    baseTokens?: number
     // Cost of THIS turn in USD, computed at finalize from usage + modelUsed via
     // activity/pricing.ts (single source of truth). Persisted so the session's
     // cumulative cost stays stable even if the price table changes later. Absent
@@ -403,6 +409,14 @@ export interface Session {
   createdAt: string
   updatedAt: string
   pinned?: boolean
+  // Lưu trữ (archive): ẩn phiên khỏi danh sách mà KHÔNG xoá gì trên đĩa. Đây là
+  // metadata thuần của header — transcript, bookmark, snapshot và attachments đều
+  // giữ nguyên; bỏ lưu trữ chỉ việc xoá hai field này (sessions.setArchived).
+  // Khác `pinned` (ghim lên đầu) ở đúng một điểm: archived LỌC BỎ khỏi
+  // `sessions.list` mặc định (xem docs/features/session-lifecycle-ops.md).
+  archived?: boolean
+  // Thời điểm lưu trữ (ISO-8601). Chỉ có mặt khi `archived === true`.
+  archivedAt?: string
   invitedAgentIds: string[]
   messages: SessionMessage[]
   pendingAgentIds: string[]
@@ -480,6 +494,11 @@ export interface SessionSummary {
   createdAt: string
   updatedAt: string
   pinned?: boolean
+  // Mirrors Session.archived/archivedAt. Surfaced on the list row so the UI can badge
+  // an archived session (and render the "archived" filter view) without loading the
+  // transcript. `sessions.list` hides these rows unless `includeArchived` is true.
+  archived?: boolean
+  archivedAt?: string
   // Resting status for the list badge (ADR 0048) — derived from the last message
   // the same way the UI derives it on open, so an un-opened session shows its true
   // done/awaiting/error state instead of a placeholder.
@@ -530,6 +549,36 @@ export interface SessionHeader extends Omit<Session, 'messages'> {
   // Trimmed preview of the LAST message text, for list subtitles (mirrors
   // SessionSummary.lastPreview).
   lastPreview?: string
+}
+
+// ─── Raw transcript inspection (sessions.listEvents) ────────────────────────
+// Debug view over a session's on-disk `session.jsonl`, one entry per LINE. Line 1 is
+// the header, lines 2+ are messages; a line that fails JSON.parse becomes a
+// 'malformed' entry instead of aborting the read — surfacing a corrupt line IS the
+// point of this RPC. Every payload passes through sessions/redact.ts first, so a
+// credential pasted into a transcript never reaches the UI (invariant #1).
+export type SessionRawEventKind = 'header' | 'message' | 'malformed'
+
+export interface SessionRawEvent {
+  // 1-based line number inside session.jsonl (stable address for a debug report).
+  line: number
+  // UTF-8 byte size of the raw line, excluding the trailing newline.
+  bytes: number
+  kind: SessionRawEventKind
+  // Parsed + redacted line. Absent for 'malformed'. `unknown` on purpose: this is a
+  // raw-log view, so the shape is whatever the file holds — the UI must not assume a
+  // SessionMessage.
+  data?: unknown
+  // First 500 chars of a line that failed to parse. Only set for 'malformed'.
+  raw?: string
+}
+
+// One page of raw lines + the file's total line count so the UI can paginate.
+export interface SessionRawEventPage {
+  events: SessionRawEvent[]
+  total: number
+  offset: number
+  limit: number
 }
 
 // ─── Session steps (tool use / thinking) ───────────────────────────────────
