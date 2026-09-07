@@ -1,0 +1,15 @@
+{
+  "sessionsBg.view": "View output",
+  "sessionsBg.title": "Background command",
+  "sessionsBg.command": "Command",
+  "sessionsBg.started": "Started",
+  "sessionsBg.output": "Output",
+  "sessionsBg.pending": "Still running — nothing printed yet.",
+  "sessionsBg.loading": "Reading the log…",
+  "sessionsBg.noOutput": "The command finished without printing anything.",
+  "sessionsBg.external": "This job ran inside the engine process, which keeps no log file, so there is no output to read back.",
+  "sessionsBg.truncated": "The log is long — showing the tail only; the first {kb} KB are not displayed.",
+  "sessionsBg.error": "Could not read this command's output: {msg}",
+  "statusbar.diffStat.title": "Uncommitted changes",
+  "statusbar.branch.createPr": "Create pull request…"
+}

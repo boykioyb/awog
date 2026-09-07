@@ -35,6 +35,7 @@ import {
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { sessionsDir, sessionDir } from './jsonl.js'
+import { sanitizeChild } from '../util/path.js'
 import { resolveBashShell, filteredShellEnv } from '../runtime/tools/shell.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
@@ -100,8 +101,13 @@ const externalKillers = new Map<string, (shellId: string) => void>()
 function bgRootFor(sessionId: string): string {
   return join(sessionDir(sessionId), BG_DIR_NAME)
 }
+// `shellId` reaches here from an RPC param (the UI's output viewer), so the segment
+// is sanitized before it touches the filesystem — separators, `..` and a bare `.`
+// all throw. Defence in depth: the RPC boundary validates the shape too, and the
+// parent dir is always derived from the caller's OWN sessionId, so one session can
+// never address another's shell.
 function shellDirFor(sessionId: string, shellId: string): string {
-  return join(bgRootFor(sessionId), shellId)
+  return join(bgRootFor(sessionId), sanitizeChild(shellId))
 }
 function logPathFor(dir: string): string {
   return join(dir, 'log')
@@ -141,18 +147,41 @@ function readExitCode(dir: string): number | null {
   }
 }
 
+interface OutputTail {
+  text: string
+  truncated: boolean
+  droppedBytes: number
+}
+
 // Read the accumulated log, capped to the LAST MAX_OUTPUT_BYTES (the tail matters
-// most for a long-running command — errors surface at the end).
-function readOutput(dir: string): string {
+// most for a long-running command — errors surface at the end). The cap is reported
+// as a FLAG rather than baked into the text, so each caller words it its own way:
+// the model gets an inline notice (readOutput below), the UI gets a banner in the
+// user's language.
+function readOutputTail(dir: string): OutputTail {
   let buf: string
   try {
     buf = readFileSync(logPathFor(dir), 'utf8')
   } catch {
-    return ''
+    return { text: '', truncated: false, droppedBytes: 0 }
   }
-  if (buf.length <= MAX_OUTPUT_BYTES) return buf
-  const dropped = buf.length - MAX_OUTPUT_BYTES
-  return `…(${dropped} bytes truncated at start)\n${buf.slice(-MAX_OUTPUT_BYTES)}`
+  if (buf.length <= MAX_OUTPUT_BYTES) return { text: buf, truncated: false, droppedBytes: 0 }
+  return {
+    text: buf.slice(-MAX_OUTPUT_BYTES),
+    truncated: true,
+    droppedBytes: buf.length - MAX_OUTPUT_BYTES,
+  }
+}
+
+// The tail with the truncation notice inlined — the string shape the `BashOutput`
+// tool and the session.background-done event have always emitted.
+function withTruncationNotice(tail: OutputTail): string {
+  if (!tail.truncated) return tail.text
+  return `…(${tail.droppedBytes} bytes truncated at start)\n${tail.text}`
+}
+
+function readOutput(dir: string): string {
+  return withTruncationNotice(readOutputTail(dir))
 }
 
 // ─── Lifecycle ──────────────────────────────────────────────────────────────
@@ -314,12 +343,42 @@ export interface BackgroundReadResult {
   status: BgShellStatus
   exitCode: number | null
   output: string
+  // The log outgrew MAX_OUTPUT_BYTES and only its tail is here. `output` already
+  // says so inline unless the caller asked for `raw`.
+  truncated: boolean
+  droppedBytes: number
+  // Runtime-owned task (Claude SDK path): it ran inside the CLI process, so there
+  // is no log file and `output` is always empty. A caller that renders this must
+  // say WHY it is empty instead of showing a blank box.
+  external: boolean
+}
+
+export interface ReadBackgroundOptions {
+  // Does this read count as "the MODEL consumed the result" (which retires the
+  // chip)? Default true keeps the `BashOutput` tool's behaviour untouched. The UI
+  // viewer passes false: a human reading the log is not the model reading it.
+  markRead?: boolean
+  // Return the bare tail, without the inline "…N bytes truncated" notice — the
+  // caller uses `truncated` / `droppedBytes` and words it itself.
+  raw?: boolean
 }
 
 // Read a shell's current output + status. Reads from disk so it works even for a
 // shell adopted after a restart. Returns null for an unknown shellId.
-export function readBackground(sessionId: string, shellId: string): BackgroundReadResult | null {
-  const dir = shellDirFor(sessionId, shellId)
+export function readBackground(
+  sessionId: string,
+  shellId: string,
+  opts: ReadBackgroundOptions = {},
+): BackgroundReadResult | null {
+  const { markRead: consume = true, raw = false } = opts
+  let dir: string
+  try {
+    dir = shellDirFor(sessionId, shellId)
+  } catch {
+    // Illegal id shape (traversal attempt, or a malformed id the model invented):
+    // indistinguishable from "no such shell" as far as the caller is concerned.
+    return null
+  }
   const state = registry.get(sessionId)?.get(shellId)
   if (!state && !existsSync(dir)) return null
 
@@ -339,8 +398,17 @@ export function readBackground(sessionId: string, shellId: string): BackgroundRe
   // Reading a FINISHED shell is what retires its chip: the model now has the
   // result, so the UI can stop showing a successful one. A still-running read is
   // just a progress poll — it retires nothing.
-  if (state && status !== 'running') markRead(state)
-  return { shellId, status, exitCode, output: readOutput(dir) }
+  if (consume && state && status !== 'running') markRead(state)
+  const tail = readOutputTail(dir)
+  return {
+    shellId,
+    status,
+    exitCode,
+    output: raw ? tail.text : withTruncationNotice(tail),
+    truncated: tail.truncated,
+    droppedBytes: tail.droppedBytes,
+    external: state?.external === true,
+  }
 }
 
 // Flag a shell as consumed by the model and tell the UI (idempotent).

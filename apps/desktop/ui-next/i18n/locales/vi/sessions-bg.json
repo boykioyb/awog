@@ -1,0 +1,15 @@
+{
+  "sessionsBg.view": "Xem output",
+  "sessionsBg.title": "Lệnh chạy nền",
+  "sessionsBg.command": "Lệnh",
+  "sessionsBg.started": "Bắt đầu",
+  "sessionsBg.output": "Output",
+  "sessionsBg.pending": "Đang chạy — chưa in ra gì.",
+  "sessionsBg.loading": "Đang đọc log…",
+  "sessionsBg.noOutput": "Lệnh chạy xong nhưng không in ra gì.",
+  "sessionsBg.external": "Job này chạy trong tiến trình engine, không có file log nên không đọc lại được output.",
+  "sessionsBg.truncated": "Log dài — chỉ hiện phần đuôi; {kb} KB đầu không được hiển thị.",
+  "sessionsBg.error": "Không đọc được output của lệnh này: {msg}",
+  "statusbar.diffStat.title": "Thay đổi chưa commit",
+  "statusbar.branch.createPr": "Tạo pull request…"
+}

@@ -37,9 +37,17 @@
       <span class="bgsh-cmd">{{ shortCmd(sh.command) }}</span>
       <span class="bgsh-hint">{{ hintFor(sh) }}</span>
       <button
+        type="button"
+        class="bgsh-act"
+        :title="t('sessionsBg.view')"
+        @click="openOutput(sh.shellId)"
+      >
+        <Icon name="terminal" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      </button>
+      <button
         v-if="sh.status === 'running'"
         type="button"
-        class="bgsh-stop"
+        class="bgsh-act bgsh-stop"
         :title="t('sessions.bg.stop')"
         @click="onStop(sh.shellId)"
       >
@@ -47,6 +55,13 @@
       </button>
     </div>
   </div>
+
+  <SessionBackgroundOutputModal
+    v-if="outputShell"
+    :shell="outputShell"
+    :output="outputText"
+    @close="closeOutput"
+  />
 </template>
 
 <script setup lang="ts">
@@ -63,6 +78,14 @@ const store = useSessionsStore()
 const shells = computed<BgShellState[]>(() =>
   props.session.engineId ? store.bgShellsFor(props.session.engineId) : [],
 )
+
+// "View output" modal (one at a time, per strip).
+const {
+  shell: outputShell,
+  output: outputText,
+  open: openOutput,
+  close: closeOutput,
+} = useSessionBackgroundOutput(() => props.session.engineId)
 
 // A finished command whose result the model has already consumed (BashOutput read,
 // wake prompt, or the runtime handing it over in-band) has nothing left to tell the
@@ -177,13 +200,15 @@ function onStop(shellId: string): void {
   opacity: 0.6;
   white-space: nowrap;
 }
-.bgsh-chip.is-ok .icn {
+/* Direct child only: the status glyph. The action buttons below carry their own
+   color and must not be tinted by the chip's status. */
+.bgsh-chip.is-ok > .icn {
   color: var(--green, var(--add));
 }
-.bgsh-chip.is-fail .icn {
+.bgsh-chip.is-fail > .icn {
   color: var(--amber);
 }
-.bgsh-stop {
+.bgsh-act {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -193,8 +218,11 @@ function onStop(shellId: string): void {
   opacity: 0.55;
   transition: opacity 0.12s var(--ease, ease);
 }
-.bgsh-stop:hover {
+.bgsh-act:hover {
   opacity: 1;
+  color: var(--accent);
+}
+.bgsh-stop:hover {
   color: var(--danger);
 }
 @keyframes bgsh-pulse {
