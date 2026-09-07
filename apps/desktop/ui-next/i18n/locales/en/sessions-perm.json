@@ -1,0 +1,21 @@
+{
+  "sessionsPerm.ruleLabel": "Rule to be granted",
+  "sessionsPerm.kind.command": "Matches this exact command — not every Bash call.",
+  "sessionsPerm.kind.path": "Matches this exact path.",
+  "sessionsPerm.kind.bare": "Matches every {tool} call.",
+  "sessionsPerm.noRule": "This command contains shell operators, so no rule can match it — it can only be allowed once.",
+  "sessionsPerm.ruleUnknown": "No suggested rule arrived for this request — it can only be allowed once.",
+  "sessionsPerm.scopeLabel": "Remember for",
+  "sessionsPerm.scope.session": "This session",
+  "sessionsPerm.scope.project": "This project",
+  "sessionsPerm.scope.projectNone": "This project (session has none)",
+  "sessionsPerm.scope.user": "Every project",
+  "sessionsPerm.hint.session": "This session only, forgotten when it ends.",
+  "sessionsPerm.hint.project": "Stored in AWOG home, keyed to this project — applies to every session in it, on this machine only. Never committed to the repo.",
+  "sessionsPerm.hint.user": "Stored in AWOG home — applies to every project on this machine.",
+  "sessionsPerm.saved.session": "Remembered for this session:",
+  "sessionsPerm.saved.project": "Saved for this project:",
+  "sessionsPerm.saved.user": "Saved for every project on this machine:",
+  "sessionsPerm.savedDowngraded": "The session belongs to no project, so the rule was only remembered for this session.",
+  "sessionsPerm.saveFailed": "The rule could not be saved — the next call will ask again."
+}

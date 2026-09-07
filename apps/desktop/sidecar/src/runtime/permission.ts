@@ -15,7 +15,20 @@
 //   plan         → block all writes/exec (Write/Edit/Bash); reads allowed.
 //   ask          → gate all writes/exec via canUseTool.
 //
-// Read-family tools (Read/Grep/Glob) never gate — they are non-mutating.
+// Read-family tools (Read/Grep/Glob) never PROMPT — they are non-mutating — but a
+// DENY rule still applies to them (see below).
+//
+// Remembered allowances (ADR 0080): "Always allow" no longer keys off the tool
+// NAME. Every gated call is matched against permission RULES scoped to the call's
+// content — `Bash(git status)`, `Write(/repo/src/**)` — evaluated session →
+// project → user, with DENY beating ALLOW everywhere. Approving `git status` once
+// therefore no longer unlocks `rm -rf /` for the rest of the session.
+//
+// "Everywhere" is literal since the 2026-09-07 security fix (F3): the rule lookup
+// runs for EVERY tool call, ahead of every early return in this hook — read-family
+// tools, `WebFetch`, `Task`, SSH tools and `mcp__*` tools included. Only the DENY
+// half is consumed that early; ALLOW keeps its old position (it only ever skips a
+// prompt, and no non-gated tool prompts anyway).
 //
 // Contract: beforeToolCall must NOT throw. Any error → fail safe = block, so a
 // bug can never silently let an unapproved write through.
@@ -24,9 +37,18 @@ import type {
   BeforeToolCallContext,
   BeforeToolCallResult,
 } from '@earendil-works/pi-agent-core'
-import type { CanUseTool, PermissionUpdate } from './permission-types.js'
+import type {
+  CanUseTool,
+  PermissionRuleSuggestion,
+  PermissionUpdate,
+} from './permission-types.js'
 import type { AgentMode, SshApprovalMode } from '../types/shared.js'
 import { allowSessionTool, isSessionToolAllowed } from '../sessions/permissions.js'
+import {
+  evaluatePermissionRules,
+  parsePermissionRule,
+  suggestRuleText,
+} from '../sessions/permission-rules.js'
 import { BROWSER_TOOL_NAME, isMutatingBrowserAction } from './tools/browser-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
@@ -94,6 +116,31 @@ function isGatedTool(name: string, args: unknown): boolean {
     isSourceMutatingTool(name) ||
     isWikiMutatingTool(name)
   )
+}
+
+// The "Always allow" suggestion for this call (ADR 0080), or null when the call
+// cannot be turned into a rule that is safe to remember — a compound shell command
+// (`git status; rm -rf /`), a Bash call with no `command` string, a relative or
+// traversing file path, or a subject that itself contains `*`. Returning null
+// hides the button, so the ONLY way past those calls is an explicit per-call yes.
+function buildRuleSuggestion(
+  toolName: string,
+  args: unknown,
+  sessionId: string | undefined,
+): PermissionRuleSuggestion | null {
+  const rule = suggestRuleText(toolName, args)
+  if (!rule) return null
+  const parsed = parsePermissionRule(rule)
+  if (!parsed) return null
+  return {
+    type: 'addRule',
+    toolName,
+    destination: 'session',
+    rule: parsed.text,
+    ruleKind: parsed.kind,
+    action: 'allow',
+    ...(sessionId ? { sessionId } : {}),
+  }
 }
 
 // Per-source runtime gate resolved from each active source's trust +
@@ -230,24 +277,26 @@ export function makeBeforeToolCall(
         // canUseTool takes an options bag; we supply the fields it reads. `signal`
         // ties the prompt to the turn abort; toolUseID identifies the call. A
         // non-empty `suggestions` array is what makes the UI offer the "Always
-        // allow" button; the rule body is opaque (the session allowlist keys off
-        // rememberKey), so a single marker rule suffices.
+        // allow" button — and the suggestion now spells out the EXACT rule that
+        // will be created (ADR 0080). No rule can be derived (compound shell
+        // command, missing/relative path…) ⇒ empty array ⇒ no "Always allow"
+        // button: this call has to be answered on its own merits.
         const input = (context.args ?? {}) as Record<string, unknown>
-        const suggestions: PermissionUpdate[] = offerAlwaysAllow
-          ? [{ type: 'addRule', toolName, destination: 'session' }]
-          : []
+        const suggestion = offerAlwaysAllow
+          ? buildRuleSuggestion(toolName, context.args, sessionId)
+          : null
+        const suggestions: PermissionUpdate[] = suggestion ? [suggestion] : []
         const result = await canUseTool(toolName, input, {
           signal: signal ?? new AbortController().signal,
           toolUseID: toolUseId,
           suggestions,
         })
         if (result.behavior === 'allow') {
-          // Remember the tool for the rest of the session when either the user
-          // clicked "Always allow" (updatedPermissions round-trips the suggestions)
-          // or the caller forced it (SSH 'session' mode remembers on first allow).
-          const remember =
-            forceRemember || (!!result.updatedPermissions && result.updatedPermissions.length > 0)
-          if (sessionId && remember) allowSessionTool(sessionId, rememberKey)
+          // "Always allow" for a GENERAL tool is persisted by sessions.permission
+          // itself (it owns the destination tier), so nothing is remembered here.
+          // This branch only serves the SSH gate, whose 'session' mode remembers
+          // the first approval under its own opaque (session, host, tool) key.
+          if (sessionId && forceRemember) allowSessionTool(sessionId, rememberKey)
           // Apply an approved input override by mutating the validated args object
           // in place — Pi executes the tool with `context.args`.
           if (result.updatedInput && context.args && typeof context.args === 'object') {
@@ -279,6 +328,29 @@ export function makeBeforeToolCall(
       }
     }
 
+    // Persisted permission rules (ADR 0080), evaluated session → project → user.
+    // Never throws (any failure degrades to 'ask').
+    //
+    // Evaluated HERE — before every early return below — because a DENY rule must
+    // apply to EVERY tool, exactly as the ADR promises. Previously this ran after
+    // the `!builtInGated && !promptTrust` short-circuit, so `Read`, `Grep`, `Glob`,
+    // `WebFetch`, `Task` and every `mcp__*` tool never reached it: a rule like
+    // `{"rule":"WebFetch","action":"deny"}` parsed fine and did nothing (F3).
+    const ruleDecision = await evaluatePermissionRules({
+      toolName,
+      args: context.args,
+      ...(sessionId ? { sessionId } : {}),
+    })
+
+    // A DENY rule is a hard guardrail the user wrote down on purpose, so it beats
+    // EVERY relaxation below — execute mode, auto-approve, accept-edits, and the
+    // SSH gate's own 'auto' mode alike.
+    const denyBlock = (name: string): BeforeToolCallResult => ({
+      block: true,
+      reason: `Blocked by a permission rule you configured for ${name}. Remove that rule from your permission rules under ~/.awog to change this.`,
+    })
+    if (ruleDecision === 'deny') return denyBlock(toolName)
+
     // SSH tools (ADR 0064 P2): act on the session's LINKED remote host. Gating is
     // MANDATORY and driven ONLY by the per-session sshApprovalMode — NOT the session
     // AgentMode / autoApprove — so it's checked BEFORE the general `execute`/
@@ -287,6 +359,18 @@ export function makeBeforeToolCall(
     // tools to the approval flow (remote reads aid investigation, like local reads).
     const sshName = sshToolName(toolName)
     if (sshName) {
+      // A rule is written against the BARE tool name (`ssh_exec`); the anthropic
+      // path calls the same tool bridged as `mcp__<server>__ssh_exec`. Evaluate the
+      // bare alias too, before sshApprovalMode is consulted — otherwise the same
+      // DENY rule would hold on one runtime and be ignored on the other (F3).
+      if (sshName !== toolName) {
+        const aliasDecision = await evaluatePermissionRules({
+          toolName: sshName,
+          args: context.args,
+          ...(sessionId ? { sessionId } : {}),
+        })
+        if (aliasDecision === 'deny') return denyBlock(sshName)
+      }
       if (mode === 'plan' && SSH_MUTATING_TOOLS.has(sshName)) {
         return {
           block: true,
@@ -316,7 +400,8 @@ export function makeBeforeToolCall(
     const builtInGated = isGatedTool(toolName, context.args)
     const promptTrust = isPromptTrustTool(toolName)
 
-    // Non-mutating built-in tool AND not a trust:'prompt' source tool: always allow.
+    // Non-mutating built-in tool AND not a trust:'prompt' source tool: always allow
+    // (a DENY rule for it was already applied above).
     if (!builtInGated && !promptTrust) return undefined
 
     // execute mode: no gate (the user opted into full access).
@@ -330,16 +415,16 @@ export function makeBeforeToolCall(
       return { block: true, reason: `Blocked in plan mode: ${toolName} is not allowed while planning.` }
     }
 
+    // An ALLOW rule matched this call's CONTENT (this exact command / this file),
+    // not merely its tool name — skip the prompt.
+    if (ruleDecision === 'allow') return undefined
+
     // Auto-approve (Settings → Sessions): allow gated tools without prompting. Sits
     // after the plan-mode block (planning stays read-only) but before the ask path.
     if (autoApprove) return undefined
 
     // accept-edits: auto-allow file edits; other gated tools (Bash) still prompt.
     if (mode === 'accept-edits' && WRITE_TOOLS.has(toolName)) return undefined
-
-    // Session "always allow": the user previously chose to allow this tool for
-    // the whole session — skip the prompt for every later call of the same tool.
-    if (sessionId && isSessionToolAllowed(sessionId, toolName)) return undefined
 
     // ask (and accept-edits for Bash): defer to the UI permission prompt.
     return promptViaUi(false)

@@ -4,6 +4,7 @@
 // aborted while a prompt is open, rejectPermissionRequest unwinds it cleanly.
 
 import type { PermissionResult, PermissionUpdate } from '../runtime/permission-types.js'
+import { clearSessionRules, forgetSessionProjectPath } from './permission-rules.js'
 
 interface ParkedRequest {
   resolve: (result: PermissionResult) => void
@@ -52,29 +53,33 @@ export function rejectPermissionRequest(requestId: string, message: string): boo
   return true
 }
 
-// ─── Session-scoped "always allow" allowlist ────────────────────────────────
-// When the user picks "Always allow" for a tool, that tool stops prompting for
-// the rest of the SESSION (sidecar process lifetime — resume rebuilds context
-// from JSONL per turn, so there is no persisted runtime object to hang this on).
-// Keyed by sessionId → set of tool names. Granularity is per-tool-name, matching
-// AWOG's existing allowlist convention (skill.alwaysAllow) and keeping
-// PermissionUpdate opaque (runtime/permission.ts keys off toolName, not the rule
-// body). Cleared on session delete; never written to disk.
-const SESSION_ALLOWLIST = new Map<string, Set<string>>()
+// ─── Session-scoped SSH allowance ───────────────────────────────────────────
+// NOT the general "always allow" path — that one moved to permission-rules.ts
+// (ADR 0080: a remembered allowance keys off the RULE, i.e. the command/path,
+// never off the bare tool name).
+//
+// What is left here is the SSH gate's own allowance (ADR 0064 F2): sshApprovalMode
+// 'session' remembers the FIRST approval per (session, host, tool) under an opaque
+// key like `ssh_exec@host`. It is deliberately separate: the SSH gate is driven by
+// sshApprovalMode rather than the general allowlist, it is never persisted to disk,
+// and its key is already content-scoped by host. Cleared on session delete.
+const SESSION_SSH_ALLOWLIST = new Map<string, Set<string>>()
 
-export function allowSessionTool(sessionId: string, toolName: string): void {
-  let allowed = SESSION_ALLOWLIST.get(sessionId)
+export function allowSessionTool(sessionId: string, rememberKey: string): void {
+  let allowed = SESSION_SSH_ALLOWLIST.get(sessionId)
   if (!allowed) {
     allowed = new Set<string>()
-    SESSION_ALLOWLIST.set(sessionId, allowed)
+    SESSION_SSH_ALLOWLIST.set(sessionId, allowed)
   }
-  allowed.add(toolName)
+  allowed.add(rememberKey)
 }
 
-export function isSessionToolAllowed(sessionId: string, toolName: string): boolean {
-  return SESSION_ALLOWLIST.get(sessionId)?.has(toolName) ?? false
+export function isSessionToolAllowed(sessionId: string, rememberKey: string): boolean {
+  return SESSION_SSH_ALLOWLIST.get(sessionId)?.has(rememberKey) ?? false
 }
 
 export function clearSessionPermissions(sessionId: string): void {
-  SESSION_ALLOWLIST.delete(sessionId)
+  SESSION_SSH_ALLOWLIST.delete(sessionId)
+  clearSessionRules(sessionId)
+  forgetSessionProjectPath(sessionId)
 }

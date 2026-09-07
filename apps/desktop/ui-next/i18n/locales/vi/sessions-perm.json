@@ -1,0 +1,21 @@
+{
+  "sessionsPerm.ruleLabel": "Sẽ cấp luật",
+  "sessionsPerm.kind.command": "Khớp đúng lệnh này — không phải mọi lệnh Bash.",
+  "sessionsPerm.kind.path": "Khớp đúng đường dẫn này.",
+  "sessionsPerm.kind.bare": "Khớp mọi lời gọi tool {tool}.",
+  "sessionsPerm.noRule": "Lệnh này có toán tử shell nên không luật nào khớp được — chỉ có thể cho phép một lần.",
+  "sessionsPerm.ruleUnknown": "Không nhận được luật gợi ý cho lượt này — chỉ có thể cho phép một lần.",
+  "sessionsPerm.scopeLabel": "Nhớ cho",
+  "sessionsPerm.scope.session": "Phiên này",
+  "sessionsPerm.scope.project": "Dự án này",
+  "sessionsPerm.scope.projectNone": "Dự án này (phiên chưa thuộc dự án)",
+  "sessionsPerm.scope.user": "Mọi dự án",
+  "sessionsPerm.hint.session": "Chỉ phiên này, quên khi phiên kết thúc.",
+  "sessionsPerm.hint.project": "Lưu trong AWOG home, gắn với dự án này — áp cho mọi phiên của dự án, chỉ trên máy này. Không bao giờ commit vào repo.",
+  "sessionsPerm.hint.user": "Lưu trong AWOG home — áp cho mọi dự án trên máy này.",
+  "sessionsPerm.saved.session": "Đã nhớ luật cho phiên này:",
+  "sessionsPerm.saved.project": "Đã ghi luật cho dự án này:",
+  "sessionsPerm.saved.user": "Đã ghi luật cho mọi dự án trên máy này:",
+  "sessionsPerm.savedDowngraded": "Phiên chưa thuộc dự án nào nên luật chỉ được nhớ cho phiên này.",
+  "sessionsPerm.saveFailed": "Không lưu được luật — lượt sau vẫn sẽ hỏi lại."
+}

@@ -74,6 +74,30 @@ export interface PermissionUpdate {
   [key: string]: unknown
 }
 
+// ─── AWOG rule suggestion (ADR 0080) ────────────────────────────────────────
+// The concrete PermissionUpdate AWOG now emits for the "Always allow" button. It
+// stays structurally a PermissionUpdate (extra fields only) so the existing UI
+// keeps working, but it carries the EXACT rule text that will be created —
+// `Bash(git status)` rather than a bare `Bash` — so the prompt can show the user
+// what they are about to grant instead of asking them to trust a tool name.
+//
+// `sessionId` rides along because sessions.permission resolves the destination
+// tier (session / project / user) at answer time, and the parked request itself
+// only knows its requestId.
+export interface PermissionRuleSuggestion extends PermissionUpdate {
+  type: 'addRule'
+  toolName: string
+  // Legacy field kept for the current UI. The REAL destination is decided by the
+  // `scope` param of sessions.permission; this is only the default.
+  destination: 'session'
+  // Canonical rule text, e.g. `Bash(git status)` / `Write(/repo/a.ts)` / `RunWorkflow`.
+  rule: string
+  // What the rule is scoped by — lets the UI phrase the confirmation ("this exact
+  // command" vs "this file" vs "this tool").
+  ruleKind: 'command' | 'path' | 'bare'
+  action: 'allow'
+}
+
 // ─── Permission result ──────────────────────────────────────────────────────
 // The discriminated shape AWOG produces in sessions.permission.ts and consumes
 // in runtime/permission.ts. Mirrors the exact fields read/written there:

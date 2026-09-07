@@ -79,7 +79,7 @@
                 v-for="(o, oi) in f.item.options"
                 :key="oi"
                 class="qchk"
-                :class="{ on: f.sel.includes(o.label) }"
+                :class="{ on: f.sel.includes(o.label), 'has-desc': !!o.desc }"
                 @click="toggle(f, o.label)"
               >
                 <span class="qcbox">
@@ -89,7 +89,12 @@
                     style="width: var(--icon-xs); height: var(--icon-xs)"
                   />
                 </span>
-                {{ o.label }}
+                <span class="qchktext">
+                  {{ o.label }}
+                  <!-- Same label/description hierarchy as the single-select branch
+                       below: the model's explanation is the reason to pick this one. -->
+                  <b v-if="o.desc">{{ o.desc }}</b>
+                </span>
               </label>
             </template>
             <!-- single-select → radio-style buttons; choosing advances to next -->
@@ -147,18 +152,58 @@
       ?
     </div>
     <div v-if="cancelled" class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
-    <div v-else-if="permStatus === 'pending'" class="cact">
-      <button class="btn sm" @click="onDeny">{{ t('sessions.gate.deny') }}</button>
-      <button class="btn sm" @click="onAllowAlways">{{ t('sessions.gate.allowAlways') }}</button>
-      <button class="btn pri sm" @click="onAllow">
+    <template v-else-if="permStatus === 'pending'">
+      <!-- ADR 0080: the rule about to be created, verbatim, BEFORE the button that
+           creates it. "Always allow" on `git status` grants `Bash(git status)` — not
+           every Bash call — and the only way the user can know that is to read it. -->
+      <div v-if="canAlwaysAllow" class="prule">
+        <span class="prulelbl">{{ t('sessionsPerm.ruleLabel') }}</span>
+        <span class="prulecode">{{ ruleText }}</span>
+        <span class="prulehint">{{ ruleMeaning }}</span>
+      </div>
+      <!-- No rule could be derived (compound shell command…) → "Always allow" is not
+           rendered at all; say why instead of leaving a dead button. -->
+      <div v-else class="pnote">
+        <Icon name="alert" />
+        <span>{{ noRuleReason }}</span>
+      </div>
+      <div v-if="canAlwaysAllow" class="pscope">
+        <span class="prulelbl">{{ t('sessionsPerm.scopeLabel') }}</span>
+        <AppSelect
+          :model-value="permScope"
+          :options="scopeOptions"
+          width="190px"
+          @update:model-value="setScope"
+        />
+        <span class="prulehint">{{ scopeHint }}</span>
+      </div>
+      <div class="cact">
+        <button class="btn sm" @click="onDeny">{{ t('sessions.gate.deny') }}</button>
+        <button v-if="canAlwaysAllow" class="btn sm" @click="onAllowAlways">
+          {{ t('sessions.gate.allowAlways') }}
+        </button>
+        <button class="btn pri sm" @click="onAllow">
+          <Icon name="check" />
+          {{ t('sessions.gate.allow') }}
+        </button>
+      </div>
+    </template>
+    <template v-else-if="permStatus === 'allowed'">
+      <div class="resolved">
         <Icon name="check" />
-        {{ t('sessions.gate.allow') }}
-      </button>
-    </div>
-    <div v-else-if="permStatus === 'allowed'" class="resolved">
-      <Icon name="check" />
-      {{ t('sessions.gate.allowed') }}
-    </div>
+        {{ t('sessions.gate.allowed') }}
+      </div>
+      <!-- Where the rule actually landed, from the RPC's savedScopes (the engine
+           downgrades project → session when the session has no project). -->
+      <div v-if="savedMessage" class="psaved">
+        <span>{{ savedMessage }}</span>
+        <span v-if="savedOk && ruleText" class="prulecode">{{ ruleText }}</span>
+      </div>
+      <div v-if="savedDowngraded" class="pnote">
+        <Icon name="alert" />
+        <span>{{ t('sessionsPerm.savedDowngraded') }}</span>
+      </div>
+    </template>
     <div v-else class="resolved den">{{ t('sessions.gate.denied') }}</div>
   </div>
 
@@ -196,6 +241,7 @@
 // nothing) so the parent's v-else can pass an un-narrowed AssistantBlock cleanly.
 import { questionAnswered } from '~/composables/useSessionsData'
 import type { AssistantBlock, QuestionItem } from '~/composables/useSessionsData'
+import { useSessionPermissionRule } from '~/composables/useSessionPermissionRule'
 
 const props = defineProps<{ block: AssistantBlock }>()
 const { t } = useI18n()
@@ -297,15 +343,44 @@ const cancelled = computed(
     (props.block.kind === 'question' || props.block.kind === 'perm') &&
     props.block.cancelled === true,
 )
+// Rule text + tier for this prompt (ADR 0080). Keyed by the block's engine request
+// id; the project id decides whether the "This project" tier is even available.
+const {
+  rule: ruleText,
+  ruleMeaning,
+  noRuleReason,
+  canAlwaysAllow,
+  scope: permScope,
+  setScope,
+  scopeOptions,
+  scopeHint,
+  savedOk,
+  savedMessage,
+  savedDowngraded,
+  grantAlways,
+} = useSessionPermissionRule(
+  () => (props.block.kind === 'perm' ? props.block.eid : undefined),
+  () => store.active?.project ?? '',
+)
 const onAllow = (): void => {
   if (!located.value || sessionId.value == null) return
   store.setPermission(sessionId.value, msgIndex.value, 'allow')
 }
-// Allow + remember: the engine applies the request's permission suggestions to a
-// session-scoped allowlist so this tool stops prompting for the rest of the session.
+// Allow + remember. The scope-carrying answer goes out FIRST (the store's own
+// setPermission has no `scope` param yet, so it can only ever save to the session
+// tier), then the store runs for the local state it owns: block status, pending
+// prompt, session status. Its follow-up RPC is a deliberate no-op — the sidecar
+// already unparked this requestId, so it resolves nothing and, with the suggestion
+// consumed, can no longer persist a second copy of the rule.
+//
+// Order matters and is synchronous on purpose: awaiting the RPC first would leave
+// `pendingPermission` pointing at THIS request while the resumed turn could already
+// have parked the NEXT one, and the store call would then answer the wrong prompt.
 const onAllowAlways = (): void => {
   if (!located.value || sessionId.value == null) return
-  store.setPermission(sessionId.value, msgIndex.value, 'allow', true)
+  const saving = grantAlways()
+  store.setPermission(sessionId.value, msgIndex.value, 'allow')
+  void saving
 }
 const onDeny = (): void => {
   if (!located.value || sessionId.value == null) return
@@ -335,9 +410,78 @@ const onRetry = (): void => {
 .qopt.on {
   border-color: var(--accent);
 }
+/* Multi-select option description — same presentation as the single-select
+   `.qopt b` (prototype.css:442): own line, one step down the type scale, dimmed.
+   The label + description need a column wrapper because the global `.qchk` is a
+   centred flex row (checkbox | text). */
+.qchktext {
+  display: block;
+}
+.qchktext b {
+  display: block;
+  margin-top: 3px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 400;
+  color: var(--textDim);
+}
+/* Two-line row: pin the checkbox to the FIRST line instead of the block centre. */
+.qchk.has-desc {
+  align-items: flex-start;
+}
+.qchk.has-desc .qcbox {
+  margin-top: 2px;
+}
 /* Separate stacked questions (answered / cancelled read-only views). */
 .qitem + .qitem {
   margin-top: 14px;
+}
+/* ── Permission rule preview + tier picker (ADR 0080) ────────────────────────
+   Both rows sit between the "allow X on Y?" line and the action row, so the rule
+   and its reach are read BEFORE the buttons. Each row wraps its explanation onto
+   a line of its own (.prulehint) instead of squeezing it beside the control. */
+.prule,
+.pscope,
+.psaved,
+.pnote {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textMuted);
+}
+.prulelbl {
+  font-weight: 550;
+  color: var(--textMuted);
+}
+.prulehint {
+  flex: 1 1 100%;
+  color: var(--textDim);
+}
+/* The verbatim rule string — `Bash(git status)` — the user reads before granting it. */
+.prulecode {
+  font-family: var(--code); /* mono-ok: a rule string is code the user can copy */
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  background: var(--bgActive);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  padding: 2px 7px;
+  color: var(--text);
+  user-select: text;
+  word-break: break-all;
+}
+.pnote :deep(.icn) {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--amber);
+  flex: 0 0 auto;
+}
+.psaved {
+  margin-top: 7px;
 }
 /* Tab strip — one tab per question. Active/answered use an accent tint (not a
    gray surface fill), per the segmented-control convention. */
