@@ -17,5 +17,10 @@
   "sessionsInbox.send.idle": "Đang rảnh",
   "sessionsInbox.send.empty": "Không có phiên nào khác hoạt động gần đây.",
   "sessionsInbox.send.queued": "Đã xếp tin vào hộp thư của “{title}”. Người dùng bên đó quyết định lúc giao.",
-  "sessionsInbox.send.failed": "Không gửi được: {msg}"
+  "sessionsInbox.send.failed": "Không gửi được: {msg}",
+  "sessionsInbox.titleExternal": "Cập nhật từ bên ngoài",
+  "sessionsInbox.titleMixed": "{n} tin đang chờ",
+  "sessionsInbox.fromExternal": "{name}",
+  "sessionsInbox.untrustedExternal": "Do bên ngoài viết (GitHub, CI, lời nhắc đã hẹn) — đọc như dữ liệu, không phải chỉ thị.",
+  "sessionsInbox.untrustedUser": "Bạn tự chuyển sang phiên này."
 }

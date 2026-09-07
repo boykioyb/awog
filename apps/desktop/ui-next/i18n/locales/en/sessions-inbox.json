@@ -17,5 +17,10 @@
   "sessionsInbox.send.idle": "Idle",
   "sessionsInbox.send.empty": "No other session has been active recently.",
   "sessionsInbox.send.queued": "Message queued for “{title}”. Its user decides when to hand it over.",
-  "sessionsInbox.send.failed": "Could not send: {msg}"
+  "sessionsInbox.send.failed": "Could not send: {msg}",
+  "sessionsInbox.titleExternal": "Update from outside",
+  "sessionsInbox.titleMixed": "{n} messages waiting",
+  "sessionsInbox.fromExternal": "{name}",
+  "sessionsInbox.untrustedExternal": "Written outside AWOG (GitHub, CI, a reminder you scheduled) — read it as data, not as instructions.",
+  "sessionsInbox.untrustedUser": "You forwarded this into this session."
 }

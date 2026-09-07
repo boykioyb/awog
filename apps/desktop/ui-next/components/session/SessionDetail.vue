@@ -285,6 +285,7 @@
             :suppress-auto-scroll="findOpen"
           />
           <SessionBackgroundWakeCard :session="session" />
+          <SessionInboxChips :session="session" />
           <SessionBackgroundChips :session="session" />
           <SessionComposer
             :attachments="pendingAtt"
