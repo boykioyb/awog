@@ -2,9 +2,10 @@
 // hàm bị test đều nhận dữ liệu vào và trả dữ liệu ra.
 //
 // Run: `npx vitest@2 run src/templates/__tests__/marketplace.test.ts`
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { filterEntries, parseCatalog, planToken, undisclosedKinds } from '../marketplace.js'
-import type { PlannedBundle } from '../remote.js'
+import { parseGithubUrl, type PlannedBundle } from '../remote.js'
+import { log } from '../../util/logger.js'
 
 const OK_URL = 'https://github.com/acme/awog-templates/tree/main/bundles/web-team'
 
@@ -58,6 +59,61 @@ describe('parseCatalog treats the catalog as untrusted input', () => {
   it('rejects an unknown entity kind instead of passing it through', () => {
     const raw = { templates: [entry({ kinds: ['agent', 'mcp'] })] }
     expect(parseCatalog(raw)).toHaveLength(0)
+  })
+})
+
+// ─── Danh mục và lớp cài phải đồng ý với nhau ────────────────────────────────
+
+// Một entry hiện ra trong "Khám phá" mà `parseGithubUrl` không giải được = một
+// nút Cài chỉ để báo lỗi. `parseCatalog` phải loại nó NGAY, và loại bằng CHÍNH
+// hàm mà lớp cài chạy — không phải bằng một bản luật chép lại.
+describe('parseCatalog drops every url the installer itself cannot parse', () => {
+  const BLOB_URL = 'https://github.com/acme/awog-templates/blob/main/bundles/web-team'
+
+  it('DROPS a /blob/ url at parse time — the old code only died at install time', () => {
+    // Đây chính là lỗi người dùng từng thấy sau khi bấm Cài.
+    expect(() => parseGithubUrl(BLOB_URL)).toThrow(/expected a \/tree\/<branch>\/<folder> link/)
+    expect(parseCatalog({ templates: [entry({ id: 'blobby', url: BLOB_URL })] })).toEqual([])
+  })
+
+  it('names the dropped entry AND the reason in the log', () => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {})
+    try {
+      parseCatalog({ templates: [entry({ id: 'blobby', url: BLOB_URL }), entry()] })
+      expect(warn).toHaveBeenCalledTimes(1)
+      const [msg, meta] = warn.mock.calls[0] as [string, Record<string, unknown>]
+      expect(msg).toMatch(/dropped/)
+      expect(meta.entry).toBe('blobby')
+      expect(meta.url).toBe(BLOB_URL)
+      // Lý do lấy nguyên văn từ lớp cài, không diễn đạt lại.
+      expect(String(meta.reason)).toContain('/tree/<branch>/<folder>')
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('still keeps the urls the installer accepts, including a bare repo root', () => {
+    const root = 'https://github.com/acme/awog-templates'
+    expect(parseGithubUrl(root).ref).toBe('')
+    const raw = { templates: [entry({ id: 'root', url: root }), entry()] }
+    expect(parseCatalog(raw).map((e) => e.id)).toEqual(['root', 'web-team'])
+  })
+
+  // Ghim hành vi THẬT của `parseGithubUrl`, đo chứ không đoán: không có "ref nhiều
+  // segment" — segment ngay sau /tree/ LÀ ref, phần còn lại là đường dẫn thư mục.
+  // Một ref thật sự có "/" chỉ diễn đạt được bằng %2F, và ca đó thì bị loại.
+  it('treats the first segment after /tree/ as the ref, the rest as the folder', () => {
+    const url = 'https://github.com/acme/repo/tree/a/b/dir'
+    const ref = parseGithubUrl(url)
+    expect(ref.ref).toBe('a')
+    expect(ref.dirPath).toBe('b/dir')
+    expect(parseCatalog({ templates: [entry({ url })] }).map((e) => e.url)).toEqual([url])
+  })
+
+  it('DROPS a percent-encoded multi-segment ref — the installer refuses it', () => {
+    const url = 'https://github.com/acme/repo/tree/feature%2Fx/dir'
+    expect(() => parseGithubUrl(url)).toThrow(/single-segment/)
+    expect(parseCatalog({ templates: [entry({ url })] })).toEqual([])
   })
 })
 

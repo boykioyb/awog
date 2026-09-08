@@ -165,6 +165,21 @@ export function parseGithubUrl(rawUrl: string): RepoRef {
   return { owner, repo, ref, dirPath }
 }
 
+export type GithubUrlParse = { ok: true; ref: RepoRef } | { ok: false; reason: string }
+
+// Biến thể KHÔNG NÉM của `parseGithubUrl` — cùng một thân luật, chỉ khác cách báo
+// hỏng. Dành cho nơi phải LỌC (danh mục marketplace duyệt một danh sách url của
+// người khác) chứ không dựng lỗi RPC. Cố ý gọi lại `parseGithubUrl` thay vì chép
+// luật `/tree/<ref>/<dir>` ra chỗ thứ hai: hai bản luật rồi sẽ lệch nhau, và lúc
+// đó url lọt lớp lọc rồi mới chết ở lớp cài.
+export function tryParseGithubUrl(rawUrl: string): GithubUrlParse {
+  try {
+    return { ok: true, ref: parseGithubUrl(rawUrl) }
+  } catch (err) {
+    return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 // ─── HTTP (allowlisted, capped) ────────────────────────────────────────────
 
 function isGithubContentHost(host: string): boolean {

@@ -103,8 +103,12 @@ thấy* gì. Nhưng danh mục **không bao giờ quyết định được thứ
   không phải sự thật: sự thật đọc từ `template.json` của chính bundle ở bước `inspect`
   (`marketplace.ts` → `planSingleBundle`). Kể cả `id` của template sau khi cài cũng lấy từ manifest
   của bundle, không phải từ `id` trong danh mục.
-- URL bị siết **hai lớp**: `parseCatalog` loại ngay entry có url không phải `https://github.com/…`
-  (nên nó không bao giờ hiện ra trong danh sách), rồi `planSingleBundle` parse lại đầy đủ lúc cài.
+- URL bị siết bằng **đúng một bộ luật**: `parseCatalog` cho url chạy qua chính `parseGithubUrl` của
+  lớp cài (`tryParseGithubUrl` — biến thể không-ném), nên entry nào cài không được thì **không bao
+  giờ hiện ra** trong danh sách; url rụng thì có log kèm `entry` + `reason`. Danh mục chỉ thêm một
+  điều kiện riêng của mình là **https** (`parseGithubUrl` còn nhận `http`). Lúc bấm Cài,
+  `planSingleBundle` parse lại bằng cùng hàm đó. Trước 2026-09-08 lớp danh mục chỉ so **host**, nên
+  một url `/blob/main/…` đi lọt rồi mới chết ở nút Cài với `expected a /tree/<branch>/<folder> link`.
 - Cài **bắt buộc kèm `token`** — băm của kế hoạch (danh sách entity + từng file + blob sha) mà
   người dùng vừa đọc. Nguồn tráo nội dung giữa lúc đọc và lúc bấm Cài ⇒ token lệch ⇒ engine **không
   ghi gì** và hỏi lại. Ràng buộc nằm ở engine, không ở UI.

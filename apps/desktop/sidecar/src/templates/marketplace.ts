@@ -36,8 +36,9 @@
 //     Redirect — `redirect: 'manual'`: mọi 3xx là lỗi. catalog.json nhỏ nên raw
 //              trả 200 trực tiếp; đây là chính sách chặt nhất mà không mất gì.
 //  L1        — danh mục KHÔNG TIN: zod, cap byte, cap số entry, timeout, và URL
-//              của từng entry phải là github.com (kiểm ngay lúc map, entry hỏng bị
-//              LOẠI thay vì hiện ra rồi hỏng lúc cài).
+//              của từng entry phải là thứ CHÍNH `parseGithubUrl` (lớp cài) giải
+//              được — kiểm ngay lúc map bằng đúng hàm đó, entry hỏng bị LOẠI +
+//              log thay vì hiện ra rồi hỏng lúc cài.
 //  Cache     — đọc lại cache cũng là L1: validate lại bằng đúng schema.
 //  Đồng ý    — cài PHẢI kèm `token` lấy từ `inspect`. Token là băm của kế hoạch
 //              (danh sách entity + từng file + blob sha). Nguồn đổi nội dung giữa
@@ -64,6 +65,7 @@ import {
   downloadFilesInto,
   finalizeBundleDir,
   planSingleBundle,
+  tryParseGithubUrl,
   type PlannedBundle,
   type RepoRef,
 } from './remote.js'
@@ -97,8 +99,9 @@ export interface MarketplaceEntry {
   description: string
   author: string
   version: string
-  // URL folder bundle trên github.com. Đã kiểm host lúc map; `planSingleBundle`
-  // sẽ parse lại đầy đủ (owner/repo/ref/path) lúc cài.
+  // URL folder bundle trên github.com. Lúc map đã cho chạy qua chính
+  // `parseGithubUrl` của lớp cài, nên entry còn ở đây là entry `planSingleBundle`
+  // giải được — nó sẽ parse lại đúng hàm đó lúc cài.
   url: string
   // Loại entity mà LISTING KHAI — chỉ để lọc/hiện nhãn. KHÔNG phải sự thật:
   // sự thật đọc từ template.json của bundle ở bước `inspect`.
@@ -245,25 +248,44 @@ async function getCatalogDoc(): Promise<unknown> {
 
 // ─── Map danh mục ───────────────────────────────────────────────────────────
 
-// URL của entry là L1: chỉ chấp nhận github.com qua https. Kiểm ngay lúc map để
-// một entry trỏ đi chỗ khác KHÔNG BAO GIỜ hiện ra trong danh sách.
-function isGithubBundleUrl(raw: string): boolean {
-  const guard = ssrfCheck(raw)
-  if (!guard.ok) return false
+// URL của entry là L1. Kiểm ngay lúc map để một entry KHÔNG CÀI ĐƯỢC không bao
+// giờ hiện ra trong danh sách. Trả lý do (null = dùng được) để chỗ loại còn nói
+// được vì sao.
+//
+// Đúng MỘT luật được viết ở đây — "https": danh mục siết chặt hơn
+// `parseGithubUrl` (hàm đó còn nhận http) vì entry đi qua đây là thứ AWOG tự
+// tuyển, không có cớ nào để rơi xuống http. Phần còn lại — host github.com, dạng
+// `/tree/<ref>/<dir>`, ký tự cho phép trong owner/repo/ref/path — KHÔNG chép lại
+// mà hỏi thẳng `tryParseGithubUrl`, tức CHÍNH hàm mà nút Cài sẽ chạy. Trước đây
+// chỗ này chỉ so host, nên một url `/blob/main/x` đi lọt danh mục rồi mới chết
+// lúc bấm Cài với "expected a /tree/<branch>/<folder> link".
+function bundleUrlProblem(raw: string): string | null {
   let url: URL
   try {
-    url = new URL(raw)
+    url = new URL(raw.trim())
   } catch {
-    return false
+    return 'not a URL'
   }
-  return url.protocol === 'https:' && url.hostname.toLowerCase() === 'github.com'
+  if (url.protocol !== 'https:') return 'catalog entries must be https'
+  const parsed = tryParseGithubUrl(raw)
+  return parsed.ok ? null : parsed.reason
+}
+
+// Danh mục do người khác xuất bản: entry biến mất mà không dấu vết là không tra
+// được. Một chỗ ghi log duy nhất cho cả đường mạng lẫn đường cache.
+function logDroppedUrl(from: string, id: string, url: string, reason: string): void {
+  log.warn('templates: catalog entry dropped — url is not installable', {
+    from,
+    entry: id,
+    url,
+    reason,
+  })
 }
 
 function toEntry(raw: unknown): MarketplaceEntry | null {
   const parsed = EntrySchema.safeParse(raw)
   if (!parsed.success) return null
   const e = parsed.data
-  if (!isGithubBundleUrl(e.url)) return null
   return {
     id: e.id,
     name: e.name,
@@ -286,7 +308,13 @@ export function parseCatalog(raw: unknown): MarketplaceEntry[] {
   const seenIds = new Set<string>()
   for (const item of doc.data.templates) {
     const entry = toEntry(item)
-    if (!entry || seenIds.has(entry.id)) continue
+    if (!entry) continue
+    const problem = bundleUrlProblem(entry.url)
+    if (problem) {
+      logDroppedUrl('catalog', entry.id, entry.url, problem)
+      continue
+    }
+    if (seenIds.has(entry.id)) continue
     seenIds.add(entry.id)
     out.push(entry)
     if (out.length >= MAX_ENTRIES) break
@@ -333,9 +361,14 @@ async function readCache(): Promise<{ fetchedAt: number; entries: MarketplaceEnt
     log.warn('templates: catalog cache invalid, ignoring')
     return null
   }
-  // Cache cũ có thể được ghi bởi bản app trước khi siết luật URL — kiểm lại.
+  // Cache cũ có thể được ghi bởi bản app trước khi siết luật URL — kiểm lại bằng
+  // ĐÚNG luật đang chạy, nếu không entry `/blob/…` ghi từ bản trước vẫn hiện ra.
   const entries = parsed.data.entries
-    .filter((e) => isGithubBundleUrl(e.url))
+    .filter((e) => {
+      const problem = bundleUrlProblem(e.url)
+      if (problem) logDroppedUrl('cache', e.id, e.url, problem)
+      return problem === null
+    })
     .map<MarketplaceEntry>((e) => ({
       id: e.id,
       name: e.name,

@@ -115,4 +115,22 @@ describe('phép kiểm bắt được file mẫu hỏng', () => {
     const bloated = Buffer.alloc(MAX_CATALOG_BYTES + 1, 0x20)
     expect(withinByteCap(bloated)).toBe(false)
   })
+
+  // Kiểu hỏng dễ mắc nhất khi soạn danh mục bằng tay: copy link từ thanh địa chỉ
+  // lúc đang XEM MỘT FILE (github.com đưa /blob/) thay vì lúc xem thư mục
+  // (/tree/). Trước bản vá này entry vẫn hiện ra trong Khám phá rồi mới chết ở
+  // nút Cài; giờ nó phải rụng ngay tại parse, và rụng có tên.
+  it('/blob/ thay vì /tree/ ⇒ entry bị loại NGAY ở parse và tên nó hiện ra', () => {
+    const broken = seed.templates.map((item, i) => {
+      if (i !== 1) return item
+      const e = item as Record<string, unknown>
+      return { ...e, url: String(e.url).replace('/tree/', '/blob/') }
+    })
+    expect(rejectedIds(broken)).toEqual(['#1 (web-app-team)'])
+    // Hai entry còn lại không hề gì — một entry hỏng không giết cả danh mục.
+    expect(parseCatalog({ templates: broken }).map((e) => e.id)).toEqual([
+      'awog-delivery-guild',
+      'spec-driven-planning',
+    ])
+  })
 })
