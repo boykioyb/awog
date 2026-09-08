@@ -175,6 +175,12 @@ Vá: vân tay là **tuple** `sha256(scheme ‖ sha256(json) ‖ script)` — `sc
 
 Giới hạn còn lại, nói rõ để không ai tưởng đã phủ hết: vân tay chỉ sâu **một tầng** — script được duyệt vẫn `source ./helper.sh` hay gọi binary khác được. Chống được "sửa file dưới chân đồng ý cũ", không phải sandbox.
 
+**Bổ sung 2026-09-08 — đo lại thì vế "gọi binary khác" mới là vế nặng.** Cả hai hook `format-after-edit.sh` thật trên máy dev đều **không dùng `source` lần nào**; thứ chúng làm là `pnpm exec prettier` và `ruff`. Mà `prettier` nằm trong `node_modules`, tức **đi theo repo** — nên một repo lạ không cần sửa script hook, chỉ cần ship `node_modules/.bin/prettier` độc.
+
+Đã cân nhắc và **bác** phương án quét tĩnh `source`/`.` để băm thêm: nó đóng cánh cửa không ai đi qua, bỏ qua dạng đang thực sự được dùng, và lách được trong một dòng (`bash -c "$(curl …)"` không phải `source`). Chặn `source` mà thả `curl | sh` là **nghiêm khắc giả** — bán một cảm giác an toàn không có thật, đúng lớp lỗi [ADR 0080](./0080-command-scoped-permission-rules.md) F14 gọi tên.
+
+Thay vào đó, sửa chỗ câu chữ đang nói thiếu: màn duyệt trước đây chỉ nói hook **đến từ đâu** ("comes from the project's .awog/hooks … (ADR 0032)"), không nói người dùng **đang đồng ý điều gì**. Nay nó nói thẳng: hook chạy shell với quyền của người dùng, hãy đọc lệnh và script trước, dấu duyệt buộc vào đúng nội dung đó — còn **chương trình chúng gọi thì không được phủ**, kể cả `node_modules/.bin` của chính repo. Đồng ý CÓ HIỂU BIẾT là hàng rào duy nhất còn đúng ở tầng này.
+
 **F8 — `hooks.run-once` fail-open.** Cổng cũ: `if (tagged && tagged.trusted === false) throw` ⇒ tra cứu **trượt** (`tagged === undefined`) thì hook vẫn spawn — mà trượt xảy ra thật đúng trong ca F1 (và trên FS không phân biệt hoa/thường: `loadHook('Runner')` đọc được `runner.json` còn listing tag id là `runner`). Nay mặc định ĐÓNG: `if (!tagged || tagged.trusted !== true) throw`. Cổng không trả lời được thì phải đóng.
 
 **Sơ đồ vân tay đánh version, không nâng cấp im lặng.** `~/.awog/hook-trust/<key>.json` mang `version: 3`; đọc thấy version khác ⇒ `log.warn` + coi như **chưa duyệt gì** (v1 = chỉ id, v2 = chỉ băm JSON — cả hai đều là "không biết đã đồng ý với cái gì"). Đúng khuôn đã dùng cho entry v1 ở vòng trước.

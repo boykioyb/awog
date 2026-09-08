@@ -22,7 +22,7 @@
   "hooks.detail.noRuns": "Chưa chạy lần nào — dùng Chạy thử để kiểm tra.",
 
   "hooks.trust.title": "Hook dự án chưa được tin",
-  "hooks.trust.desc": "Hook này đến từ .awog/hooks của dự án và sẽ không chạy cho đến khi bạn tin nó (ADR 0032).",
+  "hooks.trust.desc": "Hook này đi kèm dự án và chạy lệnh shell với quyền của bạn — đọc lệnh và script bên dưới trước khi tin. Dấu duyệt buộc vào đúng nội dung của chúng, nên sửa bên nào cũng thu hồi. Chương trình mà chúng GỌI thì không được phủ: repo cũng mang theo node_modules/.bin của chính nó.",
   "hooks.trust.button": "Tin hook này",
 
   "hooks.creator.title": "Mô tả một hook",

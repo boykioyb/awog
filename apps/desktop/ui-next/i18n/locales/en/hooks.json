@@ -22,7 +22,7 @@
   "hooks.detail.noRuns": "No runs yet — use Run once to test it.",
 
   "hooks.trust.title": "Untrusted project hook",
-  "hooks.trust.desc": "This hook comes from the project's .awog/hooks and won't run until you trust it (ADR 0032).",
+  "hooks.trust.desc": "This hook came with the project and runs shell commands with your privileges — read the command and script below before you trust it. Trust is bound to their exact contents, so editing either one revokes it. Programs they call are NOT covered: a repo ships its own node_modules/.bin too.",
   "hooks.trust.button": "Trust this hook",
 
   "hooks.creator.title": "Describe a hook",
