@@ -665,11 +665,31 @@ export async function sanitizeRemoteParams(
       return pick(asObject(raw), ['sessionId'])
     case 'sessions.steer': {
       // Steering injects user text into a LIVE turn — same trust level as a
-      // message, and the gate stays on because the turn's mode was already
-      // clamped when it started.
+      // message.
+      //
+      // Cửa sau của bản vá kẹp mode, phát hiện trong lượt infosec sau đó: câu
+      // "mode của lượt đã được kẹp khi nó bắt đầu" CHỈ đúng cho lượt do điện
+      // thoại khởi động. Một lượt do DESKTOP khởi động ở `execute` chưa từng đi
+      // qua `clampRemoteMode` — nên một thiết bị chỉ có device token có thể bơm
+      // chỉ thị vào đúng vòng lặp ungated đó trong khi công tắc `unattended`
+      // đang TẮT. Bịt cửa trước mà để ngỏ cửa sau thì không bịt được gì.
+      //
+      // Nên steer đọc mode THẬT của phiên đích và từ chối khi nó ungated mà
+      // công tắc chưa bật — cùng nguồn sự thật `sessions.get` mà `sendMessage`
+      // dùng ngay phía trên.
       const p = asObject(raw)
+      const sessionId = reqString(p.sessionId, 'sessionId')
+      const { session } = (await request('sessions.get', { sessionId })) as {
+        session: SessionLike | null
+      }
+      if (!session) throw new RemoteRejected('session not found')
+      if (isUngatedMode(session.settings.mode) && !policy.unattended) {
+        throw new RemoteRejected(
+          'this session runs in an unattended mode; steering it from a remote device needs the desktop switch',
+        )
+      }
       return {
-        sessionId: reqString(p.sessionId, 'sessionId'),
+        sessionId,
         messageId: reqString(p.messageId, 'messageId'),
         text: reqString(p.text, 'text').slice(0, MAX_STEER_CHARS),
       }

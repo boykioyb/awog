@@ -1,5 +1,5 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { log } from './logger'
@@ -102,13 +102,17 @@ export class DeviceStore {
 
   private async persist(): Promise<void> {
     try {
-      await mkdir(join(homedir(), '.awog'), { recursive: true })
+      await mkdir(join(homedir(), '.awog'), { recursive: true, mode: 0o700 })
       const file: StoreFile = {
         enabled: this.enabled,
         unattended: this.unattended,
         devices: this.devices,
       }
       await writeFile(STORE_FILE, JSON.stringify(file, null, 2), { mode: 0o600 })
+      // `mode` của writeFile chỉ áp lúc TẠO. File do bản build cũ tạo, hoặc bị
+      // chmod nhầm, sẽ giữ nguyên quyền rộng qua mọi lần ghi sau — nên siết lại
+      // mỗi lần, giống cách credentials.json làm. Nó chứa hash token ghép nối.
+      await chmod(STORE_FILE, 0o600)
     } catch (err) {
       log.error('remote-devices persist failed', {
         message: err instanceof Error ? err.message : String(err),
@@ -201,10 +205,17 @@ export class DeviceStore {
   }
 
   // Remove a device (revoke). The gateway force-closes its live sockets separately.
+  //
+  // Thu hồi cũng hạ `unattended`, cùng lý do với `setEnabled(false)`: người ta bấm
+  // Revoke đúng lúc niềm tin vừa mất — máy thất lạc, thiết bị lạ. Công tắc là
+  // TOÀN CỤC chứ không gắn thiết bị, nên để nó bật sau khi thu hồi nghĩa là thiết
+  // bị ghép nối TIẾP THEO thừa hưởng ngay quyền chạy không duyệt mà không ai bật
+  // lại. Ghép nối lại là hành động bình thường; khôi phục im lặng quyền đó thì không.
   async revoke(id: string): Promise<boolean> {
     const before = this.devices.length
     this.devices = this.devices.filter((d) => d.id !== id)
     if (this.devices.length === before) return false
+    this.unattended = false
     await this.persist()
     return true
   }
