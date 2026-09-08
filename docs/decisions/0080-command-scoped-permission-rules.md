@@ -198,7 +198,7 @@ Cổng quyền giờ chạy trên **mọi** lời gọi tool (F3) nên chi phí 
 - Token hoá pattern được **nhớ lại** theo `(kind, pattern)`.
 - Đánh giá quét **một lượt** thay vì hai (DENY trả về ngay; ALLOW chỉ chốt sau khi đã quét hết ⇒ ngữ nghĩa không đổi).
 - Trần cứng `MAX_RULES_PER_EVAL = 1500` luật cho mỗi lần đánh giá; vượt trần ⇒ `'ask'` (không bao giờ `'allow'` từ một lượt quét dở dang). Tầng session cũng nhận trần 500 luật như tầng file.
-- Đọc file có thêm TTL 1s trên `stat` (vẫn kiểm `mtime + size`), nên một chuỗi lời gọi tool liên tiếp không nện đĩa.
+- Đọc file có thêm TTL 1s trên `stat`, nên một chuỗi lời gọi tool liên tiếp không nện đĩa. (Khoá cache viết ở đây là `mtime + size`; nó **đã bị thay** bằng danh tính file đầy đủ trong F11 dưới — đoạn này giữ nguyên làm lịch sử.)
 
 ### F11 — cache file luật khoá theo `(mtimeMs, size)` phục vụ bản cũ vô thời hạn
 
@@ -213,6 +213,30 @@ TTL 1s **không** che lỗ này — nó là thứ khác: TTL bỏ qua `stat` tro
 - Thêm trần tuổi `MAX_CACHE_AGE_MS = 5000`: quá hạn thì đọc lại bất kể danh tính, nên phần dư (hệ thống tệp trả về danh tính trùng cho hai nội dung) chỉ còn trễ ≤ 5s thay vì vô hạn.
 
 **Không băm nội dung** — cache này nằm trên đường nóng của **mọi** lời gọi tool, băm mỗi lần là đọc cả file mỗi lần, đúng thứ cache sinh ra để tránh. Đo trên file kịch bản xấu nhất (500 luật, 62 KB): đọc + `JSON.parse` + zod theo từng entry mất **0,28 ms**, một `stat` trần mất **0,010 ms**. Băm-mỗi-lần đắt hơn ~28× trên mỗi lời gọi tool × 3 tầng; trần tuổi 5s thì chỉ tốn 0,28 ms mỗi 5s cho mỗi file đang dùng.
+
+#### Đã đo toàn bộ cổng — 2026-09-08, mục cache ĐÓNG LẠI
+
+Hai chỗ trong ADR này còn để lửng chuyện "cache file luật" như một việc phải làm tiếp. Nó **đã làm xong** ở chính F11; phần còn thiếu là con số để biết có nên làm gì thêm nữa không. Đo trên máy dev (macOS, node 22, tiến trình đã ấm, 5000 vòng mỗi ca, `evaluatePermissionRules` đo đầu-tới-cuối kể cả overhead promise):
+
+| Kịch bản | µs / lời gọi |
+|---|---|
+| 0 luật, **cả hai file luật đều thiếu** — trạng thái mặc định của người dùng | **25,4** |
+| 2 file luật tồn tại nhưng rỗng | 4,8 |
+| 9 luật / 3 tầng (khớp ALLOW · không khớp · khớp DENY) | 5,1 · 5,0 · 5,3 |
+| 50 luật | 13,4 |
+| 200 luật | 41,9 |
+| 500 luật (trần một file) | 102 |
+| 1000 luật (trần × 2 file) | 428 |
+| ALLOW theo đường dẫn, có phiếu phủ quyết symlink (F11c) | 80 |
+| *tham chiếu:* một `stat` qua threadpool của libuv | 8,3 (file có) · 10,6 (ENOENT) |
+
+Đường nóng gọi **đúng một lần** `evaluatePermissionRules` cho mỗi lời gọi tool (`isUnreadableUnderDeny` được memo hoá và chỉ chạy trên nhánh sắp bỏ qua prompt; lượt tra thêm cho tên trần chỉ có ở tool SSH). Một lời gọi tool của model tốn hàng trăm ms tới vài giây, nên **5–25 µs là 0,01% của lượt** — nhiễu. Kết luận: **không thêm lớp cache nào nữa.**
+
+Ba điều số liệu nói ra, đáng ghi vì chúng đảo ngược trực giác:
+
+- **Chi phí trội nhất KHÔNG phải việc quét luật mà là hai `stat` hỏng khi file luật chưa tồn tại** (25,4 µs so với 4,8 µs khi file có mặt). `loadRuleFile` cố ý **không ghi nhớ kết quả âm**: nhớ lại thì một luật DENY vừa thêm ở Settings → Quyền sẽ không có hiệu lực cho tới khi hết hạn cache. Đổi 20 µs lấy một cửa sổ fail-open là đổi sai chiều, nhất là khi 20 µs đó không ai đo được trên UI. Hai test mới (`sees a rule file that did not exist…`, `drops the rules when the file is deleted`) ghim đúng hai chiều này để lần "tối ưu" sau bị đỏ ngay.
+- Chi phí quét tuyến tính ~**0,2 µs/luật**. Trần `MAX_RULES_PER_EVAL = 1500` vì thế tương đương ~0,3 ms — đúng tầm một trần an toàn, không phải một trần hiệu năng.
+- Ở 1000 pattern **khác nhau**, `TOKEN_CACHE` (cap 512) bị xoá sạch liên tục nên token hoá chạy lại mỗi lời gọi (428 µs, thay vì ~200 µs nếu ngoại suy tuyến tính). Chỉ chạm được khi cả hai file luật đều đầy tới trần 500; không sửa, ghi lại để lần sau ai thấy con số này biết nó đến từ đâu chứ không đi tìm nhầm chỗ.
 
 ### F12 — `run_in_background` không nằm trong chủ thể của luật
 

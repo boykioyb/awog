@@ -1077,6 +1077,35 @@ describe('rule file cache notices a same-size, same-mtime rewrite (F11)', () => 
     // lỗ hổng: thu hồi một luật mà cổng quyền không bao giờ thấy.
     await expect(askBash(sessionId, 'aaa')).resolves.toBe('ask')
   })
+
+  // Hai ca dưới khoá đúng hai chiều mà một "tối ưu" cache sau này sẽ phá. Chi
+  // phí của đường không-cache đã được ĐO (≈10 µs mỗi file thiếu, ≈25 µs cho một
+  // lời gọi ở trạng thái mặc định) nên không có lý do tốc độ nào để đánh đổi.
+  it('sees a rule file that did not exist when the gate first looked', async () => {
+    const file = userRuleFile()
+    // Lần tra đầu: file CHƯA tồn tại. `loadRuleFile` cố ý KHÔNG ghi nhớ kết quả
+    // âm — nhớ lại thì luật DENY người dùng vừa thêm ở Settings → Quyền sẽ không
+    // có hiệu lực cho tới khi hết một hạn cache nào đó.
+    await expect(askBash(sessionId, 'ls')).resolves.toBe('ask')
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, JSON.stringify({ version: 1, rules: [{ rule: 'Bash(ls)' }] }))
+    // Không tua đồng hồ: file mới tạo phải có hiệu lực NGAY, không qua TTL nào.
+    await expect(askBash(sessionId, 'ls')).resolves.toBe('allow')
+  })
+
+  it('drops the rules when the file is deleted', async () => {
+    const file = userRuleFile()
+    await mkdir(dirname(file), { recursive: true })
+    await writeFile(file, JSON.stringify({ version: 1, rules: [{ rule: 'Bash(ls)' }] }))
+    await expect(askBash(sessionId, 'ls')).resolves.toBe('allow')
+    await rm(file)
+    // Vượt cửa sổ "không stat" 1s — trong cửa sổ đó luật cũ vẫn được phục vụ, và
+    // đó là độ trễ CÓ TRẦN mà ADR 0080 nói rõ. Sau đó thì `stat` hỏng phải xoá
+    // mục cache, không được giữ lại bản đã nạp.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(Date.now() + 2000))
+    await expect(askBash(sessionId, 'ls')).resolves.toBe('ask')
+  })
 })
 
 // ─── F12 — `run_in_background` đổi hệ quả của cùng một chuỗi lệnh ────────────
