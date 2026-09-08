@@ -1,6 +1,6 @@
 # Parity với Claude Code Desktop — bản đồ 46 hạng mục
 
-**Trạng thái:** đang thực thi · **Cập nhật:** 2026-09-07
+**Trạng thái:** đang thực thi · **Cập nhật:** 2026-09-08
 
 Tài liệu này là *bản đồ*, không phải spec. Mỗi hạng mục có spec/ADR riêng khi được làm — cột cuối trỏ tới đó.
 
@@ -66,7 +66,7 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | 32 | Chip diff-stat + Create PR ở thanh trạng thái | ✅ | `git.status` có field `additions/deletions` nhưng `parsePorcelainV2` **chưa bao giờ điền** ⇒ phải cộng từ `git.diff` |
 | 33 | Xem output job nền | ✅ | Kèm RPC `sessions.backgroundRead` |
 | 34 | Follow-up do model gợi ý | ✅ | Model tự phát qua tool. **Cố ý chọn cách phủ kém hơn**: heuristic dẫn xuất từ văn bản sẽ bịa lời cho model — cùng họ lỗi confabulation repo đang chống |
-| 35 | Artifact có URL/version/bình luận | ⬜ | **Khuyến nghị không làm** — trái local-first. Dừng ở export file |
+| 35 | Artifact có URL/version/bình luận | ✅ ⚠️ | Khuyến nghị cũ ("**không làm** — trái local-first") **SAI** và đã gỡ: nó giả định AWOG phải tự dựng backend lưu trữ. Không cần — CLI đã có sẵn tool built-in `Artifact` (publish/list/read/update, có URL, có version qua `label`, có bình luận), hosting của Anthropic **dưới tài khoản Claude của chính người dùng**. AWOG chỉ mở cổng, không dựng lại gì. Cổng đó **không phải** `settings.enableArtifact` như doc SDK gợi ý: đo thật (SDK 0.3.260/CLI 2.1.260) cho thấy khoá ấy là **no-op** vì CLI đóng theo ENTRYPOINT (`sdk_default_off`) trước khi hỏi tới settings — lever thật là env `CLAUDE_CODE_ARTIFACT=1`. Bảng đo + hàm CLI đã giải mã nằm trong `runtime/claude-sdk/artifact.ts`. Công tắc tắt dùng lại `disabledTools` sẵn có (nhóm Web trong SessionConfigPopover), **không** thêm setting mới. ⚠️ **Chỉ có trên nhánh Claude SDK (provider `anthropic`) và KHÔNG bắc cầu được** — thân của tool là dịch vụ hosting của Anthropic, không có phần thân AWOG để dùng chung như 7 tool đã bắc. Đổi agent sang OpenAI/Google/Ollama là **mất hẳn, không có bản vá**. Đây là ca đầu tiên trong repo mà mối nguy [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md) (*đổi provider là đổi năng lực agent*) **không sửa được, chỉ nói ra được**. Bề mặt cần infosec để mắt: nội dung file `.html` **rời máy** lên hosting của Anthropic — ngoại lệ có chủ đích với local-first, chỉ xảy ra khi người dùng yêu cầu và tắt được bằng công tắc tool |
 
 ## D. Cấu hình & hệ sinh thái
 

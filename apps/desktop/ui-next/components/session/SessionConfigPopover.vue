@@ -226,7 +226,13 @@ const TOOL_GROUPS: [string, string[]][] = [
   // dev_server nói về chính những background shell ở nhóm này: list/logs/stop, cộng
   // một `start` chỉ trả về lệnh để model chạy qua Bash.
   ['Exec', ['Bash', 'BashOutput', 'KillShell', 'monitor', 'read_terminal', 'dev_server']],
-  ['Web', ['WebFetch', 'WebSearch', 'browser_tool']],
+  // `Artifact` là tool built-in CHỈ có trên nhánh Claude SDK (provider anthropic);
+  // ở nhánh Pi tắt nó là no-op, giống `WebSearch` ghi ở trên. Xếp vào Web vì đây là
+  // nhóm chạm mạng — nhưng nó là tool DUY NHẤT ở đây đẩy nội dung RA: publish một
+  // trang có URL chia sẻ được, lưu bền dưới tài khoản Claude của người dùng. Ai
+  // không muốn nội dung rời máy thì đây là công tắc, và nó tắt thật (`disabledTools`
+  // → `disallowedTools`, đã đo: tool biến khỏi toolset).
+  ['Web', ['WebFetch', 'WebSearch', 'browser_tool', 'Artifact']],
   // list_sessions / send_session_message = kênh nhắn sang phiên KHÁC. Tắt ở đây là
   // model không nhìn thấy danh bạ phiên và không đặt được tin vào hộp thư phiên nào.
   [

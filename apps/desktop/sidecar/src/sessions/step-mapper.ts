@@ -77,6 +77,11 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   // đây là việc của agent chứ không phải một lần đọc/ghi file.
   list_sessions: 'task',
   send_session_message: 'task',
+  // `Artifact` là tool built-in của CLI (chỉ có trên nhánh Claude SDK), KHÔNG phải
+  // tool AWOG bắc cầu — nên nó không nằm trong bảng `bridged.ts` và chỉ cần nhãn +
+  // icon ở đây. `save` chứ không phải `write`: hành động mặc định là ĐẨY một file
+  // đã có lên thành trang có URL, không phải ghi file xuống đĩa.
+  Artifact: 'save',
   Glob: 'find-files',
   Grep: 'search',
   WebSearch: 'search',
@@ -201,6 +206,15 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
     case 'browser_tool': {
       const action = typeof input.action === 'string' ? input.action : ''
       return action ? `Browser: ${action}` : 'Browser'
+    }
+    // Tool một-tên-mười-một-việc, giống `browser_tool`: nhãn phải mang theo
+    // `action` kẻo mọi hàng đều đọc là "Artifact" trong khi việc thật khác hẳn
+    // nhau (đăng một trang / liệt kê / đọc / tải asset lên). `action` VẮNG nghĩa
+    // là publish — đó là mặc định do chính schema của tool khai, nên hàng phải
+    // đọc là "Publish artifact" chứ không phải một nhãn trống nghĩa.
+    case 'Artifact': {
+      const action = typeof input.action === 'string' ? input.action : ''
+      return !action || action === 'publish' ? 'Publish artifact' : `Artifact: ${action}`
     }
     case 'Task': {
       // Format: "Agent <subagent_type>" so the step row reads like Claude Code's
