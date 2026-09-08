@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "tsc -p tsconfig.build.json && node dist/lib/src/index.js",
+    "dev": "tsc -p tsconfig.build.json --outDir dist-dev/lib && node dist-dev/lib/src/index.js",
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"no lint\""

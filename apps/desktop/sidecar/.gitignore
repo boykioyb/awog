@@ -1,4 +1,7 @@
 dist
+# Cây biên dịch của đường DEV (electron/scripts/dev.mjs) — tách khỏi `dist` của
+# build đóng gói để hai bên không ghi đè nhau.
+dist-dev
 dist-tsc
 node_modules
 *.log

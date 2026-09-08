@@ -51,4 +51,4 @@ Có driver cụ thể: cần provider/feature mới chỉ có ở 0.80.x, hoặc
 ## Lưu ý môi trường
 
 - Upgrade trong home-switcher này: `pnpm add`/`install` báo `ERR_PNPM_UNEXPECTED_STORE` → truyền `--store-dir <store đang link>` lấy từ chính message lỗi (xem `reference_pnpm_store_dir_mismatch`).
-- Sửa code sidecar phải `tsc -p tsconfig.build.json` (rebuild `dist/lib`) + **restart app** — dev chạy từ `dist`, không watch.
+- Sửa code sidecar phải `tsc -p tsconfig.build.json --outDir dist-dev/lib` (đường dev nay đọc `dist-dev/lib`, không còn `dist/lib`) + **restart app** — dev chạy từ cây đã biên dịch, không watch.

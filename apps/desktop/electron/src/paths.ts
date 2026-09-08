@@ -6,12 +6,18 @@ import { app } from 'electron'
 //
 // Dev layout (compiled main lives at apps/desktop/electron/dist/main.js):
 //   __dirname = apps/desktop/electron/dist
-//   engine    = apps/desktop/sidecar/dist/lib/src/index.js  (tsc output)
+//   engine    = apps/desktop/sidecar/dist-dev/lib/src/index.js  (tsc output)
 //   ui        = served by Nuxt dev server (ui-next on :3031 by default)
 //
 // Packaged layout (electron-builder, engine + UI shipped as extraResources):
 //   engine    = <resources>/sidecar/lib/src/index.js
 //   ui        = <resources>/ui/index.html
+//
+// Dev compiles into `dist-dev/`, NOT `dist/`: `dist/` belongs to the packaging
+// build (scripts/build.mjs) alone. Both used to write the same tree, so a
+// `pnpm build` overwrote the engine a running dev app was executing from —
+// the build lock can't help, because a dev process lives for hours and holding
+// the lock that long would stall every later build. Two writers, two trees.
 
 // Dev UI dev-server URL. Defaults to the ui-next rebuild (:3031); override with
 // AWOG_DEV_URL to point at another Nuxt dev host.
@@ -22,7 +28,9 @@ export function enginePath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'sidecar', 'lib', 'src', 'index.js')
   }
-  return join(__dirname, '..', '..', 'sidecar', 'dist', 'lib', 'src', 'index.js')
+  // Dev — no fallback to the packaging tree on purpose: a stale `dist/lib` left
+  // over from an old build must never be booted instead of the fresh dev output.
+  return join(__dirname, '..', '..', 'sidecar', 'dist-dev', 'lib', 'src', 'index.js')
 }
 
 // Directory that holds the generated Nuxt SPA (index.html + _nuxt assets).

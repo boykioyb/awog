@@ -128,7 +128,7 @@ Electron's `utilityProcess` dùng **ESM loader đã vá**, vỡ khi một depend
 
 > **Đã verify (headless):** real Electron main (`process.type=browser`) → `engine.start()` (spawn) → `ping` → `{pong:true}` qua stdio. ✅
 
-**Module path:** `enginePath()` → dev `apps/desktop/sidecar/dist/lib/src/index.js`; prod `<resources>/sidecar/lib/src/index.js`.
+**Module path:** `enginePath()` → dev `apps/desktop/sidecar/dist-dev/lib/src/index.js`; prod `<resources>/sidecar/lib/src/index.js`. Hai cây tách nhau có chủ ý: `dist/` chỉ thuộc build đóng gói ([build.mjs](../../apps/desktop/sidecar/scripts/build.mjs)), đường dev biên dịch sang `dist-dev/` (`tsc --outDir` ở [dev.mjs](../../apps/desktop/electron/scripts/dev.mjs)) — trước đây cả hai cùng ghi `dist/` nên `pnpm build` ghi đè đúng file mà app dev đang chạy, và khoá build không cứu được vì tiến trình dev sống hàng giờ. Đường dev **không** fallback về `dist/`: tàn dư `dist/lib` cũ không được phép boot thay bản mới.
 
 ### 5.1 Khôi phục PATH khi launch từ GUI (`shell-env.ts`)
 

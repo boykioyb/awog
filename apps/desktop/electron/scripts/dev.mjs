@@ -1,6 +1,6 @@
 // Dev orchestrator for the Electron shell.
 //
-// 1. Compile the engine (tsc → sidecar/dist/lib) and the Electron main/preload.
+// 1. Compile the engine (tsc → sidecar/dist-dev/lib) and the Electron main/preload.
 // 2. Start the Nuxt dev server (ui-next on :3031 by default) + Electron together.
 // Electron retries loading the dev URL until Nuxt is listening (see window.ts),
 // so we don't need to poll the port here. Killing Electron tears everything down.
@@ -27,9 +27,28 @@ function run(cmd, args, opts = {}) {
 
 async function main() {
   // Compile engine + shell up front (both must exist before Electron boots).
-  await run('pnpm', ['--filter', '@awog/sidecar', 'exec', 'tsc', '-p', 'tsconfig.build.json'], {
-    cwd: repoRoot,
-  })
+  //
+  // --outDir overrides tsconfig.build.json's `dist/lib` so the dev engine lands in
+  // sidecar/dist-dev/ instead: `dist/` is the packaging build's tree (build.mjs) and
+  // two writers on one tree means `pnpm build` overwrites the engine a running dev
+  // app executes from. The tsconfig itself stays untouched — the packaging build
+  // shares it and must keep emitting into `dist/lib` (paths.ts resolves the same
+  // split: dist-dev in dev, dist when packaged).
+  const engineOutDir = resolve(repoRoot, 'apps', 'desktop', 'sidecar', 'dist-dev', 'lib')
+  await run(
+    'pnpm',
+    [
+      '--filter',
+      '@awog/sidecar',
+      'exec',
+      'tsc',
+      '-p',
+      'tsconfig.build.json',
+      '--outDir',
+      engineOutDir,
+    ],
+    { cwd: repoRoot },
+  )
   await run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json'], { cwd: electronDir })
 
   const children = []
