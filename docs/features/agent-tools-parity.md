@@ -178,7 +178,7 @@ Sau thay đổi của WP1. "SDK" = nhánh `provider === 'anthropic'` (`runtime/c
 | `Bash(run_in_background)` + `BashOutput` | ✅ sessions | ✅ CLI | AWOG mirror task của CLI qua external registry |
 | `KillShell` | ✅ **mới** sessions | ✅ CLI | Trước WP1: chỉ UI có nút, model không có tool |
 | `monitor` (chờ điều kiện) | ✅ **mới** sessions | ⚠️ `Monitor` của CLI, nhưng `persistent` chết theo lượt | Pi: chờ một background shell, KHÔNG chạy lệnh (§5) |
-| `read_terminal` | ✅ **mới** sessions | ❌ | Chưa bridge sang SDK (cần SDK MCP server riêng) |
+| `read_terminal` | ✅ **mới** sessions | ✅ | Bridge `mcp__awogterm__read_terminal` (2026-09-08). Server RIÊNG chứ không đi nhờ `awogsurfaces`: tên server hiện trong luật quyền và `disabledTools`, mà một tool ĐỌC dữ liệu L1 không nên nằm chung họ với các surface model ghi vào phiên |
 | `WebFetch` | ✅ (SSRF guard, ADR 0042) | ✅ CLI | |
 | `WebSearch` | ❌ **cố ý không quảng cáo** | ✅ CLI thật | Nhánh Pi bù bằng câu trong `ENGINEERING_PROMPT` |
 | `TodoWrite` | ✅ (+ `todoSink` → `Session.todos`) | ✅ CLI | ADR 0069 |
@@ -199,8 +199,8 @@ Sau thay đổi của WP1. "SDK" = nhánh `provider === 'anthropic'` (`runtime/c
 
 1. **Wire `SCRATCH_DIR_PROMPT`** ở 4 điểm append còn lại: `runtime/run-stream.ts`, `runtime/invoke.ts`, `runtime/claude-sdk/run-stream.ts`, `runtime/claude-sdk/invoke.ts`. Mỗi chỗ một dòng trong mảng `appendParts`.
 2. **`read_terminal` trong plan mode.** Tool read-only này lẽ ra hữu ích nhất ở plan mode ("đọc lỗi rồi lập kế hoạch"), nhưng đang bám cờ `backgroundExec` — cờ này tắt trong plan mode. Sửa gọn: tách một cờ `chatSession` ở `run-stream.ts` (ngoài quyền sở hữu WP1).
-3. **`read_terminal` cho nhánh Claude SDK** — cần một in-process SDK MCP server (`mcp__awogterm__read_terminal`) như wiki/memory.
-4. **`sessions/step-mapper.ts`**: `read_terminal` và `KillShell` chưa có trong `TOOL_NAME_MAP` nên rơi về icon `task` (sparkles). Nên map `terminal` cho cả hai. File ngoài quyền sở hữu WP1.
+3. ~~**`read_terminal` cho nhánh Claude SDK**~~ — **đã xong 2026-09-08.** Thân dùng chung qua `runReadTerminal`, không chép: hai hàng rào bảo mật (khử bí mật + hàng rào nonce) nằm trong đó, nên một bản dựng lại ở bridge là lỗ bảo mật im lặng chứ không phải trùng lặp vô hại. Cơ chế gấp tên bắc cầu ở `step-mapper.ts` được tổng quát hoá thành một BẢNG (server → tool) thay vì chép thêm một hằng.
+4. ~~**`sessions/step-mapper.ts`**: `read_terminal` và `KillShell` chưa có icon~~ — icon đã có từ trước; cái THIẾU hoá ra là **nhãn**: `read_terminal`, `KillShell`, `monitor`, `dev_server`, `code_index` hiện tên thô trong transcript ở CẢ HAI runtime. Đã đặt nhãn 2026-09-08. File ngoài quyền sở hữu WP1.
 5. **`.gitignore`**: cân nhắc thêm `.awog/scratch/`.
 6. **i18n**: nhóm Exec trong `SessionConfigPopover.vue` hiển thị tên tool thô (`read_terminal`), nhất quán với các tool khác — nếu muốn nhãn thân thiện thì phải thêm bảng nhãn, không thuộc phạm vi WP1.
 7. **`monitor` trong `sessions/step-mapper.ts`** — chưa có trong `TOOL_NAME_MAP` nên rơi về icon `task` (sparkles); nên map `terminal` như `BashOutput`/`KillShell`. Cùng file, cùng dòng sửa với mục 4. Tham số `description` (tuỳ chọn) đã được đặt tên khớp `pickTarget` sẵn có, nên dòng transcript hiện được nội dung chờ mà **không** cần sửa mapper.
