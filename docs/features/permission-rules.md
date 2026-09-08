@@ -248,7 +248,9 @@ Bị hỏi đi hỏi lại cùng một lệnh dẫn tới **bấm bừa** — n�
 - Cổng SSH (ADR 0064) giữ allowance riêng theo `(phiên, host, tool)`, không đi qua hệ luật này.
 - Lệnh chạy nền (`run_in_background: true`) không bao giờ nhớ được ⇒ bị hỏi mỗi lần (xem trên).
 - Sửa file luật có độ trễ hiệu lực ≤ 1s (cửa sổ không-`stat`), tối đa 5s trong trường hợp hệ thống tệp trả về danh tính trùng.
-- UI chưa hiện `ruleSkipped`: khi vừa sửa tham số vừa bấm "Always allow", thẻ xin quyền chỉ thấy `savedScopes` rỗng chứ chưa nói rõ lý do.
+- `ruleSkipped` là **hợp đồng chờ sẵn**, không phải khiếm khuyết UX đang xảy ra. Đo lại 2026-09-08: cờ này **không client nào kích được**. Nó chỉ bật khi request mang `updatedInput`, mà (a) `rg updatedInput apps/desktop/ui-next` không ra kết quả nào — desktop chưa có chỗ sửa tham số trước khi duyệt, (b) PWA gửi đúng `{ requestId, decision }`, và (c) [remote-gateway-policy.ts](../../apps/desktop/electron/src/remote-gateway-policy.ts) **cố ý loại bỏ** `updatedInput` lẫn `alwaysAllow` (F7). Nên hàng rào ở sidecar là **phòng thủ theo chiều sâu** cho một năng lực chưa mở, và nó đúng: nó phải có mặt TRƯỚC khi UI sửa tham số ra đời, chứ không phải sau.
+
+  Cố ý **không** thêm dòng thông báo ở thẻ xin quyền bây giờ: một chuỗi người dùng không bao giờ render được thì không tự kiểm chứng được và sẽ mục theo thời gian ([principles.md](../../.claude/rules/principles.md): *YAGNI — không viết cho nhu cầu chưa tồn tại*). Khi nào UI sửa tham số được làm, đó là lúc — và là cùng một PR — phải hiện lý do.
 
 ## Quyền file của worktree
 
