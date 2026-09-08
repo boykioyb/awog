@@ -198,7 +198,16 @@ const SURFACE_TOOLS = [
 // transcript, nó hẹn giờ.
 //
 // Khai ở ĐÂY, trước `TOOL_GROUPS`, vì cùng lý do TDZ ghi ở chú thích dưới.
-const SURFACE_BRIDGED = [...SURFACE_TOOLS, 'schedule_wakeup']
+//
+// Bảng tool → SERVER bắc cầu, chứ không phải một danh sách với tiền tố cứng: từ
+// khi `read_terminal` đi qua `awogterm`, giả định "mọi thứ bắc cầu đều nằm dưới
+// awogsurfaces" không còn đúng. Tắt bằng tên trần thôi thì công tắc trông như đã
+// tắt trong khi model vẫn gọi được ở nhánh Claude SDK.
+const BRIDGE_SERVER_OF: Record<string, string> = {
+  ...Object.fromEntries(SURFACE_TOOLS.map((tl) => [tl, 'awogsurfaces'])),
+  schedule_wakeup: 'awogsurfaces',
+  read_terminal: 'awogterm',
+}
 // KHAI TRƯỚC `TOOL_GROUPS`: đó là một `const` cấp module, chạy NGAY lúc nạp file,
 // nên nó đọc `SURFACE_TOOLS` trong cùng lượt đánh giá. Khai sau sẽ ném TDZ — đúng
 // lỗi vừa vá ở `TopBarNotifications.vue`, chỉ khác là ở cấp module thay vì setup.
@@ -218,7 +227,7 @@ const TOOL_GROUPS: [string, string[]][] = [
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
 
 const TOOL_ALIASES: Record<string, string[]> = Object.fromEntries(
-  SURFACE_BRIDGED.map((tl) => [tl, [`mcp__awogsurfaces__${tl}`]]),
+  Object.entries(BRIDGE_SERVER_OF).map(([tl, server]) => [tl, [`mcp__${server}__${tl}`]]),
 )
 const namesFor = (tl: string): string[] => [tl, ...(TOOL_ALIASES[tl] ?? [])]
 

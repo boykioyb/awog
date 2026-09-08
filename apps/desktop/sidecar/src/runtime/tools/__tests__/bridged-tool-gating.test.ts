@@ -16,6 +16,11 @@ import {
 } from '../browser-tool.js'
 import { SURFACE_MCP_SERVER, SURFACE_TOOL_NAMES } from '../surface-tools.js'
 import { WAKEUP_TEXT } from '../wakeup-tool.js'
+import {
+  READ_TERMINAL_TEXT,
+  READ_TERMINAL_TOOL_NAMES,
+  TERMINAL_MCP_SERVER,
+} from '../read-terminal-tool.js'
 import { stepFromToolUse } from '../../../sessions/step-mapper.js'
 
 const BRIDGED = `mcp__awogbrowser__${BROWSER_TOOL_NAME}`
@@ -109,5 +114,47 @@ describe('schedule_wakeup bắc cầu qua awogsurfaces', () => {
     expect(WAKEUP_TEXT.description.length).toBeGreaterThan(200)
     expect(WAKEUP_TEXT.inSeconds).toContain('seconds')
     expect(WAKEUP_TEXT.note).toContain('characters')
+  })
+})
+
+// `read_terminal` bắc cầu qua server RIÊNG `awogterm` — cố ý khác `schedule_wakeup`.
+//
+// Lý do khác: tên server hiện ra trong luật quyền và trong `disabledTools`, nên nó
+// phải nói đúng tool là gì. Một wake-up là thứ model đặt VÀO phiên; đọc terminal
+// của người dùng là một NGUỒN ĐỌC. Gộp chung thì một luật viết cho
+// `mcp__awogsurfaces__*` sẽ vô tình phủ luôn một tool đọc dữ liệu L1.
+describe('read_terminal bắc cầu qua awogterm', () => {
+  const BARE = 'read_terminal'
+  const BRIDGED = `mcp__${TERMINAL_MCP_SERVER}__${BARE}`
+
+  const labelOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { lines: 50 } }).label
+  const iconOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { lines: 50 } }).tool ?? ''
+
+  it('tên nằm trong danh sách được gấp tên', () => {
+    expect(READ_TERMINAL_TOOL_NAMES as readonly string[]).toContain(BARE)
+  })
+
+  it('hai runtime cho ra CÙNG nhãn VÀ cùng icon', () => {
+    // Icon quan trọng không kém nhãn: thiếu gấp tên thì hàng rơi về `task`
+    // (sparkles) thay vì `terminal`, và người đọc transcript không nhận ra đây là
+    // một lần đọc terminal.
+    expect(labelOf(BARE)).toBe('Terminal')
+    expect(labelOf(BRIDGED)).toBe('Terminal')
+    expect(iconOf(BARE)).toBe('terminal')
+    expect(iconOf(BRIDGED)).toBe('terminal')
+  })
+
+  it('KHÔNG gấp tên của một server lạ trùng tên tool', () => {
+    expect(labelOf(`mcp__someoneelse__${BARE}`)).toBe(`someoneelse: ${BARE}`)
+  })
+
+  it('chính sách chỉ có MỘT bản cho cả hai runtime', () => {
+    // Hai hàng rào bảo mật (khử bí mật + hàng rào nonce) nằm trong `runReadTerminal`,
+    // và cả hai nhánh gọi đúng hàm đó. Test này chỉ giữ được nguồn chuỗi dùng chung;
+    // phần thân được giữ bằng việc bridge KHÔNG có nhánh dựng lại nào.
+    expect(READ_TERMINAL_TEXT.description).toContain('UNTRUSTED DATA')
+    expect(READ_TERMINAL_TEXT.lines).toContain('trailing lines')
   })
 })

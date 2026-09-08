@@ -61,6 +61,8 @@ import { buildWikiToolsSdkServer } from './wiki-sdk-server.js'
 import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
 import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
+import { buildTerminalToolsSdkServer } from './terminal-sdk-server.js'
+import { TERMINAL_MCP_SERVER } from '../tools/read-terminal-tool.js'
 import { SURFACE_MCP_SERVER } from '../tools/surface-tools.js'
 import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
 import { listHosts } from '../../ssh/store.js'
@@ -592,6 +594,11 @@ export async function runStreamClaude(
     // Same shared handlers, so a chapter or a file card behaves identically on
     // either runtime; step-mapper maps the bridged names back to the bare ones.
     [SURFACE_MCP_SERVER]: buildSurfaceToolsSdkServer(args.sessionId, args.cwd ?? process.cwd()),
+    // Terminal của NGƯỜI DÙNG (ADR 0019) → mcp__awogterm__read_terminal. Cùng
+    // handler với AgentTool của Pi, nên khử bí mật + hàng rào nonce là một bản
+    // duy nhất. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat — đúng điều
+    // kiện `filter.chatSession` mà nhánh Pi dùng.
+    [TERMINAL_MCP_SERVER]: buildTerminalToolsSdkServer(args.cwd ?? process.cwd()),
   }
   const claudeBinary = resolveClaudeBinary()
 

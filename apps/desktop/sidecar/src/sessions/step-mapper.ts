@@ -25,6 +25,10 @@ import {
   SURFACE_TOOL_NAMES,
   takeResolvedSurface,
 } from '../runtime/tools/surface-tools.js'
+import {
+  READ_TERMINAL_TOOL_NAMES,
+  TERMINAL_MCP_SERVER,
+} from '../runtime/tools/read-terminal-tool.js'
 import type {
   FindingSeverity,
   SessionFinding,
@@ -209,10 +213,24 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
     case 'suggest_followups':
       return 'Follow-ups'
     // Chỉ cần tên TRẦN: dạng bắc cầu `mcp__awogsurfaces__schedule_wakeup` đã được
-    // `unbridgeSurfaceToolName` gấp về đây trước khi tới bảng này. Trước dòng này
+    // `unbridgeAwogToolName` gấp về đây trước khi tới bảng này. Trước dòng này
     // hàng hiện tên thô `schedule_wakeup` trên CẢ HAI runtime.
     case 'schedule_wakeup':
       return 'Wake-up'
+    // Nhóm tool AWOG-native chưa từng có nhãn: hàng transcript hiện tên thô
+    // (`read_terminal`, `dev_server`…) trong khi mọi tool khác hiện tên người
+    // đọc được. Lộ ra khi bắc `read_terminal` sang nhánh SDK — nhãn phải giống
+    // nhau ở hai runtime, mà hoá ra nó chưa đúng ở runtime NÀO cả.
+    case 'read_terminal':
+      return 'Terminal'
+    case 'KillShell':
+      return 'Kill shell'
+    case 'monitor':
+      return 'Monitor'
+    case 'dev_server':
+      return 'Dev server'
+    case 'code_index':
+      return 'Code index'
     case 'ExitPlanMode':
       return 'Exit plan'
     case 'EnterPlanMode':
@@ -286,19 +304,30 @@ export function stepFromTodos(id: string, todos: unknown): SessionStep {
 // all: it falls through to the generic tool row, which is what renders the error.
 const surfaceToolNames: ReadonlySet<string> = new Set<string>(SURFACE_TOOL_NAMES)
 
-// The Claude SDK path bridges the same four tools through an in-process MCP server
-// (claude-sdk/surface-sdk-server.ts), so a call arrives as
-// `mcp__awogsurfaces__mark_chapter` there and as `mark_chapter` on Pi. Fold the
-// bridged form back to the bare name ONCE, next to the mcp_call unwrap, instead of
-// listing both spellings in surfaceToolNames + humanLabel + TOOL_NAME_MAP (which is
-// what wiki/memory had to do). The suffix must be one of ours: an unrelated MCP
-// server that happened to be named `awogsurfaces` still renders as an MCP row.
-const SURFACE_BRIDGE_PREFIX = `mcp__${SURFACE_MCP_SERVER}__`
+// The Claude SDK path bridges AWOG's own tools through in-process MCP servers, so
+// the same call arrives as `mcp__awogsurfaces__mark_chapter` there and as
+// `mark_chapter` on Pi. Fold the bridged form back to the bare name ONCE, next to
+// the mcp_call unwrap, instead of listing both spellings in humanLabel +
+// TOOL_NAME_MAP (which is what wiki/memory had to do). The suffix must be one of
+// ours: an unrelated MCP server that happened to be named `awogsurfaces` still
+// renders as an MCP row.
+//
+// Bảng thay vì một hằng: mỗi lần bắc thêm một tool AWOG sang SDK là một lần lớp
+// bug "tool bắc cầu đổi tên" có thể quay lại (đã cắn ba lần). Thêm một dòng ở đây
+// rẻ hơn nhiều so với việc phát hiện ra hàng transcript hiện `awogterm:
+// read_terminal` sáu tuần sau, chỉ trên những phiên dùng provider anthropic.
+const AWOG_BRIDGED_TOOLS: readonly (readonly [string, ReadonlySet<string>])[] = [
+  [`mcp__${SURFACE_MCP_SERVER}__`, surfaceToolNames],
+  [`mcp__${TERMINAL_MCP_SERVER}__`, new Set<string>(READ_TERMINAL_TOOL_NAMES)],
+]
 
-function unbridgeSurfaceToolName(name: string): string {
-  if (!name.startsWith(SURFACE_BRIDGE_PREFIX)) return name
-  const bare = name.slice(SURFACE_BRIDGE_PREFIX.length)
-  return surfaceToolNames.has(bare) ? bare : name
+function unbridgeAwogToolName(name: string): string {
+  for (const [prefix, names] of AWOG_BRIDGED_TOOLS) {
+    if (!name.startsWith(prefix)) continue
+    const bare = name.slice(prefix.length)
+    if (names.has(bare)) return bare
+  }
+  return name
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -495,7 +524,7 @@ export function stepFromToolUse(rawInfo: ToolUseInfo): SessionStep {
   // Unwrap a proxy mcp_call into its underlying mcp__server__tool identity + real
   // args so it renders like a direct MCP call, not a bare "mcp_call" (ADR 0051).
   const { name, input } = unwrapMcpToolCall(rawInfo.name, rawInfo.input)
-  const info: ToolUseInfo = { ...rawInfo, name: unbridgeSurfaceToolName(name), input }
+  const info: ToolUseInfo = { ...rawInfo, name: unbridgeAwogToolName(name), input }
   // Surface tools render as their card from the first event on, so the user never
   // sees a generic tool row flip into a card mid-turn.
   if (surfaceToolNames.has(info.name)) {
@@ -598,7 +627,7 @@ export function stepFromToolResult(rawInfo: ToolResultInfo): SessionStep {
   const { name, input } = unwrapMcpToolCall(rawInfo.toolName, rawInfo.toolInput)
   const info: ToolResultInfo = {
     ...rawInfo,
-    toolName: unbridgeSurfaceToolName(name),
+    toolName: unbridgeAwogToolName(name),
     toolInput: input,
   }
   // A successful surface call: prefer the validated payload the tool reported over
