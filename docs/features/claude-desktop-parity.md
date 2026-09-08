@@ -157,6 +157,29 @@ tự nhìn — nhất là ở regex và ở chỗ nói "không có đường nà
 
 Bài học đó đã được nâng thành **luật đứng** ở [ADR 0085](../decisions/0085-workflow-as-script.md) D-4: *tier nằm trong repo không bao giờ mang mã thực thi, và không bao giờ tự mang bản ghi trust của chính nó.* Áp luật đó ngược lại repo thì lộ ngay `hooks/store.ts:129` (xem bảng bug ở trên).
 
+## Audit lần 3 (2026-09-08) — trên chính bảy tool vừa bắc cầu
+
+Chạy vì quy tắc repo: mở bề mặt mới trên một runtime chưa từng có nó thì phải audit. Ba tool
+"nguy hiểm" mà brief chỉ đích danh (`read_terminal`, `send_session_message`, `dev_server`) **đều
+bắc đúng** — cả ba gọi thẳng hàm thân dùng chung nên khử bí mật, hàng rào nonce, trần theo lượt và
+điều kiện cấp phát đều là một bản. Không lỗ hổng nào do bridge tạo ra.
+
+Cái nặng nhất lại nằm ở commit **sửa** chuyện tên bắc cầu:
+
+| # | Mức | Nội dung | TT |
+|---|---|---|---|
+| F1 | **High** | `tools:` của AGENT.md là **NO-OP** trên nhánh anthropic. Khai báo SDK nói rõ `allowedTools` là danh sách *tự-duyệt không hỏi*, còn *"to restrict which tools are available, use the `tools` option instead"* — mà AWOG **chưa bao giờ** set `tools`. Một agent khai `tools: [Read, Grep, Glob]` vẫn có `Bash`/`Write`, và ở mode `execute` chạy thẳng không một lời hỏi; nhánh Pi thì intersect CỨNG | ✅ Whitelist đi vào `tools`; **bỏ hẳn** `allowedTools` (nó là một dòng cấp-thêm-quyền chờ ngày ai đó gỡ `bypassPermissions`) |
+| F2 | Medium | Luật DENY viết bằng tên TRẦN không áp cho tool bắc cầu. Người dùng viết luật theo cái tên họ NHÌN THẤY — transcript đã gấp tên, và `denyReason()` cũng in tên trần — nên `{"rule":"dev_server","action":"deny"}` chặn được trên Pi và im lặng vô hiệu trên anthropic | ✅ Thay ca đặc biệt `sshToolName` bằng `unbridgeAwogToolName`; chỉ chiều DENY |
+| F5 | Low | Schema zod nhánh SDK thiếu trần độ dài mà TypeBox của Pi có | ✅ |
+| F6 | Low | Dòng tham chiếu PDF mất vế "if it is inside your working directory" | ✅ |
+| F3 | Medium | `dev_server(stop)` giết tiến trình mà không qua cổng quyền; `send_session_message` nhận `session_id` tuỳ ý (không buộc nằm trong danh bạ vừa liệt) | ⬜ **Backlog** — không phải hồi quy (nhánh Pi cũng thế), nhưng nay chạy trên provider phổ biến nhất. Hệ quả bị chặn ở chỗ tin chỉ thành chip chờ người bấm |
+| F4 | Low | Một source của người dùng tên trùng 10 server dành riêng bị AWOG ghi đè **im lặng** — tool của họ biến mất không cảnh báo | ⬜ **Backlog** — bug khả dụng, không phải bảo mật; đường đi tới chiều ngược lại gần như không có (source id mới có hậu tố hex) |
+
+**Điều đáng rút ra:** F1 là một hiểu sai **do chính tôi ghi vào code** ở commit ngay trước — commit
+message khẳng định `allowedTools` tước mất tool, trong khi nó không hạn chế gì. Bản vá "sửa lỗ"
+hoá ra là thêm tên vào một danh sách tự-duyệt. Đọc doc của thư viện trước khi mô tả hành vi của nó
+trong một commit về bảo mật; một mô hình sai ghi vào comment sống lâu hơn nhiều so với một dòng code sai.
+
 ## Bảy tool bắc cầu sang nhánh Claude SDK (2026-09-08)
 
 Runtime chọn **theo provider** (ADR 0058), nên mọi tool chỉ đăng ký ở `runtime/tools/index.ts`
