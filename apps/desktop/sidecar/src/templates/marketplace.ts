@@ -38,7 +38,9 @@
 //  L1        — danh mục KHÔNG TIN: zod, cap byte, cap số entry, timeout, và URL
 //              của từng entry phải là thứ CHÍNH `parseGithubUrl` (lớp cài) giải
 //              được — kiểm ngay lúc map bằng đúng hàm đó, entry hỏng bị LOẠI +
-//              log thay vì hiện ra rồi hỏng lúc cài.
+//              log thay vì hiện ra rồi hỏng lúc cài. `homepage` là link UI biến
+//              thành cú bấm mở trình duyệt: bắt buộc https + qua `ssrfCheck`,
+//              hỏng thì RỤNG RIÊNG field (entry vẫn sống) — xem `safeHomepage`.
 //  Cache     — đọc lại cache cũng là L1: validate lại bằng đúng schema.
 //  Đồng ý    — cài PHẢI kèm `token` lấy từ `inspect`. Token là băm của kế hoạch
 //              (danh sách entity + từng file + blob sha). Nguồn đổi nội dung giữa
@@ -282,10 +284,46 @@ function logDroppedUrl(from: string, id: string, url: string, reason: string): v
   })
 }
 
+// `homepage` là trang chủ người xuất bản tự khai, và UI biến nó thành MỘT CÚ BẤM
+// mở trình duyệt hệ thống. Nó không cài gì nên không đi qua `bundleUrlProblem`
+// (luật đó ghim github.com + dạng `/tree/`), nhưng vẫn là L1 y hệt: một
+// `javascript:`/`data:`/`file:` lọt tới UI là cái bẫy nằm chờ được bấm.
+//
+// Ở đây cũng chỉ viết đúng MỘT luật của riêng danh mục — "https", cùng điều kiện
+// `bundleUrlProblem` áp cho `url`. Phần còn lại (scheme thực thi được, loopback,
+// IP nội bộ) hỏi thẳng `ssrfCheck` — đúng hàm mọi lối ra mạng của sidecar đang
+// dùng — thay vì chép luật ra chỗ thứ hai.
+function homepageProblem(url: string): string | null {
+  const guard = ssrfCheck(url)
+  // `reason` là optional trên `SsrfGuardResult` — không có thì vẫn phải loại.
+  if (!guard.ok) return guard.reason ?? 'not a safe link'
+  // `ssrfCheck` còn nhận http; danh mục AWOG tự tuyển thì không có cớ nào để một
+  // trang chủ rơi xuống http. `new URL` không thể ném ở đây: `ssrfCheck` vừa parse.
+  return new URL(url).protocol === 'https:' ? null : 'homepage must be https'
+}
+
+// Homepage hỏng KHÔNG giết entry — nó là siêu dữ liệu phụ, không phải thứ đem
+// cài. Chỉ RỤNG RIÊNG cái field, entry vẫn hiện ra bình thường (nhưng có log:
+// người xuất bản khai sai thì phải tra được).
+function safeHomepage(from: string, id: string, raw?: string): string | undefined {
+  if (!raw) return undefined
+  const url = raw.trim()
+  const problem = homepageProblem(url)
+  if (!problem) return url
+  log.warn('templates: catalog entry homepage dropped — not a safe link', {
+    from,
+    entry: id,
+    homepage: raw,
+    reason: problem,
+  })
+  return undefined
+}
+
 function toEntry(raw: unknown): MarketplaceEntry | null {
   const parsed = EntrySchema.safeParse(raw)
   if (!parsed.success) return null
   const e = parsed.data
+  const homepage = safeHomepage('catalog', e.id, e.homepage)
   return {
     id: e.id,
     name: e.name,
@@ -295,7 +333,7 @@ function toEntry(raw: unknown): MarketplaceEntry | null {
     url: e.url,
     kinds: e.kinds ?? [],
     tags: e.tags ?? [],
-    ...(e.homepage ? { homepage: e.homepage } : {}),
+    ...(homepage ? { homepage } : {}),
   }
 }
 
@@ -369,17 +407,21 @@ async function readCache(): Promise<{ fetchedAt: number; entries: MarketplaceEnt
       if (problem) logDroppedUrl('cache', e.id, e.url, problem)
       return problem === null
     })
-    .map<MarketplaceEntry>((e) => ({
-      id: e.id,
-      name: e.name,
-      description: e.description,
-      author: e.author,
-      version: e.version,
-      url: e.url,
-      kinds: e.kinds,
-      tags: e.tags,
-      ...(e.homepage ? { homepage: e.homepage } : {}),
-    }))
+    .map<MarketplaceEntry>((e) => {
+      // Cache cũ cũng mang homepage ghi bởi bản app trước khi siết — kiểm lại.
+      const homepage = safeHomepage('cache', e.id, e.homepage)
+      return {
+        id: e.id,
+        name: e.name,
+        description: e.description,
+        author: e.author,
+        version: e.version,
+        url: e.url,
+        kinds: e.kinds,
+        tags: e.tags,
+        ...(homepage ? { homepage } : {}),
+      }
+    })
   return { fetchedAt: parsed.data.fetchedAt, entries }
 }
 

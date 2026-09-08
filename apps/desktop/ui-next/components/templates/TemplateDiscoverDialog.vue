@@ -6,7 +6,7 @@
     :width="620"
     @close="emit('close')"
   >
-    <TemplateConsentPanel v-if="inspection" :inspection="inspection" />
+    <TemplateConsentPanel v-if="inspection" :inspection="inspection" :homepage="pickedHomepage" />
 
     <div v-else class="tdd">
       <div class="tdd-bar">
@@ -118,6 +118,9 @@ const error = ref('')
 const inspectingId = ref('')
 const installing = ref(false)
 const inspection = ref<MarketplaceInspection | null>(null)
+// Trang chủ người xuất bản khai — chỉ có ở ENTRY của danh mục, `inspection` không
+// mang nó. Giữ lại của đúng entry vừa bấm để màn hình đồng ý hiện được.
+const pickedHomepage = ref('')
 const result = ref<MarketplaceResult>({
   entries: [],
   origin: 'offline',
@@ -159,6 +162,7 @@ watch(
     query.value = ''
     error.value = ''
     inspection.value = null
+    pickedHomepage.value = ''
     installing.value = false
     inspectingId.value = ''
     void load()
@@ -168,6 +172,7 @@ watch(
 
 const back = () => {
   inspection.value = null
+  pickedHomepage.value = ''
   error.value = ''
 }
 
@@ -178,6 +183,7 @@ async function onPick(entry: MarketplaceEntry): Promise<void> {
   error.value = ''
   try {
     inspection.value = await store.marketplaceInspect(entry.id)
+    pickedHomepage.value = entry.homepage ?? ''
   } catch (err) {
     error.value = err instanceof Error ? err.message : t('templatesDiscover.inspectFailed')
   } finally {

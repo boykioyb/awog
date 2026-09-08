@@ -20,6 +20,7 @@
 
   "templatesDiscover.consent.title": "Xem kỹ trước khi cài",
   "templatesDiscover.consent.source": "Nguồn",
+  "templatesDiscover.consent.homepage": "Trang chủ",
   "templatesDiscover.consent.alreadyInstalled": "Đã cài",
   "templatesDiscover.consent.willWrite": "Bundle này chứa",
   "templatesDiscover.consent.nothing": "Bundle này không có thành phần nào.",

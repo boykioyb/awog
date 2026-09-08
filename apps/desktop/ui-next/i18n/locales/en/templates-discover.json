@@ -20,6 +20,7 @@
 
   "templatesDiscover.consent.title": "Review before installing",
   "templatesDiscover.consent.source": "Source",
+  "templatesDiscover.consent.homepage": "Homepage",
   "templatesDiscover.consent.alreadyInstalled": "Already installed",
   "templatesDiscover.consent.willWrite": "This bundle contains",
   "templatesDiscover.consent.nothing": "This bundle contains no entities.",

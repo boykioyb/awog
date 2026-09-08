@@ -15,6 +15,15 @@
       <span class="tcp-src-url">{{ inspection.sourceUrl }}</span>
     </div>
 
+    <!-- Trang chủ do người xuất bản khai (tuỳ chọn). Chỉ hiện khi nó là link
+         https thật — homepage hỏng thì KHÔNG hiện gì, không hiện link chết. -->
+    <div v-if="safeHomepage" class="tcp-src">
+      <span class="tcp-src-lbl">{{ t('templatesDiscover.consent.homepage') }}</span>
+      <button type="button" class="tcp-src-url link" :title="safeHomepage" @click="openHomepage">
+        {{ safeHomepage }}
+      </button>
+    </div>
+
     <!-- Cảnh báo bề mặt nguy hiểm: hook = script chạy được, rule = vào thẳng
          system prompt. Chỉ hiện khi bundle thật sự có, và nói rõ hậu quả. -->
     <div v-if="risky.length" class="tcp-warn">
@@ -86,9 +95,38 @@
 import { computed } from 'vue'
 import { KIND_ORDER, type ConfigKind, type MarketplaceInspection } from '~/stores/templates'
 
-const props = defineProps<{ inspection: MarketplaceInspection }>()
+// `homepage` đến từ ENTRY của danh mục, không từ `inspection` (bundle không khai
+// trang chủ) — nên hộp thoại truyền xuống riêng.
+const props = defineProps<{ inspection: MarketplaceInspection; homepage?: string }>()
 
 const { t } = useI18n()
+const sc = useSidecar()
+
+// Danh mục do người lạ xuất bản ⇒ `homepage` là L1. Sidecar đã lọc lúc parse
+// (`safeHomepage` trong templates/marketplace.ts), nhưng đây là bề mặt biến nó
+// thành một cú bấm nên tự kiểm lại: chỉ https, sai hoặc thiếu ⇒ chuỗi rỗng ⇒
+// không render dòng nào. Cố ý KHÔNG nhận http — trang chủ của một bundle mà AWOG
+// tuyển thì không có cớ nào rơi xuống http, và đó cũng đúng luật danh mục áp cho
+// url của entry.
+const safeHomepage = computed<string>(() => {
+  const raw = props.homepage?.trim()
+  if (!raw) return ''
+  try {
+    return new URL(raw).protocol === 'https:' ? raw : ''
+  } catch {
+    return ''
+  }
+})
+
+// Mở bằng đúng đường của app: shell.openExternal ở main process (gate theo
+// scheme lần nữa ở đó). KHÔNG <a target="_blank">.
+function openHomepage(): void {
+  const url = safeHomepage.value
+  if (!url) return
+  void sc.openExternal(url).catch((err) => {
+    console.warn('[templates] openExternal failed', err)
+  })
+}
 
 // Hai loại entity có hậu quả thực thi/prompt — cái người dùng cần thấy trước nhất.
 const RISKY_KINDS: readonly ConfigKind[] = ['hook', 'rule']
@@ -168,6 +206,17 @@ const sizeLabel = computed(() => {
   line-height: var(--lh-xs);
   color: var(--text);
   overflow-wrap: anywhere;
+}
+.tcp-src-url.link {
+  padding: 0;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--accent);
+  cursor: pointer;
+}
+.tcp-src-url.link:hover {
+  text-decoration: underline;
 }
 .tcp-warn {
   display: flex;

@@ -117,6 +117,47 @@ describe('parseCatalog drops every url the installer itself cannot parse', () =>
   })
 })
 
+// ─── `homepage` là một cú bấm, nên nó phải là link an toàn ───────────────────
+
+// UI hiện `homepage` thành link mở trình duyệt hệ thống. Người xuất bản danh mục
+// là người lạ, nên một `javascript:`/`file:` đi lọt tới đó là cái bẫy nằm chờ.
+// Khác `url`: homepage hỏng KHÔNG giết entry — chỉ rụng riêng field.
+describe('parseCatalog sanitises the publisher-declared homepage', () => {
+  it('keeps an https homepage as-is', () => {
+    const raw = { templates: [entry({ homepage: 'https://example.com/awog-web-team' })] }
+    expect(parseCatalog(raw)[0]?.homepage).toBe('https://example.com/awog-web-team')
+  })
+
+  it('has no homepage field when the entry declares none', () => {
+    expect(parseCatalog({ templates: [entry()] })[0]?.homepage).toBeUndefined()
+  })
+
+  it.each([
+    ['javascript', 'javascript:alert(document.cookie)'],
+    ['data', 'data:text/html,<script>alert(1)</script>'],
+    ['file', 'file:///etc/passwd'],
+    ['plain http', 'http://example.com/'],
+    ['loopback', 'https://127.0.0.1/admin'],
+    ['private IP', 'https://192.168.1.1/reboot'],
+    ['not a URL', 'example.com'],
+  ])('DROPS a %s homepage but KEEPS the entry', (_label, homepage) => {
+    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {})
+    try {
+      const [e] = parseCatalog({ templates: [entry({ homepage })] })
+      // Entry sống — chỉ field rụng.
+      expect(e?.id).toBe('web-team')
+      expect(e?.homepage).toBeUndefined()
+      // Rụng có tên: người xuất bản khai sai thì phải tra được.
+      const meta = warn.mock.calls[0]?.[1] as Record<string, unknown>
+      expect(meta.entry).toBe('web-team')
+      expect(meta.homepage).toBe(homepage)
+      expect(String(meta.reason)).toBeTruthy()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+})
+
 // ─── Lọc cục bộ (chạy được cả khi offline) ───────────────────────────────────
 
 describe('filterEntries searches the fields the user can see', () => {

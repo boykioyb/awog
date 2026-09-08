@@ -69,7 +69,7 @@ Mỗi phần tử của `templates` ([`EntrySchema`](../../apps/desktop/sidecar/
 | `version` | — | string ≤120 | Nhãn hiển thị thuần |
 | `kinds` | — | mảng ≤5 của `agent`/`skill`/`hook`/`rule`/`command` | Loại entity **listing khai** |
 | `tags` | — | mảng ≤20, mỗi phần tử ≤60 ký tự | Dùng cho ô tìm cục bộ |
-| `homepage` | — | string ≤2048 | Chỉ mang theo, UI chưa hiển thị |
+| `homepage` | — | string ≤2048 | **Bắt buộc https** (+ qua `ssrfCheck`: không loopback/IP nội bộ). Hiện thành link bấm được ở màn hình đồng ý; sai luật ⇒ **rụng riêng field**, entry vẫn sống |
 
 Toàn file phải **≤ 512 KB** (`MAX_CATALOG_BYTES`). Ngoài ra:
 
