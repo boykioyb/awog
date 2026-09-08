@@ -208,18 +208,38 @@ const BRIDGE_SERVER_OF: Record<string, string> = {
   schedule_wakeup: 'awogsurfaces',
   read_terminal: 'awogterm',
   browser_tool: 'awogbrowser',
+  dev_server: 'awogdev',
+  code_index: 'awogcode',
+  list_sessions: 'awogsessions',
+  send_session_message: 'awogsessions',
 }
 // KHAI TRƯỚC `TOOL_GROUPS`: đó là một `const` cấp module, chạy NGAY lúc nạp file,
 // nên nó đọc `SURFACE_TOOLS` trong cùng lượt đánh giá. Khai sau sẽ ném TDZ — đúng
 // lỗi vừa vá ở `TopBarNotifications.vue`, chỉ khác là ở cấp module thay vì setup.
 
 const TOOL_GROUPS: [string, string[]][] = [
-  ['File', ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit']],
+  // code_index tra mã theo SYMBOL (định nghĩa / tham chiếu / blast radius) — cùng
+  // họ đọc mã với Grep/Glob, nên nó ở đây chứ không ở Exec.
+  ['File', ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit', 'code_index']],
   // read_terminal reads the tail of a PTY the USER typed in — off here means the
   // model cannot see the user's terminals at all.
-  ['Exec', ['Bash', 'BashOutput', 'KillShell', 'monitor', 'read_terminal']],
+  // dev_server nói về chính những background shell ở nhóm này: list/logs/stop, cộng
+  // một `start` chỉ trả về lệnh để model chạy qua Bash.
+  ['Exec', ['Bash', 'BashOutput', 'KillShell', 'monitor', 'read_terminal', 'dev_server']],
   ['Web', ['WebFetch', 'WebSearch', 'browser_tool']],
-  ['Agent', ['Task', 'TodoWrite', 'ExitPlanMode', 'schedule_wakeup']],
+  // list_sessions / send_session_message = kênh nhắn sang phiên KHÁC. Tắt ở đây là
+  // model không nhìn thấy danh bạ phiên và không đặt được tin vào hộp thư phiên nào.
+  [
+    'Agent',
+    [
+      'Task',
+      'TodoWrite',
+      'ExitPlanMode',
+      'schedule_wakeup',
+      'list_sessions',
+      'send_session_message',
+    ],
+  ],
   // Model-initiated surfaces: chapters, file cards, task suggestions, follow-ups.
   // Off here means the model can still answer, it just cannot put cards in the
   // transcript — useful for anyone who finds them noisy.

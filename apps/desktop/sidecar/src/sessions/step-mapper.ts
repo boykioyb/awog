@@ -30,6 +30,12 @@ import {
   TERMINAL_MCP_SERVER,
 } from '../runtime/tools/read-terminal-tool.js'
 import { BROWSER_MCP_SERVER, BROWSER_TOOL_NAME } from '../runtime/tools/browser-tool.js'
+import { DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES } from '../runtime/tools/dev-server-tool.js'
+import { CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES } from '../runtime/tools/code-index-tool.js'
+import {
+  SESSION_MESSAGING_MCP_SERVER,
+  SESSION_MESSAGING_TOOL_NAMES,
+} from '../runtime/tools/session-tools.js'
 import type {
   FindingSeverity,
   SessionFinding,
@@ -71,6 +77,17 @@ const TOOL_NAME_MAP: Record<string, SessionStepTool> = {
   KillShell: 'terminal',
   read_terminal: 'terminal',
   monitor: 'terminal',
+  // `dev_server` nói về những background shell của Bash, nên nó cùng icon với
+  // chúng. `code_index` là tra cứu ⇒ cùng icon với Grep. Cả hai đã có NHÃN từ
+  // trước mà chưa từng có icon, nên hàng của chúng rơi về `task` (sparkles) —
+  // trông như một lượt subagent, thứ chúng không phải.
+  dev_server: 'terminal',
+  code_index: 'search',
+  // Nhắn giữa các phiên: `SessionStepTool` chỉ có 8 giá trị và không giá trị nào
+  // nói đúng "một phiên khác", nên `task` là cái gần nhất — nó ít nhất báo hiệu
+  // đây là việc của agent chứ không phải một lần đọc/ghi file.
+  list_sessions: 'task',
+  send_session_message: 'task',
   Glob: 'find-files',
   Grep: 'search',
   WebSearch: 'search',
@@ -232,6 +249,12 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Dev server'
     case 'code_index':
       return 'Code index'
+    // Hai tool nhắn giữa các phiên (gói #17) cũng chưa từng có nhãn — cùng lỗ với
+    // nhóm trên, lộ ra khi bắc chúng sang nhánh Claude SDK.
+    case 'list_sessions':
+      return 'Sessions'
+    case 'send_session_message':
+      return 'Message'
     case 'ExitPlanMode':
       return 'Exit plan'
     case 'EnterPlanMode':
@@ -321,6 +344,9 @@ const AWOG_BRIDGED_TOOLS: readonly (readonly [string, ReadonlySet<string>])[] = 
   [`mcp__${SURFACE_MCP_SERVER}__`, surfaceToolNames],
   [`mcp__${TERMINAL_MCP_SERVER}__`, new Set<string>(READ_TERMINAL_TOOL_NAMES)],
   [`mcp__${BROWSER_MCP_SERVER}__`, new Set<string>([BROWSER_TOOL_NAME])],
+  [`mcp__${DEV_SERVER_MCP_SERVER}__`, new Set<string>(DEV_SERVER_TOOL_NAMES)],
+  [`mcp__${CODE_INDEX_MCP_SERVER}__`, new Set<string>(CODE_INDEX_TOOL_NAMES)],
+  [`mcp__${SESSION_MESSAGING_MCP_SERVER}__`, new Set<string>(SESSION_MESSAGING_TOOL_NAMES)],
 ]
 
 function unbridgeAwogToolName(name: string): string {

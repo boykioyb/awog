@@ -21,6 +21,21 @@ import {
   READ_TERMINAL_TOOL_NAMES,
   TERMINAL_MCP_SERVER,
 } from '../read-terminal-tool.js'
+import {
+  DEV_SERVER_MCP_SERVER,
+  DEV_SERVER_TEXT,
+  DEV_SERVER_TOOL_NAMES,
+} from '../dev-server-tool.js'
+import {
+  CODE_INDEX_MCP_SERVER,
+  CODE_INDEX_TEXT,
+  CODE_INDEX_TOOL_NAMES,
+} from '../code-index-tool.js'
+import {
+  SESSION_MESSAGING_MCP_SERVER,
+  SESSION_MESSAGING_TEXT,
+  SESSION_MESSAGING_TOOL_NAMES,
+} from '../session-tools.js'
 import { stepFromToolUse } from '../../../sessions/step-mapper.js'
 
 const BRIDGED = `mcp__awogbrowser__${BROWSER_TOOL_NAME}`
@@ -156,5 +171,138 @@ describe('read_terminal bắc cầu qua awogterm', () => {
     // phần thân được giữ bằng việc bridge KHÔNG có nhánh dựng lại nào.
     expect(READ_TERMINAL_TEXT.description).toContain('UNTRUSTED DATA')
     expect(READ_TERMINAL_TEXT.lines).toContain('trailing lines')
+  })
+})
+
+// `dev_server` bắc cầu qua server RIÊNG `awogdev`.
+//
+// Cùng tiêu chí đã dùng cho `read_terminal`: tên server hiện ra trong luật quyền và
+// trong `disabledTools`, nên nó phải nói đúng tool là gì. Một surface là thứ model
+// ĐẶT VÀO transcript; `dev_server` thì ĐỌC log L1 của một tiến trình và DỪNG được
+// tiến trình đó — hai việc mà một luật viết cho `mcp__awogsurfaces__*` không được
+// phép vô tình phủ.
+describe('dev_server bắc cầu qua awogdev', () => {
+  const BARE = 'dev_server'
+  const BRIDGED = `mcp__${DEV_SERVER_MCP_SERVER}__${BARE}`
+
+  const labelOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { action: 'list' } }).label
+  const iconOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { action: 'list' } }).tool ?? ''
+
+  it('tên nằm trong danh sách được gấp tên', () => {
+    expect(DEV_SERVER_TOOL_NAMES as readonly string[]).toContain(BARE)
+  })
+
+  it('hai runtime cho ra CÙNG nhãn VÀ cùng icon', () => {
+    expect(labelOf(BARE)).toBe('Dev server')
+    expect(labelOf(BRIDGED)).toBe('Dev server')
+    expect(iconOf(BARE)).toBe('terminal')
+    expect(iconOf(BRIDGED)).toBe('terminal')
+  })
+
+  it('KHÔNG gấp tên của một server lạ trùng tên tool', () => {
+    expect(labelOf(`mcp__someoneelse__${BARE}`)).toBe(`someoneelse: ${BARE}`)
+  })
+
+  it('chính sách chỉ có MỘT bản cho cả hai runtime', () => {
+    // Giao kèo quan trọng nhất của tool này — `start` KHÔNG tự spawn, nó trả về
+    // nguyên văn lệnh để model chạy qua `Bash`, tức qua đúng cổng quyền — nằm
+    // trong mô tả dùng chung. Chép chuỗi sang bridge rồi bỏ câu đó đi là tháo một
+    // hàng rào, nên test giữ lấy nguồn chung.
+    expect(DEV_SERVER_TEXT.description).toContain('does NOT launch anything')
+    expect(DEV_SERVER_TEXT.description).toContain('run_in_background')
+    expect(DEV_SERVER_TEXT.lines).toContain('matching lines')
+  })
+})
+
+// `code_index` bắc cầu qua server RIÊNG `awogcode`.
+describe('code_index bắc cầu qua awogcode', () => {
+  const BARE = 'code_index'
+  const BRIDGED = `mcp__${CODE_INDEX_MCP_SERVER}__${BARE}`
+
+  const labelOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { action: 'refs', symbol: 'x' } }).label
+  const iconOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { action: 'refs', symbol: 'x' } }).tool ?? ''
+
+  it('tên nằm trong danh sách được gấp tên', () => {
+    expect(CODE_INDEX_TOOL_NAMES as readonly string[]).toContain(BARE)
+  })
+
+  it('hai runtime cho ra CÙNG nhãn VÀ cùng icon', () => {
+    expect(labelOf(BARE)).toBe('Code index')
+    expect(labelOf(BRIDGED)).toBe('Code index')
+    expect(iconOf(BARE)).toBe('search')
+    expect(iconOf(BRIDGED)).toBe('search')
+  })
+
+  it('KHÔNG gấp tên của một server lạ trùng tên tool', () => {
+    expect(labelOf(`mcp__someoneelse__${BARE}`)).toBe(`someoneelse: ${BARE}`)
+  })
+
+  it('chính sách chỉ có MỘT bản cho cả hai runtime', () => {
+    // Lời tự thú về chỗ mù của parser là thứ giữ model khỏi kết luận "không ai gọi
+    // hàm này" rồi xoá. Nó phải đi cùng tool ở CẢ HAI nhánh.
+    expect(CODE_INDEX_TEXT.description).toContain('NOT the TypeScript compiler')
+    expect(CODE_INDEX_TEXT.description).toContain('confirm with Grep before deleting')
+    expect(CODE_INDEX_TEXT.symbol).toContain('case-sensitive')
+  })
+})
+
+// `list_sessions` + `send_session_message` bắc cầu qua server RIÊNG `awogsessions`.
+//
+// Vì sao không đi nhờ `awogsurfaces`: một surface đặt một thẻ vào transcript của
+// CHÍNH phiên này; hai tool ở đây đọc danh bạ các phiên khác và GHI vào hộp thư của
+// một phiên khác. Biên tin cậy khác hẳn, nên một cú tắt "surfaces" không được phép
+// vô tình khoá kênh liên phiên (và ngược lại).
+describe('list_sessions + send_session_message bắc cầu qua awogsessions', () => {
+  const bridged = (bare: string): string => `mcp__${SESSION_MESSAGING_MCP_SERVER}__${bare}`
+
+  const labelOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { session_id: 'ses-1', message: 'hi' } }).label
+  const iconOf = (name: string): string =>
+    stepFromToolUse({ id: 't1', name, input: { session_id: 'ses-1', message: 'hi' } }).tool ?? ''
+
+  it('cả hai tên nằm trong danh sách được gấp tên', () => {
+    expect(SESSION_MESSAGING_TOOL_NAMES as readonly string[]).toContain('list_sessions')
+    expect(SESSION_MESSAGING_TOOL_NAMES as readonly string[]).toContain('send_session_message')
+  })
+
+  it('hai runtime cho ra CÙNG nhãn VÀ cùng icon', () => {
+    expect(labelOf('list_sessions')).toBe('Sessions')
+    expect(labelOf(bridged('list_sessions'))).toBe('Sessions')
+    expect(labelOf('send_session_message')).toBe('Message')
+    expect(labelOf(bridged('send_session_message'))).toBe('Message')
+    // Lưu ý về sức mạnh của phép kiểm này: `task` CŨNG là giá trị rơi mặc định
+    // của `pickStepTool`, nên với hai tool này khẳng định icon là ghi lại chủ ý
+    // chứ không bắt được việc thiếu dòng trong `TOOL_NAME_MAP` — đã kiểm chứng
+    // bằng cách gỡ dòng đó ra và thấy test vẫn xanh. Cái bắt được lỗ hổng ở đây
+    // là khẳng định NHÃN ngay trên (gỡ dòng bảng gấp tên ⇒ 'awogsessions:
+    // list_sessions'). Dòng trong bảng icon vẫn được giữ tường minh vì mặc định
+    // có thể đổi, còn chủ ý thì không.
+    for (const name of [
+      'list_sessions',
+      bridged('list_sessions'),
+      'send_session_message',
+      bridged('send_session_message'),
+    ]) {
+      expect(iconOf(name)).toBe('task')
+    }
+  })
+
+  it('KHÔNG gấp tên của một server lạ trùng tên tool', () => {
+    expect(labelOf('mcp__someoneelse__list_sessions')).toBe('someoneelse: list_sessions')
+    expect(labelOf('mcp__someoneelse__send_session_message')).toBe(
+      'someoneelse: send_session_message',
+    )
+  })
+
+  it('chính sách chỉ có MỘT bản cho cả hai runtime', () => {
+    // Hai câu quan trọng nhất: danh bạ là nhãn KHÔNG tin được, và gửi tin thì
+    // KHÔNG khởi động lượt nào ở phiên đích (nên đừng ngồi chờ trả lời).
+    expect(SESSION_MESSAGING_TEXT.listDescription).toContain('untrusted labels')
+    expect(SESSION_MESSAGING_TEXT.sendDescription).toContain('no reply to wait for')
+    expect(SESSION_MESSAGING_TEXT.message).toContain('characters')
   })
 })
