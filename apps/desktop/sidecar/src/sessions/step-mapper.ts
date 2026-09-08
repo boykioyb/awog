@@ -21,21 +21,10 @@ import { countDone, parseTodos } from '../runtime/todos.js'
 import { buildUnifiedDiff } from '../runtime/tools/text-diff.js'
 import { unwrapMcpToolCall, MCP_DESCRIBE_TOOL } from '../runtime/tools/mcp-tools.js'
 import {
-  SURFACE_MCP_SERVER,
   SURFACE_TOOL_NAMES,
   takeResolvedSurface,
 } from '../runtime/tools/surface-tools.js'
-import {
-  READ_TERMINAL_TOOL_NAMES,
-  TERMINAL_MCP_SERVER,
-} from '../runtime/tools/read-terminal-tool.js'
-import { BROWSER_MCP_SERVER, BROWSER_TOOL_NAME } from '../runtime/tools/browser-tool.js'
-import { DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES } from '../runtime/tools/dev-server-tool.js'
-import { CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES } from '../runtime/tools/code-index-tool.js'
-import {
-  SESSION_MESSAGING_MCP_SERVER,
-  SESSION_MESSAGING_TOOL_NAMES,
-} from '../runtime/tools/session-tools.js'
+import { unbridgeAwogToolName } from '../runtime/tools/bridged.js'
 import type {
   FindingSeverity,
   SessionFinding,
@@ -328,35 +317,18 @@ export function stepFromTodos(id: string, todos: unknown): SessionStep {
 // all: it falls through to the generic tool row, which is what renders the error.
 const surfaceToolNames: ReadonlySet<string> = new Set<string>(SURFACE_TOOL_NAMES)
 
-// The Claude SDK path bridges AWOG's own tools through in-process MCP servers, so
-// the same call arrives as `mcp__awogsurfaces__mark_chapter` there and as
-// `mark_chapter` on Pi. Fold the bridged form back to the bare name ONCE, next to
-// the mcp_call unwrap, instead of listing both spellings in humanLabel +
-// TOOL_NAME_MAP (which is what wiki/memory had to do). The suffix must be one of
-// ours: an unrelated MCP server that happened to be named `awogsurfaces` still
-// renders as an MCP row.
+// Gấp tên bắc cầu về tên trần — dùng bảng CHUNG ở `runtime/tools/bridged.ts`.
 //
-// Bảng thay vì một hằng: mỗi lần bắc thêm một tool AWOG sang SDK là một lần lớp
-// bug "tool bắc cầu đổi tên" có thể quay lại (đã cắn ba lần). Thêm một dòng ở đây
-// rẻ hơn nhiều so với việc phát hiện ra hàng transcript hiện `awogterm:
-// read_terminal` sáu tuần sau, chỉ trên những phiên dùng provider anthropic.
-const AWOG_BRIDGED_TOOLS: readonly (readonly [string, ReadonlySet<string>])[] = [
-  [`mcp__${SURFACE_MCP_SERVER}__`, surfaceToolNames],
-  [`mcp__${TERMINAL_MCP_SERVER}__`, new Set<string>(READ_TERMINAL_TOOL_NAMES)],
-  [`mcp__${BROWSER_MCP_SERVER}__`, new Set<string>([BROWSER_TOOL_NAME])],
-  [`mcp__${DEV_SERVER_MCP_SERVER}__`, new Set<string>(DEV_SERVER_TOOL_NAMES)],
-  [`mcp__${CODE_INDEX_MCP_SERVER}__`, new Set<string>(CODE_INDEX_TOOL_NAMES)],
-  [`mcp__${SESSION_MESSAGING_MCP_SERVER}__`, new Set<string>(SESSION_MESSAGING_TOOL_NAMES)],
-]
-
-function unbridgeAwogToolName(name: string): string {
-  for (const [prefix, names] of AWOG_BRIDGED_TOOLS) {
-    if (!name.startsWith(prefix)) continue
-    const bare = name.slice(prefix.length)
-    if (names.has(bare)) return bare
-  }
-  return name
-}
+// Cùng một tool mang HAI tên tuỳ runtime (`mark_chapter` trên Pi,
+// `mcp__awogsurfaces__mark_chapter` trên Claude SDK). Gấp MỘT lần ở đây, ngay
+// cạnh chỗ mở gói `mcp_call`, thay vì liệt kê hai cách viết ở `humanLabel` +
+// `TOOL_NAME_MAP` (đúng thứ wiki/memory từng phải làm).
+//
+// Bảng đó cũng là thứ NỞ tên cho `allowedTools`/`disabledTools` trên nhánh SDK.
+// Hai chiều BẮT BUỘC đọc cùng một nguồn: nếu chỗ hiển thị biết
+// `mcp__awogdev__dev_server` là của ta mà chỗ lọc quyền không biết, thì transcript
+// hiện đúng trong khi whitelist của AGENT.md lại tước mất tool — im lặng, và chỉ
+// trên provider anthropic.
 
 function asRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}

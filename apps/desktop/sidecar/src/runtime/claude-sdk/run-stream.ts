@@ -61,10 +61,16 @@ import { buildWikiToolsSdkServer } from './wiki-sdk-server.js'
 import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
 import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
+import { withBridgedAliases } from '../tools/bridged.js'
 import { buildTerminalToolsSdkServer } from './terminal-sdk-server.js'
-import { buildBrowserToolSdkServer } from './browser-sdk-server.js'
-import { BROWSER_MCP_SERVER } from '../tools/browser-tool.js'
 import { TERMINAL_MCP_SERVER } from '../tools/read-terminal-tool.js'
+import { BROWSER_MCP_SERVER, buildBrowserToolSdkServer } from './browser-sdk-server.js'
+import { buildDevServerSdkServer } from './dev-server-sdk-server.js'
+import { DEV_SERVER_MCP_SERVER } from '../tools/dev-server-tool.js'
+import { buildCodeIndexSdkServer } from './code-index-sdk-server.js'
+import { CODE_INDEX_MCP_SERVER } from '../tools/code-index-tool.js'
+import { buildSessionMessagingSdkServer } from './session-messaging-sdk-server.js'
+import { SESSION_MESSAGING_MCP_SERVER } from '../tools/session-tools.js'
 import { SURFACE_MCP_SERVER } from '../tools/surface-tools.js'
 import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
 import { listHosts } from '../../ssh/store.js'
@@ -333,6 +339,22 @@ function toClaudeFileTextBlock(att: SessionAttachment): ClaudeTextBlock | null {
   }
 }
 
+// Đính kèm của MỘT lượt, đổi thành block prompt: file-text trước, rồi document,
+// rồi ảnh. Export để test được một bất biến đã từng vỡ: **mỗi đính kèm phải để lại
+// dấu vết nào đó** — hoặc nội dung, hoặc ít nhất một dòng nói rằng file tồn tại.
+// Trước bản vá #12, một PDF vượt trần kích thước rơi khỏi `toClaudeDocBlock` VÀ bị
+// `toClaudeFileTextBlock` bỏ qua (vì nó bỏ qua mọi PDF), nên biến mất hoàn toàn:
+// model không được cho biết là có file đó.
+export function attachmentPromptBlocks(
+  attachments: SessionAttachment[] | undefined,
+): ClaudePromptBlock[] {
+  const list = attachments ?? []
+  const images = list.map(toClaudeImageBlock).filter((b): b is ClaudeImageBlock => b !== null)
+  const docs = list.map(toClaudeDocBlock).filter((b): b is ClaudeDocBlock => b !== null)
+  const files = list.map(toClaudeFileTextBlock).filter((b): b is ClaudeTextBlock => b !== null)
+  return [...files, ...docs, ...images]
+}
+
 // An input stream we hold open on purpose. `close()` lets the generator finish,
 // which is what makes the SDK close the CLI's stdin.
 interface OpenPrompt {
@@ -357,16 +379,13 @@ function openClaudePrompt(
   text: string,
   attachments: SessionAttachment[] | undefined,
 ): OpenPrompt {
-  const list = attachments ?? []
-  const images = list.map(toClaudeImageBlock).filter((b): b is ClaudeImageBlock => b !== null)
-  const docs = list.map(toClaudeDocBlock).filter((b): b is ClaudeDocBlock => b !== null)
-  const files = list.map(toClaudeFileTextBlock).filter((b): b is ClaudeTextBlock => b !== null)
+  const blocks = attachmentPromptBlocks(attachments)
   let content: string | ClaudePromptBlock[] = text
-  if (images.length > 0 || docs.length > 0 || files.length > 0) {
-    const blocks: ClaudePromptBlock[] = []
-    if (text) blocks.push({ type: 'text', text })
-    blocks.push(...files, ...docs, ...images)
-    content = blocks
+  if (blocks.length > 0) {
+    const all: ClaudePromptBlock[] = []
+    if (text) all.push({ type: 'text', text })
+    all.push(...blocks)
+    content = all
   }
   let release = (): void => {}
   const closed = new Promise<void>((resolve) => {
@@ -596,14 +615,38 @@ export async function runStreamClaude(
     // Same shared handlers, so a chapter or a file card behaves identically on
     // either runtime; step-mapper maps the bridged names back to the bare ones.
     [SURFACE_MCP_SERVER]: buildSurfaceToolsSdkServer(args.sessionId, args.cwd ?? process.cwd()),
+    // Embedded browser (ADR 0043) → mcp__awogbrowser__browser_tool. Same handler as
+    // the Pi AgentTool, so browsing does not disappear on an Anthropic account.
+    [BROWSER_MCP_SERVER]: buildBrowserToolSdkServer(args.cwd ?? process.cwd()),
     // Terminal của NGƯỜI DÙNG (ADR 0019) → mcp__awogterm__read_terminal. Cùng
     // handler với AgentTool của Pi, nên khử bí mật + hàng rào nonce là một bản
     // duy nhất. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat — đúng điều
     // kiện `filter.chatSession` mà nhánh Pi dùng.
     [TERMINAL_MCP_SERVER]: buildTerminalToolsSdkServer(args.cwd ?? process.cwd()),
-    // Embedded browser (ADR 0043) → mcp__awogbrowser__browser_tool. Same handler as
-    // the Pi AgentTool, so browsing does not disappear on an Anthropic account.
-    [BROWSER_MCP_SERVER]: buildBrowserToolSdkServer(args.cwd ?? process.cwd()),
+    // Chỉ mục symbol + đồ thị import (docs/features/code-index.md) →
+    // mcp__awogcode__code_index. Vô điều kiện, đúng như nhánh Pi cấp nó
+    // (runtime/tools/index.ts): chỉ ĐỌC, và chỉ mục dựng LƯỜI ở lần gọi đầu nên
+    // model không dùng thì không tốn gì.
+    [CODE_INDEX_MCP_SERVER]: buildCodeIndexSdkServer(args.cwd ?? process.cwd()),
+    // Nhắn giữa các phiên (gói #17) → mcp__awogsessions__list_sessions /
+    // _send_session_message. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat —
+    // đúng điều kiện `filter.chatSession` mà nhánh Pi dùng; một task/subagent
+    // không có người ngồi đọc hộp thư để bấm giao.
+    [SESSION_MESSAGING_MCP_SERVER]: buildSessionMessagingSdkServer(args.sessionId),
+    // Dev server của dự án (docs/features/dev-server.md) → mcp__awogdev__dev_server.
+    // KHÔNG vô điều kiện: nhánh Pi gate nó bằng `filter.backgroundExec`, tức
+    // `!inPlanMode` — nó nói về chính những background shell mà plan mode cấm tạo,
+    // và `start` chỉ có nghĩa khi model được phép chạy `Bash` sau đó. Giữ nguyên
+    // điều kiện thay vì nới rộng: nới là một thay đổi hành vi, và phải làm ở nhánh
+    // Pi trước để hai runtime không lệch nhau.
+    ...(inPlanMode
+      ? {}
+      : {
+          [DEV_SERVER_MCP_SERVER]: buildDevServerSdkServer(
+            args.cwd ?? process.cwd(),
+            args.sessionId,
+          ),
+        }),
   }
   const claudeBinary = resolveClaudeBinary()
 
@@ -659,8 +702,14 @@ export async function runStreamClaude(
     // ends only the current turn and tasks are stopped one at a time from the chip.
     perTaskStopAffordance: true,
     // Honour the agent's tool whitelist (Claude Code subagent `tools:` field).
-    ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
-    ...(args.disabledTools ? { disallowedTools: args.disabledTools } : {}),
+    // NỞ tên bắc cầu trước khi giao cho SDK. `tools:` của AGENT.md viết tên TRẦN
+    // (`wiki_read`), còn tool thật trên nhánh này mang tên `mcp__awogwiki__wiki_read`
+    // — SDK khớp allowlist bằng chuỗi chính xác, nên không nở thì một agent khai
+    // `tools: [Read, wiki_read]` MẤT `wiki_read`, và mất im lặng, chỉ khi provider
+    // là anthropic. Giữ nguyên cả tên gốc: người dùng có thể đã viết sẵn dạng bắc
+    // cầu, và whitelist phải khớp cả hai cách viết.
+    ...(args.allowedTools ? { allowedTools: withBridgedAliases(args.allowedTools) } : {}),
+    ...(args.disabledTools ? { disallowedTools: withBridgedAliases(args.disabledTools) } : {}),
     ...(sdkModel ? { model: sdkModel } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(args.sdkSessionId ? { resume: args.sdkSessionId } : {}),
