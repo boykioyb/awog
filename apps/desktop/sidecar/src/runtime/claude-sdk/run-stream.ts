@@ -61,7 +61,7 @@ import { buildWikiToolsSdkServer } from './wiki-sdk-server.js'
 import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
 import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
-import { withBridgedAliases } from '../tools/bridged.js'
+import { isReservedAwogServerName, withBridgedAliases } from '../tools/bridged.js'
 import { buildTerminalToolsSdkServer } from './terminal-sdk-server.js'
 import { TERMINAL_MCP_SERVER } from '../tools/read-terminal-tool.js'
 import { BROWSER_MCP_SERVER, buildBrowserToolSdkServer } from './browser-sdk-server.js'
@@ -575,9 +575,16 @@ export async function runStreamClaude(
   // External MCP servers of the user (SDK-native mechanism, not a custom tool) +
   // AWOG `api` sources as in-process SDK MCP servers (api-sdk-server.ts) + the
   // `awog` source_* setup tools (source-sdk-server.ts, SESSIONS-only, mirroring the
-  // Pi includeSourceTools). Merged into ONE map handed to options.mcpServers;
-  // source ids don't collide with mcp source ids nor with the `awog` key (source
-  // ids are `<slug>_<hex>`). The turn abort signal cancels in-flight api fetches.
+  // Pi includeSourceTools). Merged into ONE map handed to options.mcpServers, và
+  // khoá của một server ngoài CHÍNH LÀ source id.
+  //
+  // Đính chính một câu đã sai ở đúng chỗ này ("source ids are `<slug>_<hex>` nên
+  // không đụng khoá `awog`"): đúng với source MỚI, SAI với id MCP DI TRÚ từ bản cũ
+  // — id đó không có hậu tố hex và có thể trùng đúng một tên của AWOG. Các server
+  // của AWOG gộp SAU CÙNG nên khi trùng thì AWOG thắng, vì thế biên tạo source đã
+  // từ chối tên dành riêng (sources/reserved.ts) và migration đã đổi tên id di trú;
+  // dòng warn dưới bắt phần còn lại (config có sẵn trên đĩa từ trước hai hàng rào
+  // đó). The turn abort signal cancels in-flight api fetches.
   const mcpServers = await toSdkMcpServers(args.mcpServers)
   // Per-source allowedApiEndpoints (ADR 0060 P4) gate non-GET api calls inside the
   // SDK tool handler — the SAME check the Pi path enforces (isApiCallAllowed).
@@ -597,6 +604,18 @@ export async function runStreamClaude(
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
   const memoryAutoWrite = ctxCfg?.memoryAutoWrite === true
   const memoryBodies = memoryOn && (await hasMemoryBodies(args.projectId))
+  // Source nào sắp bị chính AWOG nuốt mất tool thì phải NÓI RA. Không tự đổi tên
+  // giữa lượt — đổi id ở đây làm hỏng whitelist per-agent và tiền tố account
+  // keychain; việc của dòng này là biến một lỗi câm thành một lỗi đọc được.
+  const shadowedSourceIds = [...Object.keys(mcpServers ?? {}), ...Object.keys(apiServers)].filter(
+    isReservedAwogServerName,
+  )
+  if (shadowedSourceIds.length > 0) {
+    log.warn('claude-sdk: source id collides with an AWOG built-in MCP server', {
+      ids: shadowedSourceIds,
+      note: 'every tool of these sources is lost on this runtime — rename the source id',
+    })
+  }
   const allServers = {
     ...(mcpServers ?? {}),
     ...apiServers,
