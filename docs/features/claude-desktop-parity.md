@@ -119,7 +119,7 @@ Một lượt infosec chạy trên đúng phần vừa thêm đã **chặn merge
 | F6 | Medium | `redact.ts` chỉ che **giá trị chuỗi** dưới khoá nhạy cảm ⇒ lọt array/object; và không đọc nội dung chuỗi ⇒ lọt `PGPASSWORD=…`, `-H 'X-Api-Key: …'` | ✅ Che cả nhánh con bất kể kiểu + lớp thứ 3 quét gán trong chuỗi |
 | F8 | Medium | Worktree: `canCommit` chỉ kiểm tra **cấu hình** auto-commit, không kiểm tra commit có xảy ra thật ⇒ node fail giữa chừng thì `rm -rf` xoá trắng việc chưa commit. Merge cũng rơi vào nhánh đang checkout, không phải nhánh đã ghi | ✅ Không xoá mù nữa: còn thay đổi ⇒ commit `WIP` (`--no-verify`, vì hook fail chính là một trong các đường mất trắng); cứu không được ⇒ **giữ nguyên checkout** thay vì xoá. Nhánh đích neo lúc cấp worktree, HEAD lệch ⇒ không merge, pause task |
 | F15 | Low | `mergeOne` đẩy `git stderr` thô lên event UI, không qua sanitizer của đường RPC | ✅ |
-| F9–F14 | Low/Med | Chi phí matcher nhân số luật; cache theo `mtime+size`; `run_in_background` không nằm trong subject của luật; chưa có UI xem/thu hồi luật | 🟡 F9 xong, còn lại vào backlog |
+| F9–F14 | Low/Med | Chi phí matcher nhân số luật; cache theo `mtime+size`; `run_in_background` không nằm trong subject của luật; chưa có UI xem/thu hồi luật | ✅ F9 xong; `run_in_background` xử lý bằng F12 (lời gọi detached vẫn quét đủ nhưng KHÔNG được chốt ALLOW); UI xem/thu hồi luật xong 2026-09-07. Còn lại: cache theo `mtime+size` |
 
 ## Audit lần 2 (2026-09-08) — sau khi allowlist Remote Gateway mở rộng
 
@@ -186,7 +186,7 @@ Bốn mục nợ đã xử lý xong (gỡ khỏi danh sách bên dưới); ghi l
 ## Nợ kỹ thuật ghi nhận, chưa xử lý
 
 - `sessions.setArchived` + `sessions.listEvents` chưa vào allowlist Remote Gateway (⚠️ cần infosec nếu muốn lên PWA).
-- `sessions.search` đã trả `archivedHidden` nhưng `useSessionSearch.ts` chưa đọc ⇒ người dùng vẫn chưa thấy dòng "còn N phiên trong kho lưu trữ khớp". Việc còn lại thuần hiển thị, không cần đụng sidecar.
+- ~~`sessions.search` trả `archivedHidden` mà UI chưa đọc~~ — **đã xong**: `useSessionSearch.ts` đọc field này và `SessionList.vue:297` hiện dòng "còn N phiên trong kho lưu trữ khớp".
 - Comment ở `git/runner.ts` (mục "Version probe") vẫn viết `git.checkInstalled` "keeps its own parse" — đã hết đúng sau lần dọn 2026-09-07.
 - `resolveSessionProjectPath` cache theo vòng đời sidecar — phiên bị trỏ sang project khác sẽ đọc cache cũ.
 - Nhánh Claude SDK: job nền external không có file log ⇒ vĩnh viễn chỉ có metadata, kể cả sau khi có `sessions.backgroundRead`.

@@ -148,7 +148,7 @@ Ngữ nghĩa của D-8 đổi từ *"đã duyệt cho dự án này, đi theo re
 
 Test: `apps/desktop/sidecar/src/hooks/__tests__/trust.test.ts` — file trust trong repo không được nạp, băm ổn định + chuẩn hoá, round-trip ghi/đọc, file hỏng ⇒ rỗng, project đổi tên ⇒ hỏi lại.
 
-**Việc còn lại:** `.gitignore` của repo còn dòng `.awog/.trust.json` (giờ vô nghĩa) — gỡ trong một commit riêng, file đang do phiên khác giữ.
+~~**Việc còn lại:** `.gitignore` còn dòng `.awog/.trust.json`~~ — **đã gỡ 2026-09-08.** Giữ nó lại là tệ hơn vô nghĩa: nó gợi ý rằng bản ghi trust *nên* nằm trong repo và chỉ cần che đi, trong khi kết luận của chính đính chính này là nó không được phép ở đó.
 
 ### Bổ sung 2026-09-08 — đồng ý ràng buộc vào thứ THỰC SỰ CHẠY
 
