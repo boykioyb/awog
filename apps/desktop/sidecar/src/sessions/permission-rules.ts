@@ -538,7 +538,7 @@ function tokenize(pattern: string, crossAll: boolean): GlobToken[] {
 const TOKEN_CACHE = new Map<string, GlobToken[]>()
 
 function tokensOf(pattern: string, kind: PermissionRuleKind): GlobToken[] {
-  const key = `${kind} ${pattern}`
+  const key = `${kind}\u0000${pattern}`
   const hit = TOKEN_CACHE.get(key)
   if (hit) return hit
   const tokens = tokenize(pattern, kind === 'command')
