@@ -240,6 +240,15 @@ giờ mùa không sai) chứ không dựng hàng đợi thứ hai: một lời h
 
 Lý do và các đánh đổi: [ADR 0082 § Đính chính](../decisions/0082-scheduled-runs.md).
 
+### Giới hạn: chỉ có trên nhánh Pi
+
+`schedule_wakeup` được đăng ký trong `runtime/tools/index.ts`, tức **chỉ nhánh Pi**. Nhánh Claude
+SDK bắc cầu tool AWOG qua các in-process MCP server (`awog`, `awogssh`, `awogwiki`, `awogmemory`,
+`awogsurfaces`, `awogbrowser`) và **không có cái nào chứa tool này** — nên đặt provider của agent
+là `anthropic` thì model mất hẳn khả năng tự hẹn giờ. Runtime chọn theo provider ([ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)),
+nên đây là đúng cái bẫy ADR đó cảnh báo: **đổi provider là đổi năng lực của agent**. Đóng được
+bằng một SDK MCP server nhỏ như `awogwiki`/`awogmemory`, chưa làm.
+
 ### Nó KHÔNG chạy lượt LLM nào
 
 Tới giờ, sidecar chỉ đặt một lời nhắc vào **hộp thư của phiên** (`session.inbox-message` — cùng kênh
