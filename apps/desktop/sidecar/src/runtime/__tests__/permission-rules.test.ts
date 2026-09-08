@@ -1848,3 +1848,47 @@ describe('ALLOW không đi ra ngoài qua symlink (F11c)', () => {
     await expect(ask('Write', { file_path: `${outside}/a.ts` })).resolves.toBe('ask')
   })
 })
+
+// Luật DENY viết bằng tên TRẦN phải chặn được cả dạng bắc cầu (audit F2).
+//
+// Người dùng viết luật theo cái tên họ NHÌN THẤY: transcript đã gấp
+// `mcp__awogdev__dev_server` về `dev_server`, và `denyReason()` cũng in tên trần.
+// Trước bản vá, luật đó chặn được trên nhánh Pi và IM LẶNG vô hiệu trên nhánh
+// Claude SDK — cùng một luật, cùng một máy, khác provider.
+describe('luật DENY tên trần phủ cả tên bắc cầu', () => {
+  const sessionId = 'ses-deny-bridged'
+
+  beforeEach(() => clearSessionRules(sessionId))
+  afterEach(() => clearSessionRules(sessionId))
+
+  it('chặn cả hai cách viết, và lý do nêu tên NGƯỜI DÙNG đã viết', async () => {
+    addSessionRule(sessionId, rule('dev_server', 'deny'))
+    const hook = makeBeforeToolCall(undefined, 'execute', sessionId)
+
+    const bare = await hook(toolCtx('dev_server', { action: 'list' }))
+    expect(bare?.block).toBe(true)
+
+    const bridged = await hook(toolCtx('mcp__awogdev__dev_server', { action: 'list' }))
+    expect(bridged?.block).toBe(true)
+    // Lý do phải nêu `dev_server` — cái tên có trong file luật — chứ không phải
+    // tên bắc cầu, để người dùng tìm được luật mà sửa.
+    expect(bridged?.reason).toContain('dev_server')
+    expect(bridged?.reason).not.toContain('mcp__awogdev__')
+  })
+
+  it('không chặn nhầm một server LẠ trùng tên tool', async () => {
+    addSessionRule(sessionId, rule('dev_server', 'deny'))
+    const hook = makeBeforeToolCall(undefined, 'execute', sessionId)
+    // `unbridgeAwogToolName` đòi cả tên tool LẪN tên server khớp bảng, nên tool
+    // cùng tên của người khác không bị luật của ta chạm tới.
+    const other = await hook(toolCtx('mcp__someoneelse__dev_server', { action: 'list' }))
+    expect(other?.block).toBeUndefined()
+  })
+
+  it('nhóm SSH vẫn chặn như cũ (bảng phủ luôn ca đặc biệt trước đây)', async () => {
+    addSessionRule(sessionId, rule('ssh_exec', 'deny'))
+    const hook = makeBeforeToolCall(undefined, 'execute', sessionId)
+    const bridged = await hook(toolCtx('mcp__awogssh__ssh_exec', { host: 'box' }))
+    expect(bridged?.block).toBe(true)
+  })
+})

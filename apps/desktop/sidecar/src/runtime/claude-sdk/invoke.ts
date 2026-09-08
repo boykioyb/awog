@@ -26,6 +26,7 @@ import {
 import { isToolAllowed } from '../tools/index.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { makeTaskToolGate } from '../permission.js'
+import { withBridgedAliases } from '../tools/bridged.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -290,9 +291,13 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
         { hooks: [makeForegroundOnlyHook(makeTaskToolGate(args.projectIds?.[0], args.cwd))] },
       ],
     },
-    // Honour the node agent's tool whitelist (Claude Code subagent `tools:` field).
-    ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
-    ...(args.disabledTools ? { disallowedTools: args.disabledTools } : {}),
+    // Whitelist `tools:` của agent node đi vào `tools`, KHÔNG phải `allowedTools`.
+    // Xem chú thích dài ở claude-sdk/run-stream.ts: `allowedTools` là danh sách
+    // "tự duyệt, không hỏi", không hạn chế gì — dòng này trước đây nói "honour the
+    // node agent's tool whitelist" trong khi thực tế không honour gì cả. Nở tên
+    // bắc cầu vì tool AWOG trên nhánh này mang tên `mcp__<server>__<tool>`.
+    ...(args.allowedTools ? { tools: withBridgedAliases(args.allowedTools) } : {}),
+    ...(args.disabledTools ? { disallowedTools: withBridgedAliases(args.disabledTools) } : {}),
     ...(sdkModel ? { model: sdkModel } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(Object.keys(allServers).length > 0 ? { mcpServers: allServers } : {}),

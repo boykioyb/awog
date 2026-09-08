@@ -716,13 +716,26 @@ export async function runStreamClaude(
     // ends only the current turn and tasks are stopped one at a time from the chip.
     perTaskStopAffordance: true,
     // Honour the agent's tool whitelist (Claude Code subagent `tools:` field).
-    // NỞ tên bắc cầu trước khi giao cho SDK. `tools:` của AGENT.md viết tên TRẦN
-    // (`wiki_read`), còn tool thật trên nhánh này mang tên `mcp__awogwiki__wiki_read`
-    // — SDK khớp allowlist bằng chuỗi chính xác, nên không nở thì một agent khai
-    // `tools: [Read, wiki_read]` MẤT `wiki_read`, và mất im lặng, chỉ khi provider
-    // là anthropic. Giữ nguyên cả tên gốc: người dùng có thể đã viết sẵn dạng bắc
-    // cầu, và whitelist phải khớp cả hai cách viết.
-    ...(args.allowedTools ? { allowedTools: withBridgedAliases(args.allowedTools) } : {}),
+    // Whitelist `tools:` của AGENT.md đi vào `tools`, KHÔNG phải `allowedTools`.
+    //
+    // Đính chính một hiểu sai đã từng được ghi vào chính chỗ này: theo khai báo của
+    // SDK (`sdk.d.ts`), `allowedTools` là danh sách "tự duyệt, không hỏi" — nó
+    // KHÔNG hạn chế gì, và doc của nó nói thẳng "to restrict which tools are
+    // available, use the `tools` option instead". Vì AWOG chưa bao giờ set `tools`,
+    // whitelist năng lực theo agent là NO-OP trên nhánh này: một agent khai
+    // `tools: [Read, Grep, Glob]` vẫn có `Bash`/`Write`, và ở mode `execute` thì
+    // chạy thẳng không một lời hỏi. Nhánh Pi thì intersect CỨNG (tools/index.ts),
+    // nên cùng một AGENT.md có hai mức năng lực khác nhau tuỳ provider.
+    //
+    // Bỏ hẳn `allowedTools`: hôm nay nó vô hại vì `bypassPermissions` đã tắt engine
+    // quyền của CLI và mọi thứ đi qua PreToolUse hook — nhưng nó là một dòng CẤP
+    // THÊM quyền đứng chờ ngày ai đó gỡ `bypassPermissions`.
+    //
+    // Nở tên bắc cầu cho cả hai: tool thật trên nhánh này mang tên
+    // `mcp__awogwiki__wiki_read`, nên whitelist viết tên trần mà không nở sẽ tước
+    // mất chính tool người dùng muốn giữ. Giữ luôn tên gốc vì họ có thể đã viết sẵn
+    // dạng bắc cầu.
+    ...(args.allowedTools ? { tools: withBridgedAliases(args.allowedTools) } : {}),
     ...(args.disabledTools ? { disallowedTools: withBridgedAliases(args.disabledTools) } : {}),
     ...(sdkModel ? { model: sdkModel } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),

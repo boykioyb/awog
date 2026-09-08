@@ -56,6 +56,7 @@ import type {
 } from './permission-types.js'
 import type { AgentMode, SshApprovalMode } from '../types/shared.js'
 import { allowSessionTool, isSessionToolAllowed } from '../sessions/permissions.js'
+import { unbridgeAwogToolName } from './tools/bridged.js'
 import {
   evaluatePermissionRules,
   isUnreadableUnderDeny,
@@ -242,8 +243,15 @@ async function deniedToolName(
 ): Promise<string | null> {
   const scoped = scopeQuery(scope)
   if ((await evaluatePermissionRules({ toolName, args, ...scoped })) === 'deny') return toolName
-  const bare = sshToolName(toolName)
-  if (bare && bare !== toolName) {
+  // Tên TRẦN của một tool AWOG bắc cầu. Người dùng viết luật theo cái tên họ NHÌN
+  // THẤY trong transcript (`dev_server`) — mà transcript đã gấp tên rồi — và theo
+  // đúng cái tên `denyReason()` in ra. Không tra lại dạng trần ở đây thì cùng một
+  // luật chặn được trên Pi và im lặng vô hiệu trên nhánh anthropic.
+  //
+  // `sshToolName` trước đây là ca đặc biệt cho riêng nhóm SSH; bảng dùng chung ở
+  // `runtime/tools/bridged.ts` phủ cả nhóm đó nên nó không còn cần một nhánh riêng.
+  const bare = unbridgeAwogToolName(toolName)
+  if (bare !== toolName) {
     if ((await evaluatePermissionRules({ toolName: bare, args, ...scoped })) === 'deny') return bare
   }
   return null
@@ -533,6 +541,24 @@ export function makeBeforeToolCall(
     })
 
     if (ruleDecision === 'deny') return denyBlock(toolName)
+
+    // Và tra thêm tên TRẦN của một tool bắc cầu. Người dùng viết luật theo cái tên
+    // họ NHÌN THẤY trong transcript (`dev_server`) — transcript đã gấp tên rồi — và
+    // theo đúng cái tên `denyReason()` in ra. Thiếu bước này thì cùng một luật chặn
+    // được trên Pi và im lặng vô hiệu trên nhánh anthropic.
+    //
+    // CHỈ chiều DENY, cố ý: đây là rào chắn người dùng tự dựng, còn chiều ALLOW thì
+    // giữ nguyên tên đang chạy — một luật cấp quyền không nên nở ra thêm cách viết.
+    const bareName = unbridgeAwogToolName(toolName)
+    if (bareName !== toolName) {
+      const bareDeny = await evaluatePermissionRules({
+        toolName: bareName,
+        args: context.args,
+        ...(sessionId ? { sessionId } : {}),
+        ...(cwd ? { cwd } : {}),
+      })
+      if (bareDeny === 'deny') return denyBlock(bareName)
+    }
 
     // SSH tools (ADR 0064 P2): act on the session's LINKED remote host. Gating is
     // MANDATORY and driven ONLY by the per-session sshApprovalMode — NOT the session
