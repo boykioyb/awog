@@ -110,7 +110,7 @@ describe('listDevServers', () => {
 
 describe('startDevServer', () => {
   it('chưa chạy ⇒ spawn đúng một lần, cwd là gốc dự án do sidecar dựng', async () => {
-    const res = await startDevServer({ projectRoot: root, sessionId: SID, name: 'web' })
+    const res = await startDevServer({ projectRoot: root, sessionId: SID, name: 'web', confirmCommand: 'AWOG_DEV_SERVER=web pnpm dev' })
     expect(res.outcome).toBe('started')
     expect(res.server).toMatchObject({ status: 'running', shellId: 'bg_new' })
     expect(startBackground).toHaveBeenCalledTimes(1)
@@ -123,7 +123,7 @@ describe('startDevServer', () => {
 
   it('ĐANG chạy ⇒ KHÔNG spawn thêm, trả về cái đang chạy', async () => {
     listBackground.mockReturnValue([shell()])
-    const res = await startDevServer({ projectRoot: root, sessionId: SID, name: 'web' })
+    const res = await startDevServer({ projectRoot: root, sessionId: SID, name: 'web', confirmCommand: 'AWOG_DEV_SERVER=web pnpm dev' })
     expect(res.outcome).toBe('already-running')
     expect(res.server.shellId).toBe('bg_1')
     expect(startBackground).not.toHaveBeenCalled()
@@ -153,7 +153,7 @@ describe('startDevServer', () => {
 
   it('tên không khai ⇒ not-found, không spawn gì', async () => {
     await expect(
-      startDevServer({ projectRoot: root, sessionId: SID, name: 'ghost' }),
+      startDevServer({ projectRoot: root, sessionId: SID, name: 'ghost', confirmCommand: 'x' }),
     ).rejects.toBeInstanceOf(DevServerError)
     expect(startBackground).not.toHaveBeenCalled()
   })

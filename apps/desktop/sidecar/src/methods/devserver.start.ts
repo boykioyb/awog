@@ -17,7 +17,11 @@ const Params = z.object({
   projectId: z.string().min(1),
   sessionId: z.string().min(1),
   name: z.string().min(1).max(64),
-  confirmCommand: z.string().max(4096).optional(),
+  // BẮT BUỘC, không optional. Toàn bộ lập luận an toàn của đường này đứng trên
+  // "người dùng đã đọc nguyên văn lệnh rồi bấm" — để trường này tuỳ chọn nghĩa là
+  // bỏ nó đi thì kiểm tra bị BỎ QUA chứ không bị TỪ CHỐI, và một lời gọi renderer
+  // lạc (hoặc lỗi logic ở UI) sẽ chạy lệnh do repo cấp mà không ai đọc.
+  confirmCommand: z.string().min(1).max(4096),
 })
 
 register('devserver.start', async (raw) => {

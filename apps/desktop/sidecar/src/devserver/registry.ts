@@ -167,13 +167,14 @@ export async function startDevServer(input: {
   projectRoot: string
   sessionId: string
   name: string
-  confirmCommand?: string | undefined
+  confirmCommand: string
 }): Promise<StartDevServerResult> {
   const { projectRoot, sessionId, name } = input
   const { entry, view } = await getDevServer(projectRoot, sessionId, name)
   if (view.status === 'running') return { outcome: 'already-running', server: view }
 
-  if (input.confirmCommand !== undefined && input.confirmCommand !== view.command) {
+  // So sánh vô điều kiện: không có nhánh "bỏ trống thì thôi".
+  if (input.confirmCommand !== view.command) {
     throw new DevServerError(
       'command-changed',
       `The declared command for "${entry.name}" changed since it was shown. Review it again before starting.`,
