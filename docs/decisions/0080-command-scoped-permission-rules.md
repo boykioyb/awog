@@ -312,7 +312,13 @@ Hai giới hạn **phải nói ra**, chứ không được để người dùng 
   Ngữ nghĩa giữ nguyên: đường dẫn tương đối chỉ có hiệu lực theo chiều DENY dù gốc đến từ đâu. `cwd` chỉ được truyền khi có giá trị thật — `evaluatePermissionRules` phân biệt `undefined` (rơi về đường dẫn project) với `null` (thôi giải đường dẫn tương đối), nên gửi nhầm `null` là âm thầm tắt một nửa luật.
 
   Đo lại thì tác động **hẹp hơn** mô tả ban đầu ở chiều phiên: thiếu `cwd`, một lời gọi tương đối không dựng nổi chủ thể và phiên **leo thang thành hỏi** (F4) chứ không lặng lẽ chạy — sai ở chỗ hỏi nhầm một thứ người dùng đã cấm tường minh, và lý do hiện ra không nói được luật nào. Chỗ nó thực sự **lọt** là **task**: cổng task cố ý không leo thang (không có ai để hỏi), nên node chạy trong worktree riêng — tức cwd KHÔNG BAO GIỜ là đường dẫn project — cho qua thẳng. Đó là ca test chính của nhóm mới.
-- Dư địa: symlink cắm **bên trong** một thư mục đã được ALLOW vẫn chuyển hướng được lời ghi ra ngoài (chiều ALLOW cố ý không `realpath`). Đóng được nếu sau này chuẩn hoá luôn tiền tố literal của pattern, nhưng chi phí là fs I/O trên đường luật.
+- ~~Dư địa: symlink cắm **bên trong** một thư mục đã được ALLOW~~ — **đã đóng 2026-09-08 (F11c).** `Write(/repo/**)` cộng `/repo/alias → /etc` thì `Write(/repo/alias/passwd)` khớp mặt chữ và ghi vào `/etc/passwd`. Không cần model tự tạo symlink: **git commit được symlink**, nên clone một repo lạ rồi cho phép `Write({repo}/**)` là đủ — cùng chủ đề nội-dung-repo với F1.
+
+  Sửa bằng một **phiếu phủ quyết** chạy SAU khi mặt chữ đã khớp, không phải đổi cách khớp. Đây là điểm mấu chốt: thay chủ thể bằng `realpath` như nhánh DENY sẽ làm luật viết cho `/tmp/...` (macOS: `/tmp` là symlink) không bao giờ khớp lại ⇒ "Always allow" hỏng. Ba bước, dừng sớm ở bước rẻ nhất: (1) không có symlink ⇒ xong; (2) bí danh vẫn khớp CHÍNH pattern đó ⇒ vẫn trong vùng (symlink trỏ nội bộ, hoặc pattern rộng phủ cả hai); (3) chuẩn hoá tiền tố literal của pattern rồi viết bí danh trở lại "không gian mặt chữ" để so lần cuối — bước này cứu ca `/tmp`. Mọi lỗi ⇒ coi như ra ngoài ⇒ hỏi.
+
+  Chi phí đã đo chứ không ước: **16.0 µs/lời gọi** ở đường cấp quyền so với **15.7 µs** khi không luật nào khớp — phiếu này tốn ~0.3 µs, trong khi nhánh `realpath` lười của DENY tốn 54 µs. Nó chỉ chạy khi một luật ALLOW **theo đường dẫn** đã khớp mặt chữ, tức đúng lúc sắp cấp quyền cho một tool (Write/Edit/Bash) đằng nào cũng sắp chạm đĩa.
+
+  6 test dựng symlink THẬT, trong đó 4 test giữ-hành-vi (symlink nội bộ, thư mục gốc là symlink, DENY không đổi, không-symlink). Gỡ bản vá ra thì đúng 2 test đo lỗ hổng đỏ và 4 test kia vẫn xanh.
 
 ## Tham chiếu
 

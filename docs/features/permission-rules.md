@@ -104,7 +104,11 @@ Giờ:
 - Đoạn `..` được **thu gọn** thay vì bị từ chối (`/repo/../etc/passwd` ⇒ `/etc/passwd`) — từ chối chính là một đường né luật DENY. Pattern trong **văn bản luật** thì vẫn cấm `..` như cũ.
 - **Đường dẫn tương đối chỉ có hiệu lực theo chiều DENY.** Nó không bao giờ đủ để thoả một luật ALLOW, vì gốc kia là **suy ra**: cwd thật có thể là thư mục kéo-thả (`workspaceFolder`) hoặc một worktree, và đoán sai gốc theo chiều CẤP là leo thang quyền. Bất đối xứng y hệt lời gọi detached (F12): chiều hỏng luôn là "hỏi thêm".
 - **Symlink**: một luật DENY còn được so với `realpath` của đường dẫn, nên `/repo/alias` trỏ tới `/repo/.git/hooks/pre-commit` không lách được `Write(/repo/.git/**)`. File chưa tồn tại (Write tạo mới) thì thư mục cha được `realpath` — chính thư mục mới hay là symlink. Tính **lười**: chỉ chạm hệ thống tệp khi có luật DENY theo đường dẫn cùng tên tool mà dạng mặt chữ đã trượt.
-- Chiều **ALLOW cố ý không** dùng `realpath`: văn bản luật là thứ người dùng ĐỌC, mà đòi thêm dạng chuẩn hoá thì một luật viết cho `/tmp/...` (trên macOS `/tmp` là symlink) sẽ không bao giờ khớp lại ⇒ "Always allow" hỏng. Đổi lại còn một dư địa đã biết: symlink cắm **bên trong** một thư mục đã được ALLOW vẫn chuyển hướng được lời ghi ra ngoài.
+- Chiều **ALLOW không THAY chủ thể bằng `realpath`**: văn bản luật là thứ người dùng ĐỌC, mà đòi thêm dạng chuẩn hoá thì một luật viết cho `/tmp/...` (trên macOS `/tmp` là symlink) sẽ không bao giờ khớp lại ⇒ "Always allow" hỏng.
+- Nhưng ALLOW **có một phiếu phủ quyết** chạy sau khi mặt chữ đã khớp (2026-09-08): nếu đường dẫn vừa khớp thật ra trỏ **ra ngoài** vùng cho phép, quyền không được cấp và lời gọi rơi về hỏi. `Write(/repo/**)` cộng `/repo/alias → /etc` vì thế không còn ghi được `/etc/passwd`. Ca này không cần model tự tạo symlink — **git commit được symlink**, nên chỉ cần clone một repo lạ rồi cho phép `Write({repo}/**)`.
+  - Symlink trỏ **nội bộ** trong vùng (`/repo/a → /repo/b`) vẫn được cấp: đích vẫn nằm trong đúng thứ người dùng đã duyệt.
+  - Thư mục **gốc của luật** bản thân là symlink (ca `/tmp`) vẫn được cấp: tiền tố literal của pattern được chuẩn hoá rồi bí danh được viết trở lại "không gian mặt chữ" để so lần cuối.
+  - Chi phí đo được: **~0.3 µs**/lời gọi trên đường cấp quyền (16.0 µs so với 15.7 µs khi không luật nào khớp). Chỉ chạy khi một luật ALLOW theo đường dẫn đã khớp.
 - `\` chỉ được coi là dấu phân cách trên **Windows**. Trên POSIX nó là ký tự hợp lệ trong tên file, nên đổi vô điều kiện làm file tên `a\b` khớp nhầm luật `/repo/a/**`.
 
 ### DENY khớp rộng hơn ALLOW
@@ -235,9 +239,8 @@ Bị hỏi đi hỏi lại cùng một lệnh dẫn tới **bấm bừa** — n�
 ## Giới hạn đã biết
 
 - Luật `deny` chỉ khớp lệnh đơn: `foo && rm -rf /` không khớp `Bash(rm -rf /)`. Trong phiên nó rơi vào "hỏi" kể cả ở `execute` mode (xem trên); trong Task thì **được cho qua**.
-- Task trên provider `anthropic` (nhánh Claude SDK) vẫn chạy `bypassPermissions` — luật `deny` chưa áp ở đó.
-- Đường dẫn tương đối không bao giờ thoả được một luật ALLOW (gốc là suy ra) ⇒ lời gọi viết đường dẫn tương đối luôn phải trả lời từng lần.
-- Symlink cắm bên trong một thư mục đã ALLOW vẫn chuyển hướng được lời ghi ra ngoài — chiều ALLOW cố ý không `realpath`.
+- ~~Task trên provider `anthropic` chưa áp luật `deny`~~ — đã nối 2026-09-08. Lưu ý cách nói cũ ở đây SAI: `bypassPermissions` không phải thứ bỏ qua cổng (nhánh chat dùng đúng cờ đó, có chủ ý, để cổng của SDK không che cổng của AWOG); cổng thật luôn nằm ở hook `PreToolUse`, và đường task chỉ đăng ký một hook khác. Nay hook đó chạy thêm cổng chỉ-DENY.
+- Đường dẫn tương đối không bao giờ thoả được một luật ALLOW (gốc là suy ra) ⇒ lời gọi viết đường dẫn tương đối luôn phải trả lời từng lần. Chiều DENY thì đã bám đúng `cwd` của lượt từ 2026-09-08 (trước đó gốc luôn là đường dẫn project, sai với phiên kéo-thả folder và với node task chạy trong worktree).
 - Chủ thể chứa `*` thật (vd `git add *`) không được gợi ý làm luật (ngữ pháp không có cơ chế escape).
 - Gợi ý chỉ rút được từ lời gọi `Bash` và `Write` (transcript không lưu tên tool, xem trên) — `Edit`/`MultiEdit` không bao giờ được đề xuất.
 - Trang quản lý luật ghi được hai tầng bền vững; luật tầng `session` chỉ **xem và thu hồi** được ở đó, muốn thêm thì qua thẻ xin quyền trong phiên.

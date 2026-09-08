@@ -1733,3 +1733,89 @@ describe('cwd của lượt được nối tới cổng chỉ-DENY của task', 
     await expect(gate(toolCtx('Write', { file_path: 'src/a.ts' }))).resolves.toBeUndefined()
   })
 })
+
+// Symlink cắm BÊN TRONG một thư mục đã ALLOW (F11c).
+//
+// Dư địa cuối của ADR 0080. `Write(/repo/**)` cộng `/repo/alias → /etc` thì
+// `Write(/repo/alias/passwd)` khớp mặt chữ và ghi vào `/etc/passwd`. Không cần
+// model tự tạo symlink: git commit được symlink, nên clone một repo lạ rồi cho
+// phép `Write({repo}/**)` là đủ.
+//
+// Ràng buộc phải giữ song song: luật viết cho một thư mục mà BẢN THÂN nó là
+// symlink (`/tmp` trên macOS) vẫn phải khớp — nếu không thì "Always allow" hỏng.
+// Đó là lý do bản vá là một phiếu PHỦ QUYẾT sau khi khớp, không phải đổi cách khớp.
+describe('ALLOW không đi ra ngoài qua symlink (F11c)', () => {
+  const sessionId = 'ses-symlink-allow'
+  let root: string
+  let repo: string
+  let outside: string
+
+  beforeEach(async () => {
+    clearSessionRules(sessionId)
+    // `realpath` ngay từ đầu: trên macOS `tmpdir()` đã là symlink, mà ở đây ta
+    // muốn dựng ca symlink một cách CÓ CHỦ Ý chứ không nhờ nền tảng.
+    root = await realpath(await mkdtemp(join(tmpdir(), 'awog-symlink-')))
+    repo = join(root, 'repo')
+    outside = join(root, 'outside')
+    await mkdir(join(repo, 'src'), { recursive: true })
+    await mkdir(outside, { recursive: true })
+  })
+
+  afterEach(async () => {
+    clearSessionRules(sessionId)
+    await rm(root, { recursive: true, force: true })
+  })
+
+  const ask = (toolName: string, args: unknown) =>
+    evaluatePermissionRules({ toolName, args, sessionId })
+
+  it('symlink trỏ RA NGOÀI vùng cho phép ⇒ không cấp, rơi về hỏi', async () => {
+    await symlink(outside, join(repo, 'alias'))
+    addSessionRule(sessionId, rule(`Write(${repo}/**)`))
+
+    // File thật trong repo: vẫn cấp như thường.
+    await expect(ask('Write', { file_path: `${repo}/src/a.ts` })).resolves.toBe('allow')
+    // Qua bí danh: khớp mặt chữ, nhưng ghi ra ngoài ⇒ KHÔNG cấp.
+    await expect(ask('Write', { file_path: `${repo}/alias/passwd` })).resolves.toBe('ask')
+  })
+
+  it('file CHƯA tồn tại trong thư mục symlink cũng bị bắt', async () => {
+    // Ca thực tế nhất: `Write` tạo file mới. `realpath` trên chính nó sẽ lỗi, nên
+    // phải rơi xuống thư mục cha — chính THƯ MỤC mới là cái symlink.
+    await symlink(outside, join(repo, 'alias'))
+    addSessionRule(sessionId, rule(`Write(${repo}/**)`))
+    await expect(ask('Write', { file_path: `${repo}/alias/brand-new.txt` })).resolves.toBe('ask')
+  })
+
+  it('symlink trỏ NỘI BỘ trong vùng cho phép ⇒ vẫn cấp', async () => {
+    // Không được siết nhầm: đích vẫn nằm trong đúng vùng người dùng đã duyệt.
+    await mkdir(join(repo, 'real'), { recursive: true })
+    await symlink(join(repo, 'real'), join(repo, 'link'))
+    addSessionRule(sessionId, rule(`Write(${repo}/**)`))
+    await expect(ask('Write', { file_path: `${repo}/link/a.ts` })).resolves.toBe('allow')
+  })
+
+  it('luật viết cho một thư mục BẢN THÂN là symlink vẫn khớp (ca /tmp trên macOS)', async () => {
+    // Đây là lý do ALLOW cố ý không dùng realpath ngay từ đầu. Bản vá phải giữ
+    // được ca này, nếu không thì "Always allow" hỏng với mọi đường dẫn dưới /tmp.
+    const realDir = join(root, 'real-home')
+    const linkDir = join(root, 'link-home')
+    await mkdir(join(realDir, 'src'), { recursive: true })
+    await symlink(realDir, linkDir)
+
+    addSessionRule(sessionId, rule(`Write(${linkDir}/**)`))
+    await expect(ask('Write', { file_path: `${linkDir}/src/a.ts` })).resolves.toBe('allow')
+  })
+
+  it('DENY không đổi — vẫn bám theo file qua symlink', async () => {
+    await symlink(outside, join(repo, 'alias'))
+    addSessionRule(sessionId, rule(`Write(${outside}/**)`, 'deny'))
+    await expect(ask('Write', { file_path: `${repo}/alias/x` })).resolves.toBe('deny')
+  })
+
+  it('không có symlink ⇒ hành vi y hệt trước (không hồi quy)', async () => {
+    addSessionRule(sessionId, rule(`Write(${repo}/**)`))
+    await expect(ask('Write', { file_path: `${repo}/src/a.ts` })).resolves.toBe('allow')
+    await expect(ask('Write', { file_path: `${outside}/a.ts` })).resolves.toBe('ask')
+  })
+})

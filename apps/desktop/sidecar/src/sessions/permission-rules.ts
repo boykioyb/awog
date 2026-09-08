@@ -413,6 +413,74 @@ async function symlinkAlias(value: string): Promise<string | null> {
   }
 }
 
+// Tiền tố LITERAL của một pattern glob: phần trước dấu `*` đầu tiên, cắt về dấu
+// `/` gần nhất. `/repo/**` → `/repo`; `/repo/src/*.ts` → `/repo/src`. Pattern mở
+// đầu bằng wildcard ⇒ null (không có vùng nào để neo).
+function literalPrefix(pattern: string): string | null {
+  const star = pattern.indexOf('*')
+  const head = star === -1 ? pattern : pattern.slice(0, star)
+  const cut = head.lastIndexOf('/')
+  if (cut <= 0) return null
+  return head.slice(0, cut)
+}
+
+// Chủ thể ALLOW này có ĐI RA NGOÀI vùng cho phép qua symlink không (F11c)?
+//
+// Dư địa đã ghi trong ADR 0080: một symlink cắm BÊN TRONG thư mục đã ALLOW vẫn
+// chuyển hướng lời ghi ra ngoài — `Write(/repo/**)` cộng `/repo/alias → /etc` thì
+// `Write(/repo/alias/passwd)` khớp mặt chữ và ghi vào `/etc/passwd`. Ca thực tế
+// không cần model tự tạo symlink: git commit được symlink, nên chỉ cần clone một
+// repo lạ rồi cho phép `Write({repo}/**)`.
+//
+// Vì sao KHÔNG sửa bằng cách thay chủ thể bằng `realpath` như nhánh DENY: văn bản
+// luật là thứ người dùng đọc rồi bấm đồng ý. Đòi dạng chuẩn hoá thì luật viết cho
+// `/tmp/...` (macOS: `/tmp` là symlink tới `/private/tmp`) không bao giờ khớp lại
+// ⇒ "Always allow" hỏng. Nên đây là một phiếu PHỦ QUYẾT chạy SAU khi mặt chữ đã
+// khớp, không phải một cách khớp khác.
+//
+// Ba bước, dừng sớm ở bước rẻ nhất:
+//   1. Không có symlink nào trên đường đi ⇒ xong (đúng một `realpath`).
+//   2. Bí danh vẫn khớp CHÍNH pattern đó ⇒ vẫn trong vùng — symlink trỏ nội bộ
+//      (`/repo/a → /repo/b`), hoặc pattern rộng tới mức phủ cả hai.
+//   3. Còn lại: chuẩn hoá luôn tiền tố literal của pattern rồi viết bí danh trở
+//      lại "không gian mặt chữ" để so lần cuối. Đây chính là bước cứu `/tmp/**`.
+//
+// Mọi lỗi ⇒ true (coi như đi ra ngoài) ⇒ không cấp ⇒ rơi về hỏi. Fail-closed ở
+// đây chỉ tốn một lần hỏi, còn fail-open là ghi ra ngoài vùng người dùng duyệt.
+async function allowEscapesSymlink(pattern: string, value: string): Promise<boolean> {
+  const alias = await symlinkAlias(value)
+  if (!alias) return false
+  if (matchesPattern(pattern, alias, 'path')) return false
+  const prefix = literalPrefix(pattern)
+  if (!prefix) return true
+  let realPrefix: string
+  try {
+    realPrefix = toPosixSeparators(await realpath(prefix))
+  } catch {
+    return true
+  }
+  // Vùng cho phép vốn đã là dạng chuẩn ⇒ bí danh không khớp nghĩa là ra ngoài thật.
+  if (realPrefix === prefix) return true
+  const root = realPrefix === '/' ? '' : realPrefix
+  if (alias !== realPrefix && !alias.startsWith(`${root}/`)) return true
+  return !matchesPattern(pattern, `${prefix}${alias.slice(realPrefix.length)}`, 'path')
+}
+
+// ALLOW còn đứng vững sau khi soi symlink không? Đủ MỘT chủ thể khớp mà không đi
+// ra ngoài là đứng vững — nhiều chủ thể chỉ xảy ra với tool nhận nhiều đường dẫn.
+async function allowSurvivesSymlink(
+  pattern: string,
+  subjects: readonly RuleSubject[],
+): Promise<boolean> {
+  for (const subject of subjects) {
+    if (subject.kind !== 'path') continue
+    if (!matchesPattern(pattern, subject.value, 'path')) continue
+    // eslint-disable-next-line no-await-in-loop
+    if (!(await allowEscapesSymlink(pattern, subject.value))) return true
+  }
+  return false
+}
+
 // Chủ thể DENY bổ sung sinh từ symlink. Tính LƯỜI (chỉ gọi khi có luật DENY cùng
 // tên tool mà dạng mặt chữ không khớp) nên đường nóng của mọi lời gọi tool không
 // tốn thêm syscall nào.
@@ -1109,7 +1177,17 @@ export async function evaluatePermissionRules(query: RuleQuery): Promise<Permiss
           continue
         }
         if (detached || allowed) continue
-        if (matchRule(rule, subjects.allow, query.toolName)) allowed = true
+        if (!matchRule(rule, subjects.allow, query.toolName)) continue
+        // Phiếu phủ quyết symlink (F11c) — chỉ cho luật theo ĐƯỜNG DẪN, và chỉ
+        // khi mặt chữ ĐÃ khớp, nên fs I/O nằm trên đường CẤP QUYỀN chứ không phải
+        // đường nóng của mọi lời gọi tool. Đo trên máy dev: 16.0 µs/lời gọi ở
+        // đường cấp quyền so với 15.7 µs khi không luật nào khớp — tức phiếu này
+        // tốn ~0.3 µs, trong khi nhánh `realpath` lười của DENY tốn 54 µs.
+        if (rule.kind === 'path' && rule.pattern !== null) {
+          // eslint-disable-next-line no-await-in-loop
+          if (!(await allowSurvivesSymlink(rule.pattern, subjects.allow))) continue
+        }
+        allowed = true
       }
     }
     return allowed ? 'allow' : 'ask'
