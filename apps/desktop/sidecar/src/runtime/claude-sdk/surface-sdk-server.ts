@@ -38,6 +38,7 @@ import {
   type SurfaceRunResult,
 } from '../tools/surface-tools.js'
 import { WAKEUP_TEXT, createWakeupRunner } from '../tools/wakeup-tool.js'
+import { MAX_WAKEUP_NOTE_LEN } from '../../schedules/schema.js'
 
 // A refused call (budget guard, no usable path) has no surface. It must come back
 // flagged `isError` — that is what makes step-mapper render it as a failed row
@@ -136,7 +137,11 @@ export function buildSurfaceToolsSdkServer(
         WAKEUP_TEXT.description,
         {
           in_seconds: z.number().describe(WAKEUP_TEXT.inSeconds),
-          note: z.string().describe(WAKEUP_TEXT.note),
+          // Trần độ dài nằm trong SCHEMA để khớp bản TypeBox của nhánh Pi
+          // (wakeup-tool.ts). Hàng rào THẬT vẫn là `armWakeup` — nó kiểm độ dài
+          // TRƯỚC khi chuỗi đi qua bộ lọc bí mật — nhưng để hai runtime lệch nhau
+          // ở lớp phòng thủ đầu tiên là tự tạo một khác biệt không ai giải thích được.
+          note: z.string().max(MAX_WAKEUP_NOTE_LEN).describe(WAKEUP_TEXT.note),
         },
         async (args) => {
           const r = await runWakeup(args.in_seconds, args.note)

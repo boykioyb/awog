@@ -20,6 +20,7 @@
 // run-stream.ts CHÍNH LÀ đường chat, nên ở đó chúng được cấp vô điều kiện.
 
 import { z } from 'zod'
+import { MAX_TEXT_LEN } from '../../sessions/inbox.js'
 import {
   createSdkMcpServer,
   tool,
@@ -52,7 +53,10 @@ export function buildSessionMessagingSdkServer(sessionId: string): McpSdkServerC
         SESSION_MESSAGING_TEXT.sendDescription,
         {
           session_id: z.string().describe(SESSION_MESSAGING_TEXT.sessionId),
-          message: z.string().describe(SESSION_MESSAGING_TEXT.message),
+          // Cùng lý do với `note` của schedule_wakeup: hàng rào thật là
+          // `postSessionMessage` (kiểm `MAX_TEXT_LEN`), nhưng lớp phòng thủ đầu
+          // tiên phải giống nhau ở hai runtime.
+          message: z.string().max(MAX_TEXT_LEN).describe(SESSION_MESSAGING_TEXT.message),
         },
         async (args) => {
           const r = await run.sendSessionMessage(args.session_id, args.message)

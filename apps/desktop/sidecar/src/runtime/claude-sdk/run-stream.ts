@@ -344,7 +344,7 @@ function toClaudeFileTextBlock(att: SessionAttachment): ClaudeTextBlock | null {
   // Read" khiến model đòi cả tài liệu 300 trang rồi mới biết là quá lớn.
   if (parseDataUrl(att.url)?.[0] === 'application/pdf') {
     const note =
-      'PDF too large to inline. Read it with the Read tool a page range at a time — offset is the first page, limit the page count.'
+      'PDF too large to inline. Read it with the Read tool a page range at a time (offset is the first page, limit the page count) if it is inside your working directory.'
     return { type: 'text', text: `<attached-file ${attrs} note="${note}" />` }
   }
   return {
