@@ -65,6 +65,7 @@ import {
   suggestRuleText,
 } from '../sessions/permission-rules.js'
 import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool.js'
+import { isDevServerToolName, isMutatingDevServerAction } from './tools/dev-server-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
 import { log } from '../util/logger.js'
@@ -126,6 +127,11 @@ function isGatedTool(name: string, args: unknown): boolean {
   // Claude SDK (`mcp__awogbrowser__browser_tool`). Chỉ so tên trần thì lời gọi bắc
   // cầu lọt qua cổng — kể cả trong plan mode, nơi đã hứa là read-only.
   if (isBrowserToolName(name)) return isMutatingBrowserAction(args)
+  // Cùng khuôn, cùng lý do: `dev_server` cũng là một tool nhiều hành động, và chỉ
+  // `stop` có hệ quả ra ngoài (giết một tiến trình mà người dùng đã phải duyệt lúc
+  // khởi động). `list`/`start`/`logs` không gate — bắt duyệt cả việc đọc log là
+  // cách nhanh nhất để rào chắn bị tắt.
+  if (isDevServerToolName(name)) return isMutatingDevServerAction(args)
   return (
     WRITE_TOOLS.has(name) ||
     EXEC_TOOLS.has(name) ||

@@ -13,9 +13,10 @@
 // Repo này đã vá hai lỗ hổng cùng lớp — luật quyền tầng project đặt trong repo
 // (ADR 0080, Đính chính F1) và trust của hook (ADR 0032) — cả hai đều là "một file
 // trong repo khiến sidecar chạy lệnh mà không hỏi". Một tool tự spawn theo file đó
-// sẽ là lỗ thứ ba, vì cổng quyền khoá theo TÊN TOOL (`EXEC_TOOLS = ['Bash']` trong
-// runtime/permission.ts): `dev_server` không nằm trong đó, nên `beforeToolCall` cho
-// qua thẳng — không hỏi, không chặn ở plan mode, không đụng luật deny của người dùng.
+// sẽ là lỗ thứ ba: thứ người dùng duyệt phải là CHUỖI LỆNH họ đọc thấy, mà một
+// `start` tự spawn thì chuỗi đó đến từ một file trong repo và không ai nhìn nó cả.
+// (Từ 2026-09-08 tool này đã có cổng, nhưng chỉ cho `stop` — xem `MUTATING_ACTIONS`
+// bên dưới: `start` vẫn không gate, nên lập luận trên vẫn nguyên giá trị.)
 //
 // Nên `start` trả về NGUYÊN VĂN lệnh và bắt model chạy nó bằng
 // `Bash({ run_in_background: true, command: <đúng chuỗi đó> })`. Việc khởi động vì
@@ -62,7 +63,35 @@ import {
 // trình và DỪNG được tiến trình đó. Gộp chung thì một luật viết cho
 // `mcp__awogsurfaces__*` vô tình phủ luôn cả hai việc đó.
 export const DEV_SERVER_MCP_SERVER = 'awogdev'
-export const DEV_SERVER_TOOL_NAMES = ['dev_server'] as const
+export const DEV_SERVER_TOOL_NAME = 'dev_server'
+export const DEV_SERVER_TOOL_NAMES = [DEV_SERVER_TOOL_NAME] as const
+
+// ─── Cổng quyền theo HÀNH ĐỘNG ───────────────────────────────────────────────
+// `dev_server` là MỘT tool mang nhiều hành động, và chỉ một trong số đó có hệ quả
+// ra ngoài tool: `stop` GIẾT một tiến trình. Tiến trình đó tồn tại được là vì người
+// dùng đã duyệt lệnh khởi động nó (`start` cố ý không tự spawn — nó trả nguyên văn
+// lệnh về để model chạy qua `Bash`, tức đi qua cổng quyền thật), nên việc dừng nó
+// phải đi qua cùng một cổng chứ không được lọt xuống dưới.
+//
+// Nhưng gate CẢ TOOL thì sai: `list`/`start`/`logs` không đổi gì ở ngoài, và bắt
+// người dùng duyệt cả việc đọc log là cách nhanh nhất biến rào chắn thành thứ họ
+// tắt đi. Nên quyết theo TỪNG LỜI GỌI, đúng khuôn `isMutatingBrowserAction` của
+// browser-tool.ts — cũng là một tool nhiều hành động.
+const MUTATING_ACTIONS = new Set(['stop'])
+
+// Khớp CẢ HAI cách gọi tên: tên trần của nhánh Pi (`dev_server`) và tên bắc cầu của
+// nhánh Claude SDK (`mcp__awogdev__dev_server`). Chỉ so tên trần thì cổng im lặng
+// vô hiệu trên đúng nhánh phổ biến nhất — lớp bug đã xảy ra bảy lần trong repo này.
+// `endsWith('__dev_server')` chứ không `includes`: một tool bên thứ ba tên
+// `dev_server_helper` không được ăn theo cổng này.
+export function isDevServerToolName(name: string): boolean {
+  return name === DEV_SERVER_TOOL_NAME || name.endsWith(`__${DEV_SERVER_TOOL_NAME}`)
+}
+
+export function isMutatingDevServerAction(args: unknown): boolean {
+  const action = (args as { action?: unknown } | null)?.action
+  return typeof action === 'string' && MUTATING_ACTIONS.has(action)
+}
 
 // Mọi chuỗi model ĐỌC về tool này, ở đúng một chỗ — nhánh Pi dựng schema TypeBox
 // từ đây, nhánh Claude SDK dựng schema zod từ đây (claude-sdk/dev-server-sdk-server.ts).
@@ -189,7 +218,7 @@ export function createDevServerTool(
   sessionId: string,
 ): AgentTool<typeof Params, DevServerDetails> {
   return {
-    name: 'dev_server',
+    name: DEV_SERVER_TOOL_NAME,
     label: 'Dev server',
     description: DEV_SERVER_TEXT.description,
     parameters: Params,

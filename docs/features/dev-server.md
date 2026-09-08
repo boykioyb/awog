@@ -52,7 +52,9 @@ Nạp **fail-soft** như [ADR 0080 F2](../decisions/0080-command-scoped-permissi
 
 **File này nằm trong repo, nên bất kỳ ai commit cũng được: nó là dữ liệu L1 KHÔNG TIN.**
 
-Repo này đã vá **hai** lỗ hổng cùng lớp trong ngày 2026-09-07: luật quyền tầng project đặt trong repo ([ADR 0080](../decisions/0080-command-scoped-permission-rules.md), mục Đính chính F1) và trust của hook ([ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md)). Cả hai đều là *"một file trong repo khiến sidecar chạy lệnh mà không hỏi"*. **Một tool tự spawn theo file này sẽ là lỗ thứ ba**, vì cổng quyền khoá theo **tên tool** (`EXEC_TOOLS = ['Bash']` trong `runtime/permission.ts`): `dev_server` không nằm trong đó ⇒ `beforeToolCall` cho qua thẳng — không hỏi, không chặn ở plan mode, không đụng luật deny của người dùng.
+Repo này đã vá **hai** lỗ hổng cùng lớp trong ngày 2026-09-07: luật quyền tầng project đặt trong repo ([ADR 0080](../decisions/0080-command-scoped-permission-rules.md), mục Đính chính F1) và trust của hook ([ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md)). Cả hai đều là *"một file trong repo khiến sidecar chạy lệnh mà không hỏi"*. **Một tool tự spawn theo file này sẽ là lỗ thứ ba**: thứ người dùng duyệt phải là **chuỗi lệnh họ đọc thấy**, mà một `start` tự spawn thì chuỗi đó đến từ một file trong repo và không ai nhìn nó cả.
+
+> Từ **2026-09-08** tool này đã có cổng quyền, nhưng **chỉ cho `stop`** (xem mục dưới). `start` vẫn không spawn, nên lập luận trên vẫn nguyên giá trị.
 
 Nên tính năng này tách hẳn **khai** khỏi **chạy**, và có đúng hai đường chạy:
 
@@ -76,11 +78,30 @@ Chỉ chạy khi người dùng bấm nút trên UI, **sau khi đã đọc nguy�
 
 Kể cả khi ai đó bỏ qua cả hai cửa trên, một entry vẫn không nối được lệnh thứ hai: `command` là một token, `args` là mảng, và **không token nào được chứa** `; & | ` `` ` `` ` $ ( ) { } < > \ ' " ` xuống dòng hay ký tự điều khiển. Lúc ghép, token "hiền" giữ nguyên (để người dùng đọc được nguyên văn), token có khoảng trắng được bọc nháy đơn — an toàn vì nháy đơn đã bị cấm từ lúc nạp. `cwd` do sidecar dựng từ gốc dự án, **không bao giờ** nhận từ payload; RPC nhận `projectId` chứ không nhận đường dẫn.
 
+### Cổng quyền: `stop` phải hỏi, `list`/`start`/`logs` thì không
+
+Bổ sung 2026-09-08 (finding F3 của lượt audit) — `runtime/permission.ts`, `isGatedTool`:
+
+`dev_server({ action: 'stop' })` **giết một tiến trình**, và tiến trình đó tồn tại được là vì người dùng đã duyệt lệnh khởi động nó. Việc dừng nó vì thế phải đi qua **cùng một cổng**, chứ không được lọt xuống dưới. Trước bản vá, `stop` chạy thẳng: không hỏi ở `ask`, không bị chặn ở plan mode.
+
+Nhưng gate **cả tool** thì sai: `list`/`start`/`logs` không đổi gì ở ngoài tool, và bắt người dùng duyệt cả việc **đọc log** là cách nhanh nhất biến rào chắn thành thứ họ tắt đi. Nên cổng quyết theo **từng lời gọi**, đúng khuôn `isMutatingBrowserAction` của `browser_tool` — cũng là một tool nhiều hành động:
+
+| Hành động | `execute` | `ask` / `accept-edits` | `plan` |
+|---|---|---|---|
+| `list` · `start` · `logs` | chạy | chạy, không hỏi | chạy |
+| `stop` | chạy | **hỏi** | **chặn** |
+
+Nhận diện tên đi qua `isDevServerToolName()` nên khớp **cả hai** cách viết: `dev_server` (nhánh Pi) và `mcp__awogdev__dev_server` (nhánh Claude SDK). Cả hai runtime dùng chung `makeBeforeToolCall`, nên hàng rào chỉ có một bản. Khoá bằng test: [`runtime/__tests__/dev-server-gate.test.ts`](../../apps/desktop/sidecar/src/runtime/__tests__/dev-server-gate.test.ts).
+
+Ô "plan ⇒ chặn" là **phòng thủ theo tầng**, không phải một hành vi mới người dùng sẽ gặp: tool này vốn không được nạp trong plan mode (`filter.backgroundExec`). Nó ở đó để nếu điều kiện cấp phát có nới ra sau này, `stop` không âm thầm trở thành thứ chạy được lúc đang lập kế hoạch.
+
+Luật quyền viết cho tool này là luật **trần** (`dev_server`), không có chủ thể — nên "Always allow" ở prompt của `stop` cấp quyền cho mọi lần `stop` sau đó, giống hệt `browser_tool`.
+
 ### Đề xuất (CHƯA làm)
 
-Hai hướng, cần tech-lead chốt trước khi ai đó code:
+Cần tech-lead chốt trước khi ai đó code:
 
-1. **Thêm `dev_server` vào `EXEC_TOOLS`** + một nhánh trong `suggestRuleText` để "always allow" ghi ra luật `DevServer(web)` chứ không phải tên tool trần. Khi đó `start` spawn thẳng được, vẫn qua cổng. Rẻ, nhưng đụng `runtime/permission.ts` — cần audit lại chung với đường SSH/browser.
+1. **Cho `start` spawn thẳng** (thêm `start` vào nhóm gated + một nhánh trong `suggestRuleText` để "always allow" ghi ra luật `dev_server(web)` chứ không phải tên tool trần). Rẻ về code, nhưng nó đảo lại đúng quyết định "khai ≠ chạy" ở trên — phải audit chung với đường SSH/browser trước.
 2. **Cổng trust riêng cho file cấu hình** (khuôn hook trust của [ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md)): người dùng duyệt *nội dung file* một lần theo băm, đổi file ⇒ hỏi lại. Mạnh hơn nhưng thêm một khái niệm và một UI.
 
 ## Ánh xạ tên → tiến trình: marker, không phải registry thứ hai
@@ -143,7 +164,7 @@ Trả về kèm `matched` / `total` để người đọc biết "3/1240 dòng k
 
 Chỉ được nạp khi `filter.backgroundExec` có mặt — tức **phiên chat, không phải plan mode**, không phải task/subagent — cùng điều kiện với `BashOutput` / `KillShell` / `monitor`, vì nó nói về đúng những background shell đó.
 
-Nhánh **Claude SDK** (provider `anthropic`, [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)) **chưa có** tool này.
+Nhánh **Claude SDK** (provider `anthropic`, [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)) bắc cùng tool này qua một in-process MCP server tên `awogdev` ⇒ `mcp__awogdev__dev_server` (`runtime/claude-sdk/dev-server-sdk-server.ts`). Handler là **đúng** hàm `runDevServer`, không phải bản chép, và điều kiện cấp phát giữ nguyên `filter.backgroundExec`.
 
 ## Giới hạn đã biết / chưa làm
 
@@ -151,4 +172,3 @@ Nhánh **Claude SDK** (provider `anthropic`, [ADR 0058](../decisions/0058-claude
 - **Server không xuyên phiên** (ranh giới ADR 0066). Muốn xuyên phiên thì phải cho background shell một tầng lưu trữ theo *project* thay vì theo *session* — đó là một quyết định kiến trúc riêng.
 - **`start` của model không tự spawn.** Model có thể bỏ qua lời nhắc và tự gõ một lệnh khác qua `Bash`; khi đó AWOG không tra được nó theo tên (thiếu marker). Đây là đánh đổi có chủ ý: thà mất khả năng tra ngược còn hơn mở một bề mặt spawn không qua cổng quyền.
 - **Không dò cổng thật.** `port` là thứ file khai, không phải thứ AWOG đo. Muốn biết server lên chưa thì `monitor` trên `shellId` với `until_output_contains`.
-- **Nhánh Claude SDK chưa có tool tương ứng.**
