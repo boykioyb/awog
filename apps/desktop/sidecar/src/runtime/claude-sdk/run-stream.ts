@@ -62,6 +62,7 @@ import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
 import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
 import { isReservedAwogServerName, withBridgedAliases } from '../tools/bridged.js'
+import { ARTIFACT_ENV } from './artifact.js'
 import { buildTerminalToolsSdkServer } from './terminal-sdk-server.js'
 import { TERMINAL_MCP_SERVER } from '../tools/read-terminal-tool.js'
 import { BROWSER_MCP_SERVER, buildBrowserToolSdkServer } from './browser-sdk-server.js'
@@ -761,7 +762,9 @@ export async function runStreamClaude(
     ...(args.sdkSessionId ? { resume: args.sdkSessionId } : {}),
     ...(Object.keys(allServers).length > 0 ? { mcpServers: allServers } : {}),
     ...(args.abortController ? { abortController: args.abortController } : {}),
-    env: buildSdkEnv(cred),
+    // Mở tool `Artifact` của CLI (parity #35). Cổng thật là biến môi trường chứ
+    // KHÔNG phải `settings.enableArtifact` — artifact.ts ghi bảng đo và lý do.
+    env: { ...buildSdkEnv(cred), ...ARTIFACT_ENV },
     // Packaged builds: point at the bundled native binary (ADR 0058 P3); dev leaves
     // it undefined so the SDK auto-discovers from the pnpm store.
     ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),

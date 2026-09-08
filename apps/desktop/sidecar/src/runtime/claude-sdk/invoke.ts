@@ -27,6 +27,7 @@ import { isToolAllowed } from '../tools/index.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { makeTaskToolGate } from '../permission.js'
 import { withBridgedAliases } from '../tools/bridged.js'
+import { ARTIFACT_ENV } from './artifact.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -302,7 +303,14 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(Object.keys(allServers).length > 0 ? { mcpServers: allServers } : {}),
     ...(args.abortController ? { abortController: args.abortController } : {}),
-    env: buildSdkEnv(cred),
+    // `Artifact` bật cho CẢ task node, không chỉ phiên chat (artifact.ts giải thích
+    // vì sao là env chứ không phải `settings.enableArtifact`). Một node "viết báo
+    // cáo" thì thứ nó cần đưa cho người đọc chính là một trang có URL. Chạy không
+    // người trông KHÔNG phải lý do để bỏ: node ở đây đã có `Bash` dưới
+    // `bypassPermissions`, nên publish một trang không mở thêm hạng rủi ro nào —
+    // và luật `deny` của người dùng vẫn ràng buộc nó qua `makeTaskToolGate`, y hệt
+    // mọi tool khác.
+    env: { ...buildSdkEnv(cred), ...ARTIFACT_ENV },
     // Packaged builds: bundled native binary (ADR 0058 P3); dev auto-discovers.
     ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
   }
