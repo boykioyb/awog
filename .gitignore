@@ -31,8 +31,6 @@ Thumbs.db
 .claude/projects/
 
 # AWOG local runtime state (dogfooding AWOG on its own repo).
-# Bản ghi trust của hook ĐÃ chuyển sang `~/.awog/hook-trust/` — giữ dòng dưới chỉ
-# để file cũ (nếu còn) không lọt vào commit. Dòng này che được repo NÀY thôi: mọi
 # Thư mục nháp của agent (quy ước scratchpad) — không bao giờ commit.
 .awog/scratch/
 
