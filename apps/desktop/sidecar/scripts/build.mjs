@@ -31,11 +31,16 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import process from 'node:process'
+import { BuildLockTimeoutError, DEFAULT_TIMEOUT_MS, withBuildLock } from './build-lock.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkgRoot = resolve(__dirname, '..')
 const repoRoot = resolve(pkgRoot, '..', '..', '..')
 const outDir = join(pkgRoot, 'dist')
+
+// Khoá nằm CẠNH `dist/`, không nằm TRONG: bước đầu của build là `rm -rf dist`,
+// nên một khoá đặt trong đó sẽ tự xoá chính mình. Xem `build-lock.mjs`.
+const lockPath = join(pkgRoot, '.build.lock')
 
 function compileTs() {
   console.error('[build] tsc -p tsconfig.build.json')
@@ -202,7 +207,11 @@ async function writeStagePackageJson() {
   await writeFile(join(outDir, 'package.json'), `${JSON.stringify(out, null, 2)}\n`)
 }
 
-async function main() {
+// Toàn bộ chuỗi này là vùng tới hạn, không hẹp hơn được: bước đầu đã `rm -rf`
+// cả `dist/`, tsc ghi `dist/lib`, `pnpm deploy` bày thư mục tạm trong
+// `node_modules` của workspace rồi `cp` sang `dist/node_modules`, prune xoá
+// trong đó, bước cuối ghi `dist/package.json`. Không có giai đoạn nào chỉ đọc.
+async function runBuild() {
   if (existsSync(outDir)) await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
 
@@ -214,7 +223,23 @@ async function main() {
   console.error('[build] Done. Engine bundle ready at apps/desktop/sidecar/dist/')
 }
 
-main().catch((err) => {
+function timeoutMsFromEnv() {
+  const raw = process.env.AWOG_BUILD_LOCK_TIMEOUT_MS
+  if (raw === undefined || raw === '') return DEFAULT_TIMEOUT_MS
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`AWOG_BUILD_LOCK_TIMEOUT_MS must be a non-negative number, got ${raw}`)
+  }
+  return parsed
+}
+
+withBuildLock(runBuild, { lockPath, timeoutMs: timeoutMsFromEnv() }).catch((err) => {
+  // Kẹt khoá không phải build hỏng: in gọn một dòng đã nêu đích danh người giữ,
+  // đừng chôn nó dưới một stack trace.
+  if (err instanceof BuildLockTimeoutError) {
+    console.error(err.message)
+    process.exit(1)
+  }
   console.error('[build] Fatal:', err instanceof Error ? err.stack : err)
   process.exit(1)
 })

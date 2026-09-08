@@ -2,3 +2,6 @@ dist
 dist-tsc
 node_modules
 *.log
+
+# Khoá liên-tiến-trình của build (scripts/build-lock.mjs) — runtime state, không commit.
+.build.lock

@@ -13,8 +13,13 @@
 // Export một object thuần thay vì `defineConfig` từ 'vitest/config': vitest chưa
 // nằm trong devDependencies của sidecar (chạy qua `npx vitest@2`), nên import đó
 // sẽ không resolve được.
+//
+// `scripts/__tests__/` là ngoại lệ có chủ đích: khoá build (`scripts/build-lock.mjs`)
+// phải là JS thuần chạy được NGAY, vì `build.mjs` chạy trước khi tsc sinh ra
+// `dist/` — nên nó không thể sống trong `src/` như mọi module khác. Mở rộng
+// `include` rẻ hơn nhiều so với việc dựng một đường biên dịch riêng cho nó.
 export default {
   test: {
-    include: ['src/**/__tests__/**/*.test.ts'],
+    include: ['src/**/__tests__/**/*.test.ts', 'scripts/__tests__/**/*.test.mjs'],
   },
 }
