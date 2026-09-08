@@ -95,7 +95,7 @@ Pattern kind `path` phải **tuyệt đối** (hoặc mở đầu bằng ký t�
 
 Áp theo thứ tự `session → project → user`. **DENY thắng bất kể thứ tự**: một `deny` ở tầng user thắng một `allow` ở tầng session. (Bản đầu quét hai lượt — DENY hết mọi tầng rồi mới tới ALLOW; từ 2026-09-07 gộp thành **một lượt**: gặp DENY là trả về ngay, còn ALLOW chỉ được chốt sau khi đã quét hết — kết quả y hệt, chi phí một nửa, xem F9.) DENY còn thắng cả `execute` mode, `autoApprove` và `accept-edits` — nó là rào chắn người dùng tự dựng, không phải một mức nới lỏng.
 
-File JSON là **L1 không tin**: validate **từng entry** bằng zod rồi đi tiếp qua `parsePermissionRule`; entry hỏng bị **bỏ qua + log** mà **không** kéo theo các entry còn lại (F2), file hỏng toàn phần (JSON sai, `rules` không phải mảng) coi như rỗng, không bao giờ làm sập cổng quyền. Ghi bằng **atomic rename** (file tạm cùng thư mục → `rename`), mode `0600`. Đọc có cache theo `(mtimeMs, size)` để cổng quyền không đọc đĩa dày.
+File JSON là **L1 không tin**: validate **từng entry** bằng zod rồi đi tiếp qua `parsePermissionRule`; entry hỏng bị **bỏ qua + log** mà **không** kéo theo các entry còn lại (F2), file hỏng toàn phần (JSON sai, `rules` không phải mảng) coi như rỗng, không bao giờ làm sập cổng quyền. Ghi bằng **atomic rename** (file tạm cùng thư mục → `rename`), mode `0600`. Đọc có cache khoá theo DANH TÍNH file `(dev, ino, mtimeMs, ctimeMs, size)` (F11 thay `(mtimeMs, size)`) để cổng quyền không đọc đĩa dày.
 
 ### 5. Prompt phải nêu chính xác luật sắp tạo
 
@@ -136,7 +136,7 @@ Allowance của cổng SSH (ADR 0064 F2, key `ssh_exec@host`) giữ nguyên tron
   - Hỏi nhiều hơn trước: mỗi lệnh khác nhau là một lần hỏi (đó là *ý đồ*, nhưng là thay đổi UX rõ rệt).
   - Quét toán tử là quét thô ⇒ `echo "a;b"` cũng bị coi là lệnh ghép và luôn hỏi. Fail-safe theo hướng an toàn.
   - Luật DENY chỉ khớp lệnh đơn: `foo && rm -rf /` không khớp `Bash(rm -rf /)` — nhưng nó rơi vào "hỏi", không phải "cho qua".
-  - Mỗi lời gọi tool bị gate tốn 1–2 `stat` (có cache theo mtime), kể cả ở execute mode (để DENY còn hiệu lực).
+  - Mỗi lời gọi tool bị gate tốn 1–2 `stat` (có cache khoá theo danh tính file — xem F11), kể cả ở execute mode (để DENY còn hiệu lực).
   - UI hiện tại chưa có bộ chọn tầng ⇒ tạm thời mọi "Always allow" vẫn rơi vào tầng `session`; hai tầng file đã hoạt động đầy đủ nhưng còn phải sửa tay file JSON.
 - **Việc cần làm tiếp:**
   - UI: hiện `suggestion.rule` trong prompt + thêm bộ chọn tầng (Phiên / Dự án / Máy này) gửi `scope`, và một trang xem/xoá luật đã lưu.
@@ -282,7 +282,7 @@ Checkout của worktree nằm ở `~/.awog/tasks/<id>/worktrees/<slug>` (và `~/
 - UI (`i18n/locales/*/sessions-perm.json`) còn nói tầng project ghi vào `.awog/permission-rules.json` **của dự án** — sai từ bản vá này. Cần đổi chuỗi thành "ghi trong AWOG home, chỉ áp trên máy này" (file thuộc sở hữu agent khác, chưa sửa trong gói này).
 - ~~Vẫn chưa có trang xem/thu hồi luật đã lưu~~ — **đã xong 2026-09-07**: Settings → Quyền liệt kê cả 3 tầng, hiện nguyên văn luật, xoá theo cặp (nguyên văn, action) nên gỡ một `allow` không bao giờ kéo theo `deny` cùng tên; entry không parse được vẫn được liệt kê (đó chính là thứ trước đây bắt buộc sửa tay), file hỏng toàn phần báo riêng vì mọi DENY trong đó đang vô hiệu. Xem [permission-rules.md](../features/permission-rules.md).
 - Luật cho tool bắc cầu MCP vẫn phải viết đúng tên đang chạy (`mcp__<id>__<tool>`); chỉ nhóm SSH được đối chiếu thêm tên trần.
-- UI chưa đọc `ruleSkipped` của `sessions.permission` (F13): khi người dùng vừa sửa tham số vừa bấm "Always allow", thẻ xin quyền nên nói rõ "không lưu luật vì tham số đã bị sửa" thay vì chỉ hiện `savedScopes` rỗng.
+- ~~UI chưa đọc `ruleSkipped` của `sessions.permission` (F13)~~ — **đính chính 2026-09-08: đây không phải khiếm khuyết UX đang xảy ra.** Cờ này chỉ bật khi request mang `updatedInput`, mà không client nào gửi: `rg updatedInput apps/desktop/ui-next` không ra kết quả (desktop chưa có chỗ sửa tham số trước khi duyệt), PWA gửi đúng `{ requestId, decision }`, và `remote-gateway-policy.ts` **cố ý loại bỏ** `updatedInput` lẫn `alwaysAllow` (F7). Hàng rào ở sidecar là phòng thủ theo chiều sâu cho một năng lực chưa mở — và nó phải có mặt TRƯỚC khi UI đó ra đời. Cố ý KHÔNG thêm chuỗi thông báo bây giờ: một câu người dùng không bao giờ render được thì không kiểm chứng được và sẽ mục. Xem [permission-rules.md](../features/permission-rules.md).
 
 ## Đính chính 2026-09-08 — infosec audit (lượt 2)
 
