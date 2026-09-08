@@ -260,6 +260,53 @@ Checkout của worktree nằm ở `~/.awog/tasks/<id>/worktrees/<slug>` (và `~/
 - Luật cho tool bắc cầu MCP vẫn phải viết đúng tên đang chạy (`mcp__<id>__<tool>`); chỉ nhóm SSH được đối chiếu thêm tên trần.
 - UI chưa đọc `ruleSkipped` của `sessions.permission` (F13): khi người dùng vừa sửa tham số vừa bấm "Always allow", thẻ xin quyền nên nói rõ "không lưu luật vì tham số đã bị sửa" thay vì chỉ hiện `savedScopes` rỗng.
 
+## Đính chính 2026-09-08 — infosec audit (lượt 2)
+
+Ba finding của lượt hai. F3b chặn merge; F4 và F5 là hai quyết định phải nói tường minh chứ không được để lửng.
+
+### F3b — luật theo đường dẫn vô hiệu với đường dẫn TƯƠNG ĐỐI (HIGH)
+
+**Sai ở đâu.** `normalizePathValue` trả `null` cho mọi đường dẫn không tuyệt đối, trong khi mô tả tham số của `Read`/`Write`/`Edit` nói rõ chúng nhận *"Absolute **or workspace-relative**"*. Chủ thể `null` ⇒ `evaluatePermissionRules` trả `'ask'` — mà với `Read`/`Grep`/`Glob` thì `'ask'` **không phải là hỏi**: chúng không bị gate nên chạy thẳng. Luật `{"rule":"Read(/Users/k/proj/.env)","action":"deny"}` vì thế im lặng vô tác dụng với `Read({file_path: '.env'})`, đúng cách gọi tự nhiên nhất của model.
+
+**Vá.**
+
+- `RuleQuery` nhận thêm `cwd`. Đường dẫn tương đối được giải theo `cwd`, và khi caller không cấp thì theo **đường dẫn project của phiên** (cùng nguồn mà tầng `project` đã dùng).
+- Đoạn `..` được **thu gọn** thay vì bị từ chối: từ chối biến chủ thể thành `null`, tức chính nó là một đường né DENY. Pattern trong văn bản luật vẫn cấm `..` như cũ (một pattern như vậy là path traversal đội lốt luật quyền, và nó không có lý do chính đáng nào).
+- **Đường dẫn tương đối chỉ có hiệu lực theo chiều DENY.** Gốc kia là *suy ra*: cwd thật có thể là thư mục kéo-thả (`Session.workspaceFolder`) hoặc một worktree, nên đoán sai gốc theo chiều CẤP là leo thang quyền, còn theo chiều CẤM chỉ là chặn nhầm (người dùng gỡ luật). Bất đối xứng y hệt F12.
+- **Symlink (đóng luôn phần symlink của lượt trước).** DENY còn được so với `realpath` của đường dẫn — `/repo/alias` trỏ tới `/repo/.git/hooks/pre-commit` không lách được `Write(/repo/.git/**)`. File chưa tồn tại thì `realpath` thư mục cha (chính thư mục mới hay là symlink). Tính **lười**: hệ thống tệp chỉ bị chạm khi tồn tại một luật DENY theo đường dẫn cùng tên tool mà dạng mặt chữ đã trượt, nên đường nóng của mọi lời gọi tool không tốn thêm syscall nào.
+  ALLOW **cố ý không** dùng `realpath`: văn bản luật là thứ người dùng ĐỌC, mà đòi thêm dạng chuẩn hoá thì một luật viết cho `/tmp/...` (macOS: `/tmp` là symlink) không bao giờ khớp lại ⇒ "Always allow" hỏng vĩnh viễn. Dư địa còn lại — symlink cắm bên trong một thư mục đã ALLOW — được ghi nhận, không vá trong gói này.
+- `\` chỉ đổi thành `/` trên **Windows**. Trên POSIX nó là ký tự hợp lệ trong tên file; đổi vô điều kiện làm file tên `a\b` khớp nhầm luật `/repo/a/**`.
+
+### F4 — DENY chưa thắng `execute`/`autoApprove` như đã hứa (HIGH)
+
+**Sai ở đâu.** Mục "Ba tầng luật" viết *"DENY thắng cả execute mode, autoApprove và accept-edits"*. Thực tế nó chỉ thắng khi **khớp**, nên mọi cách né matcher đều là né DENY — và ở `execute` thì "không khớp" nghĩa là **chạy im lặng**: `rm -rf /data;` (dấu `;` ⇒ chủ thể null), `rm  -rf /data` (hai khoảng trắng), `rm -rf "/data"` (nháy), lệnh dài quá `MAX_SUBJECT`. Đó là **false assurance**: trang Settings → Quyền bán một cảm giác an toàn không có thật, nguy hiểm hơn là không có tính năng.
+
+**Quyết định: chọn (a) — bắt hỏi — nhưng khoanh phạm vi cho nó dùng được.** Hai bản vá, cả hai chỉ nới theo chiều CẤM:
+
+1. **Chuẩn hoá lệnh cho DENY** (`denyCommandVariants`): ngoài chuỗi nguyên văn, luật `deny` còn so với bản gộp khoảng trắng và bản bỏ dấu nháy. `rm  -rf /data` và `rm -rf "/data"` không lách nổi `Bash(rm -rf /data)` nữa. Chiều ALLOW **không** nhận các dạng này — `git add "a b"` là một đối số, không phải hai, nên nó không được ăn theo luật viết cho `git add a b`.
+2. **`isUnreadableUnderDeny`**: khi cổng không dựng nổi chủ thể (lệnh ghép, lệnh quá dài, thiếu tham số) **và** người dùng đã viết ít nhất một luật `deny` cho đúng tool đó, thì `execute` / `autoApprove` / `accept-edits` không được cho qua — lời gọi rơi về thẻ xin quyền. (`canUseTool` luôn được `sessions.send-message.ts` truyền vào kể cả ở `execute`, nên đây thật sự là một câu hỏi, không phải một cái chặn cụt.)
+
+**Vì sao không làm (a) theo nghĩa rộng nhất.** "Trả `'ask'` mà có luật DENY cho tool ⇒ bắt hỏi" nghe chặt hơn, nhưng nó gộp hai thứ khác hẳn nhau: *"luật của bạn không nói tới lời gọi này"* (trường hợp thường gặp) và *"cổng không nhìn thấy lời gọi này là gì"*. Bắt cả hai thì **một** luật `Bash(rm -rf /)` biến `execute` mode thành ask-mode cho **mọi** lệnh Bash — người dùng sẽ tắt luật hoặc bỏ chế độ, và một guardrail bị tắt thì bảo vệ được số không. Ranh giới "đọc nổi hay không" là thứ duy nhất vừa kiểm chứng được vừa không phá chế độ.
+
+Nhánh SSH không nhận điều (2): tool SSH thuộc kind `bare` nên chủ thể của chúng luôn đọc được, cờ không bao giờ có thể bật.
+
+### F5 — Tasks bỏ qua toàn bộ cổng quyền (MEDIUM)
+
+**Sai ở đâu.** `runtime/invoke.ts` đặt `beforeToolCall: async () => undefined`, nên node của Task và subagent của Task chạy `Bash`/`Write` **không qua luật nào**. Đây là quyết định cũ (ADR 0024 D-7, tasks chạy không người trực) chứ không phải hồi quy — nhưng ADR 0080 cộng trang Settings → Quyền biến nó thành mâu thuẫn: UI liệt kê luật 3 tầng mà không nói tầng nào không áp cho Tasks.
+
+**Quyết định: bọc bằng cổng CHỈ-DENY** (`makeTaskToolGate` trong `runtime/permission.ts`), đúng đề xuất của infosec. Cổng này `deny ⇒ block`, còn lại ⇒ `undefined`: nó không bao giờ hỏi (không có ai để hỏi), không bao giờ nhớ, và **không có nhánh nào cấp thêm quyền** so với trước — nên nó chỉ có thể thêm chặn, không thể phá một workflow từng chạy được vì lý do quyền. Lỗi nội bộ bất kỳ cũng degrade về `undefined` (hành vi cũ). Luật viết theo tên trần của tool SSH bắc cầu cũng được đối chiếu, y như trong phiên.
+
+Hai giới hạn **phải nói ra**, chứ không được để người dùng tự suy:
+
+- **Task không áp điều (2) của F4.** Lệnh ghép vẫn không khớp luật đơn và ở Task thì được cho qua: không có ai để hỏi, mà chặn mọi `cd x && npm test` chỉ vì tồn tại một luật deny là phá workflow đang chạy được.
+- **Đường Anthropic chưa có cổng này.** Task chạy provider `anthropic` đi qua `runtime/claude-sdk/invoke.ts` với `permissionMode: 'bypassPermissions'` — file đó nằm ngoài gói vá này (đang có phiên khác sửa), nên đây là việc còn lại, và là chênh lệch hành vi giữa hai runtime.
+
+### Việc còn lại sau đính chính lượt 2
+
+- Wire `RuleQuery.cwd` từ cwd THẬT của lượt (`runtime/run-stream.ts` + `runtime/claude-sdk/run-stream.ts` đã có `args.cwd`). Khi đó đường dẫn tương đối được giải theo đúng thư mục kéo-thả / worktree thay vì đường dẫn project. Ngữ nghĩa "tương đối chỉ dùng cho DENY" giữ nguyên — sửa một dòng ở mỗi call-site.
+- Cổng chỉ-DENY cho nhánh Claude SDK của Tasks (`runtime/claude-sdk/invoke.ts`).
+- Dư địa: symlink cắm **bên trong** một thư mục đã được ALLOW vẫn chuyển hướng được lời ghi ra ngoài (chiều ALLOW cố ý không `realpath`). Đóng được nếu sau này chuẩn hoá luôn tiền tố literal của pattern, nhưng chi phí là fs I/O trên đường luật.
+
 ## Tham chiếu
 
 - Spec: [docs/features/permission-rules.md](../features/permission-rules.md)

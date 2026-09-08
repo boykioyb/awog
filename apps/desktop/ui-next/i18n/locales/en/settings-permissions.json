@@ -1,7 +1,7 @@
 {
   "settingsPermissions.nav": "Permissions",
   "settingsPermissions.heading": "Permissions",
-  "settingsPermissions.subtitle": "Rules decide which tool calls run without asking. Review them here, revoke any of them, and pick up suggestions drawn from your history.",
+  "settingsPermissions.subtitle": "Rules decide which tool calls run without asking, and which are blocked outright. A deny rule beats execute mode and auto-approve — but it only ever matches one literal command or path, and it cannot see inside a compound command. Review them here, revoke any of them, and pick up suggestions drawn from your history.",
   "settingsPermissions.unavailable": "Only available in the installed app — this page needs the engine.",
   "settingsPermissions.action.allow": "Allow",
   "settingsPermissions.action.deny": "Deny",

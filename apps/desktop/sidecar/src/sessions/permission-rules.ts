@@ -50,10 +50,52 @@
 // F12 — Cờ `run_in_background` của `Bash` đổi hệ quả của lệnh (tiến trình
 //   detached sống lâu hơn lượt) nên KHÔNG được ăn theo luật ALLOW viết cho bản
 //   foreground. Luật DENY thì vẫn khớp — bật một cờ không được phép lách rào.
+//
+// ─── Đính chính bảo mật 2026-09-08 (lượt audit 2) ────────────────────────────
+//
+// F3b — Luật theo ĐƯỜNG DẪN trước đây vô hiệu với đường dẫn TƯƠNG ĐỐI. Mô tả
+//   tham số của `Read`/`Write`/`Edit` nói rõ nhận "absolute OR workspace-relative",
+//   mà `normalizePathValue` trả null cho mọi đường dẫn không tuyệt đối ⇒ chủ thể
+//   null ⇒ 'ask'; với `Read`/`Grep`/`Glob` (không bị gate) thì 'ask' nghĩa là
+//   CHẠY THẲNG. Luật `Read(/repo/.env)` action deny im lặng vô tác dụng khi model
+//   gọi `Read({file_path: '.env'})` — cách gọi tự nhiên nhất.
+//   Nay đường dẫn tương đối được giải theo `RuleQuery.cwd` (gốc của lượt), và khi
+//   caller không cấp thì theo đường dẫn project của phiên. Vì gốc suy ra có thể
+//   LỆCH với cwd thật (thư mục kéo-thả, worktree), đường dẫn tương đối chỉ được
+//   dùng cho DENY — nó không bao giờ đủ chắc để CẤP quyền (bất đối xứng y như
+//   F12: chiều hỏng luôn là "hỏi thêm").
+//
+// F3c — `\` không còn bị đổi thành `/` vô điều kiện: trên POSIX `\` là ký tự hợp
+//   lệ trong tên file, nên đổi vô điều kiện làm file tên `a\b` khớp nhầm luật
+//   `/repo/a/**`.
+//
+// F11b — Symlink TRONG workspace lách được luật DENY: `/repo/alias` trỏ tới
+//   `/repo/.git/hooks/pre-commit` là một cách viết khác của cùng inode. DENY nay
+//   so thêm dạng `realpath` (tính LƯỜI — chỉ khi có luật DENY cùng tên tool mà
+//   dạng mặt chữ không khớp, nên đường nóng không tốn syscall nào). ALLOW cố ý
+//   KHÔNG dùng realpath: văn bản luật là thứ người dùng đọc, đòi thêm dạng chuẩn
+//   hoá thì luật viết cho `/tmp/...` (macOS: `/tmp` là symlink) không bao giờ
+//   khớp lại ⇒ "Always allow" hỏng.
+//
+// F4 — DENY chưa thắng `execute`/`autoApprove` như ADR hứa: nó chỉ thắng khi
+//   KHỚP, mà mọi cách né matcher đều là né DENY. Hai bản vá:
+//   (1) DENY so thêm các dạng CHUẨN HOÁ của lệnh (gộp khoảng trắng, bỏ dấu nháy)
+//       ⇒ `rm  -rf /data` và `rm -rf "/data"` không lách nổi `Bash(rm -rf /data)`.
+//       Chỉ DENY — thêm dạng chuẩn hoá cho ALLOW là nới quyền rộng hơn văn bản.
+//   (2) `isUnreadableUnderDeny`: khi cổng KHÔNG đọc nổi lời gọi thành chủ thể
+//       (lệnh ghép, lệnh quá dài, thiếu tham số) mà người dùng CÓ luật DENY cho
+//       đúng tool đó, mọi nới lỏng (execute/autoApprove/accept-edits/ssh auto)
+//       đều bị tước ⇒ phải hỏi. Cố ý KHÔNG tước khi chủ thể đọc được mà chỉ
+//       không khớp: làm vậy thì một luật DENY duy nhất biến execute mode thành
+//       ask mode cho mọi lệnh — người dùng sẽ tắt tính năng, tức tệ hơn.
+//
+// F5 — Tasks chạy KHÔNG qua cổng quyền (ADR 0024 D-7). Nay có `makeTaskToolGate`
+//   (runtime/permission.ts): cổng CHỈ-DENY, không hỏi (task chạy không người
+//   trực), chặn đúng thứ người dùng đã cấm.
 
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { isAbsolute, resolve } from 'node:path'
+import { mkdir, readdir, readFile, realpath, rename, stat, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import { z } from 'zod'
 import { awogHome } from '../util/path.js'
 import { log } from '../util/logger.js'
@@ -162,69 +204,101 @@ export function hasShellOperator(command: string): boolean {
 
 // Lệnh: CHỈ cắt khoảng trắng hai đầu. Cố ý không gộp khoảng trắng bên trong —
 // gộp lại là đổi ngữ nghĩa lệnh mà vẫn khớp luật cũ; lệch một khoảng trắng thì
-// chỉ việc hỏi lại.
+// chỉ việc hỏi lại. (Chiều DENY có thêm dạng chuẩn hoá riêng, xem
+// `denyCommandVariants` — nới rộng theo chiều CẤM thì không có rủi ro đó.)
 function normalizeCommand(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed || trimmed.length > MAX_SUBJECT) return null
   return trimmed
 }
 
-// Đường dẫn: đổi `\` → `/`, gộp `//`, bỏ `.`; PHẢI tuyệt đối và KHÔNG được chứa
-// đoạn `..` (path traversal — xem invariant 2).
-function normalizePathValue(value: string): string | null {
+// Chỉ Windows mới coi `\` là dấu phân cách thư mục. Trên POSIX nó là ký tự HỢP
+// LỆ trong tên file, nên đổi `\` → `/` vô điều kiện làm một file tên `a\b` khớp
+// nhầm luật `/repo/a/**` (F3c).
+const IS_WINDOWS = process.platform === 'win32'
+
+function toPosixSeparators(value: string): string {
+  return IS_WINDOWS ? value.replace(/\\/g, '/') : value
+}
+
+// Một giá trị đường dẫn đã chuẩn hoá, kèm việc nó có phải giải theo gốc SUY RA
+// hay không — thứ quyết định nó được dùng cho ALLOW hay chỉ cho DENY (F3b).
+interface PathValue {
+  value: string
+  // true ⇒ giá trị gốc là đường dẫn TƯƠNG ĐỐI, đã giải theo `base`.
+  fromRelative: boolean
+}
+
+// Đường dẫn: chuẩn hoá về dạng tuyệt đối, gộp `//`, bỏ `.`, thu gọn `..`.
+// Đường dẫn tương đối giải theo `base` (cwd của lượt / project của phiên); không
+// có `base` ⇒ null như trước.
+//
+// Khác bản cũ ở chỗ `..` được THU GỌN thay vì bị từ chối: từ chối làm chủ thể
+// thành null, mà null với tool đọc nghĩa là chạy thẳng — tức `Read('a/../../.env')`
+// né được luật DENY. Thu gọn cho ra đúng file sẽ bị đụng tới, nên DENY bám được;
+// còn ALLOW thì đường dẫn thoát ra ngoài cũng không khớp pattern nào của người
+// dùng (pattern chứa `..` vẫn bị parser từ chối như cũ).
+function normalizePathValue(value: string, base?: string | null): PathValue | null {
   const trimmed = value.trim()
   if (!trimmed || trimmed.length > MAX_SUBJECT) return null
   if (trimmed.includes('\0')) return null
-  if (!isAbsolute(trimmed)) return null
-  const slashed = trimmed.replace(/\\/g, '/')
-  const parts = slashed.split('/')
-  const out: string[] = []
-  for (const part of parts) {
-    if (part === '..') return null
-    if (part === '.') continue
-    out.push(part)
-  }
-  // Giữ lại dấu `/` mở đầu (phần tử rỗng đầu tiên) của đường dẫn POSIX.
-  const joined = out.join('/').replace(/\/{2,}/g, '/')
-  return joined.length > 0 ? joined : '/'
+  const slashed = toPosixSeparators(trimmed)
+  const absolute = isAbsolute(slashed)
+  if (!absolute && !(base && isAbsolute(base))) return null
+  const resolved = toPosixSeparators(absolute ? resolve(slashed) : resolve(base as string, slashed))
+  if (resolved.length > MAX_SUBJECT) return null
+  return { value: resolved, fromRelative: !absolute }
 }
 
 // Giá trị đường dẫn đầu tiên dùng được trong `args` theo danh sách khoá.
-function firstPathArg(keys: readonly string[], args: unknown): string | null {
-  const bag = args && typeof args === 'object' ? (args as Record<string, unknown>) : null
-  if (!bag) return null
+function firstPathArg(
+  keys: readonly string[],
+  bag: Record<string, unknown>,
+  base: string | null,
+): PathValue | null {
   for (const key of keys) {
     const raw = bag[key]
     if (typeof raw !== 'string') continue
-    return normalizePathValue(raw)
+    return normalizePathValue(raw, base)
+  }
+  return null
+}
+
+// Chuỗi lệnh đầu tiên dùng được trong `args`, hoặc null (thiếu, quá dài, hoặc là
+// lệnh ghép — lệnh ghép thì KHÔNG luật đơn nào được phép khớp).
+function firstCommandArg(keys: readonly string[], bag: Record<string, unknown>): string | null {
+  for (const key of keys) {
+    const raw = bag[key]
+    if (typeof raw !== 'string') continue
+    const cmd = normalizeCommand(raw)
+    if (!cmd || hasShellOperator(cmd)) return null
+    return cmd
   }
   return null
 }
 
 // Chủ thể của lời gọi tool này, hoặc null khi tool CÓ tham số quyết định nhưng
 // tham số không dùng được (thiếu, sai kiểu, chứa toán tử shell, đường dẫn tương
-// đối). null ⇒ không luật nào khớp ⇒ luôn hỏi (default-deny).
-export function ruleSubject(toolName: string, args: unknown): RuleSubject | null {
+// đối mà không biết gốc). null ⇒ không luật nào khớp ⇒ luôn hỏi (default-deny).
+//
+// `base` = gốc để giải đường dẫn tương đối. Bỏ trống ⇒ hành vi y như trước
+// (tương đối ⇒ null) — đó là thứ `suggestRuleText` cần: luật ghi xuống đĩa phải
+// tuyệt đối, không phụ thuộc thư mục làm việc của một lượt.
+export function ruleSubject(
+  toolName: string,
+  args: unknown,
+  base?: string | null,
+): RuleSubject | null {
   const kind = ruleKindOfTool(toolName)
   if (kind === 'bare') return { kind, value: '' }
   const bag = args && typeof args === 'object' ? (args as Record<string, unknown>) : null
   if (!bag) return null
-  const keys = kind === 'command' ? COMMAND_ARG_KEYS[toolName] : PATH_ARG_KEYS[toolName]
-  for (const key of keys ?? []) {
-    const raw = bag[key]
-    if (typeof raw !== 'string') continue
-    if (kind === 'command') {
-      const cmd = normalizeCommand(raw)
-      if (!cmd) return null
-      // Lệnh ghép ⇒ không luật đơn nào được phép khớp.
-      if (hasShellOperator(cmd)) return null
-      return { kind, value: cmd }
-    }
-    const path = normalizePathValue(raw)
-    if (!path) return null
-    return { kind, value: path }
+  if (kind === 'command') {
+    const cmd = firstCommandArg(COMMAND_ARG_KEYS[toolName] ?? [], bag)
+    return cmd ? { kind, value: cmd } : null
   }
-  return null
+  const path = firstPathArg(PATH_ARG_KEYS[toolName] ?? [], bag, base ?? null)
+  return path ? { kind, value: path.value } : null
 }
 
 // ─── Lời gọi "detached" (F12) ────────────────────────────────────────────────
@@ -251,18 +325,106 @@ export function isDetachedCall(toolName: string, args: unknown): boolean {
   return bag?.[key] === true
 }
 
-// MỌI chủ thể mà một luật có thể khớp cho lời gọi này. Với tool đọc (Read/Grep/
-// Glob) có hai: luật trần `Read` và luật đường dẫn `Read(/x/**)` — cả hai đều
-// phải khớp được, nếu không luật DENY người dùng viết sẽ im lặng vô tác dụng
-// (F3). null ⇒ giữ nguyên nghĩa default-deny của `ruleSubject`.
-function matchSubjects(toolName: string, args: unknown): RuleSubject[] | null {
-  const primary = ruleSubject(toolName, args)
-  if (!primary) return null
-  if (primary.kind !== 'bare') return [primary]
+// Chủ thể mà một luật có thể khớp cho lời gọi này, tách theo HÀNH ĐỘNG.
+//
+// `deny` rộng hơn `allow` một cách có chủ đích — nới rộng theo chiều CẤM thì
+// chiều hỏng là "chặn nhầm, người dùng gỡ luật", còn nới rộng theo chiều CẤP thì
+// chiều hỏng là leo thang quyền. Hai chỗ lệch:
+//   - đường dẫn TƯƠNG ĐỐI (giải theo gốc suy ra, F3b) — chỉ nằm trong `deny`;
+//   - dạng chuẩn hoá của lệnh (F4) — thêm ở `denyCommandVariants`.
+// Với tool đọc (Read/Grep/Glob) cả hai đều có hai chủ thể: luật trần `Read` và
+// luật đường dẫn `Read(/x/**)` (F3).
+//
+// null ⇒ cổng KHÔNG đọc nổi lời gọi này thành chủ thể ⇒ không luật nào khớp.
+interface CallSubjects {
+  deny: RuleSubject[]
+  allow: RuleSubject[]
+}
+
+function callSubjects(toolName: string, args: unknown, base: string | null): CallSubjects | null {
+  const kind = ruleKindOfTool(toolName)
+  const bag = args && typeof args === 'object' ? (args as Record<string, unknown>) : null
+
+  if (kind === 'command') {
+    if (!bag) return null
+    const cmd = firstCommandArg(COMMAND_ARG_KEYS[toolName] ?? [], bag)
+    if (!cmd) return null
+    const subject: RuleSubject = { kind, value: cmd }
+    return {
+      deny: denyCommandVariants(cmd).map((value) => ({ kind, value })),
+      allow: [subject],
+    }
+  }
+
+  if (kind === 'path') {
+    if (!bag) return null
+    const path = firstPathArg(PATH_ARG_KEYS[toolName] ?? [], bag, base)
+    if (!path) return null
+    const subject: RuleSubject = { kind, value: path.value }
+    return { deny: [subject], allow: path.fromRelative ? [] : [subject] }
+  }
+
+  const bare: RuleSubject = { kind: 'bare', value: '' }
   const keys = READ_PATH_ARG_KEYS[toolName]
-  if (!keys) return [primary]
-  const path = firstPathArg(keys, args)
-  return path ? [primary, { kind: 'path', value: path }] : [primary]
+  const path = keys && bag ? firstPathArg(keys, bag, base) : null
+  if (!path) return { deny: [bare], allow: [bare] }
+  const subject: RuleSubject = { kind: 'path', value: path.value }
+  return { deny: [bare, subject], allow: path.fromRelative ? [bare] : [bare, subject] }
+}
+
+// Các dạng viết khác của CÙNG một lệnh mà một luật DENY phải bám theo (F4).
+// Nguyên văn luôn đứng đầu; hai dạng còn lại chỉ thêm khi thật sự khác:
+//   - gộp khoảng trắng bên trong  ⇒ `rm  -rf /data` không lách `Bash(rm -rf /data)`
+//   - bỏ dấu nháy rồi gộp lại     ⇒ `rm -rf "/data"` cũng vậy
+// Chỉ dùng cho DENY. Cấp quyền theo dạng chuẩn hoá thì `git add "a b"` sẽ ăn
+// theo luật viết cho `git add a b` — hai lệnh khác nhau.
+function denyCommandVariants(command: string): string[] {
+  const out = [command]
+  const collapsed = command.replace(/\s+/g, ' ')
+  if (collapsed !== command) out.push(collapsed)
+  const unquoted = collapsed.replace(/["']/g, '').replace(/\s+/g, ' ').trim()
+  if (unquoted && unquoted !== collapsed && !out.includes(unquoted)) out.push(unquoted)
+  return out
+}
+
+// Bí danh symlink của một đường dẫn (F11b): `/repo/alias` trỏ tới
+// `/repo/.git/hooks/pre-commit` là một cách viết khác của cùng inode, và một
+// luật DENY phải bám theo file chứ không theo cách viết.
+//
+// File chưa tồn tại (Write tạo mới) ⇒ thử thư mục cha, vì chính THƯ MỤC mới hay
+// là symlink. Mọi lỗi ⇒ null (không có bí danh) — hàm này không bao giờ được
+// làm hỏng một quyết định quyền.
+async function symlinkAlias(value: string): Promise<string | null> {
+  try {
+    const real = toPosixSeparators(await realpath(value))
+    return real === value ? null : real
+  } catch {
+    // Rơi xuống nhánh thư mục cha.
+  }
+  const dir = dirname(value)
+  if (dir === value) return null
+  try {
+    const realDir = toPosixSeparators(await realpath(dir))
+    if (realDir === dir) return null
+    const joined = `${realDir === '/' ? '' : realDir}/${basename(value)}`
+    return joined === value ? null : joined
+  } catch {
+    return null
+  }
+}
+
+// Chủ thể DENY bổ sung sinh từ symlink. Tính LƯỜI (chỉ gọi khi có luật DENY cùng
+// tên tool mà dạng mặt chữ không khớp) nên đường nóng của mọi lời gọi tool không
+// tốn thêm syscall nào.
+async function symlinkDenySubjects(subjects: readonly RuleSubject[]): Promise<RuleSubject[]> {
+  const out: RuleSubject[] = []
+  for (const subject of subjects) {
+    if (subject.kind !== 'path') continue
+    // eslint-disable-next-line no-await-in-loop
+    const alias = await symlinkAlias(subject.value)
+    if (alias) out.push({ kind: 'path', value: alias })
+  }
+  return out
 }
 
 // ─── Phân tích văn bản luật ──────────────────────────────────────────────────
@@ -330,7 +492,9 @@ function countStars(value: string): number {
 // được chứa `..` (một pattern như `/repo/../../etc/**` là path traversal đội lốt
 // luật quyền).
 function normalizePattern(pattern: string): string | null {
-  const slashed = pattern.replace(/\\/g, '/')
+  // Cùng lý do với chủ thể (F3c): trên POSIX `\` là ký tự hợp lệ trong tên file,
+  // đổi vô điều kiện thì luật `Write(/repo/a\b)` lại khớp `/repo/a/b`.
+  const slashed = toPosixSeparators(pattern)
   if (slashed.split('/').some((p) => p === '..')) return null
   if (!isAbsolute(slashed) && !slashed.startsWith('*')) return null
   return slashed.replace(/\/{2,}/g, '/')
@@ -399,6 +563,16 @@ export function matchesPattern(pattern: string, value: string, kind: PermissionR
   let reachable = DP_BUFFERS[cur]
   reachable.fill(0, 0, n + 1)
   reachable[0] = 1
+  // `nextSlash[j]` = vị trí `/` đầu tiên tại hoặc sau j (n nếu không còn). Tính
+  // một lần, dùng cho mọi token `*` — giữ tổng chi phí ở O(n).
+  const nextSlash = new Int32Array(n + 1)
+  {
+    let last = n
+    for (let j = n; j >= 0; j -= 1) {
+      if (j < n && value[j] === '/') last = j
+      nextSlash[j] = last
+    }
+  }
   for (const token of tokens) {
     const next = DP_BUFFERS[cur === 0 ? 1 : 0]
     next.fill(0, 0, n + 1)
@@ -407,18 +581,36 @@ export function matchesPattern(pattern: string, value: string, kind: PermissionR
         if (!reachable[j]) continue
         if (value.startsWith(token.text, j)) next[j + token.text.length] = 1
       }
-    } else {
-      // `filled` giữ tiến độ đã tô để mỗi vị trí chỉ được duyệt một lần
-      // (amortized O(n) cho mỗi sao — chặn đường bùng nổ kiểu ReDoS).
+    } else if (token.cross) {
+      // `**` không có biên để dừng, nên tiến độ đã tô dùng chung được cho mọi
+      // vị trí bắt đầu — amortized O(n), chặn đường bùng nổ kiểu ReDoS.
       let filled = 0
       for (let j = 0; j <= n; j += 1) {
         if (!reachable[j]) continue
-        const start = Math.max(j, filled)
-        for (let k = start; k <= n; k += 1) {
+        for (let k = Math.max(j, filled); k <= n; k += 1) {
           next[k] = 1
           filled = k + 1
-          if (!token.cross && value[k] === '/') break
         }
+      }
+    } else {
+      // `*` DỪNG ở `/`, nên KHÔNG được dùng chung `filled` theo kiểu trên: lượt
+      // quét từ một vị trí sớm hơn dừng tại dấu `/` và để `filled` nằm BÊN KIA
+      // dấu đó, khiến lượt sau bắt đầu sau biên và không bao giờ chạm `break` —
+      // `*` khi ấy khớp vượt một cấp thư mục. Cụ thể:
+      //   matchesPattern('/repo/src/*.*.ts', '/repo/src/a.b.c/evil.ts') === true
+      // trong khi luật người dùng đọc chỉ nói tới file ngay trong `src/`.
+      // Sai theo chiều ALLOW rộng hơn văn bản luật, nên phải đóng.
+      //
+      // Cách đúng mà vẫn O(n): với `*`, mọi vị trí trong cùng một đoạn (giữa hai
+      // dấu `/`) có cùng giới hạn, nên chỉ cần tô một lần cho mỗi đoạn.
+      let filled = 0
+      for (let j = 0; j <= n; j += 1) {
+        if (!reachable[j]) continue
+        const limit = nextSlash[j]
+        const start = Math.max(j, filled)
+        if (start > limit) continue
+        for (let k = start; k <= limit; k += 1) next[k] = 1
+        filled = limit + 1
       }
     }
     cur = cur === 0 ? 1 : 0
@@ -766,6 +958,13 @@ export async function saveRuleToFile(
 // import động để module này (và test của nó) không kéo theo cả session manager.
 
 const SESSION_PROJECT_PATH = new Map<string, string | null>()
+const PROJECT_PATH_BY_ID = new Map<string, string | null>()
+
+async function loadProjectPath(projectId: string): Promise<string | null> {
+  const { loadProject } = await import('../projects/store.js')
+  const project = await loadProject(projectId)
+  return project?.path && isAbsolute(project.path) ? project.path : null
+}
 
 export async function resolveSessionProjectPath(sessionId: string): Promise<string | null> {
   const cached = SESSION_PROJECT_PATH.get(sessionId)
@@ -774,11 +973,7 @@ export async function resolveSessionProjectPath(sessionId: string): Promise<stri
   try {
     const { sessionManager } = await import('./session-manager.js')
     const summary = sessionManager.getSessions().find((s) => s.id === sessionId)
-    if (summary?.projectId) {
-      const { loadProject } = await import('../projects/store.js')
-      const project = await loadProject(summary.projectId)
-      if (project?.path && isAbsolute(project.path)) path = project.path
-    }
+    if (summary?.projectId) path = await loadProjectPath(summary.projectId)
   } catch (err) {
     log.warn('permission rules: project path lookup failed', {
       sessionId,
@@ -786,6 +981,25 @@ export async function resolveSessionProjectPath(sessionId: string): Promise<stri
     })
   }
   SESSION_PROJECT_PATH.set(sessionId, path)
+  return path
+}
+
+// Đường dẫn project theo id — cho cổng chỉ-DENY của Tasks (F5), thứ không có
+// phiên nào để suy ra. Cùng kiểu nạp lười + cache: cổng chạy trên mỗi lời gọi
+// tool của mỗi node.
+export async function resolveProjectPathById(projectId: string): Promise<string | null> {
+  const cached = PROJECT_PATH_BY_ID.get(projectId)
+  if (cached !== undefined) return cached
+  let path: string | null = null
+  try {
+    path = await loadProjectPath(projectId)
+  } catch (err) {
+    log.warn('permission rules: project path lookup by id failed', {
+      projectId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+  PROJECT_PATH_BY_ID.set(projectId, path)
   return path
 }
 
@@ -802,6 +1016,11 @@ export interface RuleQuery {
   // Ghi đè đường dẫn project (test / caller đã biết sẵn). Bỏ trống ⇒ suy ra từ
   // phiên.
   projectPath?: string | null
+  // Gốc để giải đường dẫn TƯƠNG ĐỐI (F3b) — cwd thật của lượt. Bỏ trống ⇒ dùng
+  // đường dẫn project của phiên. Đường dẫn tương đối chỉ có hiệu lực theo chiều
+  // DENY dù gốc đến từ đâu: cwd thật có thể là thư mục kéo-thả hoặc worktree,
+  // nên không bao giờ đủ chắc để CẤP quyền.
+  cwd?: string | null
 }
 
 function matchRule(
@@ -820,28 +1039,48 @@ function matchRule(
   return false
 }
 
+// Ba tầng luật theo đúng thứ tự áp dụng, dùng chung cho `evaluatePermissionRules`
+// và `isUnreadableUnderDeny`.
+async function ruleTiers(
+  sessionId: string | undefined,
+  projectPath: string | null,
+): Promise<ParsedPermissionRule[][]> {
+  const tiers: ParsedPermissionRule[][] = []
+  tiers.push(sessionId ? getSessionRules(sessionId) : [])
+  if (projectPath) await warnLegacyProjectRuleFile(projectPath)
+  const projectFile = projectPath ? projectRuleFile(projectPath) : null
+  tiers.push(projectFile ? await loadRuleFile(projectFile) : [])
+  tiers.push(await loadRuleFile(userRuleFile()))
+  return tiers
+}
+
+// Đường dẫn project của lượt: ưu tiên giá trị caller cấp, nếu không thì suy từ
+// phiên. Cùng giá trị đó là gốc mặc định để giải đường dẫn tương đối.
+async function queryProjectPath(query: RuleQuery): Promise<string | null> {
+  if (query.projectPath !== undefined) return query.projectPath
+  if (query.sessionId) return resolveSessionProjectPath(query.sessionId)
+  return null
+}
+
 // Quyết định cho MỘT lời gọi tool. Không bao giờ ném: lỗi bất kỳ ⇒ 'ask'.
 export async function evaluatePermissionRules(query: RuleQuery): Promise<PermissionRuleDecision> {
   try {
-    const subjects = matchSubjects(query.toolName, query.args)
+    const projectPath = await queryProjectPath(query)
+    const base = query.cwd !== undefined ? query.cwd : projectPath
+    const subjects = callSubjects(query.toolName, query.args, base ?? null)
     if (!subjects) return 'ask'
     // Lời gọi detached: quét vẫn chạy đủ (để DENY còn hiệu lực) nhưng ALLOW
     // không được chốt — cùng chuỗi lệnh, khác hệ quả (F12).
     const detached = isDetachedCall(query.toolName, query.args)
+    const tiers = await ruleTiers(query.sessionId, projectPath)
 
-    const tiers: ParsedPermissionRule[][] = []
-    tiers.push(query.sessionId ? getSessionRules(query.sessionId) : [])
-
-    const projectPath =
-      query.projectPath !== undefined
-        ? query.projectPath
-        : query.sessionId
-          ? await resolveSessionProjectPath(query.sessionId)
-          : null
-    if (projectPath) await warnLegacyProjectRuleFile(projectPath)
-    const projectFile = projectPath ? projectRuleFile(projectPath) : null
-    tiers.push(projectFile ? await loadRuleFile(projectFile) : [])
-    tiers.push(await loadRuleFile(userRuleFile()))
+    // Bí danh symlink của đường dẫn (F11b): tính MỘT lần, và chỉ khi thật sự có
+    // một luật DENY cùng tên tool mà dạng mặt chữ không khớp.
+    let aliases: RuleSubject[] | null = null
+    const denySubjects = async (): Promise<RuleSubject[]> => {
+      if (!aliases) aliases = await symlinkDenySubjects(subjects.deny)
+      return aliases
+    }
 
     // MỘT lượt quét cho cả hai hành động (F9). DENY thắng bất kể thứ tự: gặp
     // DENY là trả về ngay, còn ALLOW chỉ được trả về sau khi đã quét HẾT — nên
@@ -859,9 +1098,18 @@ export async function evaluatePermissionRules(query: RuleQuery): Promise<Permiss
           })
           return 'ask'
         }
-        if (!matchRule(rule, subjects, query.toolName)) continue
-        if (rule.action === 'deny') return 'deny'
-        if (!detached) allowed = true
+        if (rule.action === 'deny') {
+          if (matchRule(rule, subjects.deny, query.toolName)) return 'deny'
+          // Bí danh symlink chỉ có nghĩa với luật theo ĐƯỜNG DẪN, và chỉ khi
+          // dạng mặt chữ đã trượt — nên `denySubjects()` (fs) hiếm khi chạy.
+          if (rule.kind === 'path' && rule.toolName === query.toolName) {
+            // eslint-disable-next-line no-await-in-loop
+            if (matchRule(rule, await denySubjects(), query.toolName)) return 'deny'
+          }
+          continue
+        }
+        if (detached || allowed) continue
+        if (matchRule(rule, subjects.allow, query.toolName)) allowed = true
       }
     }
     return allowed ? 'allow' : 'ask'
@@ -871,6 +1119,39 @@ export async function evaluatePermissionRules(query: RuleQuery): Promise<Permiss
       err: err instanceof Error ? err.message : String(err),
     })
     return 'ask'
+  }
+}
+
+// Cổng KHÔNG đọc nổi lời gọi này thành chủ thể của luật (lệnh ghép, lệnh quá
+// dài, thiếu tham số) TRONG KHI người dùng có ít nhất một luật DENY cho đúng
+// tool đó (F4).
+//
+// Đây là ranh giới giữa "luật của bạn không nói tới lời gọi này" và "cổng không
+// nhìn thấy lời gọi này là gì". Trường hợp sau, mọi nới lỏng (execute mode,
+// auto-approve, accept-edits, ssh auto) đều bị tước ⇒ phải hỏi: `rm -rf /data;`
+// không được phép chạy im lặng chỉ vì dấu `;` làm matcher mù.
+//
+// Cố ý KHÔNG tước khi chủ thể đọc được mà chỉ không khớp — làm vậy thì một luật
+// DENY duy nhất biến execute mode thành ask mode cho MỌI lệnh.
+// Không bao giờ ném: lỗi bất kỳ ⇒ false (giữ nguyên hành vi cũ).
+export async function isUnreadableUnderDeny(query: RuleQuery): Promise<boolean> {
+  try {
+    const projectPath = await queryProjectPath(query)
+    const base = query.cwd !== undefined ? query.cwd : projectPath
+    if (callSubjects(query.toolName, query.args, base ?? null)) return false
+    const tiers = await ruleTiers(query.sessionId, projectPath)
+    for (const tier of tiers) {
+      for (const rule of tier) {
+        if (rule.action === 'deny' && rule.toolName === query.toolName) return true
+      }
+    }
+    return false
+  } catch (err) {
+    log.warn('permission rules: deny-guard lookup failed, ignoring', {
+      toolName: query.toolName,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return false
   }
 }
 

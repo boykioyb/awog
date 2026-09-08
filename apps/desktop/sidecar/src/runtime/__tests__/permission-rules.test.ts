@@ -4,7 +4,17 @@
 // Run với vitest: `npx vitest run src/runtime/__tests__/permission-rules.test.ts`
 // (vitest chưa nằm trong devDeps của sidecar — xem git/__tests__/discover.test.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  symlink,
+  utimes,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type { BeforeToolCallContext } from '@earendil-works/pi-agent-core'
@@ -17,6 +27,7 @@ import {
   evaluatePermissionRules,
   hasShellOperator,
   isDetachedCall,
+  isUnreadableUnderDeny,
   listRulesInFile,
   listSessionRuleTiers,
   matchesPattern,
@@ -33,7 +44,7 @@ import {
   userRuleFile,
   type HistoryToolCall,
 } from '../../sessions/permission-rules.js'
-import { isSafeToolInputOverride, makeBeforeToolCall } from '../permission.js'
+import { isSafeToolInputOverride, makeBeforeToolCall, makeTaskToolGate } from '../permission.js'
 import type { CanUseTool } from '../permission-types.js'
 import { parkPermissionRequest } from '../../sessions/permissions.js'
 import { dispatch } from '../../transport/rpc.js'
@@ -163,8 +174,20 @@ describe('ruleSubject', () => {
       kind: 'path',
       value: '/repo/src/a.ts',
     })
-    expect(ruleSubject('Edit', { file_path: '/repo/../etc/passwd' })).toBeNull()
+    // `..` được THU GỌN, không còn bị từ chối (F3b): từ chối làm chủ thể thành
+    // null, mà null với tool đọc nghĩa là chạy thẳng — tức `..` từng là một
+    // đường né luật DENY. Thu gọn cho ra đúng file sẽ bị đụng tới.
+    expect(ruleSubject('Edit', { file_path: '/repo/../etc/passwd' })).toEqual({
+      kind: 'path',
+      value: '/etc/passwd',
+    })
+    // Không biết gốc ⇒ đường dẫn tương đối vẫn là null (hành vi cũ).
     expect(ruleSubject('Write', { file_path: 'relative/a.ts' })).toBeNull()
+    // Biết gốc ⇒ giải theo gốc đó.
+    expect(ruleSubject('Write', { file_path: 'relative/a.ts' }, '/repo')).toEqual({
+      kind: 'path',
+      value: '/repo/relative/a.ts',
+    })
   })
 
   it('treats an unscoped tool as bare', () => {
@@ -213,6 +236,22 @@ describe('matchesPattern — path mode', () => {
     expect(matchesPattern('/repo/**', '/repo/src/deep/a.ts', 'path')).toBe(true)
     expect(matchesPattern('/repo/**/*.ts', '/repo/src/a.ts', 'path')).toBe(true)
     expect(matchesPattern('/repo/**', '/other/a.ts', 'path')).toBe(false)
+  })
+
+  // Hồi quy: với NHIỀU sao trong một pattern, tiến độ tô (`filled`) từng được
+  // dùng chung cho mọi vị trí bắt đầu. Lượt quét sớm dừng ở `/` rồi để `filled`
+  // nằm bên kia dấu đó, nên lượt sau bắt đầu SAU biên và không bao giờ chạm
+  // `break` ⇒ `*` khớp vượt một cấp thư mục. Sai theo chiều ALLOW rộng hơn văn
+  // bản luật, nên đây là ca phải khoá lại. Test một-sao ở trên không bắt được.
+  it('nhiều sao vẫn không được vượt biên thư mục', () => {
+    expect(matchesPattern('/repo/src/*.*.ts', '/repo/src/a.b.ts', 'path')).toBe(true)
+    expect(matchesPattern('/repo/src/*.*.ts', '/repo/src/a.b.c/evil.ts', 'path')).toBe(false)
+    expect(matchesPattern('/repo/*_*.json', '/repo/a_b.json', 'path')).toBe(true)
+    expect(matchesPattern('/repo/*_*.json', '/repo/a_b_c/evil.json', 'path')).toBe(false)
+    expect(matchesPattern('/w/*-*.md', '/w/a-b-c/d-e.md', 'path')).toBe(false)
+    // `**` thì vượt biên là đúng thiết kế — đừng siết nhầm cái này.
+    expect(matchesPattern('/repo/**/*-*.md', '/w/a/b-c.md', 'path')).toBe(false)
+    expect(matchesPattern('/repo/**/*-*.md', '/repo/a/b-c.md', 'path')).toBe(true)
   })
 })
 
@@ -1296,5 +1335,302 @@ describe('sessions.permission — alwaysAllow + updatedInput (F13)', () => {
     await expect(
       dispatch('sessions.permission', { requestId, decision: 'deny' }),
     ).resolves.toMatchObject({ resolved: true })
+  })
+})
+
+// ─── F3b — luật theo đường dẫn phải áp cho ĐƯỜNG DẪN TƯƠNG ĐỐI ──────────────
+//
+// Mô tả tham số của Read/Write/Edit nói rõ nhận "absolute OR workspace-relative",
+// nên `Read({file_path: '.env'})` là cách gọi TỰ NHIÊN NHẤT — và trước bản này nó
+// không khớp luật nào ⇒ 'ask' ⇒ với tool đọc (không bị gate) là CHẠY THẲNG.
+describe('a relative path still meets the rules (F3b)', () => {
+  const sessionId = 'ses-test-f3b'
+  const project = '/proj'
+
+  beforeEach(() => clearSessionRules(sessionId))
+  afterEach(() => clearSessionRules(sessionId))
+
+  const ask = (toolName: string, args: unknown, cwd?: string | null) =>
+    evaluatePermissionRules({
+      toolName,
+      args,
+      sessionId,
+      projectPath: project,
+      ...(cwd !== undefined ? { cwd } : {}),
+    })
+
+  it('denies the exact repro: Read(".env") against a rule written absolute', async () => {
+    addSessionRule(sessionId, rule('Read(/proj/.env)', 'deny'))
+    await expect(ask('Read', { file_path: '/proj/.env' })).resolves.toBe('deny')
+    await expect(ask('Read', { file_path: '.env' })).resolves.toBe('deny')
+    await expect(ask('Read', { file_path: './.env' })).resolves.toBe('deny')
+    // Vẫn không đụng file khác.
+    await expect(ask('Read', { file_path: 'notes.md' })).resolves.toBe('ask')
+  })
+
+  it('resolves against the turn cwd when the caller supplies one', async () => {
+    addSessionRule(sessionId, rule('Write(/work/**)', 'deny'))
+    // Gốc mặc định (project) ⇒ /proj/a.ts ⇒ không khớp.
+    await expect(ask('Write', { file_path: 'a.ts' })).resolves.toBe('ask')
+    await expect(ask('Write', { file_path: 'a.ts' }, '/work')).resolves.toBe('deny')
+  })
+
+  it('collapses `..` instead of going blind on it', async () => {
+    addSessionRule(sessionId, rule('Read(/etc/**)', 'deny'))
+    await expect(ask('Read', { file_path: '/proj/../etc/passwd' })).resolves.toBe('deny')
+    await expect(ask('Read', { file_path: '../etc/passwd' })).resolves.toBe('deny')
+  })
+
+  it('NEVER lets a relative path satisfy an ALLOW rule — the base is inferred', async () => {
+    addSessionRule(sessionId, rule('Write(/proj/**)'))
+    await expect(ask('Write', { file_path: '/proj/a.ts' })).resolves.toBe('allow')
+    // Cùng file, viết tương đối: gốc chỉ là SUY RA (cwd thật có thể là thư mục
+    // kéo-thả / worktree) nên không đủ chắc để CẤP quyền ⇒ hỏi.
+    await expect(ask('Write', { file_path: 'a.ts' })).resolves.toBe('ask')
+    // Nhưng chiều CẤM thì vẫn áp.
+    clearSessionRules(sessionId)
+    addSessionRule(sessionId, rule('Write(/proj/**)', 'deny'))
+    await expect(ask('Write', { file_path: 'a.ts' })).resolves.toBe('deny')
+  })
+
+  it('a bare read rule still covers a call whose path is unusable', async () => {
+    addSessionRule(sessionId, rule('Read', 'deny'))
+    await expect(ask('Read', { file_path: 'anything' })).resolves.toBe('deny')
+    await expect(ask('Read', {})).resolves.toBe('deny')
+  })
+})
+
+// ─── F3c — `\` không phải dấu phân cách trên POSIX ──────────────────────────
+const describePosix = process.platform === 'win32' ? describe.skip : describe
+
+describePosix('a backslash is a normal filename character on POSIX (F3c)', () => {
+  it('does not turn `a\\b` into `a/b`', () => {
+    expect(ruleSubject('Write', { file_path: '/repo/a\\b' })).toEqual({
+      kind: 'path',
+      value: '/repo/a\\b',
+    })
+    expect(matchesPattern('/repo/a/**', '/repo/a\\b', 'path')).toBe(false)
+    // Luật viết ra cũng giữ nguyên ký tự đó.
+    expect(parsePermissionRule('Write(/repo/a\\b)')).toMatchObject({
+      pattern: '/repo/a\\b',
+    })
+  })
+})
+
+// ─── F11b — symlink không lách được luật DENY ───────────────────────────────
+describe('a symlink alias cannot dodge a DENY rule (F11b)', () => {
+  const sessionId = 'ses-test-f11b'
+  let root: string
+
+  beforeEach(async () => {
+    clearSessionRules(sessionId)
+    // realpath ngay từ đầu: trên macOS `os.tmpdir()` đã là symlink, nên không
+    // chuẩn hoá thì test đo nhầm chính cái symlink của hệ thống.
+    root = await realpath(await mkdtemp(join(tmpdir(), 'awog-perm-link-')))
+    await mkdir(join(root, 'secret'), { recursive: true })
+    await writeFile(join(root, 'secret', 'pre-commit'), '#!/bin/sh\n')
+    await symlink(join(root, 'secret', 'pre-commit'), join(root, 'alias'))
+    await symlink(join(root, 'secret'), join(root, 'aliasdir'))
+  })
+
+  afterEach(async () => {
+    clearSessionRules(sessionId)
+    await rm(root, { recursive: true, force: true })
+  })
+
+  const ask = (args: unknown, toolName = 'Write') =>
+    evaluatePermissionRules({ toolName, args, sessionId, projectPath: null })
+
+  it('follows a symlink to the denied file', async () => {
+    addSessionRule(sessionId, rule(`Write(${root}/secret/**)`, 'deny'))
+    await expect(ask({ file_path: `${root}/secret/pre-commit` })).resolves.toBe('deny')
+    await expect(ask({ file_path: `${root}/alias` })).resolves.toBe('deny')
+    await expect(ask({ file_path: `${root}/other.txt` })).resolves.toBe('ask')
+  })
+
+  it('follows a symlinked DIRECTORY even for a file that does not exist yet', async () => {
+    addSessionRule(sessionId, rule(`Write(${root}/secret/**)`, 'deny'))
+    await expect(ask({ file_path: `${root}/aliasdir/new-file.sh` })).resolves.toBe('deny')
+  })
+
+  it('does NOT widen an ALLOW rule through the same link', async () => {
+    // Cố ý bất đối xứng: văn bản luật là thứ người dùng ĐỌC. Đòi thêm dạng chuẩn
+    // hoá ở chiều ALLOW thì luật viết cho `/tmp/...` (macOS: symlink) không bao
+    // giờ khớp lại và "Always allow" hỏng.
+    addSessionRule(sessionId, rule(`Write(${root}/secret/**)`))
+    await expect(ask({ file_path: `${root}/secret/pre-commit` })).resolves.toBe('allow')
+    await expect(ask({ file_path: `${root}/alias` })).resolves.toBe('ask')
+  })
+})
+
+// ─── F4 — DENY phải thắng execute / autoApprove, kể cả khi matcher mù ───────
+describe('dodging the matcher no longer dodges DENY (F4)', () => {
+  const sessionId = 'ses-test-f4'
+
+  beforeEach(() => clearSessionRules(sessionId))
+  afterEach(() => clearSessionRules(sessionId))
+
+  const ask = (command: string) =>
+    evaluatePermissionRules({ toolName: 'Bash', args: { command }, sessionId, projectPath: null })
+
+  it('matches a denied command through extra whitespace and quotes', async () => {
+    addSessionRule(sessionId, rule('Bash(rm -rf /data)', 'deny'))
+    await expect(ask('rm -rf /data')).resolves.toBe('deny')
+    await expect(ask('rm  -rf   /data')).resolves.toBe('deny')
+    await expect(ask('rm -rf "/data"')).resolves.toBe('deny')
+    await expect(ask("rm -rf '/data'")).resolves.toBe('deny')
+    // Vẫn là lệnh khác thì vẫn không khớp — chuẩn hoá không phải "gần đúng".
+    await expect(ask('rm -rf /data2')).resolves.toBe('ask')
+  })
+
+  it('does NOT widen an ALLOW rule the same way', async () => {
+    addSessionRule(sessionId, rule('Bash(git add a b)'))
+    await expect(ask('git add a b')).resolves.toBe('allow')
+    // `git add "a b"` là MỘT đối số, không phải hai — luật cấp cho lệnh kia
+    // không được phép cấp cho lệnh này.
+    await expect(ask('git add "a b"')).resolves.toBe('ask')
+  })
+
+  it('flags an unreadable call when a DENY rule for the tool exists', async () => {
+    addSessionRule(sessionId, rule('Bash(rm -rf /data)', 'deny'))
+    const unreadable = (command: string) =>
+      isUnreadableUnderDeny({ toolName: 'Bash', args: { command }, sessionId, projectPath: null })
+    await expect(unreadable('rm -rf /data;')).resolves.toBe(true)
+    await expect(unreadable('cd x && npm test')).resolves.toBe(true)
+    await expect(unreadable('a'.repeat(5000))).resolves.toBe(true)
+    // Đọc được mà không khớp thì KHÔNG bị cờ — nếu không, một luật DENY duy nhất
+    // biến execute mode thành ask mode cho mọi lệnh.
+    await expect(unreadable('git status')).resolves.toBe(false)
+  })
+
+  it('does not flag anything when the user wrote no DENY rule for that tool', async () => {
+    addSessionRule(sessionId, rule('Bash(npm run build)'))
+    addSessionRule(sessionId, rule('Write(/repo/**)', 'deny'))
+    await expect(
+      isUnreadableUnderDeny({
+        toolName: 'Bash',
+        args: { command: 'rm -rf /data;' },
+        sessionId,
+        projectPath: null,
+      }),
+    ).resolves.toBe(false)
+  })
+})
+
+describe('makeBeforeToolCall — execute mode stops being a silent bypass (F4)', () => {
+  let home: string
+  let originalHome: string | undefined
+  let asked: string[]
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = home
+    asked = []
+  })
+
+  afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+    await rm(home, { recursive: true, force: true })
+  })
+
+  // Ghi lại mọi lần cổng THẬT SỰ hỏi, rồi trả lời "cho phép" — nên một test thấy
+  // `asked` rỗng nghĩa là lời gọi đã chạy IM LẶNG.
+  const approving: CanUseTool = async (toolName) => {
+    asked.push(toolName)
+    return { behavior: 'allow', updatedInput: undefined }
+  }
+
+  it('asks about a compound command in execute mode when a Bash DENY rule exists', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(rm -rf /data)', 'deny'))
+    const hook = makeBeforeToolCall(approving, 'execute')
+    // Lệnh đơn khớp luật ⇒ chặn thẳng.
+    await expect(hook(toolCtx('Bash', { command: 'rm -rf /data' }))).resolves.toMatchObject({
+      block: true,
+    })
+    expect(asked).toEqual([])
+    // Lệnh ghép ⇒ matcher mù ⇒ PHẢI hỏi thay vì chạy im lặng.
+    await expect(hook(toolCtx('Bash', { command: 'rm -rf /data;' }))).resolves.toBeUndefined()
+    expect(asked).toEqual(['Bash'])
+  })
+
+  it('leaves execute mode alone for a readable command that no rule mentions', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(rm -rf /data)', 'deny'))
+    const hook = makeBeforeToolCall(approving, 'execute')
+    await expect(hook(toolCtx('Bash', { command: 'git status' }))).resolves.toBeUndefined()
+    await expect(hook(toolCtx('Write', { file_path: '/repo/a.ts' }))).resolves.toBeUndefined()
+    expect(asked).toEqual([])
+  })
+
+  it('applies the same guard to auto-approve and accept-edits', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(rm -rf /data)', 'deny'))
+    await saveRuleToFile(userRuleFile(), rule('Write(/repo/**)', 'deny'))
+    const auto = makeBeforeToolCall(approving, 'ask', undefined, true)
+    await expect(auto(toolCtx('Bash', { command: 'rm -rf /data;' }))).resolves.toBeUndefined()
+    expect(asked).toEqual(['Bash'])
+    const accept = makeBeforeToolCall(approving, 'accept-edits')
+    // Thiếu `file_path` ⇒ cổng không đọc nổi chủ thể ⇒ hỏi.
+    await expect(accept(toolCtx('Write', { content: 'x' }))).resolves.toBeUndefined()
+    expect(asked).toEqual(['Bash', 'Write'])
+  })
+
+  it('does nothing at all when there is no DENY rule to protect', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(npm run build)'))
+    const hook = makeBeforeToolCall(approving, 'execute')
+    await expect(hook(toolCtx('Bash', { command: 'rm -rf /data;' }))).resolves.toBeUndefined()
+    expect(asked).toEqual([])
+  })
+})
+
+// ─── F5 — Tasks có cổng CHỈ-DENY ────────────────────────────────────────────
+describe('makeTaskToolGate — tasks stop ignoring the permission rules (F5)', () => {
+  let home: string
+  let originalHome: string | undefined
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = home
+  })
+
+  afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+    await rm(home, { recursive: true, force: true })
+  })
+
+  it('blocks what the user denied and lets everything else through', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(rm -rf /)', 'deny'))
+    const gate = makeTaskToolGate()
+    await expect(gate(toolCtx('Bash', { command: 'rm -rf /' }))).resolves.toMatchObject({
+      block: true,
+    })
+    await expect(gate(toolCtx('Bash', { command: 'git status' }))).resolves.toBeUndefined()
+    await expect(gate(toolCtx('Write', { file_path: '/repo/a.ts' }))).resolves.toBeUndefined()
+  })
+
+  it('never prompts and never grants — a task has nobody to ask', async () => {
+    // Không có luật nào ⇒ cổng phải trong suốt, y như trước bản vá.
+    const gate = makeTaskToolGate()
+    await expect(gate(toolCtx('Bash', { command: 'anything at all' }))).resolves.toBeUndefined()
+    // Luật ALLOW cũng không đổi gì (cổng chỉ có nhánh chặn).
+    await saveRuleToFile(userRuleFile(), rule('Bash(npm run build)'))
+    await expect(gate(toolCtx('Bash', { command: 'npm run build' }))).resolves.toBeUndefined()
+  })
+
+  it('honours a rule written against the bare SSH name on the bridged form too', async () => {
+    await saveRuleToFile(userRuleFile(), rule('ssh_exec', 'deny'))
+    const gate = makeTaskToolGate()
+    await expect(gate(toolCtx('ssh_exec', { host: 'box' }))).resolves.toMatchObject({ block: true })
+    await expect(
+      gate(toolCtx('mcp__awogssh__ssh_exec', { host: 'box' })),
+    ).resolves.toMatchObject({ block: true })
+  })
+
+  it('does NOT escalate an unreadable call — there is no one to ask (documented residual)', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Bash(rm -rf /)', 'deny'))
+    const gate = makeTaskToolGate()
+    await expect(gate(toolCtx('Bash', { command: 'cd x && npm test' }))).resolves.toBeUndefined()
   })
 })

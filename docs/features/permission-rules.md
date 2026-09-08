@@ -30,8 +30,8 @@ Quy tắc:
 - **Không có ký tự đại diện ngầm.** Không `*` ⇒ so khớp nguyên văn. `Bash(git status)` **không** khớp `git statuses`.
 - Chỉ có `*` (và `**` cho đường dẫn). Không regex, không `?`, không lớp ký tự.
 - Kind `command`: `*` khớp mọi ký tự. Kind `path`: `*` không vượt `/`, `**` thì vượt.
-- Khoảng trắng so khớp **nguyên văn** — `git  status` (2 dấu cách) không khớp `Bash(git status)`, chỉ đơn giản là hỏi lại.
-- Luật đường dẫn phải **tuyệt đối** (hoặc mở đầu bằng `*`) và không được chứa `..`.
+- Khoảng trắng so khớp **nguyên văn ở chiều ALLOW** — `git  status` (2 dấu cách) không khớp `Bash(git status)`, chỉ đơn giản là hỏi lại. Chiều **DENY** thì so thêm dạng chuẩn hoá (gộp khoảng trắng, bỏ dấu nháy), xem [DENY khớp rộng hơn ALLOW](#deny-khớp-rộng-hơn-allow).
+- Luật đường dẫn phải **tuyệt đối** (hoặc mở đầu bằng `*`) và không được chứa `..`. Giá trị đường dẫn của lời gọi thì **được** viết tương đối — xem [Đường dẫn tương đối](#đường-dẫn-tương-đối-và-symlink).
 - `Bash`, `Write`, `Edit`, `MultiEdit`, `NotebookEdit` **bắt buộc có pattern** — luật trần cho các tool này bị từ chối (đó chính là lỗ hổng cũ).
 
 ### Bảng tool → tham số khoá luật
@@ -75,7 +75,7 @@ Quét là quét thô, không phân biệt trong/ngoài dấu nháy: `echo "a;b"`
 | `project` | `~/.awog/permission-rules/<sha256(đường dẫn project)[0..32]>.json` | bền vững, **chỉ trên máy này** |
 | `user` | `~/.awog/permission-rules.json` | bền vững toàn máy |
 
-Áp theo thứ tự `session → project → user`. **DENY thắng ALLOW ở mọi tầng** — kể cả khi phiên đang ở `execute` mode, bật auto-approve, hay SSH đang ở `auto`.
+Áp theo thứ tự `session → project → user`. **DENY thắng ALLOW ở mọi tầng** — kể cả khi phiên đang ở `execute` mode, bật auto-approve, hay SSH đang ở `auto`. Xem thêm [DENY khớp rộng hơn ALLOW](#deny-khớp-rộng-hơn-allow) cho phần "thắng" đó có ý nghĩa tới đâu.
 
 ### Luật project KHÔNG nằm trong repo
 
@@ -93,6 +93,39 @@ Luật `deny` được tra **trước mọi nhánh thoát sớm** của cổng q
 `Read` / `Grep` / `Glob` nhận **cả hai dạng** luật: trần (`Read` = cấm đọc tất cả) và theo đường dẫn (`Read(/Users/x/.ssh/**)`). Đây là ngoại lệ có chủ đích so với `Bash`/`Write` — ba tool này không bị gate nên luật của chúng chỉ có nghĩa theo chiều DENY.
 
 Tool MCP bắc cầu phải viết đúng tên đang chạy (`mcp__<id>__<tool>`); riêng nhóm SSH được đối chiếu thêm tên trần (`ssh_exec`) để một luật dùng chung cho cả hai runtime.
+
+### Đường dẫn tương đối (và symlink)
+
+Mô tả tham số của `Read` / `Write` / `Edit` nói rõ chúng nhận đường dẫn **tuyệt đối HOẶC tương đối theo workspace**, nên `Read({file_path: '.env'})` là cách gọi tự nhiên nhất của model. Trước bản 2026-09-08, chủ thể của một đường dẫn tương đối là `null` ⇒ không luật nào khớp ⇒ `'ask'`; mà `Read`/`Grep`/`Glob` **không bị gate**, nên `'ask'` ở đó nghĩa là **chạy thẳng, không log, không hỏi**. Luật `Read(/repo/.env)` action `deny` im lặng vô tác dụng.
+
+Giờ:
+
+- Đường dẫn tương đối được giải theo **gốc của lượt**: `RuleQuery.cwd` nếu caller cấp, nếu không thì **đường dẫn project của phiên**.
+- Đoạn `..` được **thu gọn** thay vì bị từ chối (`/repo/../etc/passwd` ⇒ `/etc/passwd`) — từ chối chính là một đường né luật DENY. Pattern trong **văn bản luật** thì vẫn cấm `..` như cũ.
+- **Đường dẫn tương đối chỉ có hiệu lực theo chiều DENY.** Nó không bao giờ đủ để thoả một luật ALLOW, vì gốc kia là **suy ra**: cwd thật có thể là thư mục kéo-thả (`workspaceFolder`) hoặc một worktree, và đoán sai gốc theo chiều CẤP là leo thang quyền. Bất đối xứng y hệt lời gọi detached (F12): chiều hỏng luôn là "hỏi thêm".
+- **Symlink**: một luật DENY còn được so với `realpath` của đường dẫn, nên `/repo/alias` trỏ tới `/repo/.git/hooks/pre-commit` không lách được `Write(/repo/.git/**)`. File chưa tồn tại (Write tạo mới) thì thư mục cha được `realpath` — chính thư mục mới hay là symlink. Tính **lười**: chỉ chạm hệ thống tệp khi có luật DENY theo đường dẫn cùng tên tool mà dạng mặt chữ đã trượt.
+- Chiều **ALLOW cố ý không** dùng `realpath`: văn bản luật là thứ người dùng ĐỌC, mà đòi thêm dạng chuẩn hoá thì một luật viết cho `/tmp/...` (trên macOS `/tmp` là symlink) sẽ không bao giờ khớp lại ⇒ "Always allow" hỏng. Đổi lại còn một dư địa đã biết: symlink cắm **bên trong** một thư mục đã được ALLOW vẫn chuyển hướng được lời ghi ra ngoài.
+- `\` chỉ được coi là dấu phân cách trên **Windows**. Trên POSIX nó là ký tự hợp lệ trong tên file, nên đổi vô điều kiện làm file tên `a\b` khớp nhầm luật `/repo/a/**`.
+
+### DENY khớp rộng hơn ALLOW
+
+ADR hứa "DENY thắng cả execute mode và auto-approve", nhưng điều đó chỉ đúng khi luật **khớp** — mà mọi cách né matcher đều là né DENY, và ở `execute` thì "không khớp" nghĩa là **chạy im lặng**. Hai bản vá, cả hai đều chỉ nới theo chiều CẤM:
+
+1. **Chuẩn hoá lệnh cho DENY.** Ngoài chuỗi nguyên văn, luật `deny` còn được so với bản gộp khoảng trắng và bản bỏ dấu nháy: `rm  -rf /data` và `rm -rf "/data"` không lách nổi `Bash(rm -rf /data)`. Chiều ALLOW **không** có mấy dạng này — `git add "a b"` là một đối số, không phải hai, nên nó không được ăn theo luật viết cho `git add a b`.
+2. **Lời gọi không đọc nổi + có luật DENY cho tool đó ⇒ phải hỏi.** Khi cổng không dựng nổi chủ thể (lệnh ghép `rm -rf /data;`, lệnh dài quá `MAX_SUBJECT`, thiếu tham số) mà người dùng đã viết ít nhất một luật `deny` cho đúng tool đó, thì `execute` / auto-approve / `accept-edits` **không** được cho qua nữa — lời gọi rơi về thẻ xin quyền.
+
+Điều (2) **cố ý hẹp**: nó chỉ bắt trường hợp "cổng không nhìn thấy lời gọi này là gì", không bắt "luật của bạn không nói tới lời gọi này". Nếu bắt cả hai thì **một** luật `Bash(...)` deny biến `execute` mode thành ask-mode cho **mọi** lệnh — một chế độ không ai dùng nổi thì không bảo vệ được ai.
+
+### Tasks: cổng chỉ-DENY
+
+Node của Task và subagent của nó chạy **không người trực** (ADR 0024 D-7) nên trước đây chúng bỏ qua toàn bộ cổng quyền (`beforeToolCall: async () => undefined`). Trang Settings → Quyền lại liệt kê luật như thể chúng áp cho mọi nơi — mâu thuẫn.
+
+Nay đường **Pi** (`runtime/invoke.ts`) dùng `makeTaskToolGate`: cổng **chỉ chặn**, không bao giờ hỏi, không bao giờ nhớ, không bao giờ cấp thêm gì so với trước. Luật `deny` (kể cả tên trần của tool SSH bắc cầu) có hiệu lực; mọi thứ khác đi qua.
+
+Hai giới hạn phải nói rõ:
+
+- **Không leo thang khi matcher mù.** Lệnh ghép (`cd x && npm test`) vẫn không khớp luật đơn, và ở Task thì **không** áp điều (2) ở trên: không có ai để hỏi, mà chặn mọi lệnh ghép chỉ vì tồn tại một luật deny sẽ phá vỡ workflow đang chạy được.
+- **Đường Anthropic chưa có cổng này.** Task chạy trên provider `anthropic` đi qua `runtime/claude-sdk/invoke.ts` với `permissionMode: 'bypassPermissions'` — nằm ngoài gói vá này, còn là việc phải làm.
 
 ### Định dạng file
 
@@ -147,7 +180,7 @@ Code: [`components/session/SessionGateCard.vue`](../../apps/desktop/ui-next/comp
 Khi thẻ còn `pending`, thứ tự đọc là **luật → phạm vi → nút**:
 
 1. **Luật sắp cấp, nguyên văn.** In đúng `suggestion.rule` (`Bash(git status)`) bằng font code, chọn/copy được, render bằng text node (dữ liệu L1, không `v-html`). Kèm một câu nói luật khớp cái gì, theo `ruleKind`: `command` → "khớp đúng lệnh này, không phải mọi lệnh Bash", `path` → "khớp đúng đường dẫn này", `bare` → "khớp mọi lời gọi tool này".
-2. **Bộ chọn phạm vi** (`AppSelect`): *Phiên này* / *Dự án này* / *Mọi dự án* ⇒ `scope` = `session | project | user`. **Mặc định `session`** (ít quyền nhất). Mỗi mức có một dòng nói hệ quả (quên khi hết phiên / ghi vào `.awog/permission-rules.json` của dự án / ghi vào `~/.awog/permission-rules.json`). Phiên không thuộc project nào ⇒ mục *Dự án này* bị **disable** kèm chú thích, không im lặng rơi về `session`.
+2. **Bộ chọn phạm vi** (`AppSelect`): *Phiên này* / *Dự án này* / *Mọi dự án* ⇒ `scope` = `session | project | user`. **Mặc định `session`** (ít quyền nhất). Mỗi mức có một dòng nói hệ quả (quên khi hết phiên / ghi trong AWOG home theo băm đường dẫn dự án, chỉ áp trên máy này / ghi vào `~/.awog/permission-rules.json`). Phiên không thuộc project nào ⇒ mục *Dự án này* bị **disable** kèm chú thích, không im lặng rơi về `session`.
 3. **Nút "Always allow" chỉ hiện khi có luật.** Không có suggestion (lệnh ghép, đường dẫn tương đối…) ⇒ nút **không được render**, thay bằng một dòng nói vì sao lần này chỉ cho phép một lần. UI cũng coi trường hợp *không nhận được suggestion* (event tới trước khi cửa sổ kịp lắng nghe) là "không có luật" — thà hỏi lại còn hơn đoán ra một luật mà người dùng chưa từng đọc.
 4. **Sau khi lưu**, thẻ nói tầng THẬT SỰ đã ghi theo `savedScopes` trả về, kèm lại chuỗi luật; bị hạ cấp `project → session` thì nói rõ; `savedScopes` rỗng (ghi hỏng) thì báo "không lưu được luật — lượt sau vẫn hỏi".
 
@@ -201,11 +234,13 @@ Bị hỏi đi hỏi lại cùng một lệnh dẫn tới **bấm bừa** — n�
 
 ## Giới hạn đã biết
 
-- Luật `deny` chỉ khớp lệnh đơn: `foo && rm -rf /` không khớp `Bash(rm -rf /)` — nhưng nó rơi vào "hỏi", không phải "cho qua".
+- Luật `deny` chỉ khớp lệnh đơn: `foo && rm -rf /` không khớp `Bash(rm -rf /)`. Trong phiên nó rơi vào "hỏi" kể cả ở `execute` mode (xem trên); trong Task thì **được cho qua**.
+- Task trên provider `anthropic` (nhánh Claude SDK) vẫn chạy `bypassPermissions` — luật `deny` chưa áp ở đó.
+- Đường dẫn tương đối không bao giờ thoả được một luật ALLOW (gốc là suy ra) ⇒ lời gọi viết đường dẫn tương đối luôn phải trả lời từng lần.
+- Symlink cắm bên trong một thư mục đã ALLOW vẫn chuyển hướng được lời ghi ra ngoài — chiều ALLOW cố ý không `realpath`.
 - Chủ thể chứa `*` thật (vd `git add *`) không được gợi ý làm luật (ngữ pháp không có cơ chế escape).
 - Gợi ý chỉ rút được từ lời gọi `Bash` và `Write` (transcript không lưu tên tool, xem trên) — `Edit`/`MultiEdit` không bao giờ được đề xuất.
 - Trang quản lý luật ghi được hai tầng bền vững; luật tầng `session` chỉ **xem và thu hồi** được ở đó, muốn thêm thì qua thẻ xin quyền trong phiên.
-- Chuỗi i18n của thẻ xin quyền (`sessionsPerm.hint.project`) còn nói "ghi vào `.awog/permission-rules.json` của dự án" — sai kể từ bản vá F1, cần đổi thành "ghi trong AWOG home, chỉ áp trên máy này".
 - Đánh giá có trần cứng 1500 luật mỗi lần; vượt trần ⇒ hỏi (không bao giờ tự cho qua).
 - Cổng SSH (ADR 0064) giữ allowance riêng theo `(phiên, host, tool)`, không đi qua hệ luật này.
 - Lệnh chạy nền (`run_in_background: true`) không bao giờ nhớ được ⇒ bị hỏi mỗi lần (xem trên).

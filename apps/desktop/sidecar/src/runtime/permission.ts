@@ -35,6 +35,13 @@
 // leaves a process running past the turn, so it is asked every time even when the
 // same command string is approved for the foreground (F12). DENY still covers it.
 //
+// Two more asymmetries landed with the 2026-09-08 audit:
+//   F4 — a call the matcher cannot read AT ALL (compound/oversized command, missing
+//        argument) no longer slips through `execute` / auto-approve / accept-edits
+//        while a DENY rule for that tool exists: it is asked instead. See
+//        `guardedByDeny` below for why this is deliberately narrow.
+//   F5 — Tasks finally have a gate: `makeTaskToolGate` (deny-only, never prompts).
+//
 // Contract: beforeToolCall must NOT throw. Any error → fail safe = block, so a
 // bug can never silently let an unapproved write through.
 
@@ -51,7 +58,9 @@ import type { AgentMode, SshApprovalMode } from '../types/shared.js'
 import { allowSessionTool, isSessionToolAllowed } from '../sessions/permissions.js'
 import {
   evaluatePermissionRules,
+  isUnreadableUnderDeny,
   parsePermissionRule,
+  resolveProjectPathById,
   suggestRuleText,
 } from '../sessions/permission-rules.js'
 import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool.js'
@@ -204,21 +213,69 @@ export function isSafeToolInputOverride(value: unknown): value is Record<string,
   return !keys.some((key) => UNSAFE_TOOL_ARG_KEYS.has(key))
 }
 
+// Which session / project the rule lookup is scoped to. Tasks have no session, so
+// they pass `projectPath` straight through (F5).
+type RuleScope = { sessionId?: string; projectPath?: string | null }
+
+function scopeQuery(scope: RuleScope): { sessionId?: string; projectPath?: string | null } {
+  return {
+    ...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
+    ...(scope.projectPath !== undefined ? { projectPath: scope.projectPath } : {}),
+  }
+}
+
 // The tool name a DENY rule matched for these args, or null when nothing denies
 // them. Checks the bridged SSH alias too (`mcp__<server>__ssh_exec` → `ssh_exec`),
 // mirroring the main gate so one rule holds on both runtimes.
 async function deniedToolName(
   toolName: string,
   args: unknown,
-  sessionId: string | undefined,
+  scope: RuleScope,
 ): Promise<string | null> {
-  const scoped = sessionId ? { sessionId } : {}
+  const scoped = scopeQuery(scope)
   if ((await evaluatePermissionRules({ toolName, args, ...scoped })) === 'deny') return toolName
   const bare = sshToolName(toolName)
   if (bare && bare !== toolName) {
     if ((await evaluatePermissionRules({ toolName: bare, args, ...scoped })) === 'deny') return bare
   }
   return null
+}
+
+// The message a blocked call carries back to the model. Names the tool the rule
+// was written for so the user can find and edit it.
+function denyReason(name: string): string {
+  return `Blocked by a permission rule you configured for ${name}. Remove that rule from your permission rules under ~/.awog to change this.`
+}
+
+// Deny-only gate for the Task Execution Engine (F5). Tasks run UNATTENDED
+// (ADR 0024 D-7) so there is nobody to prompt: this hook never asks, never
+// remembers anything, and never grants — it only BLOCKS what the user already
+// wrote down as a DENY rule. Before this, a task node and its subagents ran
+// `Bash`/`Write` through no rule at all while Settings → Permissions listed those
+// rules as if they applied everywhere.
+//
+// Residual, on purpose: a call the matcher cannot read (a compound command) is
+// NOT escalated here the way it is in a session — there is no one to ask, and
+// blocking every `cd x && npm test` because one Bash deny rule exists would break
+// working workflows. Sessions keep the stricter treatment.
+//
+// Any internal failure degrades to `undefined` (the pre-F5 behaviour): this gate
+// may only ever ADD blocks, never break a workflow that used to run.
+export function makeTaskToolGate(projectId?: string): BeforeToolCall {
+  return async (context) => {
+    const toolName = context.toolCall.name
+    try {
+      const projectPath = projectId ? await resolveProjectPathById(projectId) : null
+      const denied = await deniedToolName(toolName, context.args, { projectPath })
+      return denied ? { block: true, reason: denyReason(denied) } : undefined
+    } catch (err) {
+      log.warn('task tool gate: rule lookup failed, letting the call through', {
+        toolName,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      return undefined
+    }
+  }
 }
 
 export type BeforeToolCall = (
@@ -307,8 +364,40 @@ export function makeBeforeToolCall(
     // gate's own 'auto' mode, and an approved argument override alike.
     const denyBlock = (name: string): BeforeToolCallResult => ({
       block: true,
-      reason: `Blocked by a permission rule you configured for ${name}. Remove that rule from your permission rules under ~/.awog to change this.`,
+      reason: denyReason(name),
     })
+
+    // "Beats every relaxation" used to hold only when a rule MATCHED, and every way
+    // of dodging the matcher was a way of dodging DENY — in execute mode a dodge ran
+    // SILENTLY (`rm -rf /data;` picks up a `;`, so no single-command rule can match
+    // it). That was false assurance, which is worse than no feature (F4).
+    //
+    // So: when the gate cannot read this call as a rule subject AT ALL — compound
+    // command, oversized command, missing argument — and the user has a DENY rule
+    // for this very tool, none of the relaxations apply and the call is asked.
+    // Memoised: at most one lookup per tool call, and only on a path that was about
+    // to skip the prompt.
+    //
+    // Deliberately NOT extended to "subject readable but no rule matched": that
+    // would turn one Bash deny rule into an ask-prompt for every Bash call in
+    // execute mode, and a mode nobody can use protects nobody.
+    let denyGuard: boolean | undefined
+    const guardedByDeny = async (): Promise<boolean> => {
+      if (denyGuard === undefined) {
+        denyGuard = await isUnreadableUnderDeny({
+          toolName,
+          args: context.args,
+          ...(sessionId ? { sessionId } : {}),
+        })
+        if (denyGuard) {
+          log.warn('permission gate: unreadable call under a deny rule; asking instead', {
+            toolName,
+            mode,
+          })
+        }
+      }
+      return denyGuard
+    }
 
     // Defer to the UI permission prompt (park) and translate the answer. Shared by
     // the general gated path and the SSH-tool path. `forceRemember` = remember on
@@ -372,7 +461,9 @@ export function makeBeforeToolCall(
               })
               return { block: true, reason: 'Rejected an unsafe argument override — blocked.' }
             }
-            const denied = await deniedToolName(toolName, result.updatedInput, sessionId)
+            const denied = await deniedToolName(toolName, result.updatedInput, {
+              ...(sessionId ? { sessionId } : {}),
+            })
             if (denied) return denyBlock(denied)
             const target = context.args as Record<string, unknown>
             for (const key of Object.keys(target)) delete target[key]
@@ -446,6 +537,8 @@ export function makeBeforeToolCall(
           reason: `Blocked in plan mode: ${sshName} mutates the remote host and is not allowed while planning.`,
         }
       }
+      // No F4 guard here: SSH tools carry no rule subject (they are 'bare' kind), so
+      // their calls are always readable and the guard could never fire.
       if (sshApprovalMode === 'auto') return undefined
       // Scope the remembered allowance per (session, host, BARE tool name), reading
       // the host from THIS call's `host` arg (unified model — the tool targets any
@@ -473,8 +566,9 @@ export function makeBeforeToolCall(
     // (a DENY rule for it was already applied above).
     if (!builtInGated && !promptTrust) return undefined
 
-    // execute mode: no gate (the user opted into full access).
-    if (mode === 'execute') return undefined
+    // execute mode: no gate (the user opted into full access) — unless the gate
+    // cannot read this call while a DENY rule for the tool exists (F4).
+    if (mode === 'execute' && !(await guardedByDeny())) return undefined
 
     // plan mode: block every write/exec — planning is read-only. Only the built-in
     // write/exec set is hard-blocked; a trust:'prompt' source tool (not a write)
@@ -490,10 +584,13 @@ export function makeBeforeToolCall(
 
     // Auto-approve (Settings → Sessions): allow gated tools without prompting. Sits
     // after the plan-mode block (planning stays read-only) but before the ask path.
-    if (autoApprove) return undefined
+    // Same F4 guard as execute mode.
+    if (autoApprove && !(await guardedByDeny())) return undefined
 
     // accept-edits: auto-allow file edits; other gated tools (Bash) still prompt.
-    if (mode === 'accept-edits' && WRITE_TOOLS.has(toolName)) return undefined
+    if (mode === 'accept-edits' && WRITE_TOOLS.has(toolName) && !(await guardedByDeny())) {
+      return undefined
+    }
 
     // ask (and accept-edits for Bash): defer to the UI permission prompt.
     return promptViaUi(false)

@@ -27,6 +27,7 @@ import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import { detailsSignalError } from './tools/tool-error.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
+import { makeTaskToolGate } from './permission.js'
 import {
   COMMUNICATION_PROMPT,
   ENGINEERING_PROMPT,
@@ -295,8 +296,9 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         ...(args.mcpServers ? { parentMcpServers: args.mcpServers } : {}),
         // Same for the node's api sources (ADR 0060 P3).
         ...(args.apiSources ? { parentApiSources: args.apiSources } : {}),
-        // Tasks run unattended: subagent tool calls bypass permissions too.
-        beforeToolCall: async () => undefined,
+        // Tasks run unattended: no prompt for the subagent either — but the user's
+        // DENY rules still hold (ADR 0080 F5). Same deny-only gate as the node.
+        beforeToolCall: makeTaskToolGate(args.projectIds?.[0]),
         // Inherit the task's co-author setting for subagent-made commits.
         ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         makeChildSink: (parentToolCallId) => {
@@ -396,10 +398,12 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         // Our AgentMessages are already pi Messages — pass through unchanged.
         convertToLlm: (messages) => messages as Message[],
         ...(reasoning ? { reasoning } : {}),
-        // Tasks run unattended (ADR 0024 D-7): always allow tool calls. Tool
-        // gating is the workflow author's job via the agent's allowedTools (the
-        // tool set is already filtered in createRuntimeToolDefinitions above).
-        beforeToolCall: async () => undefined,
+        // Tasks run unattended (ADR 0024 D-7): no interactive prompt. Tool gating
+        // is the workflow author's job via the agent's allowedTools (the tool set
+        // is already filtered in createRuntimeToolDefinitions above) — but a DENY
+        // rule the user wrote is a guardrail, not a prompt, so it applies here too
+        // (ADR 0080 F5). Deny-only: this gate blocks, it never grants.
+        beforeToolCall: makeTaskToolGate(args.projectIds?.[0]),
         // Capture Codex plan-usage from response headers (no-op for non-Codex),
         // then fail closed on Anthropic extra-usage: a headless task cannot prompt,
         // so if a response consumed PAID overage we STOP rather than silently bill.

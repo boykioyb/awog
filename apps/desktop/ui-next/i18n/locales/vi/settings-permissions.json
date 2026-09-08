@@ -1,7 +1,7 @@
 {
   "settingsPermissions.nav": "Quyền",
   "settingsPermissions.heading": "Quyền",
-  "settingsPermissions.subtitle": "Luật quyết định lời gọi tool nào được chạy mà không hỏi. Ở đây xem lại, thu hồi, và nhận gợi ý rút từ lịch sử.",
+  "settingsPermissions.subtitle": "Luật quyết định lời gọi tool nào được chạy mà không hỏi, và lời gọi nào bị chặn thẳng. Luật từ chối thắng cả execute mode lẫn auto-approve — nhưng nó chỉ khớp đúng một lệnh hoặc một đường dẫn, và không nhìn được vào bên trong một lệnh ghép. Ở đây xem lại, thu hồi, và nhận gợi ý rút từ lịch sử.",
   "settingsPermissions.unavailable": "Chỉ xem được trong ứng dụng đã cài — trang này cần engine.",
   "settingsPermissions.action.allow": "Cho phép",
   "settingsPermissions.action.deny": "Từ chối",
