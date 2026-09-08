@@ -299,12 +299,15 @@ Nhánh SSH không nhận điều (2): tool SSH thuộc kind `bare` nên chủ th
 Hai giới hạn **phải nói ra**, chứ không được để người dùng tự suy:
 
 - **Task không áp điều (2) của F4.** Lệnh ghép vẫn không khớp luật đơn và ở Task thì được cho qua: không có ai để hỏi, mà chặn mọi `cd x && npm test` chỉ vì tồn tại một luật deny là phá workflow đang chạy được.
-- **Đường Anthropic chưa có cổng này.** Task chạy provider `anthropic` đi qua `runtime/claude-sdk/invoke.ts` với `permissionMode: 'bypassPermissions'` — file đó nằm ngoài gói vá này (đang có phiên khác sửa), nên đây là việc còn lại, và là chênh lệch hành vi giữa hai runtime.
+- ~~**Đường Anthropic chưa có cổng này.**~~ — **đã xong 2026-09-08.** Cổng đi vào `makeForegroundOnlyHook(gate)` ở `runtime/claude-sdk/shared.ts`, nối tại `claude-sdk/invoke.ts`.
+
+  Đính chính một cách nói sai từng có ở đây: `permissionMode: 'bypassPermissions'` **không phải** thứ bỏ qua cổng. Nhánh chat dùng đúng cờ đó (`claude-sdk/run-stream.ts:646`), có chủ ý, để cổng của SDK không che cổng của AWOG — cổng thật ở nhánh này **luôn** nằm trong hook `PreToolUse`. Đường task chỉ đăng ký một hook KHÁC (`makeForegroundOnlyHook`, vốn là hook viết-lại-input và luôn trả `allow`). Neo finding vào cái cờ là neo sai dòng.
+
+  Vì sao bắt buộc phải đối xứng: runtime chọn **theo provider** (ADR 0058). Để lệch, đổi provider của một agent sang `anthropic` làm luật `deny` của người dùng lặng lẽ hết hiệu lực — cùng một task, cùng một file luật. Bất đối xứng đó do **chính bản vá F5 này** tạo ra khi chỉ sửa một nhánh; nó là một thể hiện nữa của cùng bài học ở F1: vá một tầng mà không xét tầng bên cạnh là cách tạo ra lỗ tiếp theo.
 
 ### Việc còn lại sau đính chính lượt 2
 
 - Wire `RuleQuery.cwd` từ cwd THẬT của lượt (`runtime/run-stream.ts` + `runtime/claude-sdk/run-stream.ts` đã có `args.cwd`). Khi đó đường dẫn tương đối được giải theo đúng thư mục kéo-thả / worktree thay vì đường dẫn project. Ngữ nghĩa "tương đối chỉ dùng cho DENY" giữ nguyên — sửa một dòng ở mỗi call-site.
-- Cổng chỉ-DENY cho nhánh Claude SDK của Tasks (`runtime/claude-sdk/invoke.ts`).
 - Dư địa: symlink cắm **bên trong** một thư mục đã được ALLOW vẫn chuyển hướng được lời ghi ra ngoài (chiều ALLOW cố ý không `realpath`). Đóng được nếu sau này chuẩn hoá luôn tiền tố literal của pattern, nhưng chi phí là fs I/O trên đường luật.
 
 ## Tham chiếu
