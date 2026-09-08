@@ -42,6 +42,10 @@ const Params = Type.Object({
       `maximum ${MAX_WAKEUP_DELAY_SECONDS} (${MAX_DELAY_HOURS} hours). Anything outside that range is clamped and the result says so.`,
   }),
   note: Type.String({
+    // Trần nằm trong SCHEMA chứ không chỉ trong mô tả: nó là hàng rào đầu tiên trước
+    // một `note` vài MB. Hàng rào thật vẫn là `armWakeup`, nơi độ dài được kiểm
+    // TRƯỚC khi chuỗi đi qua bộ lọc bí mật.
+    maxLength: MAX_WAKEUP_NOTE_LEN,
     description:
       `What to remind yourself of when you come back, in plain prose (max ${MAX_WAKEUP_NOTE_LEN} characters). ` +
       'Write it for a version of you that has the conversation but not the last minute of context: what you were waiting for, and how to check it.',

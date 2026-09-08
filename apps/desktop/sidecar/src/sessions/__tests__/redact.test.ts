@@ -5,10 +5,13 @@
 // trong devDeps của sidecar — xem git/__tests__/discover.test.ts).
 //
 // Hai chiều đều quan trọng như nhau:
-//   - `describe('bắt được')` — các ca RÒ RỈ mà bản cũ để lọt (infosec F6).
+//   - `describe('bắt được')` — các ca RÒ RỈ mà bản cũ để lọt (infosec F6, F2).
 //   - `describe('không redact quá tay')` — dữ liệu người dùng mở view debug/export ra
-//     để xem. Che nhầm chúng thì hai bề mặt đó mất hết tác dụng, nên chúng là test
-//     hồi quy chứ không phải "nice to have".
+//     để xem, VÀ mã nguồn trên đường vào prompt của model (infosec F4). Che nhầm chúng
+//     thì hai bề mặt debug mất tác dụng và model nhận bằng chứng sai, nên chúng là
+//     test hồi quy chứ không phải "nice to have".
+//   - `describe('hiệu năng')` — bộ lọc chạy trên luồng DUY NHẤT của sidecar, nên độ
+//     phức tạp là một yêu cầu bảo mật (infosec F3).
 import { describe, expect, it } from 'vitest'
 import { redactDeep, redactString } from '../redact.js'
 
@@ -39,7 +42,9 @@ describe('redactDeep — bắt được các ca F6 từng lọt', () => {
 
   it('header nhạy cảm nằm TRONG chuỗi lệnh (khoá JSON vô hại)', () => {
     const out = deep({
-      input: { command: "curl -H 'X-Api-Key: 9f2c8a1e4b7d0f33' https://api.example.com/v1/ping" },
+      input: {
+        command: "curl -H 'X-Api-Key: 9f2c8a1e4b7d0f33' https://api.example.com/v1/ping",
+      },
     })
     const command = (out.input as Record<string, unknown>).command
     expect(command).toBe(`curl -H 'X-Api-Key: ${REDACTED}' https://api.example.com/v1/ping`)
@@ -99,7 +104,15 @@ describe('redactDeep — bắt được các ca F6 từng lọt', () => {
   it('đi sâu qua mảng và object lồng nhau', () => {
     const out = deep({
       messages: [
-        { steps: [{ input: { env: { OPENAI_API_KEY: 'sk-proj-AAAAAAAAAAAAAAAAAAAA' } } }] },
+        {
+          steps: [
+            {
+              input: {
+                env: { OPENAI_API_KEY: 'sk-proj-AAAAAAAAAAAAAAAAAAAA' },
+              },
+            },
+          ],
+        },
       ],
     })
     expect(JSON.stringify(out)).not.toContain('sk-proj-')
@@ -114,6 +127,57 @@ describe('redactDeep — bắt được các ca F6 từng lọt', () => {
   it('idempotent — chạy 2 lần cho cùng kết quả', () => {
     const once = redactString("curl -H 'X-Api-Key: 9f2c8a1e4b7d0f33' https://x.dev")
     expect(redactString(once)).toBe(once)
+  })
+})
+
+describe('redactDeep — F2: JSON nằm TRONG chuỗi và cờ CLI', () => {
+  // Lớp 1 chỉ chạy trên object THẬT. Cái đi qua `read_terminal` là JSON đã bị in ra
+  // thành MỘT chuỗi, nơi sau tên khoá là dấu nháy chứ không phải dấu hai chấm.
+  it('khoá JSON nằm trong nháy — dạng rò rỉ phổ biến nhất của tool I/O', () => {
+    expect(redactString('{"apiKey":"abcd1234efgh5678ijkl"}')).toBe(`{"apiKey":"${REDACTED}"}`)
+    expect(redactString('{"api_key": "abcd1234efgh5678ijkl"}')).toBe(`{"api_key": "${REDACTED}"}`)
+    expect(redactString('{ "password" : "hunter2hunter2" }')).toBe(`{ "password" : "${REDACTED}" }`)
+    expect(redactString("{'token': 'abcd1234efgh5678'}")).toBe(`{'token': '${REDACTED}'}`)
+  })
+
+  it('`cat ~/.awog/credentials.json` — key của endpoint tuỳ biến KHÔNG có tiền tố', () => {
+    const dump = '{"accessToken":"abcd1234efgh5678ijkl","refreshToken":"zzzz9999yyyy8888"}'
+    const out = redactString(dump)
+    expect(out).not.toContain('abcd1234')
+    expect(out).not.toContain('zzzz9999')
+    // Hình dạng JSON vẫn còn đọc được — đó là lý do người dùng mở view debug.
+    expect(out).toBe(`{"accessToken":"${REDACTED}","refreshToken":"${REDACTED}"}`)
+  })
+
+  it('cờ CLI dài, giá trị cách bằng khoảng trắng', () => {
+    expect(redactString('mysql --password hunter2hunter2')).toBe(`mysql --password ${REDACTED}`)
+    expect(redactString("psql --password='hunter2hunter2'")).toBe(`psql --password='${REDACTED}'`)
+    expect(redactString('gh auth login --token 9f2c8a1e4b7d0f33aa')).toBe(
+      `gh auth login --token ${REDACTED}`,
+    )
+    expect(redactString('curl -u admin --password Sup3rS3cret')).toBe(
+      `curl -u admin --password ${REDACTED}`,
+    )
+  })
+
+  it('cờ ngắn `-p` CHỈ sau lệnh mà `-p` thật sự là mật khẩu', () => {
+    expect(redactString('docker login -u me -p hunter2hunter2')).toBe(
+      `docker login -u me -p ${REDACTED}`,
+    )
+    expect(redactString('mysql -h db.internal -u app -p Sup3rS3cret')).toBe(
+      `mysql -h db.internal -u app -p ${REDACTED}`,
+    )
+  })
+
+  it('idempotent trên các dạng mới', () => {
+    for (const input of [
+      '{"apiKey":"abcd1234efgh5678ijkl"}',
+      'mysql --password hunter2hunter2',
+      'docker login -u me -p hunter2hunter2',
+    ]) {
+      const once = redactString(input)
+      expect(redactString(once)).toBe(once)
+    }
   })
 })
 
@@ -143,7 +207,11 @@ describe('redactDeep — cố ý KHÔNG redact', () => {
 
   it('cờ boolean và null dưới khoá bí mật — trạng thái, không phải bí mật', () => {
     const out = deep({ hasApiKey: true, apiKey: null, isAuthenticated: false })
-    expect(out).toEqual({ hasApiKey: true, apiKey: null, isAuthenticated: false })
+    expect(out).toEqual({
+      hasApiKey: true,
+      apiKey: null,
+      isAuthenticated: false,
+    })
   })
 
   it('metadata phiên: id, đường dẫn, tên model, chi phí', () => {
@@ -202,5 +270,178 @@ describe('redactDeep — cố ý KHÔNG redact', () => {
     let node: Record<string, unknown> = { leaf: 'ok' }
     for (let i = 0; i < 40; i += 1) node = { child: node }
     expect(JSON.stringify(deep(node))).toContain('[truncated: too deep]')
+  })
+})
+
+describe('redactString — F4: mã nguồn và lệnh KHÔNG được đụng tới', () => {
+  // Ba mẫu dưới đây lấy từ 366 dòng JSONL thật của 40 phiên, nơi bản trước sửa
+  // `.steps[].detail.content` 207 lần, `.detail.output` 38 lần, `.detail.diff` 27 lần.
+  // Đây không chỉ là lỗi UX: `redactString` chạy trên ĐƯỜNG VÀO prompt, nên model đọc
+  // `const token = [redacted] | null>(…` rồi "sửa" một dòng code không tồn tại.
+  it('khai báo biến có generic / gọi hàm / truy cập thuộc tính', () => {
+    for (const line of [
+      "const token = useCookie<string | null>('pms_auth_token', {…})",
+      'const secret = process.env.MY_SECRET',
+      'apiKey: options.apiKey ?? undefined',
+      'password = models.CharField(max_length=128)',
+      'credentials: await loadCredentials(),',
+      '+  const authToken = ref<string | null>(null)',
+    ]) {
+      expect(redactString(line)).toBe(line)
+    }
+  })
+
+  it('giá trị là ĐỊNH DANH (tên biến), không phải bí mật', () => {
+    expect(redactString('password: hashedPassword,')).toBe('password: hashedPassword,')
+    expect(redactString('token: accessToken,')).toBe('token: accessToken,')
+    expect(redactString('secret_key: hashed_secret_key')).toBe('secret_key: hashed_secret_key')
+  })
+
+  it('lệnh shell: glob, nội suy, placeholder', () => {
+    for (const line of [
+      "sed 's/PASSWORD=.*/PASSWORD=***/'",
+      'TOKEN=$(cat /tmp/t)',
+      'export API_KEY=$MY_API_KEY',
+      'secret_key: <your-key-here>',
+      'docker login -u me --password-stdin',
+    ]) {
+      expect(redactString(line)).toBe(line)
+    }
+  })
+
+  it('`-p` của lệnh khác là cổng/đường dẫn, không phải mật khẩu', () => {
+    for (const line of [
+      'mkdir -p /Users/kyro/KyroTech/Projects/awog/.awog',
+      'docker run -p 8080:80 nginx:alpine',
+      'redis-cli -p 6379 ping',
+      'rsync -avz -p ./dist/ server:/srv/app/',
+    ]) {
+      expect(redactString(line)).toBe(line)
+    }
+  })
+
+  it('văn xuôi và nhãn sơ đồ có từ khoá nhạy cảm', () => {
+    const erd = 'otp_code ||--|| verification_token : "phát sau verify"'
+    expect(redactString(erd)).toBe(erd)
+    const doc = '- secret: the value read from keychain'
+    expect(redactString(doc)).toBe(doc)
+  })
+
+  it('CỐ Ý bỏ lọt: giá trị toàn chữ cái, không chữ số, không ký hiệu', () => {
+    // Luật cũ "dài ≥ 12 ký tự là đủ" bắt được ca này, nhưng chính nó gây 272 lần che
+    // nhầm đo được ở trên. Bí mật thật gần như luôn có chữ số hoặc ký hiệu; một chuỗi
+    // toàn chữ sau `password:` gần như luôn là tên biến. Đây là đánh đổi CÓ CHỦ Ý,
+    // ghi ra thành test để lần sau đổi ý thì phải đổi tường minh.
+    expect(redactString('password: abcdefghijkl')).toBe('password: abcdefghijkl')
+    // Ngay khi có một chữ số thì lại bị che.
+    expect(redactString('password: abcdefghijk1')).toBe(`password: ${REDACTED}`)
+  })
+
+  it('lớp 3 VẪN chạy trên nội dung file — `Write` một file .env là rò rỉ thật', () => {
+    const out = deep({
+      name: 'Write',
+      detail: { content: 'DB_HOST=localhost\nDB_PASSWORD=Sup3rS3cret123\n' },
+    })
+    const detail = out.detail as Record<string, unknown>
+    expect(detail.content).toBe(`DB_HOST=localhost\nDB_PASSWORD=${REDACTED}\n`)
+  })
+})
+
+describe('redactString — F3: độ phức tạp tuyến tính', () => {
+  // Sidecar chạy MỘT luồng và phục vụ mọi RPC. Bản trước có hai regex bậc hai, nên
+  // `sessions.save-export` trên một transcript vài trăm KB đứng hình hàng chục giây —
+  // đủ để lỡ 3 nhịp heartbeat và bị `killWedged()` giết engine giữa lượt. Số đo cũ:
+  // 25k → 909ms, 50k → 3.4s, 100k → 13.8s, 200k → 56.9s (gấp đôi input = gấp bốn giờ).
+  // Ngân sách dưới đây rộng gấp nhiều lần số đo sau khi vá (~30ms) nên nó chỉ đỏ khi
+  // có ai đó thêm lại một lượng tử không trần.
+  const BUDGET_MS = 2_000
+
+  it.each([
+    ['PEM thiếu dấu END', '-----BEGIN RSA PRIVATE KEY-----' + 'A'.repeat(200_000)],
+    ['dãy chữ-số dài trần', 'A'.repeat(200_000)],
+    ['gán với giá trị dài', 'password=' + 'A'.repeat(200_000)],
+    ['nháy mở không bao giờ đóng', 'password="' + 'A'.repeat(200_000)],
+    ['nhiều mốc BEGIN', '-----BEGIN RSA PRIVATE KEY-----'.repeat(6_000)],
+  ])('%s — 200 KB xong dưới ngân sách', (_name, input) => {
+    const started = performance.now()
+    redactString(input)
+    expect(performance.now() - started).toBeLessThan(BUDGET_MS)
+  })
+
+  it('vẫn bắt được khối PEM thật sau khi thân bị đặt trần', () => {
+    const pem = [
+      '-----BEGIN RSA PRIVATE KEY-----',
+      'MIIEow'.repeat(20),
+      '-----END RSA PRIVATE KEY-----',
+    ].join('\n')
+    expect(redactString(`key:\n${pem}\ndone`)).toBe(`key:\n${REDACTED}\ndone`)
+  })
+
+  it('chuỗi vượt trần đầu vào bị CẮT, không bị bỏ lọc', () => {
+    const over = 'sk-ant-api03-AAAAAAAAAAAAAAAAAAAA ' + 'x'.repeat(1024 * 1024)
+    const out = redactString(over)
+    expect(out).not.toContain('sk-ant-api03-')
+    expect(out).toContain('[truncated:')
+    expect(out).toContain('chars over the redaction cap]')
+    expect(out.length).toBeLessThan(over.length)
+  })
+})
+
+// Ngữ cảnh "vế phải LÀ thông tin đăng nhập": khoá kiểu biến môi trường và cờ CLI.
+//
+// Nhóm này ra đời từ một phép ĐO, không phải suy đoán: quét 577 phiên thật trong
+// ~/.awog/sessions cho ~950 lần khớp mà bộ lọc đang bỏ qua, phần áp đảo là thông tin
+// đăng nhập thật (`POSTGRES_PASSWORD=pwpf_dev`, `MINIO_ROOT_PASSWORD=minioadmin`).
+// Thủ phạm là hàng rào "định danh thuần" `^[A-Za-z_][A-Za-z_.-]*$` — nó chặn che
+// nhầm tên biến trong mã nguồn, nhưng cũng nuốt mọi bí mật toàn chữ/có gạch nối.
+describe('redactString — khoá biến môi trường và cờ CLI', () => {
+  it('bí mật toàn chữ / có gạch nối sau khoá IN HOA vẫn bị che', () => {
+    // Không có chữ số, không có ký hiệu "mùi bí mật" ⇒ luật chặt bỏ lọt hết.
+    expect(redactString('MINIO_ROOT_PASSWORD=minioadmin')).toBe(`MINIO_ROOT_PASSWORD=${REDACTED}`)
+    expect(redactString('DB_PASSWORD=postgres')).toBe(`DB_PASSWORD=${REDACTED}`)
+    expect(redactString('SECRET_KEY="change-me-in-production"')).toBe(`SECRET_KEY="${REDACTED}"`)
+    expect(redactString('APP_JWT_SECRET=doi-bi-mat-nay-truoc-khi-len-that')).toBe(
+      `APP_JWT_SECRET=${REDACTED}`,
+    )
+  })
+
+  it('cụm mật khẩu NHIỀU TỪ trong nháy bị che ở ngữ cảnh env/CLI', () => {
+    // Luật chặt loại mọi giá trị có khoảng trắng (chống che nhầm mã nguồn), nên bốn
+    // từ thường — dạng passphrase được khuyến nghị rộng rãi — từng lọt sạch.
+    expect(redactString('SSH_PASSPHRASE="correct horse battery staple"')).toBe(
+      `SSH_PASSPHRASE="${REDACTED}"`,
+    )
+    expect(redactString("ssh-keygen -t ed25519 -N 'correct horse battery staple' -f k")).toBe(
+      `ssh-keygen -t ed25519 -N '${REDACTED}' -f k`,
+    )
+    expect(redactString('--passphrase "correct horse battery staple"')).toBe(
+      `--passphrase "${REDACTED}"`,
+    )
+  })
+
+  it('nới cho env/CLI KHÔNG mở lại cửa cho biểu thức shell', () => {
+    // `relaxed` chỉ tha khoảng trắng và "định danh thuần"; ký tự cú pháp vẫn loại.
+    expect(redactString('MY_TOKEN="$(cat /tmp/t)"')).toBe('MY_TOKEN="$(cat /tmp/t)"')
+    expect(redactString('API_KEY=${SOME_OTHER}')).toBe('API_KEY=${SOME_OTHER}')
+  })
+
+  it('khoá viết THƯỜNG không được nới — nhãn giao diện phải đi qua nguyên vẹn', () => {
+    // Ranh giới cố ý. Đo trên cùng bộ 577 phiên: nới cho khoá thường che thêm 104
+    // chuỗi mà gần như tất cả là nhãn i18n, và KHÔNG bắt thêm bí mật thật nào. Cái
+    // giá là một cụm mật khẩu toàn chữ sau khoá thường vẫn lọt — không có dấu hiệu
+    // cấu trúc nào tách nó khỏi một nhãn giao diện.
+    expect(redactString('"password": "Nhập mật khẩu"')).toBe('"password": "Nhập mật khẩu"')
+    expect(redactString('"password": "Enter your password"')).toBe(
+      '"password": "Enter your password"',
+    )
+    expect(redactString('passphrase="correct horse battery staple"')).toBe(
+      'passphrase="correct horse battery staple"',
+    )
+  })
+
+  it('`-N` chỉ mang nghĩa passphrase sau ssh-keygen', () => {
+    // Cùng hàng rào với `-p`: `-N` ở lệnh khác nghĩa hoàn toàn khác.
+    expect(redactString('sort -N mydatafile')).toBe('sort -N mydatafile')
+    expect(redactString('grep -N pattern file')).toBe('grep -N pattern file')
   })
 })

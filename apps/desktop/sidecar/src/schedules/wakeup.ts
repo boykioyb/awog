@@ -176,21 +176,28 @@ export interface ArmedWakeup {
 
 // Ghi một lời hẹn xuống store lịch. Ném `WakeupError` khi từ chối.
 export async function armWakeup(input: ArmWakeupInput): Promise<ArmedWakeup> {
-  // Khử bí mật TRƯỚC mọi thứ khác: chuỗi này sắp nằm trong một file trên đĩa rồi
-  // quay lại context sau vài giờ.
-  const note = redactString(input.note.trim())
-  if (!note) {
+  // Kiểm ĐỘ DÀI trước, khử bí mật sau. `redactString` quét bằng regex trên luồng duy
+  // nhất của sidecar, nên đưa cho nó một `note` vài MB (model bịa, hoặc payload cố ý)
+  // là trả tiền cho một chuỗi mà ta sắp từ chối vì quá dài. Thứ tự này giữ chi phí
+  // của một lời hẹn bị từ chối ở mức O(1).
+  const raw = input.note.trim()
+  if (!raw) {
     throw new WakeupError(
       'invalid-note',
       'The note is empty. Write what you need to check when you come back, or do not schedule anything.',
     )
   }
-  if (note.length > MAX_WAKEUP_NOTE_LEN) {
+  if (raw.length > MAX_WAKEUP_NOTE_LEN) {
     throw new WakeupError(
       'invalid-note',
-      `The note is ${note.length} characters; the limit is ${MAX_WAKEUP_NOTE_LEN}. Write a shorter reminder — one or two sentences.`,
+      `The note is ${raw.length} characters; the limit is ${MAX_WAKEUP_NOTE_LEN}. Write a shorter reminder — one or two sentences.`,
     )
   }
+  // Khử bí mật: chuỗi này sắp nằm trong một file trên đĩa rồi quay lại context sau
+  // vài giờ. `[redacted]` dài hơn thứ nó thay, nên bản đã lọc có thể vượt trần mà
+  // model không làm gì sai — cắt thay vì ném lỗi khó hiểu (schema store cũng chặn ở
+  // đúng trần này).
+  const note = redactString(raw).slice(0, MAX_WAKEUP_NOTE_LEN)
 
   const pending = await pendingWakeupsFor(input.sessionId)
   if (pending.length >= MAX_PENDING_WAKEUPS_PER_SESSION) {

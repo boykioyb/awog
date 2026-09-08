@@ -166,10 +166,16 @@ sẻ. Transcript là **L1** — nội dung do người dùng gõ, do model sinh,
 [`sessions/redact.ts`](../../apps/desktop/sidecar/src/sessions/redact.ts) trước khi rời
 sidecar (invariant #1).
 
+Cùng bộ lọc còn chạy trên **đường vào prompt** của model: `read_terminal`, `dev_server`,
+`browser` (header/response), hộp thư liên phiên, khối theo dõi PR, `note` của lời hẹn.
+Trên đường đó "che nhầm" không chỉ là lỗi UX — model nhận một **bằng chứng sai** và đi sửa
+một dòng code không tồn tại, đúng failure mode mà `EVIDENCE_PROMPT` sinh ra để chặn.
+
 Bộ lọc chạy **3 lớp**, fail-safe theo hướng che nhiều hơn thiếu — nhưng không che tới
 mức làm hỏng công dụng của chính hai bề mặt này (xem [Cố ý không
 redact](#cố-ý-không-redact)). Lớp 1 và lớp 3 được viết lại 2026-09-07 sau audit infosec
-(F6 — nhiều ca rò rỉ thật đi qua nguyên vẹn).
+(F6 — nhiều ca rò rỉ thật đi qua nguyên vẹn), rồi vá tiếp 2026-09-08 (F2/F3/F4 — xem
+[Vòng vá thứ hai](#vòng-vá-thứ-hai-2026-09-08)).
 
 **Lớp 1 — theo tên field** (chuẩn hoá lowercase, bỏ `_`/`-`, so kiểu **chứa**):
 `apikey`, `accesskey`, `authorization`, `bearer`, `clientsecret`, `cookie`, `credential`,
@@ -218,6 +224,15 @@ rò rỉ phổ biến nhất trong tool I/O và buffer terminal:
 - `{"input":{"command":"curl -H 'X-Api-Key: 9f2c…' https://…"}}` — khoá JSON là `command`, vô hại.
 - `{"command":"PGPASSWORD=Sup3rS3cret psql …"}` — không tiền tố nào của lớp 2 khớp.
 - dump header nhiều dòng: `X-API-KEY: 8f14e45f…`, `AWS_SECRET_ACCESS_KEY=wJalr…`.
+- **JSON đã in ra thành chuỗi**: `{"apiKey":"abcd1234…"}` — sau tên khoá là dấu **nháy**
+  rồi mới tới `:`, nên dấu phân cách cho phép `["']?` đứng trước. Lớp 1 không cứu ca này
+  vì nó chỉ chạy trên object THẬT; `cat ~/.awog/credentials.json` qua `read_terminal` đi
+  đúng đường chuỗi này, và key của endpoint tuỳ biến **không có tiền tố nào** cho lớp 2.
+- **Cờ CLI có giá trị cách bằng khoảng trắng**: `mysql --password …`,
+  `gh auth login --token …` (dạng `--password=…` thì đã là gán). Cờ ngắn `-p` chỉ được
+  hiểu là mật khẩu khi đứng sau `docker login`/`mysql`/`mysqldump`/`mysqladmin`/
+  `redis-cli`/`mongo`/`mongosh` — không có hàng rào đó thì `mkdir -p /path` và
+  `docker run -p 8080:80` bị che.
 
 Tên khoá nhận diện: `password|passwd|passphrase|secret|token|credential|authorization|api[_-]?key|access[_-]?key|private[_-]?key`, cho phép tiền tố/hậu tố tuỳ ý (`X-Api-Key`,
 `PGPASSWORD`, `AWS_SECRET_ACCESS_KEY`). Cố ý **không** có `auth` trần (dính
@@ -226,10 +241,35 @@ Tên khoá nhận diện: `password|passwd|passphrase|secret|token|credential|au
 
 Giá trị chỉ bị che khi "có mùi bí mật": dài ≥ 4, không phải placeholder
 (`null`/`true`/`none`/`[redacted]`…), không phải số/tỉ lệ (`maxTokens=100000`,
-`contextTokens: 87%`), không phải semver (`token: v1.2.3`), **và** có chữ số, hoặc có ký
-hiệu `_ + / = ~ @ % & * $ # !`, hoặc dài ≥ 12. Cân bằng này giữ văn xuôi lại được: một
-khoá nhạy cảm đứng trước một từ tiếng Anh ngắn thường là câu văn (`Token: Reserved for
-later`), còn bí mật thật gần như luôn có chữ số/ký hiệu/độ dài.
+`contextTokens: 87%`), không phải semver (`token: v1.2.3`), **không chứa ký tự cú pháp**
+``( ) < > { } [ ] $ * ` `` hay khoảng trắng nội bộ, **không phải định danh thuần**
+(`^[A-Za-z_][A-Za-z_.-]*$` — tên biến không chữ số), **và** có chữ số hoặc ký hiệu
+`_ + / = ~ @ % & # !`. Cân bằng này giữ văn xuôi VÀ mã nguồn lại được: một khoá nhạy cảm
+đứng trước một từ tiếng Anh ngắn thường là câu văn (`Token: Reserved for later`), đứng
+trước một biểu thức thì là code (`const secret = process.env.MY_SECRET`), còn bí mật thật
+gần như luôn có chữ số hoặc ký hiệu.
+
+**Ngoại lệ: khoá kiểu biến môi trường và cờ CLI được nới.** Hai hàng rào cuối (khoảng
+trắng nội bộ, định danh thuần) sinh ra để bảo vệ **mã nguồn**, nhưng ở vế phải của
+`PGPASSWORD=…`, `SSH_PASSPHRASE="…"`, `--token …`, `ssh-keygen -N '…'` thì theo định
+nghĩa không có mã nguồn — có thông tin đăng nhập. Nên khi tên khoá khớp
+`^[A-Z][A-Z0-9_]*$` hoặc khớp đến từ một cờ CLI, giá trị chỉ cần **dài ≥ 6** và **không
+chứa ký tự cú pháp**; khoảng trắng và định danh thuần không còn loại nó.
+
+Con số đến từ phép đo, không phải suy đoán: quét **577 phiên thật** trong
+`~/.awog/sessions` (chuỗi đã parse) cho ~950 lần khớp thêm, phần áp đảo là thông tin
+đăng nhập **đang lọt** — `POSTGRES_PASSWORD=pwpf_dev`, `MINIO_ROOT_PASSWORD=minioadmin`,
+`AWS_SECRET_ACCESS_KEY=minioadmin`, `DB_PASSWORD=postgres`,
+`SECRET_KEY=change-me-in-production` — vì hàng rào "định danh thuần" nuốt trọn mọi bí mật
+toàn chữ hoặc có gạch nối. Che nhầm còn ~140 lần, toàn hằng mã lỗi
+(`API_KEY_EXPIRED="unauthorized"`).
+
+Khoá **viết thường** cố ý **không** được nới. Cùng bộ 577 phiên: nới ra mọi giá trị trong
+nháy che thêm 104 chuỗi mà gần như tất cả là nhãn i18n ("Nhập mật khẩu", "Enter your
+password", "Passwords do not match"), và không bắt thêm bí mật thật nào. Cái giá đã biết:
+một cụm mật khẩu toàn chữ sau khoá viết thường (`passphrase: "correct horse battery
+staple"`) vẫn lọt — không có dấu hiệu cấu trúc nào tách nó khỏi một nhãn giao diện, và
+đổi 104 lần hỏng bằng chứng lấy 0 lần bắt được là một vụ đổi tồi.
 
 **Không phải bí mật nhưng vẫn bị cắt:** data URL base64 (`data:<mime>;base64,…`) của ảnh/
 PDF đính kèm → `data:<mime>;base64,[stripped: N base64 chars]`. Lý do là kích thước: ở
@@ -240,7 +280,8 @@ Ngoài ra: `redactDeep` luôn trả về **bản sao**, không bao giờ mutate 
 nhận `Session` đang nằm trong cache ấm của `sessionManager`, làm bẩn nó là làm hỏng
 transcript của phiên đang chạy. Độ sâu cap ở 24 cấp (`[truncated: too deep]`) để một file
 bệnh hoạn không làm tràn stack. `redactString` **idempotent**: chạy lại trên chuỗi đã lọc
-cho đúng kết quả cũ.
+cho đúng kết quả cũ, và có **trần độ dài đầu vào 1 MiB** — phần vượt trần bị cắt kèm nhãn
+`[truncated: N chars over the redaction cap]` chứ không được đi qua không lọc.
 
 ### Cố ý không redact
 
@@ -256,12 +297,70 @@ dưới đây có test hồi quy riêng, ngang hàng với test bắt bí mật.
 - **Đường dẫn tới file khoá** vẫn bị che nếu tên biến chứa `private_key`/`secret`
   (`SSH_PRIVATE_KEY_PATH=/home/x/id_rsa` → `[redacted]`) — chấp nhận over-redact ở đây,
   đổi lại không phải đoán "cái này là path hay là khoá".
+- **Mã nguồn sau một khoá nhạy cảm** — `const token = useCookie<string | null>(…)`,
+  `password = models.CharField(max_length=128)`, `apiKey: options.apiKey ?? undefined`,
+  `TOKEN=$(cat /tmp/t)`, `sed 's/PASSWORD=.*/PASSWORD=***/'`. Lớp 3 từ chối mọi giá trị
+  có hình dạng biểu thức.
+- **Giá trị toàn chữ cái, không chữ số, không ký hiệu** (`password: abcdefghijkl`) —
+  đánh đổi CÓ CHỦ Ý của vòng vá F4, có test tường minh. Thêm một chữ số thì lại bị che.
+
+### Vòng vá thứ hai (2026-09-08)
+
+Audit infosec kế tiếp trả về ba finding, cả ba đều có số đo thật.
+
+**F3 — độ phức tạp bậc hai (nặng nhất).** Sidecar chạy **một luồng** và phục vụ mọi RPC,
+nên một `redactString` chậm là một engine đứng hình. Hai lượng tử "mở" gây ra chuyện đó:
+`([a-z][a-z0-9+.-]*` mở đầu rule URL và `[A-Za-z0-9_.-]*` mở đầu lớp 3 — ở **mọi** vị trí
+trong một dãy chữ-số dài, chúng nuốt tới cuối dãy rồi lùi lại để tìm cái không có. Gấp đôi
+input ⇒ gấp bốn thời gian (đo trên Node 22, M-series, ms):
+
+| Input 200 KB | Trước | Sau |
+|---|---|---|
+| PEM thiếu dấu `END` | 64 234 | 29 |
+| dãy chữ trần | 62 889 | 29 |
+| `password=` + dãy dài | 25 286 | 28 |
+| nháy mở không bao giờ đóng | 66 172 | 30 |
+| nhiều mốc `BEGIN` | 127 | 81 |
+| log thật (nhiều dòng) | 4 | 5 |
+
+Sau vá, gấp đôi input ⇒ gấp đôi thời gian; ở đúng trần 1 MiB thì ca xấu nhất là 434 ms.
+
+Hệ quả cụ thể của bản trước: `save-export`/`listEvents` chạy `redactDeep` trên **toàn bộ**
+transcript ⇒ hàng chục giây ⇒ lỡ 3 nhịp heartbeat ⇒ `killWedged()` giết engine giữa lượt.
+Bản vá đặt **trần cho mọi lượng tử mở** (phụ tố tên khoá 24, giá trị 4096, thân PEM 8000
+gói trong "atomic group" `(?=(…))\1`, scheme URL 24, khoảng trắng sau `Bearer` 8), thêm
+**trần đầu vào 1 MiB** cho `redactString`, và đảo thứ tự ở `schedules/wakeup.ts`: `note`
+được kiểm **độ dài trước**, khử bí mật sau — cộng `maxLength` trong schema của tool
+`schedule_wakeup`, nên một `note` vài MB bị từ chối với chi phí O(1).
+
+**F2 — lọt hình dạng rò rỉ phổ biến nhất.** Khoá JSON trong nháy và cờ CLI (chi tiết ở
+lớp 3 bên trên). Trước vá, cả 5 ca sau đi qua **nguyên vẹn**: `{"apiKey":"…"}`,
+`{"api_key": "…"}`, `{ "password" : "…" }`, `mysql --password …`,
+`docker login -u me -p …`.
+
+**F4 — che nhầm nặng, và nó làm hỏng bằng chứng gửi cho model.** Đo trên 366 dòng JSONL
+của 40 phiên: `.steps[].detail.content` bị sửa **207 lần**, `.detail.output` 38,
+`.detail.diff` 27 — gần như toàn bộ là tên biến, dính vì luật cũ "dài ≥ 12 ký tự là đủ".
+Luật đó bị gỡ và thay bằng hai hàng rào hình dạng (ký tự cú pháp / định danh thuần).
+**Không** tách `detail.diff`/`detail.content` ra khỏi lớp 3: một `Write` ghi file `.env`
+mang đúng `DB_PASSWORD=…` trong `content`, bỏ lớp 3 ở đó là mở lại một lỗ thật.
+
+**F4b — hàng rào của chính F4 mở ra một lỗ mới.** Phát hiện khi kiểm chứng lại bản vá
+F4 chứ không phải khi audit: "định danh thuần" khớp `^[A-Za-z_][A-Za-z_.-]*$`, nên nó
+chặn `password: hashedPassword` (đúng ý đồ) **và** `SECRET_KEY=change-me-in-production`
+(không hề đúng ý đồ). Cùng lúc, hàng rào "khoảng trắng nội bộ" làm lọt sạch dạng
+passphrase bốn từ được khuyến nghị rộng rãi. Cả hai đóng bằng ngoại lệ env/CLI ở trên —
+đo được, không phải nới bừa.
 
 ### Test
 
 [`sessions/__tests__/redact.test.ts`](../../apps/desktop/sidecar/src/sessions/__tests__/redact.test.ts)
-— 23 test, hai nhóm cân nhau: nhóm **bắt được** (6 ca F6 từng lọt + hình dạng token mới +
-không hồi quy lớp 2 + idempotent + không mutate) và nhóm **cố ý không redact**. Chạy:
+— 47 test, các nhóm cân nhau: **bắt được** (6 ca F6 từng lọt + hình dạng token mới + JSON
+trong chuỗi và cờ CLI của F2 + không hồi quy lớp 2 + idempotent + không mutate), **cố ý
+không redact** (metadata, SHA, văn xuôi) và **mã nguồn không được đụng tới** (F4), cộng
+nhóm **hiệu năng** (F3 — 5 hình dạng đối kháng 200 KB phải xong dưới 2 giây; bản trước mất
+25–66 giây) và nhóm **khoá env / cờ CLI** (F4b, kèm ranh giới cố ý: khoá viết thường vẫn
+giữ nguyên nhãn giao diện, `-N` chỉ mang nghĩa passphrase sau `ssh-keygen`). Chạy:
 `npx vitest@2 run src/sessions/__tests__/redact.test.ts` trong `apps/desktop/sidecar`
 (vitest chưa nằm trong devDeps, xem `git/__tests__/discover.test.ts`).
 
