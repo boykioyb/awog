@@ -121,6 +121,38 @@ Một lượt infosec chạy trên đúng phần vừa thêm đã **chặn merge
 | F15 | Low | `mergeOne` đẩy `git stderr` thô lên event UI, không qua sanitizer của đường RPC | ✅ |
 | F9–F14 | Low/Med | Chi phí matcher nhân số luật; cache theo `mtime+size`; `run_in_background` không nằm trong subject của luật; chưa có UI xem/thu hồi luật | 🟡 F9 xong, còn lại vào backlog |
 
+## Audit lần 2 (2026-09-08) — sau khi allowlist Remote Gateway mở rộng
+
+Bốn lượt audit song song, **cả bốn đều chặn merge**. Bản vá nằm ở 7 commit `fix(...)`
+trên nhánh này. Những mục đáng ghi lại:
+
+| # | Mức | Nội dung | TT |
+|---|---|---|---|
+| A1 | **Critical** | `sessions.steer` không kẹp chế độ. Mọi method khác từ chối phiên chạy chế độ không cần duyệt khi `unattended` tắt, riêng steer thì không ⇒ một frame từ điện thoại lái được phiên `execute` | ✅ Steer đọc chế độ THẬT của phiên đích |
+| A2 | High | Thu hồi thiết bị không hạ `unattended`. Công tắc là toàn cục, không gắn thiết bị ⇒ thiết bị ghép nối **tiếp theo** thừa hưởng ngay quyền chạy không duyệt | ✅ Revoke hạ luôn công tắc |
+| A3 | High | Bộ so khớp glob sai ở **biên thư mục**: biến `filled` dùng chung cho mọi vị trí bắt đầu, nên `*` khớp xuyên `/` | ✅ Tách nhánh `cross` + tiền tính `nextSlash`, kèm test hồi quy |
+| A4 | High | `will-navigate` không bắn cho redirect server và iframe con ⇒ một cú 302 đưa Browser pane ra ngoài allowlist. Lần vá trước sửa `browser.ts` mà **bỏ sót `window.ts`** | ✅ `will-redirect` + `will-frame-navigate` ở cả hai, cộng chặn permission request và download |
+| A5 | High | Trust của hook neo vào **ID lấy từ frontmatter** — tức nằm trong chính file sửa được | ✅ ID ép theo tên file; vân tay băm trên bytes đã parse; script ngoài `.awog/hooks` fail-closed |
+| A6 | High | `confirmCommand` của dev server là tuỳ chọn ⇒ quên ở một call site là fail-**open** | ✅ Bắt buộc |
+| A7 | Medium | Spec widget khẳng định "không có kênh rò rỉ vì CSP chặn hết". Khẳng định SAI: CSP không có directive nào quản việc trang **tự điều hướng chính nó** | ✅ `openFull()` gửi bản không script; đính chính thẳng câu sai trong spec |
+| A8 | High | `redact.ts` bậc hai: 200 KB mất ~57 giây, đủ lỡ 3 nhịp heartbeat và bị `killWedged()` giết engine giữa lượt | ✅ Trần cho mọi lượng tử mở + atomic group + trần đầu vào 1 MiB. Gấp đôi input ⇒ gấp đôi thời gian |
+
+**F4b — hàng rào chống che nhầm tự mở ra một lỗ.** Đáng ghi riêng vì nó chỉ lộ ra khi
+**kiểm chứng lại một bản vá đã pass**, không phải khi audit. Bản vá "che nhầm mã nguồn"
+thay luật `dài ≥ 12` bằng hàng rào "định danh thuần" `^[A-Za-z_][A-Za-z_.-]*$`. Hàng rào
+đó chặn `password: hashedPassword` đúng ý đồ — và nuốt trọn
+`SECRET_KEY=change-me-in-production`. Quét **577 phiên thật**: ~950 lần khớp bị bỏ qua,
+phần áp đảo là thông tin đăng nhập đang lọt (`POSTGRES_PASSWORD`, `MINIO_ROOT_PASSWORD`,
+`AWS_SECRET_ACCESS_KEY`, `DB_PASSWORD=postgres`). Đóng bằng ngoại lệ hẹp cho khoá kiểu
+biến môi trường và cờ CLI; khoá viết thường cố ý không nới (đo được: +104 nhãn i18n, +0
+bí mật thật).
+
+**Điều đáng rút ra (lần 2):** báo cáo của agent **chẩn đoán sai nguyên nhân** hiệu năng
+(quy cho nhánh PEM; thủ phạm thật là hai lượng tử khác), và một agent khác **khẳng định
+sai** rằng nhánh Claude SDK không gọi `evaluatePermissionRules`. Cả hai chỉ lộ ra khi tự
+đo và tự đọc lại `path:line`. Một suite xanh và một báo cáo gọn gàng không thay được việc
+tự nhìn — nhất là ở regex và ở chỗ nói "không có đường nào tới đây".
+
 **Điều đáng rút ra:** F1 sinh ra *từ chính bản vá* của một lỗ hổng khác. Luật cũ hỏng vì khoá theo tên tool; luật mới khoá theo nội dung đúng như thiết kế, nhưng việc đặt tier project **trong repo** đã lặng lẽ biến cấu hình quyền thành thứ người lạ ghi được. Sửa một lỗ ở tầng logic mà không xét lại tầng lưu trữ là cách tạo ra lỗ tiếp theo.
 
 Bài học đó đã được nâng thành **luật đứng** ở [ADR 0085](../decisions/0085-workflow-as-script.md) D-4: *tier nằm trong repo không bao giờ mang mã thực thi, và không bao giờ tự mang bản ghi trust của chính nó.* Áp luật đó ngược lại repo thì lộ ngay `hooks/store.ts:129` (xem bảng bug ở trên).
