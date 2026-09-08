@@ -62,6 +62,8 @@ import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
 import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
 import { buildTerminalToolsSdkServer } from './terminal-sdk-server.js'
+import { buildBrowserToolSdkServer } from './browser-sdk-server.js'
+import { BROWSER_MCP_SERVER } from '../tools/browser-tool.js'
 import { TERMINAL_MCP_SERVER } from '../tools/read-terminal-tool.js'
 import { SURFACE_MCP_SERVER } from '../tools/surface-tools.js'
 import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
@@ -599,6 +601,9 @@ export async function runStreamClaude(
     // duy nhất. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat — đúng điều
     // kiện `filter.chatSession` mà nhánh Pi dùng.
     [TERMINAL_MCP_SERVER]: buildTerminalToolsSdkServer(args.cwd ?? process.cwd()),
+    // Embedded browser (ADR 0043) → mcp__awogbrowser__browser_tool. Same handler as
+    // the Pi AgentTool, so browsing does not disappear on an Anthropic account.
+    [BROWSER_MCP_SERVER]: buildBrowserToolSdkServer(args.cwd ?? process.cwd()),
   }
   const claudeBinary = resolveClaudeBinary()
 

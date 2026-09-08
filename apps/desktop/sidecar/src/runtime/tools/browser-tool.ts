@@ -41,6 +41,11 @@ import { assertSafeUrl } from './ssrf.js'
 
 export const BROWSER_TOOL_NAME = 'browser_tool'
 
+// Tên server MCP in-process bắc tool này sang nhánh Claude SDK. Đặt ở đây chứ
+// không trong file SDK, cùng lý do với `TERMINAL_MCP_SERVER`: `step-mapper.ts`
+// cần nó để gấp tên bắc cầu, mà file đó chạy trên CẢ HAI nhánh.
+export const BROWSER_MCP_SERVER = 'awogbrowser'
+
 // Mutating actions that should be permission-gated (see runtime/permission.ts).
 // `tab_new` is in the set because it can carry a url, i.e. it navigates.
 // Read-only actions (snapshot / extract / screenshot / console / network /

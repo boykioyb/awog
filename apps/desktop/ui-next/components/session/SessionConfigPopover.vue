@@ -207,6 +207,7 @@ const BRIDGE_SERVER_OF: Record<string, string> = {
   ...Object.fromEntries(SURFACE_TOOLS.map((tl) => [tl, 'awogsurfaces'])),
   schedule_wakeup: 'awogsurfaces',
   read_terminal: 'awogterm',
+  browser_tool: 'awogbrowser',
 }
 // KHAI TRƯỚC `TOOL_GROUPS`: đó là một `const` cấp module, chạy NGAY lúc nạp file,
 // nên nó đọc `SURFACE_TOOLS` trong cùng lượt đánh giá. Khai sau sẽ ném TDZ — đúng
@@ -217,7 +218,7 @@ const TOOL_GROUPS: [string, string[]][] = [
   // read_terminal reads the tail of a PTY the USER typed in — off here means the
   // model cannot see the user's terminals at all.
   ['Exec', ['Bash', 'BashOutput', 'KillShell', 'monitor', 'read_terminal']],
-  ['Web', ['WebFetch', 'WebSearch']],
+  ['Web', ['WebFetch', 'WebSearch', 'browser_tool']],
   ['Agent', ['Task', 'TodoWrite', 'ExitPlanMode', 'schedule_wakeup']],
   // Model-initiated surfaces: chapters, file cards, task suggestions, follow-ups.
   // Off here means the model can still answer, it just cannot put cards in the

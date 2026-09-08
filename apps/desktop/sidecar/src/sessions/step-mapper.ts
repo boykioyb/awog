@@ -29,6 +29,7 @@ import {
   READ_TERMINAL_TOOL_NAMES,
   TERMINAL_MCP_SERVER,
 } from '../runtime/tools/read-terminal-tool.js'
+import { BROWSER_MCP_SERVER, BROWSER_TOOL_NAME } from '../runtime/tools/browser-tool.js'
 import type {
   FindingSeverity,
   SessionFinding,
@@ -319,6 +320,7 @@ const surfaceToolNames: ReadonlySet<string> = new Set<string>(SURFACE_TOOL_NAMES
 const AWOG_BRIDGED_TOOLS: readonly (readonly [string, ReadonlySet<string>])[] = [
   [`mcp__${SURFACE_MCP_SERVER}__`, surfaceToolNames],
   [`mcp__${TERMINAL_MCP_SERVER}__`, new Set<string>(READ_TERMINAL_TOOL_NAMES)],
+  [`mcp__${BROWSER_MCP_SERVER}__`, new Set<string>([BROWSER_TOOL_NAME])],
 ]
 
 function unbridgeAwogToolName(name: string): string {
