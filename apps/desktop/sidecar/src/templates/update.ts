@@ -346,6 +346,10 @@ export async function updateTemplate(
       sourceUrl: bundleUrl(ref, bundle.bundleDir),
       sourceRef: ref.ref,
       ...(bundle.version ? { version: bundle.version } : {}),
+      // Trang chủ đến từ danh mục chứ không từ bundle, nên bước cập nhật không
+      // đọc lại được — mang nguyên từ `.install.json` cũ sang, kẻo cập nhật một
+      // phát là mất field (nó đã qua `safeHomepage` lúc đọc).
+      ...(meta.homepage ? { homepage: meta.homepage } : {}),
       entities: baselines,
     })
     await swapBundle(staging, id)

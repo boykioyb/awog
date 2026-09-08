@@ -250,6 +250,7 @@ async function withInstallMeta(tpl: InstalledTemplate): Promise<InstalledTemplat
     sourceUrl: meta.sourceUrl,
     sourceRef: meta.sourceRef,
     installedAt: meta.installedAt,
+    ...(meta.homepage ? { homepage: meta.homepage } : {}),
   }
 }
 

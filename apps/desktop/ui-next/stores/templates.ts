@@ -26,9 +26,12 @@ export type TemplateEntityRef = {
 // A saved template bundle (mirror of sidecar ProjectTemplate). The store owns
 // its own minimal slice — NOT imported from the sidecar package.
 //
-// `version`/`sourceUrl`/`sourceRef`/`installedAt` only exist on bundles fetched
-// from a source (WP10): they come from the bundle's `.install.json` and are what
-// makes a template a re-installable plugin. A locally exported bundle has none.
+// `version`/`sourceUrl`/`sourceRef`/`installedAt`/`homepage` only exist on bundles
+// fetched from a source (WP10): they come from the bundle's `.install.json` and are
+// what makes a template a re-installable plugin. A locally exported bundle has none.
+//
+// `homepage` là trang chủ do người xuất bản danh mục khai — dữ liệu L1, sidecar đã
+// lọc cả lúc ghi lẫn lúc đọc `.install.json` (`templates/homepage.ts`).
 export type ProjectTemplate = {
   id: string
   name: string
@@ -39,6 +42,7 @@ export type ProjectTemplate = {
   sourceUrl?: string
   sourceRef?: string
   installedAt?: string
+  homepage?: string
   entities: TemplateEntityRef[]
 }
 

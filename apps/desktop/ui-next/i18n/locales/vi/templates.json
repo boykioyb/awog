@@ -15,6 +15,7 @@
 
   "templates.detail.install": "Cài đặt",
   "templates.detail.delete": "Xoá template",
+  "templates.detail.homepage": "Trang chủ",
   "templates.detail.entities": "Thành phần",
   "templates.detail.entityCount": "{n} thành phần",
   "templates.detail.noEntities": "Template này chưa có thành phần nào.",

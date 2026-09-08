@@ -431,6 +431,9 @@ export async function finalizeBundleDir(
     sourceUrl: string
     sourceRef: string
     version?: string
+    // Trang chủ danh mục khai cho bundle này (chỉ đường cài từ danh mục mới có).
+    // `writeInstallMeta` lọc lại trước khi ghi — đây là dữ liệu L1.
+    homepage?: string
     entities: Record<string, HashMap>
   },
 ): Promise<void> {
@@ -440,6 +443,7 @@ export async function finalizeBundleDir(
     sourceRef: provenance.sourceRef,
     installedAt: new Date().toISOString(),
     ...(provenance.version ? { version: provenance.version } : {}),
+    ...(provenance.homepage ? { homepage: provenance.homepage } : {}),
     entities: provenance.entities,
   })
 }

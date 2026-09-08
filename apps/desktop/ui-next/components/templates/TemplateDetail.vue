@@ -33,6 +33,15 @@
     <div class="dscroll">
       <p v-if="template.description" class="tdt-desc">{{ template.description }}</p>
 
+      <!-- Trang chủ do người xuất bản khai, giữ lại từ lúc cài (`.install.json`).
+           Chỉ hiện khi nó là link https thật — hỏng thì KHÔNG hiện dòng nào. -->
+      <div v-if="safeHomepage" class="tdt-home">
+        <span class="tdt-home-lbl">{{ t('templates.detail.homepage') }}</span>
+        <button type="button" class="tdt-home-url" :title="safeHomepage" @click="openHomepage">
+          {{ safeHomepage }}
+        </button>
+      </div>
+
       <div class="tdt-section">
         <div class="tdt-section-hd">{{ t('templates.detail.entities') }}</div>
         <div v-if="!groups.length" class="tdt-empty">
@@ -75,6 +84,31 @@ const props = defineProps<{ template: ProjectTemplate }>()
 const emit = defineEmits<{ install: []; delete: []; 'check-update': [] }>()
 
 const { t } = useI18n()
+const sc = useSidecar()
+
+// Trang chủ đến từ danh mục do người lạ xuất bản ⇒ L1. Sidecar đã lọc lúc ghi và
+// lúc đọc `.install.json` (`templates/homepage.ts`), nhưng đây là bề mặt biến nó
+// thành một cú bấm nên tự kiểm lại — cùng luật, cùng lý do như
+// `TemplateConsentPanel`: chỉ https, sai hoặc thiếu ⇒ chuỗi rỗng ⇒ không render.
+const safeHomepage = computed<string>(() => {
+  const raw = props.template.homepage?.trim()
+  if (!raw) return ''
+  try {
+    return new URL(raw).protocol === 'https:' ? raw : ''
+  } catch {
+    return ''
+  }
+})
+
+// Mở bằng đúng đường của app: shell.openExternal ở main process (gate theo scheme
+// lần nữa ở đó). KHÔNG <a target="_blank">.
+function openHomepage(): void {
+  const url = safeHomepage.value
+  if (!url) return
+  void sc.openExternal(url).catch((err) => {
+    console.warn('[templates] openExternal failed', err)
+  })
+}
 
 // Manifest grouped by kind, in canonical kind order, with a count chip per group.
 type Group = { kind: ConfigKind; entities: TemplateEntityRef[] }
@@ -118,6 +152,31 @@ const groups = computed<Group[]>(() => {
   color: var(--textMuted);
   line-height: var(--lh-prose);
   margin: 0 0 18px;
+}
+.tdt-home {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  margin: 0 0 18px;
+}
+.tdt-home-lbl {
+  color: var(--textDim);
+  flex: 0 0 auto;
+}
+.tdt-home-url {
+  padding: 0;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  overflow-wrap: anywhere;
+}
+.tdt-home-url:hover {
+  text-decoration: underline;
 }
 .tdt-section-hd {
   font-size: var(--fs-xs);

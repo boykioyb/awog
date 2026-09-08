@@ -30,8 +30,9 @@
 import { createHash } from 'node:crypto'
 import type { Dirent } from 'node:fs'
 import { readdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { z } from 'zod'
+import { safeHomepage } from './homepage.js'
 import type { ProjectTemplate, TemplateEntityRef } from '../types/shared.js'
 
 export const INSTALL_META_NAME = '.install.json'
@@ -53,6 +54,10 @@ const InstallMetaSchema = z.object({
   sourceRef: z.string().min(1).max(256),
   installedAt: z.string().max(64),
   version: z.string().max(120).optional(),
+  // Trang chủ người xuất bản khai trong danh mục — siêu dữ liệu phụ, KHÔNG bắt
+  // buộc: `.install.json` do bản app cũ ghi không có field này và vẫn đọc bình
+  // thường. Nội dung của nó còn phải qua `safeHomepage` (xem read/write dưới).
+  homepage: z.string().max(2048).optional(),
   // `${kind}/${id}` → ảnh chụp nội dung nguồn của entity đó lúc đồng bộ.
   entities: z.record(z.string().max(400), HashMapSchema),
 })
@@ -73,6 +78,7 @@ export type InstalledTemplate = ProjectTemplate & {
   sourceUrl?: string
   sourceRef?: string
   installedAt?: string
+  homepage?: string
 }
 
 export function installMetaFile(bundleDir: string): string {
@@ -90,10 +96,25 @@ export async function readInstallMeta(bundleDir: string): Promise<TemplateInstal
   }
   try {
     const parsed = InstallMetaSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
+    if (!parsed.success) return null
+    // zod chỉ nói "là chuỗi ≤ 2048" — chưa nói link có bấm được an toàn không.
+    // File này nằm trong thư mục người dùng: sửa tay được, và bản app cũ có thể
+    // đã ghi một homepage chưa qua lọc. Nên lọc LẠI lúc đọc, đúng khuôn `readCache`
+    // của marketplace.ts. Homepage hỏng chỉ rụng field, meta vẫn dùng được.
+    return withSafeHomepage(bundleDir, parsed.data)
   } catch {
     return null
   }
+}
+
+// Một chỗ áp phép lọc cho cả đường đọc lẫn đường ghi. `id` trong log là tên thư
+// mục bundle — đủ để tra ra template nào khai sai.
+function withSafeHomepage(bundleDir: string, meta: TemplateInstallMeta): TemplateInstallMeta {
+  const homepage = safeHomepage('install-meta', basename(bundleDir), meta.homepage)
+  if (homepage === meta.homepage) return meta
+  const next: TemplateInstallMeta = { ...meta }
+  delete next.homepage
+  return homepage ? { ...next, homepage } : next
 }
 
 export async function writeInstallMeta(
@@ -102,7 +123,10 @@ export async function writeInstallMeta(
 ): Promise<void> {
   const file = installMetaFile(bundleDir)
   const tmp = `${file}.tmp.${process.pid}`
-  await writeFile(tmp, JSON.stringify(meta, null, 2), 'utf8')
+  // `homepage` đến từ danh mục do người lạ xuất bản (L1) — lọc TRƯỚC khi nó
+  // thành một dòng trên đĩa, đừng để một `javascript:` nằm chờ được bấm.
+  const safe = withSafeHomepage(bundleDir, meta)
+  await writeFile(tmp, JSON.stringify(safe, null, 2), 'utf8')
   await rename(tmp, file)
 }
 

@@ -15,6 +15,7 @@
 
   "templates.detail.install": "Install",
   "templates.detail.delete": "Delete template",
+  "templates.detail.homepage": "Homepage",
   "templates.detail.entities": "Entities",
   "templates.detail.entityCount": "{n} entities",
   "templates.detail.noEntities": "This template has no entities.",

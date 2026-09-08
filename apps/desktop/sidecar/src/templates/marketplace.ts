@@ -40,7 +40,7 @@
 //              được — kiểm ngay lúc map bằng đúng hàm đó, entry hỏng bị LOẠI +
 //              log thay vì hiện ra rồi hỏng lúc cài. `homepage` là link UI biến
 //              thành cú bấm mở trình duyệt: bắt buộc https + qua `ssrfCheck`,
-//              hỏng thì RỤNG RIÊNG field (entry vẫn sống) — xem `safeHomepage`.
+//              hỏng thì RỤNG RIÊNG field (entry vẫn sống) — xem `homepage.ts`.
 //  Cache     — đọc lại cache cũng là L1: validate lại bằng đúng schema.
 //  Đồng ý    — cài PHẢI kèm `token` lấy từ `inspect`. Token là băm của kế hoạch
 //              (danh sách entity + từng file + blob sha). Nguồn đổi nội dung giữa
@@ -61,6 +61,7 @@ import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import { awogHome } from '../util/path.js'
 import { blockedHostReason, ssrfCheck } from '../mcp/http-client.js'
+import { safeHomepage } from './homepage.js'
 import { baselineFromDisk, entityKeyOf, type InstalledTemplate } from './install-meta.js'
 import {
   bundleUrl,
@@ -282,41 +283,6 @@ function logDroppedUrl(from: string, id: string, url: string, reason: string): v
     url,
     reason,
   })
-}
-
-// `homepage` là trang chủ người xuất bản tự khai, và UI biến nó thành MỘT CÚ BẤM
-// mở trình duyệt hệ thống. Nó không cài gì nên không đi qua `bundleUrlProblem`
-// (luật đó ghim github.com + dạng `/tree/`), nhưng vẫn là L1 y hệt: một
-// `javascript:`/`data:`/`file:` lọt tới UI là cái bẫy nằm chờ được bấm.
-//
-// Ở đây cũng chỉ viết đúng MỘT luật của riêng danh mục — "https", cùng điều kiện
-// `bundleUrlProblem` áp cho `url`. Phần còn lại (scheme thực thi được, loopback,
-// IP nội bộ) hỏi thẳng `ssrfCheck` — đúng hàm mọi lối ra mạng của sidecar đang
-// dùng — thay vì chép luật ra chỗ thứ hai.
-function homepageProblem(url: string): string | null {
-  const guard = ssrfCheck(url)
-  // `reason` là optional trên `SsrfGuardResult` — không có thì vẫn phải loại.
-  if (!guard.ok) return guard.reason ?? 'not a safe link'
-  // `ssrfCheck` còn nhận http; danh mục AWOG tự tuyển thì không có cớ nào để một
-  // trang chủ rơi xuống http. `new URL` không thể ném ở đây: `ssrfCheck` vừa parse.
-  return new URL(url).protocol === 'https:' ? null : 'homepage must be https'
-}
-
-// Homepage hỏng KHÔNG giết entry — nó là siêu dữ liệu phụ, không phải thứ đem
-// cài. Chỉ RỤNG RIÊNG cái field, entry vẫn hiện ra bình thường (nhưng có log:
-// người xuất bản khai sai thì phải tra được).
-function safeHomepage(from: string, id: string, raw?: string): string | undefined {
-  if (!raw) return undefined
-  const url = raw.trim()
-  const problem = homepageProblem(url)
-  if (!problem) return url
-  log.warn('templates: catalog entry homepage dropped — not a safe link', {
-    from,
-    entry: id,
-    homepage: raw,
-    reason: problem,
-  })
-  return undefined
 }
 
 function toEntry(raw: unknown): MarketplaceEntry | null {
@@ -580,7 +546,11 @@ export async function inspectEntry(id: string): Promise<MarketplaceInspection> {
 
 // Dựng bundle trong thư mục tạm rồi mới đổi chỗ (giống `remote.ts`/`update.ts`):
 // mất mạng giữa chừng thì bản đang có còn nguyên.
-async function writePlannedBundle(ref: RepoRef, bundle: PlannedBundle): Promise<void> {
+async function writePlannedBundle(
+  ref: RepoRef,
+  bundle: PlannedBundle,
+  homepage?: string,
+): Promise<void> {
   const staging = stagingDir(bundle.localId)
   await mkdir(staging, { recursive: true, mode: 0o700 })
   try {
@@ -597,6 +567,9 @@ async function writePlannedBundle(ref: RepoRef, bundle: PlannedBundle): Promise<
       sourceUrl: bundleUrl(ref, bundle.bundleDir),
       sourceRef: ref.ref,
       ...(bundle.version ? { version: bundle.version } : {}),
+      // Trang chủ chỉ có ở ENTRY của danh mục (bundle không tự khai), nên nó phải
+      // đi cùng bước ghi này mới sống sót qua lúc cài.
+      ...(homepage ? { homepage } : {}),
       // Cài mới: đĩa CHÍNH LÀ nội dung nguồn vừa tải, chưa có sửa đổi cục bộ nào.
       entities: await baselineFromDisk(staging, bundle.entities),
     })
@@ -625,7 +598,7 @@ export async function installEntry(
     return { status: 'exists', templateId: inspection.templateId }
   }
 
-  await writePlannedBundle(ref, bundle)
+  await writePlannedBundle(ref, bundle, entry.homepage)
   const template = await getTemplate(bundle.localId)
   if (!template) throw new RpcError(-32012, `Install finished but ${bundle.localId} is unreadable`)
   log.info('templates: installed from catalog', {
