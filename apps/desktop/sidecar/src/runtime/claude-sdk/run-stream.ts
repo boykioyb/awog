@@ -329,10 +329,24 @@ function toClaudeFileTextBlock(att: SessionAttachment): ClaudeTextBlock | null {
   if (att.preview && att.preview.trim().length > 0) {
     return { type: 'text', text: `<attached-file name="${name}">\n${att.preview}\n</attached-file>` }
   }
-  // A PDF that will ride as a document block is not also a reference.
-  if (parseDataUrl(att.url)?.[0] === 'application/pdf') return null
+  // Một PDF SẼ đi theo dạng document block thì không cần thêm dòng tham chiếu.
+  // Nhưng phải hỏi ĐÚNG câu đó — `toClaudeDocBlock` còn từ chối vì quá cỡ, và bản
+  // trước bỏ qua mọi PDF bất kể block kia có được tạo hay không: một PDF vượt trần
+  // vì thế BIẾN MẤT hoàn toàn với model, không block, không cả một dòng nói rằng
+  // file tồn tại. Nay quá cỡ thì rơi xuống dòng tham chiếu bên dưới.
+  if (parseDataUrl(att.url)?.[0] === 'application/pdf' && toClaudeDocBlock(att) !== null) {
+    return null
+  }
   if (!att.path) return null
   const attrs = `name="${name}" path="${sanitizeAttr(att.path)}"`
+  // PDF được nói riêng, y như nhánh Pi (context-builder.ts): `Read` đọc được theo
+  // KHOẢNG TRANG (offset = trang đầu, limit = số trang). Câu chung chung "dùng
+  // Read" khiến model đòi cả tài liệu 300 trang rồi mới biết là quá lớn.
+  if (parseDataUrl(att.url)?.[0] === 'application/pdf') {
+    const note =
+      'PDF too large to inline. Read it with the Read tool a page range at a time — offset is the first page, limit the page count.'
+    return { type: 'text', text: `<attached-file ${attrs} note="${note}" />` }
+  }
   return {
     type: 'text',
     text: `<attached-file ${attrs} note="Binary/document attachment — no inline text. Use the Read tool to open it if it is inside your working directory." />`,
