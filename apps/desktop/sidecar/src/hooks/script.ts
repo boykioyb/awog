@@ -24,15 +24,30 @@ function isMissing(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as FsError).code === 'ENOENT'
 }
 
-// First token in the shell command that looks like a script file path.
-export function detectScriptToken(command: string): string | null {
+// MỌI token trong lệnh trông như đường dẫn script, theo đúng thứ tự xuất hiện.
+//
+// Trước đây hàm này trả về token ĐẦU TIÊN, và đó là một lỗ: một lệnh
+// `bash .claude/hooks/a.sh && bash scripts/evil.sh` phân giải thành `inside`
+// (a.sh) nên trust được cấp, trong khi `scripts/evil.sh` không bao giờ được
+// nhìn tới — vừa lách rào "outside ⇒ từ chối trust" bằng cách đặt một script hợp
+// lệ lên trước, vừa khiến sửa script thứ hai không làm mất dấu duyệt. Đồng ý
+// phải phủ THỨ THỰC SỰ CHẠY, mà "thứ thực sự chạy" là tất cả chúng.
+//
+// Khử trùng lặp theo mặt chữ để một script được gọi hai lần không phải đọc hai
+// lần; thứ tự giữ nguyên nên vân tay ổn định.
+export function detectScriptTokens(command: string): string[] {
   const tokens = command.match(/"[^"]*"|'[^']*'|\S+/g) ?? []
+  const out: string[] = []
   for (const raw of tokens) {
     const t = raw.replace(/^['"]|['"]$/g, '')
-    if (SCRIPT_EXT.test(t)) return t
+    if (SCRIPT_EXT.test(t) && !out.includes(t)) out.push(t)
   }
-  return null
+  return out
 }
+
+// Trần số script trong một lệnh. Một hook chạy hơn ngần này script là thứ ta
+// không ràng buộc nổi một cách có nghĩa ⇒ fail-closed thay vì băm nửa vời.
+const MAX_SCRIPTS = 8
 
 async function workspaceFor(source: HookSource, projectId: string | undefined): Promise<string> {
   if (source === 'project') {
@@ -71,20 +86,28 @@ function isAllowed(abs: string, workspace: string): boolean {
 // (băm JSON KHÔNG phủ được mã thực thi).
 export type HookScriptRef =
   | { kind: 'none' }
-  | { kind: 'inside'; path: string; abs: string }
+  | { kind: 'inside'; scripts: readonly { path: string; abs: string }[] }
   | { kind: 'outside'; path: string }
 
+// `inside` chỉ khi MỌI script trong lệnh nằm trong vùng cho phép. Một cái ở ngoài
+// là cả lệnh `outside`: băm những cái còn lại chỉ tạo ra một vân tay trông có vẻ
+// đầy đủ trong khi phần không băm mới là phần đáng ngờ.
 export async function resolveHookScriptRef(
   command: string,
   source: HookSource,
   projectId: string | undefined,
 ): Promise<HookScriptRef> {
-  const token = detectScriptToken(command)
-  if (!token) return { kind: 'none' }
+  const tokens = detectScriptTokens(command)
+  if (tokens.length === 0) return { kind: 'none' }
+  if (tokens.length > MAX_SCRIPTS) return { kind: 'outside', path: tokens[0] }
   const workspace = await workspaceFor(source, projectId)
-  const abs = resolveToken(token, workspace)
-  if (!isAllowed(abs, workspace)) return { kind: 'outside', path: token }
-  return { kind: 'inside', path: token, abs }
+  const scripts: { path: string; abs: string }[] = []
+  for (const token of tokens) {
+    const abs = resolveToken(token, workspace)
+    if (!isAllowed(abs, workspace)) return { kind: 'outside', path: token }
+    scripts.push({ path: token, abs })
+  }
+  return { kind: 'inside', scripts }
 }
 
 async function resolveHookScript(
@@ -93,7 +116,9 @@ async function resolveHookScript(
   projectId: string | undefined,
 ): Promise<{ path: string; abs: string } | null> {
   const ref = await resolveHookScriptRef(command, source, projectId)
-  return ref.kind === 'inside' ? { path: ref.path, abs: ref.abs } : null
+  // Trình sửa script trong UI làm việc với script ĐẦU TIÊN — đó là affordance
+  // giao diện, khác với vân tay (phải phủ hết). Đừng gộp hai mối quan tâm này.
+  return ref.kind === 'inside' ? ref.scripts[0] : null
 }
 
 export interface HookScript {

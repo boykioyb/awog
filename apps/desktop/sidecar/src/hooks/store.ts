@@ -289,20 +289,30 @@ async function scriptComponent(hook: Hook): Promise<string | null> {
     )
     return null
   }
-  try {
-    // `stat` trước: một FIFO/thiết bị sẽ treo `readFile` vô hạn.
-    const st = await stat(ref.abs)
-    if (!st.isFile()) return null
-    return sha256Hex(await readFile(ref.abs))
-  } catch (err) {
-    if (isMissing(err)) return 'absent'
-    log.warn('hooks: cannot read the hook script to fingerprint it', {
-      id: hook.id,
-      script: ref.path,
-      err: err instanceof Error ? err.message : String(err),
-    })
-    return null
+  // MỌI script lệnh gọi, không chỉ cái đầu: `bash a.sh && bash b.sh` chạy cả hai,
+  // nên đồng ý phải phủ cả hai. Ghép bằng '\n' — mỗi thành phần là hex độ dài cố
+  // định (hoặc 'absent') nên không có cách ghép nhập nhằng ra cùng một chuỗi.
+  const parts: string[] = []
+  for (const script of ref.scripts) {
+    try {
+      // `stat` trước: một FIFO/thiết bị sẽ treo `readFile` vô hạn.
+      const st = await stat(script.abs)
+      if (!st.isFile()) return null
+      parts.push(sha256Hex(await readFile(script.abs)))
+    } catch (err) {
+      if (isMissing(err)) {
+        parts.push('absent')
+        continue
+      }
+      log.warn('hooks: cannot read the hook script to fingerprint it', {
+        id: hook.id,
+        script: script.path,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      return null
+    }
   }
+  return parts.join('\n')
 }
 
 // Vân tay của thứ THỰC SỰ CHẠY = (nội dung JSON, nội dung script command gọi).
@@ -345,7 +355,11 @@ async function readTrustedHooks(projectPath: string): Promise<Map<string, string
     if (obj.version !== TRUST_VERSION) {
       log.warn(
         'hooks: trust record was written by an older scheme and is IGNORED — re-approve the hooks to grant trust again',
-        { file, version: typeof obj.version === 'number' ? obj.version : null, expected: TRUST_VERSION },
+        {
+          file,
+          version: typeof obj.version === 'number' ? obj.version : null,
+          expected: TRUST_VERSION,
+        },
       )
       return new Map()
     }
@@ -431,7 +445,10 @@ export async function setHookTrust(projectId: string, hookIds: string[]): Promis
     // eslint-disable-next-line no-await-in-loop
     const hash = await fingerprint(loaded)
     if (!hash) {
-      log.warn('hooks: cannot fingerprint what this hook runs, trust NOT granted', { projectId, id })
+      log.warn('hooks: cannot fingerprint what this hook runs, trust NOT granted', {
+        projectId,
+        id,
+      })
       continue
     }
     existing.set(loaded.hook.id, hash)
@@ -596,7 +613,10 @@ export async function appendRunRecord(
     await mkdir(dirname(file), { recursive: true, mode: 0o700 })
     await appendFile(file, `${JSON.stringify(record)}\n`, 'utf8')
   } catch (err) {
-    log.warn('hooks: failed to append run record', { id, err: err instanceof Error ? err.message : String(err) })
+    log.warn('hooks: failed to append run record', {
+      id,
+      err: err instanceof Error ? err.message : String(err),
+    })
   }
 }
 
@@ -611,7 +631,10 @@ export async function listRunRecords(
     raw = await readFile(file, 'utf8')
   } catch (err) {
     if (isMissing(err)) return []
-    log.warn('hooks: failed to read run log', { id, err: err instanceof Error ? err.message : String(err) })
+    log.warn('hooks: failed to read run log', {
+      id,
+      err: err instanceof Error ? err.message : String(err),
+    })
     return []
   }
   const lines = raw.split('\n').filter((l) => l.trim().length > 0)

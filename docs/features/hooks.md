@@ -172,9 +172,10 @@ Quyết định trust cho hook project-tier → **`~/.awog/hook-trust/<sha256(re
 > **Trust khoá theo VÂN TAY của thứ thực sự chạy** (bổ sung 2026-09-08, [ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md#bổ-sung-2026-09-08--đồng-ý-ràng-buộc-vào-thứ-thực-sự-chạy)). Mỗi entry trong file trust là `{ id, hash }` với `hash = sha256(sơ-đồ ‖ sha256(nội dung .json) ‖ nội dung script mà command chạy)`, `version: 3`.
 >
 > - **`id` = TÊN FILE**, không phải field `"id"` trong JSON. Hai file cùng khai một `id` thì file thứ hai KHÔNG thừa hưởng trust của file thứ nhất; JSON khai lệch tên file ⇒ `log.warn`, tên file thắng.
-> - **Sửa `.json` HOẶC sửa script ⇒ thu hồi trust**, phải duyệt lại. Script chưa tồn tại lúc duyệt cũng được ghi vào vân tay (`absent`) nên tạo file sau đó cũng thu hồi.
+> - **Sửa `.json` HOẶC sửa BẤT KỲ script nào ⇒ thu hồi trust**, phải duyệt lại. Script chưa tồn tại lúc duyệt cũng được ghi vào vân tay (`absent`) nên tạo file sau đó cũng thu hồi.
+> - **Vân tay phủ MỌI script trong lệnh** (sửa 2026-09-08). Bản đầu chỉ lấy token script **đầu tiên**, và đó là một lỗ lách được chính rào ở gạch đầu dòng dưới: `bash .awog/hooks/a.sh && bash scripts/evil.sh` phân giải thành “hợp lệ” theo `a.sh`, còn `scripts/evil.sh` không bao giờ được nhìn tới — vừa qua rào, vừa khiến sửa script thứ hai không mất dấu duyệt. Nay mọi token script được băm theo thứ tự xuất hiện; **một script ngoài vùng cho phép làm CẢ lệnh bị từ chối**, dù script đầu hợp lệ. Lệnh chạy quá 8 script cũng bị từ chối (không ràng buộc nổi một cách có nghĩa).
 > - **Script nằm ngoài thư mục hook hợp lệ** (`{ws}/.claude/hooks`, `{ws}/.awog/hooks`, `~/.claude/hooks`, `~/.awog/hooks`) ⇒ **không cấp trust được**: bản ghi đồng ý sẽ không phủ được mã sẽ chạy, và app cũng không hiện nội dung script đó cho người dùng đọc. Hook project kiểu `command: "node scripts/gen.js"` phải chuyển script vào `.awog/hooks/` hoặc viết thẳng vào `command`. Hook tier global không ảnh hưởng (trusted theo vị trí).
-> - **Giới hạn:** vân tay sâu một tầng — script đã duyệt vẫn `source` file khác được. Đây là chống "đổi mã dưới chân đồng ý cũ", không phải sandbox.
+> - **Giới hạn:** vân tay sâu một tầng — script đã duyệt vẫn `source` file khác được (phần này regex trong `command` không thấy). Đây là chống "đổi mã dưới chân đồng ý cũ", không phải sandbox.
 > - **Bản ghi của sơ đồ cũ (v1 chỉ id, v2 chỉ băm .json) bị bỏ qua**, không nâng cấp im lặng ⇒ duyệt lại.
 > - `hooks.run-once` mặc định **ĐÓNG**: không khẳng định được `trusted === true` thì từ chối, kể cả khi tra cứu trượt.
 
