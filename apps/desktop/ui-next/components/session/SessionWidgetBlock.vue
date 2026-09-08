@@ -99,9 +99,16 @@
 //      contains the DoS case, since a sandboxed srcdoc frame can share the renderer's
 //      event loop and a `while(true)` would otherwise hang the transcript.
 //   4. A CSP is injected as the first element of the frame document: `default-src 'none'`
-//      kills every network egress (fetch/XHR/websocket/beacon/external img/CDN css/font),
-//      so a prompt-injected widget has no exfiltration channel. Extra policies can only
-//      intersect, so markup carrying its own <meta csp> can never loosen ours.
+//      kills fetch/XHR/websocket/beacon/external img/CDN css/font, and `webrtc 'block'`
+//      closes the STUN/TURN side channel. Extra policies can only intersect, so markup
+//      carrying its own <meta csp> can never loosen ours.
+//      CẨN THẬN — CSP KHÔNG phủ hết đường ra. Không directive nào của nó cai quản việc
+//      một document TỰ điều hướng chính nó (`navigate-to` chưa từng ship; `form-action`
+//      chỉ chặn `<form>`). Với script đã bật, `location.href = '…?d=' + payload` là một
+//      kênh xuất thật. Nó bị chặn ở TẦNG KHÁC — `will-frame-navigate` trong
+//      electron/src/window.ts — chứ không phải bởi CSP ở đây. Comment cũ ở chỗ này
+//      khẳng định "không có kênh exfiltrate nào" và điều đó SAI; một khẳng định an
+//      toàn sai là thứ người review dựa vào.
 //   5. Byte cap (WIDGET_MAX) + fixed height + lazy mount (IntersectionObserver): a huge or
 //      broken widget cannot stall the transcript, and a long session doesn't spawn dozens
 //      of frames at once.
@@ -165,7 +172,16 @@ async function copySource() {
 // frame carries allow-scripts unconditionally — showing it earlier would silently run
 // code the user declined.
 function openFull() {
-  openPreview({ name: t('sessionsWidget.title'), kind: 'html', text: buildDoc(props.code) })
+  // Cố ý gửi bản KHÔNG script sang PreviewModal: khung của modal mang
+  // `allow-popups`, và `window.open` ở renderer này được biến thành
+  // `shell.openExternal` (electron/src/window.ts), tức một widget bật script mở
+  // được trình duyệt THẬT của người dùng bằng URL nó tự dựng. Xem toàn màn hình
+  // là để ĐỌC nội dung, không phải để chạy nó.
+  openPreview({
+    name: t('sessionsWidget.title'),
+    kind: 'html',
+    text: buildDocWithoutScripts(props.code),
+  })
 }
 
 const sandbox = computed(() => (scripts.value ? 'allow-scripts' : ''))
@@ -175,14 +191,23 @@ const sandbox = computed(() => (scripts.value ? 'allow-scripts' : ''))
 // inline; script-src is added only in the opted-in variant.
 const CSP_BASE =
   "default-src 'none'; style-src 'unsafe-inline'; img-src data:; media-src data:; " +
-  "font-src data:; form-action 'none'; base-uri 'none'"
+  "font-src data:; form-action 'none'; base-uri 'none'; webrtc 'block'"
 
 // The frame gets a white canvas (same choice as PreviewModal's html render): model-authored
 // markup assumes a light page, and pushing app theme colours across the boundary would only
 // half-apply. Colours here are literals inside a string that becomes a foreign document —
 // not app chrome — so they are not theme tokens.
+// Bản cố định KHÔNG script, dùng cho bề mặt nào không kiểm soát được sandbox.
+function buildDocWithoutScripts(body: string): string {
+  return buildDocWith(body, false)
+}
+
 function buildDoc(body: string): string {
-  const csp = scripts.value
+  return buildDocWith(body, scripts.value)
+}
+
+function buildDocWith(body: string, withScripts: boolean): string {
+  const csp = withScripts
     ? `${CSP_BASE}; script-src 'unsafe-inline'`
     : `${CSP_BASE}; script-src 'none'`
   const style =

