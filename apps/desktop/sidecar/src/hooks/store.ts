@@ -12,7 +12,7 @@
 // reuse the MCP keychain helpers.
 
 import { mkdir, readdir, readFile, writeFile, chmod, rename, unlink, appendFile, stat } from 'node:fs/promises'
-import { join, dirname, isAbsolute, resolve } from 'node:path'
+import { join, dirname, basename, isAbsolute, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
@@ -20,6 +20,7 @@ import { RpcError } from '../transport/rpc.js'
 import { loadProject } from '../projects/store.js'
 import { expandSecrets, purgeServerSecrets } from '../mcp/secrets.js'
 import { HookConfigSchema } from './schema.js'
+import { resolveHookScriptRef } from './script.js'
 import type { Hook, HookRunRecord, HookScanReport, HookSource } from '../types/shared.js'
 
 const HOOKS_DIR_NAME = sanitizeChild('hooks')
@@ -60,19 +61,47 @@ function isMissing(err: unknown): boolean {
 
 // ─── Parse / tag ───────────────────────────────────────────────────────────
 
+// TÊN FILE là id, không thương lượng. Bản trước chỉ backfill khi JSON THIẾU `id`,
+// nên hai file khác nhau khai cùng `"id"` cùng tồn tại được — và trust tra theo
+// id ⇒ file thứ hai thừa hưởng luôn đồng ý dành cho file thứ nhất (`good.json`
+// đã duyệt, pull về thêm `evil.json` cũng khai `"id":"good"` ⇒ cả hai trusted).
+// Ép id theo tên file thì mỗi id lại tương ứng đúng MỘT file trong một thư mục:
+// `evil.json` thành hook `evil`, chưa ai duyệt, không chạy.
+function idFromFile(file: string): string | null {
+  const name = basename(file)
+  const derived = name.endsWith('.json') ? name.slice(0, -5) : name
+  try {
+    return sanitizeChild(derived)
+  } catch {
+    // Tên file không dùng làm path segment an toàn được (`..`, `.`) ⇒ bỏ hẳn
+    // file: mọi thứ khoá theo id (trust, run-log, save/delete) đều sẽ lệch.
+    return null
+  }
+}
+
 function parse(
   raw: string,
   file: string,
   source: HookSource,
   projectId: string | undefined,
 ): Hook | null {
+  const derived = idFromFile(file)
+  if (!derived) {
+    log.warn('hooks: unusable file name, skipping', { file })
+    return null
+  }
   try {
     const obj = JSON.parse(raw) as unknown
-    // Filename is the source of truth for id — backfill if a hand-edit omits it.
-    if (obj && typeof obj === 'object' && typeof (obj as { id?: unknown }).id !== 'string') {
-      const name = file.split('/').pop() ?? file
-      const derived = name.endsWith('.json') ? name.slice(0, -5) : name
-      if (derived) (obj as { id: string }).id = derived
+    if (obj && typeof obj === 'object') {
+      const declared = (obj as { id?: unknown }).id
+      if (typeof declared === 'string' && declared !== derived) {
+        log.warn('hooks: id declared in the file differs from its filename, filename wins', {
+          file,
+          declared,
+          used: derived,
+        })
+      }
+      ;(obj as { id: string }).id = derived
     }
     const res = HookConfigSchema.safeParse(obj)
     if (!res.success) {
@@ -96,21 +125,30 @@ function parse(
   }
 }
 
-async function listFromDir(
+// Một hook vừa nạp, kèm ĐÚNG chuỗi bytes đã parse ra nó. Trust phải tính trên
+// `raw` này chứ không phải trên một lần đọc lại theo id: hai lần đọc là hai thời
+// điểm, `git checkout` xen vào giữa cho ra "chạy nội dung A, xác thực nội dung B".
+interface LoadedHook {
+  hook: Hook
+  file: string
+  raw: string
+}
+
+async function scanDir(
   dir: string,
   source: HookSource,
   projectId: string | undefined,
-): Promise<Hook[]> {
+): Promise<LoadedHook[]> {
   let entries: string[]
   try {
     entries = await readdir(dir)
   } catch (err) {
     if (!isMissing(err)) {
-      log.warn('hooks: listFromDir failed', { dir, err: err instanceof Error ? err.message : String(err) })
+      log.warn('hooks: scanDir failed', { dir, err: err instanceof Error ? err.message : String(err) })
     }
     return []
   }
-  const hooks: Hook[] = []
+  const loaded: LoadedHook[] = []
   for (const name of entries) {
     if (!name.endsWith('.json')) continue
     const file = join(dir, name)
@@ -118,12 +156,30 @@ async function listFromDir(
       // eslint-disable-next-line no-await-in-loop
       const raw = await readFile(file, 'utf8')
       const hook = parse(raw, file, source, projectId)
-      if (hook) hooks.push(hook)
+      if (hook) loaded.push({ hook, file, raw })
     } catch (err) {
       log.warn('hooks: failed to read file', { file, err: err instanceof Error ? err.message : String(err) })
     }
   }
-  return hooks
+  return loaded
+}
+
+// Đọc + parse đúng một file hook (một lần đọc duy nhất, giữ lại bytes).
+async function loadOne(
+  file: string,
+  source: HookSource,
+  projectId: string | undefined,
+): Promise<LoadedHook | null> {
+  try {
+    const raw = await readFile(file, 'utf8')
+    const hook = parse(raw, file, source, projectId)
+    return hook ? { hook, file, raw } : null
+  } catch (err) {
+    if (!isMissing(err)) {
+      log.warn('hooks: failed to read file', { file, err: err instanceof Error ? err.message : String(err) })
+    }
+    return null
+  }
 }
 
 // ─── Trust (project tier, D-8) ───────────────────────────────────────────────
@@ -194,61 +250,114 @@ async function warnLegacyTrustFile(projectPath: string): Promise<void> {
   )
 }
 
-// Băm nội dung file hook. Trust ràng buộc vào ĐÂY, không vào id — xem ghi chú
-// dưới `readTrustedHooks`.
-function hookContentHash(raw: string): string {
-  return createHash('sha256').update(raw, 'utf8').digest('hex').slice(0, 32)
+// Sơ đồ vân tay hiện hành. Đổi cách băm ⇒ tăng số này: bản ghi cũ KHÔNG được
+// nâng cấp im lặng (xem `readTrustedHooks`).
+//   v1 — chỉ id (không băm gì)
+//   v2 — băm file .json
+//   v3 — băm (file .json, nội dung script mà command trỏ tới)
+const TRUST_VERSION = 3
+const FINGERPRINT_SCHEME = 'awog-hook-trust/3'
+
+function sha256Hex(data: string | Buffer): string {
+  return createHash('sha256').update(data).digest('hex')
 }
 
-// Đọc file hook trên đĩa rồi băm. Không đọc được ⇒ `null` ⇒ không thể khớp trust
-// ⇒ hook không chạy (fail-closed).
-async function hashHookFile(file: string): Promise<string | null> {
+// Băm nội dung script mà `command` trỏ tới:
+//   'none'   — command không tham chiếu script nào (toàn bộ mã nằm trong command,
+//              vốn đã nằm trong JSON đã băm)
+//   'absent' — có tham chiếu nhưng file chưa tồn tại; tạo file sau đó ⇒ vân tay
+//              đổi ⇒ trust bị thu hồi, đúng ý muốn
+//   <hex>    — băm bytes của script
+//   null     — KHÔNG ràng buộc được đồng ý vào mã sẽ chạy (script ngoài vùng hook
+//              cho phép, không phải file thường, hoặc không đọc nổi) ⇒ fail-closed
+async function scriptComponent(hook: Hook): Promise<string | null> {
+  let ref: Awaited<ReturnType<typeof resolveHookScriptRef>>
   try {
-    return hookContentHash(await readFile(file, 'utf8'))
-  } catch {
+    ref = await resolveHookScriptRef(hook.command, hook.source ?? 'global', hook.projectId)
+  } catch (err) {
+    log.warn('hooks: cannot resolve the script referenced by the command', {
+      id: hook.id,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
+  if (ref.kind === 'none') return 'none'
+  if (ref.kind === 'outside') {
+    log.warn(
+      'hooks: command runs a script outside the hook directories — its bytes cannot be covered by a trust record, so trust is refused',
+      { id: hook.id, script: ref.path },
+    )
+    return null
+  }
+  try {
+    // `stat` trước: một FIFO/thiết bị sẽ treo `readFile` vô hạn.
+    const st = await stat(ref.abs)
+    if (!st.isFile()) return null
+    return sha256Hex(await readFile(ref.abs))
+  } catch (err) {
+    if (isMissing(err)) return 'absent'
+    log.warn('hooks: cannot read the hook script to fingerprint it', {
+      id: hook.id,
+      script: ref.path,
+      err: err instanceof Error ? err.message : String(err),
+    })
     return null
   }
 }
 
-// Trust map: id → băm nội dung ĐÃ ĐƯỢC DUYỆT.
+// Vân tay của thứ THỰC SỰ CHẠY = (nội dung JSON, nội dung script command gọi).
 //
-// Vì sao có băm. Bản trước khoá theo **id**: duyệt `format-on-save` một lần rồi
+// Băm riêng JSON là chưa đủ: `command: "bash .awog/hooks/x.sh"` thì toàn bộ mã
+// nằm trong `x.sh`, sửa file đó không đổi một bit nào của JSON ⇒ mã mới chạy
+// dưới đồng ý cũ. Băm ghép hai thành phần độ dài cố định + dấu phân cách nên
+// không có cách nào ghép nhập nhằng ra cùng một vân tay.
+//
+// null ⇒ không cấp và không khớp được trust (fail-closed).
+async function fingerprint(loaded: LoadedHook): Promise<string | null> {
+  const script = await scriptComponent(loaded.hook)
+  if (script === null) return null
+  return createHash('sha256')
+    .update(`${FINGERPRINT_SCHEME}\n${sha256Hex(loaded.raw)}\n${script}`)
+    .digest('hex')
+    .slice(0, 32)
+}
+
+// Trust map: id → vân tay ĐÃ ĐƯỢC DUYỆT.
+//
+// Vì sao có vân tay. Bản đầu khoá theo **id**: duyệt `format-on-save` một lần rồi
 // cài đè một bundle mang hook TRÙNG ID (marketplace, template, hay ai đó sửa file
 // trong repo) thì nội dung mới thừa hưởng luôn trust cũ. Bản ghi đồng ý phải ràng
 // buộc vào THỨ NÓ ĐỒNG Ý — cùng bài học với ADR 0080 (luật quyền khoá theo nội
 // dung lệnh, không theo tên tool) và với chính đính chính "trust không nằm trong
-// repo" ở trên. Đây là lần thứ ba cùng một hình dạng lỗi.
+// repo" ở trên.
 //
-// Bản ghi cũ (`hooks: string[]`, không có băm) KHÔNG được nâng cấp im lặng: không
-// có băm nghĩa là không biết người dùng đã duyệt nội dung nào, nên coi như chưa
-// duyệt và bắt duyệt lại. Nâng cấp mù chính là giữ nguyên lỗ hổng dưới tên khác.
+// Bản ghi của sơ đồ cũ KHÔNG được nâng cấp im lặng: v1 không có băm (không biết
+// người dùng đã duyệt nội dung nào), v2 chỉ băm JSON (không phủ script mà command
+// gọi). Cả hai đều là "không rõ đã đồng ý với cái gì" ⇒ coi như chưa duyệt và bắt
+// duyệt lại. Nâng cấp mù chính là giữ nguyên lỗ hổng dưới một cái tên khác.
 async function readTrustedHooks(projectPath: string): Promise<Map<string, string>> {
   await warnLegacyTrustFile(projectPath)
   const file = hookTrustFile(projectPath)
   if (!file) return new Map()
   try {
     const raw = await readFile(file, 'utf8')
-    const obj = JSON.parse(raw) as { hooks?: unknown }
+    const obj = JSON.parse(raw) as { version?: unknown; hooks?: unknown }
+    if (obj.version !== TRUST_VERSION) {
+      log.warn(
+        'hooks: trust record was written by an older scheme and is IGNORED — re-approve the hooks to grant trust again',
+        { file, version: typeof obj.version === 'number' ? obj.version : null, expected: TRUST_VERSION },
+      )
+      return new Map()
+    }
     const out = new Map<string, string>()
-    let legacy = 0
     if (Array.isArray(obj.hooks)) {
       for (const entry of obj.hooks) {
-        if (typeof entry === 'string') {
-          legacy += 1 // bản cũ chỉ có id — không đủ để tin
-          continue
-        }
         if (!entry || typeof entry !== 'object') continue
         const rec = entry as { id?: unknown; hash?: unknown }
         if (typeof rec.id === 'string' && typeof rec.hash === 'string' && rec.hash.length > 0) {
           out.set(rec.id, rec.hash)
         }
       }
-    }
-    if (legacy > 0) {
-      log.warn(
-        'hooks: legacy trust entries without a content hash IGNORED — re-approve those hooks',
-        { file, count: legacy },
-      )
     }
     return out
   } catch (err) {
@@ -265,25 +374,30 @@ async function readTrustedHooks(projectPath: string): Promise<Map<string, string
   }
 }
 
-// Gắn cờ trust cho hook tier project: chỉ tin khi băm nội dung HIỆN TẠI khớp băm
-// đã duyệt. Băm lệch (file bị sửa, hoặc một bundle cài đè hook trùng id) ⇒ về
-// `false` và người dùng phải duyệt lại — đó là toàn bộ mục đích của băm.
+// Gắn cờ trust cho hook tier project: chỉ tin khi vân tay HIỆN TẠI khớp vân tay
+// đã duyệt. Lệch (JSON bị sửa, script bị sửa, hay một bundle cài đè hook trùng
+// id) ⇒ về `false` và người dùng phải duyệt lại.
+//
+// Vân tay tính trên `loaded.raw` — chính bytes vừa parse ra hook này — nên không
+// còn khe "đọc lại theo id": không thể xác thực một file khác với file vừa nạp.
 async function applyProjectTrust(
-  hooks: Hook[],
-  dir: string,
+  loaded: LoadedHook[],
   trusted: Map<string, string>,
 ): Promise<void> {
   await Promise.all(
-    hooks.map(async (h) => {
-      const approved = trusted.get(h.id)
+    loaded.map(async (l) => {
+      const approved = trusted.get(l.hook.id)
       if (!approved) {
-        h.trusted = false
+        l.hook.trusted = false
         return
       }
-      const current = await hashHookFile(join(dir, `${sanitizeChild(h.id)}.json`))
-      h.trusted = current !== null && current === approved
+      const current = await fingerprint(l)
+      l.hook.trusted = current !== null && current === approved
       if (current !== null && current !== approved) {
-        log.warn('hooks: content changed since it was approved, trust revoked', { id: h.id, dir })
+        log.warn('hooks: content changed since it was approved, trust revoked', {
+          id: l.hook.id,
+          file: l.file,
+        })
       }
     }),
   )
@@ -296,24 +410,37 @@ export async function setHookTrust(projectId: string, hookIds: string[]): Promis
   const file = hookTrustFile(project.path)
   if (!file) throw new RpcError(-32602, `Project path is not absolute: ${projectId}`)
   const existing = await readTrustedHooks(project.path)
-  // Băm được chốt Ở THỜI ĐIỂM DUYỆT: người dùng đồng ý với nội dung họ vừa đọc,
-  // không phải với cái tên. File không đọc được ⇒ bỏ qua id đó thay vì ghi một
-  // bản ghi trust không ràng buộc vào gì.
+  // Vân tay chốt Ở THỜI ĐIỂM DUYỆT: người dùng đồng ý với nội dung họ vừa đọc,
+  // không phải với cái tên. Không tính được vân tay ⇒ bỏ qua id đó thay vì ghi
+  // một bản ghi trust không ràng buộc vào gì.
   const dir = projectHooksDir(project.path)
   for (const id of hookIds) {
-    // eslint-disable-next-line no-await-in-loop
-    const hash = await hashHookFile(join(dir, `${sanitizeChild(id)}.json`))
-    if (!hash) {
-      log.warn('hooks: cannot hash hook file, trust NOT granted', { projectId, id })
+    let hookFilePath: string
+    try {
+      hookFilePath = hookFile(dir, id) // sanitizeChild: id đến từ UI (L1)
+    } catch {
+      log.warn('hooks: illegal hook id, trust NOT granted', { projectId, id })
       continue
     }
-    existing.set(id, hash)
+    // eslint-disable-next-line no-await-in-loop
+    const loaded = await loadOne(hookFilePath, 'project', projectId)
+    if (!loaded) {
+      log.warn('hooks: cannot load hook file, trust NOT granted', { projectId, id })
+      continue
+    }
+    // eslint-disable-next-line no-await-in-loop
+    const hash = await fingerprint(loaded)
+    if (!hash) {
+      log.warn('hooks: cannot fingerprint what this hook runs, trust NOT granted', { projectId, id })
+      continue
+    }
+    existing.set(loaded.hook.id, hash)
   }
   await mkdir(dirname(file), { recursive: true, mode: 0o700 })
   // `projectPath` là ghi chú cho người mở thư mục băm; khoá luôn tính lại từ
   // đường dẫn thật lúc đọc, không bao giờ giải ngược từ field này.
   const doc = {
-    version: 2,
+    version: TRUST_VERSION,
     projectPath: project.path,
     hooks: [...existing].map(([id, hash]) => ({ id, hash })),
   }
@@ -332,7 +459,7 @@ export async function listHooks(
 ): Promise<{ hooks: Hook[]; reports: HookScanReport[] }> {
   const reports: HookScanReport[] = []
 
-  const global = await listFromDir(globalHooksDir(), 'global', undefined)
+  const global = (await scanDir(globalHooksDir(), 'global', undefined)).map((l) => l.hook)
   global.forEach((h) => {
     h.trusted = true
   })
@@ -343,11 +470,11 @@ export async function listHooks(
       const project = await loadProject(id)
       if (!project) return []
       const dir = projectHooksDir(project.path)
-      const native = await listFromDir(dir, 'project', id)
+      const native = await scanDir(dir, 'project', id)
       const trusted = await readTrustedHooks(project.path)
-      await applyProjectTrust(native, dir, trusted)
+      await applyProjectTrust(native, trusted)
       reports.push({ dir, source: 'project', found: native.length, projectId: id })
-      return native
+      return native.map((l) => l.hook)
     }),
   )
 
@@ -367,7 +494,9 @@ export async function listHooks(
 // Enabled + trusted hooks for global + the given project — the dispatcher's
 // source set (it filters by event/matcher). No run records (hot path).
 export async function listEnabledHooksForDispatch(projectId: string | undefined): Promise<Hook[]> {
-  const global = (await listFromDir(globalHooksDir(), 'global', undefined)).filter((h) => h.enabled)
+  const global = (await scanDir(globalHooksDir(), 'global', undefined))
+    .map((l) => l.hook)
+    .filter((h) => h.enabled)
   global.forEach((h) => {
     h.trusted = true
   })
@@ -376,9 +505,9 @@ export async function listEnabledHooksForDispatch(projectId: string | undefined)
   if (!project) return global
   const trusted = await readTrustedHooks(project.path)
   const projDir = projectHooksDir(project.path)
-  const projHooks = (await listFromDir(projDir, 'project', projectId)).filter((h) => h.enabled)
-  await applyProjectTrust(projHooks, projDir, trusted)
-  return [...global, ...projHooks]
+  const projLoaded = (await scanDir(projDir, 'project', projectId)).filter((l) => l.hook.enabled)
+  await applyProjectTrust(projLoaded, trusted)
+  return [...global, ...projLoaded.map((l) => l.hook)]
 }
 
 export async function loadHook(
@@ -387,13 +516,7 @@ export async function loadHook(
   projectId?: string,
 ): Promise<Hook | null> {
   const dir = await resolveHooksDir(source, projectId)
-  try {
-    const raw = await readFile(hookFile(dir, id), 'utf8')
-    return parse(raw, hookFile(dir, id), source, projectId)
-  } catch (err) {
-    if (isMissing(err)) return null
-    throw err
-  }
+  return (await loadOne(hookFile(dir, id), source, projectId))?.hook ?? null
 }
 
 // Resolve a hook's env `secret:KEY` refs to plaintext, namespaced by hook id.

@@ -64,17 +64,36 @@ function isAllowed(abs: string, workspace: string): boolean {
   return dirs.some((d) => abs === d || abs.startsWith(d + sep))
 }
 
+// Script mà một hook command tham chiếu, nhìn từ góc bảo mật. Ba trạng thái này
+// KHÁC nhau và người gọi phải phân biệt được — gộp `outside` với `none` thành
+// `null` là cách F2 lọt lưới: "không có script" (toàn bộ mã nằm trong chính
+// command, băm JSON là đủ) bị lẫn với "có script nhưng AWOG không đọc nổi"
+// (băm JSON KHÔNG phủ được mã thực thi).
+export type HookScriptRef =
+  | { kind: 'none' }
+  | { kind: 'inside'; path: string; abs: string }
+  | { kind: 'outside'; path: string }
+
+export async function resolveHookScriptRef(
+  command: string,
+  source: HookSource,
+  projectId: string | undefined,
+): Promise<HookScriptRef> {
+  const token = detectScriptToken(command)
+  if (!token) return { kind: 'none' }
+  const workspace = await workspaceFor(source, projectId)
+  const abs = resolveToken(token, workspace)
+  if (!isAllowed(abs, workspace)) return { kind: 'outside', path: token }
+  return { kind: 'inside', path: token, abs }
+}
+
 async function resolveHookScript(
   command: string,
   source: HookSource,
   projectId: string | undefined,
 ): Promise<{ path: string; abs: string } | null> {
-  const token = detectScriptToken(command)
-  if (!token) return null
-  const workspace = await workspaceFor(source, projectId)
-  const abs = resolveToken(token, workspace)
-  if (!isAllowed(abs, workspace)) return null
-  return { path: token, abs }
+  const ref = await resolveHookScriptRef(command, source, projectId)
+  return ref.kind === 'inside' ? { path: ref.path, abs: ref.abs } : null
 }
 
 export interface HookScript {

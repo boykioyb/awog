@@ -24,10 +24,14 @@ register('hooks.run-once', async (raw) => {
     if (!project) throw new RpcError(-32602, `Project not found: ${params.projectId}`)
     workspace = project.path
     // Trust gate: a project hook must be granted trust before it can spawn.
+    // DEFAULT CLOSED — the check used to be `tagged && tagged.trusted === false`,
+    // so a lookup that found nothing (id no longer resolves after the listing,
+    // an unreadable file, a duplicate-id collision) fell through and spawned the
+    // shell command. A gate that opens when it cannot answer is not a gate.
     const { listHooks } = await import('../hooks/store.js')
     const { hooks } = await listHooks([params.projectId])
     const tagged = hooks.find((h) => h.id === params.id && h.source === 'project')
-    if (tagged && tagged.trusted === false) {
+    if (!tagged || tagged.trusted !== true) {
       throw new RpcError(-32602, 'Hook is not trusted yet — grant trust before running it')
     }
   }

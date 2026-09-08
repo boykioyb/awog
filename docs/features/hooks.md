@@ -169,6 +169,15 @@ Quyết định trust cho hook project-tier → **`~/.awog/hook-trust/<sha256(re
 
 > **Trust KHÔNG nằm trong repo.** Trước 2026-09-07 file này là `{project.path}/.awog/.trust.json` — cùng repo với chính hook nó bảo lãnh, nên ai commit được hook độc hại thì commit luôn bản ghi trust cho nó. Giờ trust sống trong AWOG home, khoá theo băm đường dẫn tuyệt đối của project: nghĩa là **"đã duyệt cho dự án này TRÊN MÁY NÀY"**, không bao giờ đi theo git sang máy người khác. Đổi tên / di chuyển thư mục project ⇒ khoá khác ⇒ hook phải được duyệt lại (fail-safe). File `.trust.json` cũ còn sót trong repo **bị bỏ qua, không migrate** — chỉ `log.warn` một lần mỗi project mỗi tiến trình, nêu cả đường dẫn cũ lẫn mới.
 
+> **Trust khoá theo VÂN TAY của thứ thực sự chạy** (bổ sung 2026-09-08, [ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md#bổ-sung-2026-09-08--đồng-ý-ràng-buộc-vào-thứ-thực-sự-chạy)). Mỗi entry trong file trust là `{ id, hash }` với `hash = sha256(sơ-đồ ‖ sha256(nội dung .json) ‖ nội dung script mà command chạy)`, `version: 3`.
+>
+> - **`id` = TÊN FILE**, không phải field `"id"` trong JSON. Hai file cùng khai một `id` thì file thứ hai KHÔNG thừa hưởng trust của file thứ nhất; JSON khai lệch tên file ⇒ `log.warn`, tên file thắng.
+> - **Sửa `.json` HOẶC sửa script ⇒ thu hồi trust**, phải duyệt lại. Script chưa tồn tại lúc duyệt cũng được ghi vào vân tay (`absent`) nên tạo file sau đó cũng thu hồi.
+> - **Script nằm ngoài thư mục hook hợp lệ** (`{ws}/.claude/hooks`, `{ws}/.awog/hooks`, `~/.claude/hooks`, `~/.awog/hooks`) ⇒ **không cấp trust được**: bản ghi đồng ý sẽ không phủ được mã sẽ chạy, và app cũng không hiện nội dung script đó cho người dùng đọc. Hook project kiểu `command: "node scripts/gen.js"` phải chuyển script vào `.awog/hooks/` hoặc viết thẳng vào `command`. Hook tier global không ảnh hưởng (trusted theo vị trí).
+> - **Giới hạn:** vân tay sâu một tầng — script đã duyệt vẫn `source` file khác được. Đây là chống "đổi mã dưới chân đồng ý cũ", không phải sandbox.
+> - **Bản ghi của sơ đồ cũ (v1 chỉ id, v2 chỉ băm .json) bị bỏ qua**, không nâng cấp im lặng ⇒ duyệt lại.
+> - `hooks.run-once` mặc định **ĐÓNG**: không khẳng định được `trusted === true` thì từ chối, kể cả khi tra cứu trượt.
+
 Script tự viết (Node, Python, shell) đặt ở `{project}/.awog/hooks/` — user tự quản, AWOG không tạo template tự động.
 
 ## UI/UX Notes
