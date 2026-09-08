@@ -25,6 +25,7 @@ import {
 } from '../prompts.js'
 import { isToolAllowed } from '../tools/index.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
+import { makeTaskToolGate } from '../permission.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -276,12 +277,17 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     includePartialMessages: true,
     thinking: thinkingFromLevel(args.settings.level),
     effort: effortFromLevel(args.settings.level),
-    // Tasks run unattended (ADR 0024 D-7): always allow, no permission gate. The
-    // hook is input-rewrite only — it forces `Task` to its synchronous form so a
-    // subagent isn't killed when this one-shot query ends (shared.ts).
+    // Tasks run unattended (ADR 0024 D-7): không hỏi ai, không nhớ gì. `bypassPermissions`
+    // ở đây KHÔNG có nghĩa "không có cổng" — nhánh chat dùng đúng cờ này (run-stream.ts)
+    // để cổng của SDK không che cổng của AWOG; cổng thật luôn nằm ở hook PreToolUse.
+    // Hook này vừa ép `Task` về dạng đồng bộ (kẻo subagent bị giết khi one-shot kết
+    // thúc) vừa chạy cổng CHỈ-DENY, để luật `deny` của người dùng ràng buộc task ở CẢ
+    // HAI runtime — nhánh Pi đã có từ ADR 0080 F5.
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
-    hooks: { PreToolUse: [{ hooks: [makeForegroundOnlyHook()] }] },
+    hooks: {
+      PreToolUse: [{ hooks: [makeForegroundOnlyHook(makeTaskToolGate(args.projectIds?.[0]))] }],
+    },
     // Honour the node agent's tool whitelist (Claude Code subagent `tools:` field).
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
     ...(args.disabledTools ? { disallowedTools: args.disabledTools } : {}),

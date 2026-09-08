@@ -14,6 +14,7 @@ import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { Credential } from '../../credentials/credential-resolver.js'
 import type { McpServersConfig } from '../permission-types.js'
+import type { BeforeToolCall } from '../permission.js'
 import type { ThinkingLevel } from '../../types/shared.js'
 import { assertSafeUrl } from '../tools/ssrf.js'
 import { CO_AUTHOR_TRAILER } from '../../git/co-author.js'
@@ -141,10 +142,7 @@ const SDK_CONNECT_CAP_MS = 5_000
 
 // Server này có được nạp thẳng ở turn-1 không (S1/S2/S3 ở trên). Thuần + export
 // để test.
-export function alwaysLoadExternalMcp(
-  cfg: { timeoutMs?: number },
-  attachedCount: number,
-): boolean {
+export function alwaysLoadExternalMcp(cfg: { timeoutMs?: number }, attachedCount: number): boolean {
   if (attachedCount > SDK_ALWAYS_LOAD_MAX_SERVERS) return false
   if (typeof cfg.timeoutMs === 'number' && cfg.timeoutMs > SDK_CONNECT_CAP_MS) return false
   return true
@@ -275,21 +273,57 @@ export const NO_BACKGROUND_PROMPT = `<background-work>
 This task node runs as a single one-shot: nothing survives its end, so background work is terminated and no completion notification can reach you. Subagents you spawn with \`Task\` are forced to run synchronously — their result comes back in the same tool call, so just use it. Do not run \`Bash\` with \`run_in_background: true\`, and never end your run waiting to be notified about anything.
 </background-work>`
 
-// Minimal PreToolUse hook for the UNATTENDED path (tasks): no permission gate to
-// run — it exists solely to apply forceForegroundSubagent to the tool input. The
-// chat path has its own hook (the 4-mode gate) and does not need this.
-export function makeForegroundOnlyHook(): (
+// PreToolUse hook for the UNATTENDED path (tasks). Two jobs:
+//
+//   1. Áp `forceForegroundSubagent` lên tool input (lý do ban đầu nó tồn tại).
+//   2. Chạy cổng CHỈ-DENY, nếu người gọi cấp một cái.
+//
+// Về (2): ADR 0024 D-7 nói task chạy không cần duyệt — "always allow, no
+// permission gate" — và điều đó VẪN đúng cho nửa ALLOW. Nhưng ADR 0080 nói DENY
+// "thắng cả `execute` mode, `autoApprove` và `accept-edits`: nó là rào chắn người
+// dùng tự dựng, không phải một mức nới lỏng". Task chạy `mode:'execute'` theo cấu
+// tạo, nên hai câu đó chỉ hoà hợp khi DENY vẫn ràng buộc task. Nhánh Pi đã có
+// `makeTaskToolGate` từ ADR 0080 F5; hook này là bản đối xứng cho nhánh Claude SDK.
+//
+// Vì sao đối xứng là bắt buộc chứ không phải cho đẹp: runtime được chọn THEO
+// PROVIDER (ADR 0058). Không có nó, đổi provider của một agent sang `anthropic`
+// làm luật `deny` của người dùng lặng lẽ hết hiệu lực — cùng một task, cùng một
+// file luật. Đó đúng là mối nguy ADR 0058 cảnh báo, rơi trúng một biên bảo mật.
+//
+// `gate` là tuỳ chọn để những chỗ gọi không có ngữ cảnh project giữ nguyên hành vi
+// cũ; và bản thân `makeTaskToolGate` degrade về `undefined` khi tra luật lỗi, nên
+// đường này chỉ có thể THÊM chặn, không bao giờ làm hỏng workflow đang chạy được.
+export function makeForegroundOnlyHook(
+  gate?: BeforeToolCall,
+): (
   input: HookInput,
   toolUseID: string | undefined,
   options: { signal: AbortSignal },
 ) => Promise<HookJSONOutput> {
-  return async (input) => {
+  return async (input, _toolUseID, { signal }) => {
     if (input.hook_event_name !== 'PreToolUse') return { continue: true }
     const toolInput =
       input.tool_input && typeof input.tool_input === 'object'
         ? { ...(input.tool_input as Record<string, unknown>) }
         : {}
     forceForegroundSubagent(input.tool_name, toolInput)
+    if (gate) {
+      // Cổng đọc args ĐÃ ghi đè, giống nhánh chat: luật phải xét đúng thứ sẽ chạy.
+      const ctx = {
+        toolCall: { name: input.tool_name, id: input.tool_use_id },
+        args: toolInput,
+      } as unknown as Parameters<BeforeToolCall>[0]
+      const res = await gate(ctx, signal)
+      if (res?.block) {
+        return {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: res.reason || 'Denied.',
+          },
+        }
+      }
+    }
     return {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
