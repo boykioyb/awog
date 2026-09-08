@@ -1,6 +1,6 @@
 # Nhắn tin giữa các phiên / giữa các agent
 
-**Trạng thái:** P1 — lõi engine + store đã code, còn chờ wire tool + component UI (xem [Phần chưa làm](#phần-chưa-làm)).
+**Trạng thái:** P1 — lõi engine + store + tool (cả hai runtime) đã code, còn chờ component UI (xem [Phần chưa làm](#phần-chưa-làm)).
 
 ## Vấn đề
 
@@ -14,7 +14,7 @@ Tính năng này dựng đúng cái nền đó: **một hộp thư cho mỗi phi
 phiên A (model)                    sidecar                         phiên B (renderer)
    │ send_session_message            │                                    │
    ├────────────────────────────────►│ postSessionMessage()               │
-   │                                 │  · kiểm tra đích tồn tại           │
+   │                                 │  · đích tồn tại + trong danh bạ    │
    │                                 │  · áp 3 trần chống lặp             │
    │                                 │  · redactString(thân tin)          │
    │                                 │  · bọc hàng rào nonce              │
@@ -35,13 +35,14 @@ Cả hai rơi vào cùng một cơ chế: sidecar chỉ **dựng sẵn khối v�
 
 **Tự động giao (opt-in, mặc định TẮT)** là bước sau: nó cần một công tắc trong Settings (`stores/settings.ts` không thuộc quyền sửa của gói này) và mở đúng cánh cửa "đốt tiền sau lưng" mà P1 cố tình đóng. P1 = **thủ công**.
 
-### Ba trạng thái của phiên đích
+### Bốn trạng thái của phiên đích
 
 | Trạng thái đích | Hành vi |
 |---|---|
 | Đang chạy một lượt | Tin nằm trong hàng đợi; `canDeliverInbox()` trả `false` ⇒ nút giao khoá, chip ghi "đang đợi lượt hiện tại". |
 | Đang rảnh | Chip + nút "Giao cho agent". Bấm ⇒ một lượt duy nhất mang **tất cả** tin đang chờ. |
 | Không tồn tại / đã lưu trữ | `postSessionMessage()` **ném lỗi** ngay: `unknown-target` / `archived-target`. Model nhận đúng câu giải thích, không nuốt lỗi thành "đã gửi". |
+| Idle và nguội quá 24h | Ngoài danh bạ ⇒ tin **của model** bị từ chối (`unreachable-target`); người dùng vẫn gửi được. Xem [Đích phải nằm trong danh bạ](#đích-phải-nằm-trong-danh-bạ). |
 
 ## Chống lạm dụng — ba trần độc lập
 
@@ -64,6 +65,24 @@ Mốc **phân rã sau 30 phút**, nên một cuộc trao đổi mới về sau l
 Trần 2 và 3 chỉ áp cho tin **do model gửi**. Người dùng bấm gửi từ UI không phải runaway loop; họ chỉ bị chặn bởi trần độ dài (`MAX_TEXT_LEN` = 4000 ký tự).
 
 Sổ cái chống lạm dụng nằm **trong bộ nhớ** sidecar (`recentDeliveries`, `inboundHopMark`), tự dọn theo cửa sổ 30 phút.
+
+## Đích phải nằm trong danh bạ
+
+Bổ sung 2026-09-08 (finding F3 của lượt audit) — `sessions/inbox.ts`:
+
+`list_sessions` nói với model *"đây là những phiên bạn nhắn được"*, còn `send_session_message` thì trước đây **nhận id nào cũng gửi**: nó chỉ kiểm phiên có tồn tại, chưa lưu trữ, và không phải chính mình. Một model bị prompt-injection từ file trong workspace vì thế nhắn được vào **một phiên bất kỳ** của cùng người dùng — kể cả phiên nguội hàng tháng mà không ai còn mở, tức không ai đọc để nhận ra tin đó là giả.
+
+Nay tin **do model gửi** phải tới một đích thoả đúng vị từ mà danh bạ dùng (`isAddressable`): chưa lưu trữ, **và** đang chạy một lượt hoặc vừa hoạt động trong 24h. Hai nửa đọc chung một hàm nên lời hứa của danh bạ là lời hứa thật.
+
+Ba lựa chọn bị cân nhắc rồi loại:
+
+- **Ràng theo "cùng lượt"** (model phải gọi `list_sessions` trước mỗi lần gửi) — **loại**. Nó chặn đúng một luồng hợp lệ: trả lời một phiên vừa nhắn tới, mà id đã nằm sẵn trong khối tin đến. Còn kẻ tấn công thì chỉ việc bảo model gọi `list_sessions` trước — danh bạ không phải bí mật, nó trả về theo yêu cầu và không qua cổng nào. Thêm ma sát cho người dùng thật, không thêm biên tin cậy nào.
+- **Ràng theo danh sách đã cắt** (`CONTACT_LIMIT` = 30) — **loại**. Cùng một lời gọi lúc chạy lúc không, tuỳ người dùng đang mở bao nhiêu phiên trong 24h qua. Vị từ thì giải thích được, một cái cắt danh sách thì không.
+- **Áp cho cả người dùng** — **loại**. Họ chọn đích bằng mắt trên danh sách của chính họ; siết luồng đó là siết nhầm người. Cùng lý do với việc trần 2 và 3 chỉ áp cho model.
+
+Đây là hàng rào thứ tư, **không thay** ba trần: một đích hợp lệ vẫn phải qua đủ 3/lượt, 10/đích/30 phút và 4 hop.
+
+Khoá bằng test: [`sessions/__tests__/inbox.test.ts`](../../apps/desktop/sidecar/src/sessions/__tests__/inbox.test.ts).
 
 ## Bảo mật
 
@@ -108,17 +127,14 @@ Hàng đợi là state của renderer, **giống `pendingWakes`**: reload mất 
 | `apps/desktop/sidecar/src/sessions/inbox.ts` | Lõi: danh bạ + hộp thư + 3 trần + hàng rào nonce |
 | `apps/desktop/sidecar/src/methods/sessions.list-agents.ts` | RPC `sessions.listAgents` |
 | `apps/desktop/sidecar/src/methods/sessions.post-message.ts` | RPC `sessions.postMessage` |
-| `apps/desktop/sidecar/src/runtime/tools/session-tools.ts` | `list_sessions` + `send_session_message` |
+| `apps/desktop/sidecar/src/runtime/tools/session-tools.ts` | `list_sessions` + `send_session_message` (thân dùng chung 2 runtime) |
+| `apps/desktop/sidecar/src/runtime/claude-sdk/session-messaging-sdk-server.ts` | Cầu MCP `awogsessions` cho nhánh Claude SDK |
+| `apps/desktop/sidecar/src/sessions/__tests__/inbox.test.ts` | Test hàng rào danh bạ |
 | `apps/desktop/ui-next/stores/sessions.ts` | Hàng đợi renderer + action giao/bỏ qua/gửi |
 | `apps/desktop/ui-next/i18n/locales/{en,vi}/sessions-inbox.json` | Chuỗi UI (`sessionsInbox.`) |
 
 ## Phần chưa làm
 
-1. **Wire tool vào toolset.** `runtime/tools/index.ts` chưa gọi `createSessionMessagingTools()` — file thuộc quyền sở hữu của gói khác. Cần thêm đúng một nhánh cạnh `read_terminal`:
-   ```ts
-   ...(filter.chatSession ? createSessionMessagingTools({ sessionId: filter.chatSession.sessionId }) : []),
-   ```
-2. **Component UI.** Chip/banner hộp thư + bộ chọn đích chưa có; chuỗi i18n đã sẵn.
-3. **Parity nhánh Claude SDK.** Provider `anthropic` chạy qua `runtime/claude-sdk/` ([ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)) và cần cầu MCP riêng — chưa làm, nên P1 hai tool này chỉ có ở nhánh Pi.
-4. **Permission gate.** `send_session_message` hiện không đi qua `runtime/permission.ts`: nó không chạy được gì, bị chặn bởi ba trần, và kết quả luôn hiện ra cho người dùng thấy trước khi tới model nào. Nếu infosec muốn siết thì đây là chỗ.
-5. **Tự động giao (opt-in, mặc định TẮT)** — cần công tắc Settings, xem lý do ở trên.
+1. **Component UI.** Chip/banner hộp thư + bộ chọn đích chưa có; chuỗi i18n đã sẵn.
+2. **Permission gate.** `send_session_message` vẫn không đi qua `runtime/permission.ts`: nó không chạy được gì, bị chặn bởi ba trần + hàng rào danh bạ, và kết quả luôn hiện ra cho người dùng thấy trước khi tới model nào. Nếu muốn siết thêm thì đây là chỗ.
+3. **Tự động giao (opt-in, mặc định TẮT)** — cần công tắc Settings, xem lý do ở trên.

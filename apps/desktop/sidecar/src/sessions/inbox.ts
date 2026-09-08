@@ -36,6 +36,12 @@ export type InboxOrigin = 'session' | 'user' | 'external'
 // runaway loop — họ chỉ bị chặn bởi trần độ dài.
 //
 // ─── Bảo mật ─────────────────────────────────────────────────────────────────
+// ĐÍCH phải nằm trong danh bạ. Tin do MODEL gửi chỉ tới được phiên mà
+// `listSessionContacts()` được phép cho nó thấy (cùng vị từ `isAddressable`); tin
+// người dùng bấm gửi từ UI thì không — họ chọn đích bằng mắt, trên danh sách của
+// chính họ. Trước đây `send_session_message` nhận id nào cũng gửi, nên một model bị
+// prompt-injection từ file workspace nhắn được vào phiên bất kỳ của cùng người dùng.
+//
 // Nội dung tin do model của phiên A viết ⇒ với phiên B nó là L1 (KHÔNG TIN). Khối
 // giao đi mang hàng rào có NONCE sinh lúc tin tới (sau khi A đã viết xong, nên A
 // không đoán được để tự đóng hàng rào rồi viết "chỉ thị hệ thống" ở ngoài) — cùng
@@ -76,6 +82,7 @@ export type InboxErrorCode =
   | 'self-target'
   | 'rate-limited'
   | 'loop-detected'
+  | 'unreachable-target'
 
 // Từ chối CÓ LÝ DO. Tool trả nguyên `message` cho model (nói thẳng vì sao không
 // gửi được, thay vì để nó đoán rồi thử lại), RPC để dispatch bọc thành lỗi -32603.
@@ -200,6 +207,26 @@ function buildBlock(input: {
 
 // ─── Danh bạ ─────────────────────────────────────────────────────────────────
 
+// Phiên này có nằm trong danh bạ không: chưa lưu trữ, VÀ đang chạy một lượt hoặc
+// vừa hoạt động trong CONTACT_RECENT_MS.
+//
+// Tách thành hàm riêng vì `postSessionMessage` áp đúng vị từ này cho tin do MODEL
+// gửi (F3, lượt audit 2026-09-08). Trước đó `list_sessions` hứa "đây là những phiên
+// bạn nhắn được" còn `send_session_message` thì nhận id nào cũng gửi — nên một model
+// bị prompt-injection từ file workspace gửi được vào một phiên bất kỳ của cùng người
+// dùng, kể cả phiên đã nguội hàng tháng mà không ai còn mở. Hai chỗ đọc chung một vị
+// từ thì lời hứa của danh bạ mới là lời hứa thật.
+function isAddressable(
+  s: { id: string; archived?: boolean; updatedAt: string; createdAt: string },
+  now: number,
+  running: Set<string>,
+): boolean {
+  if (s.archived) return false
+  if (running.has(s.id)) return true
+  const updatedMs = Date.parse(s.updatedAt || s.createdAt)
+  return Number.isFinite(updatedMs) && now - updatedMs <= CONTACT_RECENT_MS
+}
+
 // Các phiên có thể chọn làm đích: đang chạy một lượt, HOẶC vừa hoạt động trong 24h
 // và chưa lưu trữ. Sắp xếp mới nhất trước (listSessionSummaries đã sắp), cắt ở
 // CONTACT_LIMIT. `selfId` bị loại — tự gửi cho mình là vòng lặp hiển nhiên.
@@ -211,10 +238,8 @@ export async function listSessionContacts(selfId: string | null): Promise<Sessio
   const contacts: SessionContact[] = []
   for (const s of summaries) {
     if (s.id === selfId) continue
-    if (s.archived) continue
+    if (!isAddressable(s, now, running)) continue
     const busy = running.has(s.id)
-    const updatedMs = Date.parse(s.updatedAt || s.createdAt)
-    if (!busy && (!Number.isFinite(updatedMs) || now - updatedMs > CONTACT_RECENT_MS)) continue
     const sent = selfId
       ? (recentDeliveries.get(s.id) ?? []).filter((e) => e.from === selfId).length
       : 0
@@ -276,10 +301,30 @@ export async function postSessionMessage(input: PostSessionMessageInput): Promis
     )
   }
 
-  // Trần 2 + 3 chỉ áp cho tin do model gửi.
+  // Trần 2 + 3 + hàng rào danh bạ chỉ áp cho tin do model gửi.
   const delivered = recentDeliveries.get(input.to) ?? []
   let hops = 1
   if (input.from !== null) {
+    // Đích phải là phiên mà `list_sessions` ĐƯỢC PHÉP cho model thấy (F3). Model
+    // không được nhắn vào một phiên nằm ngoài danh bạ của chính nó — đó là toàn bộ
+    // ý nghĩa của danh bạ.
+    //
+    // Vị từ chứ KHÔNG phải danh sách đã cắt: `listSessionContacts` dừng ở
+    // CONTACT_LIMIT, nên ràng theo danh sách sẽ khiến một tin gửi được hay không
+    // phụ thuộc vào việc người dùng có bao nhiêu phiên mở trong 24h qua — cùng một
+    // lời gọi, lúc chạy lúc không, không ai giải thích nổi.
+    //
+    // Và KHÔNG ràng "phải gọi list_sessions trong cùng lượt": model đọc được id
+    // trong khối tin đến (`id <from>`) nên trả lời một phiên vừa nhắn tới là luồng
+    // hợp lệ không cần danh bạ; mà kẻ tấn công thì chỉ việc bảo model gọi
+    // `list_sessions` trước — danh bạ không phải bí mật. Ràng như thế là thêm ma sát
+    // cho người dùng thật và không thêm biên tin cậy nào.
+    if (!isAddressable(target, now, new Set(activeSessionIds()))) {
+      throw new InboxError(
+        'unreachable-target',
+        `Session "${input.to}" is not in your contact list: it is idle and has not been active in the last 24 hours, so nobody is watching it. Call list_sessions and pick one of the sessions it returns.`,
+      )
+    }
     const fromModel = delivered.filter((e) => e.from !== null).length
     if (fromModel >= MAX_PER_TARGET_WINDOW) {
       throw new InboxError(
