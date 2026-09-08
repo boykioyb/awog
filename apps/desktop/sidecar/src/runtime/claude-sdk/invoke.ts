@@ -27,7 +27,6 @@ import { isToolAllowed } from '../tools/index.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { makeTaskToolGate } from '../permission.js'
 import { withBridgedAliases } from '../tools/bridged.js'
-import { ARTIFACT_ENV } from './artifact.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
@@ -303,14 +302,29 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     ...(args.cwd ? { cwd: args.cwd } : {}),
     ...(Object.keys(allServers).length > 0 ? { mcpServers: allServers } : {}),
     ...(args.abortController ? { abortController: args.abortController } : {}),
-    // `Artifact` bật cho CẢ task node, không chỉ phiên chat (artifact.ts giải thích
-    // vì sao là env chứ không phải `settings.enableArtifact`). Một node "viết báo
-    // cáo" thì thứ nó cần đưa cho người đọc chính là một trang có URL. Chạy không
-    // người trông KHÔNG phải lý do để bỏ: node ở đây đã có `Bash` dưới
-    // `bypassPermissions`, nên publish một trang không mở thêm hạng rủi ro nào —
-    // và luật `deny` của người dùng vẫn ràng buộc nó qua `makeTaskToolGate`, y hệt
-    // mọi tool khác.
-    env: { ...buildSdkEnv(cred), ...ARTIFACT_ENV },
+    // ⚠ KHÔNG có `ARTIFACT_ENV` ở đây, KHÁC đường chat (claude-sdk/run-stream.ts).
+    // Cố ý, và đây là chỗ đã bị bật nhầm một lần rồi (013ff66) — lý do ghi lại để
+    // không ai bật lại lần nữa.
+    //
+    // Lập luận của lần bật đó là "node ở đây đã có `Bash` dưới `bypassPermissions`,
+    // nên publish một trang không mở thêm hạng rủi ro nào". Nó sai, và phản ví dụ
+    // nằm ngay trong repo: tasks/engine.ts (node 'discuss') khai
+    // `disabledTools: ['Write','Edit','MultiEdit','NotebookEdit','Bash']` với đúng
+    // một dòng chú thích "discussion must not touch the repo" — tức KHÔNG phải node
+    // nào cũng có `Bash`. Bật env ở tầng này là bật cho MỌI node, kể cả node được
+    // thiết kế để không chạm gì; nó vẫn publish được ra một URL công khai.
+    //
+    // Còn một chỗ lệch nữa: công tắc của người dùng cho tool này là
+    // `disabledTools` (SessionConfigPopover) — một công tắc PER-SESSION, không tồn
+    // tại trên đường task. Nên bật ở đây là bật một năng lực có hệ quả ra ngoài
+    // máy, chạy KHÔNG NGƯỜI TRÔNG (ADR 0024 D-7), mà người dùng không có nút nào
+    // để tắt. `makeTaskToolGate` không đỡ được: nó deny-only, nó chỉ chặn thứ người
+    // dùng đã tự viết ra luật cấm, và chẳng ai viết sẵn luật cấm cho một tool họ
+    // không biết là mình đang bật.
+    //
+    // Muốn node task publish được thì thứ phải thêm là một công tắc opt-in per-node
+    // ĐI KÈM cách hiển thị nó ra UI — không phải một dòng env.
+    env: buildSdkEnv(cred),
     // Packaged builds: bundled native binary (ADR 0058 P3); dev auto-discovers.
     ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
   }

@@ -64,6 +64,10 @@ import {
   resolveProjectPathById,
   suggestRuleText,
 } from '../sessions/permission-rules.js'
+// Chính sách của `Artifact` ở cùng nhà với bằng chứng đo được về cổng bật nó
+// (claude-sdk/artifact.ts). File đó KHÔNG import gì cả — nhất là không import
+// `@anthropic-ai/claude-agent-sdk` — nên dòng này không kéo SDK vào nhánh Pi.
+import { isArtifactToolName, isGatedArtifactAction } from './claude-sdk/artifact.js'
 import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool.js'
 import { isDevServerToolName, isMutatingDevServerAction } from './tools/dev-server-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
@@ -132,6 +136,14 @@ function isGatedTool(name: string, args: unknown): boolean {
   // khởi động). `list`/`start`/`logs` không gate — bắt duyệt cả việc đọc log là
   // cách nhanh nhất để rào chắn bị tắt.
   if (isDevServerToolName(name)) return isMutatingDevServerAction(args)
+  // `Artifact` (parity #35) cũng là một tool nhiều hành động, nhưng chiều mặc định
+  // của nó ĐẢO LẠI: thiếu `action` nghĩa là `publish`, tức đưa một trang lên mạng
+  // với URL công khai. Nên `isGatedArtifactAction` liệt kê hành động CHỈ ĐỌC và
+  // gate phần còn lại — xem lý do đầy đủ trong claude-sdk/artifact.ts. Không có
+  // dòng này thì lời gọi rơi xuống `return` bên dưới thành `false` và thoát ở
+  // `!builtInGated` — TRƯỚC nhánh plan mode, nên plan mode publish được ra internet
+  // trong khi `Write` cùng phiên bị chặn cứng.
+  if (isArtifactToolName(name)) return isGatedArtifactAction(args)
   return (
     WRITE_TOOLS.has(name) ||
     EXEC_TOOLS.has(name) ||
