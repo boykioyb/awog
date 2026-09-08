@@ -126,7 +126,7 @@ const PATH_RE = /^[A-Za-z0-9._/-]+$/
 //   https://github.com/<owner>/<repo>                         (repo root)
 //   https://github.com/<owner>/<repo>/tree/<ref>              (branch root)
 //   https://github.com/<owner>/<repo>/tree/<ref>/<dir...>     (a folder)
-function parseGithubUrl(rawUrl: string): RepoRef {
+export function parseGithubUrl(rawUrl: string): RepoRef {
   let url: URL
   try {
     url = new URL(rawUrl.trim())

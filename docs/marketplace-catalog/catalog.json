@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "awog-delivery-guild",
+      "name": "AWOG Delivery Guild",
+      "description": "Full delivery pipeline — PO → BA → PM → TL → developer → QA → reviewer (+ infosec). 8 role agents, 8 workflow skills, core coding rules, /commit + /adr commands, and a format-after-write hook.",
+      "author": "boykioyb",
+      "url": "https://github.com/boykioyb/awog/tree/main/templates/awog-delivery-guild",
+      "kinds": ["agent", "skill", "hook", "rule", "command"],
+      "tags": ["delivery", "pipeline", "agents", "skills", "rules", "commands", "hooks"],
+      "homepage": "https://github.com/boykioyb/awog/blob/main/templates/README.md"
+    },
+    {
+      "id": "web-app-team",
+      "name": "Web App Team",
+      "description": "Frontend feature delivery — tech-lead, developer, QA and reviewer with implement / review / test skills and Nuxt + TypeScript + lint conventions.",
+      "author": "boykioyb",
+      "url": "https://github.com/boykioyb/awog/tree/main/templates/web-app-team",
+      "kinds": ["agent", "skill", "rule"],
+      "tags": ["frontend", "nuxt", "typescript", "agents", "skills", "rules"],
+      "homepage": "https://github.com/boykioyb/awog/blob/main/templates/README.md"
+    },
+    {
+      "id": "spec-driven-planning",
+      "name": "Spec-Driven Planning",
+      "description": "Discovery to plan — product-owner, business-analyst and project-manager with feature-brief, requirements and task-decomposition skills. Turns an idea into a spec and a task plan before any code.",
+      "author": "boykioyb",
+      "url": "https://github.com/boykioyb/awog/tree/main/templates/spec-driven-planning",
+      "kinds": ["agent", "skill", "rule"],
+      "tags": ["planning", "spec", "discovery", "agents", "skills", "rules"],
+      "homepage": "https://github.com/boykioyb/awog/blob/main/templates/README.md"
+    }
+  ]
+}

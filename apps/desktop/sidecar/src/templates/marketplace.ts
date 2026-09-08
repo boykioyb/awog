@@ -80,7 +80,8 @@ const CATALOG_REF = 'main'
 const CATALOG_FILE = 'catalog.json'
 
 const FETCH_TIMEOUT_MS = 15_000
-const MAX_CATALOG_BYTES = 512 * 1024
+// Export để test kiểm được đúng trần mà `getCatalogDoc` áp, thay vì chép lại số.
+export const MAX_CATALOG_BYTES = 512 * 1024
 const MAX_ENTRIES = 300
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 const CACHE_FILE = 'template-catalog-cache.json'
