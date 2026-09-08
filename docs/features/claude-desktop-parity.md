@@ -19,7 +19,7 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | # | Hạng mục | TT | Ghi chú |
 |---|---|---|---|
 | 1 | WebSearch có backend thật cho Pi | ✅ | Stub cũ (`builtin-stubs.ts`) *khai báo* tool rồi luôn trả lỗi ⇒ model đốt một lượt tool call mới biết hỏng. Đã gỡ khỏi danh sách + nói thẳng trong system prompt. Backend search thật vẫn **chưa có** — xem [agent-tools-parity.md](./agent-tools-parity.md) |
-| 2 | Browser: a11y tree · console · network · viewport · multi-tab | 🟡 | 5 → 14 action. `snapshot` trả cây role/name + ref cho từng phần tử tương tác (click theo ref, không theo pixel), xuyên shadow root, che input password. Hàng rào chống injection vẽ theo **ai kiểm soát chuỗi** — `<title>`, URL sau redirect, response header đều nằm TRONG hàng rào. Header credential bị bỏ **ngay ở Electron main**, không qua nổi biên tiến trình. Cầu sang nhánh SDK **chưa commit được** (kẹt file phiên khác đang sửa) |
+| 2 | Browser: a11y tree · console · network · viewport · multi-tab | ✅ | 5 → 14 action, và từ 2026-09-08 chạy trên **cả hai runtime**: nhánh Claude SDK cấp qua `mcp__awogbrowser__browser_tool`, cùng handler với Pi nên duyệt web không biến mất khi dùng tài khoản Anthropic. `snapshot` trả cây role/name + ref (click theo ref, không theo pixel), xuyên shadow root, che input password |
 | 3 | Dev server từ file cấu hình + đọc log server | ✅ | `{project}/.awog/dev-servers.json`. **`dev_server(start)` KHÔNG spawn** — cổng quyền khoá theo *tên tool* (`EXEC_TOOLS = {'Bash'}`) nên một tool tự spawn sẽ đi qua không bị hỏi, không bị chặn ở plan mode, không đụng luật deny. Nó trả chuỗi lệnh đã kiểm tra và bắt model chạy qua `Bash(run_in_background)` — cổng thật. Đường spawn duy nhất là RPC sau nút bấm, có `confirmCommand` đóng khe TOCTOU giữa lúc đọc config và lúc đồng ý |
 | 4 | `read_terminal` — đọc PTY người dùng tự gõ | ✅ | Ring buffer trong `terminal/manager.ts`; gate `chatSession` nên **có cả trong plan mode** (read-only, và lập kế hoạch chính là lúc cần đọc terminal nhất) |
 | 5 | Codegraph — index symbol + call path | ✅ | Không thêm dependency, không dùng TS compiler API. Masking pass giữ **nguyên độ dài byte + vị trí newline** nên mọi offset regex vẫn map ra `path:line` thật. Đo trên repo này: cold 881ms/1148 file, warm 106ms, index 2.68MB. `refs useTheme` ra 10 file trong khi `rg -l` ra 12 — 2 file thừa chỉ nhắc tên trong comment. Giới hạn được **nói cho model biết**, nên câu trả lời luôn là "không có tham chiếu đã index", không bao giờ là "không ai gọi" |
@@ -33,7 +33,7 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | 9 | Lazy tool loading thật | ✅ | Pi tiêu ngân sách byte **rẻ-trước** nên server nhỏ giữ tool trực tiếp, chỉ server đắt bị hoãn; hoà thì so id vì bộ tool đổi giữa chừng phá prompt cache. SDK quyết theo từng server, và **không bao giờ** nạp thẳng server khai timeout > 5s (chỉ thêm một khoảng chờ chết vào turn-1) |
 | 10 | Quy ước scratchpad | ✅ | `.awog/scratch/`, wire đủ **4 điểm append** + subagent; `.gitignore` đã bỏ qua |
 | 11 | Tool `KillShell` | ✅ | UI đã quảng cáo tool này từ lâu trong khi runtime Pi không có — model bật được dev server mà không tắt được |
-| 12 | Đọc PDF theo trang | 🟡 | Tool `Read` đọc PDF theo khoảng trang (extractor tự viết, không thêm dep; xuống dòng theo toạ độ Y chứ không theo toán tử, nếu không "Java" bị cắt thành "J\nava"). Nhánh Pi được chỉ đúng đường trong ghi chú attachment — trước đó Pi **không gửi byte PDF nào**. Còn lại: nhánh Claude SDK vẫn nhét cả `document` block, bỏ nó đi là đánh đổi (mất đọc bố cục/ảnh gốc) ⇒ **tech-lead quyết** |
+| 12 | Đọc PDF theo trang | ✅ | Tool `Read` đọc PDF theo khoảng trang (extractor tự viết, không thêm dep). Cái "đánh đổi chờ tech-lead quyết" hoá ra **không phải đánh đổi**: giữ `document` block cho PDF vừa cỡ (không mất bố cục/ảnh), còn PDF quá cỡ thì rơi về dòng tham chiếu nói rõ cách đọc theo trang. Trước đó nó **biến mất hoàn toàn** — không block, không cả dòng nói file tồn tại |
 
 ## B. Điều phối & tự động hoá
 
@@ -44,7 +44,7 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | 15 | Workflow bằng script + cache theo hash input | ❌ | [ADR 0085](../decisions/0085-workflow-as-script.md) — **Rejected** (script) · **Deferred** (cache), kèm điều kiện mở lại đo được. Lý do gọn: (1) **cache là cái giá của script, không phải phần thưởng** — nó tồn tại để bù cho việc call stack JS không checkpoint được, mà AWOG đã có frontier bền vững trên `events.log`; (2) hộp cát cho *ngôn ngữ* không phải hộp cát cho *năng lực* — thứ nguy hiểm (`agent()` có tool ghi + shell) nằm trong hộp theo thiết kế, nên `node:vm` (vốn **không** phải ranh giới an toàn) lẫn isolate thật đều không mua được gì; (3) 0 workflow trên đĩa, 3 task từ trước tới nay ⇒ chưa có ca thật nào chạm giới hạn của DAG. Nhu cầu thật (fan-out động, rẽ nhánh theo verdict) nếu xuất hiện sẽ giải bằng primitive **khai báo** `forEach`/`when`, ADR riêng |
 | 16 | Worktree riêng cho node song song | ✅ | [ADR 0081](../decisions/0081-task-node-worktree-isolation.md). Trước đó 4 node song song ghi chung `project.path` và auto-commit đua nhau — lỗi tranh chấp thật |
 | 17 | Session nhắn cho session | ✅ | Hộp thư + người dùng bấm, **không** tự khởi động lượt. 3 trần chặn vòng lặp; số hop đếm lúc **gửi** nên cắt được cả khi chưa ai bấm giao. Tin từ phiên A là L1 với phiên B — hàng rào nonce sinh SAU khi bên gửi viết xong |
-| 18 | Trigger Task/Workflow từ xa | ⬜ | ⚠️ `tasks.*` bị loại khỏi allowlist gateway — **mở rộng allowlist ⇒ infosec re-audit bắt buộc** |
+| 18 | Trigger Task/Workflow từ xa | ✅ | Đã làm trọn vẹn (dòng cũ ghi ⬜ là lỗi thời). Chỉ mở ACTION (`tasks.create`/`approvePhase`/`cancel`/`pause`/`resume`); phần ĐỌC giữ gateway-local (`remote.tasks`/`remote.task`) để điện thoại không nhận cả DAG + trace. `tasks.create` khoá sau công tắc unattended vì node task chạy `mode:execute` theo cấu tạo. Loại tường minh `rerunPhase`/`discuss`/`delete`/`rename` |
 | 19 | Watch PR + CI check runs → đẩy vào phiên | ✅ | Một `gh api graphql` cho cả danh sách, mọi giá trị đi bằng variable. **Cố ý không** gọi `postSessionMessage()` — nhánh đó đóng khung "người dùng chuyển tiếp cho bạn", mà log CI không phải thứ người dùng đưa. Dấu vân tay persist ra đĩa nên mở lại app không phát lại CI hôm qua |
 | 20 | Push notification thật | ❌ | **Từ chối** ([ADR 0084](../decisions/0084-wake-when-no-window-and-push-scope.md)): payload mã hoá nhưng **metadata thì không** — bên thứ ba biết máy này vừa xong việc lúc nào, tần suất nào. Đúng thứ invariant #5 cấm, và phá mô hình tailnet-only của ADR 0067. Phần khả thi đã làm: thông báo phát từ **tiến trình main** nên sống độc lập với cửa sổ |
 | 21 | Ngân sách cấp Task | ✅ | Trước đó `types/shared.ts` tự nhận "closes the budget per task invariant" nhưng `node-runner.ts` không hề có budget — code không khớp lời hứa |
@@ -73,7 +73,7 @@ AWOG chọn runtime **theo provider** (ADR 0058): `provider === 'anthropic'` ⇒
 | # | Hạng mục | TT | Ghi chú |
 |---|---|---|---|
 | 36 | Plugin có version + update | ✅ | So **3 phía bằng git blob SHA-1** (baseline `.install.json` · đĩa · nguồn): nguồn đổi ⇒ `status`, người dùng sửa ⇒ `localModified`, **cả hai ⇒ xung đột, bắt chọn tay**. Áp dụng dựng bundle ở thư mục tạm rồi `rename` nên hỏng giữa chừng không để lại trạng thái nửa vời. Update cũ = `rm -rf` ghi đè mù |
-| 37 | Marketplace tìm plugin/skill | ⬜ | Đường vào duy nhất hiện nay: tự dán URL |
+| 37 | Marketplace tìm plugin/skill | 🟡 | **Code xong** (`templates/marketplace.ts` + 2 RPC + store + `TemplateDiscoverDialog`/`TemplateConsentPanel`). Thiếu duy nhất: repo danh mục `boykioyb/awog-templates` chưa tồn tại (404) — đó là việc **xuất bản**, không phải code |
 | 38 | MCP registry động + gợi ý theo ngữ cảnh | ✅ | Registry chính thức của MCP. `redirect: 'manual'` + kiểm tra **từng IP** sau `dns.lookup` (chặn DNS rebinding). `command` suy từ allowlist cứng — `runtimeHint` do registry cấp bị **bỏ qua**. Cache 24h, degrade offline 4 mức đã đo thật |
 | 39 | Luật quyền theo pattern lệnh + 3 tầng | ✅ ⚠️ | [ADR 0080](../decisions/0080-command-scoped-permission-rules.md). Đây là **lỗ hổng**, không phải thiếu tính năng: "always allow" cho `git status` từng mở khoá **mọi lệnh Bash** trong phiên |
 | 40 | Tự đề xuất allowlist từ lịch sử | ✅ | Chỉ đề xuất từ lời gọi người dùng **đã đồng ý** (step `done`), không bao giờ từ lời gọi bị từ chối. Nội dung luật **không đến từ UI** — park server-side dưới id ngẫu nhiên, renderer chỉ gửi lại id + tầng |
@@ -156,6 +156,31 @@ tự nhìn — nhất là ở regex và ở chỗ nói "không có đường nà
 **Điều đáng rút ra:** F1 sinh ra *từ chính bản vá* của một lỗ hổng khác. Luật cũ hỏng vì khoá theo tên tool; luật mới khoá theo nội dung đúng như thiết kế, nhưng việc đặt tier project **trong repo** đã lặng lẽ biến cấu hình quyền thành thứ người lạ ghi được. Sửa một lỗ ở tầng logic mà không xét lại tầng lưu trữ là cách tạo ra lỗ tiếp theo.
 
 Bài học đó đã được nâng thành **luật đứng** ở [ADR 0085](../decisions/0085-workflow-as-script.md) D-4: *tier nằm trong repo không bao giờ mang mã thực thi, và không bao giờ tự mang bản ghi trust của chính nó.* Áp luật đó ngược lại repo thì lộ ngay `hooks/store.ts:129` (xem bảng bug ở trên).
+
+## Bảy tool bắc cầu sang nhánh Claude SDK (2026-09-08)
+
+Runtime chọn **theo provider** (ADR 0058), nên mọi tool chỉ đăng ký ở `runtime/tools/index.ts`
+là một **lỗ năng lực im lặng**: đổi provider của một agent sang `anthropic` là model mất tool đó,
+không báo gì. Đợt này đóng bảy cái: `schedule_wakeup` · `read_terminal` · `browser_tool` ·
+`dev_server` · `code_index` · `list_sessions` · `send_session_message`.
+
+Khuôn dùng chung cho cả bảy, và **phần thân không bao giờ được chép**: nhánh Pi bọc thành
+AgentTool (schema TypeBox), nhánh SDK bọc thành MCP tool (schema zod), cùng gọi một runner. Với
+`read_terminal` lý do không phải cho gọn mà là bảo mật — khử bí mật và hàng rào nonce nằm trong
+runner đó, nên một bản dựng lại ở bridge sẽ trôi khỏi bản kia một cách im lặng, và cái trôi đi là
+bảo mật.
+
+**Tiêu chí đặt tool vào server nào**: tên server hiện ra trong luật quyền và trong `disabledTools`,
+nên nó phải nói đúng tool là gì. `schedule_wakeup` đi nhờ `awogsurfaces` (nó là thứ model ĐẶT VÀO
+phiên, cùng họ). `read_terminal` có server riêng vì nó là NGUỒN ĐỌC dữ liệu L1 — gộp chung thì một
+luật viết cho `mcp__awogsurfaces__*` vô tình phủ luôn nó. Tương tự `awogdev` (đọc log + dừng tiến
+trình) và `awogsessions` (đọc danh bạ phiên khác + ghi vào hộp thư phiên khác) — biên tin cậy khác
+hẳn nhóm surface.
+
+**Hỏng sẵn lộ ra vì test đòi hai runtime giống nhau** (test đòi cùng nhãn ⇒ hoá ra nhãn chưa đúng ở
+runtime NÀO): 7 tool AWOG-native chưa từng có nhãn transcript nên hiện tên thô; `dev_server`/
+`code_index` có nhãn mà thiếu icon nên trông như một lượt subagent; và cả bảy không nằm trong nhóm
+nào của Session config nên không tắt riêng được.
 
 ## Một lớp bug lặp lại: tool bắc cầu đổi tên
 
