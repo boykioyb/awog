@@ -240,14 +240,28 @@ giờ mùa không sai) chứ không dựng hàng đợi thứ hai: một lời h
 
 Lý do và các đánh đổi: [ADR 0082 § Đính chính](../decisions/0082-scheduled-runs.md).
 
-### Giới hạn: chỉ có trên nhánh Pi
+### Có trên CẢ HAI runtime (từ 2026-09-08)
 
-`schedule_wakeup` được đăng ký trong `runtime/tools/index.ts`, tức **chỉ nhánh Pi**. Nhánh Claude
-SDK bắc cầu tool AWOG qua các in-process MCP server (`awog`, `awogssh`, `awogwiki`, `awogmemory`,
-`awogsurfaces`, `awogbrowser`) và **không có cái nào chứa tool này** — nên đặt provider của agent
-là `anthropic` thì model mất hẳn khả năng tự hẹn giờ. Runtime chọn theo provider ([ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)),
-nên đây là đúng cái bẫy ADR đó cảnh báo: **đổi provider là đổi năng lực của agent**. Đóng được
-bằng một SDK MCP server nhỏ như `awogwiki`/`awogmemory`, chưa làm.
+Ban đầu tool chỉ đăng ký trong `runtime/tools/index.ts`, tức **chỉ nhánh Pi** — nên đặt provider của
+agent là `anthropic` thì model mất hẳn khả năng tự hẹn giờ, im lặng. Đúng cái bẫy
+[ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md) cảnh báo: *đổi provider là
+đổi năng lực của agent*.
+
+Nay nhánh Claude SDK cấp nó qua server `awogsurfaces` (`mcp__awogsurfaces__schedule_wakeup`).
+**Không dựng server `awogwake` riêng** dù thoạt nghe hợp lý hơn, vì mọi thứ quyết định nơi đặt đều
+trùng với nhóm surface: cùng điều kiện cấp phát (chỉ chat session — `claude-sdk/run-stream.ts`
+CHÍNH LÀ đường chat), cùng vòng đời (server dựng lại mỗi lượt, nên bộ đếm `MAX_WAKEUPS_PER_TURN`
+đúng nghĩa "trần theo lượt"), và quan trọng nhất: `sessions/step-mapper.ts` đã có
+`unbridgeSurfaceToolName` gấp `mcp__awogsurfaces__<tool>` về tên trần **một lần**. Một server riêng
+thì phải viết thêm một cơ chế gấp tên nữa, hoặc liệt kê hai cách viết ở khắp nơi như wiki/memory
+đang phải làm — tức tự tạo thêm bề mặt cho đúng lớp bug "tool bắc cầu đổi tên" đã cắn ba lần.
+
+Chính sách chỉ có **một bản**: mô tả tool và mô tả tham số nằm ở `WAKEUP_TEXT`, phần thân ở
+`createWakeupRunner` (`runtime/tools/wakeup-tool.ts`) — nhánh Pi bọc thành AgentTool (schema
+TypeBox), nhánh SDK bọc thành MCP tool (schema zod), cùng nguồn. Nhãn transcript là "Wake-up" ở cả
+hai; trước đây nó rơi về tên thô `schedule_wakeup` ngay cả trên Pi. Công tắc bật/tắt tool ở
+Session config nay có nó (nhóm **Agent**, không phải Surfaces — nó không đặt gì vào transcript, nó
+hẹn giờ) và tắt bằng CẢ hai dạng tên.
 
 ### Nó KHÔNG chạy lượt LLM nào
 

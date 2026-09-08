@@ -190,6 +190,15 @@ const SURFACE_TOOLS = [
   'suggest_followups',
   'report_findings',
 ]
+// Tool ĐI QUA server `awogsurfaces` trên nhánh Claude SDK, tức ở đó mang tên
+// `mcp__awogsurfaces__<tool>`. Tách khỏi `SURFACE_TOOLS` vì hai danh sách trả lời
+// hai câu hỏi khác nhau: cái trên là "hiện trong nhóm Surfaces", cái này là "cần
+// alias tên bắc cầu". `schedule_wakeup` đi nhờ server đó (sidecar
+// claude-sdk/surface-sdk-server.ts) nhưng thuộc nhóm Agent — nó không đặt gì vào
+// transcript, nó hẹn giờ.
+//
+// Khai ở ĐÂY, trước `TOOL_GROUPS`, vì cùng lý do TDZ ghi ở chú thích dưới.
+const SURFACE_BRIDGED = [...SURFACE_TOOLS, 'schedule_wakeup']
 // KHAI TRƯỚC `TOOL_GROUPS`: đó là một `const` cấp module, chạy NGAY lúc nạp file,
 // nên nó đọc `SURFACE_TOOLS` trong cùng lượt đánh giá. Khai sau sẽ ném TDZ — đúng
 // lỗi vừa vá ở `TopBarNotifications.vue`, chỉ khác là ở cấp module thay vì setup.
@@ -200,7 +209,7 @@ const TOOL_GROUPS: [string, string[]][] = [
   // model cannot see the user's terminals at all.
   ['Exec', ['Bash', 'BashOutput', 'KillShell', 'monitor', 'read_terminal']],
   ['Web', ['WebFetch', 'WebSearch']],
-  ['Agent', ['Task', 'TodoWrite', 'ExitPlanMode']],
+  ['Agent', ['Task', 'TodoWrite', 'ExitPlanMode', 'schedule_wakeup']],
   // Model-initiated surfaces: chapters, file cards, task suggestions, follow-ups.
   // Off here means the model can still answer, it just cannot put cards in the
   // transcript — useful for anyone who finds them noisy.
@@ -209,7 +218,7 @@ const TOOL_GROUPS: [string, string[]][] = [
 const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
 
 const TOOL_ALIASES: Record<string, string[]> = Object.fromEntries(
-  SURFACE_TOOLS.map((tl) => [tl, [`mcp__awogsurfaces__${tl}`]]),
+  SURFACE_BRIDGED.map((tl) => [tl, [`mcp__awogsurfaces__${tl}`]]),
 )
 const namesFor = (tl: string): string[] => [tl, ...(TOOL_ALIASES[tl] ?? [])]
 

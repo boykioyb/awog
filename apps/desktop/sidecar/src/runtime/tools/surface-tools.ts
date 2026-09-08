@@ -88,6 +88,12 @@ export const SURFACE_TOOL_NAMES = [
   'suggest_task',
   'suggest_followups',
   'report_findings',
+  // Không phải một transcript surface, nhưng ĐI NHỜ server `awogsurfaces` trên
+  // nhánh Claude SDK (xem chú thích trong claude-sdk/surface-sdk-server.ts). Tên
+  // nằm ở đây vì danh sách này chỉ phục vụ MỘT việc: cho step-mapper gấp
+  // `mcp__awogsurfaces__<tool>` về tên trần. Thiếu dòng này thì cùng một lời gọi
+  // hiện là "Wake-up" trên Pi và "awogsurfaces: schedule_wakeup" trên SDK.
+  'schedule_wakeup',
 ] as const
 
 // Every string the model reads about these tools. Shared by the TypeBox schemas

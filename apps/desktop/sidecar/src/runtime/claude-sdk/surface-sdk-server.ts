@@ -37,6 +37,7 @@ import {
   runReportFindings,
   type SurfaceRunResult,
 } from '../tools/surface-tools.js'
+import { WAKEUP_TEXT, createWakeupRunner } from '../tools/wakeup-tool.js'
 
 // A refused call (budget guard, no usable path) has no surface. It must come back
 // flagged `isError` — that is what makes step-mapper render it as a failed row
@@ -70,6 +71,16 @@ export function buildSurfaceToolsSdkServer(
   // these counters are exactly "per reply" — the same property the Pi factory
   // relies on.
   const turn = createSurfaceTurnCounters()
+  // `schedule_wakeup` đi nhờ server này thay vì có server riêng (gói #14). Nó
+  // KHÔNG phải một "transcript surface", nhưng mọi thứ quyết định nơi đặt đều
+  // trùng: cùng điều kiện cấp phát (chỉ chat session — file này CHÍNH LÀ đường
+  // chat), cùng vòng đời (dựng lại mỗi lượt, nên bộ đếm là trần theo lượt), và
+  // quan trọng nhất là step-mapper đã có sẵn `unbridgeSurfaceToolName` gấp
+  // `mcp__awogsurfaces__<tool>` về tên trần MỘT lần. Dựng `awogwake` riêng thì
+  // phải viết thêm một cơ chế gấp tên nữa, hoặc liệt kê hai cách viết ở khắp nơi
+  // như wiki/memory đang phải làm — tức tự tạo thêm bề mặt cho đúng lớp bug
+  // "tool bắc cầu đổi tên" đã cắn ba lần.
+  const runWakeup = createWakeupRunner(sessionId)
 
   return createSdkMcpServer({
     name: SURFACE_MCP_SERVER,
@@ -119,6 +130,24 @@ export function buildSurfaceToolsSdkServer(
           options: z.array(z.string()).describe(SURFACE_TOOL_TEXT.suggestFollowups.options),
         },
         async (args) => finish('suggest_followups', args, runSuggestFollowups(args, turn)),
+      ),
+      tool(
+        'schedule_wakeup',
+        WAKEUP_TEXT.description,
+        {
+          in_seconds: z.number().describe(WAKEUP_TEXT.inSeconds),
+          note: z.string().describe(WAKEUP_TEXT.note),
+        },
+        async (args) => {
+          const r = await runWakeup(args.in_seconds, args.note)
+          // `isError` phải đi qua cầu: một lần đặt BỊ TỪ CHỐI (hết chỗ, note quá
+          // dài) không phải một bước thành công — nhánh Pi phân biệt bằng
+          // `details.isError`, còn ở đây chỉ có cờ này.
+          return {
+            content: [{ type: 'text' as const, text: r.text }],
+            ...(r.isError ? { isError: true } : {}),
+          }
+        },
       ),
       tool(
         'report_findings',

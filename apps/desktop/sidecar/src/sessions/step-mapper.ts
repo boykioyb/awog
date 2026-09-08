@@ -208,6 +208,11 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Suggest task'
     case 'suggest_followups':
       return 'Follow-ups'
+    // Chỉ cần tên TRẦN: dạng bắc cầu `mcp__awogsurfaces__schedule_wakeup` đã được
+    // `unbridgeSurfaceToolName` gấp về đây trước khi tới bảng này. Trước dòng này
+    // hàng hiện tên thô `schedule_wakeup` trên CẢ HAI runtime.
+    case 'schedule_wakeup':
+      return 'Wake-up'
     case 'ExitPlanMode':
       return 'Exit plan'
     case 'EnterPlanMode':
