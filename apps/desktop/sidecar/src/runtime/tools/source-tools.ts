@@ -36,6 +36,7 @@ import { emit } from '../../transport/stdio.js'
 import { log } from '../../util/logger.js'
 import { listSources, loadSource, saveSource } from '../../sources/store.js'
 import { SourceConfigSchema } from '../../sources/schema.js'
+import { reservedSourceIdError } from '../../sources/reserved.js'
 import { testAndPersistSource } from '../../sources/test.js'
 import { getFreshToken } from '../../sources/oauth-manager.js'
 import { resolveOAuthTarget, startSourceOAuth } from '../../sources/oauth-start.js'
@@ -123,15 +124,23 @@ export async function runSourceCreate(rawConfig: Record<string, unknown>): Promi
 
   const existing = await loadSource(slug)
   const now = Date.now()
+  const id =
+    (typeof raw.id === 'string' && raw.id) ||
+    existing?.id ||
+    `${slug}_${randomBytes(4).toString('hex')}`
+
+  // Cùng hàng rào fail-closed như RPC `source.upsert`: một id trùng tên server MCP
+  // in-process của AWOG mất sạch tool trên nhánh Claude SDK. Model là đường tạo
+  // source thứ hai, nên nó phải bị chặn ở đây chứ không chỉ ở đường UI.
+  const reserved = reservedSourceIdError(id)
+  if (reserved) return result(reserved, true)
+
   const draft: Record<string, unknown> = {
     trust: 'prompt',
     enabled: false,
     timeoutMs: 30_000,
     ...raw,
-    id:
-      (typeof raw.id === 'string' && raw.id) ||
-      existing?.id ||
-      `${slug}_${randomBytes(4).toString('hex')}`,
+    id,
     createdAt: existing?.createdAt ?? (typeof raw.createdAt === 'number' ? raw.createdAt : now),
     updatedAt: now,
   }

@@ -18,6 +18,7 @@ import { awogHome } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { McpServerConfigSchema } from '../mcp/schema.js'
 import { SourceConfigSchema } from './schema.js'
+import { isReservedAwogServerName } from '../runtime/tools/bridged.js'
 import type { McpServerConfig, McpSource, McpSourceBlock } from '../types/shared.js'
 
 interface FsError extends Error {
@@ -38,13 +39,36 @@ async function pathExists(p: string): Promise<boolean> {
   }
 }
 
+// Hậu tố gắn vào một id di trú trùng tên server MCP in-process của AWOG. Mọi
+// source di trú đều là source `mcp`, nên hậu tố này vừa đúng nghĩa vừa ngắn.
+const RESERVED_ID_SUFFIX = '-mcp'
+
+// Id (= slug) mà một MCP server cũ nhận khi di trú. Giữ NGUYÊN id cũ trong mọi
+// trường hợp bình thường — đó là điều làm keychain `<id>/<key>` còn resolve được.
+//
+// Ngoại lệ DUY NHẤT: id trùng tên một server MCP in-process của AWOG. Giữ nguyên
+// thì source ra đời đã hỏng sẵn — nhánh Claude SDK gộp server của AWOG sau cùng
+// nên nó nuốt trọn tool của source, im lặng (xem sources/reserved.ts). Ở đường
+// tạo mới ta TỪ CHỐI, nhưng ở đây không có ai để hỏi, nên đổi tên là lựa chọn
+// đúng: một source đổi tên còn sửa được, một source bị nuốt thì không ai thấy.
+//
+// Cái giá: id là tiền tố account keychain, nên `secret:KEY` env/header của riêng
+// server này phải được nhập lại. Cố ý KHÔNG chép entry keychain sang id mới —
+// đường di trú sẽ phải gọi native binding cho một ca gần như không xảy ra; log
+// warn dưới nói thẳng ra để người dùng biết mà nhập lại.
+export function migratedSourceId(legacyId: string): string {
+  return isReservedAwogServerName(legacyId) ? `${legacyId}${RESERVED_ID_SUFFIX}` : legacyId
+}
+
 // Map a legacy MCP server config onto an mcp Source. The MCP `id` is preserved
 // as both the source id and the folder slug (a legacy id is always a valid
-// slug), so keychain lookups keyed on `<id>/<key>` keep resolving. `command`,
-// `args`, `env` and `cwd` fold into the stdio block; `url` and `headers` fold
-// into the http/sse block. Secret refs are copied untouched.
+// slug), so keychain lookups keyed on `<id>/<key>` keep resolving — the one
+// exception is migratedSourceId's reserved-name rename. `command`, `args`, `env`
+// and `cwd` fold into the stdio block; `url` and `headers` fold into the
+// http/sse block. Secret refs are copied untouched.
 function mapServerToSource(server: McpServerConfig): McpSource {
   const now = Date.now()
+  const id = migratedSourceId(server.id)
   const mcp: McpSourceBlock = { transport: server.transport }
   if (server.transport === 'stdio') {
     if (server.command !== undefined) mcp.command = server.command
@@ -57,11 +81,12 @@ function mapServerToSource(server: McpServerConfig): McpSource {
   }
 
   const cfg: McpSource = {
-    id: server.id,
-    slug: server.id,
+    id,
+    slug: id,
     name: server.name,
-    // provider is a freeform label; the id/slug is the most faithful carry-over
-    // (there is no provider concept in the legacy MCP config).
+    // provider is a freeform label; the LEGACY id is the most faithful carry-over
+    // (there is no provider concept in the legacy MCP config) and it keeps a
+    // renamed source pointing back at where it came from.
     provider: server.id,
     enabled: server.enabled,
     type: 'mcp',
@@ -168,7 +193,14 @@ export async function migrateMcpServersToSources(baseDir: string = awogHome()): 
       continue
     }
 
-    const slug = server.id
+    const slug = migratedSourceId(server.id)
+    if (slug !== server.id) {
+      log.warn('sources/migrate: legacy id collides with an AWOG built-in MCP server, renaming', {
+        from: server.id,
+        to: slug,
+        note: 'any secret: env/header of this server must be re-entered under the new id',
+      })
+    }
     const targetDir = join(sourcesDir, slug)
     // Idempotency guard #2: never overwrite an existing source.
     // eslint-disable-next-line no-await-in-loop

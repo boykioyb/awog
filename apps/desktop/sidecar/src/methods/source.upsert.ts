@@ -7,6 +7,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { SourceConfigSchema } from '../sources/schema.js'
+import { reservedSourceIdError } from '../sources/reserved.js'
 import { loadSource, saveSource, renameSource } from '../sources/store.js'
 
 const Params = z.object({
@@ -21,6 +22,12 @@ const Params = z.object({
 register('source.upsert', async (raw) => {
   const params = Params.parse(raw)
   const incoming = params.source
+
+  // Hàng rào tên dành riêng (sources/reserved.ts): id trùng một server MCP
+  // in-process của AWOG ⇒ source mất sạch tool trên nhánh Claude SDK. Từ chối ở
+  // ĐÂY, trước mọi thứ khác, thay vì để nó ghi xuống đĩa rồi chết im lặng.
+  const reserved = reservedSourceIdError(incoming.id)
+  if (reserved) throw new RpcError(-32602, reserved)
 
   // Kind-specific completeness checks (schema keeps per-block fields optional so
   // partial drafts round-trip; the transport gate is enforced here).

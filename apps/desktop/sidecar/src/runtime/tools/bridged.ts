@@ -60,6 +60,25 @@ export const AWOG_BRIDGE_SERVER_OF: Readonly<Record<string, string>> = Object.fr
   BRIDGED_SERVERS.flatMap(([server, names]) => names.map((n) => [n, server] as const)),
 )
 
+// Tên server MCP mà AWOG chiếm dụng trên nhánh Claude SDK — DẪN XUẤT từ bảng
+// trên, nên thêm một server vào `BRIDGED_SERVERS` là danh sách này tự dài ra.
+//
+// Vì sao phải công khai: ở `runtime/claude-sdk/run-stream.ts` các server của AWOG
+// được gộp SAU CÙNG vào `options.mcpServers`, mà khoá của một server ngoài chính
+// là SOURCE ID. Một source mang đúng một trong các tên này bị ghi đè sạch — người
+// dùng thấy source "đã kết nối" mà model không có lấy một tool nào của nó. Biên
+// tạo source dùng danh sách này để từ chối trước (`sources/reserved.ts`), và
+// migration dùng nó để đổi tên một id MCP di trú thay vì để nó xung đột im lặng.
+export const AWOG_RESERVED_MCP_SERVER_NAMES: readonly string[] = [
+  ...new Set(BRIDGED_SERVERS.map(([server]) => server)),
+]
+
+const RESERVED_SERVER_NAMES = new Set(AWOG_RESERVED_MCP_SERVER_NAMES)
+
+export function isReservedAwogServerName(name: string): boolean {
+  return RESERVED_SERVER_NAMES.has(name)
+}
+
 export function bridgedNameOf(toolName: string): string | null {
   const server = AWOG_BRIDGE_SERVER_OF[toolName]
   return server ? `mcp__${server}__${toolName}` : null
