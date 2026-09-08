@@ -314,6 +314,9 @@ export async function runStreamPi(
       // `mode`/`autoApprove`. Default 'prompt'. The gate keys the remembered allowance
       // by the per-call `host` arg (unified model).
       args.settings.sshApprovalMode ?? 'prompt',
+      // cwd THẬT của lượt: luật viết đường dẫn tương đối phải giải theo thư mục
+      // lệnh sẽ chạy, không phải đường dẫn project (ADR 0080).
+      args.cwd,
     ),
     args.budget,
     Date.now(),

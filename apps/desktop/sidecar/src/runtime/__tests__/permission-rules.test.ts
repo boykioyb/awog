@@ -1634,3 +1634,102 @@ describe('makeTaskToolGate — tasks stop ignoring the permission rules (F5)', (
     await expect(gate(toolCtx('Bash', { command: 'cd x && npm test' }))).resolves.toBeUndefined()
   })
 })
+
+// Nối `cwd` của lượt xuống cổng (ADR 0080 — việc còn lại của lượt 2).
+//
+// Tầng luật đã biết giải đường dẫn tương đối theo `RuleQuery.cwd` từ trước, nhưng
+// KHÔNG call-site nào truyền vào, nên gốc luôn là đường dẫn project. Với một phiên
+// kéo-thả folder khác, hay một node task chạy trong worktree riêng, đó là gốc SAI:
+// luật DENY viết cho thư mục thật không khớp và lời gọi đi qua. Nhóm này khoá phần
+// dây nối — tầng luật đã có test riêng ở trên.
+describe('cwd của lượt được nối tới cổng', () => {
+  const sessionId = 'ses-cwd-wiring'
+
+  beforeEach(() => clearSessionRules(sessionId))
+  afterEach(() => clearSessionRules(sessionId))
+
+  it('makeBeforeToolCall: cùng lời gọi, có cwd thì chặn, không có thì không', async () => {
+    addSessionRule(sessionId, rule('Write(/work/**)', 'deny'))
+    const args = { file_path: 'a.ts' }
+
+    // Không cwd ⇒ gốc rơi về project (ở đây không có) ⇒ đường dẫn tương đối không
+    // dựng nổi chủ thể. Phiên KHÔNG cho qua — nó leo thang thành hỏi (F4), và ở
+    // đây không có handler nên thành chặn. Đúng, nhưng SAI LÝ DO: người dùng bị
+    // hỏi về một lời gọi mà chính họ đã cấm tường minh.
+    const without = makeBeforeToolCall(undefined, 'execute', sessionId)
+    const blind = await without(toolCtx('Write', args))
+    expect(blind?.block).toBe(true)
+    expect(blind?.reason).toContain('No permission handler')
+
+    // Có cwd ⇒ 'a.ts' giải thành /work/a.ts ⇒ khớp DENY: chặn vì ĐÚNG luật, và lý
+    // do nói ra luật nào — thứ người dùng cần để đi sửa nó.
+    const withCwd = makeBeforeToolCall(
+      undefined,
+      'execute',
+      sessionId,
+      false,
+      undefined,
+      'prompt',
+      '/work',
+    )
+    const wired = await withCwd(toolCtx('Write', args))
+    expect(wired?.block).toBe(true)
+    expect(wired?.reason).toContain('permission rule')
+  })
+
+  it('makeBeforeToolCall: cwd KHÔNG biến đường dẫn tương đối thành ALLOW', async () => {
+    // Bất đối xứng cố ý: gốc là thứ suy ra được, đoán sai theo chiều CẤP QUYỀN là
+    // leo thang. Có cwd cũng không đổi điều đó.
+    addSessionRule(sessionId, rule('Write(/work/**)'))
+    const hook = makeBeforeToolCall(
+      undefined,
+      'ask',
+      sessionId,
+      false,
+      undefined,
+      'prompt',
+      '/work',
+    )
+    // ALLOW không khớp ⇒ vẫn phải đi qua đường hỏi (không có canUseTool ⇒ chặn).
+    const res = await hook(toolCtx('Write', { file_path: 'a.ts' }))
+    expect(res?.block).toBe(true)
+    expect(res?.reason).not.toContain('permission rule')
+  })
+})
+
+describe('cwd của lượt được nối tới cổng chỉ-DENY của task', () => {
+  let home: string
+  let originalHome: string | undefined
+
+  beforeEach(async () => {
+    home = await mkdtemp(join(tmpdir(), 'awog-perm-home-'))
+    originalHome = process.env.HOME
+    process.env.HOME = home
+  })
+
+  afterEach(async () => {
+    if (originalHome === undefined) delete process.env.HOME
+    else process.env.HOME = originalHome
+    await rm(home, { recursive: true, force: true })
+  })
+
+  it('node task chạy trong worktree: luật bám theo worktree, không theo project', async () => {
+    // Đây là ca hay gặp nhất của lỗi: scheduler cấp cho mỗi node song song một
+    // worktree riêng, nên cwd thật KHÔNG BAO GIỜ là đường dẫn project.
+    await saveRuleToFile(userRuleFile(), rule('Write(/wt/node-2/**)', 'deny'))
+
+    const blind = makeTaskToolGate()
+    await expect(blind(toolCtx('Write', { file_path: 'src/a.ts' }))).resolves.toBeUndefined()
+
+    const wired = makeTaskToolGate(undefined, '/wt/node-2')
+    await expect(wired(toolCtx('Write', { file_path: 'src/a.ts' }))).resolves.toMatchObject({
+      block: true,
+    })
+  })
+
+  it('cổng task vẫn chỉ-DENY khi có cwd — ALLOW không cấp thêm gì', async () => {
+    await saveRuleToFile(userRuleFile(), rule('Write(/wt/node-2/**)'))
+    const gate = makeTaskToolGate(undefined, '/wt/node-2')
+    await expect(gate(toolCtx('Write', { file_path: 'src/a.ts' }))).resolves.toBeUndefined()
+  })
+})

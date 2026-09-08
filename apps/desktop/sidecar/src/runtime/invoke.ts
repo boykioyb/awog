@@ -298,7 +298,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         ...(args.apiSources ? { parentApiSources: args.apiSources } : {}),
         // Tasks run unattended: no prompt for the subagent either — but the user's
         // DENY rules still hold (ADR 0080 F5). Same deny-only gate as the node.
-        beforeToolCall: makeTaskToolGate(args.projectIds?.[0]),
+        beforeToolCall: makeTaskToolGate(args.projectIds?.[0], args.cwd),
         // Inherit the task's co-author setting for subagent-made commits.
         ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         makeChildSink: (parentToolCallId) => {
@@ -403,7 +403,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         // is already filtered in createRuntimeToolDefinitions above) — but a DENY
         // rule the user wrote is a guardrail, not a prompt, so it applies here too
         // (ADR 0080 F5). Deny-only: this gate blocks, it never grants.
-        beforeToolCall: makeTaskToolGate(args.projectIds?.[0]),
+        beforeToolCall: makeTaskToolGate(args.projectIds?.[0], args.cwd),
         // Capture Codex plan-usage from response headers (no-op for non-Codex),
         // then fail closed on Anthropic extra-usage: a headless task cannot prompt,
         // so if a response consumed PAID overage we STOP rather than silently bill.

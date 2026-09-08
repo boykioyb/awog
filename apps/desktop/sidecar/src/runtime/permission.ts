@@ -215,12 +215,20 @@ export function isSafeToolInputOverride(value: unknown): value is Record<string,
 
 // Which session / project the rule lookup is scoped to. Tasks have no session, so
 // they pass `projectPath` straight through (F5).
-type RuleScope = { sessionId?: string; projectPath?: string | null }
+type RuleScope = { sessionId?: string; projectPath?: string | null; cwd?: string }
 
-function scopeQuery(scope: RuleScope): { sessionId?: string; projectPath?: string | null } {
+function scopeQuery(scope: RuleScope): {
+  sessionId?: string
+  projectPath?: string | null
+  cwd?: string
+} {
   return {
     ...(scope.sessionId ? { sessionId: scope.sessionId } : {}),
     ...(scope.projectPath !== undefined ? { projectPath: scope.projectPath } : {}),
+    // Chỉ truyền khi có giá trị THẬT: `evaluatePermissionRules` phân biệt
+    // `cwd: undefined` (rơi về đường dẫn project) với `cwd: null` (không giải
+    // đường dẫn tương đối nữa) — gửi nhầm `null` là âm thầm tắt một nửa luật.
+    ...(scope.cwd ? { cwd: scope.cwd } : {}),
   }
 }
 
@@ -261,12 +269,15 @@ function denyReason(name: string): string {
 //
 // Any internal failure degrades to `undefined` (the pre-F5 behaviour): this gate
 // may only ever ADD blocks, never break a workflow that used to run.
-export function makeTaskToolGate(projectId?: string): BeforeToolCall {
+export function makeTaskToolGate(projectId?: string, cwd?: string): BeforeToolCall {
   return async (context) => {
     const toolName = context.toolCall.name
     try {
       const projectPath = projectId ? await resolveProjectPathById(projectId) : null
-      const denied = await deniedToolName(toolName, context.args, { projectPath })
+      const denied = await deniedToolName(toolName, context.args, {
+        projectPath,
+        ...(cwd ? { cwd } : {}),
+      })
       return denied ? { block: true, reason: denyReason(denied) } : undefined
     } catch (err) {
       log.warn('task tool gate: rule lookup failed, letting the call through', {
@@ -333,6 +344,13 @@ export function makeBeforeToolCall(
   // 'prompt' (ask every call). Inert unless an SSH tool is actually registered
   // (only run-stream's Pi path pushes them when the session links a host).
   sshApprovalMode: SshApprovalMode = 'prompt',
+  // Thư mục làm việc THẬT của lượt (ADR 0080, việc còn lại của lượt 2). Luật quyền
+  // viết đường dẫn tương đối (`Write(.env)`) phải được giải theo đúng thư mục lệnh
+  // sẽ chạy — một phiên kéo-thả folder khác, hay một node task chạy trong worktree
+  // riêng, đều KHÔNG nằm ở đường dẫn project. Bỏ trống ⇒ rơi về đường dẫn project
+  // như trước. Đường dẫn tương đối vẫn chỉ có hiệu lực theo chiều DENY dù gốc đến
+  // từ đâu: gốc suy ra có thể sai, mà đoán sai theo chiều CẤP QUYỀN là leo thang.
+  cwd?: string,
 ): BeforeToolCall {
   const promptSourceIds =
     sourceGate?.promptSourceIds && sourceGate.promptSourceIds.length > 0
@@ -461,8 +479,12 @@ export function makeBeforeToolCall(
               })
               return { block: true, reason: 'Rejected an unsafe argument override — blocked.' }
             }
+            // CÙNG `cwd` với đường chính: nếu chỗ này giải đường dẫn tương đối
+            // theo một gốc khác, ghi đè tham số trở thành đường vòng qua đúng luật
+            // DENY mà nhánh trên vừa áp.
             const denied = await deniedToolName(toolName, result.updatedInput, {
               ...(sessionId ? { sessionId } : {}),
+              ...(cwd ? { cwd } : {}),
             })
             if (denied) return denyBlock(denied)
             const target = context.args as Record<string, unknown>
@@ -507,6 +529,7 @@ export function makeBeforeToolCall(
       toolName,
       args: context.args,
       ...(sessionId ? { sessionId } : {}),
+      ...(cwd ? { cwd } : {}),
     })
 
     if (ruleDecision === 'deny') return denyBlock(toolName)
@@ -528,6 +551,7 @@ export function makeBeforeToolCall(
           toolName: sshName,
           args: context.args,
           ...(sessionId ? { sessionId } : {}),
+          ...(cwd ? { cwd } : {}),
         })
         if (aliasDecision === 'deny') return denyBlock(sshName)
       }

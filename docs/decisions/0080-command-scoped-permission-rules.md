@@ -307,7 +307,11 @@ Hai giới hạn **phải nói ra**, chứ không được để người dùng 
 
 ### Việc còn lại sau đính chính lượt 2
 
-- Wire `RuleQuery.cwd` từ cwd THẬT của lượt (`runtime/run-stream.ts` + `runtime/claude-sdk/run-stream.ts` đã có `args.cwd`). Khi đó đường dẫn tương đối được giải theo đúng thư mục kéo-thả / worktree thay vì đường dẫn project. Ngữ nghĩa "tương đối chỉ dùng cho DENY" giữ nguyên — sửa một dòng ở mỗi call-site.
+- ~~Wire `RuleQuery.cwd` từ cwd THẬT của lượt~~ — **đã xong 2026-09-08.** Nối ở **năm** chỗ, không phải hai: hai đường phiên chat (`runtime/run-stream.ts`, `runtime/claude-sdk/run-stream.ts` → tham số thứ 7 của `makeBeforeToolCall`), hai đường task Pi và một đường task Claude SDK (`makeTaskToolGate(projectId, cwd)`). Cộng một chỗ dễ sót: lần tra DENY **sau khi người dùng ghi đè tham số** cũng phải dùng CÙNG `cwd` — giải theo gốc khác ở đó biến ghi đè thành đường vòng qua đúng luật vừa áp.
+
+  Ngữ nghĩa giữ nguyên: đường dẫn tương đối chỉ có hiệu lực theo chiều DENY dù gốc đến từ đâu. `cwd` chỉ được truyền khi có giá trị thật — `evaluatePermissionRules` phân biệt `undefined` (rơi về đường dẫn project) với `null` (thôi giải đường dẫn tương đối), nên gửi nhầm `null` là âm thầm tắt một nửa luật.
+
+  Đo lại thì tác động **hẹp hơn** mô tả ban đầu ở chiều phiên: thiếu `cwd`, một lời gọi tương đối không dựng nổi chủ thể và phiên **leo thang thành hỏi** (F4) chứ không lặng lẽ chạy — sai ở chỗ hỏi nhầm một thứ người dùng đã cấm tường minh, và lý do hiện ra không nói được luật nào. Chỗ nó thực sự **lọt** là **task**: cổng task cố ý không leo thang (không có ai để hỏi), nên node chạy trong worktree riêng — tức cwd KHÔNG BAO GIỜ là đường dẫn project — cho qua thẳng. Đó là ca test chính của nhóm mới.
 - Dư địa: symlink cắm **bên trong** một thư mục đã được ALLOW vẫn chuyển hướng được lời ghi ra ngoài (chiều ALLOW cố ý không `realpath`). Đóng được nếu sau này chuẩn hoá luôn tiền tố literal của pattern, nhưng chi phí là fs I/O trên đường luật.
 
 ## Tham chiếu

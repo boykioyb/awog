@@ -474,6 +474,9 @@ export async function runStreamClaude(
       // server below; the gate matches their `mcp__awogssh__ssh_*` names (sshToolName)
       // and keys the allowance by the `host` arg — same gate as Pi.
       args.settings.sshApprovalMode ?? 'prompt',
+      // cwd THẬT của lượt: luật viết đường dẫn tương đối phải giải theo thư mục
+      // lệnh sẽ chạy, không phải đường dẫn project (ADR 0080).
+      args.cwd,
     ),
     args.budget,
     Date.now(),

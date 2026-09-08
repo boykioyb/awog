@@ -286,7 +286,9 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
     hooks: {
-      PreToolUse: [{ hooks: [makeForegroundOnlyHook(makeTaskToolGate(args.projectIds?.[0]))] }],
+      PreToolUse: [
+        { hooks: [makeForegroundOnlyHook(makeTaskToolGate(args.projectIds?.[0], args.cwd))] },
+      ],
     },
     // Honour the node agent's tool whitelist (Claude Code subagent `tools:` field).
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
