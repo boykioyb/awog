@@ -4,7 +4,7 @@
 // aborted while a prompt is open, rejectPermissionRequest unwinds it cleanly.
 
 import type { PermissionResult, PermissionUpdate } from '../runtime/permission-types.js'
-import { clearSessionRules, forgetSessionProjectPath } from './permission-rules.js'
+import { clearSessionRules } from './permission-rules.js'
 
 interface ParkedRequest {
   resolve: (result: PermissionResult) => void
@@ -81,5 +81,4 @@ export function isSessionToolAllowed(sessionId: string, rememberKey: string): bo
 export function clearSessionPermissions(sessionId: string): void {
   SESSION_SSH_ALLOWLIST.delete(sessionId)
   clearSessionRules(sessionId)
-  forgetSessionProjectPath(sessionId)
 }

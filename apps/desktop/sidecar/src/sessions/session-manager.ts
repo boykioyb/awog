@@ -226,6 +226,16 @@ class SessionManager {
     log.info('session-manager: loaded sessions from disk (metadata only)', { count: loaded })
   }
 
+  // Project id of ONE session — O(1) off the resident map. Exists because the
+  // permission gate needs it on EVERY tool call to resolve relative rule paths, and
+  // the two accessors either side of it are both too expensive for that: `getSessions`
+  // copies, maps and SORTS the whole list, `getSession` lazy-loads the transcript.
+  // `undefined` = no such session; `null` = a session with no project.
+  getSessionProjectId(id: string): string | null | undefined {
+    const m = this.sessions.get(id)
+    return m ? (m.header.projectId ?? null) : undefined
+  }
+
   // List projection — from the resident map only, no disk read.
   getSessions(): SessionSummary[] {
     return [...this.sessions.values()].map((m) => summarizeHeader(m.header)).sort(byUpdatedDesc)

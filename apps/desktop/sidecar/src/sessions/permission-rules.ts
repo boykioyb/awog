@@ -1022,10 +1022,18 @@ export async function saveRuleToFile(
 }
 
 // ─── Đường dẫn project của phiên ─────────────────────────────────────────────
-// Nạp lười + cache: gate chạy trên mỗi lời gọi tool nên không được đọc đĩa dày.
+// Gate chạy trên MỖI lời gọi tool, nên đường này không được đọc đĩa dày. Nhưng
+// cache sai còn đắt hơn cache chậm: nó làm luật của project SAI project.
+//
+// Nên chỉ cache đúng phần tốn đĩa — `projectId → path` — và KHÔNG cache
+// `sessionId → path`. Bản cũ cache theo `sessionId` và chỉ xoá lúc XOÁ PHIÊN, nên
+// một phiên được trỏ sang project khác vẫn giải luật theo project cũ cho tới khi
+// khởi động lại sidecar: đường dẫn tương đối neo sai gốc, và luật DENY tầng project
+// của project mới không áp. Bỏ hẳn tầng cache đó không tốn thêm I/O nào vì
+// `sessionId → projectId` đọc O(1) từ map thường trú của session manager.
+//
 // import động để module này (và test của nó) không kéo theo cả session manager.
 
-const SESSION_PROJECT_PATH = new Map<string, string | null>()
 const PROJECT_PATH_BY_ID = new Map<string, string | null>()
 
 async function loadProjectPath(projectId: string): Promise<string | null> {
@@ -1035,26 +1043,21 @@ async function loadProjectPath(projectId: string): Promise<string | null> {
 }
 
 export async function resolveSessionProjectPath(sessionId: string): Promise<string | null> {
-  const cached = SESSION_PROJECT_PATH.get(sessionId)
-  if (cached !== undefined) return cached
-  let path: string | null = null
   try {
     const { sessionManager } = await import('./session-manager.js')
-    const summary = sessionManager.getSessions().find((s) => s.id === sessionId)
-    if (summary?.projectId) path = await loadProjectPath(summary.projectId)
+    const projectId = sessionManager.getSessionProjectId(sessionId)
+    return projectId ? await resolveProjectPathById(projectId) : null
   } catch (err) {
     log.warn('permission rules: project path lookup failed', {
       sessionId,
       err: err instanceof Error ? err.message : String(err),
     })
+    return null
   }
-  SESSION_PROJECT_PATH.set(sessionId, path)
-  return path
 }
 
 // Đường dẫn project theo id — cho cổng chỉ-DENY của Tasks (F5), thứ không có
-// phiên nào để suy ra. Cùng kiểu nạp lười + cache: cổng chạy trên mỗi lời gọi
-// tool của mỗi node.
+// phiên nào để suy ra, và cũng là chỗ duy nhất còn giữ cache.
 export async function resolveProjectPathById(projectId: string): Promise<string | null> {
   const cached = PROJECT_PATH_BY_ID.get(projectId)
   if (cached !== undefined) return cached
@@ -1071,8 +1074,11 @@ export async function resolveProjectPathById(projectId: string): Promise<string 
   return path
 }
 
-export function forgetSessionProjectPath(sessionId: string): void {
-  SESSION_PROJECT_PATH.delete(sessionId)
+// Gọi khi đường dẫn của một project đổi hoặc project bị xoá (methods/projects.*).
+// Đây là biến duy nhất còn có thể ôi: đường dẫn nằm trên đĩa, và người dùng sửa
+// được nó trong lúc app đang chạy.
+export function forgetProjectPath(projectId: string): void {
+  PROJECT_PATH_BY_ID.delete(projectId)
 }
 
 // ─── Đánh giá ────────────────────────────────────────────────────────────────

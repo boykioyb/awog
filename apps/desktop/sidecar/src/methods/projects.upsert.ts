@@ -4,6 +4,7 @@ import { isAbsolute, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { register, RpcError } from '../transport/rpc.js'
 import { saveProject, loadProject } from '../projects/store.js'
+import { forgetProjectPath } from '../sessions/permission-rules.js'
 import type { Project } from '../types/shared.js'
 
 // id is composed by the UI and used as the filename. We constrain shape here
@@ -152,5 +153,9 @@ register('projects.upsert', async (raw) => {
   if (incoming.githubAccount !== undefined) project.githubAccount = incoming.githubAccount
 
   await saveProject(project)
+  // Cổng quyền cache `projectId → path` cho mỗi lời gọi tool. Đường dẫn vừa đổi
+  // ở đây là biến DUY NHẤT của cache đó, nên xoá ngay: cache ôi làm luật tầng
+  // project neo vào thư mục cũ, tức luật đúng chạy trên gốc sai.
+  forgetProjectPath(project.id)
   return { project }
 })
