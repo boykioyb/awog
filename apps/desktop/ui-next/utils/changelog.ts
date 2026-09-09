@@ -30,6 +30,96 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.35.0',
+    date: '2026-09-09',
+    highlight: {
+      en: 'The largest release so far: 45 of the 46 gaps measured against Claude Code Desktop are closed. The agent’s browser is no longer invisible — it is a panel you can watch and drive, and you can hand it your own logged-in session. Prompts and workflows run on a schedule, permission rules have a page of their own, and an Anthropic account no longer means a smaller agent than any other provider.',
+      vi: 'Bản phát hành lớn nhất tới nay: 45 trong 46 khoảng chênh đo được so với Claude Code Desktop đã đóng. Trình duyệt của agent không còn vô hình — nó là một panel bạn xem và lái được, và bạn giao được cho nó phiên đăng nhập của chính mình. Prompt và workflow chạy theo lịch, luật quyền có trang riêng, và dùng tài khoản Anthropic không còn nghĩa là agent yếu hơn các provider khác.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'The agent’s browser is now a panel next to the transcript. It used to be a hidden window reachable only from the tray, so nobody knew it existed — across 793 sessions on disk the agent had called it exactly zero times. Now one button in the status bar shows the page it is on, with a tab strip, address bar, back/forward, pinned sites, and pop-out to its own window; the panel follows whichever tab the agent is driving, and you can type in it yourself.',
+        vi: 'Trình duyệt của agent giờ là một panel nằm cạnh transcript. Trước đây nó là cửa sổ ẩn, chỉ mở được từ tray, nên chẳng ai biết nó tồn tại — trong 793 phiên đã lưu, agent gọi tới nó đúng 0 lần. Giờ một nút ở thanh trạng thái hiện đúng trang nó đang mở, kèm dải tab, ô địa chỉ, back/forward, trang đã ghim và pop out ra cửa sổ riêng; panel tự theo tab mà agent đang lái, và bạn tự gõ vào đó được.',
+      },
+      {
+        kind: 'added',
+        en: 'Hand the agent your own logged-in browser. A button in the Browser panel imports cookies, Local Storage and IndexedDB from a real Chrome, Edge, Brave, Arc, Vivaldi or Chromium profile, so the agent browses sites you are already signed in to. Saved passwords, payment details, history and bookmarks are never touched. Newer cookies that Chrome binds to the app that wrote them cannot be read by anything else, so the import reports exactly what came across, row by row, instead of claiming success.',
+        vi: 'Giao cho agent chính trình duyệt bạn đã đăng nhập. Một nút trong panel Browser nhập cookie, Local Storage và IndexedDB từ profile Chrome, Edge, Brave, Arc, Vivaldi hoặc Chromium thật, để agent duyệt các trang bạn đã đăng nhập sẵn. Mật khẩu đã lưu, thông tin thanh toán, lịch sử và bookmark thì không bao giờ bị chạm tới. Cookie đời mới mà Chrome khoá theo đúng app đã ghi ra thì không app nào khác đọc được, nên phần nhập báo đúng những gì sang được, theo từng dòng, thay vì báo thành công chung.',
+      },
+      {
+        kind: 'added',
+        en: 'Clicking a link asks where it should open. A small popover appears at the click — in AWOG’s own browser, or in your everyday browser — with an "always do this" tick; ⌘-click (Ctrl or Shift on Windows and Linux) goes straight out without asking. The default lives in Settings → Workspace.',
+        vi: 'Bấm một link sẽ hỏi mở ở đâu. Một popover nhỏ hiện ngay tại chỗ bấm — trong trình duyệt của AWOG, hay trong browser bạn dùng hằng ngày — kèm ô tick "luôn dùng cách này"; ⌘-click (Ctrl hoặc Shift trên Windows và Linux) thì ra ngoài luôn, không hỏi. Mặc định đặt ở Settings → Workspace.',
+      },
+      {
+        kind: 'fixed',
+        en: 'An Anthropic account no longer gets a smaller agent. Because AWOG picks its engine from the provider, switching to an Anthropic account used to silently take tools away — and nothing said so. The browser, reading your terminal, the wiki, memory, schedules, artifacts and the multiple-choice question card all work on both engines now. The question card in particular had been missing on Anthropic accounts since 27 August: the agent would ask, and nothing appeared.',
+        vi: 'Dùng tài khoản Anthropic không còn nghĩa là agent yếu hơn. Vì AWOG chọn engine theo provider, chuyển sang tài khoản Anthropic trước đây âm thầm lấy đi một số công cụ — mà không có gì báo. Trình duyệt, đọc terminal của bạn, wiki, bộ nhớ, lịch chạy, artifact và thẻ câu hỏi trắc nghiệm giờ đều chạy trên cả hai engine. Riêng thẻ câu hỏi đã vắng mặt trên tài khoản Anthropic từ 27/08: agent có hỏi, mà không gì hiện ra.',
+      },
+      {
+        kind: 'added',
+        en: 'Run a prompt or a workflow on a schedule. Set a cron-style time and AWOG starts the session itself; the agent can also ask to be woken later, which is what a long build or a deploy you are waiting on actually needs.',
+        vi: 'Chạy một prompt hay một workflow theo lịch. Đặt thời điểm kiểu cron và AWOG tự mở phiên; agent cũng tự hẹn giờ thức lại được — đúng thứ cần cho một bản build dài hay một lần deploy bạn đang chờ.',
+      },
+      {
+        kind: 'added',
+        en: 'A page for permission rules. See every allow and deny rule in one place across the three tiers, and accept suggestions worked out from what you have actually approved before. "Always allow" now remembers the command you approved rather than the whole tool, so allowing one git command no longer allows every shell command — and you can write a deny rule to switch a tool off entirely.',
+        vi: 'Một trang cho luật quyền. Xem mọi luật cho phép và từ chối ở một chỗ, xuyên cả ba tầng, và nhận gợi ý rút ra từ chính những gì bạn đã đồng ý trước đó. "Luôn cho phép" giờ nhớ đúng câu lệnh bạn đã đồng ý thay vì cả công cụ, nên cho phép một lệnh git không còn là cho phép mọi lệnh shell — và bạn viết được luật từ chối để tắt hẳn một công cụ.',
+      },
+      {
+        kind: 'added',
+        en: 'Declare a project’s dev servers, then start them from a button and read their logs. The agent can read the log too, so "it compiles but the page is blank" stops being a guessing game.',
+        vi: 'Khai báo các dev server của project, rồi bật bằng một nút và đọc log của chúng. Agent cũng đọc được log, nên "build được mà trang trắng" thôi còn là chuyện đoán.',
+      },
+      {
+        kind: 'added',
+        en: 'Find a symbol, who calls it, and what breaks if you change it. A local index answers those in one step instead of a pile of text searches — on this repository it reads 1,148 files in under a second cold and about a tenth of that warm, with no new dependencies and nothing leaving your machine.',
+        vi: 'Tìm một symbol, ai gọi nó, và đổi nó thì vỡ những gì. Một index cục bộ trả lời trong một bước thay vì hàng loạt lần tìm chữ — trên repo này nó đọc 1.148 file dưới một giây khi nguội và khoảng một phần mười thời gian đó khi đã ấm, không thêm dependency nào và không có gì rời khỏi máy bạn.',
+      },
+      {
+        kind: 'added',
+        en: 'Check a skill before you rely on it. A report says what is wrong with the file itself, and a test tells you whether the skill actually activates for a prompt you type — the failure that is otherwise invisible.',
+        vi: 'Kiểm tra một skill trước khi tin vào nó. Một báo cáo nói file có gì sai, và một phép thử cho biết skill có thật sự kích hoạt với prompt bạn gõ hay không — kiểu lỗi mà bình thường không thấy được.',
+      },
+      {
+        kind: 'added',
+        en: 'Sessions can reach each other, and GitHub can reach you. One session can send a message to another, a pull request’s checks and reviews are watched and land in the session that opened it, and notifications now arrive even when no AWOG window is listening.',
+        vi: 'Các phiên gọi được tới nhau, và GitHub gọi được tới bạn. Một phiên nhắn được cho phiên khác, các check và review của một pull request được theo dõi rồi đổ vào đúng phiên đã mở nó, và thông báo giờ tới cả khi không có cửa sổ AWOG nào đang nghe.',
+      },
+      {
+        kind: 'added',
+        en: 'Search every session, and get at what is inside one. Search runs across all sessions from the list, not just the open one; a session can be archived, exported as JSON, or opened as its raw event log when you need to see exactly what happened.',
+        vi: 'Tìm trong mọi phiên, và lấy được thứ nằm bên trong một phiên. Tìm kiếm chạy trên tất cả các phiên từ danh sách, không chỉ phiên đang mở; một phiên archive được, export ra JSON được, hoặc mở ra dạng log sự kiện thô khi bạn cần thấy chính xác điều gì đã xảy ra.',
+      },
+      {
+        kind: 'added',
+        en: 'Browse a catalog instead of pasting URLs. Skills, agents and hook bundles come from a curated list with the source visible before you install, and installed bundles update from where they came from. MCP servers can be discovered from the official registry the same way. A hook is trusted by its contents, so editing the script re-asks.',
+        vi: 'Xem một danh mục thay vì dán URL. Skill, agent và bộ hook đến từ một danh sách được tuyển chọn, nguồn hiện rõ trước khi cài, và bộ đã cài cập nhật được từ đúng chỗ nó đến. MCP server cũng tìm được từ registry chính thức theo cùng cách đó. Một hook được tin theo nội dung của nó, nên sửa script là hỏi lại.',
+      },
+      {
+        kind: 'added',
+        en: 'Parallel work stops fighting over your files. Task nodes that run at the same time each get their own git worktree, and a subagent started from a chat gets one too — a chat subagent never merges its branch back, only tasks do, and only when you turned that on. A task also has a spend and time ceiling now.',
+        vi: 'Việc chạy song song thôi tranh nhau file của bạn. Các node task chạy cùng lúc mỗi node có git worktree riêng, và subagent mở từ một phiên chat cũng vậy — subagent chat không bao giờ tự merge nhánh về, chỉ task mới merge, và chỉ khi bạn đã bật. Một task giờ cũng có trần tiền và trần thời gian.',
+      },
+      {
+        kind: 'improved',
+        en: 'More of what the agent produces shows up as itself. Notebook cells render, a widget the agent writes runs inside a sealed frame, PDFs are read a page range at a time instead of whole, the agent can hand you a file to save, and a new Info tab collects a session’s media, links and documents. The "Start review" button on a pull request runs on a prompt and a model you choose in Settings → Git.',
+        vi: 'Nhiều thứ agent tạo ra hiện đúng dạng của nó hơn. Cell notebook render được, widget do agent viết chạy trong một khung niêm phong, PDF đọc theo khoảng trang thay vì cả file, agent giao được cho bạn một file để lưu, và tab Info mới gom lại media, link và tài liệu của một phiên. Nút "Start review" ở một pull request chạy theo prompt và model bạn chọn trong Settings → Git.',
+      },
+      {
+        kind: 'improved',
+        en: 'The phone app holds its connection. It now decides for itself that a socket has died — a phone that changes network or wakes from sleep keeps one that looks fine for minutes — and a tap during a reconnect queues instead of failing. It also follows your light or dark theme, uses one real icon set, and lets you pinch to zoom again.',
+        vi: 'App trên điện thoại giữ được kết nối. Giờ nó tự quyết định là socket đã chết — một chiếc điện thoại đổi mạng hay vừa thức khỏi chế độ ngủ vẫn giữ một socket trông như bình thường trong nhiều phút — và một cú bấm trong lúc đang kết nối lại sẽ được xếp hàng chứ không báo lỗi. Nó cũng theo theme sáng/tối của bạn, dùng một bộ icon thật, và cho phóng to bằng hai ngón trở lại.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Three security audits, and what they closed. A trusted hook is now pinned to the bytes of every script it runs, so swapping the file behind an approved name re-asks; a permission rule can no longer point out of your project through a symlink or a relative path resolved against the wrong folder; secret redaction catches the shapes it used to miss; and the embedded browser guards redirects, sub-frames, downloads and permission prompts rather than trusting the page.',
+        vi: 'Ba lần audit bảo mật, và những gì chúng đóng lại. Một hook đã tin giờ được ghim theo đúng byte của mọi script nó chạy, nên đổi file phía sau một cái tên đã được đồng ý là hỏi lại; một luật quyền không còn trỏ ra ngoài project được qua symlink hay qua đường dẫn tương đối bị resolve sai thư mục; phần khử secret bắt được cả những dạng trước đây lọt; và trình duyệt nhúng canh redirect, subframe, download cùng các lời xin quyền thay vì tin trang web.',
+      },
+    ],
+  },
+  {
     version: '0.34.0',
     date: '2026-09-06',
     highlight: {
