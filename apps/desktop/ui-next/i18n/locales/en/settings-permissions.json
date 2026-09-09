@@ -31,5 +31,9 @@
   "settingsPermissions.suggest.add": "Add rule",
   "settingsPermissions.suggest.target.user": "Every project",
   "settingsPermissions.suggest.target.project": "Only {name}",
-  "settingsPermissions.suggest.safety": "Only single commands that finished repeatedly and no rule covers are suggested. Compound commands, privilege escalation (sudo…) and commands containing a wildcard are never suggested. Nothing becomes a rule on its own — you have to press."
+  "settingsPermissions.suggest.safety": "Only single commands that finished repeatedly and no rule covers are suggested. Compound commands, privilege escalation (sudo…) and commands containing a wildcard are never suggested. Nothing becomes a rule on its own — you have to press.",
+  "settingsPermissions.deny.heading": "Block a tool",
+  "settingsPermissions.deny.desc": "A deny rule beats every relaxation — execute mode, auto-approve, and a permission you just granted. Write the tool name to turn it off completely (e.g. Artifact), or narrow it with a pattern (e.g. Bash(rm *)).",
+  "settingsPermissions.deny.placeholder": "Artifact  ·  Bash(rm *)  ·  Write(**/.env)",
+  "settingsPermissions.deny.add": "Block"
 }

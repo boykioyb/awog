@@ -31,5 +31,9 @@
   "settingsPermissions.suggest.add": "Thêm luật",
   "settingsPermissions.suggest.target.user": "Mọi dự án",
   "settingsPermissions.suggest.target.project": "Chỉ {name}",
-  "settingsPermissions.suggest.safety": "Chỉ đề xuất lệnh đơn đã chạy xong nhiều lần và chưa có luật nào phủ. Lệnh ghép, lệnh nâng quyền (sudo…) và lệnh chứa ký tự đại diện không bao giờ được đề xuất. Không có gì tự trở thành luật — bạn phải bấm."
+  "settingsPermissions.suggest.safety": "Chỉ đề xuất lệnh đơn đã chạy xong nhiều lần và chưa có luật nào phủ. Lệnh ghép, lệnh nâng quyền (sudo…) và lệnh chứa ký tự đại diện không bao giờ được đề xuất. Không có gì tự trở thành luật — bạn phải bấm.",
+  "settingsPermissions.deny.heading": "Chặn một tool",
+  "settingsPermissions.deny.desc": "Luật chặn thắng mọi nới lỏng — execute mode, tự động duyệt, và cả lời duyệt vừa bấm. Gõ tên tool để tắt hẳn (ví dụ Artifact), hoặc thu hẹp bằng mẫu (ví dụ Bash(rm *)).",
+  "settingsPermissions.deny.placeholder": "Artifact  ·  Bash(rm *)  ·  Write(**/.env)",
+  "settingsPermissions.deny.add": "Chặn"
 }

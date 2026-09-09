@@ -209,6 +209,37 @@ export function usePermissionRules() {
     }
   }
 
+  // Viết một luật DENY do người dùng tự gõ. Đây là đường DUY NHẤT trong UI tạo ra
+  // được luật cấm — trước nó trang này chỉ chấp nhận gợi ý (luôn ra `allow`) và
+  // xoá, nên không có cách nào tắt hẳn một tool.
+  //
+  // Khác `acceptSuggestion`, chỗ này gửi VĂN BẢN luật xuống sidecar. Ràng buộc
+  // "nội dung luật không đi từ renderer xuống" chỉ bảo vệ chiều ALLOW (một payload
+  // dựng tay ghi `Bash(*)` là cấp thêm quyền); chiều DENY không leo thang được, và
+  // sidecar ghim cứng `action: 'deny'` nên không lật ngược được từ đây.
+  async function addDenyRule(rule: string, target: string): Promise<boolean> {
+    if (!available.value) return false
+    const text = rule.trim()
+    if (!text) return false
+    const projectId = target.startsWith('project:') ? target.slice('project:'.length) : ''
+    busyKey.value = `deny|${text}`
+    try {
+      await sc.request('permissions.addDenyRule', {
+        rule: text,
+        scope: projectId ? 'project' : 'user',
+        ...(projectId ? { projectId } : {}),
+      })
+      await load()
+      lastError.value = ''
+      return true
+    } catch (err) {
+      lastError.value = err instanceof Error ? err.message : String(err)
+      return false
+    } finally {
+      busyKey.value = ''
+    }
+  }
+
   return {
     rules,
     groups,
@@ -227,5 +258,6 @@ export function usePermissionRules() {
     removeRule,
     scan,
     acceptSuggestion,
+    addDenyRule,
   }
 }

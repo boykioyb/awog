@@ -189,7 +189,7 @@ máy thành đối tượng lưu bền có URL**. Ba finding, tất cả Medium.
 |---|---|---|---|
 | F5 | Medium | `publish`/`upload_asset` nhận `file_path` bất kỳ — `~/.awog/credentials.json`, `.env`, `~/.aws/credentials` đăng lên được. Đường `runtime/` không có bước sanitize path nào (invariant #2) | ✅ `artifactPathViolation` chặn **CỨNG**, đặt TRƯỚC mọi nới lỏng theo mode. Hai luật: `~/.awog` cấm tuyệt đối (invariant #1 — khoá API ở đó), và path phải nằm trong cwd của lượt **hoặc** thư mục tạm |
 | F4 | Medium | `read_asset` + `out_dir` ghi file xuống thư mục tuỳ ý, và `out_dir` **không hiện ở đâu cả**: `pickTarget` lẫn thẻ xin quyền đều rơi về `url`, nên người bấm "Cho phép" thấy địa chỉ artifact chứ không thấy đích ghi trên máy | ✅ Vá phần **hiển thị**; cố ý KHÔNG bó `out_dir` — xem ghi chú dưới |
-| F3 | Medium | Không có công tắc toàn cục: `disabledTools` là per-session, mặc định rỗng ⇒ `Artifact` bật cho mọi phiên chat. UI chỉ ghi được luật `allow`, không ghi được `deny` | ⬜ **Chờ quyết định sản phẩm** — mặc định bật hay tắt |
+| F3 | Medium | Không có công tắc toàn cục: `disabledTools` là per-session, mặc định rỗng ⇒ `Artifact` bật cho mọi phiên chat. UI chỉ ghi được luật `allow`, không ghi được `deny` | ✅ RPC `permissions.addDenyRule` + ô "Chặn một tool" ở Settings → Quyền. Bản vá **chung cho mọi tool**, không phải công tắc riêng cho `Artifact` |
 
 **Vì sao thư mục tạm nằm trong danh sách cho phép.** Quy ước scratchpad (#10) bảo model đặt file
 tạm ở đó, nên *"dựng một trang trong scratchpad rồi publish"* là luồng dùng **chính**. Bó cứng vào
@@ -202,6 +202,19 @@ nên `/tmp` không nằm trong đó, mà scratchpad của phiên lại ở `/tmp
 hàng rào không tồn tại ở chỗ khác, tức trấn an sai. Tên file lại do `asset_id` quyết nên không ghi
 đè trúng file cụ thể được. Việc đúng phải làm với nó là làm cho **người duyệt thấy**, và đó là bản
 vá đã làm.
+
+**Vì sao công tắc tắt là một luật DENY, không phải một khoá settings mới.** Luật DENY đã có sẵn đủ
+đường ở tầng dưới — `evaluatePermissionRules` đọc nó, và cổng quyền cho nó thắng **mọi** nới lỏng
+(execute mode, auto-approve, accept-edits, và cả lời duyệt vừa bấm). Thứ duy nhất thiếu là một
+đường **ghi**: trang Settings → Quyền chỉ làm được hai việc, chấp nhận một gợi ý (luôn ra `allow`)
+và xoá. Thêm một khoá settings riêng cho `Artifact` sẽ tạo hai nguồn sự thật cho cùng một câu hỏi —
+đúng lý do đã bác `settings.enableArtifact` ở #35.
+
+**Và vì sao chỗ này được nhận văn bản luật từ UI, còn `acceptSuggestion` thì không.** Ràng buộc
+"nội dung luật không bao giờ đi từ renderer xuống" (ADR 0080 mục 5) bảo vệ **một chiều**: một payload
+dựng tay ghi `Bash(*)` action `allow` là **cấp thêm quyền**. Chiều DENY không leo thang được — xấu
+nhất là tự khoá chân mình, thấy ngay trên trang đó và xoá bằng một nút. Nên `action` **không** nằm
+trong payload: nó là hằng `'deny'` viết trong `permissions.add-deny-rule.ts`, không cờ nào lật được.
 
 **Phần KHÔNG đóng được, nói thẳng.** Phiên không gắn project chạy với cwd = thư mục home, nên trong
 phiên đó điều kiện "trong cwd" cho qua mọi thứ dưới `$HOME` — `~/.aws/credentials`, `~/.ssh/id_rsa`.

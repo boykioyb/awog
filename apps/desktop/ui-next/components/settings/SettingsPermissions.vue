@@ -66,6 +66,25 @@
       </div>
       <p class="permsafety">{{ t('settingsPermissions.suggest.safety') }}</p>
 
+      <!-- ── Chặn một tool ────────────────────────────────────────────────── -->
+      <div class="permhead">
+        <div class="sech">{{ t('settingsPermissions.deny.heading') }}</div>
+      </div>
+      <p class="permdesc">{{ t('settingsPermissions.deny.desc') }}</p>
+      <div class="permdeny">
+        <input
+          v-model="denyRule"
+          class="keyinp mono permdenyi"
+          :placeholder="t('settingsPermissions.deny.placeholder')"
+          @keyup.enter="onAddDeny"
+        />
+        <AppSelect v-model="denyTarget" :options="denyTargetOptions" class="permdenys" />
+        <button class="btn sm" :disabled="!denyRule.trim() || denyBusy" @click="onAddDeny">
+          <Icon name="shield" />
+          {{ t('settingsPermissions.deny.add') }}
+        </button>
+      </div>
+
       <!-- ── Luật đã lưu ──────────────────────────────────────────────────── -->
       <div class="permhead">
         <div class="sech">{{ t('settingsPermissions.list.heading') }}</div>
@@ -117,7 +136,7 @@
 //
 // Luật DENY phải phân biệt được với ALLOW chỉ bằng mắt — nhầm hai thứ này là
 // nhầm giữa "đã cấp quyền" và "đã dựng rào chắn".
-import { onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import AppSelect from '~/components/common/AppSelect.vue'
 import { useConfirm } from '~/composables/useConfirm'
 import {
@@ -145,7 +164,34 @@ const {
   removeRule,
   scan,
   acceptSuggestion,
+  addDenyRule,
 } = usePermissionRules()
+
+// Ô "chặn một tool". Đây là công tắc tắt hẳn duy nhất người dùng có: `disabledTools`
+// là per-session và mặc định rỗng, nên một tool bật theo mặc định thì bật ở mọi
+// phiên chat. Luật DENY thì thắng mọi nới lỏng — kể cả execute mode và auto-approve.
+const projects = useProjectsStore()
+const denyRule = ref('')
+const denyTarget = ref('user')
+const denyBusy = ref(false)
+
+const denyTargetOptions = computed(() => [
+  { label: t('settingsPermissions.suggest.target.user'), value: 'user' },
+  ...projects.projects.map((p) => ({
+    label: t('settingsPermissions.suggest.target.project', { name: p.name }),
+    value: `project:${p.id}`,
+  })),
+])
+
+async function onAddDeny(): Promise<void> {
+  if (!denyRule.value.trim() || denyBusy.value) return
+  denyBusy.value = true
+  try {
+    if (await addDenyRule(denyRule.value, denyTarget.value)) denyRule.value = ''
+  } finally {
+    denyBusy.value = false
+  }
+}
 
 // Tầng đích của từng gợi ý: 'user' hoặc 'project:<id>'. Mặc định là tầng HẸP
 // nhất dùng được — gợi ý chỉ đến từ một dự án thì mặc định giới hạn ở dự án đó.
@@ -196,6 +242,20 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.permdeny {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.permdenyi {
+  flex: 1;
+  min-width: 0;
+}
+.permdenys {
+  width: 220px;
+  flex: none;
+}
 .permnote {
   padding: 8px 10px;
   margin-bottom: 10px;
