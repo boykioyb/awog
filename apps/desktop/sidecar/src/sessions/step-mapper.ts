@@ -121,6 +121,12 @@ function pickTarget(toolName: string, input: Record<string, unknown>): string | 
   if (typeof nb === 'string' && nb.length > 0) return nb
   const path = input.path
   if (typeof path === 'string' && path.length > 0) return path
+  // `Artifact(read_asset)` GHI một file xuống `out_dir` nhưng cũng mang `url` (địa
+  // chỉ artifact) — không đọc khoá này thì dòng transcript hiện cái URL và đích ghi
+  // trên máy biến mất khỏi tầm mắt. Đặt TRƯỚC `url` vì đích cục bộ là thứ người đọc
+  // cần biết trước; xem claude-sdk/artifact.ts.
+  const outDir = input.out_dir
+  if (typeof outDir === 'string' && outDir.length > 0) return outDir
   const pattern = input.pattern
   if (typeof pattern === 'string' && pattern.length > 0) return pattern
   const cmd = input.command

@@ -119,7 +119,7 @@ Một lượt infosec chạy trên đúng phần vừa thêm đã **chặn merge
 | F6 | Medium | `redact.ts` chỉ che **giá trị chuỗi** dưới khoá nhạy cảm ⇒ lọt array/object; và không đọc nội dung chuỗi ⇒ lọt `PGPASSWORD=…`, `-H 'X-Api-Key: …'` | ✅ Che cả nhánh con bất kể kiểu + lớp thứ 3 quét gán trong chuỗi |
 | F8 | Medium | Worktree: `canCommit` chỉ kiểm tra **cấu hình** auto-commit, không kiểm tra commit có xảy ra thật ⇒ node fail giữa chừng thì `rm -rf` xoá trắng việc chưa commit. Merge cũng rơi vào nhánh đang checkout, không phải nhánh đã ghi | ✅ Không xoá mù nữa: còn thay đổi ⇒ commit `WIP` (`--no-verify`, vì hook fail chính là một trong các đường mất trắng); cứu không được ⇒ **giữ nguyên checkout** thay vì xoá. Nhánh đích neo lúc cấp worktree, HEAD lệch ⇒ không merge, pause task |
 | F15 | Low | `mergeOne` đẩy `git stderr` thô lên event UI, không qua sanitizer của đường RPC | ✅ |
-| F9–F14 | Low/Med | Chi phí matcher nhân số luật; cache theo `mtime+size`; `run_in_background` không nằm trong subject của luật; chưa có UI xem/thu hồi luật | ✅ F9 xong; `run_in_background` xử lý bằng F12 (lời gọi detached vẫn quét đủ nhưng KHÔNG được chốt ALLOW); UI xem/thu hồi luật xong 2026-09-07. Còn lại: cache theo `mtime+size` |
+| F9–F14 | Low/Med | Chi phí matcher nhân số luật; cache theo `mtime+size`; `run_in_background` không nằm trong subject của luật; chưa có UI xem/thu hồi luật | ✅ F9 xong; `run_in_background` xử lý bằng F12 (lời gọi detached vẫn quét đủ nhưng KHÔNG được chốt ALLOW); UI xem/thu hồi luật xong 2026-09-07. Cache theo `mtime+size` **đã đo rồi bỏ**: tra luật tốn 5–25 µs, tức 0.01% một lượt — thêm một tầng vô hiệu hoá cache để tiết kiệm thứ không đo được là lỗ ròng |
 
 ## Audit lần 2 (2026-09-08) — sau khi allowlist Remote Gateway mở rộng
 
@@ -179,6 +179,36 @@ Cái nặng nhất lại nằm ở commit **sửa** chuyện tên bắc cầu:
 message khẳng định `allowedTools` tước mất tool, trong khi nó không hạn chế gì. Bản vá "sửa lỗ"
 hoá ra là thêm tên vào một danh sách tự-duyệt. Đọc doc của thư viện trước khi mô tả hành vi của nó
 trong một commit về bảo mật; một mô hình sai ghi vào comment sống lâu hơn nhiều so với một dòng code sai.
+
+## Audit lần 4 (2026-09-09) — bề mặt `Artifact`
+
+Chạy vì cùng quy tắc: `Artifact` là bề mặt đầu tiên trong repo mà **nội dung một file cục bộ rời
+máy thành đối tượng lưu bền có URL**. Ba finding, tất cả Medium.
+
+| # | Mức | Nội dung | TT |
+|---|---|---|---|
+| F5 | Medium | `publish`/`upload_asset` nhận `file_path` bất kỳ — `~/.awog/credentials.json`, `.env`, `~/.aws/credentials` đăng lên được. Đường `runtime/` không có bước sanitize path nào (invariant #2) | ✅ `artifactPathViolation` chặn **CỨNG**, đặt TRƯỚC mọi nới lỏng theo mode. Hai luật: `~/.awog` cấm tuyệt đối (invariant #1 — khoá API ở đó), và path phải nằm trong cwd của lượt **hoặc** thư mục tạm |
+| F4 | Medium | `read_asset` + `out_dir` ghi file xuống thư mục tuỳ ý, và `out_dir` **không hiện ở đâu cả**: `pickTarget` lẫn thẻ xin quyền đều rơi về `url`, nên người bấm "Cho phép" thấy địa chỉ artifact chứ không thấy đích ghi trên máy | ✅ Vá phần **hiển thị**; cố ý KHÔNG bó `out_dir` — xem ghi chú dưới |
+| F3 | Medium | Không có công tắc toàn cục: `disabledTools` là per-session, mặc định rỗng ⇒ `Artifact` bật cho mọi phiên chat. UI chỉ ghi được luật `allow`, không ghi được `deny` | ⬜ **Chờ quyết định sản phẩm** — mặc định bật hay tắt |
+
+**Vì sao thư mục tạm nằm trong danh sách cho phép.** Quy ước scratchpad (#10) bảo model đặt file
+tạm ở đó, nên *"dựng một trang trong scratchpad rồi publish"* là luồng dùng **chính**. Bó cứng vào
+workspace chặn đúng thứ tính năng này sinh ra để làm — và một rào chắn chặn nhầm luồng chính là rào
+chắn sẽ bị gỡ. (`/tmp` phải liệt riêng cạnh `tmpdir()`: trên macOS `tmpdir()` trả `/var/folders/…`
+nên `/tmp` không nằm trong đó, mà scratchpad của phiên lại ở `/tmp/claude-<uid>/…`.)
+
+**Vì sao `out_dir` KHÔNG bị bó.** Nó là chiều **ngược lại** — ghi xuống máy, không gửi ra — và
+`Write` trên chính runtime này không có ràng buộc workspace nào. Bó riêng một tool sẽ dựng lên một
+hàng rào không tồn tại ở chỗ khác, tức trấn an sai. Tên file lại do `asset_id` quyết nên không ghi
+đè trúng file cụ thể được. Việc đúng phải làm với nó là làm cho **người duyệt thấy**, và đó là bản
+vá đã làm.
+
+**Phần KHÔNG đóng được, nói thẳng.** Phiên không gắn project chạy với cwd = thư mục home, nên trong
+phiên đó điều kiện "trong cwd" cho qua mọi thứ dưới `$HOME` — `~/.aws/credentials`, `~/.ssh/id_rsa`.
+Chỉ luật `~/.awog` còn hiệu lực. Và đây không phải hộp cát: có `Bash`, chép file ra thư mục tạm rồi
+upload là qua. Thứ hàng rào này thật sự mua được là **chặn lời gọi một bước lỡ tay** và **khoá cứng
+đường tới API key** — không phải chống một tác nhân cố tình. Muốn hơn thì phải là danh sách chặn
+theo đường dẫn nhạy cảm, và đó là quyết định riêng.
 
 ## Bảy tool bắc cầu sang nhánh Claude SDK (2026-09-08)
 

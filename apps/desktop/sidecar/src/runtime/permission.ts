@@ -65,9 +65,14 @@ import {
   suggestRuleText,
 } from '../sessions/permission-rules.js'
 // Chính sách của `Artifact` ở cùng nhà với bằng chứng đo được về cổng bật nó
-// (claude-sdk/artifact.ts). File đó KHÔNG import gì cả — nhất là không import
-// `@anthropic-ai/claude-agent-sdk` — nên dòng này không kéo SDK vào nhánh Pi.
-import { isArtifactToolName, isGatedArtifactAction } from './claude-sdk/artifact.js'
+// (claude-sdk/artifact.ts). File đó chỉ import `node:fs`/`node:path` + `awogHome`,
+// KHÔNG import `@anthropic-ai/claude-agent-sdk`, nên dòng này không kéo SDK vào
+// nhánh Pi — nhánh Pi cũng nạp chính module quyền này.
+import {
+  artifactPathViolation,
+  isArtifactToolName,
+  isGatedArtifactAction,
+} from './claude-sdk/artifact.js'
 import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool.js'
 import { isDevServerToolName, isMutatingDevServerAction } from './tools/dev-server-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
@@ -625,6 +630,28 @@ export function makeBeforeToolCall(
         rememberKey: sshKey,
         offerAlwaysAllow: false,
       })
+    }
+
+    // `Artifact` mang một ĐƯỜNG DẪN CỤC BỘ ra khỏi máy thành trang có URL lưu bền.
+    // Chặn ở đây, TRƯỚC mọi nới lỏng theo mode: `execute` và auto-approve đi vòng
+    // qua lời hỏi theo đúng thiết kế, nên "đã hỏi rồi" không phải hàng rào cuối cho
+    // một thao tác không thu hồi được. Lý do đầy đủ + vì sao `out_dir` KHÔNG bị bó
+    // nằm ở claude-sdk/artifact.ts.
+    if (isArtifactToolName(toolName)) {
+      const violation = artifactPathViolation(context.args, cwd)
+      if (violation) {
+        log.warn('permission gate: blocking Artifact upload of a path outside scope', {
+          toolName,
+          reason: violation.reason,
+        })
+        return {
+          block: true,
+          reason:
+            violation.reason === 'awog-home'
+              ? `Blocked: ${violation.path} is inside AWOG's own config directory, which holds credentials. Artifact publishes file contents to a shareable URL, so this path can never be uploaded.`
+              : `Blocked: ${violation.path} is outside this session's working directory and the scratchpad. Artifact publishes file contents to a shareable URL — copy the file into the workspace if you meant to publish it.`,
+        }
+      }
     }
 
     const builtInGated = isGatedTool(toolName, context.args)

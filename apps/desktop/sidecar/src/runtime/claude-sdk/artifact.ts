@@ -51,6 +51,11 @@
 // `CLAUDE_CODE_ENABLE_TODO_TOOLS` và `CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS`.
 // Nó nằm riêng ra đây để chính sách + bằng chứng đo được ở trên có một nhà duy
 // nhất, thay vì bị chép hai bản vào run-stream.ts và invoke.ts.
+import { realpathSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { resolve, sep } from 'node:path'
+import { awogHome } from '../../util/path.js'
+
 export const ARTIFACT_ENV: Readonly<Record<string, string>> = Object.freeze({
   CLAUDE_CODE_ARTIFACT: '1',
 })
@@ -127,4 +132,85 @@ export function isGatedArtifactAction(args: unknown): boolean {
   const action = (args as { action?: unknown } | null | undefined)?.action
   if (typeof action !== 'string') return true
   return !READ_ONLY_ARTIFACT_ACTIONS.has(action)
+}
+
+// ─── Chặn cứng đường dẫn cục bộ đi RA ngoài (invariant #1 + #2) ──────────────
+//
+// `Artifact` là tool DUY NHẤT trên nhánh này nhận một ĐƯỜNG DẪN CỤC BỘ rồi gửi
+// NỘI DUNG file đó ra khỏi máy thành một đối tượng lưu bền, có URL chia sẻ được:
+// `publish` (đọc file `.html`) và `upload_asset` (đẩy ảnh/PDF/font/CSV/JSON/MD).
+// Khác `Read` — vốn cũng đưa nội dung tới API — ở chỗ kết quả KHÔNG phải ngữ cảnh
+// nhất thời mà là một trang tồn tại tiếp sau lượt, dưới tài khoản Claude của người
+// dùng. Hai điều đó khiến nó là ca duy nhất trong repo mà một lời gọi lỡ tay biến
+// thành lộ dữ liệu vĩnh viễn.
+//
+// Cổng quyền phía trên đã hỏi trước mỗi lời gọi như thế, nhưng lời hỏi KHÔNG phải
+// hàng rào cuối: `mode: 'execute'` và auto-approve (Settings → Sessions) đi vòng
+// qua nó theo đúng thiết kế. Nên hai điều dưới đây chặn CỨNG, không mode nào miễn.
+//
+// ── (1) `~/.awog` — TUYỆT ĐỐI, không phụ thuộc phiên ──
+// `credentials.json` ở đó giữ API key. Invariant #1 nói khoá không rời sidecar, mà
+// `upload_asset` trên đúng file đó là đường ngắn nhất đưa nó lên một URL. Kiểm
+// riêng, trước mọi thứ khác, vì nó đúng kể cả khi cwd là thư mục home.
+//
+// ── (2) Phải nằm trong cwd của lượt HOẶC thư mục tạm của HĐH ──
+// Invariant #2, đúng khuôn `assertInsideWorkspace`: resolve tuyệt đối + so
+// `startsWith` + khử symlink ở cả hai vế. Thư mục tạm nằm trong danh sách cho phép
+// vì nó KHÔNG phải nới lỏng cho tiện: quy ước scratchpad (parity #10) bảo model đặt
+// file tạm ở đó, nên "dựng một trang trong scratchpad rồi publish" là luồng dùng
+// CHÍNH, không phải ca lạ. Bó cứng vào workspace sẽ chặn đúng thứ tính năng này
+// sinh ra để làm — một rào chắn chặn nhầm luồng chính là rào chắn sẽ bị gỡ.
+//
+// ── Phần KHÔNG đóng được, nói thẳng ──
+// Phiên không gắn project chạy với cwd = thư mục home (xem
+// project_no_project_session_cwd_default), nên trong phiên đó điều kiện (2) cho qua
+// mọi thứ dưới `$HOME` — `~/.aws/credentials`, `~/.ssh/id_rsa`. Chỉ (1) còn hiệu
+// lực. Và đây không phải hộp cát: có `Bash`, model chép file ra thư mục tạm rồi
+// upload là qua. Thứ hàng rào này thật sự mua được là chặn lời gọi MỘT BƯỚC lỡ tay
+// và khoá cứng đường tới API key — không phải chống một tác nhân cố tình. Muốn hơn
+// thì phải là danh sách chặn theo đường dẫn nhạy cảm, và đó là quyết định riêng.
+//
+// KHÔNG kiểm theo `action`, mà kiểm HỄ CÓ `file_path`: cùng lý do danh sách chỉ-đọc
+// ở trên đảo chiều mặc định — thiếu `action` nghĩa là `publish`, và danh sách hành
+// động do CLI của Anthropic quyết định chứ không do repo này.
+//
+// `out_dir` (đích ghi của `read_asset`) CỐ Ý không bị chặn ở đây. Nó là chiều
+// NGƯỢC LẠI — ghi xuống máy, không gửi ra — và `Write` trên chính runtime này
+// không có ràng buộc workspace nào; bó riêng một tool sẽ dựng lên một hàng rào
+// không tồn tại ở chỗ khác, tức trấn an sai. Tên file lại do `asset_id` quyết nên
+// không ghi đè trúng file cụ thể được. Việc phải làm với nó là làm cho NGƯỜI DUYỆT
+// THẤY: `pickTarget` (sessions/step-mapper.ts) và thẻ xin quyền (stores/sessions.ts)
+// nay đọc `out_dir` — trước đó cả hai rơi về `url` và đích ghi biến mất khỏi tầm mắt.
+export type ArtifactPathViolation = { path: string; reason: 'outside-workspace' | 'awog-home' }
+
+function realOrSelf(path: string): string {
+  try {
+    return realpathSync.native(path)
+  } catch {
+    return path
+  }
+}
+
+function isInside(child: string, root: string): boolean {
+  return child === root || child.startsWith(root + sep)
+}
+
+export function artifactPathViolation(
+  args: unknown,
+  cwd: string | undefined,
+): ArtifactPathViolation | undefined {
+  const raw = (args as { file_path?: unknown } | null | undefined)?.file_path
+  if (typeof raw !== 'string' || raw.length === 0) return undefined
+  const root = cwd && cwd.length > 0 ? cwd : process.cwd()
+  const abs = resolve(root, raw)
+  const real = realOrSelf(abs)
+  if (isInside(real, realOrSelf(awogHome()))) return { path: abs, reason: 'awog-home' }
+  // Cả dạng literal lẫn dạng đã khử symlink đều phải trúng một gốc: literal chặn
+  // `../..`, realpath chặn symlink trong workspace trỏ ra ngoài.
+  // `/tmp` liệt riêng cạnh `tmpdir()`: trên macOS `tmpdir()` trả `/var/folders/…`
+  // (thư mục tạm riêng của user) nên `/tmp` KHÔNG nằm trong đó, mà scratchpad của
+  // phiên lại ở `/tmp/claude-<uid>/…`. Cùng cặp gốc mà task-output.ts đã dùng.
+  const roots = [root, tmpdir(), '/tmp']
+  const ok = roots.some((r) => isInside(abs, r) || isInside(real, realOrSelf(r)))
+  return ok ? undefined : { path: abs, reason: 'outside-workspace' }
 }

@@ -3083,6 +3083,10 @@ export const useSessionsStore = defineStore('sessions', () => {
             p.blockedPath ||
             (typeof p.input.command === 'string' ? p.input.command : '') ||
             (typeof p.input.file_path === 'string' ? p.input.file_path : '') ||
+            // Artifact(read_asset) ghi file xuống out_dir và cũng mang url — không
+            // đọc out_dir thì thẻ xin quyền hiện địa chỉ artifact, còn đích ghi trên
+            // máy thì người bấm Cho phép không hề thấy.
+            (typeof p.input.out_dir === 'string' ? p.input.out_dir : '') ||
             (typeof p.input.url === 'string' ? p.input.url : '')
           pendingPermission.value = {
             sessionId: s.id,

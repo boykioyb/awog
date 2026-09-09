@@ -66,4 +66,17 @@ describe('Artifact trong transcript', () => {
         .target,
     ).toBe('https://x/y')
   })
+
+  // Ca riêng của `read_asset`: nó GHI một file xuống máy, mà args lại mang CẢ `url`.
+  // Trước bản vá `pickTarget` rơi về `url` ⇒ dòng transcript và thẻ xin quyền hiện
+  // địa chỉ artifact, còn đích ghi trên máy thì người bấm "Cho phép" không hề thấy.
+  it('read_asset hiện ĐÍCH GHI trên máy, không phải URL artifact', () => {
+    expect(
+      stepFromToolUse({
+        id: 't1',
+        name: 'Artifact',
+        input: { action: 'read_asset', url: 'https://x/y', asset_id: 'a1', out_dir: '/etc' },
+      }).target,
+    ).toBe('/etc')
+  })
 })

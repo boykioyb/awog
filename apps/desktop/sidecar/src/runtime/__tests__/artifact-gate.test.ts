@@ -27,6 +27,7 @@ import { makeBeforeToolCall } from '../permission.js'
 import type { CanUseTool } from '../permission-types.js'
 import {
   ARTIFACT_TOOL_NAME,
+  artifactPathViolation,
   isArtifactToolName,
   isGatedArtifactAction,
 } from '../claude-sdk/artifact.js'
@@ -189,5 +190,104 @@ describe('execute mode', () => {
     const hook = makeBeforeToolCall(canUseTool, 'execute')
     await expect(hook(toolCtx({ file_path: '/tmp/report.html' }))).resolves.toBeUndefined()
     expect(asked).toEqual([])
+  })
+})
+
+// ─── Đường dẫn cục bộ đi RA ngoài ────────────────────────────────────────────
+//
+// Nửa thứ tư, và là nửa duy nhất chặn CỨNG bất kể mode. Ba nhóm ca đều
+// load-bearing:
+//  · chặn được thứ phải chặn (ra ngoài cwd, và `~/.awog` dù cwd là gì);
+//  · KHÔNG chặn nhầm luồng dùng chính (trong cwd, trong scratchpad) — rào chắn
+//    chặn nhầm luồng chính là rào chắn sẽ bị gỡ;
+//  · `execute` + auto-approve không miễn trừ được — đó chính là lý do phải chặn
+//    thay vì chỉ hỏi.
+describe('artifactPathViolation', () => {
+  it('file trong cwd đi qua', () => {
+    expect(artifactPathViolation({ file_path: 'report.html' }, home)).toBeUndefined()
+    expect(artifactPathViolation({ file_path: join(home, 'a/b.html') }, home)).toBeUndefined()
+  })
+
+  it('file trong thư mục tạm đi qua — quy ước scratchpad (#10) đặt file ở đó', () => {
+    expect(
+      artifactPathViolation({ file_path: join(tmpdir(), 'scratch/report.html') }, home),
+    ).toBeUndefined()
+  })
+
+  it('không có `file_path` ⇒ không phải việc của hàm này', () => {
+    expect(artifactPathViolation({ action: 'list' }, home)).toBeUndefined()
+    expect(artifactPathViolation({ action: 'read_asset', out_dir: '/etc' }, home)).toBeUndefined()
+    expect(artifactPathViolation({}, home)).toBeUndefined()
+    expect(artifactPathViolation(null, home)).toBeUndefined()
+    expect(artifactPathViolation({ file_path: 42 }, home)).toBeUndefined()
+  })
+
+  it('ra ngoài cwd ⇒ chặn, kể cả khi đi bằng `..`', () => {
+    expect(artifactPathViolation({ file_path: '/etc/passwd' }, '/opt/work')).toMatchObject({
+      reason: 'outside-workspace',
+    })
+    expect(artifactPathViolation({ file_path: '../../etc/passwd' }, '/opt/work')).toMatchObject({
+      reason: 'outside-workspace',
+    })
+  })
+
+  it('`~/.awog` chặn TUYỆT ĐỐI — invariant #1, kể cả khi cwd chính là home', () => {
+    // Ca thật: phiên không gắn project chạy với cwd = thư mục home, nên điều kiện
+    // "trong cwd" một mình sẽ cho `credentials.json` đi qua.
+    const cred = join(home, '.awog/credentials.json')
+    expect(artifactPathViolation({ file_path: cred }, home)).toMatchObject({
+      reason: 'awog-home',
+    })
+    expect(artifactPathViolation({ file_path: '.awog/credentials.json' }, home)).toMatchObject({
+      reason: 'awog-home',
+    })
+  })
+})
+
+describe('chặn cứng đường dẫn — không mode nào miễn', () => {
+  const outside = '/etc/passwd'
+
+  it('execute mode vẫn chặn — "đã hỏi rồi" không phải hàng rào ở đây', async () => {
+    const { asked, canUseTool } = recordingGate('allow')
+    const hook = makeBeforeToolCall(canUseTool, 'execute', undefined, false, undefined, 'prompt', home)
+    await expect(hook(toolCtx({ file_path: outside }))).resolves.toMatchObject({ block: true })
+    expect(asked).toEqual([])
+  })
+
+  it('auto-approve vẫn chặn', async () => {
+    const { canUseTool } = recordingGate('allow')
+    const hook = makeBeforeToolCall(canUseTool, 'ask', undefined, true, undefined, 'prompt', home)
+    await expect(hook(toolCtx({ file_path: outside }))).resolves.toMatchObject({ block: true })
+  })
+
+  it('ask mode chặn thẳng, KHÔNG hỏi — không có nút nào cho phép việc này', async () => {
+    const { asked, canUseTool } = recordingGate('allow')
+    const hook = makeBeforeToolCall(canUseTool, 'ask', undefined, false, undefined, 'prompt', home)
+    await expect(hook(toolCtx({ file_path: outside }))).resolves.toMatchObject({ block: true })
+    expect(asked).toEqual([])
+  })
+
+  it('`~/.awog/credentials.json` chặn ngay cả ở execute mode', async () => {
+    const { canUseTool } = recordingGate('allow')
+    const hook = makeBeforeToolCall(canUseTool, 'execute', undefined, false, undefined, 'prompt', home)
+    const args = { action: 'upload_asset', file_path: join(home, '.awog/credentials.json') }
+    const result = await hook(toolCtx(args))
+    expect(result).toMatchObject({ block: true })
+    expect((result as { reason: string }).reason).toContain('credentials')
+  })
+
+  it('file trong cwd vẫn chạy bình thường ở execute mode', async () => {
+    const { canUseTool } = recordingGate('allow')
+    const hook = makeBeforeToolCall(canUseTool, 'execute', undefined, false, undefined, 'prompt', home)
+    await expect(
+      hook(toolCtx({ file_path: join(home, 'report.html') })),
+    ).resolves.toBeUndefined()
+  })
+
+  it('tool khác mang `file_path` ra ngoài KHÔNG bị đụng tới — chỉ Artifact gửi nội dung đi', async () => {
+    const { asked, canUseTool } = recordingGate('allow')
+    const hook = makeBeforeToolCall(canUseTool, 'ask', undefined, false, undefined, 'prompt', home)
+    await expect(hook(toolCtx({ file_path: outside }, 'Write'))).resolves.toBeUndefined()
+    expect(asked).toEqual(['Write'])
   })
 })
