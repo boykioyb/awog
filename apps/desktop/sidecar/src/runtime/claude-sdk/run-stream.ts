@@ -76,6 +76,7 @@ import { SURFACE_MCP_SERVER } from '../tools/surface-tools.js'
 import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
 import { listHosts } from '../../ssh/store.js'
 import {
+  noteExternalOutputFile,
   registerExternalBackground,
   settleExternalBackground,
   settleAllExternalBackground,
@@ -1108,6 +1109,12 @@ export async function runStreamClaude(
       const file = /(\/[^\s"']+\.output)/.exec(text)?.[1]
       if (!file) continue
       bgOutputFiles.set(taskId, { file, misses: 0 })
+      // Cùng đường dẫn, hai người đọc: vòng poll ở trên đẩy tail vào transcript,
+      // còn registry giữ lại để modal "View output" của NGƯỜI DÙNG đọc được sau —
+      // trước đây nó luôn thấy hộp rỗng vì AWOG không sở hữu file log nào.
+      if (mirrorSessionId) {
+        noteExternalOutputFile({ sessionId: mirrorSessionId, shellId: taskId, file })
+      }
       startOutputPoll()
     }
   }

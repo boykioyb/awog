@@ -37,6 +37,10 @@ import { randomBytes } from 'node:crypto'
 import { sessionsDir, sessionDir } from './jsonl.js'
 import { sanitizeChild } from '../util/path.js'
 import { resolveBashShell, filteredShellEnv } from '../runtime/tools/shell.js'
+// An toàn để import từ đây: `task-output.ts` chỉ dùng `node:fs`/`node:os`/`node:path`
+// + `awogHome`, KHÔNG import `@anthropic-ai/claude-agent-sdk` — nên module này không
+// kéo SDK vào nhánh Pi, vốn cũng nạp bg-registry.
+import { readTaskOutputTail } from '../runtime/claude-sdk/task-output.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 
@@ -84,8 +88,15 @@ interface LiveShell {
   settled: boolean
   read: boolean
   // Runtime-owned (Claude SDK path): AWOG mirrors a task the CLI runs inside its
-  // own process. No pid, no log file, no poll — kill routes back to the runtime.
+  // own process. No pid, no log file OF OURS, no poll — kill routes back to the
+  // runtime.
   external?: boolean
+  // …but a backgrounded SHELL on that path does have a log: the CLI names its own
+  // `<taskId>.output` file in the tool_result, and run-stream already learns that
+  // path to stream a tail into the transcript. Recording it here is what lets the
+  // user's "View output" modal read the same thing instead of a blank box. Absent
+  // for a subagent task (`local_agent`), which genuinely has no shell log.
+  externalOutputFile?: string
 }
 
 // sessionId → shellId → LiveShell. Exited shells stay here (for listBackground)
@@ -158,6 +169,15 @@ interface OutputTail {
 // as a FLAG rather than baked into the text, so each caller words it its own way:
 // the model gets an inline notice (readOutput below), the UI gets a banner in the
 // user's language.
+// Đuôi log của một shell do CLI sở hữu, gói lại đúng hình `OutputTail` mà phần
+// còn lại của module này nói. `readTaskOutputTail` không nói `truncated` bằng cờ —
+// nó tự cắt dòng đầu dở và chú thích — nên hai trường kia để 0/false: người gọi
+// (modal của người dùng) hiển thị nguyên văn.
+function externalTail(file: string, taskId: string): OutputTail {
+  const text = readTaskOutputTail(file, taskId)
+  return { text: text ?? '', truncated: false, droppedBytes: 0 }
+}
+
 function readOutputTail(dir: string): OutputTail {
   let buf: string
   try {
@@ -407,7 +427,15 @@ export function readBackground(
   // result, so the UI can stop showing a successful one. A still-running read is
   // just a progress poll — it retires nothing.
   if (consume && state && status !== 'running') markRead(state)
-  const tail = readOutputTail(dir)
+  // Một shell nền của nhánh Claude SDK không ghi vào thư mục log của AWOG — nó ghi
+  // vào file `<taskId>.output` của chính CLI. Đọc đúng file đó qua
+  // `readTaskOutputTail`, hàm đã validate đường dẫn (basename phải khớp taskId,
+  // thư mục thật phải nằm trong temp/`~/.awog`) trước mọi I/O — invariant #2.
+  // Đường này KHÔNG dùng cho task subagent: chúng không có file, và `state
+  // .externalOutputFile` vắng mặt đúng ở đó.
+  const tail = state?.externalOutputFile
+    ? externalTail(state.externalOutputFile, shellId)
+    : readOutputTail(dir)
   return {
     shellId,
     status,
@@ -514,6 +542,19 @@ export function registerExternalBackground(input: {
   emit('session.background-started', { sessionId, shellId, command, startedAt })
 }
 
+// Remember where the CLI writes a runtime-owned SHELL's output. Called by
+// run-stream when it parses the path out of the tool_result that announced the
+// background shell — the same path it polls for the transcript tail.
+export function noteExternalOutputFile(input: {
+  sessionId: string
+  shellId: string
+  file: string
+}): void {
+  const state = registry.get(input.sessionId)?.get(input.shellId)
+  if (!state || !state.external) return
+  state.externalOutputFile = input.file
+}
+
 // Settle a runtime-owned task. `read` is true because the runtime hands the result
 // to the model itself, and `wake` false because it also resumes the turn — the
 // renderer must not fire a second continuation.
@@ -540,11 +581,14 @@ export function settleExternalBackground(input: {
     read: true,
     wake: false,
   })
-  // Nothing can be read back from a finished external task (no log file), so a
-  // successful one has no reason to stay: drop it instead of growing the list by
-  // one entry per subagent for the whole session. A failed one stays listable —
-  // its chip does too.
-  if (input.status === 'exited' && input.exitCode === 0) {
+  // Một task subagent đã xong thì không đọc lại được gì (nó không có file log), nên
+  // bản thành công không có lý do ở lại: bỏ đi thay vì để danh sách phình thêm một
+  // dòng cho mỗi subagent suốt phiên. Bản thất bại thì ở lại — chip của nó cũng vậy.
+  //
+  // NGOẠI LỆ: shell nền có `externalOutputFile` thì ĐỌC LẠI ĐƯỢC, nên giữ. Số dòng
+  // giữ lại bị chặn bởi số shell nền của phiên, đúng bằng nhánh Pi; còn subagent —
+  // thứ sinh ra nhiều dòng — vẫn bị bỏ vì chúng không có file.
+  if (input.status === 'exited' && input.exitCode === 0 && !state.externalOutputFile) {
     registry.get(input.sessionId)?.delete(input.shellId)
   }
 }
