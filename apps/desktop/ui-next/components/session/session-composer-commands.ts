@@ -8,6 +8,10 @@ export type BuiltinAction =
   | { type: 'mode'; mode: 'Ask' | 'Plan' | 'AcceptEdits' | 'Execute' }
   | { type: 'compact' }
   | { type: 'style' }
+  // `/browser [url]` — mở url trong trình duyệt nhúng của app (ADR 0086) rồi hiện
+  // view Browser của workspace panel. Hành động của NGƯỜI DÙNG: không có tin nhắn
+  // nào gửi cho model, và url gõ sau lệnh là ĐỐI SỐ (xem `takesArg`).
+  | { type: 'browser' }
 
 export type BuiltinCommand = {
   // Stable dispatch id consumed by the composer (e.g. 'mode:Plan', 'compact').
@@ -17,6 +21,10 @@ export type BuiltinCommand = {
   // i18n key for the hint (sessions.command.<x>.desc).
   descKey: string
   action: BuiltinAction
+  // Lệnh ăn luôn phần text sau slug làm đối số (`/browser example.com`) thay vì để lại
+  // trong draft — và vì thế phải chạy cả khi người dùng Enter lúc menu đã đóng (Esc):
+  // nếu không, cả dòng `/browser example.com` sẽ bị gửi cho model như một prompt.
+  takesArg?: boolean
 }
 
 export const BUILTIN_COMMANDS: BuiltinCommand[] = [
@@ -51,27 +59,55 @@ export const BUILTIN_COMMANDS: BuiltinCommand[] = [
     action: { type: 'compact' },
   },
   { id: 'style', name: 'style', descKey: 'sessions.command.style.desc', action: { type: 'style' } },
+  {
+    id: 'browser',
+    name: 'browser',
+    descKey: 'sessions.command.browser.desc',
+    action: { type: 'browser' },
+    takesArg: true,
+  },
 ]
 
 export const findBuiltin = (id: string): BuiltinCommand | undefined =>
   BUILTIN_COMMANDS.find((c) => c.id === id)
 
+// Slug của hàng `@page`. Hằng riêng vì cả bộ lọc theo query lẫn hàng dựng ra đều
+// phải khớp chính xác một chuỗi.
+export const MENTION_PAGE = 'page'
+
 // ── Rendered item shapes (what the menu components display) ───────────────────
 
 // A `/` row. `kind` drives the tag + whether picking dispatches (builtin) or
-// inserts text (command/skill). `desc` is already-resolved (builtin desc is i18n,
-// resolved by the composer; user command/skill desc is the on-disk description).
+// inserts text (command/skill/cli). `desc` is already-resolved (builtin desc is
+// i18n, resolved by the composer; user command/skill desc is the on-disk
+// description; cli desc comes from the CLI itself).
+//   • command/skill → the body is expanded into the prompt on send (AWOG-side).
+//   • cli           → the `/name args` text is sent to the Claude CLI VERBATIM and
+//                     the CLI runs it (Claude SDK branch only).
 export type SlashItem = {
   key: string
-  label: string // text shown after `/` (slug or command/skill id)
+  label: string // text shown after `/` (slug, command/skill id, or CLI command name)
   desc: string
-  kind: 'builtin' | 'command' | 'skill'
-  // For builtin → the dispatch id; for command/skill → the slug to insert.
+  kind: 'builtin' | 'command' | 'skill' | 'cli'
+  // For builtin → the dispatch id; for command/skill/cli → the slug to insert.
   builtinId?: string
 }
 
-// An `@` row — agent, skill, wiki page or workspace file. `insert` is the token
-// placed after `@`.
+// Claude-CLI commands we deliberately keep OUT of the `/` menu even though the CLI
+// advertises them. Everything else it reports is offered as-is.
+//   • `clear`   — resets the CLI conversation while AWOG keeps the transcript on
+//                 screen: the model would silently lose the context the user can
+//                 still read. Rewind / fork are the AWOG-side equivalents.
+//   • `compact` — AWOG owns compaction (ADR 0047: always Pi, persists a checkpoint);
+//                 the `/compact` built-in row already drives it.
+// Names starting with `__` are the CLI's internal plumbing, never user-facing.
+const CLI_COMMAND_DENY = new Set(['clear', 'compact'])
+
+export const isOfferableCliCommand = (name: string): boolean =>
+  !name.startsWith('__') && !CLI_COMMAND_DENY.has(name)
+
+// An `@` row — agent, skill, wiki page, workspace file, or the `@page` ACTION.
+// `insert` is the token placed after `@`.
 export type MentionRow = {
   key: string
   // 'wiki' inserts `@wiki:<slug>` — a page reference the model resolves with the
@@ -79,7 +115,10 @@ export type MentionRow = {
   // 'skill' inserts `@skill:<id>` — prefixed for the same reason: a skill id and
   // an agent handle share one namespace, so a bare `@code-reviewer` would be
   // ambiguous when both exist.
-  kind: 'agent' | 'skill' | 'file' | 'wiki'
+  // 'page' KHÔNG chèn token nào: nó là một hành động (như built-in của menu `/`) —
+  // chọn nó thì trang đang mở trong trình duyệt nhúng được chèn thành khối context
+  // (useBrowserContext().attachPage). Vì thế `insert` của nó không bao giờ được dùng.
+  kind: 'agent' | 'skill' | 'file' | 'wiki' | 'page'
   insert: string
   label: string
   hint?: string

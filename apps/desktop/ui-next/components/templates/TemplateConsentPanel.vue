@@ -100,7 +100,6 @@ import { KIND_ORDER, type ConfigKind, type MarketplaceInspection } from '~/store
 const props = defineProps<{ inspection: MarketplaceInspection; homepage?: string }>()
 
 const { t } = useI18n()
-const sc = useSidecar()
 
 // Danh mục do người lạ xuất bản ⇒ `homepage` là L1. Sidecar đã lọc lúc parse
 // (`safeHomepage` trong templates/marketplace.ts), nhưng đây là bề mặt biến nó
@@ -118,14 +117,13 @@ const safeHomepage = computed<string>(() => {
   }
 })
 
-// Mở bằng đúng đường của app: shell.openExternal ở main process (gate theo
-// scheme lần nữa ở đó). KHÔNG <a target="_blank">.
+// Mở qua bộ chọn dùng chung (trong app / ra ngoài), rồi mới tới
+// shell.openExternal ở main process (gate theo scheme lần nữa ở đó).
+// KHÔNG <a target="_blank">.
 function openHomepage(): void {
   const url = safeHomepage.value
   if (!url) return
-  void sc.openExternal(url).catch((err) => {
-    console.warn('[templates] openExternal failed', err)
-  })
+  void useLinkOpen().openLink(url)
 }
 
 // Hai loại entity có hậu quả thực thi/prompt — cái người dùng cần thấy trước nhất.

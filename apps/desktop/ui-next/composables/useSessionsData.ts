@@ -104,6 +104,9 @@ export type PlanBlock = {
   eid?: string
 }
 export type QuestionOption = { label: string; desc?: string }
+// How this question is answered. 'choice' (the default when absent) picks from
+// `options`; 'text' is a free-text box; 'number' is a slider between min..max.
+export type QuestionKind = 'choice' | 'text' | 'number'
 // One question within an AskUserQuestion call. A call carries 1–4 questions that
 // are answered and submitted TOGETHER (the sidecar parks once and resumes with
 // all answers), so each item keeps its own selection/answer state.
@@ -117,12 +120,34 @@ export type QuestionItem = {
   // The user's chosen answer for THIS question (label(s)/free-text joined by
   // ", "); null/absent until submitted.
   answer?: string | null
+  // ── Extended schema. Absent on a plain choice question, so every reader must
+  // treat "no kind" as 'choice'.
+  kind?: QuestionKind
+  // One helper line under the question text.
+  hint?: string
+  // 'text' only.
+  placeholder?: string
+  // 'number' only: slider bounds + presentation.
+  min?: number
+  max?: number
+  step?: number
+  defaultValue?: number
+  unit?: string
 }
 export type QuestionBlock = {
   kind: 'question'
   // Every question in the call — render them all in one card with one Submit.
   items: QuestionItem[]
   eid?: string
+  // Optional heading for the whole call (extended schema `title`).
+  title?: string
+  // Free text the user wrote beside their answers ("anything else?").
+  response?: string
+  // The call is RESOLVED — the user replied and the turn moved on. Needed apart
+  // from the per-item answers because a reply can legitimately answer nothing:
+  // "decide for me" sends no answers at all, and without this the gate would look
+  // parked forever (drawer stuck open, status stuck on "awaiting").
+  done?: boolean
   // Set when the turn was cancelled while this gate was still parked: the gate is
   // dead (answering it is a no-op), so it renders as "cancelled" and no longer
   // counts as "awaiting" (which otherwise kept the composer stuck on Stop).
@@ -131,6 +156,7 @@ export type QuestionBlock = {
 // A question gate is answered once EVERY question in the call has a recorded
 // answer (one AskUserQuestion call = 1–4 questions submitted in one go).
 export function questionAnswered(b: QuestionBlock): boolean {
+  if (b.done) return true
   return b.items.length > 0 && b.items.every((it) => !!it.answer)
 }
 // ── Permission rule offered with a prompt (ADR 0080) ────────────────────────────
@@ -277,7 +303,10 @@ export type AssistantBlock =
 // A slash-command invocation shown compactly in the user bubble (`/name args`).
 // `text` still holds the expanded body (what the model receives + persists); this
 // is display-only metadata, mirroring `quotes` (in-memory, lost on reload).
-export type SlashCommandRef = { name: string; args: string }
+// `native` marks one of the Claude CLI's OWN commands (/goal, /context…): there is
+// no body to expand, so `text` IS `/name args` and the sidecar hands it to the CLI
+// untouched (Claude SDK branch only). An AWOG command/skill leaves it unset.
+export type SlashCommandRef = { name: string; args: string; native?: boolean }
 
 export type UserMessage = {
   role: 'user'
@@ -609,6 +638,7 @@ export type SortBy = (typeof SORTBY)[number]
 // Workspace views — [name, icon sprite id, shortcut]
 const WPVIEWS: [string, string, string][] = [
   ['Preview', 'sessions', '⇧⌘P'],
+  ['Browser', 'globe', ''],
   ['Diff', 'git', '⇧⌘D'],
   ['Terminal', 'commands', '^`'],
   ['Files', 'folder', '⇧⌘F'],

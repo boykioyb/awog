@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue'
+import { Circle, CircleCheck } from 'lucide-vue-next'
 import { answerQuestion } from '../store'
 import type { SessionQuestion, SessionQuestionAnswer, SessionStep } from '../types'
 
@@ -58,7 +59,8 @@ function submit(): void {
             :class="{ on: isOn(q, opt.label) }"
             @click="toggle(q, opt.label)"
           >
-            <span class="mark">{{ isOn(q, opt.label) ? '●' : '○' }}</span>
+            <CircleCheck v-if="isOn(q, opt.label)" class="icn-sm mark" />
+            <Circle v-else class="icn-sm mark" />
             <span class="opt-body">
               <span class="opt-label">{{ opt.label }}</span>
               <span v-if="opt.description" class="opt-desc muted">{{ opt.description }}</span>
@@ -74,7 +76,7 @@ function submit(): void {
 <style scoped>
 .q {
   border: 1px solid var(--warn);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   padding: 12px 14px;
   margin: 6px 0 12px;
   background: color-mix(in srgb, var(--warn) 7%, var(--surface));
@@ -95,7 +97,8 @@ function submit(): void {
 }
 .prompt {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 500;
 }
 .opts {
@@ -107,20 +110,25 @@ function submit(): void {
   display: flex;
   align-items: flex-start;
   gap: 9px;
+  min-height: var(--tap);
   text-align: left;
   border: 1px solid var(--border);
   background: var(--surface-2);
   color: var(--text);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  border-radius: var(--r-btn);
+  /* 11 + 22 (inherited line box) + 11 = exactly --tap for a one-line option. */
+  padding: 11px 12px;
+}
+.opt:active {
+  background: var(--surface-3);
 }
 .opt.on {
   border-color: var(--accent);
 }
 .mark {
   color: var(--accent);
-  flex-shrink: 0;
-  margin-top: 1px;
+  /* Nudge onto the first line's optical centre (label is --lh-md = 22px). */
+  margin-top: 4px;
 }
 .opt-body {
   display: flex;
@@ -128,12 +136,14 @@ function submit(): void {
   gap: 2px;
 }
 .opt-desc {
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .ans {
   display: flex;
   gap: 8px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   padding: 2px 0;
 }
 .ah {
@@ -142,6 +152,5 @@ function submit(): void {
 }
 .submit {
   width: 100%;
-  min-height: 42px;
 }
 </style>

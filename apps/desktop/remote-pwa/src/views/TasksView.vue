@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { ChevronLeft, Plus, RefreshCw, TriangleAlert } from 'lucide-vue-next'
 import { capabilities, projectName, projects, workflowName, workflowsFor } from '../catalog'
 import { route, showToast } from '../store'
 import {
@@ -109,11 +110,24 @@ async function submit(): Promise<void> {
 <template>
   <div class="tasks">
     <header class="head">
-      <button class="icon" title="Quay lại" @click="route = 'list'">‹</button>
+      <button
+        class="icon"
+        title="Quay lại"
+        aria-label="Quay lại danh sách session"
+        @click="route = 'list'"
+      >
+        <ChevronLeft />
+      </button>
       <h1>Tasks</h1>
-      <button class="icon" :disabled="taskListLoading" title="Làm mới" @click="loadTasks">
+      <button
+        class="icon"
+        :disabled="taskListLoading"
+        title="Làm mới"
+        aria-label="Làm mới danh sách task"
+        @click="loadTasks"
+      >
         <span v-if="taskListLoading" class="spin" />
-        <span v-else>↻</span>
+        <RefreshCw v-else />
       </button>
     </header>
 
@@ -143,7 +157,15 @@ async function submit(): Promise<void> {
       </li>
     </ul>
 
-    <button v-if="canCreate" class="fab" title="Chạy workflow" @click="creating = true">+</button>
+    <button
+      v-if="canCreate"
+      class="fab"
+      title="Chạy workflow"
+      aria-label="Chạy workflow mới"
+      @click="creating = true"
+    >
+      <Plus class="icn-lg" />
+    </button>
 
     <!-- Chi tiết task -->
     <AppSheet :open="!!openTask" :title="openTask?.title" @close="closeTask">
@@ -185,7 +207,8 @@ async function submit(): Promise<void> {
     <!-- Chạy workflow mới -->
     <AppSheet :open="creating" title="Chạy workflow" @close="creating = false">
       <p class="warn-box">
-        ⚠ Task chạy không có thẻ duyệt nào: mỗi node chạy Bash/Write thẳng. Trần chi phí
+        <TriangleAlert class="icn-sm" />
+        Task chạy không có thẻ duyệt nào: mỗi node chạy Bash/Write thẳng. Trần chi phí
         do máy desktop áp (mặc định $20 · 1500 tool call · 4 giờ cho mỗi task).
       </p>
       <label class="field">
@@ -244,7 +267,7 @@ async function submit(): Promise<void> {
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
   padding: 14px 14px 8px;
   position: sticky;
@@ -253,38 +276,55 @@ async function submit(): Promise<void> {
   z-index: 2;
 }
 .head h1 {
-  font-size: 22px;
-  margin: 0;
+  /* min-width:0 + ellipsis so the row still fits when the 44px hit boxes and the
+     gate badge are all present on a 375px screen. */
   flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-2xl);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .icon {
-  width: 34px;
-  height: 34px;
+  width: var(--tap);
+  height: var(--tap);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   color: var(--text);
-  font-size: 16px;
+}
+.icon:active {
+  background: var(--surface-3);
+}
+.icon:disabled {
+  opacity: 0.45;
 }
 .note,
 .warn-box {
   margin: 0 14px 12px;
   padding: 9px 11px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   color: var(--text-dim);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .warn-box {
   margin: 0 0 14px;
   border-color: var(--warn);
   background: color-mix(in srgb, var(--warn) 10%, transparent);
   color: var(--warn);
+}
+/* Inline with the sentence, so it rides the text baseline. */
+.warn-box .lucide {
+  vertical-align: -3px;
+  margin-right: 4px;
 }
 .state {
   display: flex;
@@ -293,7 +333,8 @@ async function submit(): Promise<void> {
   gap: 8px;
   padding: 26px 14px;
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .state.danger {
   color: var(--danger);
@@ -319,13 +360,15 @@ async function submit(): Promise<void> {
 .title {
   flex: 1;
   min-width: 0;
-  font-size: 15px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .time {
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   flex-shrink: 0;
 }
 .row-bot {
@@ -333,16 +376,18 @@ async function submit(): Promise<void> {
   align-items: center;
   gap: 8px;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 .meta {
   margin-bottom: 12px;
 }
 .badge {
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-3);
-  font-size: 11px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 .badge.running {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
@@ -358,8 +403,8 @@ async function submit(): Promise<void> {
 }
 .desc {
   margin: 0 0 10px;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--fs-md);
+  line-height: var(--lh-prose);
   white-space: pre-wrap;
 }
 .phases {
@@ -373,8 +418,11 @@ async function submit(): Promise<void> {
   max-height: 160px;
   overflow: auto;
   background: var(--surface-2);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
+  border-radius: var(--r-sm);
+  /* mono-ok: the phase's raw stdout tail. */
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -384,13 +432,21 @@ async function submit(): Promise<void> {
   margin-bottom: 6px;
 }
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex: 1;
+  min-height: var(--tap);
   padding: 11px 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+.btn:active {
+  background: var(--surface-3);
 }
 .btn:disabled {
   opacity: 0.5;
@@ -398,7 +454,7 @@ async function submit(): Promise<void> {
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   margin-top: 8px;
 }
 .btn.danger {
@@ -414,7 +470,8 @@ async function submit(): Promise<void> {
 }
 .field > span {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   margin-bottom: 6px;
 }
@@ -422,13 +479,14 @@ async function submit(): Promise<void> {
 .field input,
 .field textarea {
   width: 100%;
+  min-height: var(--tap);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   padding: 11px 12px;
-  outline: none;
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-family: inherit;
   resize: vertical;
 }
@@ -436,27 +494,20 @@ async function submit(): Promise<void> {
   position: fixed;
   right: 18px;
   bottom: calc(24px + var(--sab, env(safe-area-inset-bottom)));
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 54px;
   height: 54px;
   border-radius: 50%;
   border: none;
   background: var(--accent);
-  color: #fff;
-  font-size: 28px;
-  line-height: 1;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-1);
 }
-.spin {
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
+.fab:active {
+  background: color-mix(in srgb, var(--accent) 80%, black);
 }
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
+/* .spin comes from style.css — a second local copy meant the app had two spinner
+   sizes and only one of them honoured prefers-reduced-motion. */
 </style>

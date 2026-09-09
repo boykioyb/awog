@@ -3,8 +3,9 @@
 // tasks/trace-mapper.ts so both runtimes surface the same shape (ADR 0030).
 //
 // The model's todo shape (Claude Code) is { content, status, ...extras }; we
-// keep only content + a normalised status and drop the rest. Input is L1
-// (model response) so we validate defensively — never throw, just skip junk.
+// keep content + a normalised status + the Claude SDK task id when one is already
+// on the item, and drop the rest. Input is L1 (model response) so we validate
+// defensively — never throw, just skip junk.
 
 import type { TodoItem, TodoStatus } from '../types/shared.js'
 
@@ -20,7 +21,13 @@ export function parseTodos(todos: unknown): TodoItem[] {
     const rec = t as Record<string, unknown>
     const content = typeof rec.content === 'string' ? rec.content.trim() : ''
     if (!content) continue
-    items.push({ content, status: normaliseStatus(rec.status) })
+    const item: TodoItem = { content, status: normaliseStatus(rec.status) }
+    // Preserved when re-parsing a PERSISTED list (the Claude SDK path stores the
+    // CLI's task id per item so a later turn can address it — see TodoItem). The
+    // model never sends it, so this is a no-op on a raw TodoWrite argument.
+    const taskId = typeof rec.taskId === 'string' ? rec.taskId.trim() : ''
+    if (taskId) item.taskId = taskId
+    items.push(item)
   }
   return items
 }

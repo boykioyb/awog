@@ -297,15 +297,29 @@
       <symbol id="i-minus" viewBox="0 0 24 24">
         <path d="M5 12h14" />
       </symbol>
-      <symbol id="i-maximize" viewBox="0 0 24 24">
+      <!-- Cặp "khung 4 góc" (fullscreen / thoát fullscreen). TRƯỚC 2026-09-09 hai
+           symbol này khai TRÙNG id với cặp mũi tên chéo ở trên (`i-maximize` /
+           `i-minimize`): `<use href="#i-…">` lấy symbol ĐẦU TIÊN, nên cặp này chết
+           lặng và mọi nút "mở rộng" trong app vẽ ra mũi tên chéo bất kể tác giả
+           định dùng cái nào. Đổi tên để cả hai đều gọi được, và để không còn một
+           id nào che một id khác. -->
+      <symbol id="i-fullscreen" viewBox="0 0 24 24">
         <path
           d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"
         />
       </symbol>
-      <symbol id="i-minimize" viewBox="0 0 24 24">
+      <symbol id="i-fullscreen-exit" viewBox="0 0 24 24">
         <path
           d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"
         />
+      </symbol>
+      <!-- "Chọn một phần tử trên trang" — khung ngắm + con trỏ, đúng quy ước nút
+           inspect của devtools. Symbol riêng chứ không dùng lại `i-scan`: `scan`
+           đang mang nghĩa "quét/dò tìm" ở 5 chỗ khác (discover repo, permission,
+           device), và một glyph hai nghĩa là thứ người dùng phải học. -->
+      <symbol id="i-inspect" viewBox="0 0 24 24">
+        <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3" />
+        <path d="M9 9l5.5 12 1.6-4.9 4.9-1.6z" />
       </symbol>
       <!-- Response-style glyphs (SessionComposer style picker) — lucide outlines. -->
       <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14" /></symbol>

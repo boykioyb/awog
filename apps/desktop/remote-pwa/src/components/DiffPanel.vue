@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import { GitBranch, RefreshCw } from 'lucide-vue-next'
 import { gateway } from '../gateway'
 import { turnDoneSignal } from '../store'
 import { errMsg } from '../util'
@@ -65,10 +66,19 @@ watch(() => props.projectId, load)
 <template>
   <div class="diff">
     <div class="bar">
-      <span class="branch muted">{{ branch ? `⎇ ${branch}` : 'Changes' }}</span>
-      <button class="refresh" :disabled="loading" title="Làm mới" @click="load">
+      <span class="branch muted">
+        <GitBranch class="icn-sm" />
+        <span class="bname">{{ branch ?? 'Changes' }}</span>
+      </span>
+      <button
+        class="refresh"
+        :disabled="loading"
+        title="Làm mới"
+        aria-label="Làm mới danh sách thay đổi"
+        @click="load"
+      >
         <span v-if="loading" class="spin" />
-        <span v-else>↻</span>
+        <RefreshCw v-else class="icn-sm" />
       </button>
     </div>
 
@@ -116,23 +126,43 @@ watch(() => props.projectId, load)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 14px;
+  /* 4px, not 10: the refresh button grew to the 44px hit box, so the padding
+     gives way instead of the bar getting taller. */
+  padding: 4px 14px;
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   background: var(--bg);
 }
 .branch {
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.bname {
+  /* mono-ok: a git ref, copy-pasteable into `git switch`. */
   font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .refresh {
-  width: 30px;
-  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  flex-shrink: 0;
   border: 1px solid var(--border);
   background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   color: var(--text-dim);
+}
+.refresh:active {
+  background: var(--surface-3);
 }
 .state {
   display: flex;
@@ -152,7 +182,7 @@ watch(() => props.projectId, load)
 }
 .file {
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   margin-bottom: 6px;
   overflow: hidden;
 }
@@ -161,16 +191,22 @@ watch(() => props.projectId, load)
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-height: var(--tap);
   text-align: left;
   background: var(--surface);
   border: none;
   color: var(--text);
   padding: 9px 11px;
 }
+.file-head:active {
+  background: var(--surface-2);
+}
 .sym {
+  /* mono-ok: git's own status letter (A/M/D/R), read as a code column. */
   font-family: var(--mono);
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   width: 16px;
   flex-shrink: 0;
   color: var(--warn);
@@ -184,31 +220,36 @@ watch(() => props.projectId, load)
 }
 .path {
   flex: 1;
+  /* mono-ok: a file path. */
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   direction: rtl;
   text-align: left;
 }
+.add,
+.del {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-variant-numeric: tabular-nums;
+}
 .add {
   color: var(--add);
-  font-family: var(--mono);
-  font-size: 12px;
 }
 .del {
   color: var(--del);
-  font-family: var(--mono);
-  font-size: 12px;
 }
 .hunks {
   background: var(--surface-2);
   border-top: 1px solid var(--border);
   overflow-x: auto;
+  /* mono-ok: diff body — real code, column alignment is the point. */
   font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .hunk-head {
   color: var(--text-faint);
@@ -229,7 +270,8 @@ watch(() => props.projectId, load)
 }
 .no-hunk {
   padding: 8px 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   border-top: 1px solid var(--border);
 }
 </style>

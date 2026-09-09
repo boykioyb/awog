@@ -31,7 +31,7 @@ import {
   traceThinkingNode,
   formatDuration,
 } from './trace-mapper.js'
-import { recordToolCall } from './budget.js'
+import { recordToolCall, taskBudget, taskSpentUsd } from './budget.js'
 import { acquireWorkspace, releaseWorkspace } from './worktree.js'
 import { loadTask } from './store.js'
 import { taskArtifactsDir } from './store.js'
@@ -82,6 +82,42 @@ export interface NodeRunResult {
 function firstLine(text: string): string {
   const line = text.split('\n').find((l) => l.trim().length > 0) ?? ''
   return line.replace(/^#+\s*/, '').trim()
+}
+
+// Schema cho verdict của gate node khi chạy bằng structured output (nhánh Claude
+// SDK). Ba field: `status` là thứ engine đọc, `summary` một dòng, `report` là bản
+// báo cáo markdown vốn là output của node — giữ nó trong schema để bật structured
+// output KHÔNG làm mất bản báo cáo mà người dùng vẫn đọc.
+export const GATE_VERDICT_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['pass', 'fail'] },
+    summary: { type: 'string', description: 'One line: why it passed, or what failed.' },
+    report: { type: 'string', description: 'The full gate report as markdown.' },
+  },
+  required: ['status', 'summary', 'report'],
+  additionalProperties: false,
+}
+
+// Đọc verdict + bản báo cáo từ output structured. Trả undefined khi output không
+// phải JSON đúng schema — người gọi rơi về đường fenced-block, chứ KHÔNG đoán.
+function parseStructuredVerdict(
+  output: string,
+): { verdict: Verdict; report: string } | undefined {
+  const trimmed = output.trim()
+  if (!trimmed.startsWith('{')) return undefined
+  try {
+    const parsed: unknown = JSON.parse(trimmed)
+    if (typeof parsed !== 'object' || parsed === null) return undefined
+    const rec = parsed as Record<string, unknown>
+    const status = rec.status
+    if (status !== 'pass' && status !== 'fail') return undefined
+    const report = typeof rec.report === 'string' && rec.report.trim() ? rec.report : ''
+    const summary = typeof rec.summary === 'string' ? rec.summary : ''
+    return { verdict: status, report: report || summary || trimmed }
+  } catch {
+    return undefined
+  }
 }
 
 // Parse the LAST ```verdict``` fenced block in a gate node's output (ADR 0056).
@@ -206,18 +242,33 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
 
     // Gate verdict instruction (ADR 0056) — injected engine-side so ANY skill
     // works as a gate without being edited. node-runner parses the block back.
+    // Nhánh Claude SDK ép ĐÚNG hình dạng bằng `outputFormat` (JSON Schema) thay vì
+    // xin model tự gói trong fence: cách cũ có nhánh "verdict không parse được →
+    // escalate cho người", tức là một lần model quên fence là một lần gọi người.
+    // Provider khác vẫn dùng fence vì Pi không có structured output.
+    const gateStructured = !!node.gate && (agentCtx.provider ?? 'anthropic') === 'anthropic'
     const gateBlock = node.gate
-      ? [
-          '# Quality gate verdict (required)',
-          'This node is a quality gate. End your response with a fenced verdict block:',
-          '',
-          '```verdict',
-          'status: pass',
-          'summary: <one line — why it passed, or what failed>',
-          '```',
-          '',
-          'Use `status: fail` if ANY required criterion is unmet (the upstream work must be redone); otherwise `status: pass`. The orchestrator reads this block to decide whether to loop back for fixes.',
-        ].join('\n')
+      ? gateStructured
+        ? [
+            '# Quality gate verdict (required)',
+            'This node is a quality gate. Answer as a JSON object with exactly these fields:',
+            '- `status`: "pass" or "fail" — use "fail" if ANY required criterion is unmet (the upstream work must be redone).',
+            '- `summary`: one line — why it passed, or what failed.',
+            '- `report`: your full gate report as markdown. This is what the user reads, so do not shorten it.',
+            '',
+            'The orchestrator reads `status` to decide whether to loop back for fixes.',
+          ].join('\n')
+        : [
+            '# Quality gate verdict (required)',
+            'This node is a quality gate. End your response with a fenced verdict block:',
+            '',
+            '```verdict',
+            'status: pass',
+            'summary: <one line — why it passed, or what failed>',
+            '```',
+            '',
+            'Use `status: fail` if ANY required criterion is unmet (the upstream work must be redone); otherwise `status: pass`. The orchestrator reads this block to decide whether to loop back for fixes.',
+          ].join('\n')
       : ''
 
     const prompt = [
@@ -243,6 +294,10 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
 
     // Emit the root agent trace node (children nest under it).
     await emitTrace(taskId, node.id, version, traceAgentNode(rootId, agentName, node.agentId), null)
+
+    // Trần tiền còn lại cho node này. Model không có trong bảng giá ⇒ taskSpentUsd
+    // đóng góp 0, đúng như hàng rào cũ: lúc đó toolCalls/wallclock là lưới an toàn.
+    const remainingUsd = Math.max(0, taskBudget().maxCostUsd - (await taskSpentUsd(task)))
 
     const toolStarts = new Map<string, { use: InvokeToolUse; ms: number }>()
     const thinking = new Map<string, string>()
@@ -271,6 +326,14 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
         // Co-author trailer on model-made commits inside the node — matches the
         // task's per-phase auto-commit trailer (autoCommitPhase below).
         commitCoAuthor: task.commitCoAuthor ?? true,
+        // USD CÒN LẠI của task. Trần USD xưa nay chỉ được kiểm giữa các node
+        // (checkTaskBudget), nên một node đơn lẻ vẫn có thể tiêu vượt trần rồi mới bị
+        // phát hiện. Con số này đi thẳng vào `maxBudgetUsd` của SDK (dừng ngay trong
+        // node) và vào cổng tool của Pi. ≤0 ⇒ bỏ qua: đã cán trần thì checkTaskBudget
+        // chặn từ trước, và 0 với SDK nghĩa là "hết sạch" chứ không phải "không trần".
+        ...(remainingUsd > 0 ? { maxCostUsd: remainingUsd } : {}),
+        // Gate node trên nhánh Claude SDK: ép output đúng schema verdict.
+        ...(gateStructured ? { outputSchema: GATE_VERDICT_SCHEMA } : {}),
         abortController: ctx.abortController,
       },
       {
@@ -320,7 +383,12 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     )
 
     const elapsed = Date.now() - startedMs
-    const text = result.text || '(no output produced)'
+    const rawText = result.text || '(no output produced)'
+    // Gate node chạy structured output trả về JSON — bản báo cáo người dùng đọc nằm
+    // trong `report`. Bóc ra NGAY ở đây để mọi thứ hạ nguồn (artifact, trace, output
+    // file) thấy đúng markdown như trước, không phải một cục JSON.
+    const structuredGate = node.gate ? parseStructuredVerdict(rawText) : undefined
+    const text = structuredGate?.report ?? rawText
 
     // Finalise the root agent trace node (running → done, with model + duration).
     const rootDone: TraceNode = {
@@ -423,7 +491,9 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     // Gate verdict (ADR 0056): parse only for gate nodes; the run itself still
     // COMPLETED regardless of pass/fail. The engine post-processes the verdict
     // (loop-back vs escalate) — node-runner just records it.
-    const verdict = node.gate ? parseVerdict(text) : undefined
+    // Verdict: structured output (nhánh Claude SDK) trước, fenced block sau — cả
+    // hai cùng trả undefined thì engine escalate cho người, như cũ.
+    const verdict = structuredGate?.verdict ?? (node.gate ? parseVerdict(text) : undefined)
     const outcome: NodeRunOutcome = node.approval ? 'waiting_approval' : 'completed'
     await emitRunDone(taskId, node.id, version, outcome, formatDuration(elapsed), undefined, verdict)
     await emitPhaseStatus(taskId, node.id, outcome)

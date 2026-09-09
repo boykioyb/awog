@@ -11,22 +11,24 @@
       </span>
     </div>
 
-    <template v-for="group in groups" :key="group.title ?? 'top'">
-      <div v-if="group.title" class="navg">{{ t(group.title) }}</div>
-      <NuxtLink
-        v-for="item in group.items"
-        :key="item.to"
-        :to="item.to"
-        class="ni"
-        :class="{ on: isActive(item.to) }"
-        :data-tour="item.to === '/sessions' ? 'nav-sessions' : undefined"
-      >
-        <Icon :name="item.icon" />
-        {{ t(item.label) }}
-        <span v-if="item.badge" class="bdg" :class="item.badge.kind">{{ item.badge.n }}</span>
-        <span v-if="item.dot" class="gdot" />
-      </NuxtLink>
-    </template>
+    <nav class="navscroll">
+      <template v-for="group in groups" :key="group.title ?? 'top'">
+        <div v-if="group.title" class="navg">{{ t(group.title) }}</div>
+        <NuxtLink
+          v-for="item in group.items"
+          :key="item.to"
+          :to="item.to"
+          class="ni"
+          :class="{ on: isActive(item.to) }"
+          :data-tour="item.to === '/sessions' ? 'nav-sessions' : undefined"
+        >
+          <Icon :name="item.icon" />
+          {{ t(item.label) }}
+          <span v-if="item.badge" class="bdg" :class="item.badge.kind">{{ item.badge.n }}</span>
+          <span v-if="item.dot" class="gdot" />
+        </NuxtLink>
+      </template>
+    </nav>
 
     <div class="sfoot">
       <button
@@ -152,6 +154,27 @@ function toggleCollapsed() {
 </script>
 
 <style scoped>
+/* The RAIL itself must not scroll — only its nav list. prototype.css makes `.side`
+   the scroll container (`overflow-y:auto`), so with enough nav items the footer row
+   (Activity / Settings / What's New / theme / collapse) is pushed below the fold and
+   can only be reached by scrolling. Clip the rail and give the groups their own
+   scroller instead: the brand stays at the top, `.sfoot` (margin-top:auto) is pinned
+   at the bottom, and the list in between scrolls. */
+.side {
+  overflow: hidden;
+}
+.navscroll {
+  flex: 1 1 auto;
+  min-height: 0; /* a flex child won't shrink below content height without this */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The footer is the rail's last row — its own hairline is enough; nothing above it
+   should look like it scrolled underneath. */
+.sfoot {
+  flex: 0 0 auto;
+}
+
 /* Footer utility buttons (Settings + What's New + theme toggle) — sized like
    .navtgl but without the chevron rotation. The collapse button keeps
    margin-left:auto, so these sit at the left and the collapse toggle stays

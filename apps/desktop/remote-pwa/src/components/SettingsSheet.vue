@@ -139,17 +139,20 @@ function forget(): void {
   font-weight: 500;
 }
 .d {
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .hint {
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   margin: 10px 0 0;
 }
 .warn {
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   margin: 0 0 10px;
 }
@@ -162,6 +165,5 @@ function forget(): void {
 }
 .wide {
   width: 100%;
-  min-height: 44px;
 }
 </style>

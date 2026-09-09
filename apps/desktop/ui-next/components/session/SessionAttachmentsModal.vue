@@ -46,17 +46,14 @@
 // Overflow modal: lists ALL pending attachments when the composer has too many to
 // show inline. Each row → click previews, × removes. Reuses the prototype .ovl scrim.
 import type { SessionAttachment } from '~/composables/useSessionsData'
+import { formatBytes } from '~/utils/format-bytes'
 
 const props = defineProps<{ open: boolean; attachments: SessionAttachment[] }>()
 const emit = defineEmits<{ close: []; preview: [i: number]; remove: [i: number] }>()
 const { t } = useI18n()
 
-function fmtSize(n?: number): string {
-  if (n == null) return ''
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
-}
+// Absent size → no label (the row just drops it).
+const fmtSize = (n?: number): string => (n == null ? '' : formatBytes(n))
 
 function onKey(e: KeyboardEvent) {
   if (props.open && e.key === 'Escape') emit('close')

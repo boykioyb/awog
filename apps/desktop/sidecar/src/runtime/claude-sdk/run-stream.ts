@@ -46,14 +46,28 @@ import { buildStylePrompt } from '../../style/styles.js'
 import {
   EVIDENCE_PROMPT,
   OUTPUT_SURFACE_PROMPT,
-  TODO_USAGE_PROMPT,
+  TASK_CHECKLIST_PROMPT,
   SCRATCH_DIR_PROMPT,
   VERIFY_PROMPT,
 } from '../prompts.js'
 import { buildCurrentStateBlock, collectWorkspaceSnapshot } from '../../context/environment.js'
 import { isToolAllowed } from '../tools/index.js'
 import { updateSessionMetadata } from '../../sessions/store.js'
+import { ARTIFACT_ENV } from './artifact.js'
+import {
+  ASK_USER_QUESTION_TOOL,
+  QUESTION_ENV,
+  makeAskUserQuestionGate,
+} from './ask-user-question.js'
 import { createClaudeEventAdapter } from './event-adapter.js'
+import { makeElicitationHandler } from './elicitation.js'
+import {
+  CONFIG_ISOLATION_OPTIONS,
+  budgetOptions,
+  diagnosticsOptions,
+  fallbackModelFor,
+  turnCapOption,
+} from './tuning.js'
 import { buildApiSdkServers } from './api-sdk-server.js'
 import { buildSourceToolsSdkServer } from './source-sdk-server.js'
 import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
@@ -62,7 +76,6 @@ import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
 import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
 import { isReservedAwogServerName, withBridgedAliases } from '../tools/bridged.js'
-import { ARTIFACT_ENV } from './artifact.js'
 import { buildTerminalToolsSdkServer } from './terminal-sdk-server.js'
 import { TERMINAL_MCP_SERVER } from '../tools/read-terminal-tool.js'
 import { BROWSER_MCP_SERVER, buildBrowserToolSdkServer } from './browser-sdk-server.js'
@@ -179,6 +192,18 @@ function makePreToolUseHook(
 ): (input: HookInput, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<HookJSONOutput> {
   return async (input, _toolUseID, { signal }) => {
     if (input.hook_event_name !== 'PreToolUse') return { continue: true }
+    // AskUserQuestion is not a permission — it IS the question card, and the CLI only
+    // hands it to the host because its tool declares `requiresUserInteraction`. That
+    // hand-off is skipped when a hook has already decided the call (or rewritten its
+    // input), so deciding it here would silently swallow the question. Let it fall
+    // through to `canUseTool`, which owns it (ask-user-question.ts).
+    //
+    // What this costs, stated rather than hidden: a question does not count toward the
+    // per-turn tool budget and a deny RULE on this tool name is not consulted. Both are
+    // acceptable for a read-only tool whose whole effect is "wait for the user" — and
+    // the real off-switch survives, since `disabledTools` reaches the CLI as
+    // `disallowedTools` and unregisters the tool outright.
+    if (input.tool_name === ASK_USER_QUESTION_TOOL) return { continue: true }
     // Rebuild the context makeBeforeToolCall reads (name/id/args). It may mutate
     // `toolInput` in place to apply an approved input override → we forward that.
     const toolInput =
@@ -486,9 +511,13 @@ export async function runStreamClaude(
     OUTPUT_SURFACE_PROMPT,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const append = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
-  // TodoWrite is an SDK built-in here (AWOG doesn't own the implementation, unlike
-  // the Pi path), so the same allow/deny filter decides whether nudging is honest.
-  const todoAllowed = isToolAllowed('TodoWrite', {
+  // The checklist tools are SDK built-ins here (AWOG doesn't own the implementation,
+  // unlike the Pi path), so the same allow/deny filter decides whether nudging is
+  // honest. Gated on `TaskCreate`, the tool the nudge actually asks for: an agent
+  // whose `tools:` whitelist omits it would have the call refused by the SDK, and
+  // TodoWrite — the name this used to test — is not on the surface at all for
+  // current models (see TASK_CHECKLIST_PROMPT).
+  const checklistAllowed = isToolAllowed('TaskCreate', {
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
     ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
   })
@@ -522,6 +551,9 @@ export async function runStreamClaude(
   )
 
   const sdkModel = toSdkModel(args.settings.modelId)
+  // Model dự phòng khi model chính quá tải (tuning.ts). Tính một lần: gọi hai lần
+  // trong một conditional spread thì TS không narrow được `string | undefined`.
+  const fallbackModel = fallbackModelFor(sdkModel)
 
   // NOTE: `/compact` never reaches here — runner.ts routes it to Pi's runCompact
   // (provider-agnostic summarization, ADR 0047). Its checkpoint clears sdkSessionId
@@ -533,7 +565,13 @@ export async function runStreamClaude(
   // checkpoint (right after /compact) the block is [summary + kept turns] so the
   // fresh SDK session starts with REDUCED context (ADR 0047/0058).
   let promptText = args.pendingText
-  if (!args.sdkSessionId && args.history.length > 0) {
+  // A CLI-native slash command (/goal, /context, /usage…) is passed through EXACTLY
+  // as typed: the CLI parses a local command only from a message that STARTS with
+  // `/`, so every block below would turn it back into prose for the model. Skips the
+  // history prefix too — a local command reads the CLI's own session state, not a
+  // re-narrated transcript. See RunNonStreamArgs.nativeCommand.
+  const nativeCommand = args.nativeCommand === true
+  if (!nativeCommand && !args.sdkSessionId && args.history.length > 0) {
     const prefix = renderHistoryPrefix(args.history, args.compaction)
     promptText = prefix ? `${prefix}\n\n${args.pendingText}` : args.pendingText
   }
@@ -549,30 +587,44 @@ export async function runStreamClaude(
   // model's view of the tree current, and matches the Pi path. Prepended before
   // the style/checklist/plan directives below so it ends up adjacent to the
   // user's actual text. Best-effort: a non-repo yields the date alone.
-  const workspaceSnapshot = await collectWorkspaceSnapshot(args.cwd)
-  promptText = `${buildCurrentStateBlock(workspaceSnapshot)}\n\n${promptText}`
-  if (stylePrompt) promptText = `${stylePrompt}\n\n${promptText}`
-  // Checklist (ADR 0069) + the TodoWrite nudge ride on the turn prompt for the
+  const workspaceSnapshot = nativeCommand
+    ? undefined
+    : await collectWorkspaceSnapshot(args.cwd)
+  if (workspaceSnapshot) {
+    promptText = `${buildCurrentStateBlock(workspaceSnapshot)}\n\n${promptText}`
+  }
+  if (!nativeCommand && stylePrompt) promptText = `${stylePrompt}\n\n${promptText}`
+  // Checklist (ADR 0069) + the checklist-tool nudge ride on the turn prompt for the
   // frozen-append reason above. Both MUST be re-sent every turn: the checklist
-  // changes whenever the model or the user edits it, and the nudge is what makes
-  // the model keep the list current at all (the preset alone doesn't — on this
-  // path TodoWrite was effectively never called before this).
-  if (args.sessionChecklist) promptText = `${args.sessionChecklist}\n\n${promptText}`
-  if (todoAllowed) promptText = `${TODO_USAGE_PROMPT}\n\n${promptText}`
+  // changes whenever the model or the user edits it, and the nudge is what carries
+  // AWOG's own rules for it (reconcile before ending the turn; never tick an item
+  // you did not finish) plus the correction that TodoWrite is not on this surface.
+  if (!nativeCommand && args.sessionChecklist) {
+    promptText = `${args.sessionChecklist}\n\n${promptText}`
+  }
+  if (!nativeCommand && checklistAllowed) {
+    promptText = `${TASK_CHECKLIST_PROMPT}\n\n${promptText}`
+  }
   // Background work IS supported here (we hold the CLI session open until it
   // settles — see the bookkeeping below), but only within this turn. Say so, so
   // the model neither avoids it nor assumes it survives past the turn.
-  promptText = `${BACKGROUND_TURN_PROMPT}\n\n${promptText}`
+  if (!nativeCommand) promptText = `${BACKGROUND_TURN_PROMPT}\n\n${promptText}`
   // Plan-mode directive on the turn prompt for the same frozen-append reason: plan
   // can be toggled mid-session, so a system-prompt append would be ignored on
   // `resume`. Prepended last → sits at the front of the turn so the model reliably
   // presents its plan via ExitPlanMode instead of writing it as plain text.
-  if (inPlanMode) promptText = `${PLAN_MODE_PROMPT}\n\n${promptText}`
+  if (!nativeCommand && inPlanMode) promptText = `${PLAN_MODE_PROMPT}\n\n${promptText}`
 
   // Attachments (images / text files) need the streaming-input block form — the
   // string prompt can't carry them. Returns the plain string when nothing usable
   // is attached, so the common text-only turn is unchanged.
-  const prompt = openClaudePrompt(promptText, args.pendingAttachments)
+  // Attachments are dropped for a native command: the block form would push the
+  // `/name` text out of the message's leading position, and no local command reads
+  // an image anyway.
+  const prompt = openClaudePrompt(
+    promptText,
+    nativeCommand ? undefined : args.pendingAttachments,
+  )
 
   // External MCP servers of the user (SDK-native mechanism, not a custom tool) +
   // AWOG `api` sources as in-process SDK MCP servers (api-sdk-server.ts) + the
@@ -731,6 +783,22 @@ export async function runStreamClaude(
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
     hooks: { PreToolUse: [{ hooks: [makePreToolUseHook(gate)] }] },
+    // Interactive questions (AskUserQuestion). Supplying this callback is what makes
+    // the CLI advertise that tool at all when it runs non-interactively — the SDK
+    // turns it into `--permission-prompt-tool stdio`, which the tool's `isEnabled()`
+    // demands. Every OTHER tool is still decided by the PreToolUse hook above and
+    // never reaches this callback (bypassPermissions answers it first — the SDK warns
+    // as much), so this adds no second permission path. Chat only: a task/subagent
+    // leaves `askUserQuestion` undefined, and the tool stays off there.
+    ...(args.askUserQuestion
+      ? {
+          canUseTool: makeAskUserQuestionGate(args.askUserQuestion, cb),
+          // MCP elicitation (form / URL auth) → cùng thẻ câu hỏi, cùng park. Không
+          // khai callback này thì SDK TỪ CHỐI TỰ ĐỘNG mọi request — một Source cần
+          // cấp quyền qua trình duyệt sẽ hỏng câm (elicitation.ts).
+          onElicitation: makeElicitationHandler(args.askUserQuestion, cb),
+        }
+      : {}),
     // AWOG DOES render a per-task stop control (SessionBackgroundChips → the bg
     // registry → Query.stopTask), so say so: the CLI fails closed on absence and
     // would kill every background task on an interrupt. With it declared, a cancel
@@ -765,7 +833,38 @@ export async function runStreamClaude(
     ...(args.abortController ? { abortController: args.abortController } : {}),
     // Mở tool `Artifact` của CLI (parity #35). Cổng thật là biến môi trường chứ
     // KHÔNG phải `settings.enableArtifact` — artifact.ts ghi bảng đo và lý do.
-    env: { ...buildSdkEnv(cred), ...ARTIFACT_ENV },
+    // Chẩn đoán (stderr → log, `--debug` theo env) + model dự phòng khi Anthropic quá
+    // tải + khai tường minh nguồn settings/MCP. Xem tuning.ts và
+    // docs/reference/claude-sdk-options.md.
+    ...diagnosticsOptions('chat'),
+    ...CONFIG_ISOLATION_OPTIONS,
+    ...(fallbackModel ? { fallbackModel } : {}),
+    // Trần TIỀN của lượt: dừng ngay khi cán trần thay vì để lượt sau bị từ chối.
+    ...budgetOptions(args.budget?.maxCostUsd),
+    ...turnCapOption(),
+    // Tóm tắt tiến độ subagent (~30s/lần, fork dùng lại prompt cache của chính nó)
+    // → `task_progress.summary`, thứ hàng subagent trong transcript vẫn đang thiếu.
+    agentProgressSummaries: true,
+    // Gợi ý prompt kế tiếp sau mỗi lượt: đi nhờ prompt cache của lượt cha nên gần
+    // như miễn phí, và chỉ được render khi model KHÔNG tự gọi `suggest_followups`
+    // (event-adapter.ts). Tự tắt ở lượt đầu, sau lỗi API, trong plan mode và khi
+    // tài khoản sát hạn mức — không cần AWOG gác thêm.
+    promptSuggestions: true,
+    // Thư mục người dùng đính kèm cho lượt: cho tool của CLI đọc được chúng. Đây là
+    // ý định tường minh của người dùng (họ vừa gắn folder vào phiên), không phải nới
+    // quyền âm thầm — và send-message đã kiểm tuyệt-đối-và-là-thư-mục trước khi tới đây.
+    ...(args.extraDirs?.length ? { additionalDirectories: args.extraDirs } : {}),
+    // Skill: nói TƯỜNG MINH là bật hết. Bỏ trống không phải "tắt" (doc của SDK), mà
+    // AWOG đang tự bơm catalogue `<available_skills>` vào prompt — hai bên phải khớp,
+    // kẻo model đọc tên skill trong catalogue rồi gọi một tool từ chối nó.
+    skills: 'all',
+    // QUESTION_ENV chỉ đi cùng gate: nó bật schema mở rộng của AskUserQuestion, mà
+    // tool đó chỉ tồn tại khi có `canUseTool` (ask-user-question.ts).
+    env: {
+      ...buildSdkEnv(cred),
+      ...ARTIFACT_ENV,
+      ...(args.askUserQuestion ? QUESTION_ENV : {}),
+    },
     // Packaged builds: point at the bundled native binary (ADR 0058 P3); dev leaves
     // it undefined so the SDK auto-discovers from the pnpm store.
     ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
@@ -782,10 +881,11 @@ export async function runStreamClaude(
     historyTurns: args.history.length,
   })
 
-  // Persist every main-agent TodoWrite as the session's current checklist — the
-  // SDK-path equivalent of the Pi tool layer's todoSink (ADR 0069). Without it the
-  // banner/Plan tab can only fall back to the transcript snapshot and a user edit
-  // has no authoritative list to write to.
+  // Persist the main agent's checklist as the session's current one — the SDK-path
+  // equivalent of the Pi tool layer's todoSink (ADR 0069). Without it the banner/Plan
+  // tab can only fall back to the transcript snapshot and a user edit has no
+  // authoritative list to write to. The list is replayed from the CLI's task tools
+  // (task-checklist.ts), which replaced TodoWrite on this surface.
   const todoSessionId = args.sessionId
   const adapter = createClaudeEventAdapter(cb, {
     ...(todoSessionId
@@ -798,6 +898,8 @@ export async function runStreamClaude(
     // Let a finished background shell show its captured output in the transcript
     // instead of a bare "completed" (task-output.ts validates the path).
     readTaskOutput: readTaskOutputTail,
+    // Seed for the task-tool checklist tracker — see ClaudeAdapterHooks.sessionTodos.
+    ...(args.sessionTodos ? { sessionTodos: args.sessionTodos } : {}),
   })
   // ── Background work: keep the CLI session alive until it settles ────────────
   //
@@ -1247,7 +1349,7 @@ export async function runStreamClaude(
     (stylePrompt?.length ?? 0) +
     (inPlanMode ? PLAN_MODE_PROMPT.length : 0) +
     (args.sessionChecklist?.length ?? 0) +
-    (todoAllowed ? TODO_USAGE_PROMPT.length : 0) +
+    (checklistAllowed ? TASK_CHECKLIST_PROMPT.length : 0) +
     BACKGROUND_TURN_PROMPT.length
   const instructionsLen =
     Math.max(

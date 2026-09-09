@@ -69,6 +69,7 @@ Bản đầu buộc model "nhìn" bằng screenshot (đắt token, đọc chữ 
 - Console dùng event `webContents.on('console-message')` — không cần CDP.
 - Network dùng **CDP `webContents.debugger`** (`Network.enable` lúc tạo tab): `requestWillBeSent` / `responseReceived` / `loadingFinished` / `loadingFailed`. Đây là thứ duy nhất lấy được **response body** (`Network.getResponseBody`). Body chỉ nằm trong buffer của CDP một thời gian → xin body của request quá cũ sẽ lỗi, đó là hành vi đúng của giao thức.
 - Debugger attach **fail mềm** (ví dụ user mở DevTools cho cửa sổ đó): tab vẫn duyệt web, `network` trả "unavailable", `viewport` chỉ resize cửa sổ.
+- **Teardown không phải lỗi (sửa 2026-09-09).** `Network.enable` gửi async ngay lúc tạo tab, nên nếu tab bị đóng / cửa sổ chủ bị destroy / app đang thoát trong khoảng đó thì nó reject `target closed while handling command`. Bản trước log **warn** cho việc đó ⇒ tiếng ồn thuần, và đến đúng lúc log đang đầy nhất. Nay: `wc.isDestroyed()` ⇒ im lặng hẳn; message khớp `target closed|not attached` ⇒ hạ xuống `debug` (không vào file log vì `transports.file.level = 'info'`, vẫn thấy ở console dev). Lỗi attach **thật** vẫn `warn` như cũ. Đo: đóng-ngay và `browser.close()` → 0 warn; tab bình thường → 0 log, `cdp_available: true`, vẫn thu request.
 
 ### `viewport`
 
@@ -76,14 +77,27 @@ Preset `mobile` (390×844 @3x, touch + UA iPhone), `tablet` (820×1180 @2x), `de
 
 ## Cửa sổ trình duyệt & mô hình tab
 
-**Mỗi tab = một `BrowserWindow` riêng**, ẩn mặc định, tất cả dùng chung partition `persist:awog-browser` (cookie/storage chia sẻ giữa tab như trình duyệt thật, vẫn cô lập khỏi app — invariant #1). Cap 8 tab.
+> **Đổi 2026-09-09 ([ADR 0086](../decisions/0086-embedded-browser-panel.md)):** mô hình "một `BrowserWindow` ẩn mỗi tab" đã bị thay. Lý do: nó không có bề mặt nào để người dùng thấy, và đo được là **0 lời gọi `browser_tool` trong toàn bộ 793 session**. Nay **một tab = một `WebContentsView`**, nhúng được thành tab **Browser** của Session Workspace Panel — xem [session-browser-panel.md](session-browser-panel.md). Chính đoạn cũ ở đây đã dự trù: *"nếu sau này cần UI tab thật thì đó là lúc đổi sang `WebContentsView`"*.
 
-Vì sao không dùng `WebContentsView` con trong một cửa sổ shell: bề mặt này **headless mặc định** và lái hoàn toàn bằng lệnh, nên thanh tab chỉ là chrome mà ta không vẽ. Một cửa sổ mỗi tab giữ `capturePage` trên bề mặt ẩn hoạt động y như cũ, giữ console/network/debugger **per-webContents** không phải xoay visibility, và đổi lại chỉ tốn một dòng `show()`/`hide()`. Nếu sau này cần UI tab thật thì đó là lúc đổi sang `WebContentsView`.
+**Mỗi tab = một `WebContentsView`**, tất cả dùng chung partition `persist:awog-browser` (cookie/storage chia sẻ giữa tab như trình duyệt thật, vẫn cô lập khỏi app — invariant #1). Cap 8 tab. Một tab sống ở đúng một trong ba chỗ:
 
-- Cửa sổ tạo lazy (ở lệnh đầu), partition riêng `persist:awog-browser`.
-- `setWindowOpenHandler('deny')` + `will-navigate` guard (chặn click→host nội bộ).
-- Hiện/ẩn qua tray item **"Toggle browser window"** — `show()` mở tab active, `hide()` ẩn tất cả. Mặc định ẩn.
-- `before-quit` → `browser.close()` (destroy mọi tab); window bị destroy → tạo lại ở lệnh sau.
+| Chỗ | Khi nào |
+|---|---|
+| `holder` — cửa sổ **vô hình** (`opacity: 0`, `focusable: false`, ignore-mouse, `hide()`) | mặc định, và mọi lúc không hiển thị |
+| **nhúng** trong cửa sổ của renderer gọi `attach()` | tab Browser của Workspace Panel đang mở |
+| **popout** — cửa sổ riêng | tray *"Toggle browser window"*, hoặc nút ⧉ trong panel |
+
+Hai thứ phải bù khi đổi model, cả hai đều đo được:
+
+- **`capturePage` cần một compositor surface.** View chưa từng lên màn hình thì `screenshot` ném `"Current display surface not available for capture"` (chỗ mà `BrowserWindow` ẩn chụp tốt). `ensurePainted` `showInactive()` cửa sổ vô hình đúng một frame rồi `hide()`; surface sống sót qua `hide()` + reparent nên chỉ xảy ra nhiều nhất một lần mỗi tab. Nhờ vậy `screenshot` **vẫn chạy khi không có UI nào mở** (task không người trông).
+- **`backgroundThrottling: false`** trên mỗi view — Chromium đóng băng timer trong compositor ẩn (đo: 0 tick khi park, 14 tick khi tắt throttle).
+
+Còn lại giữ nguyên:
+
+- View tạo lazy (ở lệnh đầu), partition riêng `persist:awog-browser`.
+- `setWindowOpenHandler('deny')` + `will-navigate`/`will-redirect`/`will-frame-navigate` guard (chặn click/redirect/iframe → host nội bộ).
+- `before-quit` → `browser.close()` (destroy mọi view + holder + popout).
+- Đóng cửa sổ đang nhúng tab **không** giết tab: `attachTo` hook `close` của cửa sổ chủ để park view về holder trước (một view là con của cửa sổ, nên destroy cửa sổ sẽ kéo `webContents` đi theo).
 
 ## Bảo mật
 
@@ -92,6 +106,7 @@ Vì sao không dùng `WebContentsView` con trong một cửa sổ shell: bề m�
 - **Token (invariant #1):** browser_tool không chạm token; partition riêng.
 - **Prompt injection (L1):** mọi chuỗi **do trang kiểm soát** — không chỉ thân snapshot/extract/console/network, mà cả `<title>`, URL cuối sau redirect, header response — đều nằm **TRONG** hàng rào. Header của kết quả chỉ chứa dữ kiện do tool sinh (tên tab, số node, số request, cờ truncate); nếu để `<title>` ở đó thì trang chỉ cần đặt tiêu đề là một câu lệnh và nó xuất hiện ở chỗ trông như phần đáng tin. Vì lý do đó `click` cũng **không** echo nhãn phần tử. Nội dung được bọc trong **hàng rào mang nonce sinh mới mỗi lần gọi** — cùng khuôn với [read-terminal-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/read-terminal-tool.ts). Trang không đoán được nonce nên không tự đóng hàng rào để viết "chỉ thị hệ thống" ở ngoài. Header hàng rào nói thẳng với model rằng đó là **dữ liệu**, và nếu body chứa chuỗi giả dạng thẻ hàng rào thì thêm cảnh báo injection.
 - **Rò bí mật:** header credential (`Authorization`, `Cookie`, `Set-Cookie`, `X-Api-Key`, `X-CSRF-Token`, …) bị **loại hẳn ở Electron main** trước khi bản ghi rời tiến trình đó — không truncate, không redact, đơn giản là không đi qua ranh giới. Phần còn lại (URL có `?token=`, body JSON có `access_token`, `console.log(token)`) đi qua `redactString` của [sessions/redact.ts](../../apps/desktop/sidecar/src/sessions/redact.ts). Số header bị giấu được báo lại để model biết có thứ đã bị bỏ, không tưởng là request không có auth.
+- **⚠ Cookie chia sẻ với người dùng (mới, vòng 3):** từ khi tab hiển thị được trong panel, **người dùng gõ/bấm được trong đó**, nên đăng nhập của người dùng rơi vào `persist:awog-browser` — partition mà agent đọc được. Cố ý (agent đọc được trang sau đăng nhập) nhưng là **đổi thế trận** so với lúc chỉ agent chạm partition ấy. Xem [session-browser-panel.md](session-browser-panel.md#bảo-mật).
 - **Permission:** `navigate/click/fill/tab_new` (mutating) bị gate theo mode (`plan` chặn, `ask` prompt, `execute` no-gate); các action đọc (snapshot/extract/screenshot/console/network/network_body/viewport/tabs/tab_select/tab_close) không gate — chúng chỉ quan sát trình duyệt của chính agent. Logic ở [permission.ts](../../apps/desktop/sidecar/src/runtime/permission.ts) `isGatedTool(name, args)` + `isMutatingBrowserAction`.
 - **⚠ Hở đã biết — gate không bắt tên bắc cầu.** `isGatedTool` so `name === 'browser_tool'`, nên trên nhánh Claude SDK tên `mcp__awogbrowser__browser_tool` **không khớp** và navigate/click/fill đi qua không xin phép (kể cả plan mode). `browser-tool.ts` đã export sẵn `isBrowserToolName(name)`; permission.ts chỉ cần đổi một dòng thành `if (isBrowserToolName(name)) return isMutatingBrowserAction(args)` — đúng khuôn `isWikiMutatingTool` / `sshToolName` đang dùng cho các tool bắc cầu khác.
 
@@ -105,7 +120,9 @@ Tên tool của ta không bắt đầu bằng `mcp_` (tiền tố Anthropic dàn
 
 | File | Thay đổi |
 |---|---|
-| [electron/src/browser.ts](../../apps/desktop/electron/src/browser.ts) | **Mới** — BrowserController + `registerBrowserHostHandlers` + will-navigate guard |
+| [electron/src/browser.ts](../../apps/desktop/electron/src/browser.ts) | **Mới** — BrowserController + `registerBrowserHostHandlers` + will-navigate guard. **Vòng 3 (ADR 0086):** tab = `WebContentsView` + holder vô hình + `ensurePainted` + `attachTo`/`setViewBounds`/`detachFrom` + `openFromUser` + popout |
+| [electron/src/ipc.ts](../../apps/desktop/electron/src/ipc.ts) | **Vòng 3** — `registerBrowserViewIpc()`: kênh `browser:*` cho renderer (điều hướng + hình học; KHÔNG có action đọc trang) |
+| [ui-next/composables/useEmbeddedBrowser.ts](../../apps/desktop/ui-next/composables/useEmbeddedBrowser.ts) + [WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | **Vòng 3** — tab Browser của panel ([spec](session-browser-panel.md)) |
 | [electron/src/engine.ts](../../apps/desktop/electron/src/engine.ts) | `registerHostHandler` + nhánh `host-request` + `handleHostRequest` |
 | [electron/src/main.ts](../../apps/desktop/electron/src/main.ts) | `registerBrowserHostHandlers()` + `browser.close()` + tray toggle |
 | [sidecar/src/transport/stdio.ts](../../apps/desktop/sidecar/src/transport/stdio.ts) | `hostRequest` + `resolveHostResponse` + timeout |

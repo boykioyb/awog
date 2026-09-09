@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { X } from 'lucide-vue-next'
+
 // Bottom sheet — the phone stand-in for the desktop's modals/popovers. Backdrop
 // tap closes; the panel itself keeps the safe-area inset so it clears the home bar.
 defineProps<{ open: boolean; title?: string }>()
@@ -13,7 +15,9 @@ const emit = defineEmits<{ (e: 'close'): void }>()
           <div class="grab" />
           <header v-if="title" class="head">
             <span class="title">{{ title }}</span>
-            <button class="x" title="Đóng" @click="emit('close')">✕</button>
+            <button class="x" title="Đóng" aria-label="Đóng" @click="emit('close')">
+              <X class="icn-sm" />
+            </button>
           </header>
           <div class="body">
             <slot />
@@ -33,7 +37,7 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   right: 0;
   bottom: var(--kb, 0px);
   z-index: 200;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -47,12 +51,13 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   background: var(--surface);
   border: 1px solid var(--border);
   border-bottom: none;
-  border-radius: 18px 18px 0 0;
+  border-radius: var(--r-panel) var(--r-panel) 0 0;
   padding-bottom: var(--sab, env(safe-area-inset-bottom));
 }
 .grab {
   width: 38px;
   height: 4px;
+  /* design-token-ok: 2px = half of the 4px handle, i.e. the pill shape itself. */
   border-radius: 2px;
   background: var(--surface-3);
   margin: 8px auto 2px;
@@ -69,12 +74,21 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   font-weight: 600;
 }
 .x {
-  width: 32px;
-  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
+  /* Negative margins let the 44px hit box overhang the header padding instead of
+     making every sheet header 14px taller. The button is transparent, so only
+     the touch area grows. */
+  margin: -8px -10px -8px 0;
   border: none;
   background: transparent;
   color: var(--text-dim);
-  font-size: 15px;
+}
+.x:active {
+  color: var(--text);
 }
 .body {
   overflow-y: auto;

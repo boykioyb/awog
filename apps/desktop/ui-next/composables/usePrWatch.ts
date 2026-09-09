@@ -172,7 +172,7 @@ export async function pollPrWatch(): Promise<void> {
         icon: 'fork',
         action: () => {
           const item = items.value.find((i) => i.id === change.id)
-          if (item?.url) void sc.openExternal(item.url)
+          if (item?.url) void useLinkOpen().openLink(item.url)
         },
       })
     }

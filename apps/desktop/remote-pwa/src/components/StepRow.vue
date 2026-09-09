@@ -1,6 +1,21 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import {
+  Check,
+  ChevronRight,
+  Circle,
+  CircleDot,
+  CornerDownRight,
+  FileText,
+  Pencil,
+  Search,
+  Sparkles,
+  Terminal,
+  X,
+  Zap,
+} from 'lucide-vue-next'
 import StepDetail from './StepDetail.vue'
+import type { Component } from 'vue'
 import type { SessionStep } from '../types'
 
 const props = defineProps<{ step: SessionStep }>()
@@ -19,27 +34,29 @@ function toggle(): void {
   if (expandable.value) open.value = !open.value
 }
 
-const icon = computed(() => {
+// One icon set, one stroke weight (see `.lucide` in style.css). Status wins over
+// tool: an errored read has to read as an error first.
+const icon = computed<Component>(() => {
   const s = props.step
-  if (s.status === 'error') return '✕'
-  if (s.status === 'running') return '•'
+  if (s.status === 'error') return X
+  if (s.status === 'running') return CircleDot
   switch (s.tool) {
     case 'read':
-      return '◇'
+      return FileText
     case 'write':
     case 'edit':
     case 'save':
-      return '✎'
+      return Pencil
     case 'search':
     case 'find-files':
-      return '⌕'
+      return Search
     case 'terminal':
-      return '▶'
+      return Terminal
     case 'task':
-      return '⇢'
+      return CornerDownRight
     default:
-      if (isThinking.value) return '✳'
-      return isSteer.value ? '↯' : '›'
+      if (isThinking.value) return Sparkles
+      return isSteer.value ? Zap : ChevronRight
   }
 })
 
@@ -62,20 +79,20 @@ const counts = computed(() => {
     }"
   >
     <div class="line" :class="{ tappable: expandable }" @click="toggle">
-      <span class="ic">{{ icon }}</span>
+      <component :is="icon" class="icn-sm ic" />
       <span class="label">{{ step.label }}</span>
       <span v-if="step.target" class="target">{{ step.target }}</span>
       <span v-if="counts" class="counts">{{ counts }}</span>
-      <span v-if="expandable" class="chev" :class="{ open }">›</span>
+      <ChevronRight v-if="expandable" class="icn-sm chev" :class="{ open }" />
     </div>
 
     <div v-if="isSteer && step.steerText" class="steer">{{ step.steerText }}</div>
 
     <ul v-if="isTodo" class="todos">
       <li v-for="(t, i) in step.todos" :key="i" :class="t.status">
-        <span class="tick">{{
-          t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '◐' : '○'
-        }}</span>
+        <Check v-if="t.status === 'completed'" class="icn-sm tick" />
+        <CircleDot v-else-if="t.status === 'in_progress'" class="icn-sm tick" />
+        <Circle v-else class="icn-sm tick" />
         <span>{{ t.content }}</span>
       </li>
     </ul>
@@ -92,7 +109,8 @@ const counts = computed(() => {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   overflow: hidden;
   min-height: 26px;
@@ -102,9 +120,6 @@ const counts = computed(() => {
 }
 .ic {
   color: var(--text-faint);
-  flex-shrink: 0;
-  width: 14px;
-  text-align: center;
 }
 .step.running .ic {
   color: var(--accent);
@@ -122,22 +137,24 @@ const counts = computed(() => {
   color: var(--text);
 }
 .target {
+  /* mono-ok: a file path / command the step operated on. */
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .counts {
   flex-shrink: 0;
+  /* mono-ok: +/- line counts, read against the diff they summarise. */
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--text-faint);
 }
 .chev {
-  flex-shrink: 0;
   margin-left: auto;
-  padding-left: 6px;
   color: var(--text-faint);
   transition: transform 0.15s;
 }
@@ -149,8 +166,9 @@ const counts = computed(() => {
   padding: 6px 10px;
   border-left: 2px solid var(--accent);
   background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  font-size: 13px;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -161,8 +179,10 @@ const counts = computed(() => {
 }
 .todos li {
   display: flex;
+  align-items: flex-start;
   gap: 7px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   padding: 1px 0;
 }
@@ -175,6 +195,8 @@ const counts = computed(() => {
 }
 .tick {
   color: var(--accent);
-  flex-shrink: 0;
+  /* Centre on the FIRST line (--lh-sm = 20px box, 14px icon), not on a wrapped
+     block — align-items:center would float it to the middle of a 2-line item. */
+  margin-top: 3px;
 }
 </style>

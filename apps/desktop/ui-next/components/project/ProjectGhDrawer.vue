@@ -54,8 +54,9 @@
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
+        <!-- Always available, thread or not: a detail that failed to arrive is
+             exactly the one the user wants to retry. -->
         <button
-          v-if="thread"
           class="iconbtn"
           type="button"
           :title="t('projects.drawer.refresh')"
@@ -66,6 +67,33 @@
         >
           <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
+        <!-- PR only: hand the review off to a session in this project. The prompt
+             comes from Settings → Git (PR review prompt). -->
+        <button
+          v-if="kind === 'pr' && thread"
+          class="iconbtn"
+          type="button"
+          :title="t('projects.drawer.startReview')"
+          :aria-label="t('projects.drawer.startReview')"
+          :style="{
+            width: 'auto',
+            height: '28px',
+            padding: '0 9px',
+            gap: '5px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontSize: 'var(--fs-sm)',
+            lineHeight: 'var(--lh-sm)',
+            fontWeight: '510',
+            whiteSpace: 'nowrap',
+            color: 'var(--accent)',
+            borderColor: 'var(--accentBorder)',
+          }"
+          @click="emit('start-review')"
+        >
+          <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <span>{{ t('projects.drawer.startReviewShort') }}</span>
+        </button>
         <a
           v-if="thread?.url"
           class="iconbtn"
@@ -73,10 +101,29 @@
           target="_blank"
           rel="noopener"
           :title="t('projects.drawer.openOnGithub')"
+          :aria-label="t('projects.drawer.openOnGithub')"
           style="width: 28px; height: 28px"
         >
-          <Icon name="git" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </a>
+        <button
+          v-if="thread?.url"
+          class="iconbtn"
+          type="button"
+          :title="linkCopied ? t('projects.drawer.linkCopied') : t('projects.drawer.copyLink')"
+          :aria-label="t('projects.drawer.copyLink')"
+          :style="{
+            width: '28px',
+            height: '28px',
+            ...(linkCopied ? { color: 'var(--green)' } : {}),
+          }"
+          @click="copyLink"
+        >
+          <Icon
+            :name="linkCopied ? 'check' : 'copy'"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
+        </button>
         <button
           class="iconbtn"
           :title="t('projects.drawer.close')"
@@ -437,6 +484,8 @@ const emit = defineEmits<{
   (e: 'translate', lang: TranslateLang): void
   (e: 'update:comment-draft', v: string): void
   (e: 'reply', payload: { author: string; body: string }): void
+  // PR only: open a session on this pull request and send the review prompt.
+  (e: 'start-review'): void
 }>()
 
 const { t } = useI18n()
@@ -467,6 +516,23 @@ function onLangSelect(id: string): void {
   langMenu.close()
   emit('set-lang', id as ViewLang)
 }
+
+// Copy the thread's GitHub URL — the glyph flips to a check for a moment so the
+// click has an answer (no toast plumbing for a one-shot header action). The timer
+// is cleared on unmount so a copy right before closing can't tick into nothing.
+const linkCopied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+async function copyLink(): Promise<void> {
+  const url = props.thread?.url
+  if (!url) return
+  await copyText(url)
+  linkCopied.value = true
+  if (copiedTimer) clearTimeout(copiedTimer)
+  copiedTimer = setTimeout(() => (linkCopied.value = false), 1500)
+}
+onBeforeUnmount(() => {
+  if (copiedTimer) clearTimeout(copiedTimer)
+})
 
 // ── Content tabs (conditional on kind) ───────────────────────────────────────────
 // Conversation = the opening post (description). Comments = the discussion (reviews
@@ -669,6 +735,18 @@ function relativeWhen(iso: string): string {
 </script>
 
 <style scoped>
+/* Header toolbar: language + up to 6 actions no longer fit one row at the 320px
+   minimum drawer width. Wrap instead of squeezing — .iconbtn carries no
+   flex-shrink guard of its own, so a too-narrow row shrinks the 28px hit targets
+   under their own 14px glyphs. Wide drawers (the common case) look unchanged. */
+.ghdwhd {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.ghdwhd > .iconbtn {
+  flex: 0 0 auto;
+}
+
 /* Placeholder for prose still in flight (body / discussion). Same shimmer as the
    list skeleton: a soft band swept via background-position — paint only. */
 .ghsk-body {

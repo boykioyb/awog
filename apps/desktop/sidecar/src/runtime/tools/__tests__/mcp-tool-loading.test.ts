@@ -6,7 +6,7 @@
 // (vitest chưa nằm trong devDeps của sidecar — xem git/__tests__/discover.test.ts).
 import { describe, expect, it } from 'vitest'
 import { selectDirectMcpServers } from '../mcp-tools.js'
-import { alwaysLoadExternalMcp } from '../../claude-sdk/shared.js'
+import { alwaysLoadExternalMcp, buildSdkEnv } from '../../claude-sdk/shared.js'
 
 // Ngân sách nhánh Pi: 6000 byte tổng, 3000 byte cho một server.
 describe('selectDirectMcpServers (Pi)', () => {
@@ -82,5 +82,31 @@ describe('alwaysLoadExternalMcp (Claude SDK)', () => {
     expect(alwaysLoadExternalMcp({ timeoutMs: 30_000 }, 1)).toBe(false)
     // Đúng bằng trần thì vẫn được — trần là "lớn hơn mới chặn".
     expect(alwaysLoadExternalMcp({ timeoutMs: 5_000 }, 1)).toBe(true)
+  })
+})
+
+// Cờ bật tool-search của CLI (buildSdkEnv). Chính cờ này quyết định hai hàm chính
+// sách trên có tác dụng hay không: SDK hoãn tool "when tool search is enabled", mà
+// setting `toolSearchEnabled` của CLI mặc định FALSE — thiếu cờ thì mọi schema vẫn
+// bị inline vào từng request, và `alwaysLoad: false` chỉ là no-op.
+describe('buildSdkEnv — ENABLE_TOOL_SEARCH', () => {
+  it('bật trên OAuth (endpoint first-party)', () => {
+    const env = buildSdkEnv({ kind: 'oauth', accessToken: 'tok' })
+    expect(env.ENABLE_TOOL_SEARCH).toBe('true')
+  })
+
+  it('bật trên api-key không có baseURL (vẫn là api.anthropic.com)', () => {
+    const env = buildSdkEnv({ kind: 'apikey', apiKey: 'sk-test' })
+    expect(env.ENABLE_TOOL_SEARCH).toBe('true')
+  })
+
+  it('KHÔNG bật khi có baseURL riêng — endpoint đó có thể trả 400 với request shape mới', () => {
+    const env = buildSdkEnv({
+      kind: 'apikey',
+      apiKey: 'sk-test',
+      baseURL: 'http://localhost:11434',
+    })
+    expect(env.ENABLE_TOOL_SEARCH).toBeUndefined()
+    expect(env.ANTHROPIC_BASE_URL).toBe('http://localhost:11434')
   })
 })

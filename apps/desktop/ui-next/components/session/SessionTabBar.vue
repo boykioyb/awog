@@ -1,5 +1,21 @@
 <template>
   <div class="stabs">
+    <!-- Collapse / expand the session list column. Lives HERE, not in the list's own
+         toolbar, because the strip stays visible when the list is hidden — a button
+         inside the list could only ever collapse it. Hidden in compact mode, where the
+         list is already an off-canvas drawer toggled from the top bar. -->
+    <button
+      v-if="!compact"
+      class="stab-btn"
+      :class="{ on: listCollapsed }"
+      :aria-label="listCollapsed ? t('sessions.list.expand') : t('sessions.list.collapse')"
+      :title="listCollapsed ? t('sessions.list.expand') : t('sessions.list.collapse')"
+      :aria-expanded="!listCollapsed"
+      aria-controls="slistcol"
+      @click.stop="toggleList"
+    >
+      <Icon name="dock-left" style="width: var(--icon-sm); height: var(--icon-sm)" />
+    </button>
     <div ref="tablistEl" class="stabs-scroll" role="tablist" :aria-label="t('sessions.tabs.label')">
       <div
         v-for="(tab, i) in tabs"
@@ -264,6 +280,8 @@ import { placeMenu } from '~/utils/context-menu'
 const { t } = useI18n()
 const { tabs, openableProjects, projectPath, setActiveTab, closeTab } = useSessionTabs()
 const store = useSessionsStore()
+const { compact } = useResponsiveShell()
+const { collapsed: listCollapsed, toggle: toggleList } = useSessionListCollapse()
 const projectsStore = useProjectsStore()
 const { colorOf, setColor } = useProjectColors()
 const sc = useSidecar()
@@ -843,6 +861,12 @@ async function pDeleteAll() {
 .stab-btn:hover {
   color: var(--text);
   background: var(--bgHover);
+}
+/* List collapsed → the toggle reads as "on" (accent tint, not a gray fill), so the
+   missing column is explained by a lit button rather than looking like a broken layout. */
+.stab-btn.on {
+  color: var(--accent);
+  background: var(--accentDim);
 }
 /* Dropdowns under the strip (add picker / overflow). Mirrors SessionList's inline
    `.smenu` dropdowns: absolutely placed, above the page body. */

@@ -85,6 +85,26 @@ Issue và PR dùng **chung một bộ component + RPC**, phân biệt bằng `ki
 - **Prefetch theo hover:** rê chuột lên một dòng ≥140ms → warm core detail của dòng đó (`prefetchThread`). Click sau đó mở từ cache. Có debounce theo hover-intent nên quét chuột qua list không bắn gh mỗi dòng; request được dedupe theo số hiệu (hover + click dùng chung 1 promise).
 - **Cache detail:** thread + review timeline + diff + commits cache riêng theo key (project|repo|kind|account|number), TTL 1h. Reviews được fold vào thread đã cache nên mở lại là đủ. Approve / refresh thread / post comment invalidate đúng phần liên quan.
 
+### Header drawer — hành động
+
+Thanh header drawer: language picker · fullscreen · **Tải lại** · **Bắt đầu review** (PR) · **Mở trên GitHub** · **Copy liên kết** · đóng.
+
+- **Mở trên GitHub** dùng icon `external` (mũi tên thoát khung) — không phải icon `git`; **Copy liên kết** nằm ngay bên cạnh, glyph lật `copy → check` 1.5s làm phản hồi (không dựng toast cho một action một-nhịp).
+- **Tải lại** luôn hiện, kể cả khi chưa vẽ được thread nào — detail không về được chính là cái cần retry.
+- Header `flex-wrap` + `.iconbtn { flex: 0 0 auto }`: 7 control không đủ chỗ một dòng ở bề rộng drawer tối thiểu (320px), nên nó **xuống dòng** thay vì bóp nhỏ hit target 28px.
+
+### Bắt đầu review trong session (PR)
+
+Nút `scan` ở header drawer, **chỉ PR**. Bấm → mở **session mới trong đúng project của PR** và **gửi luôn** prompt review (không để ở draft — điểm của nút là review đã chạy khi user tới session).
+
+- Prompt lấy từ **Settings → Git → Prompt review PR** (`settings.git.prReviewPrompt`, persist theo `SYNCED_KEYS`). Để trống ⇒ mặc định `Review pull request {link-pr}`.
+- Token thay tại thời điểm bấm ([utils/pr-review-prompt.ts](../../apps/desktop/ui-next/utils/pr-review-prompt.ts)): `{link-pr}` (URL của PR — `gh.get` trả về, fallback dựng từ slug repo con đang chọn), `{number}`, `{title}`. Brace lạ giữ nguyên (template có thể chứa snippet/cú pháp tool khác).
+- Ví dụ cấu hình: `skill:strict-pr-review {link-pr}`.
+- **Account / model / effort:** Settings → Git có công tắc *Cấu hình LLM riêng cho session review* (`settings.git.prReviewLlm`, mặc định TẮT ⇒ kế thừa `project.llmDefaults` → default app như mọi session mới). Bật thì 4 picker (provider · account · model · mức suy luận) được áp lên session ngay sau `create()` qua `sessions.applyLlmConfig` — resolve giống `defaultsForNewSession` (account phải tồn tại trên provider đó, không thì lấy account active; model phải nằm trong danh sách account đó phục vụ). Session có `accountId` hợp lệ nên `reconcileSessionAccounts` không repoint lại.
+  - Picker **Account** có 3 trạng thái: **“theo config của session”** (`PR_REVIEW_ACCOUNT_INHERIT` — giữ account/provider mà session resolve từ project → app, chỉ áp effort + model *nếu* account đó phục vụ model ấy), **“account đang active”** (`accountId` undefined), hoặc một account cụ thể. Đổi provider chỉ xoá account **được ghim**; lựa chọn "theo session" giữ nguyên.
+  - **Lưu ý:** quota guard trong `create()` vẫn gác theo account **mặc định của project**, không theo account override này — trường hợp account mặc định cạn hạn mức mà account review còn thì vẫn bị chặn tạo session. Chỉ xảy ra khi bật `quota.blockNewSessionsOnThreshold`.
+- Session được `rename` thành `Review #<number>` (đặt tên trước lượt đầu nên auto-title của engine không ghi đè — nó chỉ chạy khi title còn là `New session`) và `setAboutGh(url)` để giữ liên kết 2 chiều với PR. `create()` trả `null` khi quota guard chặn ⇒ dừng, guard đã nói lý do.
+
 ### Dịch LLM theo từng thành phần
 
 - **Mặc định: bản gốc.** Không tự động dịch gì.

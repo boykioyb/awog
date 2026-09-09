@@ -16,15 +16,27 @@ const AnswerSchema = z.object({
 
 const Params = z.object({
   requestId: z.string().min(1),
+  // May be EMPTY on purpose: "decide for me" answers nothing, and a follow-up
+  // request may carry only what the user filled in so far.
   answers: z.array(AnswerSchema).max(4),
+  // Free text written beside the answers. Same L1 bound as an answer value.
+  response: z.string().max(4_000).optional(),
+  // The user wants another round of questions instead of proceeding.
+  followUp: z.boolean().optional(),
 })
 
 register('sessions.answerQuestion', async (raw) => {
   const params = Params.parse(raw)
-  const resolved = resolveQuestionRequest(params.requestId, params.answers)
+  const resolved = resolveQuestionRequest(params.requestId, {
+    answers: params.answers,
+    ...(params.response ? { response: params.response } : {}),
+    ...(params.followUp ? { followUp: true } : {}),
+  })
   log.info('sessions.answerQuestion', {
     requestId: params.requestId,
     answerCount: params.answers.length,
+    hasResponse: !!params.response,
+    followUp: !!params.followUp,
     resolved,
   })
   return { resolved }

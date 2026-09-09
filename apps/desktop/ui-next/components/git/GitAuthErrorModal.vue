@@ -53,7 +53,6 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>()
 
 const { t } = useI18n()
-const { openExternal } = useSidecar()
 
 const hintCopy = computed(() => {
   switch (props.error?.hint) {
@@ -92,7 +91,7 @@ async function copyCommand() {
 }
 
 function openGithub() {
-  void openExternal(githubUrl.value)
+  void useLinkOpen().openLink(githubUrl.value)
 }
 
 // Reset the transient "copied" tick whenever a fresh error opens the modal.

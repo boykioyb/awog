@@ -14,6 +14,7 @@ import type {
   SessionMessage,
   SessionSettings,
   SessionStep,
+  TodoItem,
 } from '../types/shared.js'
 import type {
   ApiSourcesConfig,
@@ -183,6 +184,12 @@ export interface RunNonStreamArgs {
   // session creation and ignores it on `resume` — there it has to ride on the
   // turn prompt, like the response style and the plan-mode directive.
   sessionChecklist?: string
+  // The same checklist as DATA, for the Claude SDK path only. There the model
+  // maintains the list through the CLI's per-item task tools, so the adapter has to
+  // seed its tracker with what was already persisted or a `TaskUpdate` addressing an
+  // earlier turn's item cannot be resolved (see claude-sdk/task-checklist.ts). The Pi
+  // path ignores it: TodoWrite sends the whole list every time.
+  sessionTodos?: TodoItem[]
   // Char sizes + lists of the bulk-loaded context sections (memory files /
   // custom agents / skills) that send-message already folded into
   // systemPromptAppend. The runtime forwards these into contextChars so the UI
@@ -207,6 +214,15 @@ export interface RunNonStreamArgs {
   // When set, `pendingText` is a slash command (e.g. '/compact') handled by the
   // runtime instead of a normal turn.
   slashCommand?: 'compact'
+  // `pendingText` is one of the Claude Code CLI's OWN slash commands (/goal,
+  // /context, /usage…), to be handed to the CLI VERBATIM. The Claude SDK path then
+  // skips every turn-prompt rider it normally prepends (<current_state>, background
+  // note, checklist, style, plan) and the fresh-session history prefix: the CLI only
+  // recognises a local command when the message STARTS with `/`, so a single
+  // prepended block turns it back into prose for the model (measured — a bare
+  // `/context` answers locally with 0 turns and 0 cost, the same text with a block in
+  // front of it goes to the API). Anthropic-only; runStream rejects it elsewhere.
+  nativeCommand?: boolean
   // Recent-context budget kept verbatim by `/compact` (ADR 0047). Manual compact
   // passes 0 (keep only the last turn — most aggressive); auto-compact omits it
   // to use Pi's DEFAULT_COMPACTION_SETTINGS.keepRecentTokens (20k).
@@ -236,7 +252,19 @@ export interface RunNonStreamArgs {
   budget?: {
     maxToolCalls?: number
     maxWallclockMs?: number
+    // USD CÒN LẠI của phiên cho lượt này (trần cứng trừ đi phần đã tiêu). Khác hai
+    // chiều trên ở chỗ nó chặn được một lượt đang cháy tiền GIỮA CHỪNG: nhánh Claude
+    // SDK đưa thẳng vào `maxBudgetUsd` (SDK dừng query, trả `error_max_budget_usd`),
+    // nhánh Pi kiểm ở biên mỗi tool call bằng usage đo được. Absent = không trần.
+    maxCostUsd?: number
   }
+  // Thư mục người dùng đính kèm cho lượt này (ngoài cwd của phiên), ĐÃ được
+  // send-message kiểm là đường dẫn tuyệt đối + là thư mục thật. Nhánh Claude SDK đưa
+  // thẳng vào `additionalDirectories` để tool của CLI ĐỌC được chúng — trước đây
+  // folder đính kèm chỉ vào prompt dưới dạng cây thư mục, model thấy tên file mà mở
+  // ra thì bị chặn vì nằm ngoài cwd. Nhánh Pi bỏ qua: ở đó fs tool gate bằng
+  // assertInsideWorkspace, nới ra là một quyết định bảo mật riêng.
+  extraDirs?: string[]
   // Current Claude Agent SDK session id for this AWOG session (ADR 0058, Anthropic
   // path only). When set, runStreamClaude resumes the SDK session so the model
   // gets prior history + native compaction from the SDK's own store; absent → a
@@ -374,6 +402,58 @@ async function runWithAuthRetry(
 }
 
 
+// Model dự phòng cho nhánh PI (đối trọng của `fallbackModel` mà Claude SDK làm sẵn).
+//
+// Provider quá tải là lỗi tạm thời: hôm nay nó giết cả lượt, người dùng chỉ còn cách
+// bấm Retry. Ở đây: nếu `AWOG_FALLBACK_MODEL` được đặt và lượt còn IM LẶNG (chưa
+// chunk nào, chưa step nào — cùng chứng cứ mà auth-retry dùng để biết chạy lại không
+// nhân đôi việc), chạy lại đúng một lần bằng model đó.
+//
+// CỐ Ý chỉ đọc env, không dùng bảng hạ bậc như nhánh Claude SDK: bảng đó là của
+// Anthropic, mà nhánh Pi chạy OpenAI/Google/custom — đoán bậc hạ cho một provider
+// mình không có bảng giá lẫn bảng năng lực là đoán mò trên tiền của người dùng.
+const OVERLOADED_HINTS = ['overloaded', 'rate limit', 'too many requests', '429', '503', '529']
+
+function looksOverloaded(err: unknown): boolean {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  return OVERLOADED_HINTS.some((h) => msg.includes(h))
+}
+
+async function runWithModelFallback(
+  args: RunNonStreamArgs,
+  cb: StreamCallbacks,
+  run: (a: RunNonStreamArgs, c: StreamCallbacks) => Promise<RunStreamResult>,
+): Promise<RunStreamResult> {
+  const fallback = process.env.AWOG_FALLBACK_MODEL?.trim()
+  if (!fallback || fallback === args.settings.modelId) return run(args, cb)
+  let emitted = false
+  const watched: StreamCallbacks = {
+    onChunk: (delta) => {
+      emitted = true
+      cb.onChunk(delta)
+    },
+    ...(cb.onStep
+      ? {
+          onStep: (step: SessionStep) => {
+            emitted = true
+            cb.onStep?.(step)
+          },
+        }
+      : {}),
+  }
+  try {
+    return await run(args, watched)
+  } catch (err) {
+    if (emitted || !looksOverloaded(err)) throw err
+    log.warn('model fallback: primary overloaded, replaying the turn', {
+      sessionId: args.sessionId,
+      from: args.settings.modelId,
+      to: fallback,
+    })
+    return run({ ...args, settings: { ...args.settings, modelId: fallback } }, cb)
+  }
+}
+
 export async function runStream(
   args: RunNonStreamArgs,
   cb: StreamCallbacks,
@@ -390,6 +470,16 @@ export async function runStream(
     return withSessionLock(args.sessionId, () => runStreamPi(args, cb))
   }
 
+  // A CLI-native slash command has no counterpart on Pi: refuse rather than send
+  // `/goal …` to another provider's model as prose (the UI only offers these on the
+  // Anthropic branch, so this is the boundary check behind that).
+  if (args.nativeCommand && args.settings.provider !== 'anthropic') {
+    throw new RpcError(
+      -32602,
+      'NATIVE_COMMAND_UNSUPPORTED: Claude CLI slash commands need the Anthropic provider',
+    )
+  }
+
   // Dual runtime (ADR 0058): the Anthropic provider runs on the Claude Agent SDK
   // (native tools + first-party prompt/loop + SDK session store); every other
   // provider stays on Pi (ADR 0029). Runtime modules are dynamically imported so
@@ -399,5 +489,5 @@ export async function runStream(
     return withSessionLock(args.sessionId, () => runWithAuthRetry(args, cb, runStreamClaude))
   }
   const { runStreamPi } = await import('../runtime/run-stream.js')
-  return withSessionLock(args.sessionId, () => runStreamPi(args, cb))
+  return withSessionLock(args.sessionId, () => runWithModelFallback(args, cb, runStreamPi))
 }

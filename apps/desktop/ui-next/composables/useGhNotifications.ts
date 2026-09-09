@@ -178,7 +178,7 @@ export function openNotification(n: GhNotification): void {
     })
     return
   }
-  if (n.url) void useSidecar().openExternal(n.url)
+  if (n.url) void useLinkOpen().openLink(n.url)
 }
 
 const notificationsSupported = (): boolean =>

@@ -32,6 +32,7 @@
 // already validated inside the tool (assertInsideWorkspace); the read it triggers
 // is gated by the same check again in the sidecar.
 import type { FilesBlock, SharedFile } from '~/composables/useSessionsData'
+import { formatBytes } from '~/utils/format-bytes'
 
 defineProps<{ block: FilesBlock }>()
 const { t } = useI18n()
@@ -41,14 +42,8 @@ function openFile(f: SharedFile): void {
   filePreview.open(f.path)
 }
 
-// Local, like the two other transcript-side size labels (SessionAttachmentsModal,
-// SessionWorkspacePanel). Third copy — worth lifting into utils/ in its own change.
-function fmtSize(n?: number): string {
-  if (n == null || n <= 0) return ''
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
-}
+// Unknown / zero size → no label at all (a "0 B" chip says nothing useful here).
+const fmtSize = (n?: number): string => (n == null || n <= 0 ? '' : formatBytes(n))
 </script>
 
 <style scoped>

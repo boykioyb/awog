@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import { ArrowUp, Camera, Check, Plus, Square, TriangleAlert, X, Zap } from 'lucide-vue-next'
 import { MAX_ATTACHMENT_BYTES, toAttachment } from '../attachments'
 import { AGENT_MODES } from '../catalog'
 import { showToast } from '../store'
@@ -113,7 +114,9 @@ function pickMode(mode: AgentMode): void {
       <div v-for="a in attachments" :key="a.id" class="att">
         <img v-if="a.type === 'image' && a.url" :src="a.url" alt="" />
         <span v-else class="doc">{{ a.name }}</span>
-        <button class="rm" title="Bỏ" @click="remove(a.id)">✕</button>
+        <button class="rm" title="Bỏ" aria-label="Bỏ tệp đính kèm" @click="remove(a.id)">
+          <X class="icn-xs" />
+        </button>
       </div>
     </div>
 
@@ -130,11 +133,25 @@ function pickMode(mode: AgentMode): void {
     </div>
 
     <div class="composer">
-      <button class="icon" title="Đính kèm" :disabled="busy" @click="filePicker?.click()">
+      <button
+        class="icon"
+        title="Đính kèm"
+        aria-label="Đính kèm tệp"
+        :disabled="busy"
+        @click="filePicker?.click()"
+      >
         <span v-if="busy" class="spin" />
-        <span v-else>＋</span>
+        <Plus v-else class="icn-lg" />
       </button>
-      <button class="icon" title="Chụp ảnh" :disabled="busy" @click="cameraPicker?.click()">◉</button>
+      <button
+        class="icon"
+        title="Chụp ảnh"
+        aria-label="Chụp ảnh"
+        :disabled="busy"
+        @click="cameraPicker?.click()"
+      >
+        <Camera class="icn-lg" />
+      </button>
 
       <!-- Enter inserts a NEWLINE (a phone keyboard's return key must not fire a
            turn); ⌘/Ctrl+Enter sends, for when a hardware keyboard is attached. -->
@@ -152,18 +169,21 @@ function pickMode(mode: AgentMode): void {
         v-if="streaming"
         class="stop"
         title="Dừng lượt"
+        aria-label="Dừng lượt"
         @click="emit('stop')"
       >
-        ■
+        <Square class="icn-sm" fill="currentColor" />
       </button>
       <button
         class="send"
         :class="{ steer: streaming }"
         :disabled="!canSend"
         :title="streaming ? 'Chen vào lượt' : 'Gửi'"
+        :aria-label="streaming ? 'Chen vào lượt đang chạy' : 'Gửi'"
         @click="submit"
       >
-        {{ streaming ? '↯' : '↑' }}
+        <Zap v-if="streaming" class="icn-lg" />
+        <ArrowUp v-else class="icn-lg" />
       </button>
     </div>
 
@@ -186,10 +206,11 @@ function pickMode(mode: AgentMode): void {
         @click="pickMode(m.id)"
       >
         <span class="mode-name" :class="{ ungated: m.ungated }">
-          {{ m.label }}<template v-if="m.ungated"> ⚠</template>
+          {{ m.label }}
+          <TriangleAlert v-if="m.ungated" class="icn-xs warn-ic" />
         </span>
         <span class="mode-hint">{{ m.hint }}</span>
-        <span v-if="m.id === mode" class="mode-tick">✓</span>
+        <Check v-if="m.id === mode" class="icn-sm mode-tick" />
       </button>
     </AppSheet>
   </div>
@@ -218,7 +239,7 @@ function pickMode(mode: AgentMode): void {
   width: 56px;
   height: 56px;
   object-fit: cover;
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   display: block;
 }
@@ -229,44 +250,64 @@ function pickMode(mode: AgentMode): void {
   max-width: 140px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  /* mono-ok: a file name — the user may retype or compare it against a path. */
   font-family: var(--mono);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The one control that cannot reach 44px on its own: it is a badge floating on a
+   56px thumbnail, so a 44px box would cover the image it belongs to. Compromise:
+   28px visible, and a transparent ::before that stretches the touch area to 44
+   without moving anything. */
 .rm {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
+  top: -8px;
+  right: -8px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--surface-3);
   color: var(--text);
-  font-size: 11px;
-  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.rm::before {
+  content: '';
+  position: absolute;
+  /* design-token-ok: -8px on each side turns the 28px box into a 44px touch area. */
+  inset: -8px;
+}
+.rm:active {
+  background: var(--surface-2);
 }
 .bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px 0;
+  padding: 4px 12px 0;
 }
 .chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
-  border-radius: 999px;
-  padding: 3px 12px;
-  font-size: 12px;
+  border-radius: var(--r-pill);
+  padding: 0 14px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
+}
+.chip:active {
+  background: var(--surface-2);
 }
 .chip.plan {
   color: var(--accent);
@@ -289,39 +330,49 @@ function pickMode(mode: AgentMode): void {
   position: relative;
   display: block;
   width: 100%;
+  min-height: var(--tap);
   text-align: left;
-  padding: 11px 34px 11px 12px;
+  padding: 11px 40px 11px 12px;
   margin-bottom: 8px;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   background: var(--surface-2);
   color: var(--text);
+}
+.mode-row:active {
+  background: var(--surface-3);
 }
 .mode-row.sel {
   border-color: var(--accent);
 }
 .mode-name {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
-.mode-name.ungated {
+.mode-name.ungated,
+.warn-ic {
   color: var(--warn);
 }
 .mode-hint {
   display: block;
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
 }
 .mode-tick {
   position: absolute;
-  top: 11px;
-  right: 12px;
+  top: 14px;
+  right: 14px;
   color: var(--accent);
 }
 .hint {
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .composer {
   display: flex;
@@ -331,51 +382,59 @@ function pickMode(mode: AgentMode): void {
 }
 textarea {
   flex: 1;
+  /* resize:none on purpose — a phone has no resize gutter, and the box already
+     grows with its content (watch on `text` above). */
   resize: none;
   max-height: 140px;
-  min-height: 42px;
+  min-height: var(--tap);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 20px;
+  border-radius: var(--r-panel);
   padding: 10px 14px;
-  outline: none;
-  line-height: 1.4;
+  line-height: var(--lh-md);
 }
 textarea:focus {
   border-color: var(--accent);
 }
 .icon {
-  width: 38px;
-  height: 42px;
+  width: var(--tap);
+  height: var(--tap);
   flex-shrink: 0;
   border: none;
   background: transparent;
   color: var(--text-dim);
-  font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.icon:active {
+  color: var(--text);
+}
+.icon:disabled {
+  opacity: 0.45;
 }
 .send,
 .stop {
-  width: 42px;
-  height: 42px;
+  width: var(--tap);
+  height: var(--tap);
   flex-shrink: 0;
   border: none;
   border-radius: 50%;
-  font-size: 19px;
-  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.send:active,
+.stop:active {
+  opacity: 0.6;
+}
 .send {
   background: var(--accent);
-  color: #04120d;
+  color: var(--on-accent);
 }
 .send.steer {
   background: var(--warn);
-  color: #1a1204;
+  color: var(--on-warn);
 }
 .send:disabled {
   opacity: 0.4;
@@ -384,6 +443,5 @@ textarea:focus {
   background: transparent;
   border: 1px solid var(--danger);
   color: var(--danger);
-  font-size: 13px;
 }
 </style>

@@ -84,7 +84,6 @@ const props = defineProps<{ template: ProjectTemplate }>()
 const emit = defineEmits<{ install: []; delete: []; 'check-update': [] }>()
 
 const { t } = useI18n()
-const sc = useSidecar()
 
 // Trang chủ đến từ danh mục do người lạ xuất bản ⇒ L1. Sidecar đã lọc lúc ghi và
 // lúc đọc `.install.json` (`templates/homepage.ts`), nhưng đây là bề mặt biến nó
@@ -100,14 +99,13 @@ const safeHomepage = computed<string>(() => {
   }
 })
 
-// Mở bằng đúng đường của app: shell.openExternal ở main process (gate theo scheme
-// lần nữa ở đó). KHÔNG <a target="_blank">.
+// Mở qua bộ chọn dùng chung (trong app / ra ngoài), rồi mới tới
+// shell.openExternal ở main process (gate theo scheme lần nữa ở đó).
+// KHÔNG <a target="_blank">.
 function openHomepage(): void {
   const url = safeHomepage.value
   if (!url) return
-  void sc.openExternal(url).catch((err) => {
-    console.warn('[templates] openExternal failed', err)
-  })
+  void useLinkOpen().openLink(url)
 }
 
 // Manifest grouped by kind, in canonical kind order, with a count chip per group.

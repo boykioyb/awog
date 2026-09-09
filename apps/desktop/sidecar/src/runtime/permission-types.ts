@@ -14,7 +14,7 @@
 // Keeping these local (not in the broad types/shared.ts) keeps the runtime
 // permission/tool contract co-located with the code that owns it (SoC).
 
-import type { ApiSource, SessionQuestion, SessionQuestionAnswer } from '../types/shared.js'
+import type { ApiSource, SessionQuestion, SessionQuestionReply } from '../types/shared.js'
 
 // ─── MCP server map ─────────────────────────────────────────────────────────
 // The already-resolved MCP server config the runtime tools consume. Upstream
@@ -151,4 +151,4 @@ export type AskUserQuestionFn = (
   toolCallId: string,
   questions: SessionQuestion[],
   signal?: AbortSignal,
-) => Promise<SessionQuestionAnswer[]>
+) => Promise<SessionQuestionReply>

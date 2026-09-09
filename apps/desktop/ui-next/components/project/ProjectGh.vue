@@ -66,6 +66,7 @@
       @approve="gh.approvePr"
       @update:comment-draft="(v) => (gh.commentDraft.value = v)"
       @reply="onReply"
+      @start-review="onStartReview"
     />
   </div>
 </template>
@@ -89,6 +90,8 @@ import {
 } from '~/composables/useProjectGh'
 import { useSidecar } from '~/composables/useSidecar'
 import { useSessionsStore } from '~/stores/sessions'
+import { DEFAULT_PR_REVIEW_PROMPT, useSettingsStore } from '~/stores/settings'
+import { fillPrReviewPrompt } from '~/utils/pr-review-prompt'
 
 const props = withDefaults(
   defineProps<{
@@ -105,6 +108,7 @@ const props = withDefaults(
 const sc = useSidecar()
 const { t } = useI18n()
 const sessions = useSessionsStore()
+const settings = useSettingsStore()
 
 // Selected child repo (relativePath). Default to the first GitHub repo; '.' (root)
 // when the project is itself a single repo. Re-resolves if the repo list changes.
@@ -223,13 +227,49 @@ async function onNewSession(item: GhThreadSummary): Promise<void> {
   await navigateTo('/sessions')
 }
 
+// "Start review" (PR drawer): open a session in THIS project bound to the PR and
+// send the review prompt from Settings → Git, with {link-pr} & co. filled in here
+// — the session gets the actual pull request, not a template. Sent rather than
+// drafted: the button's whole point is that the review is already running when the
+// user lands on the session.
+async function onStartReview(): Promise<void> {
+  const thread = gh.selected.value
+  if (props.kind !== 'pr' || !thread) return
+  const slug = selectedRepo.value?.ghSlug ?? null
+  // gh.get's own url when the detail has landed; the slug form covers a thread
+  // still painted from its list row (no url on the seed).
+  const url = thread.url || (slug ? `https://github.com/${slug}/pull/${thread.number}` : '')
+  const template = settings.git.prReviewPrompt.trim() || DEFAULT_PR_REVIEW_PROMPT
+  const prompt = fillPrReviewPrompt(template, {
+    url,
+    number: thread.number,
+    title: thread.title,
+  })
+  if (!prompt) return
+
+  // create() returns null when the quota guard blocks new sessions — it already
+  // surfaced the reason.
+  const id = sessions.create(props.projectId)
+  if (id == null) return
+  sessions.rename(id, t('projects.gh.reviewSessionTitle', { number: thread.number }))
+  if (url) sessions.setAboutGh(id, url)
+  // Settings → Git can pin the account / model / effort reviews run on; unset
+  // leaves the session on whatever a new session in this project would inherit.
+  const llm = settings.git.prReviewLlm
+  if (llm) sessions.applyLlmConfig(id, llm)
+  // Navigate first so the turn streams in front of the user instead of behind a
+  // drawer they still have to leave.
+  await navigateTo('/sessions')
+  void sessions.sendMessage(id, prompt)
+}
+
 // gh not installed / not authenticated → open the official install + auth docs in
 // the browser (login is interactive, so we point the user at the gh CLI flow).
 function onInstallGh(): void {
-  void sc.openExternal('https://cli.github.com/')
+  void useLinkOpen().openLink('https://cli.github.com/')
 }
 function onLoginHelp(): void {
-  void sc.openExternal('https://cli.github.com/manual/gh_auth_login')
+  void useLinkOpen().openLink('https://cli.github.com/manual/gh_auth_login')
 }
 
 // gh CLI accounts (login only — never a token). Best-effort; empty in browser-dev.

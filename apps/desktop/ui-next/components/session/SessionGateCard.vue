@@ -19,120 +19,9 @@
     </div>
   </div>
 
-  <!-- question — one AskUserQuestion call carries 1–4 questions answered together
-       (the sidecar parks once and resumes with the whole set). Multiple questions
-       render as tabs: choosing an answer auto-advances; only the last tab submits. -->
-  <div
-    v-else-if="block.kind === 'question'"
-    class="gcard"
-    :class="{ gate: !answered && !cancelled }"
-  >
-    <div class="gh">
-      <Icon name="alert" />
-      {{ qItems.length > 1 ? t('sessions.gate.questionMulti') : t('sessions.gate.question') }}
-    </div>
-
-    <!-- answered → read-only record -->
-    <template v-if="answered">
-      <div v-for="(it, qi) in qItems" :key="qi" class="qitem">
-        <div class="qp">{{ it.prompt }}</div>
-        <div class="resolved">
-          <Icon name="check" />
-          {{ t('sessions.gate.chose', { answer: it.answer ?? '' }) }}
-        </div>
-      </div>
-    </template>
-
-    <!-- cancelled by a turn abort while still parked -->
-    <template v-else-if="cancelled">
-      <div v-for="(it, qi) in qItems" :key="qi" class="qp">{{ it.prompt }}</div>
-      <div class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
-    </template>
-
-    <!-- interactive: one tab per question; pick → auto-advance; submit on last -->
-    <template v-else>
-      <div v-if="forms.length > 1" class="qtabs">
-        <button
-          v-for="(f, qi) in forms"
-          :key="qi"
-          class="qtab"
-          :class="{ on: qi === active, done: isAnswered(f) }"
-          @click="active = qi"
-        >
-          <Icon
-            v-if="isAnswered(f)"
-            name="check"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
-          {{ f.item.header || t('sessions.gate.qtab', { n: qi + 1 }) }}
-        </button>
-      </div>
-
-      <!-- active question body -->
-      <template v-for="(f, qi) in forms" :key="qi">
-        <div v-if="qi === active" class="qitem">
-          <div class="qp">{{ f.item.prompt }}</div>
-          <div class="qopts">
-            <!-- multi-select → checkboxes (no auto-advance: pick several, then Next) -->
-            <template v-if="f.item.multi">
-              <label
-                v-for="(o, oi) in f.item.options"
-                :key="oi"
-                class="qchk"
-                :class="{ on: f.sel.includes(o.label), 'has-desc': !!o.desc }"
-                @click="toggle(f, o.label)"
-              >
-                <span class="qcbox">
-                  <Icon
-                    v-if="f.sel.includes(o.label)"
-                    name="check"
-                    style="width: var(--icon-xs); height: var(--icon-xs)"
-                  />
-                </span>
-                <span class="qchktext">
-                  {{ o.label }}
-                  <!-- Same label/description hierarchy as the single-select branch
-                       below: the model's explanation is the reason to pick this one. -->
-                  <b v-if="o.desc">{{ o.desc }}</b>
-                </span>
-              </label>
-            </template>
-            <!-- single-select → radio-style buttons; choosing advances to next -->
-            <template v-else>
-              <button
-                v-for="(o, oi) in f.item.options"
-                :key="oi"
-                class="qopt"
-                :class="{ on: f.sel.includes(o.label) }"
-                @click="choose(f, qi, o.label)"
-              >
-                {{ o.label }}
-                <b v-if="o.desc">{{ o.desc }}</b>
-              </button>
-            </template>
-            <!-- "Other": free-text answer (always available, like Claude Code's
-                 AskUserQuestion). Enter advances / submits. -->
-            <input
-              v-model="f.other"
-              class="qother"
-              :placeholder="t('sessions.gate.otherPlaceholder')"
-              @keydown.enter="onEnter"
-            />
-          </div>
-        </div>
-      </template>
-
-      <div class="cact">
-        <button v-if="!isLast" class="btn pri sm" :disabled="!activeAnswered" @click="active++">
-          {{ t('sessions.gate.next') }}
-        </button>
-        <button v-else class="btn pri sm" :disabled="!canSubmit" @click="onSubmit">
-          <Icon name="check" />
-          {{ t('sessions.gate.submit') }}
-        </button>
-      </div>
-    </template>
-  </div>
+  <!-- question → form riêng: 3 dạng câu hỏi + ô ghi chú + 3 lối kết thúc không còn
+       vừa trong thẻ gộp này (SessionQuestionForm.vue). -->
+  <SessionQuestionForm v-else-if="block.kind === 'question'" :block="block" />
 
   <!-- perm -->
   <div
@@ -230,7 +119,8 @@
 </template>
 
 <script setup lang="ts">
-// Gate / status cards (blockHtml ~1466): plan, question (single/multi/answered),
+// Gate / status cards (blockHtml ~1466): plan, question (delegated to
+// SessionQuestionForm),
 // permission, steer note, error. Wired to the sessions store: each action drives
 // the real store (which in turn talks to the sidecar in IPC mode, or mutates the
 // no-bridge session locally). The DISPLAY is derived from `props.block` — the store's
@@ -239,8 +129,7 @@
 // (`forms` + the active tab) stays local UI working-state until "Submit" commits it.
 // Accepts the full block union; only the gate kinds match a branch (others render
 // nothing) so the parent's v-else can pass an un-narrowed AssistantBlock cleanly.
-import { questionAnswered } from '~/composables/useSessionsData'
-import type { AssistantBlock, QuestionItem } from '~/composables/useSessionsData'
+import type { AssistantBlock } from '~/composables/useSessionsData'
 import { useSessionPermissionRule } from '~/composables/useSessionPermissionRule'
 
 const props = defineProps<{ block: AssistantBlock }>()
@@ -278,57 +167,6 @@ const onPlanRun = (): void => {
 const onPlanEdit = (): void => {
   // Seed the composer with the plan text so the user can refine it before re-asking.
   if (props.block.kind === 'plan') store.seedComposer(planMarkdown.value)
-}
-
-// ── Question (AskUserQuestion: 1–4 questions answered together) ───────────────
-const qItems = computed<QuestionItem[]>(() =>
-  props.block.kind === 'question' ? props.block.items : [],
-)
-const answered = computed<boolean>(
-  () => props.block.kind === 'question' && questionAnswered(props.block),
-)
-// Per-question working state (chosen labels + free-text "Other"), UI-only until
-// Submit. Each question owns one `QForm` so the template iterates defined objects
-// (no array-index access). Built once — the card instance is per-block, so the
-// question set is fixed for its lifetime.
-type QForm = { item: QuestionItem; sel: string[]; other: string }
-const forms = ref<QForm[]>(qItems.value.map((item) => ({ item, sel: [], other: '' })))
-// Active tab (one per question). Choosing a single-select answer advances to the
-// next; the user can also click any tab to jump back.
-const active = ref(0)
-const isAnswered = (f: QForm): boolean => f.sel.length > 0 || f.other.trim().length > 0
-const isLast = computed<boolean>(() => active.value >= forms.value.length - 1)
-const activeAnswered = computed<boolean>(() => {
-  const f = forms.value[active.value]
-  return !!f && isAnswered(f)
-})
-const choose = (f: QForm, qi: number, label: string): void => {
-  f.sel = [label] // single-select: replace
-  if (qi < forms.value.length - 1) active.value = qi + 1 // auto-advance
-}
-const toggle = (f: QForm, label: string): void => {
-  const i = f.sel.indexOf(label)
-  if (i === -1) f.sel.push(label)
-  else f.sel.splice(i, 1)
-}
-// Enter in the "Other" field advances when valid (or submits on the last tab).
-const onEnter = (): void => {
-  if (isLast.value) onSubmit()
-  else if (activeAnswered.value) active.value += 1
-}
-// Submit needs every question to have at least one option or free-text answer.
-const canSubmit = computed<boolean>(() =>
-  forms.value.every((f) => f.sel.length > 0 || f.other.trim().length > 0),
-)
-const onSubmit = (): void => {
-  if (!located.value || sessionId.value == null || !canSubmit.value) return
-  const answers = forms.value.map((f) => {
-    const selected = [...f.sel]
-    const extra = f.other.trim()
-    if (extra) selected.push(extra)
-    return { header: f.item.header ?? '', selected }
-  })
-  store.answerQuestion(sessionId.value, msgIndex.value, answers)
 }
 
 // ── Permission ────────────────────────────────────────────────────────────────
@@ -407,36 +245,6 @@ const onRetry = (): void => {
   opacity: 0.5;
   cursor: default;
 }
-/* Selected single-select option mirrors the multi-select .qchk.on accent. */
-.qopt.on {
-  border-color: var(--accent);
-}
-/* Multi-select option description — same presentation as the single-select
-   `.qopt b` (prototype.css:442): own line, one step down the type scale, dimmed.
-   The label + description need a column wrapper because the global `.qchk` is a
-   centred flex row (checkbox | text). */
-.qchktext {
-  display: block;
-}
-.qchktext b {
-  display: block;
-  margin-top: 3px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 400;
-  color: var(--textDim);
-}
-/* Two-line row: pin the checkbox to the FIRST line instead of the block centre. */
-.qchk.has-desc {
-  align-items: flex-start;
-}
-.qchk.has-desc .qcbox {
-  margin-top: 2px;
-}
-/* Separate stacked questions (answered / cancelled read-only views). */
-.qitem + .qitem {
-  margin-top: 14px;
-}
 /* ── Permission rule preview + tier picker (ADR 0080) ────────────────────────
    Both rows sit between the "allow X on Y?" line and the action row, so the rule
    and its reach are read BEFORE the buttons. Each row wraps its explanation onto
@@ -483,39 +291,5 @@ const onRetry = (): void => {
 }
 .psaved {
   margin-top: 7px;
-}
-/* Tab strip — one tab per question. Active/answered use an accent tint (not a
-   gray surface fill), per the segmented-control convention. */
-.qtabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 11px;
-}
-.qtab {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-weight: 500;
-  padding: 6px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.qtab:hover {
-  border-color: var(--accent);
-  color: var(--text);
-}
-.qtab.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.qtab.done :deep(.icn) {
-  color: var(--accent);
 }
 </style>

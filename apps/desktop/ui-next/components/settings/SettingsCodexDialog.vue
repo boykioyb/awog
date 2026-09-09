@@ -100,6 +100,8 @@ const cleanup = () => {
 const openAuthUrl = async () => {
   if (!authUrl.value) return
   try {
+    // NOT through useLinkOpen: same reason as the Anthropic dialog — an OAuth flow
+    // belongs in the user's own browser, never in the agent's partition.
     await sidecar.openExternal(authUrl.value)
   } catch (err) {
     error.value = errorMessageFrom(err)

@@ -50,8 +50,11 @@ function short(command: string): string {
   flex: 0 0 auto;
   padding: 4px 10px;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 12px;
+  border-radius: var(--r-pill);
+  /* sm, not xs: the chip's content is a shell command line — text to read, not a
+     badge to glance at. */
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   background: var(--surface);
 }
@@ -78,15 +81,23 @@ function short(command: string): string {
   background: var(--danger);
 }
 .cmd {
+  /* mono-ok: a shell command line, copy-pasteable into a terminal. */
   font-family: var(--mono);
 }
 .exit {
+  /* mono-ok: process exit code, read next to the command it belongs to. */
   font-family: var(--mono);
   color: var(--text-faint);
 }
 @keyframes pulse {
   50% {
     opacity: 0.25;
+  }
+}
+/* The dot's colour already says "running"; the pulse is decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .chip.run .dot {
+    animation: none;
   }
 }
 </style>

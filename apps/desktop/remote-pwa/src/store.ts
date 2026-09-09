@@ -1,5 +1,5 @@
 import { computed, ref, watch } from 'vue'
-import { gateway } from './gateway'
+import { gateway, isDisconnect } from './gateway'
 import { loadCatalog, toAgentMode } from './catalog'
 import { buzz, notify, setBadge } from './notify'
 import { errMsg, randomId } from './util'
@@ -70,10 +70,26 @@ export interface CurrentSession {
   mode: AgentMode
   // messageId of the in-flight assistant turn — the steer/cancel target.
   streamingId: string | null
-  // Messages typed while a turn we can't steer is running (we reconnected
-  // mid-turn, so its messageId is unknown). Sent in order when the turn settles —
-  // never as a parallel turn.
+  // Outbox: messages typed while we had nowhere to send them — a turn we can't
+  // steer is running (we reconnected mid-turn, so its messageId is unknown), or
+  // the socket is down. Sent in order, one at a time, never as a parallel turn.
+  // Persisted per session (see readOutbox) so a reload / iOS discard doesn't eat
+  // what the user typed.
   pending: string[]
+  // A turn whose sendMessage RPC died with the socket. The desktop is very
+  // probably still running it, so it is neither failed nor re-sent — the next
+  // reconnect reconciles it (reconcileInterrupted).
+  interrupted: InterruptedTurn | null
+}
+
+export interface InterruptedTurn {
+  messageId: string
+  text: string
+  // Whether the text may be queued again if the reconcile proves the frame never
+  // reached the desktop. A plan approval carries a one-turn `execute` override
+  // and a message with attachments can't live in the outbox, so those two are
+  // reported to the user instead of silently re-sent in a weaker form.
+  requeueable: boolean
 }
 
 export const route = ref<Route>('list')
@@ -220,7 +236,8 @@ function blankCurrent(id: string, title: string, projectId: string | null): Curr
     settings: null,
     mode: 'ask',
     streamingId: null,
-    pending: [],
+    pending: loadPending(id),
+    interrupted: null,
   }
 }
 
@@ -230,7 +247,18 @@ export function openSession(summary: Pick<SessionSummary, 'id' | 'title' | 'proj
   current.value = blankCurrent(summary.id, summary.title, summary.projectId)
   route.value = 'session'
   gateway.subscribe(summary.id)
-  void refetchCurrent()
+  void hydrateAndFlush()
+}
+
+// Opening a session is — besides a reconnect — the other moment its outbox can go
+// out: the queue only flushes for the session currently on screen, and it may
+// have been persisted by an earlier app run.
+async function hydrateAndFlush(): Promise<void> {
+  const cur = current.value
+  if (!cur) return
+  await refetchCurrent()
+  if (current.value !== cur) return
+  if (!activeTurnIds.value.has(cur.id)) drainPending(cur)
 }
 
 export function openSessionById(sessionId: string, title = ''): void {
@@ -269,13 +297,142 @@ export async function refetchCurrent(): Promise<void> {
     // A full refetch is the source of truth: any gate resolved elsewhere is gone.
     cur.permission = null
     // A turn that was running when we dropped keeps streaming server-side; its
-    // events resume on the live subscription, so nothing is marked streaming here.
+    // events resume on the live subscription, so nothing is marked streaming
+    // here — reconcileInterrupted re-opens the bubble when sessions.turnActive
+    // confirms the turn is genuinely still in flight.
     cur.streamingId = null
   } catch (e) {
     cur.error = errMsg(e)
     cur.loading = false
   }
 }
+
+// Every transition into 'ready' (first connect + every reconnect) runs this:
+// refresh the list, re-hydrate the open session, settle a turn that was cut off
+// mid-flight, then flush the outbox. The order matters — the flush must be the
+// LAST step, after we know whether a turn is already running on this session.
+async function resumeAfterReconnect(): Promise<void> {
+  // Awaited (not fire-and-forget): it fills activeTurnIds, which is how we see a
+  // turn the DESKTOP started and therefore must not queue a message behind.
+  await loadSessions()
+  const cur = current.value
+  if (!cur) return
+  const interrupted = cur.interrupted
+  cur.interrupted = null
+  await refetchCurrent()
+  if (current.value !== cur) return
+  if (interrupted) await reconcileInterrupted(cur, interrupted)
+  if (current.value !== cur) return
+  if (!activeTurnIds.value.has(cur.id)) drainPending(cur)
+}
+
+// Settle a turn whose sendMessage RPC died with the socket. We never failed it and
+// we never blindly re-send it; we ask the engine what happened:
+//   - still running  ⇒ re-open the bubble, the live subscription carries on;
+//   - finished       ⇒ the refetched transcript already holds its final content;
+//   - finished AND absent from the transcript ⇒ the frame never reached the
+//     desktop (the sidecar persists the user message before the model runs and
+//     the assistant message before the turn deregisters), so the text is safe to
+//     queue again. That absence is the ONLY case we re-send.
+async function reconcileInterrupted(
+  cur: CurrentSession,
+  interrupted: InterruptedTurn,
+): Promise<void> {
+  const { messageId, text, requeueable } = interrupted
+  let active: boolean
+  try {
+    const res = await gateway.request<{ active: boolean }>('sessions.turnActive', {
+      sessionId: cur.id,
+      messageId,
+    })
+    active = res.active
+  } catch {
+    // Probe failed (dropped again / method refused). Leave the transcript as
+    // fetched — session.message.done still finalizes a running turn — and don't
+    // guess about re-sending.
+    return
+  }
+  if (current.value !== cur) return
+  if (active) {
+    const agent = ensureAgent(cur, messageId)
+    agent.streaming = true
+    agent.error = undefined
+    cur.streamingId = messageId
+    return
+  }
+  if (cur.messages.some((m) => m.id === messageId)) return
+  if (!requeueable) {
+    showToast('Tin nhắn chưa gửi được — hãy gửi lại')
+    return
+  }
+  enqueuePending(cur, text)
+  showToast('Tin nhắn chưa gửi được — đã xếp lại hàng')
+}
+
+// ─── Outbox ─────────────────────────────────────────────────────────────────
+
+// A tap on Send while the socket is down used to reject on the spot and lose the
+// text. Instead we park it here and flush on reconnect. Persisted per session so
+// an iOS tab discard / a reload keeps the queue; TEXT ONLY, because attachments
+// are megabytes of base64 and localStorage is a ~5MB budget shared with the
+// device token.
+const OUTBOX_KEY = 'awog.remote.outbox'
+
+function readOutbox(): Record<string, string[]> {
+  try {
+    const raw = localStorage.getItem(OUTBOX_KEY)
+    if (!raw) return {}
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const out: Record<string, string[]> = {}
+    for (const [id, list] of Object.entries(parsed as Record<string, unknown>)) {
+      if (Array.isArray(list)) out[id] = list.filter((t): t is string => typeof t === 'string')
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function writeOutbox(all: Record<string, string[]>): void {
+  try {
+    localStorage.setItem(OUTBOX_KEY, JSON.stringify(all))
+  } catch {
+    // Storage full or blocked: the queue still works for this page load.
+  }
+}
+
+function loadPending(sessionId: string): string[] {
+  return readOutbox()[sessionId] ?? []
+}
+
+// Mirror the in-memory queue to storage after every push/shift.
+function persistPending(cur: CurrentSession): void {
+  const all = readOutbox()
+  if (cur.pending.length) all[cur.id] = [...cur.pending]
+  else delete all[cur.id]
+  writeOutbox(all)
+}
+
+function enqueuePending(cur: CurrentSession, text: string): void {
+  cur.pending.push(text)
+  persistPending(cur)
+}
+
+function clearOutbox(sessionId: string): void {
+  const all = readOutbox()
+  if (!(sessionId in all)) return
+  delete all[sessionId]
+  writeOutbox(all)
+}
+
+// One queue, two reasons to be in it — the row in SessionView says which.
+export const pendingLabel = computed(() => {
+  const n = current.value?.pending.length ?? 0
+  if (n === 0) return ''
+  if (gateway.phase.value !== 'ready') return `${n} tin nhắn chờ gửi khi kết nối lại`
+  return `${n} tin nhắn đang chờ lượt hiện tại`
+})
 
 // ─── Send / steer / cancel ──────────────────────────────────────────────────
 
@@ -311,6 +468,10 @@ async function runTurn(
   cur.streamingId = messageId
   const mode = opts.mode ?? cur.mode
   const shouldTitle = isUntitled(cur.title) && countUserMessages(cur) <= 1
+  // A socket that dies mid-turn is NOT a failed turn — the desktop keeps running
+  // it. Set below so the `finally` neither finalizes the bubble nor drains the
+  // outbox behind a turn that is still going.
+  let dropped = false
   try {
     // No client timeout: a turn runs as long as it runs — `session.message.done`
     // (or a socket drop) settles it, not a stopwatch.
@@ -327,13 +488,30 @@ async function runTurn(
     )
     finalizeAgent(agent, res.text)
   } catch (e) {
-    agent.streaming = false
-    agent.error = errMsg(e)
+    if (isDisconnect(e)) {
+      // Leave the bubble streaming and remember the turn: re-sending it is not an
+      // option (messageId is NOT an idempotency key — a second sendMessage with
+      // the same id runs a SECOND model turn and appends a duplicate user
+      // message, see sidecar sessions.send-message.ts), so the reconnect asks the
+      // engine what actually happened instead. Painting `agent.error` here is the
+      // false "lỗi" the user kept seeing on a perfectly healthy run.
+      dropped = true
+      cur.interrupted = {
+        messageId,
+        text,
+        requeueable: !opts.mode && !opts.attachments?.length,
+      }
+    } else {
+      agent.streaming = false
+      agent.error = errMsg(e)
+    }
   } finally {
-    if (cur.streamingId === messageId) cur.streamingId = null
-    turnDoneSignal.value++
-    void loadSessions()
-    drainPending(cur)
+    if (!dropped) {
+      if (cur.streamingId === messageId) cur.streamingId = null
+      turnDoneSignal.value++
+      void loadSessions()
+      drainPending(cur)
+    }
   }
   if (shouldTitle) void autoTitle(cur.id, text)
 }
@@ -343,6 +521,17 @@ export function sendMessage(text: string, attachments?: SessionAttachment[]): vo
   const cur = current.value
   if (!cur) return
   if (!trimmed && !attachments?.length) return
+  if (!gateway.canSend()) {
+    // Nowhere to send it right now. Park the text rather than throw the tap away
+    // — except with attachments, which the outbox deliberately doesn't hold.
+    if (attachments?.length) {
+      showToast('Mất kết nối — gửi lại kèm ảnh khi đã kết nối')
+      return
+    }
+    enqueuePending(cur, trimmed)
+    showToast('Mất kết nối — đã xếp hàng, gửi khi kết nối lại')
+    return
+  }
   void runTurn(trimmed, { ...(attachments?.length ? { attachments } : {}) })
 }
 
@@ -353,11 +542,18 @@ export async function steer(text: string): Promise<void> {
   const cur = current.value
   const trimmed = text.trim()
   if (!cur || !trimmed) return
+  if (!gateway.canSend()) {
+    // Steering needs a live socket by definition; queue the text as a follow-up
+    // turn instead of losing it.
+    enqueuePending(cur, trimmed)
+    showToast('Mất kết nối — đã xếp hàng, gửi khi kết nối lại')
+    return
+  }
   const messageId = cur.streamingId
   if (!messageId) {
     // Turn running but started before we connected (no messageId to steer into) —
     // queue it rather than firing a second, parallel turn at the same session.
-    cur.pending.push(trimmed)
+    enqueuePending(cur, trimmed)
     showToast('Đã xếp hàng — gửi khi lượt hiện tại xong')
     return
   }
@@ -383,10 +579,16 @@ export async function cancelTurn(): Promise<void> {
   }
 }
 
-// Send the next queued message once the running turn settles (one at a time).
+// Send the next queued message once the running turn settles — ONE at a time, so
+// the "a session runs exactly one turn at a time" invariant holds however many
+// messages piled up while we were offline. `interrupted` counts as in-flight: a
+// turn the desktop may still be running has not settled just because our socket
+// did.
 function drainPending(cur: CurrentSession): void {
-  if (cur.streamingId || !cur.pending.length) return
+  if (cur.streamingId || cur.interrupted || !cur.pending.length) return
+  if (!gateway.canSend()) return
   const next = cur.pending.shift()
+  persistPending(cur)
   if (next) void runTurn(next)
 }
 
@@ -519,6 +721,7 @@ export async function renameSession(sessionId: string, title: string): Promise<v
 export async function deleteSession(sessionId: string): Promise<void> {
   try {
     await gateway.request('sessions.delete', { id: sessionId })
+    clearOutbox(sessionId)
     sessionList.value = sessionList.value.filter((s) => s.id !== sessionId)
     if (current.value?.id === sessionId) closeSession()
     showToast('Đã xoá session')
@@ -662,6 +865,9 @@ function onGatewayEvent(evt: GatewayEvent): void {
         finalizeAgent(agent, p.text)
       }
       if (cur.streamingId === p.messageId) cur.streamingId = null
+      // The authoritative "it settled" signal: an interrupted turn needs no
+      // reconcile once its own done event lands.
+      if (cur.interrupted?.messageId === p.messageId) cur.interrupted = null
       turnDoneSignal.value++
       drainPending(cur)
       if (document.hidden) {
@@ -688,13 +894,13 @@ export function initStore(): void {
   started = true
   gateway.onEvent(onGatewayEvent)
   // Each transition into 'ready' (first connect + every reconnect) refreshes the
-  // list and re-hydrates the open session (full refetch resume — AC-RES-1/2).
+  // list, re-hydrates the open session (full refetch resume — AC-RES-1/2),
+  // settles an interrupted turn and flushes the outbox.
   watch(
     () => gateway.readySignal.value,
     () => {
       void loadCatalog()
-      void loadSessions()
-      if (current.value) void refetchCurrent()
+      void resumeAfterReconnect()
     },
   )
   watch(awaitingCount, (n) => setBadge(n))

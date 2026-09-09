@@ -20,7 +20,7 @@ const html = computed(() => renderMarkdown(props.src))
 /* Ported from ui-next SessionMarkdownHtml.vue, theme tokens remapped to the PWA
    palette. v-html content is unscoped, so all selectors go through :deep(). */
 .mdinline {
-  line-height: 1.6;
+  line-height: var(--lh-prose);
   word-break: break-word;
 }
 .mdinline :deep(:first-child) {
@@ -41,12 +41,16 @@ const html = computed(() => renderMarkdown(props.src))
   font-style: italic;
 }
 .mdinline :deep(code) {
+  /* mono-ok: inline code. */
   font-family: var(--mono);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--r-xs);
   padding: 0 4px;
-  font-size: 0.92em;
+  /* No line-height here on purpose: a length-based leading is INHERITED as a
+     length, so a smaller inline child keeps the paragraph's line box instead of
+     shrinking it and making the line ragged. */
+  font-size: var(--fs-sm);
   overflow-wrap: anywhere;
 }
 .mdinline :deep(pre) {
@@ -55,9 +59,10 @@ const html = computed(() => renderMarkdown(props.src))
   padding: 10px 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--r-sm);
   overflow-x: auto;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 /* Shiki emits inline colors on a <pre class="shiki"> — clear its own bg so the
    .mdinline pre chrome shows through, matching desktop. */
@@ -68,7 +73,7 @@ const html = computed(() => renderMarkdown(props.src))
   background: none;
   border: 0;
   padding: 0;
-  font-size: 0.92em;
+  font-size: inherit;
   white-space: pre;
 }
 .mdinline :deep(ul),
@@ -114,17 +119,20 @@ const html = computed(() => renderMarkdown(props.src))
 .mdinline :deep(h4),
 .mdinline :deep(h5) {
   font-weight: 600;
-  line-height: 1.3;
+  /* Token steps instead of the old em multiples: 1.3em × 15px was 19.5px, i.e. a
+     heading rendered on a half pixel. */
+  font-size: var(--fs-md);
+  line-height: var(--lh-lg);
   margin: 16px 0 8px;
 }
 .mdinline :deep(h1) {
-  font-size: 1.3em;
+  font-size: var(--fs-xl);
 }
 .mdinline :deep(h2) {
-  font-size: 1.18em;
+  font-size: var(--fs-lg);
 }
 .mdinline :deep(h3) {
-  font-size: 1.08em;
+  font-size: var(--fs-md);
 }
 .mdinline :deep(hr) {
   border: 0;
@@ -138,7 +146,8 @@ const html = computed(() => renderMarkdown(props.src))
   overflow-x: auto;
   border-collapse: collapse;
   margin: 0 0 12px;
-  font-size: 0.96em;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .mdinline :deep(th),
 .mdinline :deep(td) {
@@ -157,7 +166,7 @@ const html = computed(() => renderMarkdown(props.src))
 .mdinline :deep(img) {
   max-width: 100%;
   height: auto;
-  border-radius: 6px;
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
 }
 /* KaTeX display equations scroll horizontally on narrow screens instead of overflowing. */

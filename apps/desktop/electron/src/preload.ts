@@ -1,5 +1,53 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
+// Shapes mirrored from main's browser.ts (Rect / TabInfo). Declared, not imported:
+// a sandboxed preload cannot pull in main-process modules — same reason the
+// channel literals are repeated here.
+type BrowserRect = { x: number; y: number; width: number; height: number }
+type BrowserTabInfo = {
+  tabId: string
+  url: string
+  title: string
+  active: boolean
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  shown: boolean
+  shownElsewhere: boolean
+}
+type BrowserTabList = { tabs: BrowserTabInfo[]; activeTabId: string | null }
+type BrowserSelection = { text: string; url: string; title: string }
+type BrowserPick = {
+  selector: string
+  text: string
+  html: string
+  url: string
+  title: string
+}
+type BrowserPageContext = { url: string; title: string; text: string }
+type BrowserSites = { mode: 'off' | 'allowlist'; hosts: string[] }
+type BrowserImportSource = {
+  id: string
+  label: string
+  profiles: { dir: string; name: string; email: string; hasCookies: boolean }[]
+}
+type BrowserImportReport = {
+  browser: string
+  profile: string
+  cookies: {
+    total: number
+    imported: number
+    appBound: number
+    undecryptable: number
+    rejected: number
+    expired: number
+    keyUnavailable: boolean
+  } | null
+  localStorage: { staged: boolean; bytes: number } | null
+  indexedDb: { staged: boolean; bytes: number } | null
+  needsRestart: boolean
+}
+
 // Preload bridge — runs sandboxed (contextIsolation + sandbox). Exposes a single
 // `window.awog` object; the renderer never touches ipcRenderer/Node directly
 // (security invariant #4). The shape mirrors the old useSidecar public API so
@@ -79,7 +127,11 @@ type PetCommand =
   | { kind: 'permission'; requestId: string; decision: 'allow' | 'deny' }
   | { kind: 'toggle' }
   | { kind: 'dismiss' }
-type PetPrefs = { enabled: boolean; scale: number; pos: { x: number; y: number } | null }
+type PetPrefs = {
+  enabled: boolean
+  scale: number
+  pos: { x: number; y: number } | null
+}
 // Mobile Remote Control (ADR 0067). Public device metadata only — no tokenHash.
 type RemoteDevice = {
   id: string
@@ -95,7 +147,12 @@ type GatewayStatus = {
   port: number
   bound: boolean
 }
-type PairingInfo = { code: string; expiresAt: number; host: string; port: number }
+type PairingInfo = {
+  code: string
+  expiresAt: number
+  host: string
+  port: number
+}
 
 const awog = {
   // Returns the JSON-RPC result, or rejects with the RpcErrorShape so the
@@ -174,6 +231,74 @@ const awog = {
     // this preload is sandboxed, so it can't import main-process modules.
     ipcRenderer.on('session:windowsChanged', listener)
     return () => ipcRenderer.removeListener('session:windowsChanged', listener)
+  },
+  // Embedded browser (ADR 0086) — the "Browser" view of the session workspace
+  // panel borrows the agent's Chromium tab into a rect of THIS window. Main
+  // resolves the host window from the sender, so a renderer can only ever fill
+  // its own window; the rect is clamped on the other side.
+  browser: {
+    attach: (rect: BrowserRect, tabId?: string): Promise<BrowserTabInfo> =>
+      ipcRenderer.invoke('browser:attach', { rect, tabId }),
+    setBounds: (rect: BrowserRect, tabId?: string): Promise<void> =>
+      ipcRenderer.invoke('browser:bounds', { rect, tabId }),
+    // Take the view off screen (tab switched away, panel closed, modal opened over
+    // it). The page keeps running — this is geometry, not a close.
+    detach: (): Promise<void> => ipcRenderer.invoke('browser:detach'),
+    tabs: (): Promise<BrowserTabList> => ipcRenderer.invoke('browser:tabs'),
+    open: (url: string, tabId?: string): Promise<BrowserTabInfo> =>
+      ipcRenderer.invoke('browser:open', { url, tabId }),
+    // `wait: false` = trả về ngay khi tab đã tạo (đường người dùng bấm link); mặc
+    // định chờ trang tải xong, giữ nguyên hành vi cho đường của model.
+    newTab: (
+      url?: string,
+      opts?: { wait?: boolean },
+    ): Promise<{ tabId: string; url: string; title: string }> =>
+      ipcRenderer.invoke('browser:newTab', { url, wait: opts?.wait !== false }),
+    selectTab: (tabId: string): Promise<BrowserTabInfo> =>
+      ipcRenderer.invoke('browser:selectTab', tabId),
+    closeTab: (tabId: string): Promise<{ closed: string; remaining: number }> =>
+      ipcRenderer.invoke('browser:closeTab', tabId),
+    back: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:back', tabId),
+    forward: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:forward', tabId),
+    reload: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:reload', tabId),
+    popout: (): Promise<void> => ipcRenderer.invoke('browser:popout'),
+    // Profile import: read the user's real Chrome/Edge/Brave/Arc profile into the
+    // agent's jar. Ids only — main resolves them to paths itself.
+    listBrowsers: (): Promise<BrowserImportSource[]> => ipcRenderer.invoke('browser:listBrowsers'),
+    importProfile: (
+      browserId: string,
+      profileDir: string,
+      parts: { cookies: boolean; localStorage: boolean; indexedDb: boolean },
+    ): Promise<BrowserImportReport> =>
+      ipcRenderer.invoke('browser:importProfile', {
+        browserId,
+        profileDir,
+        parts,
+      }),
+    // Wipe everything the agent's browser holds — the undo for an import.
+    clearData: (): Promise<void> => ipcRenderer.invoke('browser:clearData'),
+    // Staged LevelDB stores only land at boot, so finishing an import needs a
+    // restart. Confirm in the renderer first: this kills running turns.
+    relaunch: (): Promise<void> => ipcRenderer.invoke('browser:relaunch'),
+    // ── ADR 0086 phần E — read + point, all user-initiated ────────────────
+    selection: (tabId?: string): Promise<BrowserSelection> =>
+      ipcRenderer.invoke('browser:selection', tabId),
+    // Resolves when the user clicks an element, or null when they cancel.
+    pickElement: (tabId?: string): Promise<BrowserPick | null> =>
+      ipcRenderer.invoke('browser:pickElement', tabId),
+    cancelPick: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:cancelPick', tabId),
+    pageContext: (tabId?: string): Promise<BrowserPageContext> =>
+      ipcRenderer.invoke('browser:pageContext', tabId),
+    saveScreenshot: (root: string, tabId?: string): Promise<{ path: string }> =>
+      ipcRenderer.invoke('browser:saveScreenshot', { root, tabId }),
+    sites: (): Promise<BrowserSites> => ipcRenderer.invoke('browser:sites'),
+    setSites: (sites: BrowserSites): Promise<void> => ipcRenderer.invoke('browser:setSites', sites),
+    // Tab list changes — including the ones the AGENT causes. Returns unsubscribe.
+    onChanged(handler: (list: BrowserTabList) => void): () => void {
+      const listener = (_e: unknown, list: BrowserTabList): void => handler(list)
+      ipcRenderer.on('browser:changed', listener)
+      return () => ipcRenderer.removeListener('browser:changed', listener)
+    },
   },
   // Close the calling window — used by a preview popout's own ✕ / Esc. Main resolves
   // the target from the sender, so this can never close another window.

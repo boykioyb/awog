@@ -23,6 +23,11 @@
 
   <!-- Shared "translate the highlighted text" popover (selection-to-translate). -->
   <SelectionTranslatePopover />
+
+  <!-- "Open this link in the app or outside?" (ADR 0086 phần C). Also the place
+       the delegated link-click listener is installed, so every <a> in whichever
+       surface mounts this stack gets the same choice. -->
+  <LinkOpenHost />
 </template>
 
 <script setup lang="ts">

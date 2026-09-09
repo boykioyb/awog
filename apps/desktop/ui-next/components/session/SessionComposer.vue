@@ -520,9 +520,12 @@ import { pushActionToast } from '~/composables/useActionToasts'
 import {
   BUILTIN_COMMANDS,
   findBuiltin,
+  isOfferableCliCommand,
+  MENTION_PAGE,
   type SlashItem,
   type MentionRow,
 } from './session-composer-commands'
+import { useBrowserContext, openBrowserTab } from '~/composables/useBrowserContext'
 import {
   parseSlashInvocation,
   findInvocableCommand,
@@ -582,8 +585,20 @@ const draft = computed<string>({
 // session's project (lazy-loaded + cached, see useComposerData). Built-in slash
 // commands (mode/compact/style) come from the static BUILTIN_COMMANDS catalog.
 const projectIdRef = computed(() => store.active?.project ?? null)
-const data = useComposerData(projectIdRef)
+// The Claude CLI's own commands (/goal, /context, /usage…) exist only on the Claude
+// SDK branch, so the catalogue is fetched only there — and from the cwd the turn will
+// run in (dragged folder wins over the project path, as in sessions.sendMessage).
+const cliCommandsEnabled = computed(() => store.activeProvider === 'anthropic')
+const cliWorkspacePath = computed(() => store.active?.workspaceFolder ?? null)
+const data = useComposerData(projectIdRef, {
+  enabled: cliCommandsEnabled,
+  workspacePath: cliWorkspacePath,
+})
 const wiki = useWikiStore()
+// Trình duyệt nhúng ↔ composer (ADR 0086): `@page` chèn trang đang mở thành khối
+// context. Cùng composable mà chrome của tab Browser gọi cho "chọn element" và "trích
+// đoạn bôi đen" — một nguồn sự thật cho khuôn khối context.
+const browserCtx = useBrowserContext()
 const agentHandle = (name: string) => name.toLowerCase().replace(/\s+/g, '-')
 
 // Transient command feedback line (e.g. "/compact running…", "Mode → Plan") shown
@@ -604,8 +619,16 @@ onBeforeUnmount(() => {
 // Dispatch a built-in `/command` picked from the menu. Mode flips the session's
 // permission mode; compact summarises older turns (real RPC, applies next turn);
 // style opens the response-style popover. These are ACTIONS — never sent as text.
-function onCommand(builtinId: string) {
+function onCommand(builtinId: string, arg = '') {
   const cmd = findBuiltin(builtinId)
+  // `/browser` là hành động của app, không ghi gì vào session (khác mode/compact/style),
+  // nên nó chạy TRƯỚC guard activeId — mở được cả khi chưa có session nào.
+  if (cmd?.action.type === 'browser') {
+    // Không showNotice ở đây: useBrowserContext tự toast (đã mở / lỗi / không có shell
+    // desktop) — một nguồn phản hồi duy nhất cho mọi lối vào trình duyệt.
+    void openBrowserTab(arg)
+    return
+  }
   if (!cmd || store.activeId == null) return
   if (cmd.action.type === 'mode') {
     store.setMode(store.activeId, cmd.action.mode)
@@ -1056,10 +1079,29 @@ function pickQueue() {
   void onQueue()
 }
 
+// A draft that IS a built-in invocation carrying an argument (`/browser example.com`).
+// Parsed here, not only in the menu: plain Enter with the autocomplete closed (Esc, or
+// a query that matched nothing) would otherwise SEND the line to the model, and these
+// built-ins are user actions — never prompts. Returns true when it dispatched.
+function dispatchBuiltinDraft(): boolean {
+  const m = /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(draft.value.trim())
+  if (!m) return false
+  const cmd = BUILTIN_COMMANDS.find((c) => c.name === m[1] && c.takesArg)
+  if (!cmd) return false
+  draft.value = ''
+  userSizedManually.value = false
+  closeAutocomplete()
+  onCommand(cmd.id, (m[2] ?? '').trim())
+  nextTick(grow)
+  return true
+}
+
 // Enter / primary action router: idle → fresh turn; streaming → steer or queue.
 function send() {
   // Locked while /compact runs — no fresh turn, no steer, no queue.
   if (compacting.value) return
+  // Hành động của người dùng, không phải tin nhắn: chạy kể cả khi session đang bận.
+  if (dispatchBuiltinDraft()) return
   if (busy.value) {
     if (hasContent.value) onStreamPrimary()
     return
@@ -1116,6 +1158,11 @@ const mentionQuery = ref('')
 // the entity rows above them — agents + skills alone are ~50 on a workspace that
 // uses both tiers, and a cap that stops inside them would hide files completely.
 const RESULT_CAP = 80
+// The `/` menu has its own, much higher cap: with the Claude CLI catalogue merged in
+// (~60 rows after dedupe) on top of AWOG's own built-ins + commands + skills, an
+// empty `/` query is well past 80 entries, and a cap that cut into the CLI section
+// would hide exactly the commands this list exists to expose. The dropdown scrolls.
+const SLASH_RESULT_CAP = 240
 
 function caretText(): string {
   const el = ta.value
@@ -1159,7 +1206,52 @@ const slashMatches = computed<SlashItem[]>(() => {
         (q === '' || s.id.toLowerCase().startsWith(q) || s.name.toLowerCase().includes(q)),
     )
     .map((s) => ({ key: `s:${s.id}`, label: s.id, desc: s.description, kind: 'skill' }))
-  return [...builtins, ...cmds, ...sk].slice(0, RESULT_CAP)
+  const cli: SlashItem[] = nativeCliCommands.value
+    .filter(
+      (c) =>
+        q === '' ||
+        c.name.toLowerCase().startsWith(q) ||
+        (c.aliases ?? []).some((a) => a.toLowerCase().startsWith(q)),
+    )
+    .map((c) => ({
+      key: `x:${c.name}`,
+      label: c.name,
+      // The CLI leaves some descriptions blank; fall back to the argument hint so
+      // the row still says something about how the command is called.
+      desc: c.description || c.argumentHint,
+      kind: 'cli',
+    }))
+  // CLI rows last: AWOG's own entries are what the user authored, and the CLI list
+  // is long (~60 rows once the query is empty).
+  return [...builtins, ...cmds, ...sk, ...cli].slice(0, SLASH_RESULT_CAP)
+})
+
+// Claude-CLI commands offered as NATIVE rows: everything the CLI advertises, minus
+// its internal/AWOG-owned entries (isOfferableCliCommand) and minus every name AWOG
+// already serves itself. The overlap is real — the CLI advertises the same skills we
+// scan from `.claude/skills`, and a skill must keep AWOG's behaviour (the id goes to
+// the model with our own catalogue) rather than silently switching to CLI expansion.
+const nativeCliCommands = computed(() => {
+  if (!cliCommandsEnabled.value) return []
+  const ours = new Set<string>(BUILTIN_COMMANDS.map((c) => c.name))
+  for (const c of data.userCommands.value) {
+    if (c.enabled !== false && inScope(c.source, c.projectId)) ours.add(c.id)
+  }
+  for (const sk of data.skills.value) {
+    if (inScope(sk.source, sk.projectId)) ours.add(sk.id)
+  }
+  return data.cliCommands.value.filter((c) => isOfferableCliCommand(c.name) && !ours.has(c.name))
+})
+
+// Name → CLI command, including aliases (/cost and /stats both resolve to /usage),
+// so a typed alias is recognised as native too.
+const nativeCliByName = computed(() => {
+  const map = new Map<string, string>()
+  for (const c of nativeCliCommands.value) {
+    map.set(c.name, c.name)
+    for (const a of c.aliases ?? []) map.set(a, c.name)
+  }
+  return map
 })
 
 // `@` results, in pick order: agents (by handle), skills (by id), wiki pages, then
@@ -1176,6 +1268,21 @@ const mentionMatches = computed<MentionRow[]>(() => {
   const unprefixed = (prefix: string) => (q.startsWith(prefix) ? q.slice(prefix.length) : q)
   const qSkill = unprefixed('skill:')
   const qWiki = unprefixed('wiki:')
+  // `@page` — hàng HÀNH ĐỘNG, đứng đầu như built-in ở menu `/`: một mục ngắn người dùng
+  // gọi đúng tên, còn agent/skill/wiki/file là phần đuôi dài. Luôn hiện, kể cả trong
+  // browser-dev: chọn nó lúc không có trình duyệt thì attachPage() toast một câu chứ
+  // không chèn khối rỗng (cùng đường xử lý với "chưa mở trang nào").
+  const pageRows: MentionRow[] = MENTION_PAGE.startsWith(q)
+    ? [
+        {
+          key: 'page',
+          kind: 'page',
+          insert: MENTION_PAGE,
+          label: t('sessions.composer.mentionPageLabel'),
+          hint: t('sessions.composer.mentionPageHint'),
+        },
+      ]
+    : []
   const agents: MentionRow[] = data.agents.value
     .filter(
       (a) => q === '' || agentHandle(a.name).startsWith(q) || a.name.toLowerCase().includes(q),
@@ -1241,7 +1348,7 @@ const mentionMatches = computed<MentionRow[]>(() => {
     label: f.name,
     hint: f.path,
   }))
-  return [...agents, ...skills, ...wikiRows, ...files].slice(0, RESULT_CAP)
+  return [...pageRows, ...agents, ...skills, ...wikiRows, ...files].slice(0, RESULT_CAP)
 })
 
 function refreshAutocomplete() {
@@ -1301,9 +1408,12 @@ function applySlash(i: number) {
   const rest = draft.value.replace(/^\/\S*\s?/, '')
   if (item.kind === 'builtin' && item.builtinId) {
     // Built-ins are actions: strip the typed token and dispatch (no text insert).
-    draft.value = rest
+    // Built-in có đối số (`/browser <url>`) ăn luôn phần còn lại: đó là tham số, không
+    // phải text người dùng còn muốn giữ trong ô soạn.
+    const takesArg = findBuiltin(item.builtinId)?.takesArg === true
+    draft.value = takesArg ? '' : rest
     closeAutocomplete()
-    onCommand(item.builtinId)
+    onCommand(item.builtinId, takesArg ? rest.trim() : '')
   } else {
     // User command / skill → insert `/id ` (expanded into the prompt on send).
     draft.value = `/${item.label} ${rest}`.trimEnd() + (rest ? '' : ' ')
@@ -1317,6 +1427,18 @@ function applySlash(i: number) {
 function applyMention(i: number) {
   const item = mentionMatches.value[i]
   if (!item) return
+  if (item.kind === 'page') {
+    // Hành động, không phải token: gỡ `@…` đang gõ rồi để useBrowserContext chèn khối
+    // context của trang — cùng một nguồn với nút trong chrome của tab Browser.
+    draft.value = draft.value.replace(/(^|\s)@([\w./:-]*)$/, (_m, pre: string) => pre)
+    closeAutocomplete()
+    void browserCtx.attachPage()
+    nextTick(() => {
+      ta.value?.focus()
+      grow()
+    })
+    return
+  }
   // Replace the caret's `@query` word with the full `@insert` token + trailing space.
   draft.value = draft.value.replace(
     // `:` is included so re-typing over a partial `@wiki:arch…` token replaces the
@@ -1339,11 +1461,23 @@ function buildOutgoing(raw: string): { text: string; command?: SlashCommandRef }
   const inv = parseSlashInvocation(raw)
   if (!inv) return { text: raw }
   const cmd = findInvocableCommand(data.userCommands.value, inv.name, projectIdRef.value)
-  if (!cmd) return { text: raw }
-  return {
-    text: expandCommandBody(cmd.body, inv.args),
-    command: { name: inv.name, args: inv.args },
+  if (cmd) {
+    return {
+      text: expandCommandBody(cmd.body, inv.args),
+      command: { name: inv.name, args: inv.args },
+    }
   }
+  // A Claude-CLI command: rebuilt from the parsed parts rather than passed through
+  // as the raw draft, because the CLI recognises a local command only when the
+  // message STARTS with `/` — a stray leading newline would make it prose.
+  const native = nativeCliByName.value.get(inv.name)
+  if (native) {
+    return {
+      text: inv.args ? `/${inv.name} ${inv.args}` : `/${inv.name}`,
+      command: { name: inv.name, args: inv.args, native: true },
+    }
+  }
+  return { text: raw }
 }
 
 // Byte length of a string (chip size meta) — mirrors the dropped/picked file path.

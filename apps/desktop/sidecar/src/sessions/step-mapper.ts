@@ -842,7 +842,30 @@ function parseQuestions(raw: unknown): SessionQuestion[] {
         options.push(opt)
       }
     }
-    out.push({ header, question, options, multiSelect: rec.multiSelect === true })
+    const parsedQuestion: SessionQuestion = {
+      header,
+      question,
+      options,
+      multiSelect: rec.multiSelect === true,
+    }
+    // Extended schema (CLAUDE_CODE_QUESTION_EXTENDED). Every field is optional and
+    // an unknown `kind` degrades to a choice question — an unrecognised value must
+    // not produce a card with no way to answer it.
+    if (rec.kind === 'text' || rec.kind === 'number') parsedQuestion.kind = rec.kind
+    if (typeof rec.description === 'string' && rec.description) {
+      parsedQuestion.description = rec.description
+    }
+    if (typeof rec.placeholder === 'string' && rec.placeholder) {
+      parsedQuestion.placeholder = rec.placeholder
+    }
+    if (typeof rec.unit === 'string' && rec.unit) parsedQuestion.unit = rec.unit
+    if (typeof rec.min === 'number' && Number.isFinite(rec.min)) parsedQuestion.min = rec.min
+    if (typeof rec.max === 'number' && Number.isFinite(rec.max)) parsedQuestion.max = rec.max
+    if (typeof rec.step === 'number' && Number.isFinite(rec.step)) parsedQuestion.step = rec.step
+    if (typeof rec.defaultValue === 'number' && Number.isFinite(rec.defaultValue)) {
+      parsedQuestion.defaultValue = rec.defaultValue
+    }
+    out.push(parsedQuestion)
   }
   return out
 }
@@ -858,6 +881,9 @@ export function stepFromQuestion(
   questions: unknown,
   answers?: SessionQuestionAnswer[],
   status: SessionStepStatus = 'running',
+  // Extended-schema extras: the call's heading, and the free text the user wrote
+  // beside their answers. Both optional — a plain choice call has neither.
+  extra?: { title?: unknown; response?: string },
 ): SessionStep {
   const parsed = parseQuestions(questions)
   const step: SessionStep = {
@@ -868,5 +894,7 @@ export function stepFromQuestion(
     questions: parsed,
   }
   if (answers && answers.length > 0) step.answers = answers
+  if (typeof extra?.title === 'string' && extra.title) step.questionTitle = extra.title
+  if (extra?.response) step.questionResponse = extra.response
   return step
 }

@@ -10,11 +10,11 @@ import type { TodoStatus } from '~/types'
 // a fallback for a session with no persisted list yet (a session last
 // written before the field shipped).
 //
-// The banner stays pinned for as long as a checklist exists — expanded while work is
-// active, collapsed to a one-line `done/total` strip once the turn ends. The inline
-// transcript step takes over the full list at that point, so exactly one expanded copy
-// is ever on screen; it renders the model's own snapshot as a historical record and is
-// deliberately NOT editable (edits belong to the current list, not the log).
+// The banner stays pinned for as long as a checklist exists and always starts as a
+// one-line `done/total` strip — it never expands itself (SessionTodoPanel). The inline
+// transcript step carries the full list once the turn ends; it renders the model's own
+// snapshot as a historical record and is deliberately NOT editable (edits belong to the
+// current list, not the log).
 export function useSessionTodo(getSession: () => Session | null | undefined) {
   // Fallback source only (see the header): the most recent assistant TodoWrite (`note`)
   // step. Scanning from the end (messages, then blocks) keeps it current across
@@ -58,20 +58,20 @@ export function useSessionTodo(getSession: () => Session | null | undefined) {
     )
   })
 
-  // Work is live: the turn is running and the latest list still has open items. This
-  // drives the banner's *shape*, not its presence — while active the banner owns the
-  // full expanded list.
+  // Work is live: the turn is running and the latest list still has open items. Keeps
+  // the mid-run transcript quiet (see inlineTodoStep) — the docked strip is the live
+  // progress surface while a turn is in flight.
   const isActive = computed(() => total.value > 0 && isRunning.value && !allDone.value)
 
   // Banner = pinned progress affordance. Visible for as long as a checklist exists,
   // including after the turn ends — that is exactly when the user asks "where are we?".
-  // It collapses itself to a one-line strip when work is no longer active (see
-  // SessionTodoPanel) so it never competes with the inline record below.
+  // Whether it is open is the user's call alone; SessionTodoPanel starts it collapsed.
   const bannerVisible = computed(() => total.value > 0)
 
-  // The todo step to render inline in the transcript: the latest one, but only once the
-  // banner has stopped owning the full expanded list (so exactly one expanded copy is
-  // on screen). Older, intermediate snapshots are never the latest, so they stay hidden.
+  // The todo step to render inline in the transcript: the latest one, but not while the
+  // turn is still writing to it — an intermediate snapshot re-rendered on every
+  // TodoWrite is churn, and the docked strip already tracks it live. Older snapshots are
+  // never the latest, so they stay hidden.
   const inlineTodoStep = computed<StepBlock | null>(() =>
     isActive.value ? null : latestTodoStep.value,
   )

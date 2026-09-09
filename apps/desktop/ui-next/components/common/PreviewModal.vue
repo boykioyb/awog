@@ -648,7 +648,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 10px 14px;
+  /* Edge-to-edge in the shell window means this row runs under the OS window
+     controls, so it takes the strips app-shell.css publishes (both are 0px in a
+     popout window, which keeps its native title bar). */
+  padding: 10px calc(14px + var(--titlebar-inset-end)) 10px calc(14px + var(--titlebar-inset-start));
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }

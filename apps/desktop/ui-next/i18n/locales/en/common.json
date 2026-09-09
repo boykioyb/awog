@@ -110,5 +110,9 @@
   "common.create": "Create",
   "common.loading": "Loading…",
   "common.saving": "Saving…",
-  "common.edit": "Edit"
+  "common.edit": "Edit",
+  "link.openInApp": "Open in AWOG",
+  "link.openExternal": "Open in my browser",
+  "link.remember": "Always do this",
+  "link.openFailed": "Could not open in AWOG: {message}"
 }

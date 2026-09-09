@@ -136,7 +136,13 @@ Ba trạng thái đầu ra:
 
 ### 6.2 Nhánh Claude SDK: `alwaysLoad: true` cho mọi server → chính sách từng server
 
-**Trước.** `toSdkMcpServers` set `alwaysLoad: true` cho **mọi** MCP server người dùng gắn. CLI vốn có tool-search và **mặc định hoãn** tool của MCP server; `alwaysLoad` là công tắc **tắt** chính cơ chế đó. Nên nhánh SDK đang chủ động vứt bỏ thứ mà nhánh Pi phải tự làm lấy bằng meta-tool.
+**⚠ ĐÍNH CHÍNH 2026-09-08 — tiền đề của cả mục này từng SAI.** Câu "CLI mặc định hoãn tool của MCP server" **không đúng**: CLI có tool-search (`tool_search_tool_regex` / `_bm25`, beta `tool-search-tool-2025-10-19`), nhưng setting `toolSearchEnabled` của nó **mặc định FALSE**, và doc của SDK ghi rõ *"tools are deferred **when tool search is enabled**"*. Nghĩa là trước bản sửa này, **toàn bộ chính sách S1/S2/S3 dưới đây là no-op**: bỏ `alwaysLoad` không hoãn gì cả, mọi schema của mọi server vẫn được inline vào **từng request của từng lượt**.
+
+Đo được trên máy người dùng: panel AWOG báo **"Tool definitions 192k"** trong khi panel của chính Claude Code trên **cùng máy, cùng account** báo **41,2k schema đã DEFERRED** và nằm ngoài prompt (`MCP tools (deferred) 26.7k` + `System tools (deferred) 14.5k`).
+
+**Cách bật:** `buildSdkEnv` set `ENABLE_TOOL_SEARCH='true'` vào env của subprocess — **chỉ khi endpoint là first-party** (OAuth, hoặc api-key không có `baseURL`). Doc của chính cờ này: *"Enable it only if your endpoint forwards and accepts the request shape it will receive; when it does not, requests fail with HTTP 400."* Custom endpoint (proxy / Ollama / gateway nói giao thức Anthropic) là đúng ca không thể giả định là forward được request shape mới, nên ở đó giữ mặc định bảo thủ và chịu phần schema inline thay vì gãy lượt. Test: `src/runtime/tools/__tests__/mcp-tool-loading.test.ts` → `describe('buildSdkEnv — ENABLE_TOOL_SEARCH')`.
+
+**Trước.** `toSdkMcpServers` set `alwaysLoad: true` cho **mọi** MCP server người dùng gắn — `alwaysLoad` là công tắc **tắt** cơ chế hoãn. Nên nhánh SDK đang chủ động vứt bỏ thứ mà nhánh Pi phải tự làm lấy bằng meta-tool.
 
 Cái giá thứ hai ít ai để ý, chép từ doc của SDK: `alwaysLoad` *"blocks startup until the server is connected (capped at the standard 5s connect timeout)"*. Tức mỗi server bật cờ này có thể cộng tới **5 giây** vào turn-1, ngoài phần token.
 
@@ -184,7 +190,7 @@ Sau thay đổi của WP1. "SDK" = nhánh `provider === 'anthropic'` (`runtime/c
 | `TodoWrite` | ✅ (+ `todoSink` → `Session.todos`) | ✅ CLI | ADR 0069 |
 | `Task` (subagent) | ✅ | ✅ | ADR 0030 |
 | `ExitPlanMode` | ✅ khi plan mode | ✅ CLI | |
-| `AskUserQuestion` | ✅ (park, sessions) | ✅ CLI | |
+| `AskUserQuestion` | ✅ (park, sessions) | ✅ **tool builtin CLI, AWOG trả lời** (2026-09-09) | Trước đó cột này ghi "✅ CLI" nhưng **sai thực tế**: tool chỉ bật khi caller có `canUseTool` (SDK dịch thành `--permission-prompt-tool stdio`), mà nhánh SDK không truyền ⇒ model không thấy tool. Nay `canUseTool` + hook bỏ qua tool này ⇒ dùng chung park + thẻ với Pi ([spec](ask-user-question.md#nhánh-claude-sdk-2026-09-09)) |
 | `browser_tool` | ✅ | ❌ | ADR 0043 |
 | `source_*` | ✅ sessions | ✅ `mcp__awog__source_*` | |
 | `wiki_search` / `wiki_read` | ✅ | ✅ `mcp__awogwiki__*` | ADR 0073 |

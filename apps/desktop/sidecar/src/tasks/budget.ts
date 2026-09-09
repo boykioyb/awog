@@ -18,10 +18,7 @@
 // phase quay về `pending` (đúng đường resume-sau-crash đã có), task treo ở `paused`
 // và một event `task.budget` được ghi vào events.log.
 
-import { cost, getEffectivePricing, parsePricingOverrides } from '../pricing/catalog.js'
-import { loadRemotePricingMap } from '../pricing/remote.js'
-import { loadSettings } from '../settings/store.js'
-import { log } from '../util/logger.js'
+import { costUsd, loadPricingTables } from '../pricing/effective.js'
 import type { Task } from '../types/shared.js'
 
 export type BudgetDimension = 'cost' | 'toolCalls' | 'wallclock'
@@ -152,54 +149,22 @@ export function recordToolCall(taskId: string): BudgetBreach | null {
   return null
 }
 
-// Bảng giá đọc một lần cho cả tiến trình: guard không cần độ tươi tuyệt đối, và
-// đọc 2 file JSON cho mỗi lần lập lịch thì phí. Đổi giá ⇒ restart sidecar.
-let pricingOnce: Promise<{
-  overrides: ReturnType<typeof parsePricingOverrides>
-  remote: Awaited<ReturnType<typeof loadRemotePricingMap>>
-}> | null = null
-
-function pricing(): Promise<{
-  overrides: ReturnType<typeof parsePricingOverrides>
-  remote: Awaited<ReturnType<typeof loadRemotePricingMap>>
-}> {
-  if (!pricingOnce) {
-    pricingOnce = (async () => {
-      try {
-        const settings = await loadSettings()
-        return { overrides: parsePricingOverrides(settings), remote: await loadRemotePricingMap() }
-      } catch (err) {
-        log.warn('task budget: pricing load failed — falling back to the default catalog', {
-          err: err instanceof Error ? err.message : String(err),
-        })
-        return { overrides: {}, remote: {} }
-      }
-    })()
-  }
-  return pricingOnce
-}
-
 // Tổng USD đã tiêu của task, cộng từ usage đã persist của MỌI run (kể cả
 // superseded). Model không có trong bảng giá ⇒ đóng góp 0 — lúc đó hai chiều
 // toolCalls/wallclock là lưới an toàn.
 export async function taskSpentUsd(task: Task): Promise<number> {
-  const { overrides, remote } = await pricing()
+  const tables = await loadPricingTables()
   let total = 0
   for (const phase of Object.values(task.phases)) {
     for (const run of phase.runs) {
       const u = run.usage
       if (!u) continue
-      const price = getEffectivePricing(u.model, overrides, remote)
-      if (!price) continue
-      total += cost(
-        {
-          inputTokens: u.inputTokens,
-          outputTokens: u.outputTokens,
-          cacheReadTokens: u.cacheReadTokens,
-          cacheWriteTokens: u.cacheWriteTokens,
-        },
-        price,
-      )
+      total += costUsd(tables, u.model, {
+        inputTokens: u.inputTokens,
+        outputTokens: u.outputTokens,
+        cacheReadTokens: u.cacheReadTokens,
+        cacheWriteTokens: u.cacheWriteTokens,
+      })
     }
   }
   return total

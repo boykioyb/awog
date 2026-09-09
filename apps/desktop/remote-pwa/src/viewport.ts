@@ -20,7 +20,19 @@ export function initViewport(): void {
   const root = document.documentElement
 
   const sync = (): void => {
-    // offsetTop matters when the page is pinch-zoomed / scrolled by the browser.
+    // While the page is pinch-zoomed the visual viewport is smaller than the
+    // layout viewport for a reason that has nothing to do with the keyboard, so
+    // the difference is not an inset — subtracting it would shrink the app under
+    // the user's fingers. (iOS has always ignored `user-scalable=no`; now that
+    // the meta tag no longer sets it — WCAG 1.4.4 — Android can zoom too.)
+    if (vv.scale > 1.01) {
+      if (keyboardInset.value === 0) return
+      keyboardInset.value = 0
+      root.style.setProperty('--kb', '0px')
+      root.style.removeProperty('--sab')
+      return
+    }
+    // offsetTop matters when the browser scrolls the visual viewport itself.
     const px = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
     if (px === keyboardInset.value) return
     keyboardInset.value = px

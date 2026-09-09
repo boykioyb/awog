@@ -36,6 +36,15 @@
          (Agents / Skills / Commands / Rules) — one picker per kind, sweeping the
          global tier and every project at once (ADR 0035). -->
 
+    <!-- Where a clicked web link goes. Lives here (not only in the popover's
+         "always do this") so a remembered choice has a visible way back. -->
+    <SettingsField
+      :name="t('settings.workspace.linkOpen.name')"
+      :desc="t('settings.workspace.linkOpen.desc')"
+    >
+      <AppSelect v-model="linkMode" :options="linkModeOptions" width="220px" />
+    </SettingsField>
+
     <SettingsField
       v-if="sidecar.available"
       :name="t('settings.workspace.diagnostics.name')"
@@ -56,6 +65,8 @@
 </template>
 
 <script setup lang="ts">
+import type { LinkOpenMode } from '~/composables/useLinkOpen'
+
 // Workspace panel — wires setSecHtml('workspace') to real state + IPC.
 //   - Workspace path: READ-ONLY. The sidecar always uses os.homedir()/.awog as
 //     its home root (see sidecar util/path.ts `awogHome()`); there is no safe
@@ -75,6 +86,22 @@ const sidecar = useSidecar()
 // is filled from the shell's app:info (= the sidecar's awogHome) on mount.
 const workspaceRoot = computed(() => settings.workspacePath)
 onMounted(() => void settings.hydrateAppPaths())
+
+// Link routing (ADR 0086 phần C). Renderer-side only — it decides which SURFACE a
+// link opens in, nothing the engine can see — so it lives in localStorage via
+// useLinkOpen, same as the keymap.
+// Through setMode, not the raw ref: persistence lives in the setter, so writing
+// `mode.value` straight would change the session and forget it on reload.
+const { mode, setMode } = useLinkOpen()
+const linkMode = computed<string>({
+  get: () => mode.value,
+  set: (value) => setMode(value as LinkOpenMode),
+})
+const linkModeOptions = computed(() => [
+  { label: t('settings.workspace.linkOpen.ask'), value: 'ask' },
+  { label: t('settings.workspace.linkOpen.app'), value: 'app' },
+  { label: t('settings.workspace.linkOpen.external'), value: 'external' },
+])
 
 const copied = ref(false)
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null

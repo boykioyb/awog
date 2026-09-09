@@ -50,7 +50,7 @@ const hasAttachments = computed(
       <div v-if="empty && message.streaming" class="working">
         <span class="spin" /> Đang xử lý…
       </div>
-      <div v-else-if="message.streaming" class="cursor">▍</div>
+      <span v-else-if="message.streaming" class="cursor" />
 
       <div v-if="message.error" class="err">{{ message.error }}</div>
     </div>
@@ -86,23 +86,26 @@ const hasAttachments = computed(
   width: 92px;
   height: 92px;
   object-fit: cover;
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   display: block;
 }
 .doc {
   padding: 6px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   background: var(--surface-2);
+  /* mono-ok: a file name. */
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
 }
 .bubble {
   background: var(--accent-dim);
   color: var(--text);
-  border-radius: 14px 14px 4px 14px;
+  /* design-token-ok: the 4px corner is the bubble's tail — that px IS the shape. */
+  border-radius: var(--r-card) var(--r-card) 4px var(--r-card);
   padding: 10px 13px;
   max-width: 100%;
   white-space: pre-wrap;
@@ -111,10 +114,11 @@ const hasAttachments = computed(
 .msg.system .bubble {
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   max-width: 100%;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .agent .text {
   margin: 2px 0 8px;
@@ -124,11 +128,19 @@ const hasAttachments = computed(
   align-items: center;
   gap: 8px;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   padding: 4px 0;
 }
 .cursor {
-  color: var(--accent);
+  display: inline-block;
+  /* design-token-ok: a typing caret — 2 × 18px IS the shape, and drawing it as a
+     box instead of the old U+258E glyph takes the system font's baseline and
+     weight out of the picture. */
+  width: 2px;
+  height: 18px;
+  vertical-align: -3px;
+  background: var(--accent);
   animation: blink 1s steps(2) infinite;
 }
 @keyframes blink {
@@ -136,13 +148,21 @@ const hasAttachments = computed(
     opacity: 0;
   }
 }
+/* A blinking caret is the textbook reduced-motion offender; the steady bar still
+   says "more is coming". */
+@media (prefers-reduced-motion: reduce) {
+  .cursor {
+    animation: none;
+  }
+}
 .err {
   margin-top: 6px;
   padding: 8px 10px;
   border: 1px solid var(--danger);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   color: var(--danger);
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 </style>

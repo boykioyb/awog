@@ -46,12 +46,22 @@ const AUTH_DEADLINE_MS = 10_000 // F-2: terminate a socket that never authentica
 const MAX_UNAUTH_CONNS = 16 // F-2: cap concurrent un-authenticated sockets
 const MAX_AUTH_FAILS = 10 // F-4: failed auth/pair before lockout
 const AUTH_LOCKOUT_MS = 60_000 // F-4
+// WS-level heartbeat. A phone that walks out of range / rebinds NAT / gets
+// suspended by iOS leaves a socket that never reports `close` on this side: the
+// connection keeps its subscriptions and every event of that session is written
+// into a zombie socket. A protocol ping (answered automatically by the browser)
+// is the only thing that tells a live peer from a dead one, so a connection that
+// misses one whole round is terminated and cleaned up.
+const HEARTBEAT_MS = 30_000
 
 type ConnState = {
   deviceId: string | null
   subs: Set<string>
   ip: string
   authTimer: ReturnType<typeof setTimeout> | null
+  // Heartbeat liveness: set on every `pong`, cleared when a ping goes out. Still
+  // false at the next tick ⇒ the peer missed a full round ⇒ dead.
+  isAlive: boolean
 }
 type DeviceBudget = { sends: number[]; writes: number[]; taskStarts: number[] }
 
@@ -109,6 +119,8 @@ class RemoteGateway {
   private engineUnsub: (() => void) | null = null
 
   private ifaceTimer: ReturnType<typeof setInterval> | null = null
+
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
   private getWindow: () => BrowserWindow | null = () => null
 
@@ -203,6 +215,7 @@ class RemoteGateway {
       this.httpServer = httpServer
       this.wss = wss
       this.boundAddress = addr
+      this.heartbeatTimer = setInterval(() => this.reapDeadConns(), HEARTBEAT_MS)
     } catch (err) {
       log.error('remote-gateway bind failed', {
         message: err instanceof Error ? err.message : String(err),
@@ -213,7 +226,12 @@ class RemoteGateway {
   }
 
   private closeServer(): void {
-    for (const ws of this.conns.keys()) ws.terminate()
+    if (this.heartbeatTimer) clearInterval(this.heartbeatTimer)
+    this.heartbeatTimer = null
+    for (const ws of this.conns.keys()) {
+      this.dropConn(ws)
+      ws.terminate()
+    }
     this.conns.clear()
     this.wss?.close()
     this.wss = null
@@ -238,8 +256,13 @@ class RemoteGateway {
       const st = this.conns.get(ws)
       if (st && !st.deviceId) ws.terminate()
     }, AUTH_DEADLINE_MS)
-    this.conns.set(ws, { deviceId: null, subs: new Set(), ip, authTimer })
+    this.conns.set(ws, { deviceId: null, subs: new Set(), ip, authTimer, isAlive: true })
     ws.on('message', (data) => void this.onMessage(ws, data))
+    // Protocol-level pong (the browser answers our ping without app code).
+    ws.on('pong', () => {
+      const st = this.conns.get(ws)
+      if (st) st.isAlive = true
+    })
     ws.on('close', () => this.onClose(ws))
     ws.on('error', () => ws.terminate())
   }
@@ -248,9 +271,34 @@ class RemoteGateway {
     // Concurrent-turn counts settle in handleRpc's `finally` when engine.request
     // resolves/rejects (a mid-turn disconnect still settles), so closing just drops
     // the connection.
+    this.dropConn(ws)
+  }
+
+  // Forget a connection: cancel its auth deadline, drop its event subscriptions
+  // (so fanoutEvent stops writing into it) and remove it from the map. Safe to
+  // call twice — the reaper calls it before terminate(), and terminate's own
+  // `close` event calls it again.
+  private dropConn(ws: WebSocket): void {
     const st = this.conns.get(ws)
-    if (st?.authTimer) clearTimeout(st.authTimer)
+    if (!st) return
+    if (st.authTimer) clearTimeout(st.authTimer)
+    st.subs.clear()
     this.conns.delete(ws)
+  }
+
+  // Heartbeat tick: terminate whoever didn't answer the previous ping, then ping
+  // the rest. Nothing here touches the auth deadline or the revoke path — a
+  // connection dropped by either of those is already out of `conns`.
+  private reapDeadConns(): void {
+    for (const [ws, state] of this.conns) {
+      if (ws.readyState !== WebSocket.OPEN || !state.isAlive) {
+        this.dropConn(ws)
+        ws.terminate()
+        continue
+      }
+      state.isAlive = false
+      ws.ping()
+    }
   }
 
   // Mark a connection authenticated: bind the device id + cancel the auth deadline.

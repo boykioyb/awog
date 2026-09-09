@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { Check, ChevronRight, Circle, CircleDot } from 'lucide-vue-next'
 import { current, cycleTodo } from '../store'
 
 // Pinned session checklist (ADR 0069). Same contract as the desktop: the list is
@@ -15,8 +16,13 @@ const open = ref(false)
 
 <template>
   <div v-if="todos.length" class="todo">
-    <button class="strip" @click="open = !open">
-      <span class="chev" :class="{ open }">›</span>
+    <button
+      class="strip"
+      :aria-expanded="open"
+      :aria-label="open ? 'Thu gọn checklist' : 'Mở checklist'"
+      @click="open = !open"
+    >
+      <ChevronRight class="icn-sm chev" :class="{ open }" />
       <span class="count">{{ done }}/{{ todos.length }}</span>
       <span class="now">{{ active ? active.content : 'Checklist' }}</span>
     </button>
@@ -28,9 +34,9 @@ const open = ref(false)
         :class="t.status"
         @click="cycleTodo(i)"
       >
-        <span class="tick">{{
-          t.status === 'completed' ? '✓' : t.status === 'in_progress' ? '◐' : '○'
-        }}</span>
+        <Check v-if="t.status === 'completed'" class="icn-sm tick" />
+        <CircleDot v-else-if="t.status === 'in_progress'" class="icn-sm tick" />
+        <Circle v-else class="icn-sm tick" />
         <span class="txt">{{ t.content }}</span>
       </li>
     </ul>
@@ -48,29 +54,36 @@ const open = ref(false)
   align-items: center;
   gap: 8px;
   width: 100%;
+  min-height: var(--tap);
   padding: 8px 14px;
   border: none;
   background: transparent;
   color: var(--text);
   text-align: left;
 }
+.strip:active {
+  background: var(--surface-2);
+}
 .chev {
   color: var(--text-faint);
   transition: transform 0.15s;
-  flex-shrink: 0;
 }
 .chev.open {
   transform: rotate(90deg);
 }
 .count {
-  font-family: var(--mono);
-  font-size: 12px;
+  /* Not mono: it is a count, not code. tabular-nums is what keeps "9/12" from
+     jittering as the numbers change. */
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--accent);
   flex-shrink: 0;
 }
 .now {
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -87,8 +100,12 @@ const open = ref(false)
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  padding: 7px 0;
-  font-size: 14px;
+  /* 11 + 22 (--lh-md) + 11 = exactly --tap, so a one-line row reaches the hit
+     box with its text still centred instead of parked at the top. */
+  min-height: var(--tap);
+  padding: 11px 0;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   color: var(--text-dim);
   border-top: 1px solid var(--border);
 }
@@ -104,8 +121,7 @@ const open = ref(false)
 }
 .tick {
   color: var(--accent);
-  flex-shrink: 0;
-  width: 14px;
-  text-align: center;
+  /* Centre on the FIRST line (--lh-md = 22px box, 14px icon). */
+  margin-top: 4px;
 }
 </style>

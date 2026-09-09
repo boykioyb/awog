@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ListTodo, Plus, RefreshCw, Settings, X } from 'lucide-vue-next'
 import {
   activeTurnIds,
   awaitingCount,
@@ -65,12 +66,27 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
     <header class="head">
       <h1>Sessions</h1>
       <span v-if="awaitingCount" class="badge awaiting gate">{{ awaitingCount }} chờ duyệt</span>
-      <button class="icon" :disabled="listLoading" title="Làm mới" @click="loadSessions">
+      <button
+        class="icon"
+        :disabled="listLoading"
+        title="Làm mới"
+        aria-label="Làm mới danh sách session"
+        @click="loadSessions"
+      >
         <span v-if="listLoading" class="spin" />
-        <span v-else>↻</span>
+        <RefreshCw v-else />
       </button>
-      <button class="icon" title="Tasks" @click="route = 'tasks'">☰</button>
-      <button class="icon" title="Cài đặt" @click="settingsOpen = true">⚙</button>
+      <button class="icon" title="Tasks" aria-label="Mở Tasks" @click="route = 'tasks'">
+        <ListTodo />
+      </button>
+      <button
+        class="icon"
+        title="Cài đặt"
+        aria-label="Cài đặt"
+        @click="settingsOpen = true"
+      >
+        <Settings />
+      </button>
     </header>
 
     <div class="search">
@@ -83,7 +99,15 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
         autocomplete="off"
         spellcheck="false"
       />
-      <button v-if="query" class="clear" title="Xoá" @click="query = ''">✕</button>
+      <button
+        v-if="query"
+        class="clear"
+        title="Xoá"
+        aria-label="Xoá từ khoá"
+        @click="query = ''"
+      >
+        <X class="icn-sm" />
+      </button>
     </div>
 
     <div v-if="!searching && chips.length" class="chips">
@@ -155,7 +179,9 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
       </ul>
     </template>
 
-    <button class="fab" title="Session mới" @click="creating = true">+</button>
+    <button class="fab" title="Session mới" aria-label="Session mới" @click="creating = true">
+      <Plus class="icn-lg" />
+    </button>
 
     <NewSessionSheet :open="creating" @close="creating = false" />
     <SettingsSheet :open="settingsOpen" @close="settingsOpen = false" />
@@ -174,7 +200,7 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
 .head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   /* In a flex COLUMN, flex-shrink works on the height: the tall `.rows` list
      would otherwise squash these auto-height rows to nothing (the chips row
      vanished entirely) instead of scrolling. */
@@ -186,26 +212,39 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   z-index: 2;
 }
 .head h1 {
-  font-size: 22px;
-  margin: 0;
+  /* min-width:0 + ellipsis so the row still fits when the 44px hit boxes and the
+     gate badge are all present on a 375px screen. */
   flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-2xl);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .gate {
   background: color-mix(in srgb, var(--warn) 22%, transparent);
   color: var(--warn);
 }
 .icon {
-  width: 34px;
-  height: 34px;
+  width: var(--tap);
+  height: var(--tap);
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--border);
   background: var(--surface-2);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   color: var(--text-dim);
-  font-size: 16px;
+}
+.icon:active {
+  background: var(--surface-3);
+  color: var(--text);
+}
+.icon:disabled {
+  opacity: 0.45;
 }
 .search {
   position: relative;
@@ -214,26 +253,34 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
 }
 .search input {
   width: 100%;
+  min-height: var(--tap);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 9px 34px 9px 14px;
-  outline: none;
-  font-size: 15px;
+  border-radius: var(--r-pill);
+  padding: 9px 48px 9px 16px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .search input:focus {
   border-color: var(--accent);
 }
+/* Stretched to the field's own height so the hit box is 44 wide × 44 tall
+   without a bigger glyph or a taller row. */
 .clear {
   position: absolute;
-  right: 20px;
-  top: 6px;
-  width: 26px;
-  height: 26px;
+  right: 12px;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tap);
+  height: var(--tap);
   border: none;
   background: transparent;
   color: var(--text-dim);
-  font-size: 13px;
+}
+.clear:active {
+  color: var(--text);
 }
 .chips {
   display: flex;
@@ -244,13 +291,20 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   -webkit-overflow-scrolling: touch;
 }
 .chip {
+  display: inline-flex;
+  align-items: center;
   flex: 0 0 auto;
+  min-height: var(--tap);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 13px;
+  border-radius: var(--r-pill);
+  padding: 0 14px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.chip:active {
+  background: var(--surface-2);
 }
 .chip.on {
   color: var(--accent);
@@ -277,7 +331,7 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   padding: 13px 14px;
   border: 1px solid var(--border);
   background: var(--surface);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   margin-bottom: 8px;
 }
 .row:active {
@@ -296,7 +350,8 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   white-space: nowrap;
 }
 .time {
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   flex-shrink: 0;
 }
 .row-bot {
@@ -307,21 +362,25 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   overflow: hidden;
 }
 .proj {
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
   color: var(--text-dim);
   flex-shrink: 0;
 }
 .preview {
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* No mono: this is a sentence out of the transcript, i.e. prose to read — not a
+   path or a command to copy. */
 .snippet {
   margin-top: 5px;
-  font-size: 13px;
-  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -342,16 +401,19 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   position: fixed;
   right: 18px;
   bottom: calc(22px + var(--sab, env(safe-area-inset-bottom)) + var(--kb, 0px));
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 54px;
   height: 54px;
   border-radius: 50%;
   border: none;
   background: var(--accent);
-  color: #04120d;
-  font-size: 30px;
-  font-weight: 300;
-  line-height: 1;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-1);
   z-index: 3;
+}
+.fab:active {
+  background: color-mix(in srgb, var(--accent) 80%, black);
 }
 </style>

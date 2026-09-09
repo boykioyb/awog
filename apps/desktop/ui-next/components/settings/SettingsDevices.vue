@@ -141,6 +141,9 @@ const now = useNow()
 const sc = useSidecar()
 
 // Open the Tailscale download page in the OS browser (setup guide, step 1).
+// NOT through useLinkOpen: the point of this link is to DOWNLOAD an installer, and
+// downloads are blocked in the agent's browser partition (will-download →
+// preventDefault), so offering "open in the app" would offer a dead end.
 function openTailscale(): void {
   if (sc.available) void sc.openExternal('https://tailscale.com/download')
   else window.open('https://tailscale.com/download', '_blank')

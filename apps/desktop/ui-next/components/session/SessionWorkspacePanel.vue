@@ -97,63 +97,18 @@
         :visible="active === 'Terminal'"
       />
 
-      <!-- Info -->
-      <div v-if="active === 'Info'" style="display: flex; flex-direction: column">
-        <div
-          v-for="row in infoRows"
-          :key="row.k"
-          style="
-            display: flex;
-            align-items: baseline;
-            gap: 10px;
-            padding: 6px 0;
-            border-bottom: 1px solid var(--border);
-          "
-        >
-          <span style="color: var(--textDim); flex: 0 0 96px">{{ row.k }}</span>
-          <a
-            v-if="row.href"
-            class="mono"
-            :href="row.href"
-            target="_blank"
-            rel="noopener"
-            style="min-width: 0; overflow-wrap: anywhere; color: var(--blue); text-decoration: none"
-          >
-            {{ row.v }}
-          </a>
-          <span v-else class="mono" style="min-width: 0; overflow-wrap: anywhere">{{ row.v }}</span>
-        </div>
+      <!-- Browser — the agent's embedded Chromium (ADR 0086). Kept mounted once
+           opened, like Terminal: the page (and its login state) must survive a tab
+           switch. `active` tells it to pull the native view off screen instead of
+           painting over whatever tab is showing. -->
+      <WorkspaceBrowser
+        v-if="browserMounted && tabs.includes('Browser')"
+        v-show="active === 'Browser'"
+        :active="active === 'Browser'"
+      />
 
-        <!-- Context files: attachments + pinned working-set fed into the model. -->
-        <div class="infoctx">
-          <div class="infoctx-h">
-            {{ t('sessions.info.contextFiles') }}
-            <span v-if="contextFiles.length" class="infoctx-n">{{ contextFiles.length }}</span>
-          </div>
-          <button
-            v-for="f in contextFiles"
-            :key="f.key"
-            type="button"
-            class="infoctx-row"
-            :title="'path' in f ? f.path : f.name"
-            @click="openContextFile(f)"
-          >
-            <Icon
-              :name="ctxIcon(f.kind)"
-              style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-              :style="{ color: ctxIconColor(f.kind) }"
-            />
-            <span class="infoctx-name mono">{{ f.name }}</span>
-            <span v-if="f.kind === 'attachment' && f.size != null" class="infoctx-size">
-              {{ fmtBytes(f.size) }}
-            </span>
-            <span class="infoctx-kind">{{ t(`sessions.info.ctxKind.${f.kind}`) }}</span>
-          </button>
-          <p v-if="!contextFiles.length" class="infoctx-empty">
-            {{ t('sessions.info.contextFilesEmpty') }}
-          </p>
-        </div>
-      </div>
+      <!-- Info — metadata rows, context files, media/links/docs. -->
+      <WorkspaceInfo v-if="active === 'Info'" :session="session" />
 
       <!-- fallback (Preview / any unhandled view) -->
       <div v-if="isFallbackTab" class="empty" style="padding: 30px">
@@ -178,9 +133,7 @@
 // wired to real engine data via dedicated tab components (Diff/Files/Terminal/
 // Plan/Tasks) which degrade gracefully to an empty state outside the Electron shell.
 import type { Session } from '~/composables/useSessionsData'
-import type { SessionContextFile } from '~/composables/useSessionContextFiles'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
-import { formatTokenCount } from '~/utils/context-window'
 import type { WorkspaceDockSide } from '~/stores/settings'
 
 const props = withDefaults(
@@ -209,28 +162,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { wpIcon } = useSessionsData()
-const { projectName } = useProjects()
 
 // Resolve the project's absolute root + readiness for the (session-agnostic)
 // Terminal widget — it now takes a cwd + grouping key, not a Session.
 const { root: termRoot, ready: termReady } = useWorkspaceData(() => props.session.project)
-
-// Context files (working folder + attachments + pinned working-set) for the Info tab.
-const { contextFiles, openContextFile } = useSessionContextFiles(() => props.session)
-// Row icon + accent per context kind (folder/pinned = standing context → accent).
-function ctxIcon(kind: SessionContextFile['kind']): string {
-  if (kind === 'folder') return 'folder'
-  if (kind === 'pinned') return 'pin'
-  return 'rules'
-}
-function ctxIconColor(kind: SessionContextFile['kind']): string {
-  return kind === 'attachment' ? 'var(--textDim)' : 'var(--accent)'
-}
-function fmtBytes(n: number): string {
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
-}
 
 // Dock side + size go on the docked axis (width when right, height when bottom).
 // flex-basis is set both ways so .chatwrap can hold the panel as a row (right) or
@@ -245,21 +180,26 @@ const panelStyle = computed(() =>
 // survives tab switches (an unmount would kill + respawn the shell). It unmounts
 // only when the Terminal view leaves this panel — see the v-if in the template.
 const terminalMounted = ref(props.active === 'Terminal')
+// Same lazy-then-sticky rule for Browser: don't spin up a Chromium view until the
+// user opens the tab, then keep it so the page survives tab switches.
+const browserMounted = ref(props.active === 'Browser')
 watch(
   () => props.active,
   (tab) => {
     if (tab === 'Terminal') terminalMounted.value = true
+    if (tab === 'Browser') browserMounted.value = true
   },
 )
 
 // Diff/Files/Terminal/Preview own their own full-bleed chrome; the others use the
 // padded wpbody. `isFallbackTab` = any view without a dedicated body (defensive — all
 // known views are handled).
-const FLUSH_TABS = new Set(['Diff', 'Files', 'Terminal', 'Preview'])
+const FLUSH_TABS = new Set(['Diff', 'Files', 'Terminal', 'Preview', 'Browser'])
 const HANDLED_TABS = new Set([
   'Diff',
   'Files',
   'Terminal',
+  'Browser',
   'Plan',
   'Tasks',
   'Info',
@@ -294,116 +234,9 @@ function pickDock(side: WorkspaceDockSide) {
   if (props.active && side !== props.dock) emit('move-dock', props.active, side)
   dockMenuOpen.value = false
 }
-
-const totalTok = computed(() => {
-  const chars = props.session.msgs.reduce((a, m) => {
-    if (m.role === 'assistant') {
-      return (
-        a +
-        m.blocks.reduce(
-          (b, k) =>
-            b +
-            ('text' in k ? k.text.length : 0) +
-            ('detail' in k ? (k.detail || '').length : 0) +
-            60,
-          0,
-        )
-      )
-    }
-    return a + m.text.length
-  }, 0)
-  return Math.floor(chars / 3)
-})
-
-// Derive a compact label for a GitHub issue/PR URL, e.g. "PR owner/repo#5".
-function ghLabel(url: string): string {
-  const m = /github\.com\/([^/]+)\/([^/]+)\/(pull|issues)\/(\d+)/.exec(url)
-  if (!m) return url
-  const kind = m[3] === 'pull' ? 'PR' : 'Issue'
-  return `${kind} ${m[1]}/${m[2]}#${m[4]}`
-}
-
-const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
-  const s = props.session
-  const rows: { k: string; v: string; href?: string }[] = [
-    { k: t('sessions.info.id'), v: `s_${s.id}` },
-    { k: t('sessions.info.project'), v: projectName(s.project) },
-    { k: t('sessions.info.account'), v: s.account },
-    { k: t('sessions.info.model'), v: s.model },
-    { k: t('sessions.info.style'), v: s.style || 'Normal' },
-    { k: t('sessions.info.mode'), v: s.mode || 'Ask' },
-    { k: t('sessions.info.messages'), v: String(s.msgs.length) },
-    { k: t('sessions.info.tokens'), v: `${formatTokenCount(totalTok.value)} / 200k` },
-    { k: t('sessions.info.updated'), v: s.when },
-  ]
-  // Cost has its own dedicated Cost tab (per-day + 1d/7d/30d/custom-range roll-up);
-  // not duplicated here.
-  if (s.aboutGhUrl) {
-    rows.push({ k: t('sessions.info.gh'), v: ghLabel(s.aboutGhUrl), href: s.aboutGhUrl })
-  }
-  return rows
-})
 </script>
 
 <style scoped>
-/* Info tab — context files section (attachments + pinned working-set). */
-.infoctx {
-  margin-top: 14px;
-}
-.infoctx-h {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--textDim);
-  font-size: 12px;
-  line-height: 18px;
-  margin-bottom: 6px;
-}
-.infoctx-n {
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-}
-.infoctx-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 4px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-.infoctx-row:hover {
-  background: var(--bgHover);
-}
-.infoctx-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.infoctx-size {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-.infoctx-kind {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.infoctx-empty {
-  color: var(--textFaint);
-  padding: 4px 0;
-}
 /* Diff/Files/Terminal own their full chrome (file lists, viewers, the PTY canvas)
    so they take over the whole body without the default 13px padding + scroll. */
 .wpbody.flush {

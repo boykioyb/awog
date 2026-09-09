@@ -32,36 +32,56 @@ type ModelsListResponse = { models: ModelInfo[]; live: boolean; fetchedAt: strin
 // Bundled seed — mirrors the previously-hardcoded curated picker lists so the
 // picker is never empty before a Fetch. Order is the curated default order (drives
 // the first-pick fallback). load() keeps this order first, appending fetched ids.
+//
+// `contextWindow` rides along because `load()` is called from ONE place (Settings →
+// Models), so a user who has never opened that panel has a catalog with no window
+// metadata at all — and providerModelContextWindow() is what the context gauge
+// falls back to for every provider except Anthropic (utils/context-window.ts keeps
+// its own authoritative Anthropic table for the base-vs-`-1m` convention). Without
+// these numbers the gauge silently read the 200k DEFAULT for every OpenAI/Google
+// model: GPT-5.5 (272k) under-reported by a quarter, Gemini 3.5 Flash and GPT-5.5
+// Pro (~1.05M) by 5x — and the same denominator drives auto-compact, so it fired
+// four times too early. Values are pi-ai's own catalog metadata (the exact numbers
+// a Fetch would return), so seed and fetch cannot disagree; a real fetch still wins
+// on metadata for a shared id (see orderMerged/hydrate).
 const SEED: Record<ProviderName, ModelInfo[]> = {
   anthropic: [
-    { id: 'claude-opus-5', name: 'Opus 5', source: 'pi' },
-    { id: 'claude-opus-5-1m', name: 'Opus 5 (1M)', source: 'pi' },
-    { id: 'claude-sonnet-5', name: 'Sonnet 5', source: 'pi' },
-    { id: 'claude-opus-4-8', name: 'Opus 4.8', source: 'pi' },
-    { id: 'claude-opus-4-8-1m', name: 'Opus 4.8 (1M)', source: 'pi' },
-    { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', source: 'pi' },
-    { id: 'claude-haiku-4-5', name: 'Haiku 4.5', source: 'pi' },
+    { id: 'claude-opus-5', name: 'Opus 5', contextWindow: 1_000_000, source: 'pi' },
+    // `-1m` ids are AWOG-internal (base model + the context-1m beta), so pi has no
+    // row for them — see providers/anthropic/models-map.ts.
+    { id: 'claude-opus-5-1m', name: 'Opus 5 (1M)', contextWindow: 1_000_000, source: 'pi' },
+    { id: 'claude-sonnet-5', name: 'Sonnet 5', contextWindow: 1_000_000, source: 'pi' },
+    { id: 'claude-opus-4-8', name: 'Opus 4.8', contextWindow: 1_000_000, source: 'pi' },
+    { id: 'claude-opus-4-8-1m', name: 'Opus 4.8 (1M)', contextWindow: 1_000_000, source: 'pi' },
+    { id: 'claude-sonnet-4-6', name: 'Sonnet 4.6', contextWindow: 1_000_000, source: 'pi' },
+    { id: 'claude-haiku-4-5', name: 'Haiku 4.5', contextWindow: 200_000, source: 'pi' },
   ],
   openai: [
-    { id: 'gpt-5.5', name: 'GPT-5.5', source: 'pi' },
-    { id: 'gpt-5.5-pro', name: 'GPT-5.5 Pro', source: 'pi' },
+    { id: 'gpt-5.5', name: 'GPT-5.5', contextWindow: 272_000, source: 'pi' },
+    { id: 'gpt-5.5-pro', name: 'GPT-5.5 Pro', contextWindow: 1_050_000, source: 'pi' },
     // GPT-5.6 tiers — also the newest ChatGPT-subscription (Codex) models, so
     // they carry the display names a Codex connection's curated list renders.
-    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', source: 'pi' },
-    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', source: 'pi' },
-    { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', source: 'pi' },
-    { id: 'gpt-5.4', name: 'GPT-5.4', source: 'pi' },
-    { id: 'gpt-5.4-mini', name: 'GPT-5.4 mini', source: 'pi' },
-    { id: 'gpt-5.1', name: 'GPT-5.1', source: 'pi' },
-    { id: 'o4-mini', name: 'o4-mini', source: 'pi' },
-    { id: 'gpt-4.1', name: 'GPT-4.1', source: 'pi' },
+    { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', contextWindow: 272_000, source: 'pi' },
+    { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', contextWindow: 272_000, source: 'pi' },
+    { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', contextWindow: 272_000, source: 'pi' },
+    { id: 'gpt-5.4', name: 'GPT-5.4', contextWindow: 272_000, source: 'pi' },
+    { id: 'gpt-5.4-mini', name: 'GPT-5.4 mini', contextWindow: 400_000, source: 'pi' },
+    { id: 'gpt-5.1', name: 'GPT-5.1', contextWindow: 400_000, source: 'pi' },
+    { id: 'o4-mini', name: 'o4-mini', contextWindow: 200_000, source: 'pi' },
+    { id: 'gpt-4.1', name: 'GPT-4.1', contextWindow: 1_047_576, source: 'pi' },
   ],
   google: [
-    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', source: 'pi' },
-    { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', source: 'pi' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', source: 'pi' },
-    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', source: 'pi' },
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', source: 'pi' },
+    { id: 'gemini-3.5-flash', name: 'Gemini 3.5 Flash', contextWindow: 1_048_576, source: 'pi' },
+    {
+      id: 'gemini-3.1-pro-preview',
+      name: 'Gemini 3.1 Pro',
+      contextWindow: 1_048_576,
+      source: 'pi',
+    },
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', contextWindow: 1_048_576, source: 'pi' },
+    { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 1_048_576, source: 'pi' },
+    // Not in pi's catalog; 1,048,576 input tokens per Google's model table.
+    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', contextWindow: 1_048_576, source: 'pi' },
   ],
 }
 
@@ -148,7 +168,19 @@ function hydrate(): void {
       // Merge the bundled seed FIRST so default models shipped in a newer app
       // version still appear over an older cache; persisted entries add fetched
       // extras + win on metadata for shared ids.
-      if (Array.isArray(list) && list.length) catalog[p] = orderMerged(p, [...SEED[p], ...list])
+      if (Array.isArray(list) && list.length) {
+        // "Wins on metadata" must not mean "drops metadata it never carried". A
+        // cache written by a model TOGGLE (persist() stores the catalog as-is, no
+        // fetch involved) predates the seeded contextWindow, and JSON.stringify
+        // omits undefined — so spreading the seed UNDER the cached row fills the
+        // gap instead of blanking the context gauge's only fallback.
+        const seeded = new Map(SEED[p].map((m) => [m.id, m]))
+        const filled = list.map((m) => {
+          const seed = seeded.get(m.id)
+          return seed ? { ...seed, ...m } : m
+        })
+        catalog[p] = orderMerged(p, [...SEED[p], ...filled])
+      }
       const en = data.enabled?.[p]
       if (en === null || Array.isArray(en)) enabled[p] = en
       const st = data.status?.[p]

@@ -59,6 +59,7 @@ import type {
   SessionMessagePart,
   SessionSettings,
   SessionStep,
+  TodoItem,
 } from '../types/shared.js'
 
 const SessionMessageSchema = z
@@ -137,6 +138,11 @@ const Params = z.object({
   // text-or-attachments invariant is enforced by the object-level .refine below.
   text: z.string(),
   attachments: z.array(SessionAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
+  // `text` is one of the Claude Code CLI's own slash commands (/goal, /context…)
+  // and must reach the CLI verbatim — no turn-prompt riders, no history prefix
+  // (see RunNonStreamArgs.nativeCommand). Anthropic branch only; the runner
+  // refuses it on other providers.
+  nativeCommand: z.boolean().optional(),
   history: z.array(SessionMessageSchema).default([]),
   settings: SessionSettingsSchema,
   systemPrompt: z.string().optional(),
@@ -681,11 +687,16 @@ register('sessions.sendMessage', async (raw) => {
   // registering the aborter / persisting) so a refused turn leaves no side effects;
   // the UI surfaces `budget-exceeded` and prompts to raise the cap.
   const hardLimitUsd = params.budget?.hardLimitUsd
+  // USD còn lại của phiên — truyền xuống runtime để lượt bị chặn NGAY KHI cán trần,
+  // thay vì chỉ bị từ chối ở lượt kế tiếp như hàng rào bên dưới. Tính một lần ở đây
+  // vì chỉ chỗ này có cả trần (config) lẫn phần đã tiêu (usage đã persist).
+  let remainingUsd: number | undefined
   if (hardLimitUsd && hardLimitUsd > 0) {
     const spentUsd = historyForRun.reduce(
       (sum, m) => sum + (m.role === 'agent' ? (m.usage?.costUsd ?? 0) : 0),
       0,
     )
+    remainingUsd = Math.max(0, hardLimitUsd - spentUsd)
     if (spentUsd >= hardLimitUsd) {
       const errorMessage = `Session budget exceeded: $${spentUsd.toFixed(2)} ≥ $${hardLimitUsd.toFixed(2)} hard cap. Raise the cap in session config to continue.`
       emit('session.message.done', {
@@ -971,9 +982,13 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // block has to ride on the turn prompt to survive `resume` (see runner.ts).
   // Best-effort — no checklist, or an unreadable session, yields no block.
   let sessionChecklist: string | undefined
+  // The same list as data — the Claude SDK path seeds its task-tool tracker from it
+  // (see RunStreamArgs.sessionTodos); the Pi path never reads it.
+  let sessionTodos: TodoItem[] | undefined
   try {
     const withTodos = await loadSession(params.sessionId)
     sessionChecklist = buildSessionChecklistBlock(withTodos?.todos)
+    if (withTodos?.todos?.length) sessionTodos = withTodos.todos
   } catch {
     /* best-effort: never block the turn on the checklist block */
   }
@@ -1018,9 +1033,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // existing dir); invalid entries skipped, never error the chat. Deduped, and the
   // cwd's own tree (built above) isn't repeated. Tools still operate in `cwd`, so a
   // folder outside it is browsable in the tree but only Read-able if inside cwd.
+  // Thư mục đính kèm đã qua kiểm (tuyệt đối + là thư mục). Khai NGOÀI khối dưới vì
+  // nó còn đi tiếp xuống runtime, không chỉ vào prompt.
+  const validatedFolders: string[] = []
   if (params.contextFolders?.length) {
     const contextIntro =
-      'The user attached this folder to the session as read-only context — its structure is shown below for orientation. It is NOT your working directory; a file here is only Read-able with a tool when it sits inside your working directory (cwd).'
+      'The user attached this folder to the session as read-only context — its structure is shown below for orientation. It is NOT your working directory, but you may Read files inside it.'
     const seen = new Set<string>(cwd ? [cwd] : [])
     const folderBlocks: string[] = []
     for (const folder of params.contextFolders) {
@@ -1037,6 +1055,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         log.warn('ignoring non-absolute / non-directory contextFolder', { folder })
         continue
       }
+      // Thư mục đã kiểm: vừa dựng cây cho prompt, vừa ghi vào danh sách thư mục
+      // được phép đọc (nhánh Claude SDK → `additionalDirectories`). Không có nó thì
+      // model thấy tên file trong cây mà mở ra lại bị chặn vì nằm ngoài cwd.
+      validatedFolders.push(folder)
       // eslint-disable-next-line no-await-in-loop
       const treeBlock = await buildWorkspaceTreeBlock(folder, contextIntro)
       if (treeBlock) folderBlocks.push(treeBlock)
@@ -1304,6 +1326,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       {
         sessionId: params.sessionId,
         pendingText: params.text,
+        ...(params.nativeCommand ? { nativeCommand: true } : {}),
         ...(attachments && attachments.length ? { pendingAttachments: attachments } : {}),
         // Prior turns: either what the UI sent (reference `ui`) or, when it sent
         // none (`ui-next`), the transcript folded from JSONL above. The runner
@@ -1333,6 +1356,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...gateToolFilterFields(gateAcc),
         ...(systemPromptAppend ? { systemPromptAppend } : {}),
         ...(sessionChecklist ? { sessionChecklist } : {}),
+        ...(sessionTodos ? { sessionTodos } : {}),
         // Bulk-load section sizes for the context-window breakdown (the runtime
         // folds these into contextChars; it can't re-derive them from the joined
         // systemPromptAppend string).
@@ -1364,20 +1388,24 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ...(params.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         // Per-turn hard caps (tool-call count / wallclock) enforced in the runtime
         // beforeToolCall. Forward only the defined fields.
-        ...(params.budget?.maxToolCalls !== undefined || params.budget?.maxWallclockMs !== undefined
+        ...(params.budget?.maxToolCalls !== undefined ||
+        params.budget?.maxWallclockMs !== undefined ||
+        remainingUsd !== undefined
           ? {
               budget: {
-                ...(params.budget.maxToolCalls !== undefined
+                ...(params.budget?.maxToolCalls !== undefined
                   ? { maxToolCalls: params.budget.maxToolCalls }
                   : {}),
-                ...(params.budget.maxWallclockMs !== undefined
+                ...(params.budget?.maxWallclockMs !== undefined
                   ? { maxWallclockMs: params.budget.maxWallclockMs }
                   : {}),
+                ...(remainingUsd !== undefined ? { maxCostUsd: remainingUsd } : {}),
               },
             }
           : {}),
         canUseTool,
         askUserQuestion,
+        ...(validatedFolders.length > 0 ? { extraDirs: validatedFolders } : {}),
         abortController,
         // Claude SDK resume handle (ADR 0058, Anthropic path). Ignored by Pi.
         ...(sdkSessionId ? { sdkSessionId } : {}),

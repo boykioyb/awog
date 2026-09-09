@@ -38,9 +38,23 @@ export interface RectLike {
   width: number
 }
 
+// Bề mặt nào yêu cầu dịch. Chỉ có hai giá trị vì chỉ có hai CÁCH RENDER:
+//
+//   'dom'     — selection nằm trong DOM của app ⇒ popover nổi, neo vào selection.
+//   'browser' — selection nằm TRONG TRANG của trình duyệt nhúng, tức trong một
+//               `WebContentsView`. Một view native vẽ trên toàn bộ DOM, nên
+//               popover đặt lên đó là vô hình; cách duy nhất để nó hiện là gỡ
+//               trang khỏi màn hình — mà đó chính là thứ vô nghĩa ở đây: người
+//               dùng bôi đen để ĐỐI CHIẾU với trang (lỗi thật 2026-09-09, người
+//               dùng thấy "Hidden while a dialog is open" thay cho trang). Nên
+//               nguồn này render trong CHROME của trình duyệt — vùng DOM nằm
+//               ngoài rect của view — và không ai phải ẩn đi.
+export type TranslateSurface = 'dom' | 'browser'
+
 interface TranslateState {
   text: string
   anchor: SelAnchor
+  surface: TranslateSurface
   provider: ProviderName
   modelId: string
   accountId?: string
@@ -134,13 +148,19 @@ export function useSelectionTranslate() {
 
   // Open the popover for `text`, anchored to its selection rect. `projectId`
   // resolves the LLM defaults (undefined → app defaults).
-  function open(text: string, rect: RectLike, projectId?: string): void {
+  function open(
+    text: string,
+    rect: RectLike,
+    projectId?: string,
+    surface: TranslateSurface = 'dom',
+  ): void {
     const trimmed = text.trim()
     if (!trimmed) return
     const llm = resolveLlm(projectId)
     active.value = {
       text: trimmed,
       anchor: { cx: rect.left + rect.width / 2, top: rect.top, bottom: rect.bottom },
+      surface,
       provider: llm.provider,
       modelId: llm.modelId,
       ...(llm.accountId ? { accountId: llm.accountId } : {}),

@@ -4,13 +4,20 @@
          filters the list below (store.tabSessions) + restores its last-viewed session. -->
     <SessionTabBar />
     <div class="md">
+      <!-- Collapsed → hidden with v-show, not v-if: the list keeps its transient state
+           (search text, per-group page) and its cross-session search results across a
+           collapse, and expanding is instant. In compact mode the list is an off-canvas
+           drawer with its own top-bar toggle, so the collapse flag must not hide it
+           there — it would leave that toggle opening nothing. -->
       <SessionList
+        v-show="!listHidden"
         :sessions="store.tabSessions"
         :active-id="store.activeId"
         :list-width="listWidth"
         @select="store.setActive($event)"
       />
       <div
+        v-if="!listHidden"
         class="rsz"
         :class="{ drag: listDragging }"
         :title="t('sessions.resizeList')"
@@ -60,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
 // Sessions page — project tab strip on top, then list + resize handle + detail,
 // all backed by the reactive `useSessionsStore`. The list operates on the active
 // tab's sessions (store.tabSessions); the empty-state "+" creates a session scoped
@@ -86,8 +93,15 @@ const {
 const RSZ_W = 6
 const { setInset, clearInset } = useDockMetrics()
 const { compact } = useResponsiveShell()
-const publishInset = () => setInset(compact.value ? 0 : listWidth.value + RSZ_W)
-watch([listWidth, compact], publishInset)
+
+// The list column can also be collapsed away entirely (toggle in the tab strip).
+// Collapsed, there is no rail to clear either — same as compact mode.
+const { collapsed: listCollapsed } = useSessionListCollapse()
+const listHidden = computed(() => listCollapsed.value && !compact.value)
+
+const publishInset = () =>
+  setInset(compact.value || listCollapsed.value ? 0 : listWidth.value + RSZ_W)
+watch([listWidth, compact, listHidden], publishInset)
 onMounted(publishInset)
 onActivated(publishInset)
 onDeactivated(clearInset)

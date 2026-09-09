@@ -131,19 +131,21 @@ async function remove(): Promise<void> {
 }
 .field > span {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   margin-bottom: 6px;
 }
 .field input {
   width: 100%;
+  min-height: var(--tap);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   padding: 11px 12px;
-  outline: none;
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .field input:focus {
   border-color: var(--accent);
@@ -158,7 +160,7 @@ async function remove(): Promise<void> {
 }
 .meta {
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   padding: 4px 12px;
   margin-bottom: 14px;
 }
@@ -168,14 +170,18 @@ async function remove(): Promise<void> {
   justify-content: space-between;
   gap: 12px;
   padding: 7px 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .mrow + .mrow {
   border-top: 1px solid var(--border);
 }
 .v {
+  /* mono-ok: a model id / account id, matched character-by-character against the
+     desktop's own list. */
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -191,14 +197,11 @@ async function remove(): Promise<void> {
 }
 .wide {
   width: 100%;
-  min-height: 44px;
   margin-bottom: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 .warn {
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--danger);
   margin: 4px 0 10px;
 }

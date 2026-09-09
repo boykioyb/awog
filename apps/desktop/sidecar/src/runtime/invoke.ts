@@ -28,6 +28,8 @@ import { detailsSignalError } from './tools/tool-error.js'
 import { buildMcpUnavailableNote } from './tools/mcp-tools.js'
 import { createTaskTool } from './tools/task-tool.js'
 import { makeTaskToolGate } from './permission.js'
+import { withTurnBudget } from './permission.js'
+import { costUsd, loadPricingTables } from '../pricing/effective.js'
 import {
   COMMUNICATION_PROMPT,
   ENGINEERING_PROMPT,
@@ -375,6 +377,26 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
 
   const reasoning = toReasoning(settings.level, model)
   const adapter = createInvokeAdapter(cb)
+  // Trần TIỀN còn lại của task, đối trọng Pi của `maxBudgetUsd` bên Claude SDK: cổng
+  // chặn ở biên tool call khi usage đo được của node đã ăn hết phần còn lại. Không
+  // có `maxCostUsd` ⇒ withTurnBudget trả lại gate gốc, không thêm chi phí gì.
+  const pricingTables = args.maxCostUsd ? await loadPricingTables() : null
+  const nodeGate = withTurnBudget(
+    makeTaskToolGate(args.projectIds?.[0], args.cwd),
+    args.maxCostUsd ? { maxCostUsd: args.maxCostUsd } : undefined,
+    Date.now(),
+    pricingTables
+      ? (): number => {
+          const a = adapter.result()
+          return costUsd(pricingTables, a.modelUsed || args.settings.modelId, {
+            inputTokens: a.usage.input_tokens,
+            outputTokens: a.usage.output_tokens,
+            cacheReadTokens: a.usage.cache_read_tokens,
+            cacheWriteTokens: a.usage.cache_creation_tokens,
+          })
+        }
+      : undefined,
+  )
 
   log.info('task turn request (pi)', {
     runtime: 'pi',
@@ -403,7 +425,7 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         // is already filtered in createRuntimeToolDefinitions above) — but a DENY
         // rule the user wrote is a guardrail, not a prompt, so it applies here too
         // (ADR 0080 F5). Deny-only: this gate blocks, it never grants.
-        beforeToolCall: makeTaskToolGate(args.projectIds?.[0], args.cwd),
+        beforeToolCall: nodeGate,
         // Capture Codex plan-usage from response headers (no-op for non-Codex),
         // then fail closed on Anthropic extra-usage: a headless task cannot prompt,
         // so if a response consumed PAID overage we STOP rather than silently bill.

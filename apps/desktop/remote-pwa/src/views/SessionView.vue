@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { activeTurnIds, cancelTurn, closeSession, current, sendMessage, steer } from '../store'
+import {
+  activeTurnIds,
+  cancelTurn,
+  closeSession,
+  current,
+  pendingLabel,
+  sendMessage,
+  steer,
+} from '../store'
 import { keyboardInset } from '../viewport'
 import {
   RESPONSE_STYLES,
@@ -95,12 +103,26 @@ watch(
 <template>
   <div v-if="cur" class="session">
     <header class="head">
-      <button class="back" title="Quay lại" @click="closeSession">‹</button>
+      <button
+        class="back"
+        title="Quay lại"
+        aria-label="Quay lại danh sách"
+        @click="closeSession"
+      >
+        <ChevronLeft class="icn-lg" />
+      </button>
       <button class="titlebox" @click="menuOpen = true">
         <span class="title">{{ cur.title || 'Session' }}</span>
         <span v-if="subtitle" class="sub muted">{{ subtitle }}</span>
       </button>
-      <button class="menu" title="Tuỳ chọn" @click="menuOpen = true">⋯</button>
+      <button
+        class="menu"
+        title="Tuỳ chọn"
+        aria-label="Tuỳ chọn session"
+        @click="menuOpen = true"
+      >
+        <Ellipsis class="icn-lg" />
+      </button>
     </header>
 
     <nav class="tabs">
@@ -131,7 +153,7 @@ watch(
 
       <div v-if="pending.length" class="queued">
         <span class="qdot" />
-        <span class="qtxt">{{ pending.length }} tin nhắn đang chờ lượt hiện tại</span>
+        <span class="qtxt">{{ pendingLabel }}</span>
       </div>
       <BackgroundChips />
       <Composer
@@ -166,30 +188,37 @@ watch(
   background: var(--bg);
 }
 .back {
-  width: 34px;
-  height: 34px;
+  width: var(--tap);
+  height: var(--tap);
   flex-shrink: 0;
   border: none;
   background: transparent;
   color: var(--accent);
-  font-size: 26px;
-  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.back:active,
+.menu:active {
+  opacity: 0.55;
+}
 .titlebox {
   flex: 1;
   min-width: 0;
+  min-height: var(--tap);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: 1px;
   border: none;
   background: transparent;
   color: var(--text);
   padding: 4px 2px;
   text-align: left;
+}
+.titlebox:active {
+  opacity: 0.55;
 }
 .title {
   font-weight: 600;
@@ -199,36 +228,48 @@ watch(
   white-space: nowrap;
 }
 .sub {
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .menu {
-  width: 34px;
-  height: 34px;
+  width: var(--tap);
+  height: var(--tap);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: transparent;
   color: var(--text-dim);
-  font-size: 20px;
 }
 .tabs {
   display: flex;
   gap: 6px;
   flex: 0 0 auto;
-  padding: 8px 12px;
+  /* 4px instead of 8: the pills grew to the 44px hit box, so the bar keeps
+     roughly its old total height. */
+  padding: 4px 12px;
   border-bottom: 1px solid var(--border);
 }
 .tabs button {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
-  border-radius: 999px;
-  padding: 5px 14px;
-  font-size: 13px;
+  border-radius: var(--r-pill);
+  padding: 0 16px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
+}
+.tabs button:active {
+  background: var(--surface-2);
 }
 .tabs button.on {
   color: var(--accent);
@@ -258,12 +299,14 @@ watch(
   gap: 6px;
   flex: 0 0 auto;
   width: 100%;
+  min-height: var(--tap);
   padding: 7px 12px;
   border: none;
   border-top: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   text-align: left;
@@ -275,7 +318,7 @@ watch(
   flex: 0 0 auto;
   padding: 3px 9px;
   border: 1px solid var(--border);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   white-space: nowrap;
 }
 .cfg-edit {
@@ -293,7 +336,8 @@ watch(
   flex: 0 0 auto;
   padding: 6px 14px;
   border-top: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--warn);
 }
 .qdot {

@@ -94,6 +94,26 @@ export interface SessionDefaults {
   thinkingLevel: ThinkingLevel
 }
 
+// LLM config the PR detail's "Start review" session starts on. Same shape as a
+// project's llmDefaults, minus the MCP whitelist (a review reads a diff; it does
+// not need a different tool surface). Absent = inherit project → app defaults.
+export interface PrReviewLlm {
+  provider: ProviderName
+  modelId: string
+  // Three states, like the per-project gh-account override:
+  //   PR_REVIEW_ACCOUNT_INHERIT → leave the account the session resolved from the
+  //                               project / app defaults (only model + effort move)
+  //   undefined                 → the chosen provider's active account
+  //   '<id>'                    → that account
+  accountId?: string
+  // undefined = inherit the effort a plain new session would get.
+  level?: ThinkingLevel
+}
+
+// "Follow the session's own config" for PrReviewLlm.accountId — the account (and
+// with it the provider) stays whatever a new session in that project would get.
+export const PR_REVIEW_ACCOUNT_INHERIT = '__inherit'
+
 export type AutoCommitScope = 'workspace' | 'artifacts-only'
 export type DirtyTaskPolicy = 'warn' | 'auto-stash'
 
@@ -106,6 +126,12 @@ export interface GitSettings {
   dirtyTaskPolicy: DirtyTaskPolicy
   autoFetchIntervalMs: number
   commitMessageRule: string
+  // Prompt the PR detail's "Start review" button sends to the session it opens.
+  // Placeholders (utils/pr-review-prompt) are substituted at click time; blank
+  // falls back to DEFAULT_PR_REVIEW_PROMPT.
+  prReviewPrompt: string
+  // Account / model / effort that session runs on. Absent = inherit.
+  prReviewLlm?: PrReviewLlm
 }
 
 // Session + composer behaviour. autoApprove/notifications/autoCompact are the
@@ -318,6 +344,11 @@ const DEFAULT_DEFAULTS: SessionDefaults = {
   thinkingLevel: 'medium',
 }
 
+// Deliberately plain: it must do something sensible with no setup, and the user's
+// own review workflow (a skill, a house checklist, a language) is exactly what the
+// setting is for.
+export const DEFAULT_PR_REVIEW_PROMPT = 'Review pull request {link-pr}'
+
 const DEFAULT_GIT: GitSettings = {
   autoCommitPerPhase: true,
   commitCoAuthor: true,
@@ -327,6 +358,7 @@ const DEFAULT_GIT: GitSettings = {
   dirtyTaskPolicy: 'warn',
   autoFetchIntervalMs: 300_000,
   commitMessageRule: DEFAULT_COMMIT_MESSAGE_RULE,
+  prReviewPrompt: DEFAULT_PR_REVIEW_PROMPT,
 }
 
 const DEFAULT_SESSIONS: SessionSettings = {

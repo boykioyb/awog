@@ -93,7 +93,7 @@ watch(() => props.sessionId, load)
   flex: 1;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   padding: 14px 10px;
   text-align: center;
   display: flex;
@@ -101,17 +101,24 @@ watch(() => props.sessionId, load)
   gap: 4px;
 }
 .stat .v {
-  font-size: 20px;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
   font-weight: 700;
+  /* Three figures side by side: same-width digits keep the columns aligned
+     without dragging in a terminal typeface. */
+  font-variant-numeric: tabular-nums;
 }
 .stat .v.accent {
   color: var(--accent);
 }
 .stat .k {
-  font-size: 12px;
+  /* sm, not xs: this is the caption that says WHAT the number above it means. */
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .warn {
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--warn);
   margin: 0 0 12px;
 }
@@ -126,22 +133,27 @@ watch(() => props.sessionId, load)
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   margin-bottom: 6px;
 }
+/* No mono in this list: a date, a token count and an amount are numbers to read,
+   not code to copy. tabular-nums is what actually keeps them in a column. */
 .date {
   flex: 1;
-  font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-variant-numeric: tabular-nums;
 }
 .tok {
-  font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-variant-numeric: tabular-nums;
 }
 .amt {
   font-weight: 600;
   color: var(--accent);
-  font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-variant-numeric: tabular-nums;
 }
 </style>

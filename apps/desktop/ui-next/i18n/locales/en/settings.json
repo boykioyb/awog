@@ -246,5 +246,10 @@
   "settings.memory.clear.body": "Permanently delete all {n} saved facts. This cannot be undone.",
   "settings.memory.clear.confirm": "Forget all",
   "settings.wiki.autoWrite.name": "Let agents edit the wiki",
-  "settings.wiki.autoWrite.desc": "Off by default. When on, an agent can create, update and delete pages — each edit still asks for approval (except in execute mode) and shows in the transcript. The global wiki has no version history."
+  "settings.wiki.autoWrite.desc": "Off by default. When on, an agent can create, update and delete pages — each edit still asks for approval (except in execute mode) and shows in the transcript. The global wiki has no version history.",
+  "settings.workspace.linkOpen.name": "Opening links",
+  "settings.workspace.linkOpen.desc": "Where a web link goes when you click it. ⌘-click always uses your own browser.",
+  "settings.workspace.linkOpen.ask": "Ask every time",
+  "settings.workspace.linkOpen.app": "AWOG's browser",
+  "settings.workspace.linkOpen.external": "My browser"
 }

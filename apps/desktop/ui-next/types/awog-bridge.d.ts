@@ -23,6 +23,84 @@ export type AwogUpdateEvent =
   | { type: 'downloaded'; version: string }
   | { type: 'error'; message: string }
 
+// Embedded browser (ADR 0086) — mirrors Rect / TabInfo in electron/src/browser.ts.
+export type AwogBrowserRect = { x: number; y: number; width: number; height: number }
+export type AwogBrowserTab = {
+  tabId: string
+  url: string
+  title: string
+  active: boolean
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  // On screen in THIS window's rect. One webContents cannot be in two rects, so a
+  // panel that does not hold it renders a placeholder instead of fighting for it.
+  shown: boolean
+  // On screen somewhere else — the popout window, or another app window.
+  shownElsewhere: boolean
+}
+export type AwogBrowserTabList = { tabs: AwogBrowserTab[]; activeTabId: string | null }
+
+// ADR 0086 phần E — reading and pointing at the page the user is looking at.
+// Everything here is USER-initiated (a click in the chrome), which is why it may
+// return page text to the renderer at all: the model-facing path stays inside the
+// sidecar's browser_tool, where the nonce fence and the redactor live.
+export type AwogBrowserSelection = { text: string; url: string; title: string }
+// One element the user picked with the element picker.
+export type AwogBrowserPick = {
+  // A CSS path good enough to hand back to the agent ("main > form > input:nth-of-type(2)").
+  selector: string
+  // Accessible-ish label + visible text, trimmed.
+  text: string
+  // outerHTML, capped by main.
+  html: string
+  url: string
+  title: string
+}
+// The current page as chat context (`@page`).
+export type AwogBrowserPageContext = { url: string; title: string; text: string }
+// Host policy for the agent's browser. 'off' = only the built-in private/loopback
+// guard applies; 'allowlist' = additionally, only these hosts may load.
+export type AwogBrowserSites = { mode: 'off' | 'allowlist'; hosts: string[] }
+
+// Profile import (ADR 0086 phần B) — mirrors browser-import.ts.
+export type AwogBrowserProfile = {
+  dir: string
+  name: string
+  email: string
+  hasCookies: boolean
+}
+export type AwogBrowserImportSource = {
+  id: string
+  label: string
+  profiles: AwogBrowserProfile[]
+}
+export type AwogBrowserImportParts = {
+  cookies: boolean
+  localStorage: boolean
+  indexedDb: boolean
+}
+export type AwogBrowserImportReport = {
+  browser: string
+  profile: string
+  // null when that part was not requested.
+  cookies: {
+    total: number
+    imported: number
+    // Written with app-bound encryption (Chrome 127+): undecryptable by design.
+    appBound: number
+    undecryptable: number
+    rejected: number
+    expired: number
+    // The macOS keychain prompt was denied, or the item is missing.
+    keyUnavailable: boolean
+  } | null
+  localStorage: { staged: boolean; bytes: number } | null
+  indexedDb: { staged: boolean; bytes: number } | null
+  // LevelDB stores only land at the next boot — see applyPendingImport.
+  needsRestart: boolean
+}
+
 // Live log tail (Diagnostics panel).
 export type AwogLogTailEvent =
   | { type: 'init'; content: string; path: string }
@@ -188,6 +266,58 @@ export interface AwogBridge {
   listSessionWindows(): Promise<string[]>
   // Live changes to that set; returns an unsubscribe function.
   onSessionWindowsChanged(handler: (engineIds: string[]) => void): () => void
+  // Embedded browser (ADR 0086). The workspace panel's "Browser" view borrows the
+  // agent's Chromium tab into a rect of this window; main resolves the host window
+  // from the IPC sender, so a renderer can only fill its OWN window.
+  browser: {
+    attach(rect: AwogBrowserRect, tabId?: string): Promise<AwogBrowserTab>
+    setBounds(rect: AwogBrowserRect, tabId?: string): Promise<void>
+    detach(): Promise<void>
+    tabs(): Promise<AwogBrowserTabList>
+    open(url: string, tabId?: string): Promise<AwogBrowserTab>
+    // `wait: false` trả về ngay khi tab đã tạo + điều hướng đã bắt đầu (đường
+    // người dùng bấm link, để UI không đứng chờ trang tải). Mặc định chờ tải xong.
+    newTab(
+      url?: string,
+      opts?: { wait?: boolean },
+    ): Promise<{ tabId: string; url: string; title: string }>
+    selectTab(tabId: string): Promise<AwogBrowserTab>
+    closeTab(tabId: string): Promise<{ closed: string; remaining: number }>
+    back(tabId?: string): Promise<void>
+    forward(tabId?: string): Promise<void>
+    reload(tabId?: string): Promise<void>
+    popout(): Promise<void>
+    onChanged(handler: (list: AwogBrowserTabList) => void): () => void
+    // Installed Chromium browsers + their profiles. Ids only travel over IPC;
+    // main resolves them to paths itself (invariant #2).
+    listBrowsers(): Promise<AwogBrowserImportSource[]>
+    importProfile(
+      browserId: string,
+      profileDir: string,
+      parts: AwogBrowserImportParts,
+    ): Promise<AwogBrowserImportReport>
+    // Wipe everything the agent's browser holds (the undo for an import).
+    clearData(): Promise<void>
+    // Restart the app so a staged import lands. Confirm first — it kills running turns.
+    relaunch(): Promise<void>
+
+    // ── phần E: read + point (all user-initiated) ─────────────────────────
+    // Text the user highlighted IN the page — feeds Translate and "quote to chat".
+    selection(tabId?: string): Promise<AwogBrowserSelection>
+    // Arm the element picker: the page highlights on hover, and the promise
+    // resolves with the element the user clicks — or null if they cancel (Esc) or
+    // navigate away. At most one picker at a time.
+    pickElement(tabId?: string): Promise<AwogBrowserPick | null>
+    cancelPick(tabId?: string): Promise<void>
+    // The page as chat context (`@page`): url + title + visible text, capped.
+    pageContext(tabId?: string): Promise<AwogBrowserPageContext>
+    // Save a PNG of the page into the workspace. `root` is the workspace root the
+    // renderer resolved; main re-validates the write stays inside it (invariant #2).
+    saveScreenshot(root: string, tabId?: string): Promise<{ path: string }>
+    // Host policy (⋮ → Manage allowed sites).
+    sites(): Promise<AwogBrowserSites>
+    setSites(sites: AwogBrowserSites): Promise<void>
+  }
   // Close the calling window (a preview popout closing itself). Main resolves the
   // target from the IPC sender, so a renderer can never close another window.
   closeSelf(): Promise<void>

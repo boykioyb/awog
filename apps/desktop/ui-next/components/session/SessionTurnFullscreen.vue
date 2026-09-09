@@ -164,7 +164,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 10px 14px;
+  /* Same full-bleed inset as PreviewModal's header — clears the OS window controls
+     this overlay covers (app-shell.css publishes both strips). */
+  padding: 10px calc(14px + var(--titlebar-inset-end)) 10px calc(14px + var(--titlebar-inset-start));
   border-bottom: 1px solid var(--border);
   color: var(--text);
 }

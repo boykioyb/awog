@@ -105,7 +105,7 @@ function diffClass(line: string): string {
 .detail {
   margin: 4px 0 8px 21px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   background: var(--surface);
   overflow: hidden;
 }
@@ -116,8 +116,10 @@ function diffClass(line: string): string {
   justify-content: space-between;
   gap: 8px;
   padding: 6px 10px;
+  /* mono-ok: a file path / an exit code next to the command that produced it. */
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   background: var(--surface-2);
   border-bottom: 1px solid var(--border);
@@ -137,9 +139,10 @@ function diffClass(line: string): string {
 .code {
   margin: 0;
   padding: 8px 10px;
+  /* mono-ok: code, diff and terminal output. */
   font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   white-space: pre;
   overflow-x: auto;
   max-height: 320px;
@@ -180,26 +183,35 @@ function diffClass(line: string): string {
 }
 .list li {
   padding: 3px 0;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   display: flex;
   flex-direction: column;
   gap: 1px;
 }
-.it-path,
+.it-path {
+  /* mono-ok: a file path. */
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+/* The snippet is the matched LINE of a file — code, so it keeps mono; the label
+   above it is prose and does not. */
 .it-snip {
   font-family: var(--mono);
-  font-size: 12px;
+}
+.it-path,
+.it-snip {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.it-path {
-  color: var(--text-dim);
-}
 .more {
   margin: 0;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   border-top: 1px solid var(--border);
 }
 </style>

@@ -110,5 +110,9 @@
   "common.create": "Tạo",
   "common.loading": "Đang tải…",
   "common.saving": "Đang lưu…",
-  "common.edit": "Sửa"
+  "common.edit": "Sửa",
+  "link.openInApp": "Mở trong AWOG",
+  "link.openExternal": "Mở bằng browser của tôi",
+  "link.remember": "Luôn dùng cách này",
+  "link.openFailed": "Không mở được trong AWOG: {message}"
 }

@@ -44,7 +44,7 @@ const params = computed<{ key: string; value: string }[]>(() => {
 <style scoped>
 .perm {
   border: 1px solid var(--warn);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   padding: 12px 14px;
   margin: 6px 0 14px;
   background: color-mix(in srgb, var(--warn) 8%, var(--surface));
@@ -61,12 +61,15 @@ const params = computed<{ key: string; value: string }[]>(() => {
 }
 .tool {
   font-weight: 600;
+  /* mono-ok: the tool's identifier, as the engine and the deny rules spell it. */
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .sentence {
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .params {
   display: flex;
@@ -79,9 +82,13 @@ const params = computed<{ key: string; value: string }[]>(() => {
   flex-direction: column;
   gap: 2px;
 }
+/* This card is the allow/deny surface: the parameters ARE the decision, so they
+   get readable body-size type, not the 12px it used to be. */
 .k {
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
+  /* mono-ok: the parameter's name exactly as the tool declares it. */
   font-family: var(--mono);
 }
 .v {
@@ -89,9 +96,11 @@ const params = computed<{ key: string; value: string }[]>(() => {
   padding: 8px 10px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
+  /* mono-ok: the literal argument the tool will run — a command, a path, a patch. */
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 220px;
@@ -103,6 +112,5 @@ const params = computed<{ key: string; value: string }[]>(() => {
 }
 .actions .btn {
   flex: 1;
-  min-height: 44px;
 }
 </style>

@@ -15,7 +15,8 @@ import { pushActionToast } from '~/composables/useActionToasts'
 import type { AccountOption } from '~/composables/useAccounts'
 import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
-import { useSettingsStore } from '~/stores/settings'
+import { PR_REVIEW_ACCOUNT_INHERIT, useSettingsStore } from '~/stores/settings'
+import type { ProviderName } from '~/types'
 import { useProjectsStore } from '~/stores/projects'
 import {
   CTX_DIVISOR,
@@ -79,6 +80,16 @@ type EngineQuestion = {
   question: string
   options: { label: string; description?: string }[]
   multiSelect: boolean
+  // Extended schema (sidecar types/shared.ts SessionQuestion). Absent on a plain
+  // choice question — "no kind" means 'choice'.
+  kind?: 'choice' | 'text' | 'number'
+  description?: string
+  placeholder?: string
+  min?: number
+  max?: number
+  step?: number
+  defaultValue?: number
+  unit?: string
 }
 type EngineQuestionAnswer = { header: string; selected: string[] }
 
@@ -148,6 +159,8 @@ type EngineStep = {
   planStatus?: 'pending' | 'approved' | 'rejected'
   questions?: EngineQuestion[]
   answers?: EngineQuestionAnswer[]
+  questionTitle?: string
+  questionResponse?: string
   steerText?: string
   parentId?: string
   todos?: EngineTodo[]
@@ -514,19 +527,24 @@ export const useSessionsStore = defineStore('sessions', () => {
     () => sessions.value.find((s) => s.id === activeId.value) ?? null,
   )
 
+  // The provider a session's turn will run on, exactly as the engine resolves it:
+  // the selected account's provider, else the tail of the account display label,
+  // else the configured default. Single source for every provider-conditional
+  // behaviour in this store (engineSettings, steering, Claude-CLI slash commands) —
+  // the copies of this derivation had already drifted apart on their fallback.
+  function providerOf(s: Session): string {
+    const opt = s.accountId ? accountById(s.accountId) : undefined
+    const fallback = PROVIDER_DISPLAY[settingsStore.defaults.provider] ?? 'Anthropic'
+    return (opt?.provider ?? s.account.split(' · ')[1] ?? fallback).toLowerCase()
+  }
+  const activeProvider = computed<string>(() => (active.value ? providerOf(active.value) : ''))
+
   // Whether the ACTIVE session's runtime supports mid-turn steering. Only the Pi
   // runtime (non-anthropic providers) polls getSteeringMessages; the Claude SDK
   // path (anthropic) runs a single-prompt query with no steering hook, so a steer
   // there is dropped. The composer reads this to QUEUE instead of steer (never
-  // silently swallow the message). Provider is derived the same way engineSettings
-  // resolves it (selected account → the account's provider, else the display tail).
-  const activeCanSteer = computed<boolean>(() => {
-    const s = active.value
-    if (!s) return false
-    const opt = s.accountId ? accountById(s.accountId) : undefined
-    const provider = (opt?.provider ?? s.account.split(' · ')[1] ?? 'Anthropic').toLowerCase()
-    return provider !== 'anthropic'
-  })
+  // silently swallow the message).
+  const activeCanSteer = computed<boolean>(() => activeProvider.value !== 'anthropic')
 
   // Selection state for bulk actions (§1). Reactive set of client ids. `selecting`
   // is the select-mode toggle (rows show checkboxes + the bulk bar appears); it
@@ -859,11 +877,27 @@ export const useSessionsStore = defineStore('sessions', () => {
         }
         if (q.header) item.header = q.header
         if (q.multiSelect) item.multi = true
+        // Extended schema (docs/features/ask-user-question.md): kind + its control fields.
+        if (q.kind === 'text' || q.kind === 'number') item.kind = q.kind
+        if (q.description) item.hint = q.description
+        if (q.placeholder) item.placeholder = q.placeholder
+        if (q.unit) item.unit = q.unit
+        if (typeof q.min === 'number') item.min = q.min
+        if (typeof q.max === 'number') item.max = q.max
+        if (typeof q.step === 'number') item.step = q.step
+        if (typeof q.defaultValue === 'number') item.defaultValue = q.defaultValue
         const sel = byHeader.get(q.header)
         if (sel?.length) item.answer = sel.join(', ')
         return item
       })
-      return { kind: 'question', items, eid: step.id }
+      const block: QuestionBlock = { kind: 'question', items, eid: step.id }
+      if (step.questionTitle) block.title = step.questionTitle
+      if (step.questionResponse) block.response = step.questionResponse
+      // The engine flips the step to 'done' when the tool call completes, which is
+      // the ONLY reliable "the user replied" signal for a reply that answers nothing
+      // (decide-for-me / follow-up request).
+      if (step.status === 'done') block.done = true
+      return block
     }
     if (step.kind === 'steer') {
       return { kind: 'steer', text: step.steerText ?? step.label }
@@ -2031,6 +2065,45 @@ export const useSessionsStore = defineStore('sessions', () => {
     const opt = accountById(account.id)
     s.model = (opt ? modelsForAccount(opt) : modelsFor(account.display))[0] ?? s.model
     if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+
+  // Apply an explicit provider/model/account/effort onto a session — Settings →
+  // Git's "Start review" LLM config uses it right after create(), so the review
+  // runs on the account the user picked for reviews rather than the project's
+  // default. Resolution mirrors defaultsForNewSession: the account must exist on
+  // that provider (else its active one), and the model must be one that account
+  // actually offers.
+  function applyLlmConfig(
+    id: number,
+    cfg: { provider: ProviderName; modelId: string; accountId?: string; level?: ThinkingLevel },
+  ) {
+    const s = byId(id)
+    if (!s) return
+    if (cfg.level) s.thinkingLevel = cfg.level
+    if (!useIpc) return
+    const want = modelDisplayName(cfg.modelId)
+    if (cfg.accountId === PR_REVIEW_ACCOUNT_INHERIT) {
+      // "Follow the session's own config": keep the account (and provider) the
+      // session already resolved, and move the model only if that account serves
+      // it — a model from another provider would just break the turn.
+      const bound = s.accountId ? accountById(s.accountId) : undefined
+      if (bound && modelsForAccount(bound).includes(want)) s.model = want
+    } else {
+      const inProvider = accounts.value.filter(
+        (a) => a.provider === (PROVIDER_DISPLAY[cfg.provider] ?? 'Anthropic'),
+      )
+      const acct =
+        (cfg.accountId ? inProvider.find((a) => a.id === cfg.accountId) : undefined) ??
+        inProvider.find((a) => a.isActive) ??
+        inProvider[0]
+      if (acct) {
+        s.account = acct.display
+        s.accountId = acct.id
+        const available = modelsForAccount(acct)
+        s.model = available.includes(want) ? want : (available[0] ?? s.model)
+      }
+    }
+    pushUpsert(s, 'update-metadata')
   }
 
   function setStyle(id: number, style: string) {
@@ -3512,7 +3585,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Model text folds the quoted excerpts + notes into the prompt (the `quotes`
     // above are display-only). This is also what makes a quote-only turn (empty
     // draft) carry content — otherwise the sidecar rejects the empty payload.
-    const modelText = composeQuotedText(quotes, trimmed)
+    //
+    // A Claude-CLI command is the exception: the CLI reads it only from a message
+    // that STARTS with `/`, so quoted excerpts would demote it to prose. It goes out
+    // bare, and the staged quotes are left for the user's next real message.
+    const nativeCommand = command?.native === true
+    const modelText = nativeCommand ? trimmed : composeQuotedText(quotes, trimmed)
 
     // No bridge = no runtime. Surface that instead of inventing an answer.
     if (!useIpc) {
@@ -3529,7 +3607,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     // gets summarised; this message is not persisted yet, so it is never cut away.
     await maybeAutoCompact(s)
 
-    await runEngineTurn(s, modelText, atts, userMessageId)
+    await runEngineTurn(s, modelText, atts, userMessageId, nativeCommand)
   }
 
   // Drive one real turn over IPC: placeholder bubble + stream subscription folds
@@ -3541,6 +3619,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Id the caller already stamped on the pushed user bubble; omitted when the mint
     // failed validation, in which case the sidecar falls back to its own `msg_u_<hex>`.
     userMessageId?: string,
+    // `text` is one of the Claude CLI's own commands (/goal, /context…) and must
+    // reach the CLI verbatim — see the sidecar's RunNonStreamArgs.nativeCommand.
+    nativeCommand?: boolean,
   ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
@@ -3640,6 +3721,10 @@ export const useSessionsStore = defineStore('sessions', () => {
         messageId,
         ...(userMessageId ? { userMessageId } : {}),
         text,
+        // A Claude-CLI command must reach the CLI verbatim: the sidecar drops every
+        // turn-prompt rider for it, because the CLI only treats a message as a local
+        // command when it STARTS with `/`.
+        ...(nativeCommand ? { nativeCommand: true } : {}),
         ...(engineAtts.length ? { attachments: engineAtts } : {}),
         history: [],
         settings: engineSettings(s),
@@ -3768,9 +3853,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   // session with no bound account to a provider the user may have no key for.
   // modelId reverse-maps the display name; accountId is the REAL sidecar id.
   function engineSettings(s: Session): Record<string, unknown> {
-    const opt = s.accountId ? accountById(s.accountId) : undefined
-    const fallbackProvider = PROVIDER_DISPLAY[settingsStore.defaults.provider] ?? 'Anthropic'
-    const provider = (opt?.provider ?? s.account.split(' · ')[1] ?? fallbackProvider).toLowerCase()
+    const provider = providerOf(s)
     const modelId = modelIdFromDisplay(s.model)
     const mode =
       s.mode === 'Plan'
@@ -3942,6 +4025,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     id: number,
     msgIndex: number,
     answers: { header: string; selected: string[] }[],
+    // Free text written beside the answers, and the "ask me another round instead"
+    // request. Both are the tool's own reply fields, not AWOG inventions.
+    opts?: { response?: string; followUp?: boolean },
   ) {
     const s = byId(id)
     const msg = s?.msgs[msgIndex]
@@ -3951,15 +4037,23 @@ export const useSessionsStore = defineStore('sessions', () => {
     )
     if (!block) return
     // Record each answer onto its question (match by header, fall back positional).
+    // `answers` may cover only SOME questions (follow-up request) or none at all
+    // (decide-for-me), so leave an unanswered item alone instead of writing ''.
     const byHeader = new Map(answers.map((a) => [a.header, a.selected]))
     block.items.forEach((it, i) => {
       const sel = (it.header != null ? byHeader.get(it.header) : undefined) ?? answers[i]?.selected
-      it.answer = (sel ?? []).join(', ')
+      if (sel?.length) it.answer = sel.join(', ')
     })
+    if (opts?.response) block.response = opts.response
+    // The gate is spent the moment we reply — including a reply that answers
+    // nothing. Without this the card would stay interactive and the drawer open.
+    block.done = true
     if (!useIpc || !block.eid) return
     pushRequest('sessions.answerQuestion', {
       requestId: block.eid,
       answers: answers.map((a) => ({ header: a.header, selected: a.selected })),
+      ...(opts?.response ? { response: opts.response } : {}),
+      ...(opts?.followUp ? { followUp: true } : {}),
     })
     // Turn resumes generating → flip status back to streaming (else it stays
     // "awaiting" / shows "Waiting…" even though the model is working again).
@@ -4541,6 +4635,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     activeId,
     active,
     activeCanSteer,
+    activeProvider,
     selectedIds,
     selecting,
     pendingPermission,
@@ -4612,6 +4707,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setModel,
     setAccount,
     selectAccount,
+    applyLlmConfig,
     setStyle,
     setThinking,
     setNoMarkdown,

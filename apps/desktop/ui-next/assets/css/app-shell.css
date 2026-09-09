@@ -1420,6 +1420,33 @@ body[data-platform='linux'] .top {
   padding-right: calc(100vw - env(titlebar-area-width, 100vw) + 18px);
 }
 
+/* ── Full-bleed overlay headers ────────────────────────────────────────────────
+   The rules above inset the SHELL, but a full-window overlay (PreviewModal,
+   SessionTurnFullscreen) covers the top bar as well, so its own header row lands
+   under the window controls: on macOS the traffic lights sit on top of the file
+   path, on Windows/Linux the overlay glyphs sit on top of the header's ✕.
+
+   Publish the two strips as tokens instead of repeating the geometry in every
+   overlay — a new edge-to-edge surface just consumes them.
+
+   `:has(.app)` scopes this to the window that hides its title bar: only the shell
+   layout renders `.app`, and the popout windows (preview / session / tray / pet)
+   keep a NATIVE title bar, so an inset there would be dead space. The overlays are
+   teleported to <body>, i.e. OUTSIDE `.app`, which is why the gate has to sit on
+   <body> rather than on an ancestor of the header. */
+body {
+  --titlebar-inset-start: 0px;
+  --titlebar-inset-end: 0px;
+}
+/* 68px = the lights' right edge (x=66, see above) + breathing room. */
+body[data-platform='darwin']:not([data-fullscreen]):has(.app) {
+  --titlebar-inset-start: 68px;
+}
+body[data-platform='win32']:has(.app),
+body[data-platform='linux']:has(.app) {
+  --titlebar-inset-end: calc(100vw - env(titlebar-area-width, 100vw));
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    Interaction states (docs/features/native-macos-polish.md §4 W2)
 

@@ -96,6 +96,29 @@ export function buildSdkEnv(cred: Credential): Record<string, string> {
   // closing stdin at `result` cancels every tool call in that continuation with the
   // CLI's canned "The user doesn't want to take this action right now…" text.
   env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = '1'
+  // Tool search — the thing that makes deferred tool loading actually happen.
+  //
+  // The CLI carries tool search (`tool_search_tool_regex` / `_bm25`, beta
+  // `tool-search-tool-2025-10-19`), and with it only tool NAMES ride in the prompt
+  // up front; a schema is fetched the first time the model needs it. But its own
+  // setting (`toolSearchEnabled`) DEFAULTS TO FALSE, and the SDK's per-server
+  // `alwaysLoad` is documented as "tools are deferred when tool search is enabled".
+  //
+  // So without this flag the deferral AWOG relies on (alwaysLoadExternalMcp below,
+  // and every in-process server that deliberately omits `alwaysLoad`) was a NO-OP:
+  // every schema of every attached server was inlined into every request of every
+  // turn regardless. That is the difference behind "Tool definitions 192k" in AWOG's
+  // usage panel versus Claude Code's own panel reporting 41.2k of tool schemas
+  // DEFERRED and out of the prompt on the same machine.
+  //
+  // Gated on a FIRST-PARTY endpoint on purpose. The CLI's own documentation for this
+  // switch: "Enable it only if your endpoint forwards and accepts the request shape
+  // it will receive; when it does not, requests fail with HTTP 400." A custom
+  // baseURL (proxy, Ollama, a gateway speaking the Anthropic protocol) is exactly
+  // the case that cannot be assumed to forward the tool-search shape, so those keep
+  // the conservative default and pay the inlined schemas instead of failing.
+  const firstParty = cred.kind === 'oauth' || !cred.baseURL
+  if (firstParty) env.ENABLE_TOOL_SEARCH = 'true'
   if (cred.kind === 'oauth') {
     env.CLAUDE_CODE_OAUTH_TOKEN = cred.accessToken
   } else {
@@ -331,5 +354,27 @@ export function makeForegroundOnlyHook(
         updatedInput: toolInput,
       },
     }
+  }
+}
+
+// Một `result` KHÔNG phải 'success' chỉ mang mã lý do; `result` (text) thường rỗng.
+// Dịch mã đó thành câu người đọc được, vì đây là thứ duy nhất đến được UI khi lượt
+// chết. Mã lạ ⇒ trả chính mã: đoán bừa còn tệ hơn nói thẳng "cái này chưa biết".
+export function resultErrorMessage(subtype: string | undefined, text?: string): string {
+  const detail = typeof text === 'string' && text.trim() ? text.trim() : ''
+  switch (subtype) {
+    case 'error_max_budget_usd':
+      return detail || 'Stopped: this run reached its cost cap. Raise the cap in config to continue.'
+    case 'error_max_turns':
+      return detail || 'Stopped: this run reached its maximum number of turns.'
+    case 'error_max_structured_output_retries':
+      return (
+        detail ||
+        'Stopped: the model could not produce output matching the required schema after several tries.'
+      )
+    case 'error_during_execution':
+      return detail || 'The run failed during execution.'
+    default:
+      return detail || `The run ended with ${subtype ?? 'an unknown error'}.`
   }
 }

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu } from 'electron'
 import { engine } from './engine'
 import { browser, registerBrowserHostHandlers } from './browser'
+import { applyPendingImport } from './browser-import'
 import { registerIpc } from './ipc'
 import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
 import { loadShellEnv } from './shell-env'
@@ -121,7 +122,7 @@ if (!gotLock) {
   // registerSchemesAsPrivileged must run before the app is ready.
   registerAppProtocolScheme()
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     setupAppMenu()
     // macOS: keep the app in the Dock. Secondary windows (tray popover) must not
     // turn this into a background/accessory app — show the Dock icon explicitly.
@@ -130,6 +131,12 @@ if (!gotLock) {
     // so the agent's Bash tool / PTY / git runner can find tools under a GUI
     // (Finder/Dock) launch that strips the environment. No-op in dev + Windows.
     loadShellEnv()
+    // A staged browser-profile import (ADR 0086 phần B) must land BEFORE anything
+    // touches the `persist:awog-browser` partition: Local Storage / IndexedDB are
+    // LevelDB stores that Chromium holds open for a Session's lifetime, so this is
+    // the only moment they can be replaced without racing it for the lock. Awaited
+    // for that reason — and it is a no-op with no import pending.
+    await applyPendingImport()
     engine.start()
     // Expose the browser.* reverse-channel handlers so the sidecar's browser_tool
     // can drive the embedded Chromium (ADR 0043). The window itself is lazy.

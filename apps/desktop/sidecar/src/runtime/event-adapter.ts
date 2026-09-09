@@ -181,7 +181,13 @@ export function createEventAdapter(
         // call input. The tool parks until the user answers; the end event below
         // fills in the chosen answers. Id = toolCallId = the answerQuestion key.
         if (event.toolName === 'AskUserQuestion') {
-          cb.onStep(withParent(stepFromQuestion(event.toolCallId, input.questions)))
+          cb.onStep(
+            withParent(
+              stepFromQuestion(event.toolCallId, input.questions, undefined, 'running', {
+                title: input.title,
+              }),
+            ),
+          )
           break
         }
         cb.onStep(withParent(stepFromToolUse({ id: event.toolCallId, name: event.toolName, input })))
@@ -212,6 +218,7 @@ export function createEventAdapter(
           const rec = (typeof details === 'object' && details !== null ? details : {}) as {
             questions?: unknown
             answers?: SessionQuestionAnswer[]
+            response?: string
           }
           cb.onStep(
             withParent(
@@ -220,6 +227,13 @@ export function createEventAdapter(
                 rec.questions,
                 Array.isArray(rec.answers) ? rec.answers : [],
                 'done',
+                {
+                  // Tiêu đề nằm ở INPUT của lời gọi, không ở kết quả — lấy lại từ
+                  // bản input đã lưu lúc start (case này không thấy `input`).
+                  title: (toolInputs.get(event.toolCallId)?.input as { title?: unknown } | undefined)
+                    ?.title,
+                  ...(typeof rec.response === 'string' ? { response: rec.response } : {}),
+                },
               ),
             ),
           )

@@ -35,6 +35,16 @@ export type ComposerSkill = {
   source: 'global' | 'project'
   projectId?: string
 }
+// One of the Claude Code CLI's OWN slash commands (/goal, /context, /usage…), read
+// live from the CLI via sessions.cliCommands. No `id`/`source`: it isn't an AWOG
+// entity on disk — the name IS the address, and picking it sends the command to the
+// CLI verbatim instead of expanding a body (Claude SDK branch only).
+export type ComposerCliCommand = {
+  name: string
+  description: string
+  argumentHint: string
+  aliases?: string[]
+}
 
 // ── Module-scope caches (shared across every composer instance) ───────────────
 // `refetch` holds the last fetch closure for a key so a fs-changed event can
@@ -49,6 +59,7 @@ const fileCache = new Map<string, CacheEntry<FsEntry>>()
 const agentCache = new Map<string, CacheEntry<ComposerAgent>>()
 const commandCache = new Map<string, CacheEntry<ComposerCommand>>()
 const skillCache = new Map<string, CacheEntry<ComposerSkill>>()
+const cliCommandCache = new Map<string, CacheEntry<ComposerCliCommand>>()
 
 const entryFor = <T>(cache: Map<string, CacheEntry<T>>, key: string): CacheEntry<T> => {
   let entry = cache.get(key)
@@ -82,9 +93,15 @@ async function ensureFsSubscription(sc: ReturnType<typeof useSidecar>): Promise<
   try {
     fsUnlisten = await sc.onEvent((evt) => {
       if (!evt) return
-      if (evt.type === 'skills.fs-changed') invalidate(skillCache)
-      else if (evt.type === 'commands.fs-changed') invalidate(commandCache)
-      else if (evt.type === 'agents.fs-changed') invalidate(agentCache)
+      // The CLI catalogue is the union of its built-ins and the skills it discovers,
+      // so a skill/command change on disk moves it too — drop it alongside ours.
+      if (evt.type === 'skills.fs-changed') {
+        invalidate(skillCache)
+        invalidate(cliCommandCache)
+      } else if (evt.type === 'commands.fs-changed') {
+        invalidate(commandCache)
+        invalidate(cliCommandCache)
+      } else if (evt.type === 'agents.fs-changed') invalidate(agentCache)
     })
   } catch {
     fsUnlisten = null
@@ -93,7 +110,18 @@ async function ensureFsSubscription(sc: ReturnType<typeof useSidecar>): Promise<
   }
 }
 
-export function useComposerData(projectId: Ref<string | null> | ComputedRef<string | null>) {
+export function useComposerData(
+  projectId: Ref<string | null> | ComputedRef<string | null>,
+  // Claude-CLI slash catalogue. `enabled` gates the fetch (Anthropic branch only —
+  // no other runtime has these commands), `workspacePath` is the session's dragged
+  // working folder, which takes precedence over the project path for the probe's cwd
+  // exactly as it does for the turn. Omit the argument entirely and the section is
+  // never requested.
+  cli?: {
+    enabled: Ref<boolean> | ComputedRef<boolean>
+    workspacePath: Ref<string | null> | ComputedRef<string | null>
+  },
+) {
   const sc = useSidecar()
   const { projectPath } = useProjects()
 
@@ -167,6 +195,20 @@ export function useComposerData(projectId: Ref<string | null> | ComputedRef<stri
       }).value,
   )
 
+  // Claude CLI's own commands. Keyed by project + working folder because the CLI
+  // resolves skills from the cwd it is probed in.
+  const cliCommands = computed<ComposerCliCommand[]>(() => {
+    if (!cli?.enabled.value) return []
+    const key = `${projectId.value ?? ''}|${cli.workspacePath.value ?? ''}`
+    return ensure(cliCommandCache, key, async () => {
+      const res = await sc.request<{ commands: ComposerCliCommand[] }>('sessions.cliCommands', {
+        ...(projectId.value ? { projectId: projectId.value } : {}),
+        ...(cli.workspacePath.value ? { workspacePath: cli.workspacePath.value } : {}),
+      })
+      return res.commands
+    }).value
+  })
+
   const files = computed<FsEntry[]>(() => {
     const root = workspaceRoot.value
     if (!root) return []
@@ -184,10 +226,11 @@ export function useComposerData(projectId: Ref<string | null> | ComputedRef<stri
     void agents.value
     void userCommands.value
     void skills.value
+    void cliCommands.value
   }
   const ensureFiles = () => {
     void files.value
   }
 
-  return { agents, userCommands, skills, files, ensureCatalogs, ensureFiles }
+  return { agents, userCommands, skills, cliCommands, files, ensureCatalogs, ensureFiles }
 }

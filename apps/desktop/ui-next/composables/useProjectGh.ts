@@ -409,6 +409,13 @@ export function useProjectGh(
   const selected = ref<GhThread | null>(null)
   const drawerOpen = ref(false)
   const detailLoading = ref(false)
+  // The number the open drawer is showing (or still fetching); null when closed.
+  // Every staleness guard on the detail keys on THIS, not on `selected?.number`:
+  // the drawer can legitimately be open with nothing painted yet — a deep link
+  // that arrives before the list has rows has no summary to seed from — and
+  // keying on the painted thread dropped that response and left the spinner up
+  // for good.
+  const detailNumber = ref<number | null>(null)
   const segments = ref<Record<string, GhSegmentState>>({})
   const viewLang = ref<ViewLang>('orig')
 
@@ -690,7 +697,10 @@ export function useProjectGh(
   const open = async (number: number, opts: { force?: boolean } = {}): Promise<void> => {
     drawerOpen.value = true
     detailLoading.value = true
-    // Paint the row we already have while the detail is in flight.
+    detailNumber.value = number
+    // Paint the row we already have while the detail is in flight. There may be
+    // none (a deep link opening before the list loaded) — the fetch below fills
+    // the drawer either way.
     const summary = items.value.find((i) => i.number === number)
     selected.value = summary ? seedThread(summary) : null
     segments.value = {}
@@ -721,15 +731,15 @@ export function useProjectGh(
     try {
       const thread = await fetchThreadCore(number)
       // A slower open must not paint over the thread the user has since opened.
-      if (selected.value?.number !== number) return
+      if (detailNumber.value !== number) return
       selected.value = thread
     } catch (err) {
-      if (selected.value?.number !== number) return
+      if (detailNumber.value !== number) return
       errorCode.value = ghCodeOf(err)
       drawerOpen.value = false
       return
     } finally {
-      if (selected.value?.number === number) detailLoading.value = false
+      if (detailNumber.value === number) detailLoading.value = false
     }
     void loadReviews(number)
   }
@@ -758,6 +768,10 @@ export function useProjectGh(
 
   const closeDrawer = (): void => {
     drawerOpen.value = false
+    // Drop the in-flight detail too: its response belongs to a drawer that is no
+    // longer open, and a closed drawer is never "loading".
+    detailNumber.value = null
+    detailLoading.value = false
     selected.value = null
     segments.value = {}
     viewLang.value = 'orig'
@@ -1044,7 +1058,9 @@ export function useProjectGh(
   // Manual refresh of the open thread (drawer header button) — drop its cached
   // diff + commits + review timeline, then re-fetch fresh.
   const refreshThread = async (): Promise<void> => {
-    const n = selected.value?.number
+    // Fall back to the requested number so Refresh still works when nothing is
+    // painted yet (a detail that failed to arrive is exactly what gets retried).
+    const n = selected.value?.number ?? detailNumber.value
     if (n == null) return
     ghCache.delete(diffKey(n))
     ghCache.delete(commitsKey(n))

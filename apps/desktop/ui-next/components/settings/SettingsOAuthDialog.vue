@@ -159,6 +159,9 @@ const onOpenLogin = async () => {
   try {
     const { state, authUrl } = await settings.connectAnthropicOAuth()
     oauthState.value = state
+    // NOT through useLinkOpen on purpose: an auth flow has to land in the browser
+    // where the user's real Claude login lives, and an auth code must never end up
+    // in the agent's cookie jar. No chooser here.
     await sidecar.openExternal(authUrl)
     phase.value = 'waiting-code'
     await nextTick()

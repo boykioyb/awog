@@ -605,6 +605,13 @@ export type TodoStatus = 'pending' | 'in_progress' | 'completed'
 export interface TodoItem {
   content: string
   status: TodoStatus
+  // Claude Code task id, set only when the item came from the CLI's task tools
+  // (`TaskCreate` / `TaskUpdate`) on the Claude SDK path. Persisted because the
+  // CLI's task store outlives a turn while AWOG's event adapter is rebuilt each
+  // turn: without the id, a `TaskUpdate { taskId: '3' }` arriving on turn 5 has
+  // nothing to resolve against and the checklist can only be rebuilt from that
+  // one item. Absent on the Pi path, where TodoWrite sends the whole list.
+  taskId?: string
 }
 
 // AskUserQuestion (kind === 'question'): the model pauses the turn to ask the
@@ -613,18 +620,47 @@ export interface SessionQuestionOption {
   label: string
   description?: string
 }
+// How the user answers ONE question. 'choice' (default) picks from `options`;
+// 'text' is a free-text box; 'number' is a slider between min..max. Mirrors the
+// CLI's extended AskUserQuestion schema — see docs/features/ask-user-question.md.
+export type SessionQuestionKind = 'choice' | 'text' | 'number'
 export interface SessionQuestion {
   // Short chip label shown on the tab (≤ ~12 chars).
   header: string
   question: string
   options: SessionQuestionOption[]
   multiSelect: boolean
+  // ── Extended fields. Absent on a plain choice question (and on every question
+  // asked before the extended schema was enabled), so every consumer must treat
+  // "no kind" as 'choice'.
+  kind?: SessionQuestionKind
+  // One helper line under the question text.
+  description?: string
+  // 'text' only: placeholder for the empty box.
+  placeholder?: string
+  // 'number' only: bounds + presentation of the slider.
+  min?: number
+  max?: number
+  step?: number
+  defaultValue?: number
+  unit?: string
 }
 // One answered question: the option label(s) the user picked (or their custom
-// "Other" text). Keyed back to its question by `header`.
+// "Other" text; a 'text'/'number' answer is the single typed value). Keyed back
+// to its question by `header`.
 export interface SessionQuestionAnswer {
   header: string
   selected: string[]
+}
+// What the user sends back for ONE AskUserQuestion call. `answers` may be EMPTY
+// and still be a real reply: "decide for me" answers nothing on purpose, and a
+// follow-up request may carry only the questions answered so far.
+export interface SessionQuestionReply {
+  answers: SessionQuestionAnswer[]
+  // Free text the user wrote beside the structured answers ("anything else?").
+  response?: string
+  // The user asked for another round of questions instead of proceeding.
+  followUp?: boolean
 }
 
 // Model-initiated transcript surfaces (kind === 'surface'), emitted from the
@@ -693,6 +729,12 @@ export interface SessionStep {
   // then a read-only record. See docs/features/ask-user-question.md.
   questions?: SessionQuestion[]
   answers?: SessionQuestionAnswer[]
+  // Optional heading for the whole call ('title' in the extended schema), e.g.
+  // "Before I build your deck". One line, above the questions.
+  questionTitle?: string
+  // Free text the user added beside their answers, echoed back onto the step so
+  // the answered record shows what they actually said.
+  questionResponse?: string
   // Surface step (kind === 'surface'): what the model handed to the user in this
   // call — chapter marker / shared files / task suggestion / follow-up prompts.
   // The whole payload lives in one discriminated field instead of a fifth batch

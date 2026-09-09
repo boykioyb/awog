@@ -4,7 +4,7 @@
 > mô phỏng workspace switcher của Claude Code (Diff / Files / Plan / Terminal /
 > Background tasks / Preview).
 
-- **Trạng thái:** Implemented (MVP) — 6 tab wired. Terminal cần verify đóng gói native ([ADR 0019](../decisions/0019-pty-terminal-in-sidecar.md)).
+- **Trạng thái:** Implemented (MVP) — 7 tab wired (thêm **Browser** 2026-09-09, [ADR 0086](../decisions/0086-embedded-browser-panel.md) + [spec riêng](session-browser-panel.md): trình duyệt của agent nhúng thật vào panel, không phải iframe — nó là `WebContentsView` native nên **vẽ trên toàn bộ DOM** và có luật tự ẩn khi có modal/menu mở). Terminal cần verify đóng gói native ([ADR 0019](../decisions/0019-pty-terminal-in-sidecar.md)).
 - **Liên quan:** [sessions.md](sessions.md), [git-manager.md](git-manager.md), [ADR 0017](../decisions/0017-git-manager-ipc-contract.md), [ADR 0019](../decisions/0019-pty-terminal-in-sidecar.md)
 
 ## Bối cảnh
@@ -101,6 +101,31 @@ import + graceful fallback** → chưa cài/lỗi thì tab báo "unavailable", t
 bấm kế tiếp spawn shell mới** trong chính xterm đó. Resize KHÔNG tự hồi sinh shell user đã
 đóng. Write/resize RPC lỗi `Unknown terminal` cũng chuyển pane sang `exited` (phòng khi mất
 event) — trước đây lỗi bị nuốt im lặng nên pane trông sống mà gõ không ăn.
+
+### Info
+
+Ngoài các dòng metadata và mục **File ngữ cảnh**, tab Info có mục **Media, link & tài liệu** —
+chỉ mục mọi thứ đã đi qua transcript của **phiên đang mở**, gom nhóm theo kiểu bảng info của app
+chat (WhatsApp "Media, links and docs"). Ba nhóm, chọn bằng segmented control có số đếm:
+
+| Nhóm | Nguồn |
+|---|---|
+| **Media** | ảnh/video/audio đến từ: file user đính kèm, file session ghi/sửa (step Write/Edit), file model bàn giao (`send_user_file` → `FilesBlock`) |
+| **Link** | mọi URL http(s) trong text của cả 3 role (markdown `[title](url)` lấy luôn title làm nhãn) + `target` của step web (WebFetch/WebSearch) + issue/PR liên kết của phiên (`aboutGhUrl`). Mỗi hàng có **nút copy URL** (glyph lật thành ✓ 1,5s) bên cạnh vùng bấm-để-mở. Cắt URL: dừng ở backtick đóng inline-code (`` `https://…/login` `` từng lọt thành `…/login%60`); dedupe bỏ qua dấu `/` cuối; nhãn **giữ `#hash`** để hai link cùng issue khác anchor không hiện thành hai hàng y hệt |
+| **Tài liệu** | file để **đọc**: `md/mdx · txt/rtf · pdf · csv/tsv · doc(x) · xls(x) · ppt(x) · ipynb · htm(l)` — allowlist đóng ở `DOC_EXT` |
+
+- **Phân loại** media đi qua `previewKindFromPath` ([usePreview.ts](../../apps/desktop/ui-next/composables/usePreview.ts)) — giữ một nguồn sự thật cho "đuôi file → kiểu preview". Tập tool ghi file dùng chung `WRITE_LABELS` với [useSessionTouchedPaths.ts](../../apps/desktop/ui-next/composables/useSessionTouchedPaths.ts).
+- **File source/config KHÔNG được liệt kê.** Không phải media, cũng không phải tài liệu ⇒ bỏ qua: file session ghi đã có ở tab **Diff**/**Files**, file user kéo vào đã có ở mục **File ngữ cảnh** ngay phía trên. (Trước đây `repository.py` rơi vào nhóm "Tài liệu" chỉ vì nó "không phải media" — nhãn nói sai.)
+- **Thứ tự** mới nhất trước; dedupe theo path (file) / URL (link); cap 400 mục mỗi nhóm.
+- **Kiểm tra file có thật** (`useFilePreview.verifyPaths`, dùng chung cho mọi surface *liệt kê* path): một step `Write/Edit` **nêu tên** file không chứng minh file tồn tại — model có thể neo path sai base, ghi rồi xoá, hoặc chỉ nhắc tên ⇒ trước đây danh sách đầy hàng bấm vào 404. Ba lượt, rẻ trước:
+  1. `fs.listDir` **một lần/thư mục** (cache) — thấy cả file gitignore/sinh ra, thứ mà chỉ số `git ls-files` không thấy;
+  2. đọc lại thư mục nào miss (**lượt đang chạy** vừa ghi file thì listing cũ chưa có nó);
+  3. chỉ số file (`matchPath`) nhưng **chỉ nhận hit giữ nguyên thư mục** (`awog/docs/x.md` → `docs/x.md`) và hit đó phải có trên đĩa — hit kiểu đoán-theo-tên-file bị từ chối, vì thay hàng chết bằng hàng SAI còn tệ hơn.
+  Còn lại ⇒ **loại khỏi danh sách**. Hàng chưa kiểm xong vẫn hiện (kiểm xong trong cùng nhịp, giấu trước sẽ nháy trắng cả danh sách); không resolve được root (browser-dev / phiên không project) ⇒ **giữ nguyên** — chỉ một lần kiểm **có kết quả miss** mới xoá hàng. Path sai base được **sửa hiển thị** thành path thật, hai path trỏ cùng file gộp một hàng. Kiểm lại ở mỗi ranh giới lượt (`imagesVersion`, sau khi cache thư mục bị xoá).
+- **Click:** file đính kèm → PreviewModal từ bytes in-memory (gallery = các media khác của chính panel này); file workspace → `useFilePreview.open` (resolve root + gallery ảnh của phiên); link → `openExternal` (trình duyệt hệ điều hành).
+- **Thumbnail** chỉ đọc khi tab Media đang mở, cap 40 file, qua `useFilePreview.imageSrc` (`fs.readFileBase64` sau `assertInsideWorkspace`); cache bị xoá ở ranh giới lượt nên file bị ghi đè tại chỗ sẽ được đọc lại.
+- **File:** derivation ở [useSessionMediaIndex.ts](../../apps/desktop/ui-next/composables/useSessionMediaIndex.ts), UI ở [WorkspaceInfoMedia.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceInfoMedia.vue). Thân tab Info tách khỏi `SessionWorkspacePanel.vue` thành [WorkspaceInfo.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceInfo.vue) cho khớp với các tab khác (một component / một view).
+- **Phạm vi = một phiên.** Bản gộp media của *mọi* phiên (kiểu "View media from all chats") chưa làm.
 
 ## RPC & Event mới (sidecar)
 

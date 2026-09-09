@@ -1554,7 +1554,7 @@ export const useGitStore = defineStore('git', () => {
       url = `https://${host}/${owner}/${repo}`
     }
     try {
-      await useSidecar().openExternal(url)
+      await useLinkOpen().openLink(url)
     } catch (err) {
       // Without a bridge openExternal throws SidecarUnavailableError → swallow.
       console.warn('[git] openPrFor failed', err)

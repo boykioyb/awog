@@ -155,12 +155,10 @@ const statusStyle = computed(() => ({
   color: update.status === 'error' ? 'var(--amber)' : 'var(--accent)',
 }))
 
-// Open the repo in the OS browser (Electron); fall back to window.open in
-// browser-dev where the sidecar bridge isn't available.
+// The repo — through the shared chooser (in-app browser or OS browser), which
+// owns the browser-dev fallback.
 const onOpenRepo = () => {
-  sidecar.openExternal(REPO_URL).catch(() => {
-    if (typeof window !== 'undefined') window.open(REPO_URL, '_blank', 'noopener,noreferrer')
-  })
+  void useLinkOpen().openLink(REPO_URL)
 }
 </script>
 

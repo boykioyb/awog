@@ -10,29 +10,31 @@
 import { computed, toValue, type MaybeRefOrGetter } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
 
-const WRITE_LABELS = new Set(['Write', 'Edit', 'Edit (multi)', 'Edit notebook'])
+// The tools that name a file they WROTE. Exported because it is the one place that
+// knowledge lives — useSessionMediaIndex reads the same set when it walks the
+// transcript for the Info tab's docs list.
+export const WRITE_LABELS = new Set(['Write', 'Edit', 'Edit (multi)', 'Edit notebook'])
+
+// Normalise a step target (absolute or workspace-relative, possibly anchored to an
+// ancestor cwd — see memory session-file-link-path-base) toward a workspace-relative
+// path. Strips the resolved root prefix when the target is absolute under it.
+export function workspaceRelative(target: string, root: string | null): string {
+  let p = target.trim().replace(/\\/g, '/')
+  if (p.startsWith('/') && root && p.startsWith(root)) p = p.slice(root.length)
+  return p.replace(/^\.\//, '').replace(/^\/+/, '')
+}
 
 export function useSessionTouchedPaths(
   session: MaybeRefOrGetter<Session>,
   root: MaybeRefOrGetter<string | null>,
 ) {
-  // Normalise a step target (absolute or workspace-relative, possibly anchored to an
-  // ancestor cwd — see memory session-file-link-path-base) toward a workspace-relative
-  // path. Strips the resolved root prefix when the target is absolute under it.
-  function normalize(target: string): string {
-    let p = target.trim().replace(/\\/g, '/')
-    const r = toValue(root)
-    if (p.startsWith('/') && r && p.startsWith(r)) p = p.slice(r.length)
-    return p.replace(/^\.\//, '').replace(/^\/+/, '')
-  }
-
   // Workspace-relative paths the session wrote/edited, in first-touch order (the Set
   // dedupes repeated edits to the same file while preserving stable ordering).
   const touchedPaths = computed<string[]>(() => {
     const out = new Set<string>()
     const add = (tool: string, target: string): void => {
       if (target && WRITE_LABELS.has(tool)) {
-        const n = normalize(target)
+        const n = workspaceRelative(target, toValue(root))
         if (n) out.add(n)
       }
     }

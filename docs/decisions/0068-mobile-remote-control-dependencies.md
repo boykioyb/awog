@@ -32,6 +32,14 @@ Decode QR từ khung hình camera (getUserMedia → canvas → `ImageData` → `
 
 PWA port từ ui-next (cùng package) nên `jsqr` nằm chung `ui-next/package.json`; chỉ import ở route/màn scan.
 
+### 4. `lucide-vue-next` — `apps/desktop/remote-pwa/package.json`
+
+Bộ icon SVG cho PWA. Trước đó PWA vẽ icon bằng **ký tự Unicode** (`↻ ☰ ⚙ ✕ ‹ ⋯ ＋ ◉ ■ ↯ ↑ ✳ ◇ ✎ ⌕ ▶ ⇢ › ✓ ◐ ○ ▍ ⚠ ⎇ •` — 44 vị trí / 11 file): mỗi glyph lấy hình dạng, độ đậm và baseline từ font hệ thống của **máy người dùng**, nên lệch nhau ngay trong cùng một thanh (nút đính kèm dùng `＋` full-width còn FAB dùng `+` half-width) và không có cách nào ghim một stroke width chung.
+
+- **Đã là dependency của repo** (`ui-next` dùng từ đầu, `^0.460.0`) ⇒ không mở bề mặt supply-chain mới; chỉ thêm vào một package thứ hai của cùng workspace, khoá cùng version.
+- ISC, pure-JS, **không native binding**; mỗi icon là một named export ⇒ `import { X, Plus } from 'lucide-vue-next'` tree-shake sạch (đã kiểm bundle sau build: chỉ 17 icon được import có mặt, không có icon nào khác).
+- Không dùng sprite-sheet như `ui-next` (`components/Icon.vue` + `IconSprite`) vì PWA không có Nuxt auto-import và sprite phải nạp trước khi vẽ; named import không cần hạ tầng gì.
+
 ## Hệ quả
 
 ### Tích cực
@@ -45,6 +53,7 @@ PWA port từ ui-next (cùng package) nên `jsqr` nằm chung `ui-next/package.j
 ### Việc cần làm
 - [ ] `pnpm add ws && pnpm add -D @types/ws` trong `apps/desktop/electron`.
 - [ ] `pnpm add qrcode jsqr && pnpm add -D @types/qrcode` trong `apps/desktop/ui-next`.
+- [x] `pnpm add lucide-vue-next@^0.460.0` trong `apps/desktop/remote-pwa` (2026-09-09).
 - [ ] `pnpm audit` sau install; check `npm view` từng package.
 - [ ] Commit `pnpm-lock.yaml`.
 

@@ -33,13 +33,23 @@
              The session's project-scoped Terminal tab stays reachable from the
              workspace panel's own view picker. -->
         <button
-          class="sb-item"
+          class="sb-item sb-ico"
           :class="{ 'sb-on': wpViews.includes('Files') }"
           :title="t('statusbar.workspaceFiles')"
           @click="wpToggle('Files')"
         >
           <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          Files
+        </button>
+        <!-- Browser (ADR 0086) — opens the agent's embedded Chromium as a panel
+             view. One click on purpose: before this, the browser existed only as a
+             hidden window nobody could see. -->
+        <button
+          class="sb-item sb-ico"
+          :class="{ 'sb-on': wpViews.includes('Browser') }"
+          :title="t('statusbar.workspaceBrowser')"
+          @click="wpToggle('Browser')"
+        >
+          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <span class="sb-div" />
       </template>
@@ -47,13 +57,12 @@
       <!-- Global terminal toggle — ALWAYS visible (every page, with or without a
            session). Opens the app-wide terminal dock (cwd = home). -->
       <button
-        class="sb-item"
+        class="sb-item sb-ico"
         :class="{ 'sb-on': gtOpen }"
         :title="t('statusbar.terminalGlobal')"
         @click="gtToggle"
       >
         <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        Terminal
       </button>
     </div>
   </footer>
@@ -191,6 +200,16 @@ const projName = computed(() => (active.value ? projectName(active.value.project
 .statusbar :deep(.sb-item:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+/* Nút CHỈ-ICON ở mép phải (Files · Browser · Terminal).
+   Ba nút này bỏ nhãn chữ vì icon đã tự nói (thư mục / quả cầu / dấu nhắc lệnh), và
+   `title` vẫn là tên gọi cho tooltip lẫn screen reader — cùng quy ước icon-only mà
+   header của các *Detail.vue dùng. Chữ chỉ giữ ở những chip mà chữ CHÍNH LÀ dữ liệu
+   (branch, project, model, account, effort, style): ở đó không icon nào thay được.
+   Padding đối xứng + bỏ gap để ô bấm vuông thay vì lệch về phía nhãn đã mất. */
+.statusbar :deep(.sb-item.sb-ico) {
+  gap: 0;
+  padding: 0 5px;
 }
 /* Active workspace toggle (the view is open) — accent-tinted like the prototype's
    "on" chips, no solid gray fill. */

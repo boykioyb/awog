@@ -38,6 +38,25 @@
       <div class="fd" style="margin-top: 2px">{{ t('settings.git.template.tokens') }}</div>
     </SettingsField>
 
+    <!-- The PR detail's "Start review" button (Projects → Pull Requests → a PR)
+         opens a session in that project and sends THIS, with the tokens filled. -->
+    <SettingsField
+      block
+      :name="t('settings.git.prReview.name')"
+      :desc="t('settings.git.prReview.desc')"
+    >
+      <textarea
+        v-model="prReviewPrompt"
+        class="keyinp mono"
+        rows="3"
+        style="resize: vertical; min-height: 4.5rem"
+        :placeholder="t('settings.git.prReview.placeholder')"
+      />
+      <div class="fd" style="margin-top: 2px">{{ t('settings.git.prReview.tokens') }}</div>
+    </SettingsField>
+
+    <SettingsPrReviewLlm />
+
     <SettingsField :name="t('settings.git.scope.name')" :desc="t('settings.git.scope.desc')">
       <SettingsSeg v-model="autoCommitScope" :options="scopeOptions" />
     </SettingsField>
@@ -210,6 +229,12 @@ const commitCoAuthor = computed<boolean>({
 const autoCommitMessageTemplate = computed<string>({
   get: () => git.value.autoCommitMessageTemplate,
   set: (autoCommitMessageTemplate) => settings.updateGit({ autoCommitMessageTemplate }),
+})
+// Blank is meaningful: it means "use the built-in default", so store the raw text
+// and resolve the fallback where the prompt is built (the PR drawer's handler).
+const prReviewPrompt = computed<string>({
+  get: () => git.value.prReviewPrompt,
+  set: (prReviewPrompt) => settings.updateGit({ prReviewPrompt }),
 })
 const autoCommitScope = computed<string>({
   get: () => git.value.autoCommitScope,

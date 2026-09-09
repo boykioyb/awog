@@ -21,14 +21,19 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk'
 import {
   stepFromPlan,
+  stepFromQuestion,
+  stepFromSurface,
   stepFromThinking,
   stepFromTodos,
   stepFromToolResult,
   stepFromToolUse,
 } from '../../sessions/step-mapper.js'
 import { parseTodos } from '../todos.js'
+import { ASK_USER_QUESTION_TOOL } from './ask-user-question.js'
+import { TASK_CHECKLIST_TOOLS, createTaskChecklist } from './task-checklist.js'
 import type { StreamCallbacks } from '../../sessions/runner.js'
 import type { SessionStep, TodoItem } from '../../types/shared.js'
+import { resultErrorMessage } from './shared.js'
 
 export interface ClaudeAccumulator {
   text: string
@@ -135,12 +140,17 @@ export interface ClaudeEventAdapter {
 }
 
 // Optional side-channels the runner owns. `onTodos` is the SDK-path twin of the
-// Pi tool layer's `todoSink`: TodoWrite is an SDK built-in here, so the tool_use
-// event is the ONLY place AWOG can see the model's checklist and persist it as
+// Pi tool layer's `todoSink`: the checklist tools are SDK built-ins here, so their
+// events are the ONLY place AWOG can see the model's checklist and persist it as
 // the session's authoritative list (ADR 0069). Kept as a callback rather than a
 // store import so the adapter stays a pure event translator.
 export interface ClaudeAdapterHooks {
   onTodos?: (todos: TodoItem[]) => void
+  // The session's checklist as persisted BEFORE this turn. Seeds the task-tool
+  // tracker: the CLI's task store outlives a turn but this adapter does not, so
+  // without the seed a `TaskUpdate` on an item created in an earlier turn has
+  // nothing to resolve against (see task-checklist.ts).
+  sessionTodos?: readonly TodoItem[]
   // Tail of a finished background task's `output_file` (claude-sdk/task-output.ts).
   // A side channel for the same reason as onTodos: reading a file is not the
   // translator's job, but without it a finished background shell can only say
@@ -231,7 +241,16 @@ export function createClaudeEventAdapter(
   // level signal, forwarded by run-stream). The started/progress/notification events
   // alone can't tell background from foreground.
   const backgroundTaskIds = new Set<string>()
+  // The main agent's checklist, replayed from the CLI's TaskCreate/TaskUpdate/
+  // TaskList calls (task-checklist.ts). TodoWrite no longer exists on this
+  // surface for current models, so this is where the checklist comes from.
+  const taskChecklist = createTaskChecklist(hooks.sessionTodos)
+  const checklistTools: ReadonlySet<string> = new Set(TASK_CHECKLIST_TOOLS)
   let assistantSeq = 0
+  // Lượt này model đã tự gọi `suggest_followups` chưa. Gợi ý MIỄN PHÍ của SDK
+  // (`prompt_suggestion`, đi nhờ prompt cache của lượt) chỉ được hiện khi model
+  // KHÔNG tự đề xuất — hai hàng follow-up chồng nhau là nhiễu, không phải nhiều lựa chọn.
+  let sawFollowups = false
 
   const withParent =
     (parentId: string | undefined) =>
@@ -243,10 +262,21 @@ export function createClaudeEventAdapter(
     const input = toInputRecord(block.input)
     toolInputs.set(block.id, { name: block.name, input })
     const wp = withParent(parentId)
+    if (block.name === 'suggest_followups' || block.name.endsWith('__suggest_followups')) {
+      sawFollowups = true
+    }
     // ExitPlanMode → plan card; TodoWrite → inline checklist (both SDK built-ins).
     if (block.name === 'ExitPlanMode') {
       const plan = typeof input.plan === 'string' ? input.plan : ''
       cb.onStep(wp(stepFromPlan(block.id, plan)))
+      return
+    }
+    // AskUserQuestion → the interactive question card, from the call INPUT. The
+    // ANSWERS land on the same id from ask-user-question.ts (the card is answered
+    // through the permission channel, not the tool channel), so a generic tool row
+    // here would be overwritten by a card a moment later — emit the card up front.
+    if (block.name === ASK_USER_QUESTION_TOOL) {
+      cb.onStep(wp(stepFromQuestion(block.id, input.questions)))
       return
     }
     if (block.name === 'TodoWrite') {
@@ -260,6 +290,12 @@ export function createClaudeEventAdapter(
       }
       return
     }
+    // A checklist task tool renders nothing on the CALL: one whole-list row is
+    // upserted from the result instead (emitToolResult), so a five-item plan is
+    // one checklist row rather than five 'TaskCreate' rows followed by a dozen
+    // 'TaskUpdate' ones. A subagent's tasks are its own bookkeeping and stay
+    // ordinary rows, mirroring the TodoWrite sink rule above.
+    if (!parentId && checklistTools.has(block.name)) return
     cb.onStep(wp(stepFromToolUse({ id: block.id, name: block.name, input })))
   }
 
@@ -301,8 +337,13 @@ export function createClaudeEventAdapter(
     if (m.subagent_type) view.subagentType = m.subagent_type
     if (kind === 'task_started' && m.description) view.name = m.description
     if (kind === 'task_progress') {
-      if (m.description && m.description !== view.activity.at(-1)) {
-        view.activity.push(m.description)
+      // `summary` chỉ xuất hiện khi bật `agentProgressSummaries`: một câu do model
+      // sinh (~30s/lần) nói ĐANG LÀM GÌ, thay vì dòng activity thô của CLI ("Reading
+      // foo.ts"). Có thì ưu tiên nó — cùng một nhật ký, không đẩy cả hai vào cho
+      // chật. Không có (cờ tắt / chưa tới kỳ) thì mọi thứ như cũ.
+      const line = m.summary?.trim() || m.description
+      if (line && line !== view.activity.at(-1)) {
+        view.activity.push(line)
         // Keep the tail: the row is a live progress log, not an audit trail.
         if (view.activity.length > BG_ACTIVITY_LINES) view.activity.shift()
       }
@@ -402,7 +443,14 @@ export function createClaudeEventAdapter(
     emitBgStep(taskId, view, { status: 'running' })
   }
 
-  const emitToolResult = (block: ContentBlock, parentId: string | undefined): void => {
+  const emitToolResult = (
+    block: ContentBlock,
+    parentId: string | undefined,
+    // The tool's full Output object, off the carrying user message
+    // (SDKUserMessage.tool_use_result) — the SDK's own advice is to render from it
+    // rather than parse the model-facing text. Only the checklist tools read it.
+    structured: unknown,
+  ): void => {
     if (!cb.onStep || typeof block.tool_use_id !== 'string') return
     const meta = toolInputs.get(block.tool_use_id) ?? { name: 'tool', input: {} }
     // Every skip below applies to a SUCCESSFUL result only. An error must always
@@ -412,7 +460,17 @@ export function createClaudeEventAdapter(
     const failed = block.is_error === true
     // ExitPlanMode / TodoWrite already rendered their step on the tool_use; a
     // successful result is an internal ack — don't overwrite it with a generic row.
-    if ((meta.name === 'ExitPlanMode' || meta.name === 'TodoWrite') && !failed) return
+    // Same for AskUserQuestion: the answered card was already emitted when the user
+    // submitted, and its successful result is the CLI's prose restatement of those
+    // answers — a generic row would bury the card under it.
+    if (
+      (meta.name === 'ExitPlanMode' ||
+        meta.name === 'TodoWrite' ||
+        meta.name === ASK_USER_QUESTION_TOOL) &&
+      !failed
+    ) {
+      return
+    }
     // A BACKGROUNDED tool returns immediately with a launch ack ("Command running in
     // background with ID …", "Async agent launched successfully" — the CLI itself
     // tells the model not to quote it). The background row owns this id and shows the
@@ -421,6 +479,24 @@ export function createClaudeEventAdapter(
     // owns nothing, so it falls through.
     const bgTaskId = taskIdByToolUse.get(block.tool_use_id)
     if (bgTaskId !== undefined && backgroundTaskIds.has(bgTaskId) && !failed) return
+    // Fold a successful checklist mutation into the ONE upserted checklist row and
+    // persist it as the session's list. A call we cannot apply (junk payload, or an
+    // id this turn never learned about) deliberately falls through to the generic
+    // row: the list stays as it was, and the user still sees the call happened.
+    if (!parentId && !failed && checklistTools.has(meta.name)) {
+      const applied =
+        meta.name === 'TaskCreate'
+          ? taskChecklist.applyCreate(structured)
+          : meta.name === 'TaskUpdate'
+            ? taskChecklist.applyUpdate(meta.input, structured)
+            : taskChecklist.applyList(structured)
+      const items = applied ? taskChecklist.items() : []
+      if (items.length) {
+        cb.onStep(stepFromTodos('todo-list', items))
+        hooks.onTodos?.(items)
+        return
+      }
+    }
     cb.onStep(
       withParent(parentId)(
         stepFromToolResult({
@@ -459,15 +535,21 @@ export function createClaudeEventAdapter(
         break
       }
       case 'stream_event': {
-        const ev = (
-          msg as {
-            event?: {
-              type?: string
-              index?: number
-              delta?: { type?: string; text?: string; thinking?: string }
-            }
+        const partial = msg as {
+          parent_tool_use_id?: string | null
+          event?: {
+            type?: string
+            index?: number
+            delta?: { type?: string; text?: string; thinking?: string }
           }
-        ).event
+        }
+        // Frame của SUBAGENT (parent_tool_use_id khác null) KHÔNG được cộng vào câu
+        // trả lời chính: nó thuộc hội thoại riêng của subagent, và trộn vào đây là
+        // chèn chữ của người khác vào giữa bubble. Hôm nay chỉ tới nơi khi bật
+        // `forwardSubagentText` (AWOG đang tắt — xem docs/reference/claude-sdk-options.md),
+        // nhưng một cái cổng rẻ tiền vẫn đáng đứng đó trước ngày ai đó bật nó.
+        if (partial.parent_tool_use_id) break
+        const ev = partial.event
         if (!ev) break
         const blockKey = (): string => `${assistantSeq}-${typeof ev.index === 'number' ? ev.index : 0}`
         if (ev.type === 'message_start') {
@@ -529,14 +611,31 @@ export function createClaudeEventAdapter(
       }
       case 'user': {
         // Tool results arrive as a user message with tool_result content blocks.
-        const m = msg as { message?: { content?: unknown }; parent_tool_use_id?: string | null }
+        const m = msg as {
+          message?: { content?: unknown }
+          parent_tool_use_id?: string | null
+          tool_use_result?: unknown
+        }
         const parentId = m.parent_tool_use_id ?? undefined
         const content = m.message?.content
         if (Array.isArray(content)) {
           for (const raw of content as ContentBlock[]) {
-            if (raw.type === 'tool_result') emitToolResult(raw, parentId)
+            if (raw.type === 'tool_result') emitToolResult(raw, parentId, m.tool_use_result)
           }
         }
+        break
+      }
+      // Gợi ý prompt kế tiếp do SDK sinh sau mỗi lượt (`promptSuggestions`). Nó
+      // đến SAU message `result` nên chỉ tới nơi nhờ vòng lặp của run-stream còn
+      // chạy tiếp sau `result` (nó đợi `session_state_changed: idle`). Render bằng
+      // đúng surface follow-up sẵn có, một lựa chọn.
+      case 'prompt_suggestion': {
+        const m = msg as { suggestion?: string; uuid?: string }
+        const text = typeof m.suggestion === 'string' ? m.suggestion.trim() : ''
+        if (!text || sawFollowups || !cb.onStep) break
+        cb.onStep(
+          stepFromSurface(`suggest-${m.uuid ?? assistantSeq}`, { kind: 'followups', options: [text] }, 'done'),
+        )
         break
       }
       case 'result': {
@@ -565,7 +664,9 @@ export function createClaudeEventAdapter(
           if (!acc.text && typeof m.result === 'string') acc.text = m.result
         } else {
           acc.stopReason = 'error'
-          if (typeof m.result === 'string' && m.result) acc.errorMessage = m.result
+          // Trần tiền / trần lượt / hết lượt thử structured-output đều về đây với
+          // `result` rỗng — không dịch mã thì UI chỉ hiện "error" trống trơn.
+          acc.errorMessage = resultErrorMessage(m.subtype, m.result)
         }
         if (!acc.modelUsed && m.modelUsage) {
           const first = Object.keys(m.modelUsage)[0]

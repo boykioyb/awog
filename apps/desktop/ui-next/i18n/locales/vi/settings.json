@@ -246,5 +246,10 @@
   "settings.memory.clear.body": "Xóa vĩnh viễn toàn bộ {n} fact đã lưu. Không thể hoàn tác.",
   "settings.memory.clear.confirm": "Xóa hết",
   "settings.wiki.autoWrite.name": "Cho agent sửa wiki",
-  "settings.wiki.autoWrite.desc": "Mặc định TẮT. Khi bật, agent tạo/cập nhật/xoá được trang — mỗi lần sửa vẫn phải xin duyệt (trừ chế độ execute) và hiện trong transcript. Wiki global không có version history."
+  "settings.wiki.autoWrite.desc": "Mặc định TẮT. Khi bật, agent tạo/cập nhật/xoá được trang — mỗi lần sửa vẫn phải xin duyệt (trừ chế độ execute) và hiện trong transcript. Wiki global không có version history.",
+  "settings.workspace.linkOpen.name": "Mở link",
+  "settings.workspace.linkOpen.desc": "Link web đi đâu khi bạn bấm. ⌘-click thì luôn mở bằng browser của bạn.",
+  "settings.workspace.linkOpen.ask": "Hỏi mỗi lần",
+  "settings.workspace.linkOpen.app": "Trình duyệt của AWOG",
+  "settings.workspace.linkOpen.external": "Browser của tôi"
 }

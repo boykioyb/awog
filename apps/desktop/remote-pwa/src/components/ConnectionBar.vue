@@ -34,13 +34,17 @@ const reconnecting = computed(() => gateway.phase.value !== 'ready')
   justify-content: center;
   gap: 8px;
   padding: 6px 12px;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
-  color: var(--bg);
+  /* Ink token, not --bg: on the light scheme --bg is nearly white and would sit
+     at 1.3:1 on the amber strip. */
+  color: var(--on-warn);
   background: var(--warn);
 }
 .bar.ok {
   background: var(--accent);
+  color: var(--on-accent);
 }
 .dot {
   width: 8px;
@@ -52,6 +56,12 @@ const reconnecting = computed(() => gateway.phase.value !== 'ready')
 @keyframes pulse {
   50% {
     opacity: 0.3;
+  }
+}
+/* The strip's colour + label already carry the state; the pulse is decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none;
   }
 }
 </style>

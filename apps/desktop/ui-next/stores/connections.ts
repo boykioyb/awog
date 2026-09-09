@@ -737,6 +737,10 @@ export const useConnectionsStore = defineStore('connections', () => {
         // it here — the UI is responsible for opening it in the external browser
         // (the sidecar never opens one). Same external-open path as the account
         // OAuth flow (SettingsCodexDialog).
+        //
+        // NOT through useLinkOpen (ADR 0086 phần C) on purpose: an authorize URL
+        // has to land in the browser holding the user's real session, and the auth
+        // code it returns must never end up in the agent's cookie jar. No chooser.
         if (evt.type === 'source.oauth-url') {
           const payload = evt.payload as { slug?: string; url?: string }
           if (payload?.url) {

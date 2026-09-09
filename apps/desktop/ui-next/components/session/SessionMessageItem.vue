@@ -159,7 +159,16 @@
            visible actions (right), a full-width bar at the card's bottom edge. -->
       <div v-if="!streamingActive" class="mmeta mmetarow" :class="{ footer: !streaming }">
         <span class="mmetatxt">
-          <template v-if="streaming">
+          <!-- Park trên MỘT CÂU HỎI thì lượt không "đang chạy" theo nghĩa người dùng
+               phải ngồi chờ — nó chờ NGƯỜI. Nên: chữ tĩnh (không shimmer, không chấm
+               nhấp nháy) + nút mở lại popup, thay cho "Đang chờ…" của gate quyền. -->
+          <template v-if="streaming && parkedOnQuestion">
+            <span class="qwait">{{ t('sessions.message.awaitingAnswer') }}</span>
+            <button class="qwaitbtn" @click="reopenQuestion">
+              {{ t('sessions.message.answerNow') }}
+            </button>
+          </template>
+          <template v-else-if="streaming">
             <span class="strdot" />
             <span class="strshimmer">{{ t('sessions.message.waiting') }}</span>
           </template>
@@ -361,6 +370,19 @@ const parkedOnGate = computed(() => {
   )
 })
 const streamingActive = computed(() => streaming.value && !parkedOnGate.value)
+// Câu hỏi chưa trả lời trong CHÍNH lượt này (gate quyền không tính: quyền là chặn
+// một hành động, còn câu hỏi là mời người dùng quyết định lúc nào cũng được).
+const pendingQuestion = computed(() => {
+  const m = asAssistant.value
+  if (!m) return null
+  for (const b of m.blocks) {
+    if (b.kind === 'question' && !questionAnswered(b) && !b.cancelled) return b
+  }
+  return null
+})
+const parkedOnQuestion = computed(() => !!pendingQuestion.value)
+const { reopen } = useSessionQuestionModal()
+const reopenQuestion = (): void => reopen(pendingQuestion.value?.eid)
 
 // ── Streaming-render diagnostics (utils/stream-diag) ─────────────────────────────
 // Snapshot the in-memory `message.blocks` the moment the turn finalizes: how many text
@@ -865,6 +887,25 @@ const msgActions = computed<MsgAction[]>(() => [
   margin-right: 5px;
   vertical-align: middle;
   opacity: 0.5;
+}
+
+/* Park trên câu hỏi: trạng thái ĐỨNG YÊN, không phải trạng thái bận — chữ tĩnh,
+   không chấm nhấp nháy, không shimmer. Nút bên cạnh mở lại popup đã đóng. */
+.qwait {
+  color: var(--textDim);
+}
+.qwaitbtn {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--accentBorder, var(--border));
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+.qwaitbtn:hover {
+  background: var(--accentDim);
 }
 
 /* Turn-error alert: danger-tinted box with the provider message + a retry button. */

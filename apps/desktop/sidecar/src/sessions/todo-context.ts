@@ -1,11 +1,15 @@
 // Session checklist context. A session's current checklist (Session.todos) is
 // re-injected as a <session_checklist> block on EVERY turn.
 //
-// Why this exists: the model only ever sees its own last `TodoWrite` call in the
+// Why this exists: the model only ever sees its own last checklist call in the
 // conversation, so without this block a user who ticks an item in the UI would have
-// that edit silently overwritten by the model's next `TodoWrite`. Injecting the
-// persisted list makes the checklist shared state (user + model) instead of a
-// read-only mirror of the model's intent.
+// that edit silently overwritten by the model's next one. Injecting the persisted
+// list makes the checklist shared state (user + model) instead of a read-only
+// mirror of the model's intent.
+//
+// Tool-agnostic on purpose: the model writes the list with `TodoWrite` on the Pi
+// path and with the CLI's `TaskCreate`/`TaskUpdate` on the Claude SDK path, and
+// naming the wrong one here is an instruction to call a tool that does not exist.
 //
 // Built fresh each turn so the block reflects the latest state, whoever changed it.
 import { parseTodos } from '../runtime/todos.js'
@@ -42,7 +46,7 @@ export function buildSessionChecklistBlock(
   if (omitted > 0) rows.push(`- …and ${omitted} more item(s), not shown.`)
 
   return `<session_checklist>
-This is the CURRENT checklist for this session. The user can edit it directly in the UI, so it may differ from the last \`TodoWrite\` you made — when they differ, THIS block is correct and yours is stale. Use it as your starting point: carry over every item unchanged unless you are actually changing it, never re-open an item the user marked completed, and never drop an item the user added.
+This is the CURRENT checklist for this session. The user can edit it directly in the UI, so it may differ from the last version you wrote yourself — when they differ, THIS block is correct and yours is stale. Use it as your starting point: carry over every item unchanged unless you are actually changing it, never re-open an item the user marked completed, and never drop an item the user added.
 
 Legend: \`[ ]\` pending, \`[~]\` in progress, \`[x]\` completed.
 ${rows.join('\n')}

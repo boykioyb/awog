@@ -43,13 +43,14 @@ const showPair = computed(
   z-index: 300;
   max-width: min(90vw, 420px);
   padding: 10px 16px;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: var(--surface-3);
   border: 1px solid var(--border);
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   text-align: center;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-2);
 }
 .toast-enter-active,
 .toast-leave-active {

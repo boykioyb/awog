@@ -24,8 +24,10 @@
 <script setup lang="ts">
 // Slash `/` autocomplete dropdown (§2). Real sources: built-in session commands
 // (mode/compact/style — dispatched as actions) + user commands + skills (inserted
-// as `/id`, expanded on send). The composer owns the textarea + arrow-key nav and
-// passes `active` (highlighted index) down; this renders + emits select(index)/hover.
+// as `/id`, expanded on send) + the Claude CLI's own commands (/goal, /context…,
+// sent verbatim for the CLI to run — Claude SDK branch only). The composer owns the
+// textarea + arrow-key nav and passes `active` (highlighted index) down; this
+// renders + emits select(index)/hover.
 import type { SlashItem } from './session-composer-commands'
 
 defineProps<{ items: SlashItem[]; active: number }>()
@@ -35,13 +37,17 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-// Tag accent per kind: builtin = accent, command = blue, skill = violet. Exposed
-// as a `--tagc` custom property so the pill derives both text + tinted background
-// from one color (the CSS uses color-mix on it).
+// Tag accent per kind: builtin = accent, command = blue, skill = violet, Claude CLI
+// = amber. Exposed as a `--tagc` custom property so the pill derives both text +
+// tinted background from one color (the CSS uses color-mix on it).
+const TAG_COLOR: Record<SlashItem['kind'], string> = {
+  builtin: 'var(--accent)',
+  command: 'var(--blue)',
+  skill: 'var(--violet)',
+  cli: 'var(--amber)',
+}
 function tagStyle(kind: SlashItem['kind']) {
-  const color =
-    kind === 'builtin' ? 'var(--accent)' : kind === 'command' ? 'var(--blue)' : 'var(--violet)'
-  return { '--tagc': color }
+  return { '--tagc': TAG_COLOR[kind] }
 }
 </script>
 

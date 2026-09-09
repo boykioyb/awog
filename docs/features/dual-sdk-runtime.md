@@ -126,7 +126,9 @@ Bọc `@anthropic-ai/claude-agent-sdk` `query()` (craft `claude-agent.ts:1423`).
 | `/compact` | Pi `runCompact` (checkpoint) | **cùng Pi `runCompact`** (runner route compact→Pi mọi provider) → checkpoint `{summary,firstKeptMessageId}` **clear `sdkSessionId`** (fold `session.compacted`) → turn kế **re-seed SDK session mới từ [summary + kept turns]**. LUÔN nén (không dựa adaptive-compact của SDK) — verified |
 | Confab-guard | có (`getFollowUpMessages`) | **không** (dựa harness first-party — đúng mục tiêu) |
 | RunWorkflow / session↔task ([ADR 0055](../decisions/0055-session-task-link.md)) | có | **KHÔNG** (là custom tool → loại theo "SDK quyết định") |
-| AskUserQuestion (park mid-turn) | có | **KHÔNG** (park-based là custom) — dùng cơ chế SDK nếu có |
+| AskUserQuestion (park mid-turn) | có (tool AWOG) | **có, qua cơ chế SDK** (2026-09-09): tool builtin CLI + `options.canUseTool` (bật tool + nhận câu hỏi) + hook PreToolUse bỏ qua nó; park/RPC/thẻ dùng chung với Pi — [spec](ask-user-question.md#nhánh-claude-sdk-2026-09-09) |
+
+**Option của SDK — bảng đối chiếu đầy đủ**: [docs/reference/claude-sdk-options.md](../reference/claude-sdk-options.md) liệt kê cả 66 `Options`, cái nào AWOG đang dùng ở chat/task, và (2026-09-09) đợt bật thêm: `stderr` · `fallbackModel` · `maxBudgetUsd` · `settingSources`+`strictMcpConfig` · `agentProgressSummaries` · `skills` · `onElicitation` · `promptSuggestions` · `outputFormat` (verdict của gate node) · `additionalDirectories`, cùng những cái cố ý chưa bật kèm lý do. Phần đồng bộ sang Pi: trần tiền giữa lượt (`withTurnBudget` + `pricing/effective.ts`) và model dự phòng khi quá tải (`runWithModelFallback`).
 
 **Hệ quả UX**: session Anthropic (path SDK) hành xử khác OpenAI/Google (path Pi) cho tới khi (nếu) parity thêm. Ghi rõ cho user; kill-switch cho ai cần đủ tính năng AWOG-native → ép về Pi.
 

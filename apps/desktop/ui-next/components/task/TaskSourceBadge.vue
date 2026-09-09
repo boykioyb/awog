@@ -40,22 +40,18 @@
 // IconSprite glyphs (branch ≈ github, layers ≈ jira, text ≈ manual).
 import Icon from '~/components/Icon.vue'
 import { useI18n } from '~/composables/useI18n'
-import { useSidecar } from '~/composables/useSidecar'
 import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
 import type { TaskSource } from '~/stores/tasks'
 
 defineProps<{ source: TaskSource }>()
 
 const { t } = useI18n()
-const sc = useSidecar()
 const { openSession } = useSessionTaskLink()
 
-// Open the issue/PR in the OS browser; fall back to window.open in browser-dev.
+// The issue/PR behind this task — through the shared chooser (in-app browser or
+// OS browser), which handles the browser-dev fallback itself.
 const open = (url: string): void => {
-  if (!url) return
-  sc.openExternal(url).catch(() => {
-    if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener,noreferrer')
-  })
+  if (url) void useLinkOpen().openLink(url)
 }
 </script>
 

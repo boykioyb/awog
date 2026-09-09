@@ -185,7 +185,6 @@ import {
   type PrWatchItem,
 } from '~/composables/usePrWatch'
 import { useSettingsModal } from '~/composables/useSettingsModal'
-import { useSidecar } from '~/composables/useSidecar'
 import { useSessionsStore } from '~/stores/sessions'
 import { useSettingsStore } from '~/stores/settings'
 import { formatRelativeAgo } from '~/utils/relative-time'
@@ -378,7 +377,7 @@ async function onTogglePrWatch(row: PrRow, watchIt: boolean): Promise<void> {
 }
 
 function openPrExternal(url: string): void {
-  if (url) void useSidecar().openExternal(url)
+  if (url) void useLinkOpen().openLink(url)
 }
 
 // Opening pulls a fresh list: the panel is a deliberate "what do I have right now?"
@@ -408,7 +407,7 @@ function onOpen(n: GhNotification): void {
 // itself doesn't change, and closing it forced a re-open for every next row. Only the
 // in-app open (onOpen) closes, because it navigates the UI behind the panel.
 function onExternal(n: GhNotification): void {
-  if (n.url) void useSidecar().openExternal(n.url)
+  if (n.url) void useLinkOpen().openLink(n.url)
 }
 
 const onRead = (id: string): void => void markGhNotificationRead(id)
@@ -431,7 +430,7 @@ function goSettings(): void {
 }
 
 function openOnGithub(): void {
-  void useSidecar().openExternal('https://github.com/notifications')
+  void useLinkOpen().openLink('https://github.com/notifications')
 }
 </script>
 

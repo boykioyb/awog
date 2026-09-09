@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { TriangleAlert } from 'lucide-vue-next'
 import {
   AGENT_MODES,
   RESPONSE_STYLES,
@@ -99,11 +100,12 @@ function target(e: Event): string {
   </div>
 
   <p v-if="modeBlocked" class="mode-hint warn">
-    ⚠ Mode này bị chặn cho thiết bị từ xa. Bật "chạy không cần duyệt" ở Settings →
+    <TriangleAlert class="icn-xs" />
+    Mode này bị chặn cho thiết bị từ xa. Bật "chạy không cần duyệt" ở Settings →
     Devices trên máy desktop, hoặc dùng Ask và duyệt từng lệnh ngay tại đây.
   </p>
   <p v-else class="mode-hint" :class="{ warn: modeUngated }">
-    <template v-if="modeUngated">⚠ </template>{{ modeHint }}
+    <TriangleAlert v-if="modeUngated" class="icn-xs" />{{ modeHint }}
   </p>
 
   <label v-if="modelValue.provider" class="field">
@@ -163,8 +165,15 @@ function target(e: Event): string {
 <style scoped>
 .mode-hint {
   margin: -8px 0 12px;
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
+}
+/* Inline with the sentence it qualifies, so it must sit on the text baseline
+   rather than the line box's top. */
+.mode-hint .lucide {
+  vertical-align: -2px;
+  margin-right: 4px;
 }
 .mode-hint.warn {
   color: var(--warn);
@@ -173,11 +182,11 @@ function target(e: Event): string {
   margin: 0 0 14px;
   padding: 9px 11px;
   border: 1px solid var(--warn);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--warn) 10%, transparent);
   color: var(--warn);
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .field {
   display: block;
@@ -185,19 +194,21 @@ function target(e: Event): string {
 }
 .field > span {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   margin-bottom: 6px;
 }
 .field select {
   width: 100%;
+  min-height: var(--tap);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   padding: 11px 12px;
-  outline: none;
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .field select:focus {
   border-color: var(--accent);
@@ -214,9 +225,14 @@ function target(e: Event): string {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-height: var(--tap);
   margin-bottom: 14px;
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   color: var(--text-dim);
+}
+.check:active {
+  color: var(--text);
 }
 .check input {
   width: 20px;

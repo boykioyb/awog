@@ -287,6 +287,9 @@
           <SessionBackgroundWakeCard :session="session" />
           <SessionInboxChips :session="session" />
           <SessionBackgroundChips :session="session" />
+          <!-- Câu hỏi của agent (AskUserQuestion) trượt lên từ composer, ngay trên nó,
+               nên người dùng không phải đi tìm thẻ trong transcript đang cuộn. -->
+          <SessionQuestionDrawer :session="session" />
           <SessionComposer
             :attachments="pendingAtt"
             @send="onSend"
@@ -1148,7 +1151,17 @@ function onDrop(e: DragEvent) {
 const settings = useSettingsStore()
 const wpOpen = ref(false)
 
-const ALL_VIEWS = ['Diff', 'Files', 'Terminal', 'Plan', 'Tasks', 'Preview', 'Cost', 'Info'] as const
+const ALL_VIEWS = [
+  'Diff',
+  'Files',
+  'Terminal',
+  'Browser',
+  'Plan',
+  'Tasks',
+  'Preview',
+  'Cost',
+  'Info',
+] as const
 // Workspace panel starts EMPTY. The header's workspace button opens a view picker
 // (dropdown, `menu === 'workspace'`); picking a view is what opens it (+ the panel),
 // so clicking the button no longer dumps every default view at once.

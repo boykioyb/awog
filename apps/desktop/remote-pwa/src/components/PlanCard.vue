@@ -30,7 +30,7 @@ const body = computed(() => props.step.planMarkdown || (props.step.planItems ?? 
 <style scoped>
 .plan {
   border: 1px solid var(--accent);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   padding: 12px 14px;
   margin: 6px 0 12px;
   background: color-mix(in srgb, var(--accent) 7%, var(--surface));
@@ -50,7 +50,8 @@ const body = computed(() => props.step.planMarkdown || (props.step.planItems ?? 
   color: var(--accent);
 }
 .tag {
-  font-size: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-weight: 600;
 }
 .tag.ok {
@@ -62,11 +63,13 @@ const body = computed(() => props.step.planMarkdown || (props.step.planItems ?? 
 .body {
   white-space: pre-wrap;
   word-break: break-word;
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-prose);
   margin-bottom: 8px;
 }
 .rationale {
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   margin: 0 0 8px;
 }
 .actions {
@@ -75,6 +78,5 @@ const body = computed(() => props.step.planMarkdown || (props.step.planItems ?? 
 }
 .actions .btn {
   flex: 1;
-  min-height: 42px;
 }
 </style>

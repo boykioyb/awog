@@ -21,7 +21,9 @@
 </template>
 
 <script setup lang="ts">
-// `@`-mention dropdown (§2). Real sources: enabled session agents (agents.list),
+// `@`-mention dropdown (§2). Hàng đầu là HÀNH ĐỘNG `@page` (chèn trang đang mở trong
+// trình duyệt nhúng — ADR 0086), phần còn lại là thực thể.
+// Real sources: enabled session agents (agents.list),
 // skills in both tiers (skills.list — ADR 0070), wiki pages in the session's scope
 // (wiki.tree, ADR 0073), and the workspace file index (fs.listFiles,
 // .gitignore-aware). The composer owns the textarea + arrow-key nav and passes
@@ -43,11 +45,15 @@ const TAG_KEY: Record<MentionRow['kind'], string> = {
   skill: 'sessions.composer.mentionSkill',
   wiki: 'sessions.composer.mentionWiki',
   file: 'sessions.composer.mentionFile',
+  page: 'sessions.composer.mentionPage',
 }
 const GLYPH_COLOR: Partial<Record<MentionRow['kind'], string>> = {
   agent: 'var(--violet)',
   skill: 'var(--blue)',
   wiki: 'var(--accent)',
+  // `@page` là hành động (chèn trang đang mở trong trình duyệt nhúng), không phải một
+  // thực thể có tên — dùng chung accent với wiki cho khỏi thêm màu thứ tư.
+  page: 'var(--accent)',
 }
 const glyphStyle = (kind: MentionRow['kind']) => {
   const color = GLYPH_COLOR[kind]

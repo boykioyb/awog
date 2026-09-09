@@ -45,6 +45,14 @@ export interface InvokeArgs {
   // co-author trailer on model-made commits: Claude SDK path sets the SDK's native
   // `attribution`; Pi path appends CO_AUTHOR_INSTRUCTION. Omitted → on (default).
   commitCoAuthor?: boolean
+  // USD CÒN LẠI của task cho node này (trần task trừ phần đã tiêu — tasks/budget.ts).
+  // Trần task hiện chỉ được kiểm GIỮA các node; con số này để runtime chặn ngay
+  // trong node: Claude SDK dùng `maxBudgetUsd`, Pi kiểm ở biên mỗi tool call.
+  maxCostUsd?: number
+  // JSON Schema ép hình dạng câu trả lời cuối (Claude SDK `outputFormat`). Dùng cho
+  // gate node của task, nơi engine phải đọc được `status` chứ không đoán từ văn bản.
+  // Nhánh Pi BỎ QUA: Pi không có structured output, ở đó gate vẫn đi bằng fenced block.
+  outputSchema?: Record<string, unknown>
 }
 
 export interface InvokeToolUse {

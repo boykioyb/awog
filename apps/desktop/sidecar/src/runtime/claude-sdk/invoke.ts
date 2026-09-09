@@ -12,6 +12,14 @@ import {
   FROZEN_TOKEN_MIN_LIFETIME_MS,
   resolveCredential,
 } from '../../credentials/credential-resolver.js'
+import {
+  CONFIG_ISOLATION_OPTIONS,
+  budgetOptions,
+  diagnosticsOptions,
+  fallbackModelFor,
+  turnCapOption,
+  taskBudgetOption,
+} from './tuning.js'
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { InvokeArgs, InvokeCallbacks, InvokeResult } from '../../sdk/invoke.js'
@@ -19,7 +27,7 @@ import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import {
   EVIDENCE_PROMPT,
   OUTPUT_SURFACE_PROMPT,
-  TODO_USAGE_PROMPT,
+  TASK_CHECKLIST_PROMPT,
   SCRATCH_DIR_PROMPT,
   VERIFY_PROMPT,
 } from '../prompts.js'
@@ -39,6 +47,7 @@ import {
   toSdkMcpServers,
   toSdkModel,
 } from './shared.js'
+import { resultErrorMessage } from './shared.js'
 
 interface ContentBlock {
   type: string
@@ -178,6 +187,12 @@ function createInvokeAdapter(cb: InvokeCallbacks): {
           if (!text && typeof m.result === 'string') text = m.result
         } else {
           stopReason = 'error'
+          // Trần tiền của task (maxBudgetUsd) và các mã dừng khác đều rơi vào đây
+          // với `result` rỗng — node-runner chỉ thấy stopReason:'error' nếu không
+          // dịch mã ra câu. Ghi vào text để trace của node còn nói được lý do.
+          const why = resultErrorMessage(m.subtype, m.result)
+          log.warn('claude-sdk task node ended without success', { subtype: m.subtype, why })
+          if (!text) text = why
         }
         if (!modelUsed && m.modelUsage) {
           const first = Object.keys(m.modelUsage)[0]
@@ -226,11 +241,15 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
   // assumes output is printed to a terminal, while a node's answer is rendered as
   // markdown in the GUI and its paste-ready blocks get copied out verbatim.
   const rulesPrompt = await buildRulesPrompt(args.projectIds?.[0], extractTurnPaths(args.prompt))
-  // TodoWrite nudge — same as the Pi task path (invoke.ts). The preset alone leaves
-  // the checklist unused, so a task node would show no progress list on this
-  // runtime. Safe in the append here (unlike the chat path): a task node is a fresh
-  // one-shot SDK session, never a `resume`, so nothing freezes stale.
-  const todoAllowed = isToolAllowed('TodoWrite', {
+  // Checklist nudge — same intent as the Pi task path (runtime/invoke.ts). Safe in
+  // the append here (unlike the chat path): a task node is a fresh one-shot SDK
+  // session, never a `resume`, so nothing freezes stale. Gated on `TaskCreate`:
+  // TodoWrite is not on the CLI's tool surface for current models, and the task
+  // tools are what replaced it (see TASK_CHECKLIST_PROMPT). A node's task calls
+  // render as ordinary trace rows — the folded checklist row is a chat-path
+  // affordance (claude-sdk/event-adapter.ts), and a task node's checklist is
+  // ACK-only on both runtimes.
+  const checklistAllowed = isToolAllowed('TaskCreate', {
     ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
     ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
   })
@@ -238,7 +257,7 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     args.systemPrompt,
     args.systemPromptAppend,
     rulesPrompt,
-    // Safe in the append on this path for the same reason as the TodoWrite nudge
+    // Safe in the append on this path for the same reason as the checklist nudge
     // below: a task node is a fresh one-shot SDK session, never a `resume`, so
     // nothing here can freeze stale.
     VERIFY_PROMPT,
@@ -248,7 +267,7 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     SCRATCH_DIR_PROMPT,
     EVIDENCE_PROMPT,
     OUTPUT_SURFACE_PROMPT,
-    todoAllowed ? TODO_USAGE_PROMPT : undefined,
+    checklistAllowed ? TASK_CHECKLIST_PROMPT : undefined,
     // A task node is one query too: a backgrounded subagent dies with it and its
     // notification never arrives (see shared.ts). The hook below forces the
     // synchronous form; this explains the constraint.
@@ -268,6 +287,9 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
   const allServers = { ...(mcpServers ?? {}), ...apiServers }
   const claudeBinary = resolveClaudeBinary()
   const sdkModel = toSdkModel(args.settings.modelId)
+  // Model dự phòng khi model chính quá tải (tuning.ts). Tính một lần: gọi hai lần
+  // trong một conditional spread thì TS không narrow được `string | undefined`.
+  const fallbackModel = fallbackModelFor(sdkModel)
 
   const options: Options = {
     systemPrompt: { type: 'preset', preset: 'claude_code', ...(append ? { append } : {}) },
@@ -278,6 +300,24 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     includePartialMessages: true,
     thinking: thinkingFromLevel(args.settings.level),
     effort: effortFromLevel(args.settings.level),
+    // Chẩn đoán + cách ly cấu hình giống nhánh chat (tuning.ts).
+    ...diagnosticsOptions('task'),
+    ...CONFIG_ISOLATION_OPTIONS,
+    ...(fallbackModel ? { fallbackModel } : {}),
+    // Trần TIỀN còn lại của task. Task chạy không người trông nên đây là hàng rào
+    // đáng giá nhất trong nhóm: trần USD của task xưa nay chỉ được kiểm GIỮA các
+    // node, không cứu nổi một node đang cháy tiền.
+    ...budgetOptions(args.maxCostUsd),
+    ...turnCapOption(),
+    // Ngân sách token phía API (alpha) — mặc định TẮT, bật bằng env.
+    ...taskBudgetOption(),
+    // Subagent của node cũng nên có câu tiến độ như ở chat.
+    agentProgressSummaries: true,
+    // Skill: bật tường minh, khớp với catalogue AWOG bơm vào prompt (như nhánh chat).
+    skills: 'all',
+    // Structured output: node gate của task ép đúng schema verdict thay vì để engine
+    // dò fenced block trong văn bản tự do (tasks/node-runner.ts).
+    ...(args.outputSchema ? { outputFormat: { type: 'json_schema', schema: args.outputSchema } } : {}),
     // Tasks run unattended (ADR 0024 D-7): không hỏi ai, không nhớ gì. `bypassPermissions`
     // ở đây KHÔNG có nghĩa "không có cổng" — nhánh chat dùng đúng cờ này (run-stream.ts)
     // để cổng của SDK không che cổng của AWOG; cổng thật luôn nằm ở hook PreToolUse.
@@ -287,9 +327,7 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
     hooks: {
-      PreToolUse: [
-        { hooks: [makeForegroundOnlyHook(makeTaskToolGate(args.projectIds?.[0], args.cwd))] },
-      ],
+      PreToolUse: [{ hooks: [makeForegroundOnlyHook(makeTaskToolGate(args.projectIds?.[0], args.cwd))] }],
     },
     // Whitelist `tools:` của agent node đi vào `tools`, KHÔNG phải `allowedTools`.
     // Xem chú thích dài ở claude-sdk/run-stream.ts: `allowedTools` là danh sách

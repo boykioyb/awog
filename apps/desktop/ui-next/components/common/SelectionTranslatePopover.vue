@@ -3,11 +3,16 @@
        above every surface (page, session, preview modal) at the top of the modal
        z-band so a translation opened from inside the preview overlay is visible. -->
   <Teleport to="body">
-    <template v-if="active">
+    <!-- `surface === 'browser'` KHÔNG render ở đây: selection đó nằm trong trang
+         của trình duyệt nhúng, và một view native vẽ trên toàn bộ DOM ⇒ popover
+         này sẽ vô hình, còn cách "gỡ trang khỏi màn hình để thấy popover" thì phá
+         đúng việc người dùng đang làm (đối chiếu bản dịch với trang). Bề mặt đó
+         render kết quả trong chrome của chính nó — BrowserTranslateStrip. -->
+    <template v-if="active && active.surface !== 'browser'">
       <div class="sttbackdrop" @mousedown="close" />
       <div class="sttpop" :style="popStyle" @mousedown.stop>
         <div class="stthead">
-          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span class="stttitle">{{ t('translate.title') }}</span>
           <div class="sttlangs">
             <button

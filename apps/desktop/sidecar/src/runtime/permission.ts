@@ -333,12 +333,24 @@ export type BeforeToolCall = (
 // stops. `startedAtMs` is the turn start (caller-supplied so the clock is testable).
 export function withTurnBudget(
   inner: BeforeToolCall,
-  budget: { maxToolCalls?: number; maxWallclockMs?: number } | undefined,
+  budget: { maxToolCalls?: number; maxWallclockMs?: number; maxCostUsd?: number } | undefined,
   startedAtMs: number,
+  // USD đã tiêu TỪ ĐẦU LƯỢT, đo được tại thời điểm gọi. Chỉ nhánh Pi truyền: ở đó
+  // AWOG tự chạy vòng lặp nên phải tự chặn, còn nhánh Claude SDK có `maxBudgetUsd`
+  // của chính SDK làm việc này tử tế hơn (dừng giữa một lời gọi model, không phải
+  // đợi tới tool call kế tiếp). Absent ⇒ chiều tiền không được kiểm.
+  spentUsd?: () => number,
 ): BeforeToolCall {
   const maxCalls = budget?.maxToolCalls
   const maxMs = budget?.maxWallclockMs
-  if ((maxCalls == null || maxCalls <= 0) && (maxMs == null || maxMs <= 0)) return inner
+  const maxUsd = spentUsd ? budget?.maxCostUsd : undefined
+  if (
+    (maxCalls == null || maxCalls <= 0) &&
+    (maxMs == null || maxMs <= 0) &&
+    (maxUsd == null || maxUsd <= 0)
+  ) {
+    return inner
+  }
   let calls = 0
   return async (context, signal) => {
     calls += 1
@@ -352,6 +364,15 @@ export function withTurnBudget(
       return {
         block: true,
         reason: `Turn time budget exceeded (${Math.round(maxMs / 1000)}s). Stopped — raise the cap in session config to continue.`,
+      }
+    }
+    // Trần TIỀN: đo ở biên tool call vì đó là điểm dừng an toàn duy nhất AWOG có
+    // trong vòng lặp Pi. Hệ quả đã biết: một lượt chỉ sinh chữ (không gọi tool nào)
+    // không bị chặn ở đây — hàng rào trước-lượt của send-message mới chặn nó.
+    if (maxUsd != null && maxUsd > 0 && spentUsd && spentUsd() >= maxUsd) {
+      return {
+        block: true,
+        reason: `Turn cost budget exceeded ($${maxUsd.toFixed(2)}). Stopped — raise the cap in session config to continue.`,
       }
     }
     return inner(context, signal)

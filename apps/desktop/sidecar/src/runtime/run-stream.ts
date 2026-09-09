@@ -59,6 +59,7 @@ import { createSshTools } from './tools/ssh-tools.js'
 import { listHosts } from '../ssh/store.js'
 import { listWorkflows } from '../workflows/store.js'
 import { makeBeforeToolCall, withTurnBudget } from './permission.js'
+import { costUsd, loadPricingTables } from '../pricing/effective.js'
 import { toReasoning } from './thinking.js'
 import { createEventAdapter } from './event-adapter.js'
 import { buildRulesPrompt, extractTurnPaths } from '../rules/inject.js'
@@ -298,6 +299,32 @@ export async function runStreamPi(
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   const systemPromptAppend = appendParts.length > 0 ? appendParts.join('\n\n') : undefined
 
+  // Trần TIỀN của lượt (đối trọng Pi của `maxBudgetUsd` bên Claude SDK). Bảng giá
+  // nạp TRƯỚC vòng lặp vì cổng tool không await được bảng giá; `liveUsage` gán sau
+  // khi adapter tồn tại — getter chỉ chạy lúc lượt đang chạy nên thứ tự đó an toàn.
+  const pricingTables = args.budget?.maxCostUsd ? await loadPricingTables() : null
+  let liveUsage:
+    | (() => {
+        model: string
+        inputTokens: number
+        outputTokens: number
+        cacheReadTokens: number
+        cacheWriteTokens: number
+      })
+    | null = null
+  const spentUsd = pricingTables
+    ? (): number => {
+        const u = liveUsage?.()
+        if (!u) return 0
+        return costUsd(pricingTables, u.model || args.settings.modelId, {
+          inputTokens: u.inputTokens,
+          outputTokens: u.outputTokens,
+          cacheReadTokens: u.cacheReadTokens,
+          cacheWriteTokens: u.cacheWriteTokens,
+        })
+      }
+    : undefined
+
   const beforeToolCall = withTurnBudget(
     makeBeforeToolCall(
       args.canUseTool,
@@ -320,6 +347,7 @@ export async function runStreamPi(
     ),
     args.budget,
     Date.now(),
+    spentUsd,
   )
 
   // Task subagent tool (ADR 0030). Added at the TOP LEVEL only — never to a
@@ -520,6 +548,17 @@ export async function runStreamPi(
 
   const reasoning = toReasoning(args.settings.level, model)
   const adapter = createEventAdapter(cb)
+  // Nối accumulator sống của adapter vào cổng trần-tiền dựng ở trên.
+  liveUsage = () => {
+    const a = adapter.result()
+    return {
+      model: a.modelUsed,
+      inputTokens: a.inputTokens,
+      outputTokens: a.outputTokens,
+      cacheReadTokens: a.cacheReadTokens,
+      cacheWriteTokens: a.cacheWriteTokens,
+    }
+  }
 
   // Cumulative count of tool calls started this turn — feeds the confabulation
   // guard (a turn that called no tool but claims work gets one corrective nudge).

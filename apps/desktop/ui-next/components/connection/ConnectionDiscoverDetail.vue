@@ -81,7 +81,6 @@
 // ghi xuống đĩa, và không có gì được spawn cho tới khi người dùng Test.
 import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
-import { useSidecar } from '~/composables/useSidecar'
 import type { RegistryEntry } from '~/stores/connections'
 
 const props = defineProps<{ entry: RegistryEntry }>()
@@ -91,7 +90,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const sc = useSidecar()
 
 const installable = computed(() => props.entry.install.kind !== 'unsupported')
 
@@ -124,7 +122,7 @@ const repoUrl = computed(() => {
 })
 
 const openRepo = () => {
-  if (repoUrl.value) void sc.openExternal(repoUrl.value)
+  if (repoUrl.value) void useLinkOpen().openLink(repoUrl.value)
 }
 </script>
 

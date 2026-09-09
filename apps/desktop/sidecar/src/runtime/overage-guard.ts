@@ -77,7 +77,7 @@ export async function confirmOverageOrStop(
     )
   }
 
-  const answers = await askUser(
+  const reply = await askUser(
     `overage-confirm-${sessionId}`,
     [
       {
@@ -97,7 +97,7 @@ export async function confirmOverageOrStop(
     signal,
   )
 
-  if (answers[0]?.selected.includes('Continue')) {
+  if (reply.answers[0]?.selected.includes('Continue')) {
     confirmedSessions.add(sessionId)
     return
   }

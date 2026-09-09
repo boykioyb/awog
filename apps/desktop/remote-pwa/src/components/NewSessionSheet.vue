@@ -87,34 +87,33 @@ async function submit(): Promise<void> {
 }
 .field > span {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   margin-bottom: 6px;
 }
 .field input,
 .field select {
   width: 100%;
+  min-height: var(--tap);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   padding: 11px 12px;
-  outline: none;
   color: var(--text);
-  font-size: 15px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 .field input:focus,
 .field select:focus {
   border-color: var(--accent);
 }
 .note {
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   margin: 0 0 14px;
 }
 .go {
   width: 100%;
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 </style>

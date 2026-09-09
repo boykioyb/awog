@@ -96,7 +96,7 @@ watch(
   max-width: 380px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--r-card);
   padding: 28px 22px;
   text-align: center;
 }
@@ -120,11 +120,13 @@ watch(
   background: var(--accent);
 }
 h1 {
-  font-size: 20px;
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
   margin: 0 0 14px;
 }
 .notice {
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-prose);
   color: var(--text-dim);
   margin: 0 0 18px;
   text-align: left;
@@ -139,31 +141,29 @@ h1 {
 }
 .field span {
   display: block;
-  font-size: 13px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   color: var(--text-dim);
   margin-bottom: 6px;
 }
 .field input {
   width: 100%;
+  min-height: var(--tap);
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
+  border-radius: var(--r-btn);
   padding: 12px 14px;
   letter-spacing: 1px;
-  outline: none;
 }
 .field input:focus {
   border-color: var(--accent);
 }
 .connect {
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
 }
 .hint {
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   margin: 16px 0 0;
   text-align: left;
 }

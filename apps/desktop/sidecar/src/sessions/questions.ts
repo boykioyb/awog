@@ -8,28 +8,25 @@
 // an empty answer set so the tool can return a "canceled" result rather than
 // hang. See docs/features/ask-user-question.md.
 
-import type { SessionQuestionAnswer } from '../types/shared.js'
+import type { SessionQuestionReply } from '../types/shared.js'
 
 interface ParkedQuestion {
-  resolve: (answers: SessionQuestionAnswer[]) => void
+  resolve: (reply: SessionQuestionReply) => void
 }
 
 const PENDING = new Map<string, ParkedQuestion>()
 
-export function parkQuestionRequest(requestId: string): Promise<SessionQuestionAnswer[]> {
-  return new Promise<SessionQuestionAnswer[]>((resolve) => {
+export function parkQuestionRequest(requestId: string): Promise<SessionQuestionReply> {
+  return new Promise<SessionQuestionReply>((resolve) => {
     PENDING.set(requestId, { resolve })
   })
 }
 
-export function resolveQuestionRequest(
-  requestId: string,
-  answers: SessionQuestionAnswer[],
-): boolean {
+export function resolveQuestionRequest(requestId: string, reply: SessionQuestionReply): boolean {
   const parked = PENDING.get(requestId)
   if (!parked) return false
   PENDING.delete(requestId)
-  parked.resolve(answers)
+  parked.resolve(reply)
   return true
 }
 
@@ -40,6 +37,6 @@ export function rejectQuestionRequest(requestId: string): boolean {
   const parked = PENDING.get(requestId)
   if (!parked) return false
   PENDING.delete(requestId)
-  parked.resolve([])
+  parked.resolve({ answers: [] })
   return true
 }

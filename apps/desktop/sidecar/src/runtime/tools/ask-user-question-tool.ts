@@ -24,7 +24,11 @@
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import type { AskUserQuestionFn } from '../permission-types.js'
-import type { SessionQuestion, SessionQuestionAnswer } from '../../types/shared.js'
+import type {
+  SessionQuestion,
+  SessionQuestionAnswer,
+  SessionQuestionReply,
+} from '../../types/shared.js'
 
 const MAX_QUESTIONS = 4
 const MAX_OPTIONS = 4
@@ -53,6 +57,9 @@ const AskUserQuestionParams = Type.Object({
 interface AskUserQuestionDetails {
   questions: SessionQuestion[]
   answers: SessionQuestionAnswer[]
+  // Free text the user added beside the answers — carried so the answered card
+  // shows what they actually wrote, not just the picked labels.
+  response?: string
   // tool-error.ts: a malformed call is a failed call — it must render as an
   // error step, not as an answered question.
   isError?: boolean
@@ -93,18 +100,33 @@ function validate(questions: RawParams['questions']): string | null {
   return null
 }
 
-// Render the chosen answers as the tool-result text the model reads back.
-function formatAnswers(questions: SessionQuestion[], answers: SessionQuestionAnswer[]): string {
-  if (answers.length === 0) {
-    return 'The user did not answer (the question was canceled). Proceed using your best judgment or ask again if essential.'
+// Render the reply as the tool-result text the model reads back. Answers may be
+// empty and the reply still meaningful: the user can write free text instead of
+// picking, or ask for another round of questions — say which of those happened
+// rather than reporting a blank "canceled".
+function formatReply(questions: SessionQuestion[], reply: SessionQuestionReply): string {
+  const { answers, response, followUp } = reply
+  const parts: string[] = []
+  if (answers.length > 0) {
+    const byHeader = new Map(answers.map((a) => [a.header, a.selected]))
+    const lines = questions.map((q) => {
+      const selected = byHeader.get(q.header) ?? []
+      const value = selected.length > 0 ? selected.join(', ') : '(no answer)'
+      return `- ${q.question}\n  → ${value}`
+    })
+    parts.push(`The user answered:\n${lines.join('\n')}`)
   }
-  const byHeader = new Map(answers.map((a) => [a.header, a.selected]))
-  const lines = questions.map((q) => {
-    const selected = byHeader.get(q.header) ?? []
-    const value = selected.length > 0 ? selected.join(', ') : '(no answer)'
-    return `- ${q.question}\n  → ${value}`
-  })
-  return `The user answered:\n${lines.join('\n')}`
+  if (response) parts.push(`The user also wrote: "${response}"`)
+  if (followUp) {
+    parts.push(
+      'The user asked for another round of questions about this decision before you proceed. Call AskUserQuestion again with follow-up questions that build on what they said (do not repeat the ones above); do not start the task yet.',
+    )
+  } else if (answers.length === 0 && !response) {
+    parts.push(
+      'The user did not answer (canceled, or asked you to decide). Proceed using your best judgment and state the assumption you are making.',
+    )
+  }
+  return parts.join('\n\n')
 }
 
 export function createAskUserQuestionTool(
@@ -144,10 +166,10 @@ export function createAskUserQuestionTool(
         }
       }
 
-      const answers = await askUser(id, questions, signal)
+      const reply = await askUser(id, questions, signal)
       return {
-        content: [{ type: 'text', text: formatAnswers(questions, answers) }],
-        details: { questions, answers },
+        content: [{ type: 'text', text: formatReply(questions, reply) }],
+        details: { questions, answers: reply.answers, ...(reply.response ? { response: reply.response } : {}) },
       }
     },
   }

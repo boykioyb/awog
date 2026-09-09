@@ -39,6 +39,15 @@ type FilePreviewApi = {
   // (browser-dev, climbs out of the workspace, missing, non-image, over the size
   // cap). Lets the transcript render `![alt](tasks/…/shot.png)` images inline.
   imageSrc: (src: string) => Promise<string | null>
+  // Verify a BATCH of workspace paths against the real filesystem: each input maps to
+  // its true workspace-relative path, or to null when no such file exists. For
+  // surfaces that LIST paths a session merely named (the Info tab's media/docs index)
+  // — a row that opens nothing is worse than no row. Cheaper than `resolve` per path
+  // (one directory listing serves every path in that directory) and it sees
+  // generated/gitignored files, which the git-index path of `resolve` cannot.
+  // Unverifiable (no root / browser-dev) maps a path to ITSELF, never to null: only a
+  // checked miss drops a file.
+  verifyPaths: (paths: string[]) => Promise<Map<string, string | null>>
   // Absolute workspace root of the session (its cwd), resolved on demand (cached).
   // Callers that hand a message's markdown to ANOTHER renderer — the fullscreen
   // PreviewModal — need it to anchor relative image refs at the same base the
@@ -189,9 +198,13 @@ export function provideFilePreview(
 
   // Directory listings, keyed `root::dir`, shared across gallery builds in this session.
   const dirCache = new Map<string, Set<string>>()
-  async function dirFileNames(r: string, dir: string): Promise<Set<string>> {
+  // `fresh` re-reads a directory whose cached listing predates a write in THIS turn —
+  // without it a file the running turn just created reads as missing until turn end.
+  // Only a cache MISS pays for it (see verifyPaths), so the storm the cache prevents
+  // stays prevented.
+  async function dirFileNames(r: string, dir: string, fresh = false): Promise<Set<string>> {
     const key = `${r}::${dir}`
-    const hit = dirCache.get(key)
+    const hit = fresh ? undefined : dirCache.get(key)
     if (hit) return hit
     let names = new Set<string>()
     try {
@@ -207,6 +220,76 @@ export function provideFilePreview(
   const dirOf = (p: string): string => {
     const i = p.lastIndexOf('/')
     return i > 0 ? p.slice(0, i) : ''
+  }
+
+  // ── batch existence check (verifyPaths) ─────────────────────────────────────
+  // Three passes, cheapest first, over ONE directory listing per directory:
+  //   1. cached listing says the file is there            → it is real
+  //   2. re-read that directory (the running turn may have just written it)
+  //   3. the git file index (matchPath) — only a DIRECTORY-PRESERVING hit is
+  //      accepted, so a path anchored at an ancestor cwd is corrected
+  //      (`awog/docs/x.md` → `docs/x.md`, memory: session-file-link-path-base) while
+  //      a basename guess is NOT: matching `plan.md` to some other `plan.md` in the
+  //      repo would just replace a dead row with a wrong one.
+  // Anything still unmatched is null — a file the session named but never left behind.
+  const VERIFY_DIRS_MAX = 32
+  // True when the two paths share a full trailing segment run, i.e. one is the other
+  // with directories added or removed at the FRONT. Rejects matchPath's tier-3
+  // basename-only hits.
+  const sameTail = (a: string, b: string): boolean =>
+    a === b || (a.includes('/') && b.endsWith('/' + a)) || (b.includes('/') && a.endsWith('/' + b))
+
+  const verifyPaths: FilePreviewApi['verifyPaths'] = async (paths) => {
+    const out = new Map<string, string | null>()
+    const r = await ensureRoot()
+    // Can't verify → keep everything as written (browser-dev, session with no project).
+    if (!r) {
+      for (const p of paths) out.set(p, p)
+      return out
+    }
+    const rels = new Map<string, string>()
+    for (const p of paths) rels.set(p, relativeToRoot(r, p).replace(/^[/\\]+/, ''))
+
+    // Pass 1 — cached listings, capped. A path whose directory is over the cap stays
+    // unverified (kept) rather than dropped for a check we never ran.
+    const dirs: string[] = []
+    for (const rel of rels.values()) {
+      const d = dirOf(rel)
+      if (!dirs.includes(d) && dirs.length < VERIFY_DIRS_MAX) dirs.push(d)
+    }
+    const listings = new Map<string, Set<string>>()
+    await Promise.all(dirs.map(async (d) => listings.set(d, await dirFileNames(r, d))))
+    const misses: [string, string][] = []
+    for (const [written, rel] of rels) {
+      const dir = dirOf(rel)
+      if (!listings.has(dir))
+        out.set(written, written) // over the directory cap
+      else if (listings.get(dir)?.has(baseName(rel))) out.set(written, rel)
+      else misses.push([written, rel])
+    }
+    if (!misses.length) return out
+
+    // Pass 2 — one fresh listing per directory that produced a miss.
+    const refreshed = new Set<string>()
+    for (const [, rel] of misses) {
+      const d = dirOf(rel)
+      if (refreshed.has(d)) continue
+      refreshed.add(d)
+      listings.set(d, await dirFileNames(r, d, true))
+    }
+    // Pass 3 — the file index, directory-preserving hits only, and the hit is itself
+    // confirmed on disk (git can still index a file that was deleted).
+    for (const [written, rel] of misses) {
+      if (listings.get(dirOf(rel))?.has(baseName(rel))) {
+        out.set(written, rel)
+        continue
+      }
+      const hit = await matchPath(r, rel, [])
+      const onDisk =
+        hit && sameTail(hit, rel) && (await dirFileNames(r, dirOf(hit))).has(baseName(hit))
+      out.set(written, onDisk ? hit : null)
+    }
+    return out
   }
 
   // Candidates in transcript order: files the session wrote first (its own output, which is
@@ -333,6 +416,9 @@ export function provideFilePreview(
     (now, before) => {
       if (!isRunning(before) || isRunning(now)) return
       imageCache.clear()
+      // Directory listings go stale the same way the image bytes do: the turn that
+      // just ended may have written, renamed or deleted files.
+      dirCache.clear()
       imagesVersion.value++
     },
   )
@@ -389,7 +475,7 @@ export function provideFilePreview(
       return null
     }
   }
-  provide(KEY, { open, shorten, resolve, imageSrc, root: ensureRoot, imagesVersion })
+  provide(KEY, { open, shorten, resolve, verifyPaths, imageSrc, root: ensureRoot, imagesVersion })
 }
 
 // No host (markdown rendered outside a session transcript) → links are inert.
@@ -397,6 +483,8 @@ const NOOP: FilePreviewApi = {
   open: () => undefined,
   shorten: (p) => p,
   resolve: () => Promise.resolve(null),
+  // No host = nothing to check against: keep every path rather than drop them all.
+  verifyPaths: (paths) => Promise.resolve(new Map(paths.map((p) => [p, p]))),
   imageSrc: () => Promise.resolve(null),
   root: () => Promise.resolve(null),
   imagesVersion: ref(0), // never bumps — nothing to refresh without a host
