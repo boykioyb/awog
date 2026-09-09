@@ -276,11 +276,11 @@ Bốn mục nợ đã xử lý xong (gỡ khỏi danh sách bên dưới); ghi l
 
 ## Nợ kỹ thuật ghi nhận, chưa xử lý
 
-- `sessions.setArchived` + `sessions.listEvents` chưa vào allowlist Remote Gateway (⚠️ cần infosec nếu muốn lên PWA).
+- `sessions.setArchived` + `sessions.listEvents` chưa vào allowlist Remote Gateway. **Cố ý không làm** (rà 2026-09-09): PWA hiện **không có** màn hình lưu trữ hay nhật ký sự kiện nào — grep `apps/desktop/remote-pwa/src` ra 0 chỗ dùng. Mở allowlist cho một bên tiêu thụ chưa tồn tại là mở bề mặt tấn công đổi lấy con số không. Dòng này là **điều kiện tiên quyết** cho lúc PWA có màn hình đó (kèm infosec re-audit theo quy tắc repo), không phải việc đang treo.
 - ~~`sessions.search` trả `archivedHidden` mà UI chưa đọc~~ — **đã xong**: `useSessionSearch.ts` đọc field này và `SessionList.vue:297` hiện dòng "còn N phiên trong kho lưu trữ khớp".
 - Comment ở `git/runner.ts` (mục "Version probe") vẫn viết `git.checkInstalled` "keeps its own parse" — đã hết đúng sau lần dọn 2026-09-07.
-- `resolveSessionProjectPath` cache theo vòng đời sidecar — phiên bị trỏ sang project khác sẽ đọc cache cũ.
-- Nhánh Claude SDK: job nền external không có file log ⇒ vĩnh viễn chỉ có metadata, kể cả sau khi có `sessions.backgroundRead`.
+- ~~`resolveSessionProjectPath` cache theo vòng đời sidecar~~ — **đã xong 2026-09-09**: bỏ hẳn tầng cache theo `sessionId` (nó không tiết kiệm I/O nào — `sessionId → projectId` đọc O(1) từ map thường trú qua `sessionManager.getSessionProjectId`), chỉ giữ `projectId → path` là phần thật sự chạm đĩa. Cache còn lại có đúng MỘT biến, nên nó được xoá tường minh ở `projects.upsert`/`projects.delete`.
+- ~~Nhánh Claude SDK: job nền external không có file log~~ — **đã xong 2026-09-09 cho SHELL**, và chữ "vĩnh viễn" trong dòng cũ là sai: CLI tự ghi `<taskId>.output` rồi nêu đường dẫn trong tool_result, và run-stream **đã** đọc file đó để đẩy tail vào transcript — chỉ đường của NGƯỜI DÙNG là chưa. Nay `noteExternalOutputFile` ghi đường dẫn vào registry, `readBackground` đọc qua `readTaskOutputTail` (đã validate path trước mọi I/O), và một shell có file thì **không bị xoá** lúc settle nữa. Task **subagent** thì vẫn không có file thật ⇒ hộp rỗng ở đó vẫn là câu trả lời đúng, và bản thành công vẫn bị bỏ để danh sách không phình.
 - `rerunPhase` invalidate hạ nguồn theo **topology**, không theo fingerprint đầu vào ([ADR 0085](../decisions/0085-workflow-as-script.md) phần Bối cảnh). Hôm nay nó biểu hiện thành *chạy lại nhiều hơn cần* (tốn tiền, có trần chặn) chứ không phải bỏ sót ⇒ ghi nhận là nợ, không phải lỗi.
 
 ## Thứ tự đề xuất cho đợt sau
