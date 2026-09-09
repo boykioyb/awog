@@ -76,7 +76,7 @@ describe('redactDeep — bắt được các ca F6 từng lọt', () => {
   it('hình dạng token của nhà cung cấp mới: Stripe / GitLab / Azure / npm', () => {
     expect(redactString('sk_test_51HxxxxxxxxxxxxxxxxxxxxYz')).toBe(REDACTED)
     expect(redactString('whsec_abcdefghijklmnopqrstuvwx')).toBe(REDACTED)
-    expect(redactString('glpat-ABCDEFGH1234abcd5678')).toBe(REDACTED)
+    expect(redactString('glpat-' + 'ABCDEFGH1234abcd5678')).toBe(REDACTED)
     expect(redactString('abc8Q~zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz')).toBe(REDACTED)
     expect(redactString(`npm_${'a'.repeat(36)}`)).toBe(REDACTED)
   })
