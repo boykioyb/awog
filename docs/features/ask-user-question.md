@@ -129,6 +129,16 @@ afkTimeoutMs  →  followUp (in đáp án + "They also wrote")  →  response  �
 
 Vì một lời đáp hợp lệ **có thể không chứa đáp án nào**, block câu hỏi ở UI mang thêm cờ `done` (`SessionStep.status === 'done'`, và set ngay khi bấm) — thiếu nó thì `questionAnswered()` mãi false, ngăn kéo không đóng và phiên kẹt ở `awaiting`.
 
+### Ngăn kéo trong cột chat ngắn (2026-09-12)
+
+Ngăn kéo là một hàng trong `.chat` (flex column, `overflow:hidden`) — không phải overlay. Khi có dock terminal dưới đáy, cột đó có thể chỉ còn vài trăm pixel, và ngăn kéo `flex:none` cao `52vh` **đẩy composer ra khỏi cột** ⇒ đúng triệu chứng "hiện câu hỏi là mất nút Gửi". Ba thay đổi:
+
+- **Ngăn kéo co được** — `flex: 0 1 auto` + chuỗi `min-height: 0` xuyên `<Collapse>` (grid `0fr/1fr`). Vì `.msgs` có basis 0 nên toàn bộ phần co rơi vào ngăn kéo: nó lấy đúng chỗ còn lại trên composer rồi cuộn bên trong. Sàn `7em` (đơn vị `em` vì hai hàng chrome cao theo cỡ chữ, mà cỡ chữ đổi được ở Appearance) giữ cho hàng nút không bị `overflow:hidden` của `.collapsible-in` cắt.
+- **Hàng nút ra ngoài vùng cuộn** — `SessionQuestionForm` bọc phần tương tác trong `.qbody`, `.qact` là **anh em** của nó; ngăn kéo cho `.qbody` cuộn còn `.qact` `flex:none`. **KHÔNG** dùng `position:sticky`: `.qact` là phần tử cuối của thẻ nên containing block của nó kết thúc đúng chỗ nó kết thúc — sticky không có chỗ nào để bám.
+- **Gập được** — bấm hàng đầu để thu ngăn kéo về đúng một hàng (chevron xoay, dòng hint đổi thành chính câu hỏi), đọc lại transcript rồi mở lại. Gập ≠ đóng: nút X vẫn là "bỏ ngăn kéo, trả lời sau trong transcript". Câu hỏi mới thì tự mở lại.
+
+Trong ngăn kéo, thẻ câu hỏi bỏ viền/padding/hàng "⚠ Question" của nó (khung ngăn kéo đã nói đủ, và đó đúng là phần chỗ hàng nút cần); nền hổ phách `.gate` thì giữ.
+
 **File chạm (UI)**: [SessionQuestionForm.vue](../../apps/desktop/ui-next/components/session/SessionQuestionForm.vue) *(mới — tách khỏi `SessionGateCard`, nay thẻ gate chỉ uỷ quyền)*, [SessionQuestionDrawer.vue](../../apps/desktop/ui-next/components/session/SessionQuestionDrawer.vue) (ngăn kéo trên composer), `stores/sessions.ts` (`answerQuestion(…, { response, followUp })`), `sessions.answerQuestion` RPC (zod cho 2 field mới).
 
 **Nhánh Pi vẫn ở bản cơ bản**: schema tool AWOG tự viết chưa có `kind/title/description`, nên tài khoản OpenAI/Google chỉ có câu hỏi trắc nghiệm. Đáp án thì đã dùng chung `SessionQuestionReply` (answers + response + followUp), nên khi mở rộng schema bên đó chỉ phải sửa đúng phần input.

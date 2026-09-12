@@ -30,119 +30,125 @@
 
     <!-- interactive: one tab per question; pick → auto-advance; submit on last -->
     <template v-else>
-      <div v-if="forms.length > 1" class="qtabs">
-        <button
-          v-for="(f, qi) in forms"
-          :key="qi"
-          class="qtab"
-          :class="{ on: qi === active, done: isAnswered(f) }"
-          @click="active = qi"
-        >
-          <Icon
-            v-if="isAnswered(f)"
-            name="check"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
-          {{ f.item.header || t('sessions.gate.qtab', { n: qi + 1 }) }}
-        </button>
-      </div>
-
-      <template v-for="(f, qi) in forms" :key="qi">
-        <div v-if="qi === active" class="qitem">
-          <div class="qp">{{ f.item.prompt }}</div>
-          <div v-if="f.item.hint" class="qhint">{{ f.item.hint }}</div>
-
-          <!-- text: một ô nhập tự do, không có lựa chọn nào -->
-          <div v-if="f.item.kind === 'text'" class="qopts">
-            <textarea
-              v-model="f.text"
-              class="qtext"
-              :placeholder="f.item.placeholder || t('sessions.gate.textPlaceholder')"
-              :maxlength="TEXT_MAX"
-              @keydown.enter.meta="onEnter"
-              @keydown.enter.ctrl="onEnter"
+      <!-- Body and action row are SIBLINGS, not one block: in the question drawer the
+           column is short (a bottom dock can leave it a few hundred pixels), and what
+           has to give there is the body — the submit row must stay on screen. A plain
+           div here, styled only by the drawer. -->
+      <div class="qbody">
+        <div v-if="forms.length > 1" class="qtabs">
+          <button
+            v-for="(f, qi) in forms"
+            :key="qi"
+            class="qtab"
+            :class="{ on: qi === active, done: isAnswered(f) }"
+            @click="active = qi"
+          >
+            <Icon
+              v-if="isAnswered(f)"
+              name="check"
+              style="width: var(--icon-xs); height: var(--icon-xs)"
             />
-            <div class="qcount">{{ f.text.length }} / {{ TEXT_MAX }}</div>
-          </div>
+            {{ f.item.header || t('sessions.gate.qtab', { n: qi + 1 }) }}
+          </button>
+        </div>
 
-          <!-- number: thanh trượt + số đọc được, kèm đơn vị nếu model có gửi -->
-          <div v-else-if="f.item.kind === 'number'" class="qopts">
-            <div class="qnum">
-              <input
-                v-model.number="f.num"
-                class="qslider"
-                type="range"
-                :min="numMin(f)"
-                :max="numMax(f)"
-                :step="f.item.step ?? 1"
+        <template v-for="(f, qi) in forms" :key="qi">
+          <div v-if="qi === active" class="qitem">
+            <div class="qp">{{ f.item.prompt }}</div>
+            <div v-if="f.item.hint" class="qhint">{{ f.item.hint }}</div>
+
+            <!-- text: một ô nhập tự do, không có lựa chọn nào -->
+            <div v-if="f.item.kind === 'text'" class="qopts">
+              <textarea
+                v-model="f.text"
+                class="qtext"
+                :placeholder="f.item.placeholder || t('sessions.gate.textPlaceholder')"
+                :maxlength="TEXT_MAX"
+                @keydown.enter.meta="onEnter"
+                @keydown.enter.ctrl="onEnter"
               />
-              <span class="qnumval">
-                {{ f.num }}
-                <b v-if="f.item.unit">{{ f.item.unit }}</b>
-              </span>
+              <div class="qcount">{{ f.text.length }} / {{ TEXT_MAX }}</div>
             </div>
-            <div class="qnumends">
-              <span>{{ numMin(f) }}</span>
-              <span>{{ numMax(f) }}</span>
-            </div>
-          </div>
 
-          <!-- choice (mặc định): nhiều lựa chọn = checkbox, một lựa chọn = nút -->
-          <div v-else class="qopts">
-            <template v-if="f.item.multi">
-              <label
-                v-for="(o, oi) in f.item.options"
-                :key="oi"
-                class="qchk"
-                :class="{ on: f.sel.includes(o.label), 'has-desc': !!o.desc }"
-                @click="toggle(f, o.label)"
-              >
-                <span class="qcbox">
-                  <Icon
-                    v-if="f.sel.includes(o.label)"
-                    name="check"
-                    style="width: var(--icon-xs); height: var(--icon-xs)"
-                  />
+            <!-- number: thanh trượt + số đọc được, kèm đơn vị nếu model có gửi -->
+            <div v-else-if="f.item.kind === 'number'" class="qopts">
+              <div class="qnum">
+                <input
+                  v-model.number="f.num"
+                  class="qslider"
+                  type="range"
+                  :min="numMin(f)"
+                  :max="numMax(f)"
+                  :step="f.item.step ?? 1"
+                />
+                <span class="qnumval">
+                  {{ f.num }}
+                  <b v-if="f.item.unit">{{ f.item.unit }}</b>
                 </span>
-                <span class="qchktext">
+              </div>
+              <div class="qnumends">
+                <span>{{ numMin(f) }}</span>
+                <span>{{ numMax(f) }}</span>
+              </div>
+            </div>
+
+            <!-- choice (mặc định): nhiều lựa chọn = checkbox, một lựa chọn = nút -->
+            <div v-else class="qopts">
+              <template v-if="f.item.multi">
+                <label
+                  v-for="(o, oi) in f.item.options"
+                  :key="oi"
+                  class="qchk"
+                  :class="{ on: f.sel.includes(o.label), 'has-desc': !!o.desc }"
+                  @click="toggle(f, o.label)"
+                >
+                  <span class="qcbox">
+                    <Icon
+                      v-if="f.sel.includes(o.label)"
+                      name="check"
+                      style="width: var(--icon-xs); height: var(--icon-xs)"
+                    />
+                  </span>
+                  <span class="qchktext">
+                    {{ o.label }}
+                    <b v-if="o.desc">{{ o.desc }}</b>
+                  </span>
+                </label>
+              </template>
+              <template v-else>
+                <button
+                  v-for="(o, oi) in f.item.options"
+                  :key="oi"
+                  class="qopt"
+                  :class="{ on: f.sel.includes(o.label) }"
+                  @click="choose(f, qi, o.label)"
+                >
                   {{ o.label }}
                   <b v-if="o.desc">{{ o.desc }}</b>
-                </span>
-              </label>
-            </template>
-            <template v-else>
-              <button
-                v-for="(o, oi) in f.item.options"
-                :key="oi"
-                class="qopt"
-                :class="{ on: f.sel.includes(o.label) }"
-                @click="choose(f, qi, o.label)"
-              >
-                {{ o.label }}
-                <b v-if="o.desc">{{ o.desc }}</b>
-              </button>
-            </template>
-            <!-- "Other": free-text answer, luôn có (như Claude Code). -->
-            <input
-              v-model="f.other"
-              class="qother"
-              :placeholder="t('sessions.gate.otherPlaceholder')"
-              @keydown.enter="onEnter"
-            />
+                </button>
+              </template>
+              <!-- "Other": free-text answer, luôn có (như Claude Code). -->
+              <input
+                v-model="f.other"
+                class="qother"
+                :placeholder="t('sessions.gate.otherPlaceholder')"
+                @keydown.enter="onEnter"
+              />
+            </div>
           </div>
-        </div>
-      </template>
+        </template>
 
-      <!-- Ô "còn gì nữa không": đi vào `response` của tool — chữ của người dùng nằm
+        <!-- Ô "còn gì nữa không": đi vào `response` của tool — chữ của người dùng nằm
            ngoài mọi lựa chọn, model đọc được nguyên văn. -->
-      <div class="qresp">
-        <label class="qresplbl">{{ t('sessions.gate.responseLabel') }}</label>
-        <input
-          v-model="response"
-          class="qother"
-          :placeholder="t('sessions.gate.responsePlaceholder')"
-          :maxlength="TEXT_MAX"
-        />
+        <div class="qresp">
+          <label class="qresplbl">{{ t('sessions.gate.responseLabel') }}</label>
+          <input
+            v-model="response"
+            class="qother"
+            :placeholder="t('sessions.gate.responsePlaceholder')"
+            :maxlength="TEXT_MAX"
+          />
+        </div>
       </div>
 
       <div class="cact qact">
