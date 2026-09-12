@@ -13,5 +13,8 @@
   "statusbar.usage.title": "Plan usage · 5h limit",
   "statusbar.usage.fiveHour": "5-hour limit",
   "statusbar.usage.loading": "Loading usage…",
-  "statusbar.usage.none": "No usage data"
+  "statusbar.usage.none": "No usage data",
+  "statusbar.cfg.model": "Model",
+  "statusbar.cfg.account": "Account",
+  "statusbar.cfg.style": "Style"
 }

@@ -46,7 +46,7 @@
               <span class="catsq" :style="{ background: row.color }" />
               <span class="catlbl">{{ row.label }}</span>
               <span class="catnum">{{ formatTokenCount(row.tokens) }}</span>
-              <span class="catpct">{{ row.pct < 0.05 ? '0%' : `${row.pct.toFixed(1)}%` }}</span>
+              <span class="catpct">{{ pctLabel(row) }}</span>
             </div>
           </div>
 
@@ -118,6 +118,7 @@
 // open state + the two expandable bulk-load sections.
 import { computed, ref } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
+import type { CatRow } from '~/composables/useSessionContextUsage'
 import { pushActionToast } from '~/composables/useActionToasts'
 import { formatTokenCount } from '~/utils/context-window'
 
@@ -141,6 +142,13 @@ const {
 const open = ref(false)
 const memoryFilesOpen = ref(false)
 const agentsOpen = ref(false)
+
+// Usage column — blank for the unmetered rows (the derived tool-definition /
+// tool-result buckets), which carry a token size but no share of the window.
+function pctLabel(row: CatRow): string {
+  if (!row.metered) return ''
+  return row.pct < 0.05 ? '0%' : `${row.pct.toFixed(1)}%`
+}
 
 // Manual `/compact` from the context popover — only for a live (engine-backed)
 // session; the store guards overlapping calls + drives `compacting`.

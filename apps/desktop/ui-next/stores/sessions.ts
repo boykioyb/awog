@@ -598,12 +598,15 @@ export const useSessionsStore = defineStore('sessions', () => {
   const byEngineId = (eid: string) => sessions.value.find((s) => s.engineId === eid)
 
   // Context-window usage percentage (0..100) for a session. Mirrors
-  // useSessionContextUsage: occupancy = the assembled prompt content the model sees
-  // (the engine's MEASURED last-request prompt size, else the per-segment char
-  // breakdown — contextTokensFromUsage) over the SELECTED
-  // model's window — NOT the API usage total, which double-counts the cached prefix
-  // and adds output, inflating the gauge past 100%. Shared by the auto-compact
-  // trigger + quota guard.
+  // useSessionContextUsage: occupancy = the ITEMISED prompt segments only (the
+  // per-segment char breakdown — contextTokensFromUsage) over the SELECTED model's
+  // window — NOT the API usage total, which double-counts the cached prefix and adds
+  // output, inflating the gauge past 100%. Shared by the auto-compact trigger +
+  // quota guard.
+  //
+  // Tool schemas and accumulated tool results are OUTSIDE this number by design
+  // (user's call, 2026-09-12), so on a tool-heavy turn the real request can be
+  // several times this and AUTO_COMPACT_PCT is crossed much later, or not at all.
   //
   // No breakdown (browser-dev / a transcript persisted before per-turn `usage`) falls
   // back to the SAME text-only estimate the panel shows, never to 0: reading 0% there

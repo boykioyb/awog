@@ -13,5 +13,8 @@
   "statusbar.usage.title": "Hạn mức gói · giới hạn 5h",
   "statusbar.usage.fiveHour": "Giới hạn 5 giờ",
   "statusbar.usage.loading": "Đang tải hạn mức…",
-  "statusbar.usage.none": "Chưa có dữ liệu hạn mức"
+  "statusbar.usage.none": "Chưa có dữ liệu hạn mức",
+  "statusbar.cfg.model": "Model",
+  "statusbar.cfg.account": "Tài khoản",
+  "statusbar.cfg.style": "Văn phong"
 }

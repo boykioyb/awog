@@ -82,10 +82,9 @@ export const CTX_DIVISOR = 4
 // Claude Code's `/context` measures it — system prompt + instructions + system
 // tools + MCP tools + custom agents + skills + memory files + messages.
 //
-// This counts only the text AWOG itself assembles, so it UNDER-reports whenever the
-// runtime adds content of its own (tool schemas, and the tool results a turn
-// accumulates). Prefer contextTokensFromUsage, which takes the engine's measured
-// number when there is one and falls back to this. Returns 0 when no breakdown is
+// This counts only the text AWOG itself assembles — tool schemas and the tool results
+// a turn accumulates are NOT in it. That exclusion is the point: it is what the gauge
+// is defined to measure (see contextTokensFromUsage). Returns 0 when no breakdown is
 // available (the caller falls back to its own rough estimate).
 //
 // Note on the API tally: the prompt size IS input + cacheRead + cacheWrite of a
@@ -107,23 +106,32 @@ export function contextTokensFromChars(cc: ContextChars | undefined): number {
   )
 }
 
-// Context-window occupancy in tokens, preferring the MEASURED number the engine
-// reports (the prompt size of the last request) over the char-breakdown sum.
+// Context-window occupancy in tokens = the ITEMISED prompt segments only (the char
+// breakdown ÷4). Tool schemas and the tool results a turn accumulates are excluded
+// by design — user's call, 2026-09-12.
 //
-// Why measured wins: `contextChars` itemises only the text AWOG assembles. It cannot
-// see the tool schemas the runtime sends (SDK built-ins, and every attached MCP
-// server's tool list) nor the tool results the loop accumulates inside a turn — on
-// the Claude SDK path it also reports systemTools/mcpTools as 0 because those live
-// inside the SDK. Measured against real sessions the breakdown read ~28k tokens where
-// the request actually carried ~138k, so a gauge built on it never reached the
-// auto-compact threshold and sessions ran at the most expensive end of the window.
+// What this buys and what it costs, both measured on real sessions: the gauge now
+// only ever reports content AWOG can name and point at, so every row in the popover
+// is something the user can act on. But it is NOT the size of the request: the same
+// turn that itemises ~28k here sent ~138k. So the gauge UNDER-reports the real
+// prompt, and everything derived from it inherits that — `free space` reads more
+// headroom than the window has, and auto-compact (threshold 85% in stores/sessions)
+// effectively stops firing on tool-heavy sessions, which is how the window fills up
+// without warning. Use measuredContextTokens when you need the true prompt size.
 //
-// Returns 0 when neither is available (caller falls back to its own estimate).
+// Returns 0 when no breakdown is available (caller falls back to its own estimate).
 export function contextTokensFromUsage(
   usage: { contextTokens?: number; contextChars?: ContextChars } | undefined,
 ): number {
-  if (usage?.contextTokens && usage.contextTokens > 0) return usage.contextTokens
   return contextTokensFromChars(usage?.contextChars)
+}
+
+// The prompt size the provider actually billed for the last request of the turn
+// (input + cacheRead + cacheWrite — never `output`). Tool schemas + accumulated tool
+// results included, which is exactly the part the occupancy gauge no longer counts.
+// Used to derive the unmetered tool rows in the breakdown; 0 when unreported.
+export function measuredContextTokens(usage: { contextTokens?: number } | undefined): number {
+  return usage?.contextTokens && usage.contextTokens > 0 ? usage.contextTokens : 0
 }
 
 // Rough occupancy estimate from the CLIENT-side transcript, for the cases with no
