@@ -59,8 +59,9 @@ export async function appendMessage(sessionId: string, message: SessionMessage):
 
 // Drop every message AFTER `keepThroughId` (that message is kept). `null` empties
 // the transcript. An unknown id is a NO-OP (never wipe on a stale/garbage id).
-// Drops sdkSessionId (ADR 0058): a real truncation rewrites history, so the Claude
-// SDK resume handle is stale — the next Claude turn re-seeds from the truncated JSONL.
+// Drops both runtime resume handles: a real truncation rewrites history, so the
+// Claude SDK session (ADR 0058) and the Codex thread (ADR 0087) both still hold the
+// removed turns. The next turn re-seeds from the truncated JSONL instead.
 export async function truncateSession(
   sessionId: string,
   keepThroughId: string | null,
@@ -76,18 +77,19 @@ export async function truncateSession(
     messages = []
   } else {
     const idx = session.messages.findIndex((m) => m.id === keepThroughId)
-    // Unknown id → no-op: leave the transcript (and sdkSessionId) untouched.
+    // Unknown id → no-op: leave the transcript (and the resume handles) untouched.
     if (idx < 0) return
     messages = session.messages.slice(0, idx + 1)
   }
-  const { sdkSessionId: _staleSdk, ...rest } = session
+  const { sdkSessionId: _staleSdk, codexThreadId: _staleThread, ...rest } = session
   await sessionManager.saveSession({ ...rest, messages })
 }
 
 // Persist a context-compaction checkpoint (ADR 0047). Guards against a dangling
 // cut point (only applies when firstKeptMessageId still exists in the transcript).
-// Drops sdkSessionId (ADR 0058): the compaction supersedes the Claude SDK session,
-// so the next Claude turn re-seeds a fresh, smaller SDK session.
+// Drops both runtime resume handles: the compaction supersedes the Claude SDK
+// session (ADR 0058) and the Codex thread (ADR 0087), so the next turn re-seeds a
+// fresh, smaller one from [summary + kept turns].
 export async function compactSession(
   sessionId: string,
   compaction: SessionCompaction,
@@ -100,7 +102,7 @@ export async function compactSession(
   }
   const known = session.messages.some((m) => m.id === compaction.firstKeptMessageId)
   if (!known) return
-  const { sdkSessionId: _supersededSdk, ...rest } = session
+  const { sdkSessionId: _supersededSdk, codexThreadId: _supersededThread, ...rest } = session
   await sessionManager.saveSession({ ...rest, compaction })
 }
 

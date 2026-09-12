@@ -52,6 +52,8 @@ type SessionMetadataPatch = Partial<
     | 'parentSessionId'
     | 'forkFromMessageId'
     | 'sdkSessionId'
+    | 'codexThreadId'
+    | 'codexToolSignature'
     | 'compaction'
     | 'todos'
     | 'bookmarks'

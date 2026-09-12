@@ -393,6 +393,15 @@ async function gracefulShutdown(code: number): Promise<void> {
       err: err instanceof Error ? err.message : String(err),
     })
   }
+  // Codex app-server daemons are long-lived children of this process (ADR 0087).
+  // SIGTERM to us does not reach them, and a leaked daemon keeps its CODEX_HOME
+  // SQLite files open — so kill them here, after the flush that actually matters.
+  try {
+    const { shutdownCodexDaemons } = await import('./runtime/codex/app-server.js')
+    shutdownCodexDaemons()
+  } catch {
+    /* the module was never loaded (no OpenAI turn this run) — nothing to stop */
+  }
   process.exit(code)
 }
 process.on('SIGTERM', () => void gracefulShutdown(0))

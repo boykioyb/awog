@@ -1,8 +1,8 @@
 # 0087 — Codex `app-server` làm runtime cho account OpenAI
 
-- **Trạng thái:** Proposed — spike S1 đã đo xong (2026-09-11), chưa chốt triển khai
-- **Ngày:** 2026-09-11
-- **Người quyết định:** chờ tech-lead + user
+- **Trạng thái:** **Accepted** — đã triển khai 2026-09-12 ([spec](../features/codex-runtime.md)). Khác đề xuất ở một điểm, xem [§Quyết định đã chốt](#quyết-định-đã-chốt-2026-09-12)
+- **Ngày:** 2026-09-11 (spike) · 2026-09-12 (chốt + land)
+- **Người quyết định:** user (2026-09-12)
 - **Liên quan:** [0029](./0029-migrate-llm-runtime-to-pi-sdk.md) (Pi single runtime), [0058](./0058-claude-agent-sdk-vs-pi-runtime-revisit.md) (chọn runtime theo provider — ADR này mở rộng cùng cái seam `createBackend()`), [0070](./0070-share-claude-home-for-config.md) (nhà config dùng chung — ADR này kết luận **ngược** cho Codex), [0051](./0051-mcp-tool-progressive-disclosure.md), [0057](./0057-session-budget-guard.md), [0032](./0032-hook-execution-engine-ipc-contract.md)
 
 ## Bối cảnh
@@ -142,7 +142,7 @@ Bằng chứng mạnh nhất đến từ chính máy user: `~/.codex/config.toml
 - Hành vi khi daemon chết giữa lượt (restart-safe resume của AWOG).
 - **`dynamicTools` và `app-server` đều mang nhãn experimental** — trường bị ts-rs giấu nếu không `--experimental`.
 
-## Quyết định (đề xuất, chờ chốt)
+## Quyết định (đề xuất ban đầu)
 
 Thêm **`CodexAgent`** làm backend thứ 3 sau seam `createBackend()` của [ADR 0058](./0058-claude-agent-sdk-vs-pi-runtime-revisit.md), dùng cho account `provider === 'openai'`, **opt-in + kill-switch về Pi**. Ràng buộc:
 
@@ -151,6 +151,38 @@ Thêm **`CodexAgent`** làm backend thứ 3 sau seam `createBackend()` của [AD
 3. Tool AWOG đi qua `dynamicTools` (in-process), **không** đẻ MCP server ngoài process.
 4. Permission park nối vào `ServerRequest`; `AskUserQuestion` nối vào `item/tool/requestUserInput`.
 5. Pi **giữ nguyên** cho google/custom, cho `/compact`, và cho ~20 method one-shot `completeSimple`.
+
+## Quyết định đã chốt (2026-09-12)
+
+Người dùng chốt **thay hẳn Pi cho provider `openai`** — KHÔNG opt-in, không kill-switch — và **đóng gói `@openai/codex`** vào sidecar.
+
+Khác đề xuất ở ràng buộc (5): không có cờ để rơi về Pi. Ghi lại thẳng vì nó đảo trọng tâm rủi ro — mỗi hạng mục F8 chưa đo phải có **đường lùi đo được trong code**, chứ không phải một công tắc người dùng bật khi thấy hỏng:
+
+| F8 | Đường lùi đã cài |
+|---|---|
+| `thread/resume` | Resume hỏng ⇒ mở thread mới + nạp lại lịch sử (`renderHistoryPrefix`). Người dùng không mất tin nhắn |
+| Daemon chết giữa lượt | Reject mọi request đang bay + bắn `awog/daemonExited` cho thread đang sống ⇒ lượt kết thúc bằng lỗi, không treo |
+| Compaction | Không dùng của Codex. `/compact` vẫn qua Pi (ADR 0047) |
+| fork / revert / rollback | Không dùng. Ba đường cắt transcript của AWOG xoá `codexThreadId` như đã xoá `sdkSessionId` |
+| Dynamic tool trong subagent | Subagent vẫn chạy vòng lặp Pi của chính nó; Codex chỉ là runtime của lượt CHA |
+| Windows / Linux | Chưa đo. Bảng target triple trong `binary.ts` phủ đủ 6 platform, nhưng chỉ darwin-arm64 được chạy thật |
+
+Hai ràng buộc thêm, phát sinh từ chính bản triển khai:
+
+7. **Custom endpoint (`account.baseURL`) ở LẠI Pi.** Một account openai có baseURL là gateway tương thích-OpenAI (Ollama, LM Studio, router) nằm nhờ trong bucket openai; Codex nói Responses API với bảng provider của nó, nên đẩy sang đây là làm hỏng chứ không phải nâng cấp.
+8. **Tên tool `mcp__*` phải đổi trên dây.** Xem F9.
+
+### F9 — `mcp__` là tiền tố dành riêng (đo 2026-09-12, KHÔNG có trong spike)
+
+`thread/start` **từ chối nguyên lượt** một dynamic tool tên `mcp__<server>__<tool>`: `dynamic tool name is reserved`. Vì mọi Source/MCP của AWOG đều mang đúng tên đó, lỗi này sẽ chặn gần như mọi phiên — và nó chỉ lộ ra khi có server đính kèm, tức không bao giờ lộ trong một test "hello world".
+
+Thử thêm 20 tên khác (`shell`, `apply_patch`, `exec_command`, `unified_exec`, `update_plan`, `Task`, `browser`, `view_image`…): **không tên nào bị cấm**. Vậy đây là một luật hẹp, không phải một namespace.
+
+Xử lý: đổi tên trên dây thành `awogmcp__…` và trả lại tên gốc **trước** cổng quyền và **trước** step mapper — luật của người dùng, nhãn transcript và phạm vi per-source đều viết theo tên gốc. Cùng lớp với việc Anthropic chiếm tiền tố `mcp_`.
+
+### F10 — `thread/resume` không nhận `dynamicTools`
+
+Bộ tool ràng vào thread lúc `thread/start` (bảng `thread_dynamic_tools`), và `ThreadResumeParams` **không có** trường đó. Cứ resume thì một MCP server đính kèm giữa phiên sẽ im lặng không tồn tại tới hết phiên. Nên `Session.codexToolSignature` lưu chữ ký bộ tool; lệch ⇒ mở thread mới. (`developerInstructions` thì resume NHẬN, nên system prompt không bị đóng băng như nhánh Claude SDK.)
 
 ## Phương án đã cân nhắc
 
@@ -168,10 +200,12 @@ Thêm **`CodexAgent`** làm backend thứ 3 sau seam `createBackend()` của [AD
   - Phụ thuộc một protocol 617 type mang nhãn experimental.
   - Sandbox seatbelt của Codex chồng lên permission gate + worktree isolation ([ADR 0081](./0081-task-node-worktree-isolation.md)) của AWOG.
 - **Việc cần làm tiếp:**
-  1. **Trước hết**: sửa trạng thái [ADR 0058](./0058-claude-agent-sdk-vs-pi-runtime-revisit.md) (đang ghi *"chưa bắt đầu"* trong khi 5.066 LOC nhánh claude-sdk đã chạy production) — không quyết runtime mới trên một ADR sai trạng thái.
-  2. Đo nốt F8, đặc biệt `thread/resume` end-to-end và hành vi daemon chết giữa lượt.
-  3. Thiết kế `CodexAgent` + event-adapter `item/*` → `SessionStep` (mô hình `item/started`/`item/completed` map khá thẳng; `agentMessage.phase = commentary | final_answer` cần quyết map vào đâu).
-  4. Infosec bắt buộc: `CODEX_HOME` isolation, sandbox chồng lấn, dynamic tool là bề mặt thực thi mới.
+  1. ~~Thiết kế `CodexAgent` + event-adapter~~ — đã land, xem [codex-runtime.md](../features/codex-runtime.md).
+  2. ~~Hành vi daemon chết giữa lượt~~ — đã cài + có test.
+  3. **Còn nợ**: một lượt model THẬT end-to-end; `thread/resume` sau khi thread đã có rollout; Windows + Linux.
+  4. **Còn nợ**: sửa trạng thái [ADR 0058](./0058-claude-agent-sdk-vs-pi-runtime-revisit.md) (đang ghi *"chưa bắt đầu"* trong khi nhánh claude-sdk đã chạy production).
+  5. **Infosec bắt buộc, chưa chạy**: `CODEX_HOME` isolation, sandbox seatbelt chồng lên cổng quyền + worktree isolation (ADR 0081), dynamic tool là bề mặt thực thi mới, và hai file thực thi lồng nhau chưa ký trong bundle macOS.
+  6. Tasks + ~20 method one-shot vẫn ở Pi — quyết định riêng, chưa đo.
 
 ## Tham chiếu
 

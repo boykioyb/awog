@@ -473,6 +473,13 @@ export interface Session {
   // from its own store. Absent for Pi-only (non-Anthropic) sessions. JSONL still
   // records the messages for UI display — this is only the SDK's resume handle.
   sdkSessionId?: string
+  // Codex thread id (ADR 0087, OpenAI path only) + the dynamic tool-set signature
+  // that thread was started with. Codex owns the conversation inside its thread,
+  // so the next turn resumes it — unless the tool set changed, which a thread
+  // started before the change can never pick up (there is no dynamicTools on
+  // thread/resume), in which case the runtime starts a fresh thread instead.
+  codexThreadId?: string
+  codexToolSignature?: string
 }
 
 // Lightweight list-row projection of a Session WITHOUT `messages` (ADR 0048).

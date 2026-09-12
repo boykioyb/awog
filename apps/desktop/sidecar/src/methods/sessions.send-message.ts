@@ -659,24 +659,36 @@ register('sessions.sendMessage', async (raw) => {
   // the session; otherwise (history came inline from the UI) do a targeted read
   // for the Anthropic provider only. Undefined ⇒ a fresh SDK session is started.
   let sdkSessionId: string | undefined
+  // Codex thread handle + the tool-set signature it was started with (ADR 0087,
+  // OpenAI path). Same lifecycle as sdkSessionId: read here, passed to runStream,
+  // written back when it changes.
+  let codexThreadId: string | undefined
+  let codexToolSignature: string | undefined
   if (historyForRun.length === 0) {
     try {
       const loaded = await loadSession(params.sessionId)
       if (loaded && loaded.messages.length > 0) historyForRun = loaded.messages
       if (!compactionForRun && loaded?.compaction) compactionForRun = loaded.compaction
       sdkSessionId = loaded?.sdkSessionId
+      codexThreadId = loaded?.codexThreadId
+      codexToolSignature = loaded?.codexToolSignature
     } catch (err) {
       log.warn('failed to fold session history for resume', {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       })
     }
-  } else if (toSessionSettings(params.settings).provider === 'anthropic') {
-    try {
-      const loaded = await loadSession(params.sessionId)
-      sdkSessionId = loaded?.sdkSessionId
-    } catch {
-      /* no persisted SDK session yet → start fresh */
+  } else {
+    const provider = toSessionSettings(params.settings).provider
+    if (provider === 'anthropic' || provider === 'openai') {
+      try {
+        const loaded = await loadSession(params.sessionId)
+        sdkSessionId = loaded?.sdkSessionId
+        codexThreadId = loaded?.codexThreadId
+        codexToolSignature = loaded?.codexToolSignature
+      } catch {
+        /* no persisted runtime handle yet → start fresh */
+      }
     }
   }
 
@@ -1409,6 +1421,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         abortController,
         // Claude SDK resume handle (ADR 0058, Anthropic path). Ignored by Pi.
         ...(sdkSessionId ? { sdkSessionId } : {}),
+        // Codex thread handle (ADR 0087, OpenAI path). Ignored elsewhere.
+        ...(codexThreadId ? { codexThreadId } : {}),
+        ...(codexToolSignature ? { codexToolSignature } : {}),
         // Mid-turn steering: hand the loop the steers queued via sessions.steer
         // for this assistant turn (Pi only — the Claude SDK path has no steering
         // hook, see supportsSteering above). The drain clears them so each lands once.
@@ -1459,6 +1474,23 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         sdkSessionId: result.sdkSessionId,
       }).catch((err) => {
         log.warn('failed to persist sdk session id', {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      })
+    }
+    // Same for the Codex thread (ADR 0087). Both fields move together: a new
+    // thread was started with a specific tool set, and resuming it later is only
+    // valid while that set still matches.
+    if (
+      result.codexThreadId &&
+      (result.codexThreadId !== codexThreadId || result.codexToolSignature !== codexToolSignature)
+    ) {
+      await updateSessionMetadata(params.sessionId, {
+        codexThreadId: result.codexThreadId,
+        ...(result.codexToolSignature ? { codexToolSignature: result.codexToolSignature } : {}),
+      }).catch((err) => {
+        log.warn('failed to persist codex thread id', {
           sessionId: params.sessionId,
           err: err instanceof Error ? err.message : String(err),
         })

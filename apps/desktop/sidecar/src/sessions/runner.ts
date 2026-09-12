@@ -270,6 +270,14 @@ export interface RunNonStreamArgs {
   // gets prior history + native compaction from the SDK's own store; absent → a
   // fresh SDK session is started. Ignored by the Pi path.
   sdkSessionId?: string
+  // Codex thread handle for this AWOG session (ADR 0087, OpenAI path). Codex owns
+  // the conversation inside a thread, so a turn resumes one instead of re-sending
+  // history. Paired with `codexToolSignature`: the dynamic tool set is bound to a
+  // thread at thread/start and there is NO dynamicTools field on thread/resume, so
+  // a session whose tool set changed (an MCP server attached mid-session) must
+  // start a fresh thread rather than resume one that can never see the new tools.
+  codexThreadId?: string
+  codexToolSignature?: string
   // Git `commitCoAuthor` setting (Settings → Git). Controls the AWOG co-author
   // trailer on model-made commits: the Claude SDK path sets the SDK's native
   // `attribution` (overriding the claude_code preset's Claude trailer); the Pi
@@ -332,6 +340,11 @@ export interface RunStreamResult {
   // caller persists it onto the session so the next turn resumes the SDK session.
   // Absent on the Pi path (which resumes by rebuilding Context from JSONL).
   sdkSessionId?: string
+  // Codex thread handle + the tool-set signature it was started with (ADR 0087,
+  // OpenAI path). The caller persists both onto the session so the next turn can
+  // decide between resume and a fresh thread. Absent on every other runtime.
+  codexThreadId?: string
+  codexToolSignature?: string
 }
 
 // RpcError code mapClaudeErrorToRpc / mapErrorToRpc assign to an auth failure.
@@ -488,6 +501,32 @@ export async function runStream(
     const { runStreamClaude } = await import('../runtime/claude-sdk/run-stream.js')
     return withSessionLock(args.sessionId, () => runWithAuthRetry(args, cb, runStreamClaude))
   }
+  // OpenAI runs on the Codex app-server (ADR 0087) — a first-party harness, for
+  // the same reason ADR 0058 moved Anthropic onto the Claude Agent SDK.
+  //
+  // EXCEPT a custom endpoint. An account with a `baseURL` is an OpenAI-COMPATIBLE
+  // gateway (Ollama, LM Studio, a router) stored in the openai bucket; Codex talks
+  // the Responses API to its own provider table and cannot be pointed at a
+  // chat/completions endpoint, so sending those here would break them rather than
+  // upgrade them. They stay on Pi, which is what they were tested against.
+  if (args.settings.provider === 'openai' && !(await hasCustomEndpoint(args.settings))) {
+    const { runStreamCodex } = await import('../runtime/codex/run-stream.js')
+    return withSessionLock(args.sessionId, () => runStreamCodex(args, cb))
+  }
   const { runStreamPi } = await import('../runtime/run-stream.js')
   return withSessionLock(args.sessionId, () => runWithModelFallback(args, cb, runStreamPi))
+}
+
+// True when this openai account points at a custom base URL. Read from the
+// credential store rather than from the session settings, which never carry it.
+// A lookup failure answers "no custom endpoint" and lets the normal path raise
+// the real credential error, instead of silently rerouting the turn.
+async function hasCustomEndpoint(settings: SessionSettings): Promise<boolean> {
+  try {
+    const { resolveAccount } = await import('../credentials/credential-resolver.js')
+    const account = await resolveAccount('openai', settings.accountId)
+    return !!account.baseURL
+  } catch {
+    return false
+  }
 }
