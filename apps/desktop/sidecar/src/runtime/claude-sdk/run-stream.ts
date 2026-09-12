@@ -33,13 +33,7 @@ import {
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../../sessions/runner.js'
-import type {
-  ContextChars,
-  SessionAttachment,
-  SessionCompaction,
-  SessionMessage,
-  TodoItem,
-} from '../../types/shared.js'
+import type { ContextChars, SessionAttachment, TodoItem } from '../../types/shared.js'
 import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../permission.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
@@ -97,6 +91,7 @@ import {
   clearExternalKiller,
 } from '../../sessions/bg-registry.js'
 import { readTaskOutputTail } from './task-output.js'
+import { renderHistoryPrefix } from '../history-prefix.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   backgroundTurnPrompt,
@@ -241,33 +236,6 @@ function makePreToolUseHook(
   }
 }
 
-// Render prior AWOG history as a one-shot context block for the FIRST Claude turn
-// on a session that has no SDK session yet (SDK resume can't see AWOG's JSONL).
-// Subsequent turns rely on `resume`. When a compaction checkpoint is active (right
-// after /compact), seed from [summary + kept turns] (turns from firstKeptMessageId
-// onward) instead of the full transcript, so the fresh SDK session starts with
-// reduced context (ADR 0047/0058). Kept compact + text-only.
-function renderHistoryPrefix(history: SessionMessage[], compaction?: SessionCompaction): string {
-  let msgs = history
-  let summaryBlock = ''
-  if (compaction) {
-    const idx = history.findIndex((m) => m.id === compaction.firstKeptMessageId)
-    if (idx >= 0) {
-      msgs = history.slice(idx)
-      summaryBlock = `<summary_of_earlier_conversation>\n${compaction.summary}\n</summary_of_earlier_conversation>\n\n`
-    }
-  }
-  const lines: string[] = []
-  for (const m of msgs) {
-    if (m.role === 'system') continue
-    const text = (m.text ?? '').trim()
-    if (!text) continue
-    lines.push(`${m.role === 'user' ? 'User' : 'Assistant'}: ${text}`)
-  }
-  const convo =
-    lines.length > 0 ? `<conversation_so_far>\n${lines.join('\n\n')}\n</conversation_so_far>` : ''
-  return `${summaryBlock}${convo}`.trim()
-}
 
 // ── Attachments → Claude prompt content ─────────────────────────────────────
 // The SDK's plain-string `prompt` form CANNOT carry images (the root cause of

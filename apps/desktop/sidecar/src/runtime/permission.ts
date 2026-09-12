@@ -45,10 +45,7 @@
 // Contract: beforeToolCall must NOT throw. Any error → fail safe = block, so a
 // bug can never silently let an unapproved write through.
 
-import type {
-  BeforeToolCallContext,
-  BeforeToolCallResult,
-} from '@earendil-works/pi-agent-core'
+import type { BeforeToolCallResult } from '@earendil-works/pi-agent-core'
 import type {
   CanUseTool,
   PermissionRuleSuggestion,
@@ -320,8 +317,19 @@ export function makeTaskToolGate(projectId?: string, cwd?: string): BeforeToolCa
   }
 }
 
+// The part of Pi's BeforeToolCallContext this gate actually reads — the tool's
+// name, its call id, and its arguments. Declared as the minimum so the SAME gate
+// serves a runtime that is not Pi: the Codex app-server (ADR 0087) hands us a
+// tool call with no AgentContext and no assistant message behind it, and the
+// alternative to widening this type was a second copy of the permission policy.
+// Pi's own context still satisfies it, so its `beforeToolCall` slot is unchanged.
+export interface ToolGateContext {
+  toolCall: { name: string; id: string }
+  args: unknown
+}
+
 export type BeforeToolCall = (
-  context: BeforeToolCallContext,
+  context: ToolGateContext,
   signal?: AbortSignal,
 ) => Promise<BeforeToolCallResult | undefined>
 
