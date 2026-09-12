@@ -273,9 +273,14 @@ export function thinkingFromLevel(level: ThinkingLevel): ThinkingConfig {
 // impossible. The chat path therefore feeds a streaming prompt it holds open until
 // no background task is live (run-stream.ts); this prompt tells the model the
 // resulting contract.
-export const BACKGROUND_TURN_PROMPT = `<background-work>
+export function backgroundTurnPrompt(waitCapMs: number): string {
+  const capMinutes = Math.max(1, Math.round(waitCapMs / 60_000))
+  return `<background-work>
 Background work is supported in this session and the turn stays open until it settles: subagents you spawn with \`Task\` (which run in the background by default) and commands you start with \`Bash(run_in_background: true)\` keep running, and you are woken with their result inside this same turn. Use that for genuinely parallel work. What does NOT survive is the END of the turn: never finish your reply expecting to be notified later — if a result matters, wait for it now and answer with it.
+
+The turn is held open for at most ${capMinutes} minutes of background work; past that every live task is stopped and reported as interrupted. So size a watcher to fit inside that budget — a poll loop of \`attempts x interval\` must come to at most ${capMinutes} minutes. When the thing you are watching can legitimately take longer, do not start a watcher that will be cut off: report where it stands and let the user ask you to check again.
 </background-work>`
+}
 
 // The TASK path (workflow nodes) has no such holding: it is a one-shot query whose
 // result ends the node, so a backgrounded subagent there would be killed with it.
@@ -290,7 +295,7 @@ export function forceForegroundSubagent(
   }
 }
 
-// Task-path counterpart of BACKGROUND_TURN_PROMPT: explains the constraint the
+// Task-path counterpart of backgroundTurnPrompt(): explains the constraint the
 // hook above enforces, so the node doesn't end waiting to be notified.
 export const NO_BACKGROUND_PROMPT = `<background-work>
 This task node runs as a single one-shot: nothing survives its end, so background work is terminated and no completion notification can reach you. Subagents you spawn with \`Task\` are forced to run synchronously — their result comes back in the same tool call, so just use it. Do not run \`Bash\` with \`run_in_background: true\`, and never end your run waiting to be notified about anything.

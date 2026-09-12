@@ -99,7 +99,7 @@ import {
 import { readTaskOutputTail } from './task-output.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
-  BACKGROUND_TURN_PROMPT,
+  backgroundTurnPrompt,
   buildSdkEnv,
   commitAttribution,
   effortFromLevel,
@@ -114,7 +114,14 @@ import {
 // caller set one). Generous: a background build or a deep subagent legitimately
 // runs for many minutes; the cap only exists so a wedged task can't hold the
 // session lock forever.
-const DEFAULT_BACKGROUND_WAIT_MS = 15 * 60_000
+//
+// 30, not 15: at 15 the cap was the SECOND most common way a watcher died (five of
+// the eleven parks in the logs before the idle-close regression ended on it), and
+// what it was watching — a cloud build, a deploy — routinely runs past a quarter of
+// an hour. The number is no longer only ours to live with either: it rides the turn
+// prompt (backgroundTurnPrompt), so the model sizes its poll loop to fit instead of
+// writing `40 x sleep 30` and being cut at 15 minutes.
+const DEFAULT_BACKGROUND_WAIT_MS = 30 * 60_000
 
 // Grace window after the LAST background task settles: if the CLI doesn't wake the
 // model within it (ambient tasks are skipped, a failed one may produce no
@@ -606,9 +613,12 @@ export async function runStreamClaude(
     promptText = `${TASK_CHECKLIST_PROMPT}\n\n${promptText}`
   }
   // Background work IS supported here (we hold the CLI session open until it
-  // settles — see the bookkeeping below), but only within this turn. Say so, so
-  // the model neither avoids it nor assumes it survives past the turn.
-  if (!nativeCommand) promptText = `${BACKGROUND_TURN_PROMPT}\n\n${promptText}`
+  // settles — see the bookkeeping below), but only within this turn and only up to
+  // `waitCapMs`. Say both, so the model neither avoids background work nor sizes a
+  // watcher past the budget that will cut it off.
+  const waitCapMs = args.budget?.maxWallclockMs ?? DEFAULT_BACKGROUND_WAIT_MS
+  const backgroundPrompt = backgroundTurnPrompt(waitCapMs)
+  if (!nativeCommand) promptText = `${backgroundPrompt}\n\n${promptText}`
   // Plan-mode directive on the turn prompt for the same frozen-append reason: plan
   // can be toggled mid-session, so a system-prompt append would be ignored on
   // `resume`. Prepended last → sits at the front of the turn so the model reliably
@@ -951,6 +961,9 @@ export async function runStreamClaude(
   // Parked = the turn's result already arrived and we are only still here for
   // background work.
   let parked = false
+  // One log line per turn when the CLI reports itself idle under live background
+  // work (see the session_state_changed case).
+  let loggedIdleWhileParked = false
   let waitTimer: NodeJS.Timeout | undefined
   let graceTimer: NodeJS.Timeout | undefined
   let idleTimer: NodeJS.Timeout | undefined
@@ -1017,7 +1030,6 @@ export async function runStreamClaude(
   // yank stdin: ask the CLI to stop its own tasks (it is the only thing that can) and
   // let the resulting notifications take us to `idle` the normal way; the deadline is
   // the backstop if that never lands.
-  const waitCapMs = args.budget?.maxWallclockMs ?? DEFAULT_BACKGROUND_WAIT_MS
   const armWaitCap = (): void => {
     if (waitTimer || closed) return
     waitTimer = setTimeout(() => {
@@ -1134,12 +1146,34 @@ export async function runStreamClaude(
         }
         break
       case 'session_state_changed':
-        // Authoritative turn-over signal: fires once the held-back result has
-        // flushed AND the background loop has exited — nothing left to wait for.
-        // Only after this turn produced its `result`: a resumed CLI can report
-        // itself idle before it has even picked up our prompt, and acting on that
-        // would close stdin at the start of the turn.
-        if (m.state === 'idle' && sawResult) closeInput('session idle')
+        // Turn-over signal — but only for a turn with nothing parked. The SDK
+        // documents `idle` as firing once the held-back result has flushed and the
+        // bg-agent loop has exited; MEASURED, it also fires 1-47ms after `result`
+        // while a `local_bash` of ours is still running. Acting on it there closed
+        // stdin, killed the CLI process, and took the live task down with it: every
+        // one of the ten parks in the logs after that close landed on this line, and
+        // the user met each of them as a chip reading "interrupted". So `idle` means
+        // "not generating", and it is turn-over only when we are not waiting on
+        // anything. Parked, the turn ends the normal way instead: the last task's
+        // notification drops waitingCount to 0 and armGrace closes, or the wait cap
+        // stops the tasks.
+        //
+        // Also gated on this turn having produced its `result`: a resumed CLI can
+        // report itself idle before it has even picked up our prompt, and acting on
+        // that would close stdin at the start of the turn.
+        if (m.state === 'idle' && sawResult) {
+          const waiting = waitingCount()
+          if (waiting === 0) closeInput('session idle')
+          else if (!loggedIdleWhileParked) {
+            // Once per turn: this is the signal that used to end the turn here, and
+            // the only way to tell a healthy park from a stale task set in the logs.
+            loggedIdleWhileParked = true
+            log.info('claude-sdk idle while parked — holding the turn open', {
+              sessionId: args.sessionId,
+              tasks: waiting,
+            })
+          }
+        }
         break
       default:
         break
@@ -1350,7 +1384,7 @@ export async function runStreamClaude(
     (inPlanMode ? PLAN_MODE_PROMPT.length : 0) +
     (args.sessionChecklist?.length ?? 0) +
     (checklistAllowed ? TASK_CHECKLIST_PROMPT.length : 0) +
-    BACKGROUND_TURN_PROMPT.length
+    backgroundPrompt.length
   const instructionsLen =
     Math.max(
       0,
