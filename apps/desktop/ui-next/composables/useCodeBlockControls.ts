@@ -9,7 +9,13 @@ import { useSettingsStore } from '~/stores/settings'
 // the rest of the appearance slice and repaints every block on screen through the
 // `body[data-code-wrap]` attribute. For surfaces that render markdown imperatively and
 // re-attach after each innerHTML rebuild.
-export function useCodeBlockAttacher(): (el: HTMLElement) => void {
+export function useCodeBlockAttacher(opts?: {
+  // Chỉ bề mặt có chỗ chạy lệnh mới truyền (transcript của session). Bỏ trống ⇒
+  // block shell không mọc nút Run — ví dụ markdown trong drawer GitHub, nơi không
+  // có terminal nào để chạy vào.
+  onRun?: (command: string, alt: boolean) => void
+  runLabel?: string
+}): (el: HTMLElement) => void {
   const { t } = useI18n()
   const store = useSettingsStore()
   const { applyCodeWrap } = useAppearanceDom()
@@ -22,6 +28,8 @@ export function useCodeBlockAttacher(): (el: HTMLElement) => void {
     attachCodeBlockControls(el, {
       labels: { copy: t('common.copy'), copied: t('common.copied'), wrap: t('common.wrapLines') },
       onToggleWrap,
+      onRun: opts?.onRun,
+      runLabel: opts?.runLabel,
     })
 }
 

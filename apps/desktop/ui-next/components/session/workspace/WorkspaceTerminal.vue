@@ -929,16 +929,36 @@ const splitActive = (): void => {
 // ── Public API ────────────────────────────────────────────────────────────────
 // Write `text` into the ACTIVE tab's active pane using that pane's own transport
 // (local PTY or SSH). Exposed for the global dock's snippets rail: run a snippet
-// against whatever shell the user is currently looking at. No-op if no live pane.
-function runText(text: string): void {
+// against whatever shell the user is currently looking at.
+//
+// Trả về `false` khi chưa có pane sống — nút Run trong transcript mở khung này rồi
+// GHI NGAY, mà PTY thì spawn bất đồng bộ; nếu đây nuốt lỗi im lặng thì lệnh rơi vào
+// hư không và người dùng không biết gì. Có giá trị trả về thì bên gọi chờ được.
+function runText(text: string): boolean {
   const tab = activeTabId.value ? tabById(activeTabId.value) : undefined
   const pane = tab ? activePaneOf(tab) : undefined
-  if (!pane?.terminalId) return
+  if (!pane?.terminalId) return false
   transportOf(pane)
     .write(pane.terminalId, text)
     .catch(() => undefined)
+  return true
 }
 defineExpose({ runText })
+
+// Đăng ký vào registry để nút Run trên code block của transcript tìm được shell
+// này mà không phải luồn ref qua SessionWorkspacePanel → SessionDetail → transcript.
+// Khoá là `ptyKey` (`ses:<id>` cho terminal của phiên), nên mỗi phiên một chỗ chạy.
+watch(
+  () => props.ptyKey,
+  (key, prev) => {
+    if (prev) unregisterTerminalRunner(prev)
+    if (key) registerTerminalRunner(key, runText)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  if (props.ptyKey) unregisterTerminalRunner(props.ptyKey)
+})
 
 // ── Wiring ────────────────────────────────────────────────────────────────────
 // Live-apply terminal appearance to every open pane. Fires only when the user

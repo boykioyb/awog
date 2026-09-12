@@ -7,6 +7,7 @@
 </template>
 
 <script setup lang="ts">
+import { pushActionToast } from '~/composables/useActionToasts'
 // Renders a single markdown HTML run produced by useMarkdown (one segment between mermaid
 // blocks). Split out of SessionTextBlock so each run is an independent node — letting
 // mermaid segments render as live <MermaidView> diagrams in between (SoC).
@@ -79,7 +80,41 @@ function applyMarks(el: HTMLElement) {
 // markdown surface (utils/code-block-controls). Applied AFTER applyMarks so the controls'
 // (text-empty) nodes can't interfere with quote matching. The subtree is rebuilt each
 // rerender, so stale controls + their reset timers are detached and GC'd.
-const addCodeBlockControls = useCodeBlockAttacher()
+// Nút Run trên code block shell (chỉ block GHI RÕ ngôn ngữ — fence trần tuy được
+// tô như shell nhưng không mang `data-lang`, xem useMarkdown). Bấm = mở khung
+// Terminal của phiên rồi chạy; ⌥-bấm = chỉ dán, không Enter.
+//
+// Lệnh khớp mẫu phá huỷ (rm -rf, sudo, git push --force, curl|sh…) phải qua một
+// hộp xác nhận NÊU ĐÚNG lệnh sắp chạy: đây là văn bản do MODEL sinh ra, và một cú
+// misclick trên nó thì không hoàn tác được. Guard này không phải hàng rào bảo mật
+// — người dùng vẫn gõ được mọi thứ trong terminal ngay bên cạnh — nó chỉ đứng chắn
+// giữa một cú bấm nhầm và hệ thống file.
+const sessionsStore = useSessionsStore()
+const terminalRun = useSessionTerminalRun()
+const { confirm } = useConfirm()
+
+async function onRunCommand(command: string, alt: boolean): Promise<void> {
+  const id = sessionsStore.activeId
+  if (id == null) return
+  const cmd = command.trim()
+  if (!cmd) return
+  if (!alt && isDestructiveCommand(cmd)) {
+    const ok = await confirm({
+      title: t('sessions.code.confirmTitle'),
+      description: t('sessions.code.confirmDesc', { command: cmd }),
+      confirmLabel: t('sessions.code.confirmRun'),
+      kind: 'danger',
+    })
+    if (!ok) return
+  }
+  const wrote = await terminalRun.run(id, cmd, alt)
+  if (!wrote) pushActionToast(t('sessions.code.runFailed'), 'error')
+}
+
+const addCodeBlockControls = useCodeBlockAttacher({
+  onRun: (command, alt) => void onRunCommand(command, alt),
+  runLabel: t('sessions.code.run'),
+})
 
 // Turn inline-code file references (e.g. `docs/x.md`, `tasks/#21/plan.md`) and
 // relative-path links into clickable chips that open the shared PreviewModal —

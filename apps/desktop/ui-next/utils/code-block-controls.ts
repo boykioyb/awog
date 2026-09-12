@@ -8,6 +8,22 @@ const COPY_RESET_MS = 1200
 const COPY_SVG = '<svg class="icn"><use href="#i-copy"></use></svg>'
 const CHECK_SVG = '<svg class="icn"><use href="#i-check"></use></svg>'
 const WRAP_SVG = '<svg class="icn"><use href="#i-wrap"></use></svg>'
+const RUN_SVG = '<svg class="icn"><use href="#i-play"></use></svg>'
+
+// Ngôn ngữ được coi là "lệnh chạy được". Danh sách này ĂN KHỚP với những gì
+// useMarkdown thực sự phát ra ở `data-lang`, và nó chỉ có mặt khi fence GHI RÕ
+// ngôn ngữ — fence trống tuy được tô màu như shell nhưng cố ý KHÔNG mang thuộc
+// tính này (xem highlightCode). Nhờ vậy nút Run không mọc trên mọi khối ``` trần,
+// vốn phần lớn là output hoặc nội dung file chứ không phải lệnh.
+const RUNNABLE_LANGS = new Set([
+  'bash',
+  'sh',
+  'shell',
+  'shellscript',
+  'zsh',
+  'console',
+  'shellsession',
+])
 
 export type CodeBlockLabels = { copy: string; copied: string; wrap: string }
 
@@ -19,6 +35,11 @@ export type CodeBlockControlsOptions = {
   // the next render anyway. The rendered effect is pure CSS (`body[data-code-wrap='on']`),
   // so one toggle repaints every block on screen without re-attaching anything.
   onToggleWrap: () => void
+  // Chạy nội dung block trong terminal của phiên. Chỉ truyền ở bề mặt CÓ terminal
+  // (transcript của session); những bề mặt khác bỏ trống và nút không xuất hiện.
+  // `alt` = người dùng giữ ⌥ khi bấm → chỉ dán, không tự Enter.
+  onRun?: (command: string, alt: boolean) => void
+  runLabel?: string
 }
 
 // Wrap every `<pre><code>` under `el` in a `.codeblock` and pin a `.codetools` row to its
@@ -36,7 +57,7 @@ export type CodeBlockControlsOptions = {
 // querySelectorAll when nothing changed. Listeners and their reset timers die with the
 // subtree when the markdown is rebuilt.
 export function attachCodeBlockControls(el: HTMLElement, opts: CodeBlockControlsOptions): void {
-  const { labels, onToggleWrap } = opts
+  const { labels, onToggleWrap, onRun, runLabel } = opts
   for (const pre of Array.from(el.querySelectorAll('pre'))) {
     const code = pre.querySelector('code')
     if (!code) continue
@@ -91,5 +112,20 @@ export function attachCodeBlockControls(el: HTMLElement, opts: CodeBlockControls
       }, COPY_RESET_MS)
     })
     tools.appendChild(btn)
+
+    // Run — chỉ cho block shell có nhãn ngôn ngữ rõ ràng, và chỉ khi bề mặt này
+    // cấp được chỗ chạy. Đặt SAU copy nên nó là nút ngoài cùng phải: hành động
+    // nặng đô nhất nằm xa nhất khỏi hai nút vô hại.
+    if (onRun && lang && RUNNABLE_LANGS.has(lang)) {
+      const runBtn = document.createElement('button')
+      runBtn.type = 'button'
+      runBtn.className = 'coderun'
+      runBtn.title = runLabel ?? 'Run'
+      runBtn.innerHTML = RUN_SVG
+      runBtn.addEventListener('click', (ev) => {
+        onRun(code.textContent ?? '', ev.altKey)
+      })
+      tools.appendChild(runBtn)
+    }
   }
 }

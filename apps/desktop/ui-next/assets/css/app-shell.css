@@ -1404,6 +1404,17 @@ textarea.gcpta {
   align-items: center;
   gap: 6px;
 }
+/* Nút Run trên code block shell (utils/code-block-controls). Cùng khuôn với
+   .codecopy/.codewrap nhưng mang accent: nó là nút DUY NHẤT trong thanh có hệ quả
+   ra ngoài màn hình, nên nó không được trông giống hai nút vô hại bên cạnh. */
+.coderun {
+  color: var(--accent);
+}
+.coderun:hover {
+  background: var(--accentDim);
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
 .codecopy,
 .codewrap {
   display: inline-flex;
