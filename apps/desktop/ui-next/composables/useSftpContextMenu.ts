@@ -1,7 +1,7 @@
 import { computed } from 'vue'
 import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { isArchive, type SftpBrowser } from '~/composables/useSftpBrowser'
-import { useToasts } from '~/composables/useToasts'
+import { pushActionToast } from '~/composables/useActionToasts'
 import { copyText } from '~/utils/clipboard'
 import type { SftpEntry, CompressFormat } from '~/composables/useSshApi'
 
@@ -23,7 +23,6 @@ const COMPRESS_FORMATS: { fmt: CompressFormat; need: string[] }[] = [
 
 export function useSftpContextMenu(browser: SftpBrowser) {
   const { t } = useI18n()
-  const { pushToast } = useToasts()
   const { pos, target, open: openAt, close } = useContextMenu<SftpEntry>()
 
   // Effective targets: the whole selection when the right-clicked row is part of
@@ -164,13 +163,13 @@ export function useSftpContextMenu(browser: SftpBrowser) {
           await copyText(
             browser.cwd.value === '.' ? only.name : `${browser.cwd.value}/${only.name}`,
           )
-          pushToast(t('ssh.sftp.ctx.copiedPath'), 'success')
+          pushActionToast(t('ssh.sftp.ctx.copiedPath'), 'success')
         }
         break
       case 'copyname':
         if (only) {
           await copyText(only.name)
-          pushToast(t('ssh.sftp.ctx.copiedName'), 'success')
+          pushActionToast(t('ssh.sftp.ctx.copiedName'), 'success')
         }
         break
       case 'delete':

@@ -87,7 +87,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useSshApi, type SshForwardInfo } from '~/composables/useSshApi'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
+import { pushActionToast } from '~/composables/useActionToasts'
 import type { PortForward } from '~/stores/ssh'
 
 const props = defineProps<{ connId: string }>()
@@ -96,7 +96,6 @@ const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()
 const api = useSshApi()
 const sc = useSidecar()
-const { pushToast } = useToasts()
 
 const forwards = ref<SshForwardInfo[]>([])
 const adding = ref(false)
@@ -161,7 +160,10 @@ async function add(): Promise<void> {
     draft.destPort = null
     await refresh()
   } catch (err) {
-    pushToast(t('ssh.fwd.startFailed', { error: err instanceof Error ? err.message : '' }), 'error')
+    pushActionToast(
+      t('ssh.fwd.startFailed', { error: err instanceof Error ? err.message : '' }),
+      'error',
+    )
   } finally {
     adding.value = false
   }
@@ -172,7 +174,10 @@ async function stop(forwardId: string): Promise<void> {
     await api.forwardStop(forwardId)
     await refresh()
   } catch (err) {
-    pushToast(t('ssh.fwd.stopFailed', { error: err instanceof Error ? err.message : '' }), 'error')
+    pushActionToast(
+      t('ssh.fwd.stopFailed', { error: err instanceof Error ? err.message : '' }),
+      'error',
+    )
   }
 }
 

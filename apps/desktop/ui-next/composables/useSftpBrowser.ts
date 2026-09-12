@@ -8,7 +8,7 @@ import {
 import { useSidecar } from '~/composables/useSidecar'
 import { useTextPrompt } from '~/composables/useTextPrompt'
 import { useConfirm } from '~/composables/useConfirm'
-import { useToasts } from '~/composables/useToasts'
+import { pushActionToast } from '~/composables/useActionToasts'
 import { usePreview, previewKindFromPath, isOfficeKind } from '~/composables/usePreview'
 import { hasBridge, saveFilePath } from '~/composables/useFolderPicker'
 
@@ -88,7 +88,6 @@ export function useSftpBrowser(connId: Ref<string>) {
   const sc = useSidecar()
   const { prompt } = useTextPrompt()
   const { confirm } = useConfirm()
-  const { pushToast } = useToasts()
   const preview = usePreview()
 
   const cwd = ref('.')
@@ -305,11 +304,14 @@ export function useSftpBrowser(connId: Ref<string>) {
     } catch {
       // clipboard blocked — the toast still tells the user what to run
     }
-    pushToast(t('ssh.sftp.installCopied', { pkg }), 'info')
+    pushActionToast(t('ssh.sftp.installCopied', { pkg }), 'info')
   }
 
   function fail(err: unknown): void {
-    pushToast(t('ssh.sftp.opFailed', { error: err instanceof Error ? err.message : '' }), 'error')
+    pushActionToast(
+      t('ssh.sftp.opFailed', { error: err instanceof Error ? err.message : '' }),
+      'error',
+    )
   }
 
   // ── ops ──
@@ -382,10 +384,10 @@ export function useSftpBrowser(connId: Ref<string>) {
       })
     }
     if (!local?.trim()) return
-    pushToast(t('ssh.sftp.transferring', { name: e.name }), 'info')
+    pushActionToast(t('ssh.sftp.transferring', { name: e.name }), 'info')
     try {
       const res = await api.sftpDownload(connId.value, join(e.name), local.trim())
-      pushToast(t('ssh.sftp.downloaded', { name: e.name, bytes: res.bytes }), 'success')
+      pushActionToast(t('ssh.sftp.downloaded', { name: e.name, bytes: res.bytes }), 'success')
     } catch (err) {
       fail(err)
     }
@@ -399,10 +401,10 @@ export function useSftpBrowser(connId: Ref<string>) {
     let ok = 0
     for (const lp of localPaths) {
       const name = basename(lp)
-      pushToast(t('ssh.sftp.transferring', { name }), 'info')
+      pushActionToast(t('ssh.sftp.transferring', { name }), 'info')
       try {
         const res = await api.sftpUpload(connId.value, lp, join(name))
-        pushToast(t('ssh.sftp.uploaded', { name, bytes: res.bytes }), 'success')
+        pushActionToast(t('ssh.sftp.uploaded', { name, bytes: res.bytes }), 'success')
         ok += 1
       } catch (err) {
         fail(err)
@@ -414,10 +416,13 @@ export function useSftpBrowser(connId: Ref<string>) {
     const local = await prompt({ title: t('ssh.sftp.uploadTitle'), placeholder: '~/path/to/file' })
     if (!local?.trim()) return
     const remote = join(basename(local.trim()))
-    pushToast(t('ssh.sftp.transferring', { name: basename(local.trim()) }), 'info')
+    pushActionToast(t('ssh.sftp.transferring', { name: basename(local.trim()) }), 'info')
     try {
       const res = await api.sftpUpload(connId.value, local.trim(), remote)
-      pushToast(t('ssh.sftp.uploaded', { name: basename(remote), bytes: res.bytes }), 'success')
+      pushActionToast(
+        t('ssh.sftp.uploaded', { name: basename(remote), bytes: res.bytes }),
+        'success',
+      )
       await load()
     } catch (err) {
       fail(err)
@@ -443,7 +448,7 @@ export function useSftpBrowser(connId: Ref<string>) {
         targets.map((e) => join(e.name)),
         destDir,
       )
-      pushToast(t('ssh.sftp.copied', { count: targets.length }), 'success')
+      pushActionToast(t('ssh.sftp.copied', { count: targets.length }), 'success')
       await load()
     } catch (err) {
       fail(err)
@@ -456,7 +461,7 @@ export function useSftpBrowser(connId: Ref<string>) {
         const to = destDir === '.' ? e.name : `${destDir}/${e.name}`
         await api.sftpRename(connId.value, join(e.name), to)
       }
-      pushToast(t('ssh.sftp.moved', { count: targets.length }), 'success')
+      pushActionToast(t('ssh.sftp.moved', { count: targets.length }), 'success')
       clearSelection()
       await load()
     } catch (err) {
@@ -474,7 +479,7 @@ export function useSftpBrowser(connId: Ref<string>) {
       submitLabel: t('ssh.sftp.compress'),
     })
     if (!name?.trim()) return
-    pushToast(t('ssh.sftp.compressing'), 'info')
+    pushActionToast(t('ssh.sftp.compressing'), 'info')
     try {
       await api.sftpCompress(
         connId.value,
@@ -483,17 +488,17 @@ export function useSftpBrowser(connId: Ref<string>) {
         targets.map((e) => e.name),
         name.trim(),
       )
-      pushToast(t('ssh.sftp.compressed', { name: name.trim() }), 'success')
+      pushActionToast(t('ssh.sftp.compressed', { name: name.trim() }), 'success')
       await load()
     } catch (err) {
       fail(err)
     }
   }
   async function extract(e: SftpEntry): Promise<void> {
-    pushToast(t('ssh.sftp.extracting', { name: e.name }), 'info')
+    pushActionToast(t('ssh.sftp.extracting', { name: e.name }), 'info')
     try {
       await api.sftpExtract(connId.value, cwd.value, e.name)
-      pushToast(t('ssh.sftp.extracted', { name: e.name }), 'success')
+      pushActionToast(t('ssh.sftp.extracted', { name: e.name }), 'success')
       await load()
     } catch (err) {
       fail(err)
@@ -502,7 +507,7 @@ export function useSftpBrowser(connId: Ref<string>) {
   async function applyChmod(targets: SftpEntry[], mode: number): Promise<void> {
     try {
       for (const e of targets) await api.sftpChmod(connId.value, join(e.name), mode)
-      pushToast(t('ssh.sftp.chmodDone'), 'success')
+      pushActionToast(t('ssh.sftp.chmodDone'), 'success')
       await load()
     } catch (err) {
       fail(err)
@@ -522,7 +527,7 @@ export function useSftpBrowser(connId: Ref<string>) {
         group || undefined,
         recursive,
       )
-      pushToast(t('ssh.sftp.chownDone'), 'success')
+      pushActionToast(t('ssh.sftp.chownDone'), 'success')
       await load()
     } catch (err) {
       fail(err)
@@ -535,7 +540,7 @@ export function useSftpBrowser(connId: Ref<string>) {
     const q = `'${dir.replace(/'/g, `'\\''`)}'`
     try {
       await api.write(connId.value, `cd ${q}\n`)
-      pushToast(t('ssh.sftp.cdSent'), 'success')
+      pushActionToast(t('ssh.sftp.cdSent'), 'success')
     } catch (err) {
       fail(err)
     }

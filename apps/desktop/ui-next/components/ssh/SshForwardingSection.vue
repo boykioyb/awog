@@ -108,14 +108,13 @@ import AppSelect from '~/components/common/AppSelect.vue'
 import SshEmptyState from '~/components/ssh/SshEmptyState.vue'
 import { useSshApi, type SshForwardInfo } from '~/composables/useSshApi'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
+import { pushActionToast } from '~/composables/useActionToasts'
 import { useSshStore, type PortForward } from '~/stores/ssh'
 
 const { t } = useI18n()
 const api = useSshApi()
 const sc = useSidecar()
 const store = useSshStore()
-const { pushToast } = useToasts()
 
 const forwards = ref<SshForwardInfo[]>([])
 
@@ -186,7 +185,10 @@ async function add(): Promise<void> {
     adding.value = false
     await refresh()
   } catch (err) {
-    pushToast(t('ssh.fwd.startFailed', { error: err instanceof Error ? err.message : '' }), 'error')
+    pushActionToast(
+      t('ssh.fwd.startFailed', { error: err instanceof Error ? err.message : '' }),
+      'error',
+    )
   } finally {
     starting.value = false
   }
@@ -228,7 +230,10 @@ async function stop(forwardId: string): Promise<void> {
     await api.forwardStop(forwardId)
     await refresh()
   } catch (err) {
-    pushToast(t('ssh.fwd.stopFailed', { error: err instanceof Error ? err.message : '' }), 'error')
+    pushActionToast(
+      t('ssh.fwd.stopFailed', { error: err instanceof Error ? err.message : '' }),
+      'error',
+    )
   }
 }
 
