@@ -184,3 +184,21 @@ describe('createToolDispatch', () => {
     expect(res.contentItems).toEqual([{ type: 'inputText', text: '(no output)' }])
   })
 })
+
+// Thang suy luận: map SAI ở đây không hỏng lượt một cách ồn ào, nó lặng lẽ đổi
+// việc model làm. Đo trên codex-cli 0.154.0: `xhigh` và `max` là effort hạng
+// nhất (không phải bí danh của `high`), còn `ultra` server mô tả là "maximum
+// reasoning with automatic task delegation" — tức bật hành vi multi-agent. Gập
+// `max` của AWOG vào `ultra` là đổi HÀNH VI, không phải đổi độ sâu suy nghĩ.
+describe('effortFrom', () => {
+  it('maps each AWOG level to its own Codex rung', async () => {
+    const { effortFrom } = await import('../run-stream.js')
+    expect(effortFrom('low')).toBe('low')
+    expect(effortFrom('medium')).toBe('medium')
+    expect(effortFrom('high')).toBe('high')
+    expect(effortFrom('extra-high')).toBe('xhigh')
+    expect(effortFrom('max')).toBe('max')
+    // Never `ultra`: it is a different behaviour, not a higher one.
+    expect(effortFrom('max')).not.toBe('ultra')
+  })
+})

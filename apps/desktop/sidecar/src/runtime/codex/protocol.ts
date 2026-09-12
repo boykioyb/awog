@@ -47,8 +47,25 @@ export type CodexAskForApproval = 'untrusted' | 'on-request' | 'never'
 /** v2/SandboxMode */
 export type CodexSandboxMode = 'read-only' | 'workspace-write' | 'danger-full-access'
 
-/** v2/ReasoningEffort */
-export type CodexReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'ultra'
+/**
+ * v2/ReasoningEffort. `xhigh` and `max` are first-class here — NOT synonyms for
+ * `high`/`ultra`. And `ultra` is not "the most reasoning": the server describes it
+ * as "maximum reasoning with automatic task delegation", i.e. it turns on
+ * multi-agent behaviour. Mapping AWOG's `max` onto it would silently change what
+ * the turn DOES, not just how hard it thinks.
+ *
+ * Which values a given model accepts varies per model (measured: gpt-6-astra takes
+ * all six, gpt-5.5 stops at xhigh), so the runtime clamps against `model/list`.
+ */
+export type CodexReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' | 'ultra'
+
+/** v2/ModelListResponse — the slice used to clamp reasoning effort. */
+export interface CodexModelInfo {
+  id: string
+  isDefault?: boolean
+  defaultReasoningEffort?: CodexReasoningEffort | null
+  supportedReasoningEfforts?: { reasoningEffort: CodexReasoningEffort }[]
+}
 
 /** v2/DynamicToolFunctionSpec — `inputSchema` is a JSON Schema object. */
 export interface CodexDynamicToolSpec {

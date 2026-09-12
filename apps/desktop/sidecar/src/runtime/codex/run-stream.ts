@@ -61,6 +61,7 @@ import { createCodexEventAdapter, type CodexTurnOutcome } from './event-adapter.
 import { createEventAdapter as createPiEventAdapter } from '../event-adapter.js'
 import type {
   CodexAskForApproval,
+  CodexModelInfo,
   CodexCommandApprovalParams,
   CodexDynamicToolCallParams,
   CodexFileChangeApprovalParams,
@@ -79,20 +80,63 @@ const SIDECAR_VERSION = process.env.npm_package_version ?? '0.0.0'
 // 700ms is well under human typing latency and costs one map lookup when empty.
 const STEER_POLL_MS = 700
 
-function effortFrom(level: ThinkingLevel): CodexReasoningEffort {
+// AWOG's thinking level → Codex reasoning effort.
+//
+// `extra-high` → `xhigh` and `max` → `max`, NOT `high`/`ultra`: both are
+// first-class efforts here, and `ultra` is not simply "more" — the server calls
+// it "maximum reasoning with automatic task delegation", so picking it for
+// AWOG's `max` would turn on multi-agent behaviour the user never asked for.
+export function effortFrom(level: ThinkingLevel): CodexReasoningEffort {
   switch (level) {
     case 'low':
       return 'low'
     case 'medium':
       return 'medium'
     case 'high':
-    case 'extra-high':
       return 'high'
+    case 'extra-high':
+      return 'xhigh'
     case 'max':
-      return 'ultra'
+      return 'max'
     default:
       return 'medium'
   }
+}
+
+// Efforts a model accepts vary per model — measured: gpt-6-astra takes all six,
+// gpt-5.5 stops at `xhigh`. Sending one it does not take is a turn that fails on
+// a setting the user picked from a dropdown, so clamp DOWN the ladder to the
+// nearest supported rung instead. `model/list` is a local RPC (3-45ms) and the
+// catalogue is fixed for the daemon's life, so it is fetched once per daemon.
+const EFFORT_LADDER: CodexReasoningEffort[] = ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra']
+const modelCatalogs = new WeakMap<CodexDaemon, Promise<CodexModelInfo[]>>()
+
+async function clampEffort(
+  daemon: CodexDaemon,
+  modelId: string,
+  wanted: CodexReasoningEffort,
+): Promise<CodexReasoningEffort | undefined> {
+  let catalog = modelCatalogs.get(daemon)
+  if (!catalog) {
+    catalog = daemon
+      .request('model/list', {})
+      .then((res) => ((res as { data?: CodexModelInfo[] }).data ?? []))
+      // A catalogue we cannot read must not cost the user their turn: fall back
+      // to sending what they picked and let the server decide.
+      .catch(() => [])
+    modelCatalogs.set(daemon, catalog)
+  }
+  const model = (await catalog).find((m) => m.id === modelId)
+  const supported = model?.supportedReasoningEfforts?.map((e) => e.reasoningEffort)
+  if (!supported || supported.length === 0) return wanted
+  if (supported.includes(wanted)) return wanted
+  // Walk down from the requested rung; if nothing below is offered either, use
+  // the model's own default rather than guessing.
+  for (let i = EFFORT_LADDER.indexOf(wanted) - 1; i >= 0; i -= 1) {
+    const rung = EFFORT_LADDER[i]
+    if (rung && supported.includes(rung)) return rung
+  }
+  return model?.defaultReasoningEffort ?? undefined
 }
 
 // AWOG's permission mode → what Codex should stop and ask about.
@@ -350,10 +394,11 @@ export async function runStreamCodex(
     const { input, cleanup } = await buildTurnInput(promptText, args.pendingAttachments)
     cleanupFns.push(cleanup)
 
+    const effort = await clampEffort(daemon, args.settings.modelId, effortFrom(args.settings.level))
     const turnRes = (await daemon.request('turn/start', {
       threadId,
       input,
-      effort: effortFrom(args.settings.level),
+      ...(effort ? { effort } : {}),
     })) as { turn?: { id?: string } }
     const turnId = turnRes.turn?.id
     if (turnId) adapter.acc.turnId = turnId
