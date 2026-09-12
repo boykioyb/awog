@@ -11,7 +11,7 @@
         style="width: var(--icon-xs); height: var(--icon-xs)"
         :style="currentProject?.color ? { color: currentProject.color } : undefined"
       />
-      <span class="gtrunc" style="max-width: 150px">
+      <span class="gtrunc gchiplbl gchiplbl--project">
         {{ currentProject?.name ?? t('git.header.noProject') }}
       </span>
       <span v-if="(currentProject?.dirty ?? 0) > 0" class="gbadge" :style="dirtyStyle">
@@ -47,32 +47,14 @@
       @click.stop="toggle('branch', $event)"
     >
       <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="gtrunc mono" style="max-width: 180px">{{ branch }}</span>
+      <span class="gtrunc mono gchiplbl gchiplbl--branch">{{ branch }}</span>
       <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </span>
 
-    <span style="flex: 1" />
+    <span class="gspacer" />
 
     <!-- Repo ops — hidden when the workspace isn't a git repo (init empty state) -->
     <template v-if="!notARepo">
-      <!-- Merge / rebase in progress -->
-      <template v-if="isMerging || isRebasing">
-        <span class="gconflicthint" :class="{ ready: !hasConflict }">
-          {{
-            hasConflict
-              ? t('git.conflict.banner.resolve', { count: conflictedCount, action: completeLabel })
-              : t('git.conflict.banner.ready', { action: completeLabel })
-          }}
-        </span>
-        <button class="btn sm" :disabled="hasConflict" @click="emit('complete-merge')">
-          {{ completeLabel }}
-        </button>
-        <button class="btn sm gdanger" @click="emit('abort-merge')">
-          {{ isRebasing ? t('git.header.abortRebase') : t('git.header.abortMerge') }}
-        </button>
-        <span class="gsep" />
-      </template>
-
       <!-- Ops. While an op is in flight all three disable; the active one shows a
            spinner + progress and gains an attached cancel (✕) — grouped in .gop and
            edge-joined so "Push ✕" reads as one control, not a detached box. -->
@@ -109,7 +91,7 @@
         </button>
       </span>
       <span class="gop">
-        <button class="btn pri sm" :disabled="busy" @click="emit('push')">
+        <button class="btn sm gpush" :disabled="busy" @click="emit('push')">
           <span v-if="syncOp?.op === 'push'" class="gspin-ring" />
           {{ syncOp?.op === 'push' ? syncLabel : t('git.ops.pushWord') }}
           <span v-if="!syncOp && ahead" class="mono" style="font-size: var(--fs-xs)">
@@ -139,7 +121,7 @@
           name="git"
           style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
         />
-        <span class="gtrunc" style="max-width: 120px">
+        <span class="gtrunc gchiplbl gchiplbl--account">
           {{ ghAccount || t('git.header.ghAccountDefault') }}
         </span>
       </button>
@@ -276,11 +258,6 @@ const props = defineProps<{
   branches: BranchInfo[]
   ahead: number
   behind: number
-  isMerging: boolean
-  isRebasing: boolean
-  hasConflict: boolean
-  // Number of files still conflicted — interpolated into the merge/rebase banner.
-  conflictedCount: number
   notARepo: boolean
   syncOp: SyncOp | null
   // The gh account fetch/pull/push authenticate as ('' = the default identity).
@@ -295,8 +272,6 @@ const emit = defineEmits<{
   (e: 'pull'): void
   (e: 'push'): void
   (e: 'cancel', op: 'fetch' | 'pull' | 'push'): void
-  (e: 'complete-merge'): void
-  (e: 'abort-merge'): void
   (e: 'open-identity'): void
   (e: 'open-account'): void
 }>()
@@ -325,12 +300,6 @@ const syncLabel = computed(() => {
   const base = t(`git.ops.${s.op}ing`)
   return s.pct != null ? `${base} ${s.pct}%` : base
 })
-
-// Label of the finalise action, reused by the banner text and the button so both
-// stay in sync with the merge vs rebase variant.
-const completeLabel = computed(() =>
-  props.isRebasing ? t('git.header.continueRebase') : t('git.header.completeMerge'),
-)
 
 const currentProject = computed(() => props.projects.find((p) => p.id === props.currentProjectId))
 

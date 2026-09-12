@@ -693,7 +693,7 @@ body[data-theme-family='cute'] :is(.tdck, .qcbox, .lcbox) {
    read as inset, not as a second stack of floating cards.
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute']
-  :is(.tile, .tcard, .pcard, .rowi, .pstat, .authcard, .acard, .node, .gitlink, .todop, .wnode) {
+  :is(.tile, .tcard, .pcard, .rowi, .pstat, .acard, .node, .gitlink, .todop, .wnode) {
   border-radius: var(--r-card);
 }
 body[data-theme-family='cute'] :is(.step, .stepc, .cluster, .fwcard, .gcard, .qchk, .qopt) {

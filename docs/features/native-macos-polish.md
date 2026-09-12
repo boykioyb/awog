@@ -380,3 +380,28 @@ Codemod không bắt được lỗi thị giác. Duyệt tối thiểu: NavRail,
 - **`SourceAvatar` `:size="glyphSize"` = 13px lẻ** khi `size='sm'` ([SourceAvatar.vue](../../apps/desktop/ui-next/components/connection/SourceAvatar.vue)): cỡ icon lẻ mà R5 không bắt vì component đi qua `<component :is>`, không phải import lucide trực tiếp — `scripts/lib/icon-sites.mjs` không học được. 13 → 14 khi nào rà `:is` binding.
 - 3 chỗ selection lệch chuẩn để lại: `.sshsess-row.on` (chỉ đổi màu chữ), `.ostab.on` + `.ntf-tab.on` (2 tín hiệu accent, không fill).
 - `[role='tab']` chưa nằm trong họ press-state của P0 nên session tab không có phản hồi khi bấm.
+
+## 11. P10 — Git Manager (2026-09-12)
+
+Pha trước token hoá **app-wide** nên `pnpm lint` sạch, nhưng màn Git vẫn đọc như web. Đo lại riêng màn này (dev server + `getBoundingClientRect`, theme `cute`/`geist` = cấu hình user đang chạy) cho thấy chỗ hỏng **không phải** nửa pixel — 39 phần tử lệch đều là bề rộng chữ (`left` phân số), `top`/`height` nguyên hết. Sáu thứ khác mới là thủ phạm:
+
+| Hạng mục | Đo được trước | Sau |
+|---|---|---|
+| 3 thanh chrome cùng một hàng | `.top` 46 · `.gsidehd` **43** · `.gbar` **47** | cả ba 46, hairline trùng scanline |
+| Nhịp hàng trong cây Changes | dir **26** / file **40** | cả hai **28** |
+| Kiểu chữ trong một cây | dir `ui-monospace` 11px · file sans 12px | một họ sans 12px |
+| Glyph trạng thái | icon hành động (bút chì / **thùng rác** / **dấu cộng**) | chữ porcelain `M/A/D/R/C/T/I` + `U` cho untracked, `!` cho conflict |
+| Chọn (`.on`) | `--bgActive` xám ở `.gsi` `.gfile` `.gcommit` `.ghrow2` `.ctab` `.gsegbtn` `.gqi` | accent-tint + thanh accent 2px |
+| Nút primary | Commit `flex:1` tràn ngang · Push pill accent đặc giữa hàng ghost | Commit vừa nội dung dồn phải (Amend bên trái) · Push accent-outline |
+
+Ghi chú thi công:
+
+- **Hairline:** `.gbar` + `.gsidehd` đổi `border-bottom` → `box-shadow: inset 0 -1px 0` (D9). Đây chính là ca mà luật đó sinh ra: border ăn 1px content box nên hai thanh cạnh nhau lệch đúng 1px, cộng chênh padding thành 4px.
+- **Mật độ:** chỉ list file/commit xuống 28px, **không** đụng button/input — đợt bị bác trước (§D7) là thu *mọi* control.
+- **Glyph:** icon `trash` cạnh tên file đọc như *nút xoá*, và `plus` cho file added trùng đúng glyph của nút stage cùng hàng. Đảo lại quyết định "icon thay chữ porcelain" trong `statusVisual` — `StatusVisual.icon` → `.letter`.
+- **Push:** bỏ class `pri` thay vì override `.btn.pri`. `body[data-theme-family='cute'] .btn.pri` có specificity (0,3,1), `.gbar .btn.pri` chỉ (0,2,0) — thắng cuộc đua specificity bằng cách **không tham gia**: `.gbar .btn.gpush` (0,3,0) + `:hover:not(:disabled)` (0,4,0) để qua mặt `body[cute] .btn:hover`. `.btn.pri` tô đặc giữ cho Commit — default button của panel dạng form, đúng chuẩn macOS.
+- **Commit inspector:** đảo thứ tự — subject/body lên đầu, metadata (Author/SHA/Parent) xuống dưới một hairline. Bỏ `.authcard` (viền + `--bgEl` + shadow quanh đúng một hàng = card profile web) và bỏ viền/nền `.shabox` (đọc như text input bị disable). `.authcard` gỡ khỏi cả elevation ramp lẫn `theme-cute.css`.
+- **i18n:** `HISTORY` / `COMMIT` / `CHANGES` / `FILE TREE` / `AUTHOR` / `SHA` / `Parent` / `— (root)` / `N commits` đang **hardcode tiếng Anh** trong template dù key `git.*` đã tồn tại và không ai dùng. Đã nối lại và đổi sang sentence-case; `SHA`/`URL` giữ all-caps (acronym thật).
+- **Dọn dẹp:** 2 khai báo `padding` trùng (`.gsiderail`, `.gsearch`), và khối `.gfile` / `.gfile:hover` / `.gfile.on` cũ ở nhánh prototype `.gside`/`.gmid` bị khối "Git manager (interactive)" che hoàn toàn — giữ lại thì `--bgActive` còn nằm ở hai nơi, chỉ cách một lần đảo thứ tự là quay lại.
+
+**Chưa làm:** thân diff (`.dl.add/.del`) vẫn tô nền tràn cả máng số dòng; hàng diff wrap nên cao không đều (38px cho 1 dòng logic). Cần đo riêng trước khi đụng.

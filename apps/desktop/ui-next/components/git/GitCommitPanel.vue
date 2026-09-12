@@ -30,6 +30,13 @@
     </div>
     <div class="gcpfoot">
       <button
+        class="btn"
+        :disabled="!commitsCount || committing || generating"
+        @click="emit('amend')"
+      >
+        {{ t('git.commit.amend') }}
+      </button>
+      <button
         class="btn pri gcpcommit"
         :disabled="commitDisabled"
         :style="commitDisabled ? 'opacity:.45;pointer-events:none' : undefined"
@@ -45,13 +52,6 @@
         {{
           stagedCount ? t('git.changes.commitCount', { n: stagedCount }) : t('git.changes.commit')
         }}
-      </button>
-      <button
-        class="btn"
-        :disabled="!commitsCount || committing || generating"
-        @click="emit('amend')"
-      >
-        {{ t('git.commit.amend') }}
       </button>
     </div>
   </div>

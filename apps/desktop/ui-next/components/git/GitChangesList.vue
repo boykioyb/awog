@@ -43,7 +43,7 @@
           @click="emit('select-conflict', x.f)"
         >
           <span class="gsti" style="color: var(--danger)" :title="t('git.fileStatus.conflicted')">
-            <Icon name="alert" />
+            !
           </span>
           <span class="gnm2">
             <span class="gp">{{ dirName(x.f) }}</span>

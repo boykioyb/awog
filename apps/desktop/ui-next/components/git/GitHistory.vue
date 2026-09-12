@@ -2,8 +2,10 @@
   <div class="ghmain">
     <div class="ghtop" :style="{ flex: `0 0 ${topHeight}px` }">
       <div class="gfh ghhdr">
-        HISTORY
-        <span style="margin-left: auto; color: var(--textFaint)">{{ commits.length }} commits</span>
+        {{ t('git.history.title') }}
+        <span style="margin-left: auto; color: var(--textFaint)">
+          {{ t('git.history.commits', { n: commits.length }) }}
+        </span>
       </div>
       <div class="ghist">
         <div class="ghgcol">

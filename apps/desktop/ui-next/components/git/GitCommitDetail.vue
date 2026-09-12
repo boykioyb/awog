@@ -1,49 +1,51 @@
 <template>
   <div class="ctabs">
     <span class="ctab" :class="{ on: tab === 'commit' }" @click="emit('set-tab', 'commit')">
-      COMMIT
+      {{ t('git.detail.tabCommit') }}
     </span>
     <span class="ctab" :class="{ on: tab === 'changes' }" @click="emit('set-tab', 'changes')">
-      CHANGES
+      {{ t('git.detail.tabChanges') }}
     </span>
     <span class="ctab" :class="{ on: tab === 'tree' }" @click="emit('set-tab', 'tree')">
-      FILE TREE
+      {{ t('git.detail.tabTree') }}
     </span>
     <span style="flex: 1" />
     <span class="mono" style="color: var(--accent); font-size: var(--fs-xs)">{{ commit.h }}</span>
   </div>
 
   <div v-if="tab === 'commit'" class="cdbody">
-    <div class="authcard">
-      <div class="authlbl">AUTHOR</div>
-      <div class="authrow">
-        <span class="pav2 lg">{{ avatarOf(commit.a) }}</span>
-        <div style="min-width: 0">
-          <div class="authn">{{ commit.a }}</div>
-          <div class="authe mono">{{ commit.email || '' }}</div>
-        </div>
-        <span style="flex: 1" />
-        <span class="authdate">{{ commit.w }}</span>
+    <!-- Message first, metadata under it. The subject is what the reader opened
+         the commit for; author/SHA/parent are the inspector, not the headline. -->
+    <div class="cdtitle">{{ commit.m }}</div>
+    <div v-if="commit.body" class="cdmsg">{{ commit.body }}</div>
+    <div class="cdmeta">
+      <div class="kvrow">
+        <span class="kvk">{{ t('git.detail.author') }}</span>
+        <span class="authrow">
+          <span class="pav2">{{ avatarOf(commit.a) }}</span>
+          <span class="authn">{{ commit.a }}</span>
+          <span v-if="commit.email" class="authmail mono">{{ commit.email }}</span>
+          <span style="flex: 1" />
+          <span class="authdate">{{ commit.w }}</span>
+        </span>
+      </div>
+      <div class="kvrow">
+        <span class="kvk">{{ t('git.detail.sha') }}</span>
+        <span class="shabox mono">{{ commit.sha || commit.h }}</span>
+      </div>
+      <div class="kvrow">
+        <span class="kvk">{{ t('git.detail.parent') }}</span>
+        <span
+          v-if="parent"
+          class="chip mono chipbtn"
+          style="color: var(--accent)"
+          @click="emit('select-commit', parent)"
+        >
+          {{ parent }}
+        </span>
+        <span v-else class="kvv" style="color: var(--textDim)">{{ t('git.detail.root') }}</span>
       </div>
     </div>
-    <div class="kvrow">
-      <span class="kvk">SHA</span>
-      <span class="shabox mono">{{ commit.sha || commit.h }}</span>
-    </div>
-    <div class="kvrow">
-      <span class="kvk">Parent</span>
-      <span
-        v-if="parent"
-        class="chip mono chipbtn"
-        style="color: var(--accent)"
-        @click="emit('select-commit', parent)"
-      >
-        {{ parent }}
-      </span>
-      <span v-else class="kvv" style="color: var(--textDim)">— (root)</span>
-    </div>
-    <div class="cdtitle">{{ commit.m }}</div>
-    <div class="cdmsg">{{ commit.body || '' }}</div>
   </div>
 
   <!-- 2-pane: changed-files list (left) ↔ selected file's diff (right). -->
@@ -63,7 +65,7 @@
           :style="{ color: statusVisual(f.st).color }"
           :title="t(`git.fileStatus.${statusVisual(f.st).key}`)"
         >
-          <Icon :name="statusVisual(f.st).icon" />
+          {{ statusVisual(f.st).letter }}
         </span>
         <span class="gnm2">
           <span class="gp">{{ dir(f.f) }}</span>

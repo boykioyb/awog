@@ -217,33 +217,36 @@ export function statusColor(st: string): string {
   return st === 'A' ? 'var(--add)' : st === 'D' ? 'var(--del)' : 'var(--mod)'
 }
 
-// Visual for one working-tree status char: a scannable icon + theme color + i18n
-// label key. Replaces the raw porcelain letter ("?", "M", "A"…) — a colored glyph
-// reads faster and "?" no longer looks like an error. `key` maps to
+// Visual for one working-tree status char: the porcelain letter + theme color +
+// i18n label key. The letter is the column every desktop git client uses (Fork,
+// Tower, Xcode, VS Code) — an action glyph in this slot misread as a button: a
+// trash can next to a filename looked like "delete this file", and the `+` for an
+// added file was the same glyph as the stage button on the far side of the row.
+// `U` for untracked rather than `?`, which reads as an error. `key` maps to
 // `git.fileStatus.<key>` for the tooltip so color is never the only channel.
-export type StatusVisual = { icon: string; color: string; key: string }
+export type StatusVisual = { letter: string; color: string; key: string }
 
 export function statusVisual(st: string): StatusVisual {
   switch (st) {
     case 'A':
-      return { icon: 'plus', color: 'var(--add)', key: 'added' }
+      return { letter: 'A', color: 'var(--add)', key: 'added' }
     case '?':
-      return { icon: 'plus', color: 'var(--add)', key: 'untracked' }
+      return { letter: 'U', color: 'var(--add)', key: 'untracked' }
     case 'C':
-      return { icon: 'copy', color: 'var(--add)', key: 'copied' }
+      return { letter: 'C', color: 'var(--add)', key: 'copied' }
     case 'D':
-      return { icon: 'trash', color: 'var(--del)', key: 'deleted' }
+      return { letter: 'D', color: 'var(--del)', key: 'deleted' }
     case 'R':
-      return { icon: 'move', color: 'var(--mod)', key: 'renamed' }
+      return { letter: 'R', color: 'var(--mod)', key: 'renamed' }
     case 'T':
-      return { icon: 'edit', color: 'var(--mod)', key: 'typeChanged' }
+      return { letter: 'T', color: 'var(--mod)', key: 'typeChanged' }
     case 'U':
-      return { icon: 'alert', color: 'var(--danger)', key: 'conflicted' }
+      return { letter: '!', color: 'var(--danger)', key: 'conflicted' }
     case 'I':
-      return { icon: 'file', color: 'var(--textDim)', key: 'ignored' }
+      return { letter: 'I', color: 'var(--textDim)', key: 'ignored' }
     case 'M':
     default:
-      return { icon: 'edit', color: 'var(--mod)', key: 'modified' }
+      return { letter: 'M', color: 'var(--mod)', key: 'modified' }
   }
 }
 

@@ -407,6 +407,71 @@ body.light[data-surface='deep'] {
   overflow: hidden;
 }
 
+/* ──── Git toolbar: responsive to the PANE, not the window ────
+   `.gbar` needs ~770px for its ten controls but only gets ~496 at the app's own
+   minimum window (960px, see electron/src/window.ts) — measured, not guessed —
+   and `overflow-x:auto` turned the shortfall into a sideways scroll that pushed
+   Push and the identity button off-screen.
+
+   A container query, not a media query: the bar's width depends on how far the
+   user has dragged the git sidebar, so the same window width can give the bar
+   300px or 900px. Only the container knows.
+
+   Below 720px the bar wraps to a second line instead of scrolling — the same
+   call already made for the session browser toolbar. Wrapping loses the 46px
+   hairline alignment with `.gsidehd`, which is a real cost, but it is a smaller
+   one than hiding the controls that get you out of a merge. */
+.gmain {
+  container-type: inline-size;
+  container-name: gitmain;
+}
+/* Caps live here, not as inline `style="max-width:..."` on the span: an inline
+   style beats any stylesheet rule, so the container query below could never
+   tighten them. */
+.gchiplbl--project {
+  max-width: 150px;
+}
+.gchiplbl--branch {
+  max-width: 180px;
+}
+.gchiplbl--account {
+  max-width: 120px;
+}
+@container gitmain (max-width: 860px) {
+  /* Trim the unbounded labels first: a long branch name is the single biggest
+     item in the row (180px of label alone). */
+  .gbar .chip .gchiplbl {
+    max-width: 104px;
+  }
+  /* The last 22px: nine gaps at 9px and 14px of side padding is generous for a
+     row this full. Measured — at the 960px minimum window this is what takes the
+     bar from 20px of overflow to fitting. */
+  .gbar {
+    gap: 7px;
+    padding: 0 12px;
+  }
+}
+.gbar > .gspacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* 720, not 640: swept in 20px steps, the row still overflowed across 660–700
+   (by 12–52px) with the caps applied. Wrap has to start above that band. */
+@container gitmain (max-width: 720px) {
+  .gbar {
+    height: auto;
+    min-height: 46px;
+    flex-wrap: wrap;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    overflow-x: visible;
+  }
+  /* The spacer would otherwise eat the first line and push everything down. */
+  .gbar > .gspacer {
+    flex-basis: 0;
+  }
+}
+
 /* State banner (detached HEAD, etc.). */
 .gbanner {
   display: flex;
@@ -428,8 +493,11 @@ body.light[data-surface='deep'] {
   justify-content: space-between;
   gap: 7px;
   flex: 0 0 auto;
-  padding: 9px 10px;
-  border-bottom: 1px solid var(--border);
+  height: 46px;
+  padding: 0 10px;
+  /* Same 46px + inset hairline as .gbar: the two bars sit side by side across the
+     sidebar split, so their rules have to land on one scanline. */
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 .gsidetitle {
   font-size: var(--fs-xs);
@@ -454,7 +522,6 @@ body.light[data-surface='deep'] {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 3px 9px;
   padding: 8px 0;
 }
 .gqi {
@@ -471,13 +538,12 @@ body.light[data-surface='deep'] {
   color: var(--text);
 }
 .gqi.on {
-  background: var(--bgActive);
-  color: var(--text);
+  background: var(--accentDim);
+  color: var(--accent);
 }
 .gsearch {
   display: flex;
   align-items: center;
-  padding: 9px 11px;
   flex: 0 0 auto;
   padding: 7px 10px;
   border-bottom: 1px solid var(--border);
@@ -570,6 +636,23 @@ body.light[data-surface='deep'] {
   padding: 5px;
 }
 
+/* Toolbar primary (Push). Accent outline, not a filled pill: a solid accent
+   button sitting between ghost Fetch/Pull reads as a web CTA, and on macOS a
+   toolbar has no default button. `.btn.pri` (filled) is kept for the default
+   button of a form-shaped panel — Commit. The :not(:disabled) on hover is what
+   carries this past the theme-family `.btn:hover` rule, not decoration. */
+.gbar .btn.gpush {
+  color: var(--accent);
+  border-color: var(--accentBorder);
+  background: transparent;
+  font-weight: 600;
+}
+.gbar .btn.gpush:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accentDim);
+}
+
 /* Danger button variant (abort merge / drop stash). */
 .btn.gdanger {
   color: var(--danger);
@@ -641,26 +724,27 @@ body.light[data-surface='deep'] {
   cursor: pointer;
 }
 .gsegbtn.on {
-  background: var(--bgActive);
-  color: var(--text);
+  background: var(--accentDim);
+  color: var(--accent);
 }
 .gsegbtn:not(.on):hover {
   background: var(--bgHover);
 }
 
-/* Leading status glyph on a file row — a colored icon (see statusVisual) that
-   replaces the raw porcelain letter. Fixed box so filenames align regardless of
-   which status; color is set inline from the theme token, glyph strokes inherit
-   it via currentColor. */
+/* Leading status letter on a file row — the porcelain code (M/A/D/R/…), coloured
+   from the theme token set inline. A letter, not an action icon: a trash glyph
+   here read as a delete BUTTON, and the `+` for an added file collided with the
+   `+` stage button on the same row. Fixed box + tabular figures so every
+   filename starts on the same x regardless of status. */
 .gsti {
   flex: 0 0 auto;
   display: grid;
   place-items: center;
-  width: 16px;
-}
-.gsti .icn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
+  width: 14px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Trailing per-row actions (stage/unstage + discard) — grouped so they reveal
@@ -681,7 +765,9 @@ body.light[data-surface='deep'] {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px 5px;
+  height: 30px;
+  padding: 0 10px;
+  margin-top: 6px;
   cursor: pointer;
   user-select: none;
 }
@@ -846,13 +932,10 @@ textarea.gcpta {
 }
 .gcpfoot {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
   padding: 8px 14px;
   border-top: 1px solid var(--border);
-}
-.gcpcommit {
-  flex: 1;
-  justify-content: center;
 }
 
 /* Tree dir rows in the changes list — clickable + collapse chevron + ellipsis. */
@@ -1129,7 +1212,6 @@ textarea.gcpta {
 .tcard,
 .pcard,
 .pstat,
-.authcard,
 .mu {
   box-shadow: var(--shadow-sm);
 }

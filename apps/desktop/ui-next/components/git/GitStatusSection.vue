@@ -67,7 +67,7 @@
               :style="{ color: row.v.color }"
               :title="t(`git.fileStatus.${row.v.key}`)"
             >
-              <Icon :name="row.v.icon" />
+              {{ row.v.letter }}
             </span>
             <span class="gnm2">
               <span class="gn">{{ row.label }}</span>
@@ -110,7 +110,7 @@
           @contextmenu.prevent="emit('context-file', $event, x.f, staged)"
         >
           <span class="gsti" :style="{ color: x.v.color }" :title="t(`git.fileStatus.${x.v.key}`)">
-            <Icon :name="x.v.icon" />
+            {{ x.v.letter }}
           </span>
           <span class="gnm2">
             <span class="gp">{{ dirName(x.f) }}</span>
@@ -145,7 +145,7 @@
 <script setup lang="ts">
 // One working-tree zone (Staged / Unstaged) — collapsible header carrying the
 // zone-wide Stage/Unstage verb + a real nested folder tree (or flat full-path
-// rows). Each file row shows a colored status glyph (no raw porcelain letter) and
+// rows). Each file row shows the coloured porcelain status letter (M/A/D/R/…) and
 // reveals per-file stage/unstage + discard on hover — the old stage-checkbox is
 // gone (ticking-to-stage read as multi-select, which it was not).
 import type { GitFile, GitSelection, PathTreeRow, SelMods, StatusVisual } from './git-types'
