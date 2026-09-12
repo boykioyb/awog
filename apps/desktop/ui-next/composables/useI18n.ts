@@ -38,11 +38,18 @@ const STORAGE_KEY = 'awog-locale'
 // VN-first content; switchable to en. Module-level so all consumers share it.
 const locale = ref<Locale>('vi')
 
+// A missing param used to render the raw `{key}` straight into the UI — a user
+// reported a toast reading "Đã giải phóng 0 B từ {n} phiên". That is a developer
+// signal shown to the wrong audience: it tells the user nothing and looks broken.
+// Keep the signal where it belongs (a dev-console warning) and render nothing in
+// its place, so the sentence still reads as a sentence.
 function interpolate(template: string, params?: Record<string, string | number>): string {
   if (!params) return template
   return template.replace(/\{(\w+)\}/g, (_, key: string) => {
     const v = params[key]
-    return v === undefined ? `{${key}}` : String(v)
+    if (v !== undefined) return String(v)
+    if (import.meta.dev) console.warn(`[i18n] missing param "${key}" for: ${template}`)
+    return ''
   })
 }
 
