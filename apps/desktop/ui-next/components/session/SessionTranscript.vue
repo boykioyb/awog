@@ -437,6 +437,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 15px;
+  /* Trải hết cột chat. Từng có trần `78ch` căn giữa (§3.3) — bỏ 2026-09-12 sau khi
+     dùng thật: nó làm transcript thụt vào giữa trong khi composer vẫn trải hết cột,
+     nên hai khối lệch nhau cả trăm pixel. Cả hai cùng lấy mép `.msgs` / `.composer`
+     (đều đệm `--padX`) thì thẳng hàng theo cấu trúc, không phải canh bằng số. */
+  width: 100%;
 }
 .mi-enter-active {
   transition:

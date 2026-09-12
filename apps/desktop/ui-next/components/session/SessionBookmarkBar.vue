@@ -7,7 +7,53 @@
        lose a single pixel of height to a feature the user isn't using (AC-B7). It also
        waits for `loaded` — excerpts are derived from the messages, so before the
        transcript arrives there is nothing to show. -->
-  <div v-if="session.loaded && count" class="bmb">
+  <!-- Biến thể `chip` (session-ui-refactor §3.2): đánh dấu sống trong hàng ngữ cảnh
+       dùng chung. Luật AC-B7 giữ nguyên — không có đánh dấu thì VẮNG MẶT khỏi DOM,
+       không phải ẩn. -->
+  <span v-if="variant === 'chip' && session.loaded && count" class="ctxwrap2">
+    <button
+      class="ctxchip"
+      :class="{ on: expanded }"
+      :title="t('sessions.bookmark.barTitle')"
+      @click.stop="expanded = !expanded"
+    >
+      <Icon name="bookmark" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <span class="bmb-n">{{ count }}</span>
+      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+    </button>
+    <template v-if="expanded">
+      <div class="ctxbackdrop2" @click="expanded = false" />
+      <div class="pop bmbpop" @click.stop>
+        <div class="pl">{{ t('sessions.bookmark.barTitle') }}</div>
+        <div class="bmb-list">
+          <div v-for="row in rows" :key="row.id" class="bmb-row" :class="{ dead: row.dangling }">
+            <button
+              type="button"
+              class="bmb-jump"
+              :disabled="row.dangling"
+              :title="row.dangling ? t('sessions.bookmark.dangling') : t('sessions.bookmark.jump')"
+              @click="onJump(row)"
+            >
+              <span class="bmb-ex">{{ row.excerpt }}</span>
+              <span class="bmb-when">{{ formatRelativeAgo(row.at, t, now) }}</span>
+            </button>
+            <button
+              type="button"
+              class="bmb-act dgr"
+              :title="
+                row.dangling ? t('sessions.bookmark.danglingRemove') : t('sessions.bookmark.remove')
+              "
+              @click="remove(row)"
+            >
+              <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </template>
+  </span>
+
+  <div v-else-if="variant === 'bar' && session.loaded && count" class="bmb">
     <div class="bmb-head">
       <button
         type="button"
@@ -70,7 +116,9 @@ import type { Session } from '~/composables/useSessionsData'
 import type { BookmarkRow } from '~/composables/useSessionBookmarks'
 import { formatRelativeAgo } from '~/utils/relative-time'
 
-const props = defineProps<{ session: Session }>()
+const props = withDefaults(defineProps<{ session: Session; variant?: 'bar' | 'chip' }>(), {
+  variant: 'bar',
+})
 const { t } = useI18n()
 const now = useNow()
 
@@ -220,5 +268,33 @@ const onJump = (row: BookmarkRow) => {
 .bmb-act.dgr:hover {
   background: var(--dangerBg, var(--bgHover));
   color: var(--danger);
+}
+
+/* ── Biến thể chip: popover neo vào chip trong hàng ngữ cảnh ────────────── */
+.ctxwrap2 {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.ctxbackdrop2 {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+/* Strip nằm ở ĐẦU cột chat nên popover mở XUỐNG. */
+.bmbpop {
+  position: absolute;
+  top: 128%;
+  right: 0;
+  z-index: 50;
+  width: 320px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.bmbpop .bmb-list {
+  padding: 0;
+}
+.bmb-n {
+  font-variant-numeric: tabular-nums;
 }
 </style>

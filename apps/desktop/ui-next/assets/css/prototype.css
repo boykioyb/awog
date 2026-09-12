@@ -26,6 +26,11 @@
        one vocabulary instead of re-inventing radii/timings inline).
        Radius: 5 steps, nothing else. Motion: hover fastest, panels slowest. */
     --r-xs:6px; --r-sm:8px; --r-btn:10px; --r-card:14px; --r-panel:16px; --r-pill:999px;
+    /* Nhịp ngang của cột session. Trước đây header 16 · transcript 20 · chữ trong ô
+       soạn 29 — ba lề trái khác nhau cho ba khối XẾP CHỒNG trong cùng một cột, và mắt
+       bắt được độ lệch 4px. Một token cho cả ba. KHÔNG đụng đệm dọc: chiều cao thanh
+       bị ADR 0079 ràng phải chẵn để icon không rơi vào nửa pixel. */
+    --padX:22px;
     --dur-fast:130ms; --dur:160ms; --dur-panel:190ms;
     /* Type scale — offsets in px off --font-size-base (declared in app-shell.css,
        Appearance lets the user pick 12/13/14/15/16/18). Deliberately NOT rem: rem is
@@ -183,7 +188,9 @@
   .ltop{padding:11px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center}
   .srch{flex:1;display:flex;align-items:center;gap:8px;background:var(--bgInput);border:1px solid var(--border);border-radius:var(--r-sm);padding:6px 9px;color:var(--textDim);font-size: var(--fs-sm);line-height:var(--lh-sm)}
   .srch input{border:none;background:transparent;color:var(--text);outline:none;font-size: var(--fs-sm);line-height:var(--lh-sm);width:100%;font-family:var(--sans)}
-  .lscroll{overflow-y:auto;flex:1;padding:7px}
+  /* Lề ngang KHỚP `.ltop` (11px) để nền hàng đang chọn thẳng cạnh ô tìm kiếm;
+     trước đây 7 vs 11 nên hai khối lệch nhau 4px. Lề dọc giữ nguyên. */
+  .lscroll{overflow-y:auto;flex:1;padding:7px 11px}
   .li{padding:9px 10px;border-radius:var(--r-sm);cursor:pointer;margin-bottom:3px;border:1px solid transparent}
   .li:hover{background:var(--bgHover)}
   .li.on{background:var(--accentDim);border-color:var(--accentBorder);box-shadow:inset 2px 0 0 var(--accent)}
@@ -195,7 +202,7 @@
   .li .sub{font-size: var(--fs-xs);line-height:var(--lh-xs);color:var(--textDim);margin-top:4px;display:flex;gap:6px;align-items:center}
   .detail{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
   /* Same hairline-as-inset-shadow trick as `.top` above. */
-  .dh{height:50px;flex:0 0 auto;box-shadow:inset 0 -1px 0 var(--border);display:flex;align-items:center;gap:10px;padding:0 16px}
+  .dh{height:50px;flex:0 0 auto;box-shadow:inset 0 -1px 0 var(--border);display:flex;align-items:center;gap:10px;padding:0 var(--padX)}
   .dh .dt{font-size: var(--fs-lg);line-height:var(--lh-lg);font-weight:650}.dh .dsub{font-size: var(--fs-xs);line-height:var(--lh-xs);color:var(--textDim)}
   .dscroll{flex:1;overflow-y:auto;padding:18px}
 
@@ -262,7 +269,7 @@
 
   /* SESSIONS chat */
   .chat{flex:1;display:flex;flex-direction:column;overflow:hidden}
-  .msgs{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:16px}
+  .msgs{flex:1;overflow-y:auto;padding:20px var(--padX);display:flex;flex-direction:column;gap:16px}
   .mu{align-self:flex-end;max-width:74%;background:var(--bgEl);border:1px solid var(--border);border-radius:var(--r-panel);border-bottom-right-radius:var(--r-xs);padding:9px 13px;font-size: var(--fs-md);line-height:var(--lh-md)}
   .ma{max-width:88%;font-size: var(--fs-md);line-height:var(--lh-md);color:var(--text)}
   .ma p{margin:0 0 10px}.ma .h{font-weight:650;margin:0 0 8px}
@@ -272,7 +279,7 @@
   .stepc .scr .ck{color:var(--accent)}
   .toolrow{display:flex;align-items:center;gap:8px;font-size: var(--fs-sm);line-height:var(--lh-sm);color:var(--textDim);padding:5px 0}
   .toolrow .tb{padding:1px 7px;border-radius:var(--r-xs);background:var(--bgActive);color:var(--textMuted)}
-  .composer{flex:0 0 auto;border-top:1px solid var(--border);padding:13px 16px;background:var(--bgPanel)}
+  .composer{flex:0 0 auto;border-top:1px solid var(--border);padding:13px var(--padX);background:var(--bgPanel)}
   .cbox{border:1px solid var(--borderStrong);border-radius:var(--r-btn);background:var(--bgInput);padding:11px 13px}
   .cbox .ph{font-size: var(--fs-md);line-height:var(--lh-md);color:var(--textDim);min-height:34px}
   .cbar{display:flex;align-items:center;gap:8px;margin-top:9px}
@@ -393,10 +400,12 @@
   .term .ok{color:var(--add)}.term .pr{color:var(--accent)}
 
   /* messages */
-  .msgs{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:15px}
+  .msgs{flex:1;overflow-y:auto;padding:20px var(--padX);display:flex;flex-direction:column;gap:15px}
   .urow{align-self:flex-end;max-width:80%;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
   .mu{background:var(--bgEl);border:1px solid var(--border);border-radius:var(--r-panel);border-bottom-right-radius:var(--r-xs);padding:9px 13px;font-size: var(--fs-md);line-height:var(--lh-md)}
-  .maw{max-width:92%;align-self:flex-start;display:flex;flex-direction:column;gap:9px}
+  /* 100% chứ không phải 92%: khối assistant phải trùng mép ô soạn bên dưới. Bubble
+     user (.mu) vẫn có trần riêng + căn phải — nó là bong bóng, không phải cột. */
+  .maw{max-width:100%;align-self:flex-start;display:flex;flex-direction:column;gap:9px}
   .hoveract{display:flex;gap:5px;opacity:0;transition:opacity .12s}
   .urow:hover .hoveract,.maw:hover .hoveract{opacity:1}
   .ha{width:26px;height:26px;border-radius:var(--r-xs);border:1px solid var(--border);cursor:pointer;display:grid;place-items:center;color:var(--textDim);background:var(--bg);flex:0 0 auto}

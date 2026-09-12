@@ -1,132 +1,132 @@
 <template>
+  <!-- MỘT chip cấu hình thay cho bốn (session-ui-refactor §3.4). Nhãn là tên model —
+       thứ duy nhất trong bốn cái người ta liếc nhìn thường xuyên; account hiện đã có
+       donut hạn mức ở đầu kia thanh lo, còn effort/style là cấu hình đặt rồi để đó.
+       Popover gộp cả bốn mục, ngăn nhau bằng `.palg` (đường kẻ + nhãn nhóm).
+
+       `openChip` vẫn giữ nguyên union bốn giá trị: `/style` ở composer gọi
+       `open('style')` từ xa, nên menu mở cho BẤT KỲ giá trị nào và giá trị đó chỉ
+       quyết định cuộn tới mục nào. Đổi union sẽ làm hỏng đường vào đó. -->
   <span class="sb-cfg">
-    <!-- Model -->
     <span class="sb-wrap">
-      <button
-        class="sb-item"
-        :title="t('sessions.composer.modelTooltip')"
-        @click.stop="toggle('model')"
-      >
+      <button class="sb-item" :title="cfgTitle" @click.stop="toggle('model')">
         <Icon name="settings" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <!-- Model VÀ văn phong cùng nằm trên nhãn: gộp bốn chip thành một là đúng,
+             nhưng gộp xong mà giá trị biến khỏi thanh thì người dùng mất chỗ liếc.
+             Account + mức suy luận ở lại trong popover — chúng ít đổi hơn. -->
         <span class="sb-cfg-lbl">{{ selectedModel }}</span>
+        <span class="sb-cfg-sub">· {{ styleName }}</span>
       </button>
-      <div v-if="openChip === 'model'" class="smenu sb-menu" @click.stop>
-        <button v-for="m in availableModels" :key="m" class="mi" @click="pick('model', m)">
-          <span class="sb-mi-name">{{ m }}</span>
-          <Icon
-            v-if="m === selectedModel"
-            name="check"
-            class="ck"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-      </div>
-    </span>
 
-    <!-- Account -->
-    <span class="sb-wrap">
-      <button
-        class="sb-item"
-        :title="t('sessions.composer.accountTooltip')"
-        @click.stop="toggle('account')"
-      >
-        <Icon name="agents" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="sb-cfg-lbl">{{ accountShort }}</span>
-      </button>
-      <div v-if="openChip === 'account'" class="smenu sb-menu" @click.stop>
-        <!-- Fresh install: an empty menu reads as broken, so name the missing step. -->
-        <span v-if="!accounts.length" class="mi sb-mi-empty">
-          {{ t('sessions.config.noAccountHint') }}
-        </span>
-        <button v-for="a in accounts" :key="a.id" class="mi" @click="pickAccount(a)">
-          <span class="sb-mi-name">{{ a.display }}</span>
-          <Icon
-            v-if="a.id === selectedAccountId"
-            name="check"
-            class="ck"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-      </div>
-    </span>
-
-    <!-- Reasoning effort (hidden for models without reasoning support) -->
-    <span v-if="thinkSupported" class="sb-wrap">
-      <button class="sb-item" :title="t('statusbar.effort.title')" @click.stop="toggle('effort')">
-        <Icon name="zap" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="sb-cfg-lbl">{{ thinkingLabel }}</span>
-      </button>
-      <div v-if="openChip === 'effort'" class="smenu sb-menu" @click.stop>
-        <button v-for="[v, l] in THINK" :key="v" class="mi" @click="pickThink(v)">
-          <span class="sb-mi-name">{{ l }}</span>
-          <Icon
-            v-if="v === thinking"
-            name="check"
-            class="ck"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-      </div>
-    </span>
-
-    <!-- Style + no-markdown -->
-    <span class="sb-wrap">
-      <button
-        class="sb-item"
-        :title="t('sessions.composer.styleTooltip')"
-        @click.stop="toggle('style')"
-      >
-        <Icon name="skills" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="sb-cfg-lbl">{{ styleName }}</span>
-      </button>
-      <div v-if="openChip === 'style'" class="smenu stylemenu sb-menu" @click.stop>
-        <template v-for="(grp, gi) in styleGroups" :key="grp.key">
-          <div class="palg" :class="{ first: gi === 0 }">{{ grp.label }}</div>
-          <div
-            v-for="row in grp.rows"
-            :key="row.slug"
-            class="mi sty"
-            :class="{ cur: row.slug === activeStyleId }"
-            @click="pickStyle(row.slug)"
+      <div v-if="openChip" class="smenu stylemenu sb-menu sb-cfgmenu" @click.stop>
+        <!-- Bốn mục là bốn SEGMENT, không xếp chồng: chồng trong một khung cuộn
+             60vh thì mục cuối ("Văn phong") nằm dưới ba danh sách và coi như mất.
+             Segment giữ mọi mục cách chip đúng MỘT cú bấm. Accent-tint cho mục đang
+             chọn, không fill xám — theo quy ước control của app. -->
+        <div class="cfgseg">
+          <button
+            v-for="sec in sections"
+            :key="sec.id"
+            class="cfgseg-b"
+            :class="{ on: section === sec.id }"
+            @click.stop="section = sec.id"
           >
-            <Icon :name="row.icon" class="styicon" />
-            <div class="stytext">
-              <div class="nm2">
-                <span class="stynm">{{ row.name }}</span>
-                <span
-                  v-if="row.overridesBuiltIn"
-                  class="tag styover"
-                  :title="t('settingsStyles.overrides.hint')"
-                >
-                  {{ t('settingsStyles.overrides.tag') }}
-                </span>
-              </div>
-              <div v-if="row.hint" class="sd2">{{ row.hint }}</div>
-            </div>
-            <button
-              v-if="row.desc"
-              class="styinfo"
-              type="button"
-              :aria-label="t('sessions.style.infoLabel', { name: row.name })"
-              :aria-expanded="infoSlug === row.slug"
-              @click.stop="toggleInfo(row.slug)"
-            >
-              <Icon name="info" class="styinfoicon" />
-            </button>
-            <Icon v-if="row.slug === activeStyleId" name="check" class="styck" />
-          </div>
+            {{ t(sec.label) }}
+          </button>
+        </div>
+        <template v-if="section === 'model'">
+          <button v-for="m in availableModels" :key="m" class="mi" @click="pick('model', m)">
+            <span class="sb-mi-name">{{ m }}</span>
+            <Icon
+              v-if="m === selectedModel"
+              name="check"
+              class="ck"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
+          </button>
         </template>
-        <label class="nmk" style="padding: 0 10px 8px" @click.stop="toggleNoMd">
-          <span class="tog2 sm" :class="{ off: !noMd }" />
-          {{ t('sessions.config.noMarkdown') }}
-        </label>
+
+        <template v-if="section === 'account'">
+          <!-- Fresh install: an empty menu reads as broken, so name the missing step. -->
+          <span v-if="!accounts.length" class="mi sb-mi-empty">
+            {{ t('sessions.config.noAccountHint') }}
+          </span>
+          <button v-for="a in accounts" :key="a.id" class="mi" @click="pickAccount(a)">
+            <span class="sb-mi-name">{{ a.display }}</span>
+            <Icon
+              v-if="a.id === selectedAccountId"
+              name="check"
+              class="ck"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
+          </button>
+        </template>
+
+        <!-- Ẩn với model không hỗ trợ suy luận (segment cũng ẩn theo, xem SECTIONS). -->
+        <template v-if="section === 'effort' && thinkSupported">
+          <button v-for="[v, l] in THINK" :key="v" class="mi" @click="pickThink(v)">
+            <span class="sb-mi-name">{{ l }}</span>
+            <Icon
+              v-if="v === thinking"
+              name="check"
+              class="ck"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
+          </button>
+        </template>
+
+        <template v-if="section === 'style'">
+          <template v-for="grp in styleGroups" :key="grp.key">
+            <div class="palg" :class="{ first: grp.key === styleGroups[0]?.key }">
+              {{ grp.label }}
+            </div>
+            <div
+              v-for="row in grp.rows"
+              :key="row.slug"
+              class="mi sty"
+              :class="{ cur: row.slug === activeStyleId }"
+              @click="pickStyle(row.slug)"
+            >
+              <Icon :name="row.icon" class="styicon" />
+              <div class="stytext">
+                <div class="nm2">
+                  <span class="stynm">{{ row.name }}</span>
+                  <span
+                    v-if="row.overridesBuiltIn"
+                    class="tag styover"
+                    :title="t('settingsStyles.overrides.hint')"
+                  >
+                    {{ t('settingsStyles.overrides.tag') }}
+                  </span>
+                </div>
+                <div v-if="row.hint" class="sd2">{{ row.hint }}</div>
+              </div>
+              <button
+                v-if="row.desc"
+                class="styinfo"
+                type="button"
+                :aria-label="t('sessions.style.infoLabel', { name: row.name })"
+                :aria-expanded="infoSlug === row.slug"
+                @click.stop="toggleInfo(row.slug)"
+              >
+                <Icon name="info" class="styinfoicon" />
+              </button>
+              <Icon v-if="row.slug === activeStyleId" name="check" class="styck" />
+            </div>
+          </template>
+          <label class="nmk" style="padding: 0 10px 8px" @click.stop="toggleNoMd">
+            <span class="tog2 sm" :class="{ off: !noMd }" />
+            {{ t('sessions.config.noMarkdown') }}
+          </label>
+        </template>
       </div>
+
       <!-- Description popover for the highlighted style row. Rendered as a sibling of
-           the style menu (which has overflow-y:auto and would CLIP a child card) and
+           the menu (which has overflow-y:auto and would CLIP a child card) and
            anchored to the LEFT of the menu so it never runs off the window's right
            edge. Position lives in the scoped <style> (mirrors .sb-menu). -->
       <div
-        v-if="openChip === 'style' && infoSlug"
+        v-if="openChip && infoSlug"
         class="styinfocard"
         role="dialog"
         aria-labelledby="styinfo-title"
@@ -150,6 +150,8 @@
 // style picker. Popovers open upward (the bar is pinned to the window bottom).
 import type { Session, ThinkingLevel } from '~/composables/useSessionsData'
 import type { AccountOption } from '~/composables/useAccounts'
+import { computed, ref, watch } from 'vue'
+import type { ConfigChip } from '~/composables/useStatusConfig'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
@@ -175,6 +177,41 @@ const {
   selectStyle,
   toggleNoMd,
 } = useSessionModelConfig(() => props.session)
+
+// Tooltip mang cả bốn giá trị, vì nhãn chip giờ chỉ hiện model.
+const cfgTitle = computed(() =>
+  [
+    selectedModel.value,
+    accountShort.value,
+    thinkSupported.value ? thinkingLabel.value : '',
+    styleName.value,
+  ]
+    .filter(Boolean)
+    .join(' · '),
+)
+
+// Segment đang mở. `openChip` vẫn giữ union bốn giá trị vì `/style` ở composer gọi
+// `open('style')` từ xa — giá trị đó giờ chọn thẳng segment, không còn phải cuộn.
+const SECTIONS = [
+  { id: 'model', label: 'statusbar.cfg.model' },
+  { id: 'account', label: 'statusbar.cfg.account' },
+  { id: 'effort', label: 'statusbar.effort.title' },
+  { id: 'style', label: 'statusbar.cfg.style' },
+] as const
+// Model không hỗ trợ suy luận thì segment đó biến mất luôn — một segment mở ra
+// danh sách rỗng còn tệ hơn là không có segment.
+const sections = computed(() =>
+  SECTIONS.filter((sec) => sec.id !== 'effort' || thinkSupported.value),
+)
+const section = ref<ConfigChip>('model')
+watch(openChip, (c) => {
+  if (c) section.value = c
+})
+// Đổi sang model không suy luận trong lúc đang mở đúng segment đó → rơi về Model,
+// nếu không popover hiện một khoảng trắng không giải thích.
+watch(thinkSupported, (ok) => {
+  if (!ok && section.value === 'effort') section.value = 'model'
+})
 
 function pick(_kind: 'model', m: string) {
   selectModel(m)
@@ -305,5 +342,53 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Giá trị thứ hai trên nhãn chip (văn phong) — mờ hơn tên model, và nhường chỗ
+   trước khi model bị cắt khi thanh chật. */
+.sb-cfg-sub {
+  color: var(--textFaint);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Segment chuyển mục trong popover cấu hình. Accent-tint cho mục đang chọn, KHÔNG
+   fill xám đặc — control active của app dùng transparent + border + tint. */
+.cfgseg {
+  display: flex;
+  gap: 3px;
+  padding: 4px 4px 7px;
+  box-shadow: inset 0 -1px 0 var(--border);
+  margin-bottom: 5px;
+}
+.cfgseg-b {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--textDim);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.cfgseg-b:hover {
+  color: var(--text);
+  background: var(--bgHover);
+}
+.cfgseg-b.on {
+  color: var(--accent);
+  border-color: var(--accentBorder);
+  background: var(--accentDim);
 }
 </style>

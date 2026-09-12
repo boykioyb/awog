@@ -1,25 +1,156 @@
 <template>
   <div
-    class="detail"
+    class="detail sdrow"
     @dragenter.prevent="onDragEnter"
     @dragover.prevent="onDragOver"
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
-    <div class="dh">
-      <div class="dt">
-        <span
-          class="dproj"
-          :title="t('sessions.detail.changeProject')"
-          style="cursor: pointer; position: relative"
-          @click.stop="openMenu('proj')"
-        >
-          {{ projName }}
-          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+    <!-- Header (session-ui-refactor §3.1): tiêu đề + ĐÚNG HAI điều khiển. Trước đây
+         là 1 chip project + 8 icon button, trong đó tên project đã lặp lại lần thứ hai
+         sau tab strip ngay phía trên. Sáu hành động còn lại nằm sau `⋯`.
+
+         Cũng gỡ luôn nhánh `v-if="!isCute"` / `v-else`: file từng mang HAI bản markup
+         cho cùng bốn hành động (4 iconbtn cho family `awog`, menu `⋯` cho `cute`).
+         Bản `⋯` giờ là bản duy nhất, cho cả hai family. -->
+    <!-- Dock TRÁI + PHẢI là anh em của cột chính, KHÔNG nằm trong nó: chúng chạy
+         hết chiều cao khung, còn header phiên chỉ trải trên cột chat — mô hình
+         sidebar của VS Code / Linear. Trước đây cả hai nằm trong `.chatwrap`, nên
+         panel bắt đầu dưới header và chừa một dải chết ở đỉnh.
+
+         Dock DƯỚI ở lại trong cột chính: nó nằm dưới chat, không chui xuống dưới
+         hai panel bên — đúng như bottom panel của VS Code. -->
+    <template v-if="wpOpen && leftTabs.length">
+      <SessionWorkspacePanel
+        :session="session"
+        dock="left"
+        :tabs="leftTabs"
+        :active="activeLeft"
+        :size="wpLeftWidth"
+        :addable-views="addableViews"
+        @close="closeSide('left')"
+        @set-active="activeLeft = $event"
+        @close-tab="closeTab"
+        @add-view="(v) => addView(v, 'left')"
+        @move-dock="moveDock"
+      />
+      <div
+        class="rszwp"
+        :class="{ drag: wpDragging }"
+        @pointerdown="(e) => onWpResize(e, 'left')"
+      />
+    </template>
+
+    <div class="sdmain">
+      <div class="dh">
+        <div class="dt">
+          <span class="dttitle" :title="session.title">{{ session.title }}</span>
+        </div>
+
+        <!-- Views. Điều khiển duy nhất ở ngoài, vì nó là thứ được bấm nhiều lần trong
+             một phiên; mở/tắt từng khung làm việc, khung đang mở có dấu tick. -->
+        <span style="position: relative">
+          <button
+            class="iconbtn"
+            :title="t('sessions.detail.workspacePanel')"
+            style="width: 28px; height: 28px"
+            :style="
+              wpOpen || menu === 'workspace'
+                ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
+                : {}
+            "
+            @click.stop="openMenu('workspace')"
+          >
+            <Icon name="workflows" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </button>
+          <div
+            v-if="menu === 'workspace'"
+            class="smenu"
+            style="position: absolute; top: 130%; right: 0; z-index: 50"
+            @click.stop
+          >
+            <div v-for="v in ALL_VIEWS" :key="v" class="mi" @click="toggleView(v)">
+              <Icon :name="wpIcon(v)" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ v }}
+              <Icon
+                v-if="openViews.includes(v)"
+                name="check"
+                class="ck"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
+            </div>
+          </div>
+        </span>
+
+        <!-- Overflow. Ba menu (`more` · `proj` · `config`) cùng neo vào span này, nên mở
+             menu con từ trong `more` không cần thêm điểm neo — máy trạng thái `menu` vốn
+             đã chỉ cho phép MỘT menu mở tại một thời điểm. -->
+        <span style="position: relative">
+          <button
+            class="iconbtn"
+            :title="t('sessions.detail.moreActions')"
+            style="width: 28px; height: 28px"
+            :style="
+              menu === 'more' || menu === 'proj' || menu === 'config'
+                ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
+                : {}
+            "
+            @click.stop="openMenu('more')"
+          >
+            <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </button>
+
+          <div
+            v-if="menu === 'more'"
+            class="smenu"
+            style="position: absolute; top: 130%; right: 0; z-index: 50"
+            @click.stop
+          >
+            <div class="mi" @click="openMenu('proj')">
+              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('sessions.detail.changeProject') }}
+              <span class="kb">{{ projName }}</span>
+            </div>
+            <div class="mi" @click="openMenu('config')">
+              <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('sessions.detail.config') }}
+            </div>
+            <!-- Ẩn khi chưa resolve được workspace root (browser-dev / phiên không project). -->
+            <div v-if="codeRoot" class="mi" @click="runOverflow(openInCode)">
+              <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('sessions.detail.openCode') }}
+            </div>
+            <div class="msep" />
+            <!-- Ẩn khi đang ở trong popout (một cửa sổ không tự nhân bản), khoá giữa lượt
+                 đang chạy: lượt stream vào renderer NÀY nên không bàn giao được. -->
+            <div
+              v-if="canOpenInWindow"
+              class="mi"
+              :class="{ mdisabled: turnBusy }"
+              @click="runOverflow(openInWindow)"
+            >
+              <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ popoutTitle }}
+            </div>
+            <div class="mi" @click="runOverflow(minimizeSession)">
+              <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('minimize.session') }}
+            </div>
+            <div class="mi" @click="runOverflow(() => exportModal.open(session.id))">
+              <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('sessions.export.title') }}
+            </div>
+            <div class="msep" />
+            <div class="mi dmi" @click="runOverflow(askRemove)">
+              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('sessions.detail.delete') }}
+            </div>
+          </div>
+
           <div
             v-if="menu === 'proj'"
             class="smenu"
-            style="position: absolute; top: 130%; left: 0; z-index: 50"
+            style="position: absolute; top: 130%; right: 0; z-index: 50"
             @click.stop
           >
             <div v-for="p in projects" :key="p.id" class="mi" @click="selectProj(p.id)">
@@ -32,316 +163,124 @@
               />
             </div>
           </div>
+
+          <SessionConfigPopover
+            v-if="menu === 'config'"
+            :session="session"
+            style="position: absolute; top: 130%; right: 0; z-index: 50"
+            @click.stop
+          />
         </span>
-        <span class="dttitle" :title="session.title">{{ session.title }}</span>
       </div>
 
-      <!-- Open the session's project folder in VS Code (falls back to the OS file
-           manager when `code` is unavailable). Hidden while the root is unresolved
-           (browser-dev / session with no project). -->
-      <button
-        v-if="codeRoot"
-        class="iconbtn"
-        :title="t('sessions.detail.openCode')"
-        style="width: 28px; height: 28px"
-        @click="openInCode"
-      >
-        <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      <!-- chat + right-docked panel share a row (.wptop); the bottom-docked panel
+           stacks full-width beneath them. Right and bottom are independent panel
+           instances so e.g. Terminal (bottom) and Files (right) coexist. -->
 
-      <!-- Config gear → Budget / Tools (Model · Account · Effort · Style live on the
-           status-bar chips; the per-session MCP whitelist on the composer chip). -->
-      <span style="position: relative">
-        <button
-          class="iconbtn"
-          :title="t('sessions.detail.config')"
-          style="width: 28px; height: 28px"
-          :style="
-            menu === 'config' ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}
-          "
-          @click.stop="openMenu('config')"
-        >
-          <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <SessionConfigPopover
-          v-if="menu === 'config'"
-          :session="session"
-          style="position: absolute; top: 130%; right: 0; z-index: 50"
-          @click.stop
-        />
-      </span>
-      <span style="position: relative">
-        <button
-          class="iconbtn"
-          :title="t('sessions.detail.workspacePanel')"
-          style="width: 28px; height: 28px"
-          :style="
-            wpOpen || menu === 'workspace'
-              ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
-              : {}
-          "
-          @click.stop="openMenu('workspace')"
-        >
-          <Icon name="workflows" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <!-- View picker: clicking the workspace button opens this dropdown; picking
-             a view opens it (and the panel). Open views show a check + toggle off. -->
-        <div
-          v-if="menu === 'workspace'"
-          class="smenu"
-          style="position: absolute; top: 130%; right: 0; z-index: 50"
-          @click.stop
-        >
-          <div v-for="v in ALL_VIEWS" :key="v" class="mi" @click="toggleView(v)">
-            <Icon :name="wpIcon(v)" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ v }}
-            <Icon
-              v-if="openViews.includes(v)"
-              name="check"
-              class="ck"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-          </div>
-        </div>
-      </span>
-      <template v-if="!isCute">
-        <!-- Move this session to its own OS window (session-popout-window.md). Hidden
-             inside a popout — a window must not clone itself — and disabled mid-turn,
-             since a running turn streams into THIS renderer and can't be handed over. -->
-        <button
-          v-if="canOpenInWindow"
-          class="iconbtn"
-          :title="popoutTitle"
-          style="width: 28px; height: 28px"
-          :disabled="turnBusy"
-          :style="turnBusy ? { opacity: 0.45, cursor: 'not-allowed' } : {}"
-          @click="openInWindow"
-        >
-          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
-          :title="t('minimize.session')"
-          style="width: 28px; height: 28px"
-          @click="minimizeSession"
-        >
-          <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
-          :title="t('sessions.export.title')"
-          style="width: 28px; height: 28px"
-          @click="exportModal.open(session.id)"
-        >
-          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
-          :title="t('sessions.detail.delete')"
-          style="width: 28px; height: 28px"
-          @click="askRemove"
-        >
-          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-      </template>
-
-      <!-- Cute family only (spec §7/§21): the four actions above collapse behind one
-           "…" overflow control so the header keeps just the three primary actions
-           inline. Reuses the header's single-menu state machine (`menu`/`openMenu`)
-           and the same `.smenu`/`.mi` pattern as the project switcher above; every
-           row calls the EXACT same handler as its awog-family iconbtn twin, with the
-           same disabled/busy condition and title text (now the row label). -->
-      <span v-else style="position: relative">
-        <button
-          class="iconbtn"
-          :title="t('sessions.detail.moreActions')"
-          style="width: 28px; height: 28px"
-          @click.stop="openMenu('more')"
-        >
-          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <div
-          v-if="menu === 'more'"
-          class="smenu"
-          style="position: absolute; top: 130%; right: 0; z-index: 50"
-          @click.stop
-        >
+      <!-- chat + dock dưới xếp chồng trong cột chính. -->
+      <div class="chatwrap">
+        <div class="wptop">
           <div
-            v-if="canOpenInWindow"
-            class="mi"
-            :class="{ mdisabled: turnBusy }"
-            @click="runOverflow(openInWindow)"
+            class="chat"
+            @mouseup="onSelectQuote"
+            @mousedown="onChatMouseDown"
+            @contextmenu="onQuoteContextMenu"
           >
-            <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ popoutTitle }}
-          </div>
-          <div class="mi" @click="runOverflow(minimizeSession)">
-            <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('minimize.session') }}
-          </div>
-          <div class="mi" @click="runOverflow(() => exportModal.open(session.id))">
-            <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('sessions.export.title') }}
-          </div>
-          <div class="mi dmi" @click="runOverflow(askRemove)">
-            <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('sessions.detail.delete') }}
-          </div>
-        </div>
-      </span>
-    </div>
+            <!-- Cute family only (spec §13): a brief "Done!" celebration when a turn
+                 finishes. `.chat` is its positioned ancestor (below) so it floats over
+                 the top of the conversation without shifting layout. -->
+            <SessionDoneFlash v-if="isCute" :status="session.status" />
+            <!-- Hàng ngữ cảnh gộp (session-ui-refactor §3.2): task · host SSH + mức
+                 duyệt · checklist · đánh dấu trên MỘT dòng thay vì tối đa sáu hàng
+                 banner chồng nhau.
 
-    <!-- Discuss banner (ADR 0055): this session was opened to discuss a task. -->
-    <button v-if="session.aboutTaskId" class="aboutbar" @click="openTask(session.aboutTaskId)">
-      <Icon name="workflows" class="aboutbar-icn" />
-      <span class="aboutbar-lbl">{{ t('sessions.detail.aboutTask') }}</span>
-      <span class="aboutbar-title">{{ aboutTaskTitle }}</span>
-      <Icon name="chev" class="aboutbar-chev" />
-    </button>
-
-    <!-- Work banner (ADR 0064): this session was opened to work with an SSH host.
-         The approval selector governs the agent's mutating SSH tools (P2). -->
-    <div v-if="session.aboutSshHostId" class="sshbar">
-      <button class="aboutbar sshbar-open" @click="openSshHost(session.aboutSshHostId)">
-        <Icon name="ssh" class="aboutbar-icn" />
-        <span class="aboutbar-lbl">{{ t('sessions.detail.aboutSshHost') }}</span>
-        <span class="aboutbar-title">{{ aboutSshHostName }}</span>
-        <Icon name="chev" class="aboutbar-chev" />
-      </button>
-      <div class="sshbar-approval">
-        <span class="sshbar-approval-lbl">{{ t('sessions.detail.sshApproval.label') }}</span>
-        <AppSelect
-          :model-value="sshApprovalMode"
-          :options="sshApprovalOptions"
-          width="132px"
-          @update:model-value="onSshApprovalMode"
-        />
-      </div>
-      <p v-if="sshApprovalMode === 'auto'" class="sshbar-warn">
-        {{ t('sessions.detail.sshApproval.autoWarn') }}
-      </p>
-    </div>
-
-    <!-- chat + right-docked panel share a row (.wptop); the bottom-docked panel
-         stacks full-width beneath them. Right and bottom are independent panel
-         instances so e.g. Terminal (bottom) and Files (right) coexist. -->
-    <div class="chatwrap">
-      <div class="wptop">
-        <template v-if="wpOpen && leftTabs.length">
-          <SessionWorkspacePanel
-            :session="session"
-            dock="left"
-            :tabs="leftTabs"
-            :active="activeLeft"
-            :size="wpLeftWidth"
-            :addable-views="addableViews"
-            @close="closeSide('left')"
-            @set-active="activeLeft = $event"
-            @close-tab="closeTab"
-            @add-view="(v) => addView(v, 'left')"
-            @move-dock="moveDock"
-          />
-          <div
-            class="rszwp"
-            :class="{ drag: wpDragging }"
-            @pointerdown="(e) => onWpResize(e, 'left')"
-          />
-        </template>
-        <div
-          class="chat"
-          @mouseup="onSelectQuote"
-          @mousedown="onChatMouseDown"
-          @contextmenu="onQuoteContextMenu"
-        >
-          <!-- Cute family only (spec §13): a brief "Done!" celebration when a turn
-               finishes. `.chat` is its positioned ancestor (below) so it floats over
-               the top of the conversation without shifting layout. -->
-          <SessionDoneFlash v-if="isCute" :status="session.status" />
-          <SessionTodoPanel :session="session" />
-          <!-- Reading anchors for this session (spec §6.1). Mounted HERE, not inside
-               SessionTranscript, so the SSH co-pilot's transcript does not grow a bar
-               of its own; absent from the DOM entirely when there are no bookmarks. -->
-          <SessionBookmarkBar :session="session" />
-          <!-- Find-in-session (⌘/Ctrl+F): floats over the top-right of the chat column,
-               left of the transcript's fold-all button, so nothing shifts when it opens. -->
-          <div v-if="findOpen" class="findwrap">
-            <FindBar
-              v-model:query="findQuery"
-              v-model:match-case="findMatchCase"
-              :total="findTotal"
-              :current="findCurrent"
-              :status="findStatus"
-              :focus-tick="findFocusTick"
-              :placeholder="t('sessions.find.placeholder')"
-              @next="findNext"
-              @prev="findPrev"
-              @close="closeFind"
+                 Nằm TRONG `.chat`, không phải anh em của `.chatwrap`: ở ngoài nó trải
+                 ngang cả cột detail — tính luôn phần nằm trên workspace panel — nên
+                 panel bị đẩy xuống và để lại một dải chết ở đỉnh. Đây cũng đúng chỗ
+                 cũ của SessionTodoPanel / SessionBookmarkBar mà nó thay thế. -->
+            <SessionContextStrip :session="session" />
+            <!-- Find-in-session (⌘/Ctrl+F): floats over the top-right of the chat column,
+                 left of the transcript's fold-all button, so nothing shifts when it opens. -->
+            <div v-if="findOpen" class="findwrap">
+              <FindBar
+                v-model:query="findQuery"
+                v-model:match-case="findMatchCase"
+                :total="findTotal"
+                :current="findCurrent"
+                :status="findStatus"
+                :focus-tick="findFocusTick"
+                :placeholder="t('sessions.find.placeholder')"
+                @next="findNext"
+                @prev="findPrev"
+                @close="closeFind"
+              />
+            </div>
+            <SessionTranscript
+              :messages="session.msgs"
+              :fallback-when="session.when"
+              :loading="!!session.loading"
+              :suppress-auto-scroll="findOpen"
+            />
+            <SessionBackgroundWakeCard :session="session" />
+            <SessionInboxChips :session="session" />
+            <SessionBackgroundChips :session="session" />
+            <!-- Câu hỏi của agent (AskUserQuestion) trượt lên từ composer, ngay trên nó,
+                 nên người dùng không phải đi tìm thẻ trong transcript đang cuộn. -->
+            <SessionQuestionDrawer :session="session" />
+            <SessionComposer
+              :attachments="pendingAtt"
+              @send="onSend"
+              @pick="openPicker"
+              @remove-att="removeAtt"
+              @add-att="onAddAtt"
+              @preview="previewAtt"
+              @open-more="moreOpen = true"
             />
           </div>
-          <SessionTranscript
-            :messages="session.msgs"
-            :fallback-when="session.when"
-            :loading="!!session.loading"
-            :suppress-auto-scroll="findOpen"
-          />
-          <SessionBackgroundWakeCard :session="session" />
-          <SessionInboxChips :session="session" />
-          <SessionBackgroundChips :session="session" />
-          <!-- Câu hỏi của agent (AskUserQuestion) trượt lên từ composer, ngay trên nó,
-               nên người dùng không phải đi tìm thẻ trong transcript đang cuộn. -->
-          <SessionQuestionDrawer :session="session" />
-          <SessionComposer
-            :attachments="pendingAtt"
-            @send="onSend"
-            @pick="openPicker"
-            @remove-att="removeAtt"
-            @add-att="onAddAtt"
-            @preview="previewAtt"
-            @open-more="moreOpen = true"
-          />
         </div>
-        <template v-if="wpOpen && rightTabs.length">
+        <template v-if="wpOpen && bottomTabs.length">
           <div
-            class="rszwp"
+            class="rszwp vert"
             :class="{ drag: wpDragging }"
-            @pointerdown="(e) => onWpResize(e, 'right')"
+            @pointerdown="(e) => onWpResize(e, 'bottom')"
           />
           <SessionWorkspacePanel
             :session="session"
-            dock="right"
-            :tabs="rightTabs"
-            :active="activeRight"
-            :size="wpWidth"
+            dock="bottom"
+            :tabs="bottomTabs"
+            :active="activeBottom"
+            :size="wpHeight"
             :addable-views="addableViews"
-            @close="closeSide('right')"
-            @set-active="activeRight = $event"
+            @close="closeSide('bottom')"
+            @set-active="activeBottom = $event"
             @close-tab="closeTab"
-            @add-view="(v) => addView(v, 'right')"
+            @add-view="(v) => addView(v, 'bottom')"
             @move-dock="moveDock"
           />
         </template>
       </div>
-      <template v-if="wpOpen && bottomTabs.length">
-        <div
-          class="rszwp vert"
-          :class="{ drag: wpDragging }"
-          @pointerdown="(e) => onWpResize(e, 'bottom')"
-        />
-        <SessionWorkspacePanel
-          :session="session"
-          dock="bottom"
-          :tabs="bottomTabs"
-          :active="activeBottom"
-          :size="wpHeight"
-          :addable-views="addableViews"
-          @close="closeSide('bottom')"
-          @set-active="activeBottom = $event"
-          @close-tab="closeTab"
-          @add-view="(v) => addView(v, 'bottom')"
-          @move-dock="moveDock"
-        />
-      </template>
     </div>
+
+    <template v-if="wpOpen && rightTabs.length">
+      <div
+        class="rszwp"
+        :class="{ drag: wpDragging }"
+        @pointerdown="(e) => onWpResize(e, 'right')"
+      />
+      <SessionWorkspacePanel
+        :session="session"
+        dock="right"
+        :tabs="rightTabs"
+        :active="activeRight"
+        :size="wpWidth"
+        :addable-views="addableViews"
+        @close="closeSide('right')"
+        @set-active="activeRight = $event"
+        @close-tab="closeTab"
+        @add-view="(v) => addView(v, 'right')"
+        @move-dock="moveDock"
+      />
+    </template>
 
     <!-- Hidden picker behind the composer's clip button -->
     <input ref="fileInput" type="file" multiple style="display: none" @change="onPick" />
@@ -428,13 +367,7 @@
 // usage + config popovers reuse the `.dproj` dropdown pattern (one menu open at a
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are presentational.
-import type {
-  Session,
-  SessionAttachment,
-  SlashCommandRef,
-  SshApprovalMode,
-} from '~/composables/useSessionsData'
-import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsData'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import {
@@ -567,42 +500,12 @@ async function askRemove() {
   if (ok) store.remove(props.session.id)
 }
 
-// Discuss link (ADR 0055): when this session was opened to discuss a task, show a
-// banner with the task title (resolved from the tasks store) → click opens it.
-const tasksStore = useTasksStore()
-const { openTask, openSshHost } = useSessionTaskLink()
-const aboutTask = computed(() =>
-  props.session.aboutTaskId ? tasksStore.taskById(props.session.aboutTaskId) : undefined,
-)
-const aboutTaskTitle = computed(() => aboutTask.value?.title ?? props.session.aboutTaskId)
-onMounted(() => {
-  if (props.session.aboutTaskId && !aboutTask.value) void tasksStore.loadTasks()
-})
-
-// Work link (ADR 0064): when this session was opened to work with an SSH host,
-// show a banner with the host name (resolved from the ssh store) → click opens
-// the SSH page. Falls back to the raw id if the host was deleted.
-const sshStore = useSshStore()
-const aboutSshHost = computed(() =>
-  props.session.aboutSshHostId ? sshStore.hostById(props.session.aboutSshHostId) : undefined,
-)
-const aboutSshHostName = computed(() => aboutSshHost.value?.name ?? props.session.aboutSshHostId)
-onMounted(() => {
-  if (props.session.aboutSshHostId && !aboutSshHost.value) void sshStore.loadAll()
-})
+// Link "phiên này về cái gì" (ADR 0055 task · ADR 0064 host SSH) + checklist +
+// đánh dấu đã chuyển sang SessionContextStrip — chúng là một lý do thay đổi riêng.
 
 // Per-session SSH tool approval mode (ADR 0064 P2). Governs the agent's mutating
 // SSH tools (ssh_exec / ssh_write_file); 'prompt' by default. Takes effect on the
 // next turn (engine reads it per turn).
-const sshApprovalMode = computed<SshApprovalMode>(() => props.session.sshApprovalMode ?? 'prompt')
-const sshApprovalOptions = computed<AppSelectOption[]>(() => [
-  { label: t('sessions.detail.sshApproval.prompt'), value: 'prompt' },
-  { label: t('sessions.detail.sshApproval.session'), value: 'session' },
-  { label: t('sessions.detail.sshApproval.auto'), value: 'auto' },
-])
-function onSshApprovalMode(v: string) {
-  store.setSshApprovalMode(props.session.id, v as SshApprovalMode)
-}
 
 // Single popover open at a time (project switcher · config · workspace · cute-only
 // overflow). The shared backdrop closes whichever is open.
@@ -1313,6 +1216,22 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 /* Anchor the drop overlay to the detail. */
 .detail {
   position: relative;
+}
+/* Cột session là một HÀNG: dock trái/phải là anh em của cột chính nên chúng chạy
+   hết chiều cao khung, còn header phiên chỉ trải trên cột chat. `.detail` gốc ở
+   prototype.css là `flex-direction: column` và được DÙNG CHUNG với mọi trang
+   detail khác (Skills/Agents/Tasks…), nên phải đổi qua class riêng `.sdrow` chứ
+   không sửa `.detail`. */
+.detail.sdrow {
+  flex-direction: row;
+}
+/* Cột chính: header + chat + dock dưới. */
+.sdmain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 /* Discuss banner (ADR 0055) — links a discussion session back to its task. */
 .aboutbar {

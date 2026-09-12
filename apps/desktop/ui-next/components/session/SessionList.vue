@@ -18,36 +18,56 @@
       >
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
-      <button
-        class="iconbtn"
-        :title="
-          store.selecting ? t('sessions.sidebar.selectExit') : t('sessions.sidebar.selectMode')
-        "
-        :style="{
-          width: '28px',
-          height: '28px',
-          ...(store.selecting ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}),
-        }"
-        @click="toggleSelectMode"
-      >
-        <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="iconbtn"
-        :title="t('sessions.filter.tooltip')"
-        style="width: 28px; height: 28px"
-        @click="showFilters = !showFilters"
-      >
-        <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="iconbtn"
-        :title="t('sessions.foldAll.tooltip')"
-        style="width: 28px; height: 28px"
-        @click="toggleFoldAll"
-      >
-        <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      <!-- Overflow (session-ui-refactor §3.8): chế độ chọn · bộ lọc · gấp tất cả.
+           Ba thao tác dùng vài lần một tuần nhưng đang chiếm chỗ thường trực ngang
+           hàng với nút tạo phiên — thứ được bấm mỗi ngày. -->
+      <span style="position: relative">
+        <button
+          class="iconbtn"
+          :title="t('sessions.sidebar.more')"
+          style="width: 28px; height: 28px"
+          :style="
+            store.selecting || listMenu
+              ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
+              : {}
+          "
+          @click.stop="listMenu = !listMenu"
+        >
+          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </button>
+        <div
+          v-if="listMenu"
+          style="position: fixed; inset: 0; z-index: 40"
+          @click="listMenu = false"
+        />
+        <div
+          v-if="listMenu"
+          class="smenu"
+          style="position: absolute; top: 116%; right: 0; z-index: 50"
+          @click.stop
+        >
+          <div class="mi" @click="runListAction(toggleSelectMode)">
+            <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{
+              store.selecting ? t('sessions.sidebar.selectExit') : t('sessions.sidebar.selectMode')
+            }}
+          </div>
+          <div class="mi" @click="runListAction(() => (showFilters = !showFilters))">
+            <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t('sessions.filter.tooltip') }}
+            <Icon
+              v-if="showFilters"
+              name="check"
+              class="ck"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
+          </div>
+          <div class="mi" @click="runListAction(toggleFoldAll)">
+            <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t('sessions.foldAll.tooltip') }}
+          </div>
+        </div>
+      </span>
     </div>
 
     <div v-if="showFilters" class="sfdrawer">
@@ -455,6 +475,12 @@ const groupBy = ref(readGroupBy())
 const sortBy = ref<SortBy>(readSortBy())
 const showArchived = ref(localStorage.getItem(STORAGE_SHOW_ARCHIVED) === '1')
 const showFilters = ref(false)
+const listMenu = ref(false)
+// Mỗi hàng đóng menu rồi chạy đúng handler mà nút cũ của nó gọi.
+function runListAction(fn: () => void) {
+  listMenu.value = false
+  fn()
+}
 
 watch(groupBy, (v) => localStorage.setItem(STORAGE_GROUPBY, v))
 watch(sortBy, (v) => localStorage.setItem(STORAGE_SORTBY, v))

@@ -1,8 +1,24 @@
 <template>
+  <!-- Biến thể `inline` (session-ui-refactor §3.7): chỉ danh sách nguồn, không chip
+       không popover — dùng khi nó nằm SẴN trong menu `⋯` của composer, nơi một
+       popover lồng trong popover sẽ che mất chính menu chứa nó. -->
+  <template v-if="variant === 'inline' && servers.length">
+    <div class="pl">{{ t('sessions.config.mcpHint') }}</div>
+    <div v-for="m in servers" :key="m.id" class="mcprow" @click.stop="toggleMcp(m.id)">
+      <span
+        class="mcpdot"
+        :style="{ background: m.status === 'connected' ? 'var(--green)' : 'var(--textFaint)' }"
+      />
+      <span class="mcpn">{{ m.name }}</span>
+      <span class="mcpst">{{ m.status }}</span>
+      <span class="tog2 sm" :class="{ off: !onSet.has(m.id) }" />
+    </div>
+  </template>
+
   <!-- No enabled source = no chip: an "MCP 0/0" control would only offer to
        whitelist servers that do not exist. -->
   <span
-    v-if="servers.length"
+    v-else-if="servers.length"
     class="chip sm chipbtn"
     :title="t('sessions.config.mcpHint')"
     style="position: relative"
@@ -41,7 +57,10 @@
 // tab): the allowed connections are a per-turn decision, so they belong next to the
 // Mode chip rather than behind the header gear. Open state is owned by the composer
 // (one popover at a time + its click-away overlay).
-const props = defineProps<{ open: boolean }>()
+const props = withDefaults(defineProps<{ open?: boolean; variant?: 'chip' | 'inline' }>(), {
+  open: false,
+  variant: 'chip',
+})
 const emit = defineEmits<{ toggle: [] }>()
 const { t } = useI18n()
 const store = useSessionsStore()
@@ -86,7 +105,7 @@ onMounted(() => {
 watch(
   () => store.activeId,
   () => {
-    if (props.open) emit('toggle')
+    if (props.variant === 'chip' && props.open) emit('toggle')
   },
 )
 </script>

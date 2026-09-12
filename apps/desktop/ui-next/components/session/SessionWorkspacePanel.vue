@@ -4,18 +4,41 @@
     :class="{ bottom: dock === 'bottom', left: dock === 'left' }"
     :style="panelStyle"
   >
-    <div class="wphead">
-      <div class="wptabs2">
+    <div class="wphead" style="position: relative">
+      <div class="wptabs2" @contextmenu.prevent="toggleDockMenu">
+        <!-- Tab không active chỉ còn ICON (§3.5): panel rộng 322px — tụt xuống 240px
+             khi kéo hẹp — và nhãn lặp lại của ba, bốn tab ăn gần hết bề ngang. Tên
+             đầy đủ nằm ở `title`, và `×` chỉ xuất hiện trên tab đang mở hoặc khi rê
+             chuột, nên không có tab nào phải nhường chỗ cho một nút đóng nó không
+             dùng tới. -->
         <div
           v-for="tab in tabs"
           :key="tab"
           class="wptab2"
           :class="{ on: tab === active }"
+          :title="tab"
           @click="emit('set-active', tab)"
         >
           <Icon :name="wpIcon(tab)" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <span>{{ tab }}</span>
+          <span v-if="tab === active">{{ tab }}</span>
           <span class="x" @click.stop="emit('close-tab', tab)">×</span>
+        </div>
+      </div>
+      <div
+        v-if="dockMenuOpen"
+        class="smenu"
+        style="position: absolute; top: 108%; left: 8px; z-index: 50"
+        @click.stop
+      >
+        <div
+          v-for="opt in DOCK_OPTS"
+          :key="opt.side"
+          class="mi"
+          :class="{ on: opt.side === dock }"
+          @click="pickDock(opt.side)"
+        >
+          <Icon :name="opt.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{ t(opt.label) }}
         </div>
       </div>
       <span style="position: relative">
@@ -34,33 +57,9 @@
           </div>
         </div>
       </span>
-      <span style="position: relative">
-        <button
-          class="wpib"
-          :disabled="!active"
-          :title="t('sessions.workspace.dock.change')"
-          @click.stop="toggleDockMenu"
-        >
-          <Icon :name="dockIcon(dock)" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <div
-          v-if="dockMenuOpen"
-          class="smenu"
-          style="position: absolute; top: 130%; right: 0; z-index: 50"
-          @click.stop
-        >
-          <div
-            v-for="opt in DOCK_OPTS"
-            :key="opt.side"
-            class="mi"
-            :class="{ on: opt.side === dock }"
-            @click="pickDock(opt.side)"
-          >
-            <Icon :name="opt.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t(opt.label) }}
-          </div>
-        </div>
-      </span>
+      <!-- Chrome cố định còn HAI nút (session-ui-refactor §3.5): thêm khung và đóng
+           panel. Đổi vị trí dock là thao tác tần suất thấp — nó chuyển sang chuột
+           phải trên tab strip, thay vì chiếm một nút thường trực ở MỌI dock. -->
       <button class="wpib on" :title="t('sessions.workspace.closePanel')" @click="emit('close')">
         <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
@@ -225,10 +224,12 @@ const DOCK_OPTS = [
   { side: 'right', icon: 'dock-right', label: 'sessions.workspace.dock.right' },
   { side: 'bottom', icon: 'dock-bottom', label: 'sessions.workspace.dock.bottom' },
 ] as const
-const dockIcon = (side: WorkspaceDockSide): string => `dock-${side}`
 const dockMenuOpen = ref(false)
+// Mở bằng CHUỘT PHẢI trên tab strip (§3.5): đổi vị trí dock là thao tác tần suất
+// thấp, không đáng một nút thường trực ở mỗi dock.
 function toggleDockMenu() {
   dockMenuOpen.value = !dockMenuOpen.value
+  if (dockMenuOpen.value) addOpen.value = false
 }
 function pickDock(side: WorkspaceDockSide) {
   if (props.active && side !== props.dock) emit('move-dock', props.active, side)
@@ -262,5 +263,20 @@ function pickDock(side: WorkspaceDockSide) {
 .smenu .mi.on {
   color: var(--text);
   background: var(--bgActive);
+}
+
+/* `×` chỉ trên tab đang mở hoặc khi rê chuột — tab chỉ-icon không phải nhường chỗ
+   cho một nút đóng nó không dùng tới. `visibility` chứ không phải `display`: chỗ
+   của nút được giữ nguyên nên hàng tab không nhảy khi rê chuột qua. */
+.wptab2 .x {
+  visibility: hidden;
+}
+.wptab2.on .x,
+.wptab2:hover .x {
+  visibility: visible;
+}
+/* Tab chỉ-icon: bỏ khoảng trống của nhãn đã biến mất. */
+.wptab2:not(.on):not(:hover) {
+  padding-right: 8px;
 }
 </style>

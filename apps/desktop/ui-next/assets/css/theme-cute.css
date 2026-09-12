@@ -448,8 +448,9 @@ body[data-theme-family='cute'] .stab-unread {
    active row is a soft mint card with a left accent bar and a whisper of shadow —
    present, not shouting.
    ════════════════════════════════════════════════════════════════════════════ */
+/* Lề ngang khớp `.ltop` (11px) để nền hàng đang chọn thẳng cạnh ô tìm kiếm. */
 body[data-theme-family='cute'] .lscroll {
-  padding: 8px;
+  padding: 8px 11px;
 }
 body[data-theme-family='cute'] :is(.li, .libli) {
   padding: 9px 11px;
@@ -543,9 +544,11 @@ body[data-theme-family='cute'] .top {
   height: 46px;
   padding: 0 16px;
 }
+/* Nhịp ngang §3.10 cũng áp cho Cute: trước đây header 18 · transcript 22 ·
+   composer 16 — ba lề trái cho ba khối xếp chồng trong cùng một cột. */
 body[data-theme-family='cute'] .dh {
   height: 54px;
-  padding: 0 18px;
+  padding: 0 var(--padX);
 }
 body[data-theme-family='cute'] .dh .dt {
   font-size: var(--fs-xl);
@@ -759,7 +762,7 @@ body[data-theme-family='cute'] .ovl {
    The user's own message keeps a bubble (it IS a message) but loses the hard tail.
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute'] .msgs {
-  padding: 22px 22px 8px;
+  padding: 22px var(--padX) 8px;
   gap: 18px;
 }
 body[data-theme-family='cute'] .abody.bubble {
@@ -932,7 +935,7 @@ body[data-theme-family='cute'] .mdinline img {
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute'] .composer {
   border-top: 0;
-  padding: 6px 16px 14px;
+  padding: 6px var(--padX) 14px;
   background: transparent;
 }
 body[data-theme-family='cute'] .cbox {
@@ -1272,4 +1275,53 @@ body[data-theme-family='cute'] .chat {
     border-left: 0;
     border-right: 0;
   }
+}
+
+/* ══ Hàng ngữ cảnh của phiên (session-ui-refactor §3.2) ══════════════════════
+   Class mới nên Cute chưa biết gì về nó — không skin thì một dải theo ngôn ngữ
+   `awog` sẽ nằm giữa app mint. Chip theo đúng luật chip của Cute ở §635: bo
+   viên thuốc, nền trong suốt, hover tô accent mềm. */
+body[data-theme-family='cute'] .ctxstrip {
+  height: 34px;
+  padding: 0 var(--padX);
+  gap: 9px;
+  box-shadow: none;
+  border-bottom: 1px solid var(--border);
+}
+body[data-theme-family='cute'] .ctxchip {
+  height: 24px;
+  padding: 3px 12px;
+  border-radius: var(--r-pill);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--text) 12%, transparent);
+}
+body[data-theme-family='cute'] .ctxchip:hover {
+  background: var(--accentSoft);
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+body[data-theme-family='cute'] .ctxchip:hover .ctxchip-lbl {
+  color: inherit;
+}
+body[data-theme-family='cute'] :is(.ctxchip.on, .ctxchip.acc) {
+  background: var(--accentSoft);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+body[data-theme-family='cute'] .ctxchip.warn {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 28%, transparent);
+}
+
+/* Popover neo vào chip (checklist · đánh dấu · SSH) + menu overflow của composer
+   và của một lượt: cùng ngôn ngữ thẻ mềm với `.pop`/`.smenu` mà Cute đã skin. */
+body[data-theme-family='cute'] :is(.todopop, .bmbpop, .ctxpop, .cmorepop) {
+  border-radius: var(--r-card);
+}
+body[data-theme-family='cute'] :is(.cmorerow, .ctxpop-act) {
+  border-radius: var(--r-sm);
+}
+body[data-theme-family='cute'] .hamenu {
+  border-radius: var(--r-card);
 }

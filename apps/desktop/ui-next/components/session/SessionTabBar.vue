@@ -179,6 +179,13 @@
         </template>
         <template v-if="pctxIsProject">
           <div class="ctxsep" />
+          <!-- Nhà mới của quick-view project (session-ui-refactor §3.4): chip project ở
+               status bar đã bỏ vì nó là lần xuất hiện THỨ BA của cùng tên project
+               (tab strip · header · status bar). Tab chính là nơi đúng cho nó. -->
+          <div class="mi" @click="pOpenProject">
+            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t('sessions.pctx.openProject') }}
+          </div>
           <div class="mi" @click="pLlmDefaults">
             <Icon name="brain" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.pctx.llmDefaults') }}
@@ -280,6 +287,7 @@ import { placeMenu } from '~/utils/context-menu'
 const { t } = useI18n()
 const { tabs, openableProjects, projectPath, setActiveTab, closeTab } = useSessionTabs()
 const store = useSessionsStore()
+const projectModal = useProjectModal()
 const { compact } = useResponsiveShell()
 const { collapsed: listCollapsed, toggle: toggleList } = useSessionListCollapse()
 const projectsStore = useProjectsStore()
@@ -500,6 +508,12 @@ function jumpTab(id: string) {
 const pctx = ref<{ x: number; y: number; id: string } | null>(null)
 const pctxMenuEl = useTemplateRef<HTMLElement>('pctxMenuEl')
 const pctxStyle = ref<Record<string, string>>({})
+
+function pOpenProject() {
+  const id = pctx.value?.id
+  pctx.value = null
+  if (id) projectModal.open(id)
+}
 
 function openTabCtx(id: string, e: MouseEvent) {
   const { clientX: x, clientY: y } = e

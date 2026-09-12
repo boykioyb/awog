@@ -16,6 +16,10 @@
           <span class="sb-div" />
           <StatusContext :session="active" />
           <span class="sb-div" />
+          <!-- Quick-view project. Đợt §3.4 từng bỏ chip này vì tên project lặp lại
+               lần thứ ba (tab strip · header · status bar) — nhưng đó là lập luận về
+               CHUỖI LẶP, còn cái mất đi là một HÀNH ĐỘNG dùng hằng ngày. Trả lại;
+               hàng "Mở project" trong context-menu của tab giữ làm đường thứ hai. -->
           <button
             class="sb-item"
             :title="t('statusbar.project.open')"
@@ -25,13 +29,14 @@
             <span class="sb-proj">{{ projName }}</span>
           </button>
           <span class="sb-div" />
-          <!-- Model / Account / Effort / Style chips (moved out of the composer). -->
+          <!-- MỘT chip cấu hình: model · account · effort · style (§3.4). -->
           <StatusConfig :session="active" />
         </div>
         <span class="sb-div" />
-        <!-- Quick workspace toggle (open/close the session's Files panel view).
-             The session's project-scoped Terminal tab stays reachable from the
-             workspace panel's own view picker. -->
+        <!-- Files + Browser. §3.4 từng chuyển hai cái này vào `Views ▾` với lý do
+             "chúng là view, không phải trạng thái" — đúng về phân loại, sai về thực
+             tế dùng: đây là hai khung bật/tắt liên tục, và một cú bấm ở mép cửa sổ
+             không thay được bằng hai cú bấm qua menu. Trả lại. -->
         <button
           class="sb-item sb-ico"
           :class="{ 'sb-on': wpViews.includes('Files') }"
@@ -40,9 +45,7 @@
         >
           <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
-        <!-- Browser (ADR 0086) — opens the agent's embedded Chromium as a panel
-             view. One click on purpose: before this, the browser existed only as a
-             hidden window nobody could see. -->
+        <!-- Browser (ADR 0086) — Chromium nhúng của agent, mở như một khung panel. -->
         <button
           class="sb-item sb-ico"
           :class="{ 'sb-on': wpViews.includes('Browser') }"
@@ -85,8 +88,8 @@ const route = useRoute()
 const sessions = useSessionsStore()
 const { projectName } = useProjects()
 const projectModal = useProjectModal()
-// Workspace-panel bridge: toggle the active session's Files panel; the open-views
-// list (published by SessionDetail) drives the chip's active state.
+// Cầu nối workspace-panel: bật/tắt khung Files + Browser của session đang mở; danh
+// sách khung đang mở (SessionDetail publish) quyết định trạng thái sáng của chip.
 const { openViews: wpViews, toggleView: wpToggle } = useWorkspacePanel()
 // Always-visible global terminal dock (independent of any session).
 const { isOpen: gtOpen, toggle: gtToggle } = useGlobalTerminal()

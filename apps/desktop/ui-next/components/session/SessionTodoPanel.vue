@@ -1,4 +1,36 @@
 <template>
+  <!-- Biến thể `chip` (session-ui-refactor §3.2): checklist sống trong hàng ngữ cảnh
+       dùng chung thay vì một dải riêng chiếm trọn bề ngang. Hành vi giữ nguyên luật
+       của ADR 0069 — chip KHÔNG tự ẩn khi xong, và nó không tự bung: danh sách đầy
+       đủ vẫn là một cú bấm, y như strip `done/total` trước đây. -->
+  <span v-if="variant === 'chip' && bannerVisible && !dismissed" class="ctxwrap2">
+    <button
+      class="ctxchip"
+      :class="{ acc: allDone, on: popOpen }"
+      :title="t('sessions.todo.title')"
+      @click.stop="popOpen = !popOpen"
+    >
+      <Icon
+        :name="allDone ? 'check' : 'tasks'"
+        style="width: var(--icon-xs); height: var(--icon-xs)"
+      />
+      <span class="tdn">{{ doneCount }}/{{ total }}</span>
+      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+    </button>
+    <template v-if="popOpen">
+      <div class="ctxbackdrop2" @click="popOpen = false" />
+      <div class="pop todopop" @click.stop>
+        <div class="pl todopop-h">
+          {{ t('sessions.todo.title') }}
+          <button type="button" class="todox" :title="t('sessions.todo.hide')" @click="hide">
+            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </button>
+        </div>
+        <SessionTodoList :todos="todos" editable @cycle="cycleTodo" />
+      </div>
+    </template>
+  </span>
+
   <!-- Session-level pinned checklist. Docked above the composer, it shows the LATEST
        TodoWrite and stays available for as long as the session has one — including
        after the turn ends, which is exactly when the user needs to see where work
@@ -6,7 +38,11 @@
        the full list is a click away, or in the Plan & Progress tab / the inline
        transcript step. The × dismisses it for this session.
        Rows are editable — a click cycles a row's status (see useSessionTodo). -->
-  <div v-if="bannerVisible && !dismissed" class="todop" :class="{ col: collapsed }">
+  <div
+    v-else-if="variant === 'bar' && bannerVisible && !dismissed"
+    class="todop"
+    :class="{ col: collapsed }"
+  >
     <div
       class="todoh"
       :title="collapsed ? t('sessions.todo.expand') : t('sessions.todo.collapse')"
@@ -38,8 +74,15 @@
 // useSessionTodo for the shared source-of-truth and banner/inline rules.
 import type { Session } from '~/composables/useSessionsData'
 
-const props = defineProps<{ session: Session }>()
+const props = withDefaults(defineProps<{ session: Session; variant?: 'bar' | 'chip' }>(), {
+  variant: 'bar',
+})
 const { t } = useI18n()
+const popOpen = ref(false)
+function hide() {
+  popOpen.value = false
+  dismissed.value = true
+}
 
 const { todos, total, doneCount, allDone, bannerVisible, cycleTodo } = useSessionTodo(
   () => props.session,
@@ -100,5 +143,35 @@ watch(total, (n, prev) => {
 .todox:hover {
   color: var(--text);
   background: var(--bgHover);
+}
+
+/* ── Biến thể chip: popover neo vào chip trong hàng ngữ cảnh (§3.2) ─────── */
+.ctxwrap2 {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.ctxbackdrop2 {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+/* Strip nằm ở ĐẦU cột chat nên popover mở XUỐNG. */
+.todopop {
+  position: absolute;
+  top: 128%;
+  left: 0;
+  z-index: 50;
+  width: 340px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.todopop-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.todopop-h .todox {
+  margin-left: auto;
 }
 </style>

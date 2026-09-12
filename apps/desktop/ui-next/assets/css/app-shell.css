@@ -288,17 +288,13 @@ body.light[data-surface='deep'] {
   align-items: center;
   min-width: 0;
 }
-/* Session detail-header title: STACK the project crumb (small eyebrow, top) over
-   the session title (prominent, bottom) so a long title gets its own full-width
-   line and the project reads as a de-emphasised label above it. Scoped via
-   :has(> .dproj) so ONLY the session header (the only .dt carrying a project
-   crumb) becomes a column — every other detail header keeps the row rule above. */
-.dh .dt:has(> .dproj) {
+/* Session detail-header title. `.dh .dt` ở trên KHÔNG grow, và trước đây chỉ
+   header session mới grow — nhờ rule `:has(> .dproj)` bên dưới, vì nó là header
+   duy nhất mang chip project. Chip đó đã bỏ (§3.1), nên điều kiện phải đổi sang
+   `.dttitle` — nếu không tiêu đề co lại đúng bằng chữ và hai nút dồn vào sát nó
+   thay vì nằm ở mép phải. Không còn crumb để xếp chồng nên nó trở lại một HÀNG. */
+.dh .dt:has(> .dttitle) {
   flex: 1 1 auto;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 1px;
   min-width: 0;
 }
 /* Crumb = the eyebrow line: small, dimmed, brightens on hover (it's the project
@@ -981,6 +977,98 @@ textarea.gcpta {
 .grszh.drag::after {
   background: var(--accent);
   height: 2px;
+}
+
+/* ── Hàng ngữ cảnh của phiên (session-ui-refactor §3.2) ────────────────────
+   Một dòng 30px thay cho tối đa sáu hàng banner chồng nhau. Hairline vẽ bằng
+   inset shadow chứ không phải border-bottom (ADR 0079): thanh cao cố định + căn
+   giữa con theo trục dọc, border sẽ ăn 1px của content box và đẩy chip vào nửa
+   pixel. */
+.ctxstrip {
+  flex: 0 0 auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Cùng lề ngang với `.msgs` ngay bên dưới — strip sống TRONG cột chat, nên nó
+     thẳng hàng với transcript chứ không phải với mép cột detail. */
+  padding: 0 var(--padX);
+  box-shadow: inset 0 -1px 0 var(--border);
+  overflow: hidden;
+}
+/* Chip của strip. Viền `--borderStrong` chứ không phải `--border`: ở light theme
+   --border (8% đen) chỉ đủ làm đường phân cách, không đủ vẽ đường bao của một vật
+   thể nhỏ — các chip sẽ đọc thành một dòng chữ chạy dài. Nền trong suốt + viền +
+   accent-tint là quy ước control của app, KHÔNG fill xám đặc. */
+.ctxchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid var(--borderStrong);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--textDim);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease);
+}
+.ctxchip:hover {
+  background: var(--bgHover);
+  color: var(--text);
+}
+.ctxchip .icn {
+  color: inherit;
+  flex: 0 0 auto;
+}
+/* Nhãn tự cắt để chip nhường chỗ khi hàng chật — chip khác không bị đẩy khỏi hàng. */
+.ctxchip-lbl {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.ctxchip-sub {
+  flex: 0 0 auto;
+  color: var(--textFaint);
+}
+.ctxchip.on {
+  border-color: var(--accentBorder);
+  color: var(--accent);
+  background: var(--accentDim);
+}
+.ctxchip.acc {
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+/* Duyệt SSH tự động: cảnh báo sống ngay trên công tắc gây ra nó. */
+.ctxchip.warn {
+  border-color: var(--amberBorder);
+  color: var(--amber);
+  background: var(--amberDim);
+}
+.ctxchip.warn .ctxchip-lbl,
+.ctxchip.warn .ctxchip-sub {
+  color: inherit;
+}
+
+/* Hairline giữa hai nhóm hành động trong một menu — dùng để tách nhóm CẮT
+   TRANSCRIPT (xoá phiên, tua lại, tạo lại) khỏi nhóm an toàn phía trên, để một cú
+   bấm trượt không rơi thẳng vào hành động phá huỷ. Lề ngang thụt vào so với
+   `.smenu` padding 5px nên đường kẻ không chạm mép menu. */
+.smenu .msep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
 
 /* Generic context menu — disabled rows + trailing hint (e.g. ↑2 / ↓1). */

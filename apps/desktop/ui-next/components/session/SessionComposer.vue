@@ -194,31 +194,48 @@
             </div>
           </div>
         </span>
-        <!-- Per-session MCP whitelist (moved off the config popover's MCP tab). -->
-        <SessionMcpChip :open="open === 'mcp'" @toggle="toggle('mcp')" />
         <span class="grow1" />
+        <!-- Overflow (session-ui-refactor §3.7): nguồn MCP · ghim context · làm đẹp
+             prompt. Cả ba đều là cấu hình ĐẶT MỘT LẦN rồi để đó, không phải thao tác
+             mỗi lượt như Mode hay đính kèm — nên chúng rời thanh, để composer còn
+             Mode · đính kèm · ⋯ · Gửi. Chấm accent trên `⋯` giữ lại tín hiệu trạng
+             thái đã mất khi chip biến đi. -->
         <span style="position: relative">
           <button
             class="iconbtn"
-            :title="
-              pinnedCount > 0
-                ? t('sessions.pinned.titleCount', { n: pinnedCount })
-                : t('sessions.pinned.title')
-            "
+            :title="t('sessions.composer.more')"
             style="width: 28px; height: 28px; position: relative"
             :style="
-              hasPinned || open === 'pin'
-                ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
-                : {}
+              open === 'more' ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}
             "
-            @click="onPinOpen"
+            @click.stop="toggle('more')"
           >
-            <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            <!-- Count (files + notes + applied note-presets). .fbadge is absolute so it
-                 floats at the corner without adding a second grid row (the bug that
-                 stacked the number below the icon + broke the button height). -->
-            <span v-if="pinnedCount > 0" class="fbadge">{{ pinnedCount }}</span>
+            <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <span v-if="hasPinned" class="fbadge">{{ pinnedCount }}</span>
           </button>
+          <div
+            v-if="open === 'more'"
+            class="pop cmorepop"
+            style="position: absolute; bottom: 130%; right: 0; z-index: 50"
+            @click.stop
+          >
+            <SessionMcpChip variant="inline" />
+            <div class="cmoresep" />
+            <button class="cmorerow" @click="onPinOpen">
+              <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('sessions.pinned.title') }}
+              <span v-if="pinnedCount > 0" class="cmorecount">{{ pinnedCount }}</span>
+            </button>
+            <button class="cmorerow" :disabled="enhancing" @click="onEnhance">
+              <Icon
+                name="sparkles"
+                class="enhicon"
+                :class="{ enhspin: enhancing }"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
+              {{ enhancing ? t('sessions.composer.enhancing') : t('sessions.composer.enhance') }}
+            </button>
+          </div>
           <div
             v-if="open === 'pin'"
             class="pop pinpop"
@@ -399,24 +416,6 @@
             </template>
           </div>
         </span>
-        <button
-          class="iconbtn"
-          :title="enhancing ? t('sessions.composer.enhancing') : t('sessions.composer.enhance')"
-          :disabled="enhancing"
-          style="width: 28px; height: 28px"
-          @click="onEnhance"
-        >
-          <!-- Sparkles is this app's glyph for every AI-generate action (connection
-               editor, library/workflow prompt creators, hook editor, PR summary — which
-               spins it while loading exactly like this). The old `skills` wand read as
-               "open the skills library" and was the odd one out. -->
-          <Icon
-            name="sparkles"
-            class="enhicon"
-            :class="{ enhspin: enhancing }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
         <button
           class="iconbtn"
           :title="t('sessions.composer.attach')"
@@ -760,8 +759,9 @@ function onNote(i: number, e: Event) {
 // model / account / effort / style moved to the status-bar chips (StatusConfig).
 const selectedMode = computed(() => store.active?.mode || 'Ask')
 
-// Composer popovers: the Mode chip, the MCP chip + the pinned-context popover.
-type MenuKind = 'mode' | 'mcp' | 'pin'
+// Composer popovers: Mode chip, overflow `⋯`, và popover ghim context mở TỪ trong
+// overflow (cùng điểm neo, nên nó thay chỗ menu thay vì lồng vào trong).
+type MenuKind = 'mode' | 'more' | 'pin'
 const open = ref<MenuKind | null>(null)
 function toggle(kind: MenuKind) {
   open.value = open.value === kind ? null : kind
@@ -2125,5 +2125,52 @@ textarea.ci {
   font-size: 12px;
   line-height: 18px;
   font-weight: 500;
+}
+
+/* ── Overflow `⋯` của composer (session-ui-refactor §3.7) ──────────────────
+   Một popover chứa: danh sách nguồn MCP (inline, không lồng popover) · hàng mở
+   popover ghim context · hàng làm đẹp prompt. Dùng lại `.pop` cho khung, chỉ
+   thêm phần hàng bấm được. */
+.cmorepop {
+  min-width: 244px;
+}
+.cmoresep {
+  height: 1px;
+  margin: 7px 0;
+  background: var(--border);
+}
+.cmorerow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--r-xs);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  cursor: pointer;
+  text-align: left;
+}
+.cmorerow:hover:not(:disabled) {
+  background: var(--bgHover);
+}
+.cmorerow:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.cmorerow .icn {
+  color: var(--textDim);
+  flex: 0 0 auto;
+}
+.cmorecount {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--accent);
 }
 </style>

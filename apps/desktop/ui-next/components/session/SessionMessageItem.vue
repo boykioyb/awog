@@ -42,37 +42,7 @@
          bubble, right-aligned — replaces the old floating hover pill. -->
     <div class="mmeta mmetarow">
       <span class="mmetatxt">{{ fmt(message.at) }} · {{ tokLabel }} tok</span>
-      <div class="hoveract bottom">
-        <span class="ha" :title="t('sessions.message.copy')" @click="copyText">
-          <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </span>
-        <span class="ha" :title="t('sessions.message.fullscreen')" @click="openFullscreen">
-          <Icon name="maximize" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </span>
-        <span
-          v-if="canBookmark"
-          class="ha"
-          :class="{ on: isBookmarked, off: bookmarkFull }"
-          :title="bookmarkTitle"
-          @click="toggleBookmark"
-        >
-          <Icon name="bookmark" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </span>
-        <!-- `danger`: cuts the transcript (see .ha.danger below). Same three actions the
-             confirm guard gates — the colour is the warning that arrives before the click. -->
-        <span class="ha danger" :title="t('sessions.message.edit')" @click="editMsg">
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </span>
-        <span class="ha danger" :title="t('sessions.message.resend')" @click="resend">
-          <Icon name="send" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </span>
-        <span class="ha danger" :title="t('sessions.message.rewind')" @click="rewind">
-          <Icon name="rewind" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </span>
-        <span class="ha" :title="t('sessions.message.fork')" @click="fork">
-          <Icon name="fork" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </span>
-      </div>
+      <SessionMsgActions :primary="userPrimary" :overflow="userOverflow" />
     </div>
   </div>
 
@@ -177,18 +147,11 @@
             <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
           </template>
         </span>
-        <div v-if="showBottomActions" class="hoveract bottom">
-          <span
-            v-for="a in msgActions"
-            :key="a.icon"
-            class="ha"
-            :class="{ danger: a.danger, on: a.active, off: a.disabled }"
-            :title="a.title"
-            @click="a.run"
-          >
-            <Icon :name="a.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </span>
-        </div>
+        <SessionMsgActions
+          v-if="showBottomActions"
+          :primary="asstPrimary"
+          :overflow="asstOverflow"
+        />
       </div>
     </div>
     <SessionTurnFullscreen
@@ -217,6 +180,7 @@ import type { BlockHighlight } from './SessionTextBlock.vue'
 import type { ActivityEntry } from './SessionTurnActivities.vue'
 import type { PreviewRef } from '~/composables/usePreview'
 import type { ConfirmOptions } from '~/composables/useConfirm'
+import type { MsgAction, MsgSep } from './SessionMsgActions.vue'
 import {
   finalResponseIndex,
   responseIndex,
@@ -693,28 +657,36 @@ function toggleBookmark(): void {
   store.toggleBookmark(id, msgIndex.value)
 }
 
-// One action set, rendered twice (floating pill at the top + inline on the meta
-// row at the bottom) so the actions are reachable without scrolling a long reply.
-// `danger` = this action cuts the transcript → red on hover (§3.2). It is NOT the same
-// set as "opens a confirm dialog": `settings`/retryModel is danger but ungated (AC-G28).
-type MsgAction = {
-  icon: string
-  title: string
-  run: () => void
-  danger?: boolean
-  // Bookmark only: on = anchored (accent), off = at the cap (dimmed, inert).
-  active?: boolean
-  disabled?: boolean
-}
-const msgActions = computed<MsgAction[]>(() => [
+// Hai cụm hành động dưới một lượt (session-ui-refactor §3.3). Chỉ BA điều khiển ở
+// ngoài; mọi thứ hiếm dùng hoặc CẮT TRANSCRIPT nằm sau `⋯`, tách bằng một separator.
+// Trước đây cả 10 (assistant) / 7 (user) icon đều nằm ngoài cùng một trọng số, nên
+// `Tua về đây` trông y hệt `Sao chép` — màu đỏ khi hover là cảnh báo duy nhất.
+// `danger` KHÔNG đồng nghĩa với "có hộp xác nhận": retryModel là danger nhưng ungated.
+const userPrimary = computed<MsgAction[]>(() => [
   { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
-  // Response-only fullscreen (PreviewModal) — only earns a slot when there's prose to read.
-  ...(plainText.value.trim()
-    ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
+  { icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen },
+  ...(canBookmark.value
+    ? [
+        {
+          icon: 'bookmark',
+          title: bookmarkTitle.value,
+          run: toggleBookmark,
+          active: isBookmarked.value,
+          disabled: bookmarkFull.value,
+        },
+      ]
     : []),
-  // Whole-turn fullscreen (activities + gates + response) — always shown for an assistant
-  // turn, incl. tool-only turns that have no final response (AC3.9).
-  { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
+])
+const userOverflow = computed<(MsgAction | MsgSep)[]>(() => [
+  { icon: 'fork', title: t('sessions.message.fork'), run: fork },
+  { sep: true },
+  { icon: 'edit', title: t('sessions.message.edit'), run: editMsg, danger: true },
+  { icon: 'send', title: t('sessions.message.resend'), run: resend, danger: true },
+  { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
+])
+
+const asstPrimary = computed<MsgAction[]>(() => [
+  { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
   { icon: 'quote', title: t('sessions.message.quote'), run: quote },
   ...(canBookmark.value
     ? [
@@ -727,11 +699,21 @@ const msgActions = computed<MsgAction[]>(() => [
         },
       ]
     : []),
+])
+const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
+  // Response-only fullscreen only earns a row when there's prose to read.
+  ...(plainText.value.trim()
+    ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
+    : []),
+  // Whole-turn fullscreen (activities + gates + response) — always available for an
+  // assistant turn, incl. tool-only turns with no final response (AC3.9).
+  { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
+  { icon: 'branch', title: t('sessions.message.branch'), run: branch },
+  { icon: 'fork', title: t('sessions.message.forkShort'), run: fork },
+  { sep: true },
   { icon: 'refresh', title: t('sessions.message.regen'), run: regen, danger: true },
   { icon: 'settings', title: t('sessions.message.retryModel'), run: retry, danger: true },
   { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
-  { icon: 'branch', title: t('sessions.message.branch'), run: branch },
-  { icon: 'fork', title: t('sessions.message.forkShort'), run: fork },
 ])
 </script>
 
