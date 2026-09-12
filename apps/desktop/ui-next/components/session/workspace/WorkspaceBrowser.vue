@@ -16,6 +16,7 @@
         surface="panel"
         :dock="dock"
         :expanded="expanded"
+        :can-expand="canExpand"
         @select-tab="selectTab"
         @close-tab="closeTab"
         @new-tab="newTab"
@@ -40,9 +41,6 @@
           <button type="button" class="wsbr-takeover" @click="takeOver">
             {{ t('sessions.workspace.browser.takeOver') }}
           </button>
-        </div>
-        <div v-else-if="occluded" class="wsbr-hint">
-          {{ t('sessions.workspace.browser.hidden') }}
         </div>
       </div>
     </template>
@@ -81,7 +79,6 @@ const {
   activeTabId,
   urlDraft,
   error,
-  occluded,
   elsewhere,
   selectionText,
   submitUrl,
@@ -111,8 +108,9 @@ const { root } = useWorkspaceData(project)
 
 const BROWSER_VIEW = 'Browser'
 // Bằng WP_SIDE / WP_BOTTOM trong SessionDetail.vue — panel sở hữu việc kéo tay và
-// không export biên, nên hai bộ số này phải trùng nhau bằng mắt.
+// không export biên, nên ba bộ số này phải trùng nhau bằng mắt.
 const WP_MAX = { side: 560, bottom: 600 } as const
+const WP_MIN = { side: 240, bottom: 120 } as const
 const WP_DEFAULT = { side: 322, bottom: 260 } as const
 
 const dock = computed<WorkspaceDockSide>(() => settings.workspaceDockOf(BROWSER_VIEW))
@@ -192,6 +190,12 @@ watch([viewportEl, dock], () => {
   measureRoom()
 })
 
+const setPanelSize = (next: number): void => {
+  if (dock.value === 'bottom') settings.setWorkspaceBottomHeight(next)
+  else if (dock.value === 'left') settings.setWorkspaceLeftWidth(next)
+  else settings.setWorkspaceRightWidth(next)
+}
+
 // Mở rộng tới đâu là ĐỦ, chứ không phải tới hằng số.
 //
 // LỖI THẬT 2026-09-09: nút này nhảy thẳng lên `WP_MAX` (560 / 600) bất kể cửa sổ
@@ -199,16 +203,32 @@ watch([viewportEl, dock], () => {
 // nghiền thành một dải card dẹt — người dùng đọc ra là "tràn, không fit màn hình".
 // Nay trần là min(WP_MAX, 60% của hộp, hộp − sàn chat): trên màn rộng không đổi gì
 // (row 1200 ⇒ vẫn 560), trên màn hẹp thì nó dừng trước khi giết cột chat.
+//
+// Sàn là WP_MIN (cỡ nhỏ nhất kéo tay được), KHÔNG phải WP_DEFAULT: lấy mặc định
+// làm sàn thì trên cửa sổ hẹp trần bị NÂNG lên đúng bằng mặc định, và nút "mở
+// rộng" thành một cú bấm không làm gì trong khi icon vẫn khoe "đang mở rộng" —
+// đúng triệu chứng "lỗi expand". Trần thấp hơn mặc định là một sự thật về chỗ
+// trống, chỗ để nói ra là `canExpand` chứ không phải giấu bằng cách nâng trần.
 const expandTarget = computed<number>(() => {
   const cap = isBottom.value ? WP_MAX.bottom : WP_MAX.side
   const box = room.value
   if (box === null) return cap
   const floor = isBottom.value ? CHAT_FLOOR.bottom : CHAT_FLOOR.side
   return Math.max(
-    isBottom.value ? WP_DEFAULT.bottom : WP_DEFAULT.side,
+    isBottom.value ? WP_MIN.bottom : WP_MIN.side,
     Math.min(cap, Math.round(box * 0.6), box - floor),
   )
 })
+
+// Thu về mặc định — nhưng không bao giờ vượt trần. Trên cửa sổ hẹp, mặc định
+// (322) LỚN HƠN trần, nên trả về mặc định là giao cho watcher clamp bên dưới kéo
+// xuống ngay: hai bên đá qua đá lại và panel nhấp nháy.
+const shrinkTarget = computed(() =>
+  Math.min(isBottom.value ? WP_DEFAULT.bottom : WP_DEFAULT.side, expandTarget.value),
+)
+// Còn chỗ để mở rộng thật không? Hết chỗ thì nút phải TẮT, không phải im lặng
+// không làm gì.
+const canExpand = computed(() => expandTarget.value - shrinkTarget.value > 4)
 
 // Cửa sổ NHỎ LẠI thì panel phải nhỏ theo.
 //
@@ -220,11 +240,17 @@ const expandTarget = computed<number>(() => {
 // Có mất preference: kéo rộng 560 rồi thu cửa sổ là mất số 560 đó. Đổi lại là một
 // layout còn dùng được, và bấm mở rộng lần nữa trên màn rộng là lấy lại ngay —
 // giữ một con số mà cột chat không đọc nổi thì không phải là giữ gì cả.
-watch([expandTarget, panelSize], ([target, size]) => {
-  if (size <= target) return
-  if (dock.value === 'bottom') settings.setWorkspaceBottomHeight(target)
-  else if (dock.value === 'left') settings.setWorkspaceLeftWidth(target)
-  else settings.setWorkspaceRightWidth(target)
+// CHỈ theo `expandTarget`, không theo `panelSize`.
+//
+// Theo cả `panelSize` thì mỗi `pointermove` của tay kéo panel đều bị kéo ngược
+// về trần ngay trong cùng một tick: panel không nhúc nhích quá 60% hộp và cú kéo
+// giật ngược liên tục (triệu chứng "giật giật" + "kéo không rộng ra được"). Sự
+// kiện cần phản ứng là CHỖ TRỐNG HẸP LẠI (cửa sổ thu nhỏ, mở panel mép kia), và
+// đó đúng là lúc `expandTarget` đổi. Người dùng tự kéo rộng hơn trần là lựa chọn
+// tường minh của họ — để yên.
+watch(expandTarget, (target) => {
+  if (panelSize.value <= target) return
+  setPanelSize(target)
 })
 
 // "Đã mở rộng" = đang ở (gần) mức lớn nhất mà chỗ này cho phép, không phải bằng
@@ -232,14 +258,8 @@ watch([expandTarget, panelSize], ([target, size]) => {
 // thêm được nữa.
 const expanded = computed(() => panelSize.value >= expandTarget.value - 4)
 const onToggleExpand = (): void => {
-  const next = expanded.value
-    ? isBottom.value
-      ? WP_DEFAULT.bottom
-      : WP_DEFAULT.side
-    : expandTarget.value
-  if (dock.value === 'bottom') settings.setWorkspaceBottomHeight(next)
-  else if (dock.value === 'left') settings.setWorkspaceLeftWidth(next)
-  else settings.setWorkspaceRightWidth(next)
+  if (!canExpand.value) return
+  setPanelSize(expanded.value ? shrinkTarget.value : expandTarget.value)
 }
 
 // Đóng view Browser (không phải đóng cả panel): đi qua đúng cầu nối mà status bar
@@ -274,7 +294,6 @@ const onClose = (): void => toggleView(BROWSER_VIEW)
   align-items: center;
   justify-content: center;
 }
-.wsbr-hint,
 .wsbr-takeover {
   color: var(--textDim);
   font-size: var(--fs-sm);

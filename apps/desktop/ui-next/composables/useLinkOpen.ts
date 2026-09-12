@@ -39,6 +39,17 @@ const readMode = (): LinkOpenMode => {
   }
 }
 
+// Vị trí con trỏ của cú bấm gần nhất.
+//
+// 13 chỗ mở link BẰNG LỆNH (hàng GitHub notification, badge task, nút repo…) gọi
+// `openLink(url)` mà KHÔNG có `MouseEvent` — nút của chúng tự xử lý click rồi mới
+// gọi vào đây. Bản đầu rơi về `x: 0, y: 0` nên popover neo vào **góc trên trái màn
+// hình**, cách chỗ bấm cả nghìn pixel (lỗi thật 2026-09-10: bấm "Open on GitHub"
+// trong hộp thông báo thì popover hiện ở góc trái trên). Một listener `pointerdown`
+// cấp document ghi lại điểm bấm cuối, và mọi call site dùng chung nó — không phải
+// sửa 13 chỗ, và cũng không thể quên chỗ nào.
+const lastPointer = { x: 0, y: 0, at: 0 }
+
 const mode = ref<LinkOpenMode>(readMode())
 // The link waiting on a choice, with the click position so the popover opens where
 // the user's eyes already are.
@@ -135,7 +146,16 @@ export function useLinkOpen() {
     if (evt?.metaKey || evt?.ctrlKey || evt?.shiftKey) return openExternally(text)
     if (mode.value === 'external') return openExternally(text)
     if (mode.value === 'app') return openInApp(text)
-    pending.value = { url: text, x: evt?.clientX ?? 0, y: evt?.clientY ?? 0 }
+    // Điểm bấm cuối chỉ dùng khi nó vừa xảy ra: một toạ độ cũ vài giây (bấm chỗ
+    // này, link mở do timer/phím) còn tệ hơn là giữa màn hình.
+    // (0,0) tính là KHÔNG có toạ độ, không phải "bấm ở góc trên trái": `el.click()`
+    // gọi từ code (và mọi click tổng hợp) sinh event với `clientX/Y = 0`, nên
+    // `?? 0` không bắt được ca đó — popover vẫn nhảy về góc.
+    const fromEvent = evt && (evt.clientX !== 0 || evt.clientY !== 0)
+    const fresh = Date.now() - lastPointer.at < 2000
+    const x = fromEvent ? evt.clientX : fresh ? lastPointer.x : Math.round(window.innerWidth / 2)
+    const y = fromEvent ? evt.clientY : fresh ? lastPointer.y : Math.round(window.innerHeight / 3)
+    pending.value = { url: text, x, y }
   }
 
   const resolvePending = async (kind: 'app' | 'external', remember: boolean): Promise<void> => {
@@ -171,9 +191,16 @@ export function useLinkOpen() {
       event.stopPropagation()
       void openLink(href, event)
     }
+    const onPointerDown = (event: PointerEvent | MouseEvent): void => {
+      lastPointer.x = event.clientX
+      lastPointer.y = event.clientY
+      lastPointer.at = Date.now()
+    }
     document.addEventListener('click', onClick, true)
+    document.addEventListener('pointerdown', onPointerDown, true)
     return () => {
       document.removeEventListener('click', onClick, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
       installed = false
     }
   }

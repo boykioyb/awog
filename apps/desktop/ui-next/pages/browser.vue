@@ -35,9 +35,6 @@
             {{ t('sessions.workspace.browser.takeOver') }}
           </button>
         </div>
-        <div v-else-if="occluded" class="bwin-hint">
-          {{ t('sessions.workspace.browser.hidden') }}
-        </div>
       </div>
     </template>
 
@@ -75,7 +72,6 @@ const {
   activeTab,
   urlDraft,
   error,
-  occluded,
   elsewhere,
   selectionText,
   submitUrl,
@@ -138,7 +134,6 @@ useHead({
   align-items: center;
   justify-content: center;
 }
-.bwin-hint,
 .bwin-takeover {
   color: var(--textDim);
   font-size: var(--fs-sm);

@@ -10,17 +10,27 @@ import type { AwogBrowserTab, AwogBrowserTabList } from '~/types/awog-bridge'
 //
 // THE NATIVE VIEW PAINTS ABOVE THE WHOLE DOM. It is not an element, so nothing in
 // CSS can put a modal, a menu or a toast in front of it — the app's z-index bands
-// simply do not apply. So the view has to be pulled off screen whenever something
-// would have covered it. `occluded` is that rule, and it keys off the two markup
-// conventions this app already has for "something is floating above the page":
-// `.ovl.on` (modal scrim; `.ovl` alone is `display:none` in prototype.css) and the
-// v-if-mounted `.lbox` / `.smenu` / `.pop`. Menus count: the panel's own dock and
-// "+" menus open directly over the panel body.
+// simply do not apply.
 //
-// `.sttpop` is on the list for the same reason and not by convention: the shared
-// selection-translate popover (mounted by AppGlobalHosts) has its own class, and the
-// chrome's Translate button opens it right over the page box — without this entry the
-// translation would render UNDER the native view, i.e. invisible.
+// Nên trang phải NHƯỜNG CHỖ khi app mở một bề mặt nổi chồng lên nó. Luật đó đi
+// qua ba đời và đây là đời thứ ba (2026-09-12) — lịch sử quan trọng vì nó nói rõ
+// cái gì KHÔNG được làm:
+//
+//   1. Danh sách class, không đo hình học — thiếu sót, và ẩn cả trang vì một menu
+//      ở tận góc kia màn hình.
+//   2. Hit-test `elementFromPoint` trên lưới điểm — bắt được mọi thứ, nhưng ĐẮT
+//      (vài trăm lượt ép layout đồng bộ theo TỪNG mutation của cả app) và bắn cả
+//      vì toast / chip dock ở góc ⇒ trang nhấp nháy giữa lúc làm việc. Người dùng
+//      bác thẳng, và bác đúng.
+//   3. (nay) DANH SÁCH SELECTOR + KIỂM TRA CHỒNG LẤN. Một `querySelectorAll` và
+//      vài `getBoundingClientRect` — thường không khớp node nào. Tiên đoán được,
+//      rẻ, và **không bao giờ** bắn vì toast hay dock (chúng không có trong danh
+//      sách). Chỉ ẩn khi một hộp thoại/menu THẬT SỰ chồng lên khung ≥24px mỗi
+//      chiều, và khi ẩn thì khung để TRỐNG — không có dòng chữ "Tạm ẩn" nào nữa.
+//
+// ⚠ CÁI GIÁ CỦA ĐỜI 3: danh sách phải bảo trì. Thêm một loại overlay mới mà quên
+// khai báo ở `OVERLAYS` thì trang sẽ vẽ đè lên nó. Đó là đánh đổi có ý thức để
+// không quay lại đời 2.
 //
 // ONE OWNER PER WINDOW. Two panel instances can be docked at once (right + bottom),
 // and both may hold a Browser tab — but a single webContents cannot be in two
@@ -28,7 +38,35 @@ import type { AwogBrowserTab, AwogBrowserTabList } from '~/types/awog-bridge'
 // `owner` is the arbiter: the first visible instance claims the view, the rest render
 // a "showing in the other dock" placeholder with a button to take it over. Same
 // hand-off shape as the session popout.
-const OCCLUDING = '.ovl.on, .lbox, .smenu, .pop, .sttpop'
+
+// Mọi bề mặt nổi của app, theo class gốc của nó.
+//
+// ⚠ THÊM OVERLAY MỚI THÌ THÊM VÀO ĐÂY. Không có wrapper modal dùng chung trong
+// repo (23 chỗ tự viết `<div class="ovl" :class="{ on }">`), nên đây là chỗ duy
+// nhất biết "app đang có gì nổi lên".
+//
+// KHÔNG có `.toast` / `.mdock` trong danh sách, và đó là chủ ý: toast tự tắt sau
+// vài giây, chip dock thì ngồi thường trực ở góc — ẩn cả trang web vì chúng chính
+// là cú nhấp nháy mà đời 2 bị bác.
+const OVERLAYS = [
+  '.ovl.on', // 23 modal của app: Settings, Preview, Sites, Import, confirm…
+  '.lbox', // lightbox ảnh
+  '.smenu', // ContextMenu — gồm menu ⋮ và menu dock của chính trình duyệt
+  '.aselmenu', // dropdown của AppSelect
+  '.pop', // popover: status bar, composer, MCP chip, todo panel
+  '.sttpop', // popover dịch (nguồn 'dom')
+  '.lop-scrim', // popover "mở link ở đâu"
+  '.cmdk-ovl', // command palette
+  '.tph-ovl', // hộp nhập text dùng chung
+  '.shell-scrim', // scrim của drawer ở shell compact
+  '.dropzone', // khung "thả file vào đây" (pointer-events:none ⇒ hit-test không thấy)
+].join(', ')
+
+// Chồng bao nhiêu thì mới đáng ẩn. Đủ lớn để một cái chạm mép không tính, đủ nhỏ
+// để một góc menu thò vào khung vẫn đọc được.
+const OVERLAP_MIN = 24
+
+type Rect = { x: number; y: number; width: number; height: number }
 
 // Claim held by at most one instance per renderer (window).
 const owner = ref<number | null>(null)
@@ -50,11 +88,12 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
 
   const tabs = ref<AwogBrowserTab[]>([])
   const activeTabId = ref<string | null>(null)
-  const occluded = ref(false)
   const urlDraft = ref('')
   const error = ref('')
   // True while THIS instance holds the native view.
   const holding = ref(false)
+  // Có bề mặt nổi nào của app đang chồng lên khung không? Xem `OVERLAYS`.
+  const covered = ref(false)
   // Text the user has highlighted INSIDE the page. Two chrome buttons (translate,
   // quote into the chat) are disabled without it, and there is no event to learn it
   // from: the selection lives in another webContents, so the only way to know is to
@@ -98,13 +137,20 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     return r.width >= 8 && r.height >= 8
   }
 
-  let syncing = false
-  const sync = async (): Promise<void> => {
+  // Hình chữ nhật đã gửi cho main lần cuối. `setBounds` là một lượt IPC, mà
+  // `nudge` bắn mỗi frame khi transcript cuộn — trong khi cột panel thì ĐỨNG YÊN.
+  // Không nhớ lại thì mỗi lần cuộn là vài chục lượt IPC không đổi gì.
+  let lastRect: Rect | null = null
+  const sameRect = (a: Rect | null, b: Rect): boolean =>
+    a !== null && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+
+  const syncOnce = async (): Promise<void> => {
     const api = bridge.value
     const el = options.viewport.value
-    if (!api || syncing) return
-    const wanted = onScreen(el) && options.visible() && !occluded.value && isOwner.value
+    if (!api) return
+    const wanted = onScreen(el) && options.visible() && !covered.value && isOwner.value
     if (!wanted) {
+      lastRect = null
       if (holding.value) {
         holding.value = false
         if (owner.value === id) owner.value = null
@@ -112,19 +158,55 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
       }
       return
     }
-    syncing = true
     try {
       const rect = rectOf(el)
       if (!holding.value) {
+        // Tab đang hiện Ở CHỖ KHÁC (popout, dock mép kia) thì KHÔNG tự giật về.
+        // `wanted` ở trên vẫn đúng — khung này vẫn trên màn hình — nhưng "tôi có
+        // chỗ cho một view" không phải là "đưa view đang ở cửa sổ khác vào đây":
+        // một cú cuộn bất kỳ cũng gọi tới đây, và nó sẽ kéo trang ra khỏi cửa sổ
+        // popout mà người dùng vừa mở. Đường đòi lại tường minh là nút "Lấy lại"
+        // trong placeholder (`takeOver`), và nó tự nhận `owner` trước khi sync.
+        if (owner.value !== id && activeTab.value?.shownElsewhere === true) return
         owner.value = id
         const info = await api.attach(rect, activeTabId.value ?? undefined)
         holding.value = true
+        lastRect = rect
         applyOne(info)
-      } else {
+      } else if (!sameRect(lastRect, rect)) {
+        lastRect = rect
         await api.setBounds(rect, activeTabId.value ?? undefined)
       }
     } catch (err) {
+      lastRect = null
       error.value = err instanceof Error ? err.message : String(err)
+    }
+  }
+
+  // MỘT LỜI GỌI ĐANG CHẠY KHÔNG ĐƯỢC LÀM RƠI LỜI GỌI SAU.
+  //
+  // Lỗi thật (triệu chứng "nhiều lúc browser vẫn đè lên modal"): bản trước
+  // `if (syncing) return` — vứt luôn yêu cầu. Mà `syncing` bật đúng lúc một
+  // `attach`/`setBounds` đang bay, tức là đang cuộn hay đang stream, còn yêu cầu
+  // bị vứt lại là cú `detach` do modal vừa mở. Sau đó KHÔNG ai gọi lại: watcher
+  // chỉ bắn khi trạng thái ĐỔI, mà nó đã đổi rồi; modal thì không cuộn không
+  // resize nên `nudge` cũng im. Nên: xếp hàng chứ không vứt — gộp mọi yêu cầu đến
+  // trong lúc bận thành đúng một vòng chạy lại. Luật che khuất nay đã gỡ, nhưng
+  // mọi đường khác (đổi tab, đổi dock, KeepAlive, popout) vẫn cần đúng tính chất
+  // này: trạng thái CUỐI CÙNG luôn phải được áp dụng.
+  let syncing = false
+  let syncAgain = false
+  const sync = async (): Promise<void> => {
+    if (syncing) {
+      syncAgain = true
+      return
+    }
+    syncing = true
+    try {
+      do {
+        syncAgain = false
+        await syncOnce()
+      } while (syncAgain)
     } finally {
       syncing = false
     }
@@ -301,36 +383,66 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   const detachNow = async (): Promise<void> => {
     const wasOwner = owner.value === id
     holding.value = false
+    lastRect = null
     if (!wasOwner) return
     owner.value = null
     await bridge.value?.detach().catch(() => {})
   }
 
   let stopChanged: (() => void) | null = null
+  let mo: MutationObserver | null = null
   let ro: ResizeObserver | null = null
   let frame = 0
+  // Có hộp thoại / menu nào đang chồng lên khung không?
+  //
+  // Thoát sớm khi khung không trên màn hình: một panel đang bị KeepAlive cất đi
+  // không được trả giá cho từng mutation của session khác.
+  const refreshCovered = (): void => {
+    const el = options.viewport.value
+    if (!onScreen(el) || !options.visible() || !isOwner.value) {
+      if (covered.value) covered.value = false
+      return
+    }
+    const box = el.getBoundingClientRect()
+    let next = false
+    for (const node of document.querySelectorAll(OVERLAYS)) {
+      const r = node.getBoundingClientRect()
+      const w = Math.min(r.right, box.right) - Math.max(r.left, box.left)
+      const h = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top)
+      if (w >= OVERLAP_MIN && h >= OVERLAP_MIN) {
+        next = true
+        break
+      }
+    }
+    if (next !== covered.value) covered.value = next
+  }
+
+  // Cuộn/đổi cỡ vừa dịch hộp view vừa dịch overlay ⇒ đo lại cả hai. Gộp về một
+  // lượt mỗi frame; `sync` tự bỏ qua khi rect không đổi, nên nhịp này rẻ.
   const nudge = (): void => {
     if (frame) return
     frame = requestAnimationFrame(() => {
       frame = 0
+      refreshCovered()
       void sync()
     })
   }
-
-  const refreshOccluded = (): void => {
-    const next = document.querySelector(OCCLUDING) !== null
-    if (next !== occluded.value) occluded.value = next
-  }
-  let mo: MutationObserver | null = null
 
   onMounted(() => {
     const api = bridge.value
     if (!api) return
     void api.tabs().then(applyList)
     stopChanged = api.onChanged(applyList)
-    // `class` for `.ovl.on`, childList for the v-if-mounted menus and lightboxes.
-    mo = new MutationObserver(refreshOccluded)
-    mo.observe(document.body, { subtree: true, childList: true, attributeFilter: ['class'] })
+    // Overlay xuất hiện/biến mất bằng `v-if` (childList) hoặc bằng `.ovl.on`
+    // (class); popover định vị bằng inline style thì DỜI CHỖ mà không đổi cả hai,
+    // nên `style` cũng phải theo. Callback đi qua `nudge` — gộp về một lượt mỗi
+    // frame — và mỗi lượt chỉ là một `querySelectorAll`, không phải hit-test.
+    mo = new MutationObserver(nudge)
+    mo.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributeFilter: ['class', 'style'],
+    })
     ro = new ResizeObserver(nudge)
     if (options.viewport.value) ro.observe(options.viewport.value)
     window.addEventListener('resize', nudge)
@@ -345,7 +457,7 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     if (el && ro) ro.observe(el)
     void sync()
   })
-  watch([() => options.visible(), occluded, isOwner], () => void sync())
+  watch([() => options.visible(), covered, isOwner], () => void sync())
 
   // Poll only while the page is on screen in THIS instance: a parked panel has no
   // selection to report, and asking would cost an IPC round-trip per tick per dock.
@@ -392,7 +504,6 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     activeTab,
     urlDraft,
     error,
-    occluded,
     holding,
     elsewhere,
     selectionText,

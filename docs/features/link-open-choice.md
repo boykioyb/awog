@@ -36,6 +36,24 @@ Hệ quả phụ đáng giá: vì khung không còn phụ thuộc lời gọi IP
 
 Guard host vẫn chạy **đồng bộ trước khi trả về** ở cả hai chế độ, nên URL bị chặn vẫn ném ngay (`cannot open http://127.0.0.1:9/x: private/loopback IP …`) — và giờ nó hiện thành toast `link.openFailed` thay vì im lặng: người dùng vừa bấm "mở trong app", im lặng thì họ tưởng app treo.
 
+## Neo popover: theo điểm bấm CUỐI, không theo event
+
+Popover phải hiện ngay đầu ngón tay, nhưng `openLink()` được gọi từ **hai** loại chỗ và chỉ một loại có `MouseEvent`:
+
+| Người gọi | Có event? | Toạ độ |
+|---|---|---|
+| listener capture trên `<a>` | có | `clientX/Y` của cú bấm |
+| **13 call site mở link bằng lệnh** (bảng dưới) | **không** | không có gì |
+
+Bản đầu rơi về `{x: 0, y: 0}` khi thiếu event ⇒ bấm "Open in GitHub" thì popover nhảy về **góc trên trái màn hình** (lỗi thật 2026-09-10). Và một cái bẫy thứ hai: `el.click()` gọi từ code sinh `MouseEvent` **có** `clientX/Y` nhưng cả hai bằng **0** — nghĩa là "không có toạ độ", không phải "bấm ở góc". Nên luật là:
+
+1. một listener `pointerdown` pha capture trên `document` ghi lại `lastPointer = {x, y, at}` cho **mọi** cú bấm trong app;
+2. `openLink()` lấy toạ độ theo thứ tự: event (chỉ khi `clientX` hoặc `clientY` khác 0) → `lastPointer` **nếu vừa xảy ra trong 2 giây** → điểm mặc định `(rộng/2, cao/3)`.
+
+Cái mốc 2 giây không phải số cho đẹp: link mở do **timer hoặc bàn phím** thì điểm bấm cuối có thể ở tận đâu và cũ vài chục giây — neo vào đó tệ hơn neo giữa màn hình, vì nó *trông như* có chủ đích.
+
+Đo: `pointerdown` tại `(1180, 700)` rồi gọi `openLink()` **không truyền event** ⇒ popover ở `(1120, 690)`, không ở góc.
+
 ## Vì sao chỉ một listener
 
 `useLinkOpen().installInterceptor()` đăng ký **một** listener `click` ở pha capture trên `document`, lọc `a[href^=http]` + chuột trái + `!defaultPrevented`. Nhờ vậy mọi `<a>` trong app được phủ **mà không sửa call site nào**:
@@ -85,7 +103,7 @@ Cả bốn có comment ghi lý do ngay tại dòng, để lần sau không ai "d
 
 | File | Thay đổi |
 |---|---|
-| [ui-next/composables/useLinkOpen.ts](../../apps/desktop/ui-next/composables/useLinkOpen.ts) | **Mới** — mode + `openLink`/`openInApp`/`openExternally` + listener capture |
+| [ui-next/composables/useLinkOpen.ts](../../apps/desktop/ui-next/composables/useLinkOpen.ts) | **Mới** — mode + `openLink`/`openInApp`/`openExternally` + listener capture `click` **và `pointerdown`** (neo popover) |
 | [ui-next/components/LinkOpenHost.vue](../../apps/desktop/ui-next/components/LinkOpenHost.vue) | **Mới** — popover neo tại chỗ bấm; cũng là nơi cài listener |
 | [ui-next/components/AppGlobalHosts.vue](../../apps/desktop/ui-next/components/AppGlobalHosts.vue) | mount host (cả cửa sổ chính lẫn session popout) |
 | [ui-next/components/settings/SettingsWorkspace.vue](../../apps/desktop/ui-next/components/settings/SettingsWorkspace.vue) | hàng **Mở link** |

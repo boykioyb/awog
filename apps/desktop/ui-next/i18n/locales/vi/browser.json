@@ -8,6 +8,7 @@
   "browser.menu.clearData": "Xoá dữ liệu duyệt web",
   "browser.expand": "Mở rộng bảng",
   "browser.shrink": "Trả bảng về cỡ cũ",
+  "browser.expandNoRoom": "Không còn chỗ để mở rộng — hãy nới cửa sổ rộng ra",
   "browser.close": "Đóng trình duyệt",
   "browser.closeWindow": "Đóng cửa sổ này",
   "browser.pick": "Chọn một phần tử để thêm vào chat",
@@ -26,5 +27,6 @@
   "browser.sites.add": "Thêm",
   "browser.sites.empty": "Chưa có host nào — allowlist rỗng thì chặn mọi trang.",
   "browser.sites.remove": "Xoá",
-  "browser.window.title": "Trình duyệt"
+  "browser.window.title": "Trình duyệt",
+  "browser.actions.title": "Hành động trên trang"
 }

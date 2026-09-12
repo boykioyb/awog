@@ -32,17 +32,10 @@
         </button>
       </div>
 
+      <!-- Nhóm cửa sổ còn ĐÚNG HAI nút (session-ui-refactor §3.6). Dock · popout ·
+           phóng to đã chuyển xuống menu `⋯` ở hàng dưới: đây là panel rộng 322px,
+           trước đó 15 nút chen nhau tới mức thanh phải xuống dòng. -->
       <div class="bch-grp">
-        <!-- Split-view: đổi mép dock của view Browser (chỉ có nghĩa trong panel). -->
-        <button
-          v-if="isPanel"
-          type="button"
-          class="bch-act"
-          :title="t('sessions.workspace.dock.change')"
-          @click.stop="openDock"
-        >
-          <Icon :name="`dock-${dock}`" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
         <!-- ⋮ — sprite chỉ có bộ 3 chấm NGANG, quay 90° thành dọc. -->
         <button
           type="button"
@@ -53,27 +46,6 @@
           <Icon
             name="dots"
             class="bch-vdots"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-        <button
-          v-if="isPanel"
-          type="button"
-          class="bch-act"
-          :title="t('sessions.workspace.browser.popout')"
-          @click="emit('popout')"
-        >
-          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          v-if="isPanel"
-          type="button"
-          class="bch-act"
-          :title="expanded ? t('browser.shrink') : t('browser.expand')"
-          @click="emit('toggle-expand')"
-        >
-          <Icon
-            :name="expanded ? 'fullscreen-exit' : 'fullscreen'"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
         </button>
@@ -131,60 +103,19 @@
         @keydown.enter.prevent="emit('submit-url')"
       />
 
+      <!-- Hành động trên trang (ghim · chép URL · dịch · trích dẫn · chọn phần tử)
+           cộng dock · popout · phóng to: TÁM thứ, tất cả tần suất thấp, gộp sau một
+           nút. Mục nào không dùng được ở trạng thái hiện tại thì `disabled` ngay
+           trong menu — nhìn thấy được LÝ DO thay vì một nút xám không giải thích. -->
       <div class="bch-grp">
         <button
           type="button"
           class="bch-act"
-          :class="{ on: currentPinned }"
-          :disabled="!currentUrl"
-          :title="
-            currentPinned
-              ? t('sessions.workspace.browser.unpin')
-              : t('sessions.workspace.browser.pin')
-          "
-          @click="onTogglePin"
+          :class="{ on: actionsAt !== null }"
+          :title="t('browser.actions.title')"
+          @click.stop="openActions"
         >
-          <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          type="button"
-          class="bch-act"
-          :disabled="!currentUrl"
-          :title="t('sessions.workspace.browser.copyUrl')"
-          @click="onCopyUrl"
-        >
-          <Icon
-            :name="copied ? 'check' : 'copy'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-        <!-- Dịch phần người dùng bôi đen TRONG trang. Text lấy qua bridge (không
-             phải selection của renderer) rồi đi đúng đường selection-to-translate. -->
-        <button
-          type="button"
-          class="bch-act"
-          :disabled="!hasSelection"
-          :title="hasSelection ? t('translate.action') : t('browser.noSelection')"
-          @click="onTranslate"
-        >
-          <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          type="button"
-          class="bch-act"
-          :disabled="!hasSelection"
-          :title="hasSelection ? t('browser.quote') : t('browser.noSelection')"
-          @click="browserCtx.quoteSelectionToChat()"
-        >
-          <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          type="button"
-          class="bch-act"
-          :title="t('browser.pick')"
-          @click="browserCtx.pickToChat()"
-        >
-          <Icon name="inspect" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </div>
     </div>
@@ -200,6 +131,13 @@
       :items="dockItems"
       @close="dockAt = null"
       @select="onDockSelect"
+    />
+    <ContextMenu
+      :open="actionsAt !== null"
+      :position="actionsAt ?? { x: 0, y: 0 }"
+      :items="actionItems"
+      @close="actionsAt = null"
+      @select="onActionSelect"
     />
     <BrowserOverflowMenu
       :open="overflowAt !== null"
@@ -248,6 +186,9 @@ const props = withDefaults(
     surface?: BrowserChromeSurface
     // Panel đang ở cỡ tối đa? (đổi icon expand ⇄ restore)
     expanded?: boolean
+    // Cửa sổ còn đủ chỗ để mở rộng không? Hết chỗ ⇒ nút tắt, chứ không phải bấm
+    // vào rồi không có gì xảy ra.
+    canExpand?: boolean
     dock?: WorkspaceDockSide
   }>(),
   {
@@ -256,6 +197,7 @@ const props = withDefaults(
     selectionText: '',
     surface: 'panel',
     expanded: false,
+    canExpand: true,
     dock: 'right',
   },
 )
@@ -335,10 +277,11 @@ const fail = (err: unknown): void => {
   )
 }
 
-const onTranslate = async (ev: MouseEvent): Promise<void> => {
+// Nhận RECT chứ không phải MouseEvent: nó chỉ còn được gọi từ menu hành động, nơi
+// không có event nào — và rect phải đo TRƯỚC await dù sao (currentTarget bị xoá khi
+// event kết thúc dispatch), nên truyền thẳng rect là hợp đồng đúng hơn.
+const onTranslate = async (rect: DOMRect): Promise<void> => {
   const api = bridge.value
-  // Rect phải đo TRƯỚC await: currentTarget bị xoá khi event kết thúc dispatch.
-  const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect()
   if (!api) return
   try {
     const sel = await api.selection(props.activeTabId ?? undefined)
@@ -373,9 +316,6 @@ const dockAt = ref<{ x: number; y: number } | null>(null)
 const openOverflow = (ev: MouseEvent): void => {
   overflowAt.value = anchorOf(ev)
 }
-const openDock = (ev: MouseEvent): void => {
-  dockAt.value = anchorOf(ev)
-}
 
 const DOCK_OPTS = [
   { side: 'left', icon: 'dock-left', label: 'sessions.workspace.dock.left' },
@@ -393,6 +333,77 @@ const dockItems = computed<MenuItem[]>(() =>
 )
 const onDockSelect = (id: string): void => {
   emit('set-dock', id as WorkspaceDockSide)
+}
+
+// ── Menu hành động trên trang (§3.6) ───────────────────────────────────────
+// Gom năm nút hành-động-trên-trang + ba nút cửa sổ. Handler vốn đã nằm trong file
+// này nên không phải luồn prop xuống BrowserOverflowMenu — menu kia là "cấp trình
+// duyệt" (ảnh chụp, nhập cookie, xoá dữ liệu), menu này là "cấp trang".
+const actionsAt = ref<{ x: number; y: number } | null>(null)
+// Rect của chính nút `⋯`, giữ lại để bản dịch có điểm neo (menu select không mang
+// theo event nào).
+const actionsRect = ref<DOMRect | null>(null)
+const openActions = (ev: MouseEvent): void => {
+  actionsRect.value = (ev.currentTarget as HTMLElement).getBoundingClientRect()
+  actionsAt.value = anchorOf(ev)
+}
+const actionItems = computed<MenuItem[]>(() => [
+  {
+    id: 'pin',
+    label: currentPinned.value
+      ? t('sessions.workspace.browser.unpin')
+      : t('sessions.workspace.browser.pin'),
+    icon: 'pin',
+    active: currentPinned.value,
+    disabled: !currentUrl.value,
+  },
+  {
+    id: 'copy',
+    label: t('sessions.workspace.browser.copyUrl'),
+    icon: copied.value ? 'check' : 'copy',
+    disabled: !currentUrl.value,
+  },
+  // Dịch phần người dùng bôi đen TRONG trang. Text lấy qua bridge (không phải
+  // selection của renderer) rồi đi đúng đường selection-to-translate.
+  {
+    id: 'translate',
+    label: t('translate.action'),
+    icon: 'book',
+    disabled: !hasSelection.value,
+    ...(hasSelection.value ? {} : { hint: t('browser.noSelection') }),
+  },
+  {
+    id: 'quote',
+    label: t('browser.quote'),
+    icon: 'quote',
+    disabled: !hasSelection.value,
+    ...(hasSelection.value ? {} : { hint: t('browser.noSelection') }),
+  },
+  { id: 'pick', label: t('browser.pick'), icon: 'inspect' },
+  ...(isPanel.value
+    ? [
+        { id: 'sep', label: '', separator: true } as MenuItem,
+        {
+          id: 'expand',
+          label: props.expanded ? t('browser.shrink') : t('browser.expand'),
+          icon: props.expanded ? 'fullscreen-exit' : 'fullscreen',
+          disabled: !props.canExpand,
+          ...(props.canExpand ? {} : { hint: t('browser.expandNoRoom') }),
+        } as MenuItem,
+        { id: 'dock', label: t('sessions.workspace.dock.change'), icon: `dock-${props.dock}` },
+        { id: 'popout', label: t('sessions.workspace.browser.popout'), icon: 'external' },
+      ]
+    : []),
+])
+const onActionSelect = (id: string): void => {
+  if (id === 'pin') onTogglePin()
+  else if (id === 'copy') void onCopyUrl()
+  else if (id === 'translate' && actionsRect.value) void onTranslate(actionsRect.value)
+  else if (id === 'quote') void browserCtx.quoteSelectionToChat()
+  else if (id === 'pick') void browserCtx.pickToChat()
+  else if (id === 'expand') emit('toggle-expand')
+  else if (id === 'popout') emit('popout')
+  else if (id === 'dock' && actionsAt.value) dockAt.value = actionsAt.value
 }
 </script>
 

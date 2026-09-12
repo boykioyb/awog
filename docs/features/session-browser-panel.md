@@ -58,6 +58,21 @@ min(WP_MAX, 60% của hộp, hộp − sàn chat)      sàn chat: 320px (side) �
 
 **3. Cửa sổ nhỏ lại thì panel phải nhỏ theo.** Chặn cú bấm mới là nửa việc: mở rộng ở màn 1700 rồi thu cửa sổ về 1200 thì panel vẫn 560 và chat lại còn 114 — cùng một cái nghiền, khác đường tới. Panel không tự co (`flex: 0 0 <size>`, cố ý — nó là cột có cỡ do người dùng đặt), nên chỗ duy nhất sửa được là **ghi lại cỡ** khi nó vượt trần. Có mất preference (kéo rộng 560 rồi thu cửa sổ là mất số đó), đổi lại là một layout còn dùng được; giữ một con số mà cột chat không đọc nổi thì không phải giữ gì cả.
 
+### Hai lỗi mà chính bản vá trên đẻ ra (sửa 2026-09-12)
+
+**4. Watcher clamp đánh nhau với tay kéo panel.** Nó theo dõi `[expandTarget, panelSize]`, nên **mỗi `pointermove`** của cú kéo đều bị kéo ngược về trần ngay trong cùng một tick: panel không nhúc nhích quá 60% hộp và cú kéo giật liên tục. Sự kiện cần phản ứng là **chỗ trống hẹp lại** (thu cửa sổ, gập danh sách, mở panel mép kia) — đúng là lúc `expandTarget` đổi — chứ không phải "người dùng vừa đặt một cỡ mới". Nay watcher chỉ theo `expandTarget`; kéo rộng hơn trần là lựa chọn tường minh của người dùng, để yên.
+
+**5. Nút mở rộng nói dối trên cửa sổ hẹp.** `expandTarget` lấy **WP_DEFAULT làm sàn** (`max(322, min(...))`), nên hộp hẹp thì trần bị **nâng lên đúng bằng mặc định**: `expanded` (= `size ≥ target − 4`) đúng ngay ở cỡ mặc định ⇒ nút hiện icon "thu lại" và bấm vào **không có gì xảy ra**. Nay sàn là `WP_MIN` (240 / 120 — cỡ nhỏ nhất kéo tay được), và ba thứ đi cùng:
+
+```
+expandTarget = max(WP_MIN, min(WP_MAX, 60% hộp, hộp − sàn chat))
+shrinkTarget = min(WP_DEFAULT, expandTarget)          # không bao giờ vượt trần
+canExpand    = expandTarget − shrinkTarget > 4        # hết chỗ ⇒ nút TẮT
+```
+
+`shrinkTarget` phải kẹp theo trần, nếu không thì trên hộp hẹp cú "thu lại" trả về 322 rồi bị watcher clamp kéo xuống ngay — hai bên đá qua đá lại. Và hết chỗ thì `canExpand` **tắt nút** (title: *"Không còn chỗ để mở rộng — hãy nới cửa sổ rộng ra"*): một con số trần thấp hơn mặc định là sự thật về chỗ trống, chỗ để nói ra nó là trạng thái nút chứ không phải giấu bằng cách nâng trần.
+
+
 ## Hai lỗi giao tiếp renderer ↔ main (cùng sửa 2026-09-09)
 
 **`attach` không được ném vì một `tabId` cũ.** `tabId` từ renderer là một **bản cache** — nó giữ danh sách từ event `changed` cuối cùng nó nhận, nên hoàn toàn có thể xin `tab_1` sau khi tab đó đã bị đóng (`Error invoking remote method 'browser:attach': no such browser tab: tab_1`). `this.tab(id)` ném là **đúng** cho mọi hành động chỉ định tab (đọc/điều hướng tab nào là ý muốn rõ ràng) nhưng **sai** cho `attach`: đây là yêu cầu **hình học** ("cho tôi một view vào hình chữ nhật này") và main là nguồn sự thật. Nay id lạ thì rơi về tab active (tạo mới nếu chưa có) và `TabInfo` trả về mang **id thật** để renderer tự sửa mình theo. Đo: `attachTo(host, 'tab_1', rect)` sau khi tab_1 bị đóng → không ném, trả `tab_2`, `shown: true`.
@@ -82,7 +97,7 @@ Nút dịch gọi `browser.selection()` — text người dùng bôi đen **tron
 
 Nút **tắt khi không có text bôi đen**, và biết được điều đó phải trả giá: selection nằm trong một `webContents` khác nên không có event nào báo về. `useEmbeddedBrowser` vì thế **poll** `selection()` 1,2 s/lần và **chỉ khi instance đang giữ view** (panel đang park thì chẳng có gì để hỏi); một lần lỗi là tắt poll hẳn — lý do `selection()` reject là cấu trúc (bản main chưa có phần E, hoặc không có tab), không phải nhất thời.
 
-⚠ **Kết quả dịch KHÔNG dùng popover nổi** (sửa 2026-09-09). Bản đầu gọi popover selection-to-translate dùng chung và thêm `.sttpop` vào `OCCLUDING` — đúng luật, nhưng sai người dùng: popover hiện lên thì **trang bị gỡ khỏi màn hình**, thay bằng dòng "Tạm ẩn khi có hộp thoại mở", đúng lúc người ta cần đối chiếu bản dịch VỚI trang.
+⚠ **Kết quả dịch KHÔNG dùng popover nổi** (sửa 2026-09-09). Bản đầu gọi popover selection-to-translate dùng chung và thêm `.sttpop` vào danh sách che khuất — đúng luật, nhưng sai người dùng: popover hiện lên thì **trang bị gỡ khỏi màn hình**, đúng lúc người ta cần đối chiếu bản dịch VỚI trang.
 
 Nay `useSelectionTranslate` mang thêm `surface: 'dom' | 'browser'`:
 
@@ -93,23 +108,77 @@ Nay `useSelectionTranslate` mang thêm `surface: 'dom' | 'browser'`:
 
 Chỉ CHỖ RENDER khác nhau: cả hai dùng chung state, cache theo `(lang, text)`, RPC `text.translate` và bộ chọn VI/EN/JA của cùng một composable. Strip in text thuần (không render markdown): nó cao 3–4 dòng trong thanh công cụ, và nội dung là văn bản từ một trang web (L1) — càng ít đường biến nó thành HTML càng tốt.
 
-`.sttpop` **vẫn phải** nằm trong `OCCLUDING`: bôi đen trong transcript khi panel Browser đang mở thì popover đó vẫn có thể chồng lên rect của view.
+`.sttpop` **vẫn phải** nằm trong `OVERLAYS`: bôi đen trong transcript khi panel Browser đang mở thì popover đó có thể chồng lên rect của view. Còn nguồn `'browser'` dùng strip trong chrome nên nằm ngoài rect — đọc được mà không phải ẩn trang, đó mới là lý do chọn nó.
 
-## Ba trạng thái thay cho trang
+## Hai trạng thái thay cho trang
 
 | Trạng thái | Khi nào | Hiện gì |
 |---|---|---|
 | **Không khả dụng** | chạy trong browser-dev (`pnpm dev` ở :3031), không có shell Electron | "Trình duyệt nhúng chỉ có trong app desktop." |
 | **Đang ở chỗ khác** | tab đang hiển thị ở dock kia hoặc ở popout | placeholder + nút **Hiện ở đây** |
-| **Tạm ẩn** | có modal/menu/lightbox đang mở | "Tạm ẩn khi có hộp thoại mở." |
 
-Hai trạng thái sau là hệ quả trực tiếp của việc trang là một **view native**, không phải element: xem phần dưới.
+Trạng thái thứ hai là hệ quả trực tiếp của việc trang là một **view native**, không phải element: một `webContents` không nằm được trong hai hình chữ nhật.
 
-## Vì sao có luật "tạm ẩn"
+Có một trạng thái thứ ba **không hiện chữ gì**: khi app mở hộp thoại/menu chồng lên khung thì trang nhường chỗ và khung để trống — xem phần ngay dưới.
 
-Trang không phải `<iframe>` — nó là `WebContentsView` do Electron main sở hữu, **vẽ trên toàn bộ DOM**. Không CSS nào đặt được modal, menu hay toast lên trước nó; z-index band của app ([reference](../coding/nuxt-frontend.md)) vô hiệu với nó. Nên `useEmbeddedBrowser` gỡ view khỏi màn hình khi thấy `.ovl.on, .lbox, .smenu, .pop, .sttpop` trong DOM (MutationObserver trên `document.body`) — hai quy ước markup mà app này vốn đã dùng cho "có thứ gì đang nổi trên trang". Menu cũng tính: chính menu dock và menu `+` của panel mở ngay trên thân panel.
+## Luật "nhường chỗ" — ba đời, và vì sao đời 3 khác hẳn
 
-Cái giá: mở một popover bất kỳ cũng làm trang biến mất một nhịp rồi hiện lại.
+Trang không phải `<iframe>` — nó là `WebContentsView` do Electron main sở hữu, **vẽ trên toàn bộ DOM**. Không CSS nào đặt được modal, menu hay toast lên trước nó; z-index band của app ([reference](../coding/nuxt-frontend.md)) vô hiệu với nó. Nên khi app mở một bề mặt nổi chồng lên khung, **trang phải nhường chỗ** — không có lựa chọn thứ hai.
+
+| Đời | Cách làm | Vì sao bỏ |
+|---|---|---|
+| 1 | Danh sách class, **không** đo hình học | thiếu sót (hộp thông báo GitHub, ContextMenu, command palette, chính popover link), **và** ẩn cả trang vì một menu ở tận góc kia màn hình |
+| 2 | Hit-test `elementFromPoint` trên lưới điểm | bắt được mọi thứ, nhưng **đắt** (vài trăm lượt ép layout đồng bộ theo TỪNG mutation của cả app) và bắn cả vì toast / chip dock ở góc ⇒ trang **nhấp nháy giữa lúc làm việc**. Người dùng bác thẳng, và bác đúng |
+| **3** | **danh sách selector + kiểm tra chồng lấn rect** | đang dùng |
+
+Đời 3 giữ ưu điểm của cả hai và bỏ nhược điểm của cả hai:
+
+```
+covered = ∃ node khớp OVERLAYS mà rect chồng lên khung ≥ 24px theo CẢ HAI trục
+```
+
+Một `querySelectorAll` + vài `getBoundingClientRect` — thường không khớp node nào. Không hit-test, không leo cây DOM, không `getComputedStyle`. Và **`.toast` / `.mdock` không có trong danh sách**, nên toast chớp hay chip dock ngồi ở góc **không bao giờ** làm trang biến mất — đó chính là cú nhấp nháy đã hạ đời 2.
+
+Khi ẩn, khung để **trống**. Không còn dòng "Tạm ẩn khi có hộp thoại mở" (key i18n `sessions.workspace.browser.hidden` đã xoá): lúc đó người dùng đang nhìn cái hộp thoại vừa mở, không nhìn khung.
+
+### `OVERLAYS` — danh sách phải bảo trì
+
+| Selector | Bề mặt |
+|---|---|
+| `.ovl.on` | 23 modal của app — Settings, Preview, Sites, Import, confirm… |
+| `.smenu` | ContextMenu, gồm **menu ⋮ và menu dock của chính trình duyệt** |
+| `.aselmenu` | dropdown của AppSelect |
+| `.pop` | popover: status bar, composer, MCP chip, todo panel |
+| `.sttpop` · `.lop-scrim` | popover dịch (nguồn `'dom'`) · popover "mở link ở đâu" |
+| `.cmdk-ovl` · `.tph-ovl` · `.lbox` · `.shell-scrim` | command palette · hộp nhập text · lightbox · scrim drawer compact |
+| `.dropzone` | khung "thả file vào đây" — `pointer-events:none` nên đời 2 cũng phải đo tay |
+
+⚠ **Đây là cái giá của đời 3:** thêm một loại overlay mới mà quên khai báo thì trang sẽ vẽ đè lên nó. Đánh đổi có ý thức — repo không có wrapper modal dùng chung (23 chỗ tự viết `<div class="ovl" :class="{ on }">`), nên đây là chỗ duy nhất biết "app đang có gì nổi lên". Nếu sau này gom được một `AppOverlay` chung thì nên để chính nó tự đăng ký và bỏ danh sách này đi.
+
+Đo trên Chromium thật, 12 kịch bản, khung 322×568 — tất cả PASS:
+
+| Kịch bản | Kết quả |
+|---|---|
+| không có gì · `.ovl` **đóng** (`display:none`) · ContextMenu ở góc kia màn hình · menu chỉ chạm mép 8px | hiện |
+| modal Settings · menu ⋮ trên khung · dropdown AppSelect · popover composer · scrim link · dropzone | ẩn |
+| **dock thu nhỏ 3 chip · dải toast** | **hiện** |
+
+Trigger chạy lại: MutationObserver trên `document.body` (`childList` + `class` **+ `style`**, vì popover định vị bằng inline style có thể xuất hiện hoặc dời chỗ mà không đổi hai cái kia) + mỗi nhịp `nudge` (cuộn/đổi cỡ dịch cả khung lẫn overlay). Callback đi qua `nudge` nên gộp về **một lượt mỗi frame**, và mỗi lượt chỉ là một `querySelectorAll` — khác hẳn đời 2, nơi chính callback này chạy hit-test và làm nên cái "giật giật".
+
+### ⚠ Một lượt `sync` đang chạy không được làm RƠI lượt sau (sửa 2026-09-12)
+
+Triệu chứng người dùng báo: *"nhiều lúc browser vẫn overlay trên modal"* — lúc được lúc không.
+
+`sync()` mở đầu bằng `if (syncing) return`: **vứt** yêu cầu chứ không xếp hàng. Mà `syncing` chỉ bật trong lúc một `attach`/`setBounds` đang bay — tức là đúng lúc người dùng đang cuộn hoặc transcript đang stream. Mọi yêu cầu rơi vào đúng cửa sổ đó (đổi tab, đổi dock, thu panel, rời session) đều bị nuốt, và không ai gọi lại vì watcher chỉ bắn khi trạng thái **đổi** — mà nó đã đổi rồi.
+
+Nay: xếp hàng chứ không vứt — mọi yêu cầu đến trong lúc bận gộp thành **đúng một** vòng chạy lại (`syncAgain`), nên trạng thái cuối cùng luôn được áp dụng.
+
+Đi kèm hai thứ nữa cho triệu chứng *"giật giật"*:
+
+- **Nhớ rect đã gửi.** `setBounds` là một lượt IPC, `nudge` bắn mỗi frame khi transcript cuộn — trong khi cột panel thì **đứng yên**. Không nhớ lại thì mỗi lần cuộn là vài chục lượt IPC không đổi gì.
+- **Không tự giật view về từ popout.** `wanted` đúng khi khung đang hiện, nhưng *"tôi có chỗ cho một view"* ≠ *"đưa view đang ở cửa sổ khác vào đây"* — mà một cú cuộn bất kỳ cũng gọi tới đó. Nay chỉ tự attach khi tab không `shownElsewhere`, hoặc khi instance này vừa tự nhận `owner` (đường tường minh: nút **Lấy lại** trong placeholder).
+
+(Nguồn "giật" thứ ba — MutationObserver quét cả app rồi chạy **hit-test** theo từng mutation — biến mất cùng đời 2: observer vẫn còn, nhưng callback nay chỉ là một `querySelectorAll`.)
 
 ## ⚠ Invariant: view phải bị gỡ khi khung KHÔNG còn trên màn hình
 
@@ -183,7 +252,7 @@ Từ 2026-09-09 tab này còn có nút ⬇ **nhập cả profile browser thật*
 | [electron/src/browser.ts](../../apps/desktop/electron/src/browser.ts) | tab = `WebContentsView`; `holder` vô hình + `park`/`ensurePainted`; `attachTo`/`setViewBounds`/`detachFrom`; `openFromUser`/`goBack`/`goForward`/`reload`; popout thay cho show/hide theo cửa sổ-mỗi-tab; `listTabs(forWindow)` + `info()` |
 | [electron/src/ipc.ts](../../apps/desktop/electron/src/ipc.ts) | **Mới** `registerBrowserViewIpc()` — 12 kênh `browser:*` + broadcast `browser:changed` theo từng cửa sổ |
 | [electron/src/preload.ts](../../apps/desktop/electron/src/preload.ts) | `window.awog.browser.*` |
-| [ui-next/composables/useEmbeddedBrowser.ts](../../apps/desktop/ui-next/composables/useEmbeddedBrowser.ts) | **Mới** — glue rect ↔ view, luật che (`.sttpop` trong `OCCLUDING`), trọng tài một-chủ, follow tab của agent, poll `selectionText`, action cho chrome |
+| [ui-next/composables/useEmbeddedBrowser.ts](../../apps/desktop/ui-next/composables/useEmbeddedBrowser.ts) | **Mới** — glue rect ↔ view, luật nhường chỗ (`OVERLAYS`), trọng tài một-chủ, follow tab của agent, poll `selectionText`, action cho chrome |
 | [ui-next/components/browser/BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue) | **Mới** — chrome 2 hàng dùng chung (tab strip · nhóm nút cửa sổ · nav + URL + hành động), menu `⋮`, ghim/copy, dịch, trang → chat |
 | [ui-next/components/browser/BrowserSitesModal.vue](../../apps/desktop/ui-next/components/browser/BrowserSitesModal.vue) | **Mới** — `⋮` → quản lý site được phép (`off` / `allowlist` + host list) |
 | [ui-next/pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | **Mới** — route của cửa sổ popout: BrowserChrome + placeholder + `AppGlobalHosts` |

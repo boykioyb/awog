@@ -8,6 +8,7 @@
   "browser.menu.clearData": "Clear browsing data",
   "browser.expand": "Expand the panel",
   "browser.shrink": "Restore the panel size",
+  "browser.expandNoRoom": "No room to expand — make the window wider",
   "browser.close": "Close the browser",
   "browser.closeWindow": "Close this window",
   "browser.pick": "Add an element to the chat",
@@ -26,5 +27,6 @@
   "browser.sites.add": "Add",
   "browser.sites.empty": "No host listed — an allowlist with no host blocks every page.",
   "browser.sites.remove": "Remove",
-  "browser.window.title": "Browser"
+  "browser.window.title": "Browser",
+  "browser.actions.title": "Page actions"
 }
