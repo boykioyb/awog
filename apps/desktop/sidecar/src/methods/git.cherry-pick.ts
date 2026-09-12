@@ -4,9 +4,10 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { runGit } from '../git/runner.js'
+import { asConflictError } from '../git/conflict-state.js'
 import { withWorkspaceLock } from '../git/mutex.js'
 import { suppressEchoFor } from '../git/watcher.js'
-import { GIT_RPC_CODE, GitErrorCode, sanitizeStderr } from '../git/error-map.js'
+import { GIT_RPC_CODE, GitErrorCode } from '../git/error-map.js'
 import { emit } from '../transport/stdio.js'
 
 const SHA_RE = /^[a-fA-F0-9]{4,40}$/
@@ -22,31 +23,6 @@ interface Result {
   sha7: string
 }
 
-const NUL = String.fromCharCode(0)
-
-function parseConflictedFiles(porcelain: string): string[] {
-  const out: string[] = []
-  for (const entry of porcelain.split(NUL)) {
-    if (!entry.startsWith('u ')) continue
-    const lastSpace = entry.lastIndexOf(' ')
-    if (lastSpace > 0) out.push(entry.slice(lastSpace + 1))
-  }
-  return out
-}
-
-async function getConflictedFiles(workspaceRoot: string): Promise<string[]> {
-  try {
-    const r = await runGit(
-      workspaceRoot,
-      ['status', '--porcelain=v2', '-z', '--untracked-files=no'],
-      { throwOnNonZero: false },
-    )
-    return parseConflictedFiles(r.stdout)
-  } catch {
-    return []
-  }
-}
-
 register('git.cherryPick', async (raw): Promise<Result> => {
   const params = Params.parse(raw)
   if (!SHA_RE.test(params.sha)) {
@@ -58,16 +34,8 @@ register('git.cherryPick', async (raw): Promise<Result> => {
     try {
       await runGit(params.workspaceRoot, ['cherry-pick', params.sha])
     } catch (err) {
-      const data = (err as RpcError).data as { stderrSanitized?: string } | undefined
-      const stderr = data?.stderrSanitized ?? ''
-      if (/CONFLICT/i.test(stderr) || /after resolving the conflicts/i.test(stderr)) {
-        const files = await getConflictedFiles(params.workspaceRoot)
-        throw new RpcError(GIT_RPC_CODE, 'Merge conflict', {
-          gitCode: GitErrorCode.MERGE_CONFLICT,
-          files,
-          stderrSanitized: sanitizeStderr(stderr),
-        })
-      }
+      const conflict = await asConflictError(params.workspaceRoot, err, 'Merge conflict')
+      if (conflict) throw conflict
       throw err
     }
 

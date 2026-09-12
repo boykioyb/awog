@@ -7,9 +7,10 @@ import { join } from 'node:path'
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { runGit } from '../git/runner.js'
+import { asConflictError } from '../git/conflict-state.js'
 import { withWorkspaceLock } from '../git/mutex.js'
 import { suppressEchoFor } from '../git/watcher.js'
-import { GIT_RPC_CODE, GitErrorCode, sanitizeStderr } from '../git/error-map.js'
+import { GIT_RPC_CODE, GitErrorCode } from '../git/error-map.js'
 import { emit } from '../transport/stdio.js'
 
 const Params = z.object({ workspaceRoot: z.string().min(1) })
@@ -32,27 +33,6 @@ async function isRebasing(workspaceRoot: string): Promise<boolean> {
   return false
 }
 
-const NUL = String.fromCharCode(0)
-
-async function getConflictedFiles(workspaceRoot: string): Promise<string[]> {
-  try {
-    const r = await runGit(
-      workspaceRoot,
-      ['status', '--porcelain=v2', '-z', '--untracked-files=no'],
-      { throwOnNonZero: false },
-    )
-    const out: string[] = []
-    for (const entry of r.stdout.split(NUL)) {
-      if (!entry.startsWith('u ')) continue
-      const lastSpace = entry.lastIndexOf(' ')
-      if (lastSpace > 0) out.push(entry.slice(lastSpace + 1))
-    }
-    return out
-  } catch {
-    return []
-  }
-}
-
 register('git.rebaseContinue', async (raw): Promise<Result> => {
   const params = Params.parse(raw)
   if (!(await isRebasing(params.workspaceRoot))) {
@@ -69,17 +49,8 @@ register('git.rebaseContinue', async (raw): Promise<Result> => {
       // an interactive editor.
       await runGit(params.workspaceRoot, ['-c', 'core.editor=true', 'rebase', '--continue'])
     } catch (err) {
-      const data = (err as RpcError).data as { stderrSanitized?: string } | undefined
-      const stderr = data?.stderrSanitized ?? ''
-      if (/CONFLICT/i.test(stderr) || /could not apply/i.test(stderr) || /resolve all conflicts/i.test(stderr)) {
-        const files = await getConflictedFiles(params.workspaceRoot)
-        throw new RpcError(GIT_RPC_CODE, 'Rebase conflict', {
-          gitCode: GitErrorCode.MERGE_CONFLICT,
-          files,
-          rebase: true,
-          stderrSanitized: sanitizeStderr(stderr),
-        })
-      }
+      const conflict = await asConflictError(params.workspaceRoot, err, 'Rebase conflict', { rebase: true })
+      if (conflict) throw conflict
       throw err
     }
 

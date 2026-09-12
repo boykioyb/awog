@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { runGit } from '../git/runner.js'
+import { asConflictError } from '../git/conflict-state.js'
 import { withWorkspaceLock } from '../git/mutex.js'
 import { suppressEchoFor } from '../git/watcher.js'
 import { GIT_RPC_CODE, GitErrorCode } from '../git/error-map.js'
@@ -15,7 +16,6 @@ const Params = z.object({
 
 interface Result {
   ok: true
-  hasConflict: boolean
 }
 
 register('git.stashApply', async (raw): Promise<Result> => {
@@ -27,17 +27,25 @@ register('git.stashApply', async (raw): Promise<Result> => {
     const r = await runGit(params.workspaceRoot, ['stash', 'apply', ref], {
       throwOnNonZero: false,
     })
-    const stderr = r.stderr || ''
-    const stdout = r.stdout || ''
-    const conflict = /conflict/i.test(stderr) || /conflict/i.test(stdout)
 
-    if (r.code !== 0 && !conflict) {
-      throw new RpcError(GIT_RPC_CODE, stderr.trim() || 'git stash apply thất bại', {
+    // Conflicts come back as the same MERGE_CONFLICT envelope every other
+    // conflict-capable op throws (merge / rebase / cherry-pick / revert / pull),
+    // so the UI has ONE thing to branch on. This used to resolve with a
+    // `hasConflict` flag instead — a second contract for the same situation,
+    // decided by grepping the output for the word "conflict", which git
+    // translates on a non-English machine.
+    const conflict = await asConflictError(params.workspaceRoot, undefined, 'Stash conflict')
+    if (conflict) {
+      emit('git:status:changed', { reason: 'stash', workspaceRoot: params.workspaceRoot })
+      throw conflict
+    }
+    if (r.code !== 0) {
+      throw new RpcError(GIT_RPC_CODE, (r.stderr || '').trim() || 'git stash apply thất bại', {
         gitCode: GitErrorCode.UNKNOWN,
       })
     }
 
     emit('git:status:changed', { reason: 'stash', workspaceRoot: params.workspaceRoot })
-    return { ok: true as const, hasConflict: conflict }
+    return { ok: true as const }
   })
 })

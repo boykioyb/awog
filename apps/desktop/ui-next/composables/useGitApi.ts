@@ -27,6 +27,24 @@ export interface SidecarGitFileStatus {
   deletions?: number
 }
 
+export type GitPendingOp = 'merge' | 'rebase' | 'cherry-pick' | 'revert'
+
+/** One git subprocess the sidecar ran. argv + both streams arrive redacted. */
+export interface GitCommandEntry {
+  id: number
+  workspaceRoot: string
+  /** Without the leading `git`. */
+  argv: string[]
+  startedAt: string
+  durationMs: number
+  exitCode: number
+  stdout: string
+  stderr: string
+  truncated: boolean
+  /** A probe (status/diff/log/…), not a mutation — the UI filters these out. */
+  readOnly: boolean
+}
+
 export interface SidecarGitStatus {
   branch: string | null
   detached: boolean
@@ -37,6 +55,9 @@ export interface SidecarGitStatus {
   files: SidecarGitFileStatus[]
   isMerging: boolean
   isRebasing: boolean
+  // Which multi-step op git is mid-way through. Wider than the two booleans: a
+  // conflicted cherry-pick or revert leaves BOTH of those false.
+  pendingOp: GitPendingOp | null
   conflictedCount: number
 }
 
@@ -271,9 +292,10 @@ export interface StashSaveResult {
   index: number
 }
 
+// Stash apply/pop resolve plainly; a conflict arrives as the shared
+// MERGE_CONFLICT error envelope, same as merge / rebase / cherry-pick / revert.
 export interface StashConflictResult {
   ok: true
-  hasConflict: boolean
 }
 
 export interface SidecarMergeConflictBlock {
@@ -440,6 +462,21 @@ export function useGitApi() {
       sidecar.request<RebaseResult>('git.rebaseContinue', { workspaceRoot }),
     rebaseAbort: (workspaceRoot: string) =>
       sidecar.request<{ ok: true }>('git.rebaseAbort', { workspaceRoot }),
+    // Drop the commit git is stuck on and carry on with the rest of the rebase —
+    // git's own third suggestion next to continue/abort.
+    commandLog: (workspaceRoot?: string) =>
+      sidecar.request<{ entries: GitCommandEntry[] }>('git.commandLog', { workspaceRoot }),
+    commandLogClear: () => sidecar.request<{ ok: true }>('git.commandLogClear', {}),
+    rebaseSkip: (workspaceRoot: string) =>
+      sidecar.request<{ ok: true }>('git.rebaseSkip', { workspaceRoot }),
+    cherryPickContinue: (workspaceRoot: string) =>
+      sidecar.request<{ ok: true }>('git.cherryPickContinue', { workspaceRoot }),
+    cherryPickAbort: (workspaceRoot: string) =>
+      sidecar.request<{ ok: true }>('git.cherryPickAbort', { workspaceRoot }),
+    revertContinue: (workspaceRoot: string) =>
+      sidecar.request<{ ok: true }>('git.revertContinue', { workspaceRoot }),
+    revertAbort: (workspaceRoot: string) =>
+      sidecar.request<{ ok: true }>('git.revertAbort', { workspaceRoot }),
     tagCreate: (workspaceRoot: string, params: TagCreateParams) =>
       sidecar.request<{ ok: true }>('git.tagCreate', { workspaceRoot, ...params }),
     tagList: (workspaceRoot: string) =>

@@ -5,6 +5,7 @@ import { register, RpcError } from '../transport/rpc.js'
 import { withWorkspaceLock } from '../git/mutex.js'
 import { suppressEchoFor } from '../git/watcher.js'
 import { runGit } from '../git/runner.js'
+import { conflictedFiles } from '../git/conflict-state.js'
 import { runGitStreaming } from '../git/streaming.js'
 import {
   GIT_RPC_CODE,
@@ -27,32 +28,8 @@ interface Result {
   commitsApplied: number
 }
 
-const NUL = String.fromCharCode(0)
 
-function parseConflictedFiles(porcelain: string): string[] {
-  // `--porcelain=v2 -z` separates entries by NUL. Unmerged entries start with
-  // 'u XY ...' followed by metadata + a single space + path.
-  const out: string[] = []
-  for (const entry of porcelain.split(NUL)) {
-    if (!entry.startsWith('u ')) continue
-    const lastSpace = entry.lastIndexOf(' ')
-    if (lastSpace > 0) out.push(entry.slice(lastSpace + 1))
-  }
-  return out
-}
 
-async function getConflictedFiles(workspaceRoot: string): Promise<string[]> {
-  try {
-    const r = await runGit(
-      workspaceRoot,
-      ['status', '--porcelain=v2', '-z', '--untracked-files=no'],
-      { throwOnNonZero: false },
-    )
-    return parseConflictedFiles(r.stdout)
-  } catch {
-    return []
-  }
-}
 
 async function countAppliedCommits(workspaceRoot: string): Promise<number> {
   try {
@@ -104,9 +81,10 @@ register('git.pull', async (raw): Promise<Result> => {
           stderrSanitized: sanitized,
         })
       }
-      const merged = `${stdout}\n${stderr}`
-      if (/CONFLICT/i.test(merged)) {
-        const files = await getConflictedFiles(params.workspaceRoot)
+      // Unmerged index entries, not message text — git localises its output and
+      // writes the CONFLICT lines to stdout (see the note in git.merge.ts).
+      const files = await conflictedFiles(params.workspaceRoot)
+      if (files.length > 0) {
         throw new RpcError(GIT_RPC_CODE, 'Merge conflict', {
           gitCode: GitErrorCode.MERGE_CONFLICT,
           files,

@@ -14,7 +14,9 @@ import { createGitState } from '~/components/git/git-types'
 import { useFsApi } from '~/composables/useFsApi'
 import { useGitApi } from '~/composables/useGitApi'
 import type {
+  GitCommandEntry,
   GitIdentity,
+  GitPendingOp,
   GitStreamingOp,
   PrSummaryResult,
   PushParams,
@@ -221,6 +223,10 @@ export const useGitStore = defineStore('git', () => {
   const commits = ref<Commit[]>(seed.commits)
   const isMerging = ref<boolean>(seed.isMerging)
   const isRebasing = ref<boolean>(seed.isRebasing)
+  // The multi-step op git is mid-way through, straight from status. Wider than
+  // the two booleans above: a conflicted cherry-pick or revert leaves both false,
+  // which is exactly why those two used to have no banner and no way out.
+  const pendingOp = ref<GitPendingOp | null>(null)
   const hasConflict = ref<boolean>(seed.hasConflict)
   const isDetached = ref<boolean>(seed.isDetached)
   const detachedAt = ref<string | null>(seed.detachedAt)
@@ -244,6 +250,12 @@ export const useGitStore = defineStore('git', () => {
 
   // Tag name → sha, populated by loadTags(); used by checkoutTag to detach HEAD.
   const tagShaByName = ref<Record<string, string>>({})
+
+  // Every git subprocess the sidecar ran, newest last. Fed live by the
+  // `git:command` event and backfilled by loadCommandLog() on mount — the ring
+  // lives in the sidecar, so a renderer reload would otherwise start blank.
+  const commandLog = ref<GitCommandEntry[]>([])
+  const COMMAND_LOG_CAP = 400
 
   // Live `git:status:changed` unlisten handle (set by subscribe()).
   let unlisten: UnlistenFn | null = null
@@ -290,6 +302,26 @@ export const useGitStore = defineStore('git', () => {
       code: gitCodeOf(err),
       message: err instanceof Error ? err.message : String(err),
     }
+  }
+
+  // A merge/rebase/cherry-pick/pull that CONFLICTS is not a failed op — git did
+  // exactly what it was told and left the tree mid-merge on disk. Reporting it
+  // through reportError alone left the store holding pre-merge state (the `await
+  // loadAll()` after the call never runs when the call throws), so the screen
+  // showed no conflicted files, no banner, and a raw git error toast — the repo
+  // was mid-merge and the UI never said so. Re-read state, then publish where to
+  // go. `seq` makes it a re-triggerable signal: two conflicts on the same path
+  // still fire the watcher.
+  const conflictRoute = ref<{ path: string; seq: number } | null>(null)
+  let conflictSeq = 0
+
+  const handledConflict = async (err: unknown): Promise<boolean> => {
+    if (gitCodeOf(err) !== 'MERGE_CONFLICT') return false
+    await loadAll()
+    const first = conflicted.value[0]
+    if (first) conflictRoute.value = { path: first.f, seq: ++conflictSeq }
+    lastNotice.value = { key: 'git.notice.conflict', params: { n: conflicted.value.length } }
+    return true
   }
 
   // Auth-failure flavour the sidecar tags onto AUTH_FAILED errors (mirrors
@@ -409,6 +441,7 @@ export const useGitStore = defineStore('git', () => {
       conflicted.value = nextConflicted
       isMerging.value = status.isMerging
       isRebasing.value = status.isRebasing
+      pendingOp.value = status.pendingOp ?? null
       isDetached.value = status.detached
       detachedAt.value = status.detachedAt ?? null
       hasConflict.value =
@@ -609,6 +642,29 @@ export const useGitStore = defineStore('git', () => {
     },
   )
 
+  const loadCommandLog = async () => {
+    if (!available.value) return
+    try {
+      const res = await useGitApi().commandLog(workspaceRoot() || undefined)
+      commandLog.value = res.entries
+    } catch (err) {
+      reportError('commandLog', err)
+    }
+  }
+
+  const clearCommandLog = async () => {
+    if (!available.value) {
+      commandLog.value = []
+      return
+    }
+    try {
+      await useGitApi().commandLogClear()
+      commandLog.value = []
+    } catch (err) {
+      reportError('commandLogClear', err)
+    }
+  }
+
   const subscribe = async () => {
     const sidecar = useSidecar()
     if (!sidecar.available) return
@@ -628,6 +684,18 @@ export const useGitStore = defineStore('git', () => {
             op: syncOp.value.op,
             phase: typeof p.phase === 'string' ? p.phase : syncOp.value.phase,
             pct: typeof p.pct === 'number' ? p.pct : null,
+          }
+          return
+        }
+        if (evtType === 'git:command') {
+          const entry = (evt as { payload?: GitCommandEntry }).payload
+          if (entry) {
+            commandLog.value.push(entry)
+            // Mirror the sidecar's ring cap so a long session can't grow the
+            // renderer's copy without bound.
+            if (commandLog.value.length > COMMAND_LOG_CAP) {
+              commandLog.value.splice(0, commandLog.value.length - COMMAND_LOG_CAP)
+            }
           }
           return
         }
@@ -677,6 +745,7 @@ export const useGitStore = defineStore('git', () => {
     commits.value = s.commits
     isMerging.value = s.isMerging
     isRebasing.value = s.isRebasing
+    pendingOp.value = s.isRebasing ? 'rebase' : s.isMerging ? 'merge' : null
     hasConflict.value = s.hasConflict
     isDetached.value = s.isDetached
     detachedAt.value = s.detachedAt
@@ -963,7 +1032,7 @@ export const useGitStore = defineStore('git', () => {
         ? { key: 'git.notice.pulled', params: { n: res.commitsApplied } }
         : { key: 'git.notice.pullUpToDate' }
     } catch (err) {
-      reportSyncError('pull', err)
+      if (!(await handledConflict(err))) reportSyncError('pull', err)
     } finally {
       syncOp.value = null
     }
@@ -1105,7 +1174,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().merge(workspaceRoot(), name)
       await loadAll()
     } catch (err) {
-      reportError('merge', err)
+      if (!(await handledConflict(err))) reportError('merge', err)
     }
   }
 
@@ -1118,7 +1187,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().rebase(workspaceRoot(), name)
       await loadStatus()
     } catch (err) {
-      reportError('rebase', err)
+      if (!(await handledConflict(err))) reportError('rebase', err)
     }
   }
 
@@ -1126,20 +1195,24 @@ export const useGitStore = defineStore('git', () => {
     if (!available.value) {
       isMerging.value = false
       isRebasing.value = false
+      pendingOp.value = null
       hasConflict.value = false
       return
     }
     try {
-      // Rebase and merge share one header entry point; branch on `isRebasing`
-      // so a rebase advances via `rebaseContinue` (which may stop at the next
-      // conflicting commit) while a merge finalises via `completeMerge`.
-      if (isRebasing.value) await useGitApi().rebaseContinue(workspaceRoot())
-      else await useGitApi().completeMerge(workspaceRoot())
-      // loadAll re-derives hasConflict; a rebase that hit the next commit's
-      // conflict will re-open the resolver for the new batch.
+      // All four in-progress ops share one header entry point; `pendingOp` says
+      // which git verb finishes it. A continue can stop at the NEXT conflicting
+      // commit, which handledConflict re-routes into the resolver.
+      const api = useGitApi()
+      const root = workspaceRoot()
+      const op = pendingOp.value
+      if (op === 'rebase') await api.rebaseContinue(root)
+      else if (op === 'cherry-pick') await api.cherryPickContinue(root)
+      else if (op === 'revert') await api.revertContinue(root)
+      else await api.completeMerge(root)
       await loadAll()
     } catch (err) {
-      reportError(isRebasing.value ? 'rebaseContinue' : 'completeMerge', err)
+      if (!(await handledConflict(err))) reportError('completeMerge', err)
     }
   }
 
@@ -1147,15 +1220,33 @@ export const useGitStore = defineStore('git', () => {
     if (!available.value) {
       isMerging.value = false
       isRebasing.value = false
+      pendingOp.value = null
       hasConflict.value = false
       return
     }
     try {
-      if (isRebasing.value) await useGitApi().rebaseAbort(workspaceRoot())
-      else await useGitApi().mergeAbort(workspaceRoot())
+      const api = useGitApi()
+      const root = workspaceRoot()
+      const op = pendingOp.value
+      if (op === 'rebase') await api.rebaseAbort(root)
+      else if (op === 'cherry-pick') await api.cherryPickAbort(root)
+      else if (op === 'revert') await api.revertAbort(root)
+      else await api.mergeAbort(root)
       await loadAll()
     } catch (err) {
       reportError('abortMerge', err)
+    }
+  }
+
+  // `git rebase --skip`: drop the commit git is stuck on and carry on. Git offers
+  // it next to continue/abort in its own hint; the header only shows it mid-rebase.
+  const skipRebaseCommit = async () => {
+    if (!available.value) return
+    try {
+      await useGitApi().rebaseSkip(workspaceRoot())
+      await loadAll()
+    } catch (err) {
+      if (!(await handledConflict(err))) reportError('rebaseSkip', err)
     }
   }
 
@@ -1235,7 +1326,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stashApply(workspaceRoot(), i)
       await Promise.all([loadStatus(), loadStashes()])
     } catch (err) {
-      reportError('stashApply', err)
+      if (!(await handledConflict(err))) reportError('stashApply', err)
     }
   }
 
@@ -1248,7 +1339,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().stashPop(workspaceRoot(), i)
       await Promise.all([loadStatus(), loadStashes()])
     } catch (err) {
-      reportError('stashPop', err)
+      if (!(await handledConflict(err))) reportError('stashPop', err)
     }
   }
 
@@ -1337,7 +1428,7 @@ export const useGitStore = defineStore('git', () => {
       await useGitApi().cherryPick(root, sha)
       await loadAll()
     } catch (err) {
-      reportError('cherryPick', err)
+      if (!(await handledConflict(err))) reportError('cherryPick', err)
     }
   }
 
@@ -1764,9 +1855,14 @@ export const useGitStore = defineStore('git', () => {
     staged,
     unstaged,
     conflicted,
+    conflictRoute,
+    commandLog,
+    loadCommandLog,
+    clearCommandLog,
     commits,
     isMerging,
     isRebasing,
+    pendingOp,
     hasConflict,
     isDetached,
     detachedAt,
@@ -1826,6 +1922,7 @@ export const useGitStore = defineStore('git', () => {
     rebase,
     completeMerge,
     abortMerge,
+    skipRebaseCommit,
     loadConflictFile,
     resolveConflict,
     resolveConflictBinary,

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { RpcError } from '../transport/rpc.js'
 import { GIT_RPC_CODE, GitErrorCode, mapStderrToCode, sanitizeStderr } from './error-map.js'
 import { log } from '../util/logger.js'
+import { recordGitCommand } from './command-log.js'
 
 const ALLOW_ENV = ['PATH', 'HOME', 'SSH_AUTH_SOCK', 'LANG', 'LC_ALL', 'SystemRoot', 'USERPROFILE'] as const
 
@@ -107,6 +108,20 @@ function execOnce(
   args: readonly string[],
   opts: RunGitOptions,
 ): Promise<ExecOutcome> {
+  const startedAt = Date.now()
+  // Every invocation is recorded here rather than at the call sites: the
+  // stale-index.lock retry below runs execOnce twice, and a retry the user never
+  // sees is precisely the kind of thing the command log exists to reveal.
+  const record = (exitCode: number, stdout: string, stderr: string) =>
+    recordGitCommand({
+      workspaceRoot,
+      argv: args,
+      startedAt,
+      durationMs: Date.now() - startedAt,
+      exitCode,
+      stdout,
+      stderr,
+    })
   return new Promise<ExecOutcome>((resolveOutcome) => {
     const child = execFile(
       'git',
@@ -129,10 +144,12 @@ function execOnce(
         if (err) {
           const ex = err as ExecFileException
           if (ex.code === 'ENOENT') {
+            record(-1, '', 'git binary not found')
             resolveOutcome({ ok: false, kind: 'enoent' })
             return
           }
           const exitCode = typeof ex.code === 'number' ? ex.code : -1
+          record(exitCode, stdout, stderr)
           resolveOutcome({
             ok: false,
             kind: 'fail',
@@ -143,6 +160,7 @@ function execOnce(
           })
           return
         }
+        record(0, stdout, stderr)
         resolveOutcome({ ok: true, res: { stdout, stderr, code: 0 } })
       },
     )

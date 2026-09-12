@@ -41,6 +41,14 @@
         >
           <Icon name="clock" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </span>
+        <span
+          class="gqi"
+          :class="{ on: section.kind === 'command-log' }"
+          :title="t('git.sidebar.commandLog')"
+          @click="emit('update:section', { kind: 'command-log' })"
+        >
+          <Icon name="terminal" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </span>
       </div>
     </template>
 
@@ -91,6 +99,16 @@
           <span style="flex: 1">{{ t('git.sidebar.allCommits') }}</span>
         </div>
 
+        <!-- Command log — what git actually ran -->
+        <div
+          class="gsi"
+          :class="{ on: section.kind === 'command-log' }"
+          @click="emit('update:section', { kind: 'command-log' })"
+        >
+          <Icon name="terminal" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <span style="flex: 1">{{ t('git.sidebar.commandLog') }}</span>
+        </div>
+
         <!-- Branches -->
         <div class="gsec gseccol" @click="emit('toggle-section', 'branches')">
           <svg class="icn gchv" :class="{ col: !sectionOpenWithSearch.branches }">
@@ -107,6 +125,7 @@
             <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </span>
         </div>
+
         <template v-if="sectionOpenWithSearch.branches">
           <!-- Pinned branches (floated to top) -->
           <template v-if="pinnedBranches.length">

@@ -42,10 +42,6 @@
           :branches="store.branches"
           :ahead="store.ahead"
           :behind="store.behind"
-          :is-merging="store.isMerging"
-          :is-rebasing="store.isRebasing"
-          :has-conflict="store.hasConflict"
-          :conflicted-count="store.conflicted.length"
           :not-a-repo="store.notARepo"
           :sync-op="store.syncOp"
           :gh-account="store.activeGhAccount"
@@ -56,10 +52,18 @@
           @pull="() => store.pull()"
           @push="openPush"
           @cancel="(op) => store.cancel(op)"
-          @complete-merge="() => store.completeMerge()"
-          @abort-merge="onAbortMerge"
           @open-identity="() => (identityOpen = true)"
           @open-account="openAccountSetting"
+        />
+
+        <GitConflictBanner
+          v-if="store.pendingOp || store.hasConflict"
+          :pending-op="store.pendingOp"
+          :has-conflict="store.hasConflict"
+          :conflicted-count="store.conflicted.length"
+          @complete="() => store.completeMerge()"
+          @abort="onAbortMerge"
+          @skip="() => store.skipRebaseCommit()"
         />
 
         <div v-if="store.isDetached" class="gbanner">
@@ -170,6 +174,13 @@
             @pop="(i) => store.stashPop(i)"
             @apply="(i) => store.stashApply(i)"
             @drop="(i) => store.stashDrop(i)"
+          />
+
+          <!-- Command log — what git actually ran -->
+          <GitCommandLog
+            v-else-if="section.kind === 'command-log'"
+            :entries="store.commandLog"
+            @clear="() => store.clearCommandLog()"
           />
 
           <!-- Fallback (submodule / unknown) -->
@@ -455,6 +466,19 @@ function selectConflict(file: string) {
   selectedFile.value = { kind: 'conflict', path: file }
 }
 
+// A merge / rebase / cherry-pick / stash-pop / pull that conflicted: the store has
+// already re-read status, so jump the user to the work. Without this the repo sat
+// mid-merge with the screen still on whatever section they were in — the conflict
+// UI existed but nothing ever navigated to it.
+watch(
+  () => store.conflictRoute,
+  (r) => {
+    if (!r) return
+    section.value = { kind: 'local-changes' }
+    selectConflict(r.path)
+  },
+)
+
 // Select all / Deselect all — pure selection, no staging (restores the menu items
 // under their true meaning: the old "Select all" secretly staged everything).
 function selectAllInZone(staged: boolean) {
@@ -593,6 +617,9 @@ watch(
 )
 
 function onSelectSection(next: GitSection) {
+  // The ring lives in the sidecar, so a renderer that mounted after the commands
+  // ran (reload, or just a later visit) starts blank until it asks.
+  if (next.kind === 'command-log') store.loadCommandLog()
   section.value = next
   if (
     (next.kind === 'all-commits' || next.kind === 'branch' || next.kind === 'tag') &&

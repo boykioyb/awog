@@ -57,11 +57,13 @@ export type GitSection =
   | { kind: 'tag'; name: string }
   | { kind: 'stash'; index: number }
   | { kind: 'submodule'; name: string }
+  | { kind: 'command-log' }
 
 export function sectionKey(s: GitSection): string {
   switch (s.kind) {
     case 'local-changes':
     case 'all-commits':
+    case 'command-log':
       return s.kind
     case 'branch':
     case 'remote':

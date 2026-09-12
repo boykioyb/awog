@@ -1,26 +1,16 @@
 import { z } from 'zod'
-import { access } from 'node:fs/promises'
-import { join } from 'node:path'
 import { register, RpcError } from '../transport/rpc.js'
 import { runGit } from '../git/runner.js'
 import { parsePorcelainV2 } from '../git/parser.js'
 import { attachGitWatcher } from '../git/watcher.js'
 import { GitErrorCode } from '../git/error-map.js'
+import { pendingOpOf } from '../git/conflict-state.js'
 import type { GitStatus } from '../git/types.js'
 
 const Params = z.object({
   workspaceRoot: z.string().min(1),
   includeIgnored: z.boolean().optional(),
 })
-
-async function exists(p: string): Promise<boolean> {
-  try {
-    await access(p)
-    return true
-  } catch {
-    return false
-  }
-}
 
 register('git.status', async (raw): Promise<GitStatus> => {
   const params = Params.parse(raw)
@@ -47,12 +37,7 @@ register('git.status', async (raw): Promise<GitStatus> => {
   }
   const parsed = parsePorcelainV2(result.stdout)
 
-  const gitDir = join(params.workspaceRoot, '.git')
-  const [isMerging, isRebaseMerge, isRebaseApply] = await Promise.all([
-    exists(join(gitDir, 'MERGE_HEAD')),
-    exists(join(gitDir, 'rebase-merge')),
-    exists(join(gitDir, 'rebase-apply')),
-  ])
+  const pendingOp = await pendingOpOf(params.workspaceRoot)
 
   // Lazy-attach the watcher on first status call per workspace.
   attachGitWatcher(params.workspaceRoot)
@@ -66,8 +51,11 @@ register('git.status', async (raw): Promise<GitStatus> => {
     ahead: parsed.ahead,
     behind: parsed.behind,
     files: parsed.files,
-    isMerging,
-    isRebasing: isRebaseMerge || isRebaseApply,
+    // Kept as derived booleans so existing call sites keep working; `pendingOp`
+    // is the one that can also say cherry-pick / revert.
+    isMerging: pendingOp === 'merge',
+    isRebasing: pendingOp === 'rebase',
+    pendingOp,
     conflictedCount,
   }
   if (parsed.detachedAt !== undefined) status.detachedAt = parsed.detachedAt

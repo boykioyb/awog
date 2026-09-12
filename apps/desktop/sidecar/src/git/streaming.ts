@@ -4,6 +4,7 @@
 //
 // Một (workspaceRoot, op) chỉ chạy được 1 instance — spawn thứ 2 reject `BUSY`.
 import { spawn, type ChildProcess } from 'node:child_process'
+import { recordGitCommand } from './command-log.js'
 import { stat } from 'node:fs/promises'
 import { RpcError } from '../transport/rpc.js'
 import { GIT_RPC_CODE, GitErrorCode } from './error-map.js'
@@ -158,6 +159,7 @@ export async function runGitStreaming(params: RunStreamingParams): Promise<Strea
     : null
   const spawnArgs = params.ghAccount ? [...GH_CREDENTIAL_ARGS, ...args] : [...args]
 
+  const startedAt = Date.now()
   const child = spawn('git', spawnArgs, {
     cwd: workspaceRoot,
     env: filteredEnv(ghToken),
@@ -231,6 +233,20 @@ export async function runGitStreaming(params: RunStreamingParams): Promise<Strea
   }
 
   const code = typeof child.exitCode === 'number' ? child.exitCode : -1
+
+  // fetch/pull/push go through this runner, not runGit — record them here or the
+  // command log would be missing exactly the commands most worth inspecting.
+  // `spawnArgs`, not `args`: the gh credential-helper wiring is part of what ran.
+  // The token itself travels in the ENV and never reaches argv.
+  recordGitCommand({
+    workspaceRoot,
+    argv: spawnArgs,
+    startedAt,
+    durationMs: Date.now() - startedAt,
+    exitCode: code,
+    stdout,
+    stderr,
+  })
 
   // Force a status refresh on the UI — fetch/pull may have moved refs even on
   // partial success; push doesn't change local tree but ahead/behind shifted.

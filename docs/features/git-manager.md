@@ -1320,6 +1320,7 @@ interface WorkspaceSettings {
 
 ## Tham chiếu
 
+- [git-command-log.md](./git-command-log.md) — bảng "git vừa chạy lệnh gì" (mục Log lệnh trong sidebar)
 - [git-manager.brief.md](./git-manager.brief.md) — feature brief gốc
 - [artifact-system.md](./artifact-system.md) — diff viewer tái dùng
 - [task-execution-engine.md](./task-execution-engine.md) — auto-commit per phase, status lifecycle

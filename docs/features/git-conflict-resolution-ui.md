@@ -1,6 +1,6 @@
 # Feature: Git Conflict Resolution UI
 
-**Trạng thái:** Draft
+**Trạng thái:** **Đã land** (UI v1 + sidecar). Cập nhật 2026-09-12 — xem [Sửa 2026-09-12](#sửa-2026-09-12--conflict-chưa-bao-giờ-tới-được-màn-hình) ở cuối.
 **Owner:** Business Analyst
 **Ngày tạo:** 2026-07-09
 **Tham chiếu Brief:** [git-manager.brief.md](./git-manager.brief.md) — mục "Resolve conflict"
@@ -546,3 +546,81 @@ Kịch bản test tối thiểu (dựng repo local):
 - Sidecar: [git.read-conflict-file.ts](../../apps/desktop/sidecar/src/methods/git.read-conflict-file.ts), [git.resolve-file.ts](../../apps/desktop/sidecar/src/methods/git.resolve-file.ts), [git.resolve-file-binary.ts](../../apps/desktop/sidecar/src/methods/git.resolve-file-binary.ts)
 - UI: [useGitApi.ts](../../apps/desktop/ui-next/composables/useGitApi.ts), [stores/git.ts](../../apps/desktop/ui-next/stores/git.ts), [GitChangesList.vue](../../apps/desktop/ui-next/components/git/GitChangesList.vue), [GitPageHeader.vue](../../apps/desktop/ui-next/components/git/GitPageHeader.vue), [git-types.ts](../../apps/desktop/ui-next/components/git/git-types.ts)
 - Convention: [.claude/rules/nuxt-vue.md](../../.claude/rules/nuxt-vue.md)
+
+
+## Sửa 2026-09-12 — conflict chưa bao giờ tới được màn hình
+
+Toàn bộ UI trong tài liệu này **đã có code và chạy đúng** (resolver 4 mode, section Xung đột, banner merge/rebase, `git.readConflictFile`/`resolveFile`/`completeMerge`/`rebaseContinue` verify được bằng repo thật). Nhưng người dùng báo "chưa có màn hình xử lý conflict" — và đúng: **không có đường nào dẫn tới nó.** Hai lỗi nối tiếp.
+
+### Lỗi 1 (sidecar) — `git.merge` không nhận ra chính conflict của nó
+
+`git.merge` / `git.rebase` / `git.cherryPick` / `git.pull` quyết định "có phải conflict không" bằng **regex trên stderr**:
+
+```ts
+if (/CONFLICT/i.test(stderr) || /automatic merge failed/i.test(stderr)) { … }
+```
+
+Đo thật: `git merge` in `CONFLICT (content)` + `Automatic merge failed` ra **stdout**, còn **stderr rỗng** — mà `runGit` khi throw chỉ mang theo `stderrSanitized`, không có stdout. Nên **mọi** merge conflict thoát ra ngoài với `gitCode: "UNKNOWN"` và message thô `Command failed: git merge --no-edit topic`. (`rebase`/`cherryPick` thoát nạn nhờ may: git ghi `could not apply` ra stderr. `pull` ghép cả hai luồng nên cũng thoát.)
+
+Còn một lỗi tiềm ẩn nữa ở cùng chỗ: `ALLOW_ENV` của runner **cho `LANG`/`LC_ALL` đi xuyên qua**, nên trên máy locale khác, output git được dịch và mọi regex tiếng Anh đều trượt.
+
+**Sửa:** bỏ hẳn việc đoán bằng chữ, hỏi thẳng **index** — `getConflictedFiles()` (hàm đã có sẵn trong cả 4 file); có entry unmerged ⇒ conflict. Entry unmerged chỉ sinh ra từ một thao tác conflict, nên không dương tính giả: `git merge` trên cây bẩn vẫn trả về `DIRTY_TREE` như cũ. Không phụ thuộc luồng nào, không phụ thuộc ngôn ngữ.
+
+### Lỗi 2 (UI store) — conflict được coi như op thất bại
+
+```ts
+try { await useGitApi().merge(...); await loadAll() }   // ← loadAll không bao giờ chạy
+catch (err) { reportError('merge', err) }               // ← chỉ toast đỏ
+```
+
+Conflict **không phải** op hỏng: git đã làm đúng việc được yêu cầu và để lại cây mid-merge trên đĩa. Nhưng vì RPC throw, `loadAll()` bị nhảy qua ⇒ store vẫn giữ state trước merge: không file conflict, không banner, không gì cả. `git.merge` cũng chỉ `emit('git:status:changed')` ở **nhánh thành công**, và `suppressEchoFor()` đã chặn echo của watcher — nên không có ai cứu.
+
+**Sửa:** `handledConflict(err)` trong `stores/git.ts` — thấy `MERGE_CONFLICT` thì `await loadAll()`, rồi publish `conflictRoute = { path, seq }` + notice `git.notice.conflict`. `GitManager.vue` watch signal đó → chuyển `section` về Local Changes + `selectConflict(path)`. Áp cho `merge` / `rebase` / `cherryPick` / `pull`. `stashApply` / `stashPop` **resolve** với `{ ok, hasConflict }` chứ không throw, nên chúng gọi thẳng `routeToConflict()` từ kết quả.
+
+### Chốt bằng test
+
+[`src/methods/__tests__/conflict-detection.test.ts`](../../apps/desktop/sidecar/src/methods/__tests__/conflict-detection.test.ts) — git thật, repo tạm thật (luồng stdout/stderr của child process là đúng thứ đang test, mock không tái hiện được). Đã xác minh test **fail đúng chỗ** trên code cũ: `expected 'UNKNOWN' to be 'MERGE_CONFLICT'`.
+
+## Sửa 2026-09-12 (đợt 2) — cherry-pick / revert không có đường ra, và thanh công cụ vỡ
+
+Ba việc còn nợ ở đợt 1 hoá ra chạm vào một lỗi lớn hơn.
+
+### `pendingOp` — hai boolean không đủ
+
+`git.status` chỉ có `isMerging` (probe `MERGE_HEAD`) và `isRebasing` (probe `rebase-merge`/`rebase-apply`). Đo thật: conflict của **cherry-pick** để lại `CHERRY_PICK_HEAD`, của **revert** để lại `REVERT_HEAD` — **cả hai boolean đều false**. Mà banner lại gate theo `isMerging || isRebasing` ⇒ hai trạng thái đó **không banner, không nút continue, không nút abort**: người dùng kẹt giữa sequencer, màn hình im lặng, và không có cách nào thoát từ UI.
+
+Thêm `pendingOp: 'merge' | 'rebase' | 'cherry-pick' | 'revert' | null` vào `GitStatus` (hai boolean cũ giữ lại, derive từ nó nên call site cũ không phải sửa). Rebase xét trước vì bước của nó có thể để lại `MERGE_HEAD`.
+
+5 RPC mới: `git.rebaseSkip` · `git.cherryPickContinue` · `git.cherryPickAbort` · `git.revertContinue` · `git.revertAbort`. Continue dùng `-c core.editor=true` để không treo ở editor tương tác trong tiến trình con headless. Mỗi cái từ chối sạch khi không có op tương ứng đang chạy (`INVALID_REF`), chứ không bắn lệnh vào hư không.
+
+### `conflict-state.ts` — một chỗ trả lời "có đang conflict không"
+
+`getConflictedFiles` từng có **6 bản sao** gần-giống-nhau, kèm 6 regex tự chế. Chúng **đã trôi**: bản trong `git.merge.ts` khớp stderr, mà git in CONFLICT ra stdout — đó chính là lỗi đợt 1. Gom về [`src/git/conflict-state.ts`](../../apps/desktop/sidecar/src/git/conflict-state.ts): `conflictedFiles()` · `pendingOpOf()` · `asConflictError()`. 6 call site giờ còn 4 dòng mỗi chỗ, và không còn chỗ nào để một bản sao trôi tiếp.
+
+### Stash nói cùng một thứ tiếng
+
+`git.stashApply`/`stashPop` giờ **ném** `MERGE_CONFLICT` (kèm `stashKept: true` cho pop — git giữ lại entry) thay vì resolve với cờ `hasConflict` quyết định bằng cách grep chữ "conflict". UI còn đúng **một** thứ để rẽ nhánh. Conflict từ stash **không** có sequencer state ⇒ `pendingOp` là null ⇒ banner hiện dạng chỉ-dẫn, **không** có nút Hoàn tất/Huỷ (vì không có gì để hoàn tất — resolve rồi stage chính là kết thúc).
+
+### Banner ra khỏi thanh công cụ
+
+Đo `.gbar` khi banner còn nằm trong đó: ở cửa sổ **1440px mặc định**, `scrollWidth 1580` vs `clientWidth 976` — **tràn 604px**, và `overflow-x:auto` biến nó thành cuộn ngang đẩy nút **Huỷ** ra ngoài màn hình: đúng cái nút để thoát khỏi repo đang mid-merge. Thủ phạm: câu chỉ dẫn 423px + 3 nút 309px + chip branch 222px, tất cả `nowrap`.
+
+Tách thành [`GitConflictBanner.vue`](../../apps/desktop/ui-next/components/git/GitConflictBanner.vue) — dải riêng full-width dưới toolbar, cạnh banner detached-HEAD, `flex-wrap` nên ở cửa sổ hẹp nút xuống dòng chứ không tràn. Câu chữ bỏ đuôi "…rồi {action}" vì nó lặp lại đúng chữ trên nút ngay bên cạnh; thay bằng nhãn op đứng đầu (**Đang rebase** · …).
+
+### Toolbar responsive theo PANE, không theo cửa sổ
+
+Tràn 300px ở **cửa sổ nhỏ nhất mà app cho phép** (960px, `window.ts` `minWidth`) — lỗi có sẵn, không phải do banner. Dùng **container query** chứ không media query: bề rộng thanh phụ thuộc người dùng kéo sidebar git tới đâu, nên cùng một cửa sổ có thể cho thanh 300px hoặc 900px — chỉ container mới biết. `.gmain` thành `container-type: inline-size`.
+
+- ≤860px: cap nhãn chip còn 104px + gap 9→7 + padding 14→12. **Cap phải nằm ở class** — bản cũ đặt `style="max-width:180px"` inline, mà inline thắng mọi rule stylesheet nên container query không với tới được (đo ra: sửa CSS mà số không đổi).
+- ≤**720**px: thanh xuống dòng thay vì cuộn. 720 chứ không phải 640 — quét từng bước 20px thấy dải **660–700 vẫn tràn 12–52px** sau khi đã cap.
+
+Quét lại 1200→400 bước 20px: **0 chỗ tràn**, nút luôn nằm trong khung.
+
+### Chốt bằng test
+
+[`conflict-detection.test.ts`](../../apps/desktop/sidecar/src/methods/__tests__/conflict-detection.test.ts) lên **13 test**: envelope của 3 op, không-dương-tính-giả (cây bẩn vẫn `DIRTY_TREE`), `pendingOp` cho cả 4 op + cây sạch, abort của cherry-pick/revert, `rebase --skip`, từ chối khi không có op, và envelope + `stashKept` của stash. Suite sidecar: 746 pass.
+
+### Còn lại
+
+- Wrap ở ≤720px làm mất căn hairline 46px giữa `.gbar` và `.gsidehd` — đánh đổi có chủ ý (thà lệch còn hơn giấu nút thoát), nhưng nếu sau này muốn giữ căn thì phải gom bớt control vào một menu tràn.
+- `git.pull` vẫn tự giữ nhánh xử lý riêng (auth check phải chạy trước) — nó dùng chung `conflictedFiles()` nhưng không dùng `asConflictError()`.

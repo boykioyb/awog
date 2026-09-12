@@ -1,3 +1,4 @@
+import type { GitPendingOp } from './conflict-state.js'
 // Sidecar-local Git types. Shape follows docs/features/git-manager.md
 // (workspace-rooted, no projectId) — UI store adapts these to its
 // per-project shape. Independent of UI types per ADR 0017.
@@ -35,6 +36,11 @@ export interface GitStatus {
   files: GitFileStatus[]
   isMerging: boolean
   isRebasing: boolean
+  // Which multi-step operation git is in the middle of, if any. `isMerging` /
+  // `isRebasing` only ever covered two of the four: a conflicted cherry-pick or
+  // revert left BOTH false, so the UI showed no banner and offered no way to
+  // continue or abort — the user was stuck mid-sequencer with nothing on screen.
+  pendingOp: GitPendingOp | null
   conflictedCount: number
 }
 
