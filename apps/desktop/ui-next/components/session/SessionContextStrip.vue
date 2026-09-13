@@ -58,6 +58,10 @@
       </div>
     </span>
 
+    <!-- Hạ tầng (ADR 0088): chip tự quản popover + màu của nó, đúng khuôn chip SSH
+         phía trên. Nó cũng tự ẩn khi phiên không ghim ngữ cảnh nào. -->
+    <InfraChip :session="session" />
+
     <SessionTodoPanel :session="session" variant="chip" />
     <SessionBookmarkBar :session="session" variant="chip" />
 
@@ -118,16 +122,20 @@ function goSshHost() {
 }
 
 // ── Hiện/ẩn cả hàng ────────────────────────────────────────────────────────
-// Hai điều kiện cuối lặp lại luật của SessionTodoPanel / SessionBookmarkBar: con tự
-// ẩn chip của nó, nhưng cha phải biết TRƯỚC để không vẽ một dải 30px rỗng.
+// Ba điều kiện cuối lặp lại luật của SessionTodoPanel / SessionBookmarkBar / InfraChip:
+// con tự ẩn chip của nó, nhưng cha phải biết TRƯỚC để không vẽ một dải 30px rỗng.
 const { bannerVisible } = useSessionTodo(() => props.session)
 const hasBookmarks = computed(
   () => !!props.session.loaded && (props.session.bookmarks?.length ?? 0) > 0,
 )
+// Khớp với `pinned` trong InfraChip.vue — chip hạ tầng ở P0 chỉ nói về AWS.
+const { effective: infraContext } = useInfraContext(() => ({ sessionId: props.session.id }))
+const hasInfra = computed(() => !!infraContext.value.profile || !!infraContext.value.region)
 const show = computed(
   () =>
     !!props.session.aboutTaskId ||
     !!props.session.aboutSshHostId ||
+    hasInfra.value ||
     bannerVisible.value ||
     hasBookmarks.value,
 )

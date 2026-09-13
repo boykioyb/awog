@@ -24,16 +24,45 @@
   <SessionQuestionForm v-else-if="block.kind === 'question'" :block="block" />
 
   <!-- perm -->
+  <!-- Lệnh hạ tầng nhuộm ĐỎ thay vì hổ phách khi chạm tài khoản production (ADR 0088
+       §5): hai lớp không cùng lúc, nếu không thì `.gcard.gate` của prototype.css và
+       luật đỏ ở đây tranh nhau đúng một thuộc tính và thắng thua phụ thuộc thứ tự
+       chèn style — thứ không ai đọc code đoán được. -->
   <div
     v-else-if="block.kind === 'perm'"
     class="gcard"
-    :class="{ gate: permStatus === 'pending' && !cancelled }"
+    :class="{ gate: gateLit && !isProdInfra, iprod: gateLit && isProdInfra }"
   >
     <div class="gh">
-      <Icon name="shield" />
-      {{ t('sessions.gate.permission') }}
+      <Icon :name="infra ? 'globe' : 'shield'" />
+      {{ infra ? t('infraGate.title') : t('sessions.gate.permission') }}
     </div>
-    <div>
+    <!-- Hạ tầng (ADR 0088 §5): hậu quả → dòng lệnh → ngữ cảnh, đúng thứ tự người
+         duyệt cần đọc. Dòng lệnh là bản ĐÃ chèn cờ ngữ cảnh của sidecar, nên nó là
+         thứ sắp chạy thật chứ không phải thứ model gõ ra. Cả cụm nằm NGOÀI nhánh
+         pending nên một lệnh đã duyệt vẫn tra lại được là nó chạm account nào. -->
+    <template v-if="infra">
+      <div class="isent" :class="{ hot: infra.commandClass === 'destructive' }">
+        {{ t(`infraGate.sentence.${infra.commandClass}`) }}
+      </div>
+      <div class="icmd">{{ infra.command }}</div>
+      <div class="ichips">
+        <span
+          v-for="chip in infraChips"
+          :key="chip.key"
+          class="chip"
+          :class="chip.tone"
+          :title="chip.label"
+        >
+          {{ chip.label }}
+        </span>
+      </div>
+      <div v-for="note in infraNotes" :key="note" class="pnote">
+        <Icon name="alert" />
+        <span>{{ note }}</span>
+      </div>
+    </template>
+    <div v-else>
       {{ t('sessions.gate.allowQuestion') }}
       <b>{{ block.tool }}</b>
       {{ t('sessions.gate.on') }}
@@ -45,18 +74,19 @@
       <!-- ADR 0080: the rule about to be created, verbatim, BEFORE the button that
            creates it. "Always allow" on `git status` grants `Bash(git status)` — not
            every Bash call — and the only way the user can know that is to read it. -->
-      <div v-if="canAlwaysAllow" class="prule">
+      <div v-if="canRemember" class="prule">
         <span class="prulelbl">{{ t('sessionsPerm.ruleLabel') }}</span>
         <span class="prulecode">{{ ruleText }}</span>
         <span class="prulehint">{{ ruleMeaning }}</span>
       </div>
       <!-- No rule could be derived (compound shell command…) → "Always allow" is not
-           rendered at all; say why instead of leaving a dead button. -->
+           rendered at all; say why instead of leaving a dead button. Lệnh hạ tầng
+           không bao giờ nhớ được, và lý do khác hẳn nên câu chữ cũng khác. -->
       <div v-else class="pnote">
         <Icon name="alert" />
-        <span>{{ noRuleReason }}</span>
+        <span>{{ infra ? t('infraGate.noRemember') : noRuleReason }}</span>
       </div>
-      <div v-if="canAlwaysAllow" class="pscope">
+      <div v-if="canRemember" class="pscope">
         <span class="prulelbl">{{ t('sessionsPerm.scopeLabel') }}</span>
         <AppSelect
           :model-value="permScope"
@@ -68,7 +98,7 @@
       </div>
       <div class="cact">
         <button class="btn sm" @click="onDeny">{{ t('sessions.gate.deny') }}</button>
-        <button v-if="canAlwaysAllow" class="btn sm" @click="onAllowAlways">
+        <button v-if="canRemember" class="btn sm" @click="onAllowAlways">
           {{ t('sessions.gate.allowAlways') }}
         </button>
         <button class="btn pri sm" @click="onAllow">
@@ -129,7 +159,7 @@
 // (`forms` + the active tab) stays local UI working-state until "Submit" commits it.
 // Accepts the full block union; only the gate kinds match a branch (others render
 // nothing) so the parent's v-else can pass an un-narrowed AssistantBlock cleanly.
-import type { AssistantBlock } from '~/composables/useSessionsData'
+import type { AssistantBlock, InfraCommandClass, InfraPrompt } from '~/composables/useSessionsData'
 import { useSessionPermissionRule } from '~/composables/useSessionPermissionRule'
 
 const props = defineProps<{ block: AssistantBlock }>()
@@ -201,6 +231,87 @@ const {
   () => (props.block.kind === 'perm' ? props.block.suggestion : undefined),
   () => store.active?.project ?? '',
 )
+// ── Lệnh hạ tầng (ADR 0088 §5, §6) ────────────────────────────────────────────
+// Cổng quyền gửi kèm prompt duyệt một payload có cấu trúc (`decisionReason`), đã
+// được validate ở biên store. Có mặt ⇒ thẻ đổi bố cục; vắng ⇒ thẻ duyệt thường,
+// không nhánh nào biết gì về nhánh kia.
+const infra = computed<InfraPrompt | undefined>(() =>
+  props.block.kind === 'perm' ? props.block.infra : undefined,
+)
+const isProdInfra = computed<boolean>(() => infra.value?.accountKind === 'production')
+// Thẻ đang "sáng đèn" chờ người duyệt — màu (hổ phách hay đỏ) do isProdInfra chọn.
+const gateLit = computed<boolean>(() => permStatus.value === 'pending' && !cancelled.value)
+
+// KHÔNG có nút "Always allow" cho lệnh hạ tầng: nhớ được một lệnh là dựng nguồn sự
+// thật thứ hai cạnh ma trận quyền, và người dùng sẽ tin nhầm cái yếu hơn (ADR 0088
+// §6). Cổng ở sidecar đã không chào luật nào (`offerAlwaysAllow: false`) nên hôm nay
+// `canAlwaysAllow` vốn đã false; điều kiện này giữ cho nút không bao giờ mọc lại nếu
+// một đường khác lỡ gửi kèm suggestion — bấm vào nó sẽ không có tác dụng gì.
+const canRemember = computed<boolean>(() => canAlwaysAllow.value && !infra.value)
+
+type InfraChip = { key: string; label: string; tone: '' | 'warn' | 'danger' }
+// Lớp lệnh tô theo mức hậu quả, không theo mức quyền: `write` còn quay lại được,
+// `destructive` thì không.
+const CLASS_TONE: Record<InfraCommandClass, InfraChip['tone']> = {
+  read: '',
+  write: 'warn',
+  destructive: 'danger',
+  'context-switch': 'warn',
+}
+// Thứ tự ĐỌC, không phải thứ tự field: tài khoản trước vị trí, vị trí trước cụm.
+const CONTEXT_FIELDS = [
+  'accountId',
+  'profile',
+  'region',
+  'context',
+  'namespace',
+  'workspace',
+] as const
+const hasInfraContext = computed<boolean>(() =>
+  CONTEXT_FIELDS.some((f) => Boolean(infra.value?.[f])),
+)
+
+const infraChips = computed<InfraChip[]>(() => {
+  const i = infra.value
+  if (!i) return []
+  const chips: InfraChip[] = []
+  // Chip đỏ đứng đầu hàng: "lệnh này chạm production" là thứ phải đọc được trong
+  // một cái liếc, trước cả lớp lệnh và tên account.
+  if (i.accountKind === 'production') {
+    chips.push({ key: 'prod', label: t('infraGate.chip.production'), tone: 'danger' })
+  }
+  chips.push({
+    key: 'class',
+    label: t(`infraGate.class.${i.commandClass}`),
+    tone: CLASS_TONE[i.commandClass],
+  })
+  for (const field of CONTEXT_FIELDS) {
+    const value = i[field]
+    if (!value) continue
+    const slot = field === 'accountId' ? 'account' : field
+    chips.push({ key: field, label: t(`infraGate.chip.${slot}`, { value }), tone: '' })
+  }
+  if (i.reason === 'bypass') {
+    chips.push({ key: 'reason', label: t('infraGate.chip.bypass'), tone: 'warn' })
+  } else if (i.reason === 'session-narrowed') {
+    chips.push({ key: 'reason', label: t('infraGate.chip.narrowed'), tone: '' })
+  }
+  return chips
+})
+
+// Vì sao đang bị hỏi (hoặc vì sao lần sau sẽ không bị hỏi), và cảnh báo khi lời gọi
+// không ghim tài khoản nào — lúc đó CLI tự giải lấy, và `default` rất thường là
+// production.
+const infraNotes = computed<string[]>(() => {
+  const i = infra.value
+  if (!i) return []
+  const notes: string[] = []
+  if (!hasInfraContext.value) notes.push(t('infraGate.noAccount'))
+  if (i.reason === 'bypass') notes.push(t('infraGate.hint.bypass'))
+  else if (i.reason === 'session-narrowed') notes.push(t('infraGate.hint.narrowed'))
+  return notes
+})
+
 const onAllow = (): void => {
   if (!located.value || sessionId.value == null) return
   void store.setPermission(sessionId.value, msgIndex.value, 'allow')
@@ -291,5 +402,70 @@ const onRetry = (): void => {
 }
 .psaved {
   margin-top: 7px;
+}
+/* ── Lệnh hạ tầng (ADR 0088 §5) ──────────────────────────────────────────────
+   Thẻ đỏ thay cho thẻ hổ phách khi account là production. Hai lớp loại trừ nhau ở
+   template nên ở đây không phải đua specificity với `.gcard.gate`. */
+.gcard.iprod {
+  border-color: var(--dangerBorder);
+  background: var(--dangerDim);
+}
+.gcard.iprod .gh {
+  color: var(--danger);
+}
+/* Một câu: lệnh này làm gì với hạ tầng. Đọc trước dòng lệnh, vì phần lớn người
+   duyệt không phân loại được `s3api delete-bucket` chỉ bằng cách nhìn. */
+.isent {
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  color: var(--text);
+}
+.isent.hot {
+  font-weight: 650;
+  color: var(--danger);
+}
+/* Dòng lệnh ĐÚNG NHƯ sắp chạy. Cuộn ngang chứ KHÔNG xuống dòng: một lệnh bị bẻ
+   dòng đọc ra thành nhiều lệnh, và `--profile prod` rơi xuống dòng dưới là đúng
+   chi tiết mà người duyệt cần thấy dính liền với lệnh. */
+.icmd {
+  margin-top: 9px;
+  padding: 7px 10px;
+  font-family: var(--code); /* mono-ok: dòng lệnh người dùng copy vào terminal */
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+  background: var(--bgActive);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  white-space: pre;
+  overflow-x: auto;
+  user-select: text;
+}
+.ichips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+/* Một `-chdir=` dài hơn cả thẻ thì cắt bằng ellipsis, không đẩy ngang cả hàng —
+   giá trị đầy đủ nằm ở `title`. `inline-block` chứ không `inline-flex` (mặc định
+   của `.chip`) vì text-overflow chỉ ăn trên hộp khối; chip ở đây thuần chữ nên
+   không mất gì. */
+.ichips .chip {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ichips .chip.danger {
+  color: var(--danger);
+  border-color: var(--dangerBorder);
+  background: var(--dangerDim);
+  font-weight: 650;
+}
+.ichips .chip.warn {
+  color: var(--amber);
+  border-color: var(--amberBorder);
+  background: var(--amberDim);
 }
 </style>

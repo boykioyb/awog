@@ -1,0 +1,15 @@
+{
+  "infra.confirm.title": "{action} · {target}",
+  "infra.confirm.run": "Chạy",
+  "infra.confirm.copyCommand": "Sao chép lệnh",
+  "infra.confirm.blocked": "AWOG không chạy lệnh này. Sao chép rồi tự chạy nếu bạn thật sự muốn.",
+  "infra.confirm.tech": "Chi tiết kỹ thuật",
+  "infra.confirm.logged": "Ghi vào nhật ký hoạt động",
+  "infra.confirm.production": "Production",
+  "infra.confirm.typeToConfirm": "Gõ lại {name} để xác nhận",
+  "infra.confirm.ctx.accountId": "Tài khoản",
+  "infra.confirm.ctx.profile": "Hồ sơ",
+  "infra.confirm.ctx.region": "Vùng",
+  "infra.confirm.ctx.cluster": "Cụm",
+  "infra.confirm.ctx.namespace": "Namespace"
+}

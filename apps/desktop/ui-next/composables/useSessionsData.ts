@@ -7,7 +7,7 @@
 // (a sample project, a sample account, a sample diff), so they are gone.
 
 import type { ProviderName } from '~/stores/settings'
-import type { TodoStatus } from '~/types'
+import type { InfraContext, TodoStatus } from '~/types'
 import {
   providerModelsShown,
   providerModelDisplayName,
@@ -205,6 +205,118 @@ export function parsePermSuggestion(raw: unknown): PermRuleSuggestion | undefine
   return undefined
 }
 
+// ── Lệnh hạ tầng trong thẻ duyệt (ADR 0088 §5, §6) ─────────────────────────────
+// Payload CÓ CẤU TRÚC mà cổng quyền gửi kèm prompt duyệt của một lệnh hạ tầng:
+// trường `decisionReason` của `session.permission-request`, dựng ở sidecar
+// `runtime/permission.ts` → `infraPromptPayload()`. Chỉ lời gọi `aws_cli` /
+// `tf_cli` / `kubectl_cli` / `infra_action` / `infra_context` mới mang nó, nên
+// `PermBlock.infra` là optional — mọi prompt khác giữ nguyên thẻ cũ.
+//
+// Vì sao không dùng lại `InfraContext` (~/types): đó là ngữ cảnh NGƯỜI DÙNG ghim
+// và sửa được; cái này là ảnh chụp bất biến của MỘT lời gọi, cộng phán quyết của
+// ma trận (lớp lệnh, kiểu tài khoản, lý do). Giống shape, khác ý nghĩa — gộp lại
+// là trùng lặp ngẫu nhiên.
+export type InfraCommandClass = 'read' | 'write' | 'destructive' | 'context-switch'
+// KHÔNG export: `useConfirm.ts` đã có `InfraAccountKind` cùng nghĩa, và auto-import
+// của Nuxt chỉ giữ được một cái tên — xuất bản thêm một cái nữa là để nơi gọi bốc
+// nhầm định nghĩa. Người ngoài dùng `InfraPrompt['accountKind']`. Gộp hai chỗ về
+// một nhà là việc của người sở hữu useConfirm, không phải của thẻ duyệt.
+type InfraPromptAccountKind = 'normal' | 'production'
+export type InfraDecisionReason = 'matrix' | 'bypass' | 'session-narrowed'
+export type InfraDecisionMode = 'auto' | 'ask' | 'block'
+
+export type InfraPrompt = {
+  /** Tên tool trần (`aws_cli`…) — lời gọi bắc cầu đã bị gỡ tiền tố ở sidecar. */
+  tool: string
+  /** Dòng lệnh ĐÚNG NHƯ sẽ chạy, kể cả cờ ngữ cảnh sidecar tự chèn. */
+  command: string
+  commandClass: InfraCommandClass
+  accountKind: InfraPromptAccountKind
+  /** Luôn là 'ask' khi thẻ này tồn tại — 'auto'/'block' không park prompt nào. */
+  mode: InfraDecisionMode
+  reason: InfraDecisionReason
+  profile?: string
+  accountId?: string
+  region?: string
+  /** kubectl context (`--context`) — sidecar đặt tên field là `context`. */
+  context?: string
+  namespace?: string
+  workspace?: string
+}
+
+const INFRA_CLASSES: readonly string[] = ['read', 'write', 'destructive', 'context-switch']
+const INFRA_ACCOUNT_KINDS: readonly string[] = ['normal', 'production']
+const INFRA_REASONS: readonly string[] = ['matrix', 'bypass', 'session-narrowed']
+const INFRA_MODES: readonly string[] = ['auto', 'ask', 'block']
+const isInfraClass = (v: unknown): v is InfraCommandClass =>
+  typeof v === 'string' && INFRA_CLASSES.includes(v)
+const isInfraAccountKind = (v: unknown): v is InfraPromptAccountKind =>
+  typeof v === 'string' && INFRA_ACCOUNT_KINDS.includes(v)
+const isInfraReason = (v: unknown): v is InfraDecisionReason =>
+  typeof v === 'string' && INFRA_REASONS.includes(v)
+const isInfraMode = (v: unknown): v is InfraDecisionMode =>
+  typeof v === 'string' && INFRA_MODES.includes(v)
+
+// Sidecar tự cắt dòng lệnh ở 4000 (MAX_COMMAND_CHARS); đây là lưới phía hiển thị.
+const MAX_INFRA_COMMAND_LEN = 4000
+const MAX_INFRA_FIELD_LEN = 200
+const INFRA_CONTEXT_FIELDS = [
+  'profile',
+  'accountId',
+  'region',
+  'context',
+  'namespace',
+  'workspace',
+] as const
+
+// Ký tự điều khiển không bao giờ thuộc về một dòng hiển thị. Khác
+// `parsePermSuggestion` (nó VỨT cả gợi ý luật có ký tự lạ, vì luật hiện khác luật
+// ghi mới là lỗ hổng nó vá): ở đây dòng lệnh CHÍNH LÀ thứ người duyệt phải đọc,
+// nên một ký tự lạc chỗ bị chà thành dấu cách chứ không cướp mất cả thẻ.
+function scrubInfraLine(value: string, max: number): string {
+  let out = ''
+  for (let i = 0; i < value.length && out.length < max; i++) {
+    const code = value.charCodeAt(i)
+    out += code < 0x20 || code === 0x7f ? ' ' : value.charAt(i)
+  }
+  return value.length > max ? `${out.slice(0, max - 1)}…` : out
+}
+
+/**
+ * Đọc payload hạ tầng khỏi `decisionReason` của một `session.permission-request`.
+ * Dữ liệu L1: hình dạng lạ ⇒ `undefined` và thẻ rơi về prompt duyệt thường.
+ */
+export function parseInfraPrompt(raw: unknown): InfraPrompt | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const p = raw as Record<string, unknown>
+  if (p.kind !== 'infra') return undefined
+  const tool = typeof p.tool === 'string' ? scrubInfraLine(p.tool, MAX_INFRA_FIELD_LEN).trim() : ''
+  const command =
+    typeof p.command === 'string' ? scrubInfraLine(p.command, MAX_INFRA_COMMAND_LEN).trim() : ''
+  // Không có tên tool hoặc không có dòng lệnh thì thẻ hạ tầng không nói được gì
+  // hơn thẻ thường — để thẻ thường làm việc của nó.
+  if (!tool || !command) return undefined
+  const out: InfraPrompt = {
+    tool,
+    command,
+    // Lớp không đọc được ⇒ `write`, đúng chiều fail-safe của `classify()` ở sidecar.
+    commandClass: isInfraClass(p.commandClass) ? p.commandClass : 'write',
+    // Không đọc được ⇒ coi là PRODUCTION. Cờ này là tín hiệu DUY NHẤT cho biết
+    // lệnh chạm tài khoản thật; payload lệch mà âm thầm rơi về 'normal' là gỡ
+    // đúng cái cảnh báo người duyệt cần nhất. Sai theo chiều cảnh báo thừa.
+    accountKind: isInfraAccountKind(p.accountKind) ? p.accountKind : 'production',
+    mode: isInfraMode(p.mode) ? p.mode : 'ask',
+    reason: isInfraReason(p.reason) ? p.reason : 'matrix',
+  }
+  for (const key of INFRA_CONTEXT_FIELDS) {
+    const v = p[key]
+    if (typeof v !== 'string') continue
+    const clean = scrubInfraLine(v, MAX_INFRA_FIELD_LEN).trim()
+    if (clean) out[key] = clean
+  }
+  return out
+}
+
 export type PermBlock = {
   kind: 'perm'
   tool: string
@@ -219,6 +331,12 @@ export type PermBlock = {
   // CREATES this block — a component-side listener would always open one tick late
   // and miss the very prompt it has to describe.
   suggestion?: PermRuleSuggestion
+  // Ảnh chụp lời gọi hạ tầng kèm phán quyết của ma trận quyền (ADR 0088 §5),
+  // đến từ `decisionReason` của CÙNG sự kiện dựng nên block này. Có mặt ⇒ thẻ
+  // duyệt đổi sang bố cục hạ tầng (dòng lệnh + account + lớp lệnh) và KHÔNG
+  // chào nút "Always allow": nhớ một lệnh hạ tầng là dựng nguồn sự thật thứ hai
+  // cạnh ma trận (ADR 0088 §6).
+  infra?: InfraPrompt
 }
 export type SteerBlock = { kind: 'steer'; text: string }
 export type ErrorBlock = { kind: 'error'; text: string }
@@ -565,6 +683,12 @@ export type Session = {
   // GitHub issue/PR URL this session was opened from ("New session" on an issue/PR
   // row). Surfaced in the Info panel as a link; round-trips through sessions.upsert.
   aboutGhUrl?: string
+  // Ngữ cảnh hạ tầng ĐÓNG BĂNG lúc tạo phiên (ADR 0088 §7): bản sao ý kiến của
+  // project + toàn app tại thời điểm đó. Đóng băng để đổi mặc định project sau này
+  // không âm thầm chuyển tài khoản của phiên đang chạy dở. Field vắng mặt = kế thừa
+  // tiếp xuống project/app; field '' = cố ý không ghim, dừng kế thừa
+  // (utils/infra-context.ts). Đổi qua `infra.setSessionContext` (có ghi nhật ký).
+  infra?: InfraContext
   // Real context-window usage from turn events.
   usage?: SessionUsage
   // Queued messages (auto-sent after the current turn finishes).

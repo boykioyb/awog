@@ -4,6 +4,8 @@ import { useSidecar } from '~/composables/useSidecar'
 import type { KeymapBlob } from '~/composables/useKeymap'
 import type { PetQuipBucket } from '~/utils/pet-quips'
 import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
+import { INFRA_FIELDS, compactInfraContext } from '~/utils/infra-context'
+import type { InfraContext } from '~/types'
 
 // Settings store (ui-next) — ports apps/desktop/ui/stores/settings.ts to the
 // rebuild. Three kinds of state:
@@ -503,6 +505,10 @@ interface SyncedShape {
   translate: TranslateSettings
   context: ContextSettings
   keymap: KeymapBlob
+  // Ngữ cảnh hạ tầng mặc định của TOÀN APP (ADR 0088 §7) — tầng cuối của chuỗi kế
+  // thừa phiên → project → app. Ma trận quyền hạ tầng KHÔNG ở đây: nó là quyết định
+  // khác (lớp lệnh nào được chạy thẳng), có nhà riêng.
+  infra: InfraContext
 }
 
 const SYNCED_KEYS: readonly (keyof SyncedShape)[] = [
@@ -520,6 +526,7 @@ const SYNCED_KEYS: readonly (keyof SyncedShape)[] = [
   'translate',
   'context',
   'keymap',
+  'infra',
 ]
 
 // Machine-local view state — never written to settings.json (a panel width from a
@@ -658,6 +665,9 @@ export const useSettingsStore = defineStore('settings', () => {
   })
   const translate = reactive<TranslateSettings>({ ...DEFAULT_TRANSLATE, ...persisted.translate })
   const context = reactive<ContextSettings>({ ...DEFAULT_CONTEXT, ...persisted.context })
+  // Không có mặc định xuất xưởng: "chưa chọn gì" là trạng thái đúng cho một máy chưa
+  // cấu hình AWS/kubectl. compact() để một blob cũ mang khoá lạ không lọt vào slice.
+  const infra = reactive<InfraContext>(compactInfraContext(persisted.infra))
   // Opaque here on purpose: useKeymap owns the combo schema + its validation, this
   // store only carries the blob to and from disk (SoC — no key-binding logic here).
   const keymap = ref<KeymapBlob>({ ...persisted.keymap })
@@ -686,6 +696,7 @@ export const useSettingsStore = defineStore('settings', () => {
     translate: { ...translate },
     context: { ...context },
     keymap: { ...keymap.value },
+    infra: { ...infra },
   })
 
   // --- settings.json sync (user tier) ---------------------------------------
@@ -740,6 +751,20 @@ export const useSettingsStore = defineStore('settings', () => {
     if (isObj(blob.translate)) Object.assign(translate, blob.translate)
     if (isObj(blob.context)) Object.assign(context, blob.context)
     if (isObj(blob.keymap)) keymap.value = { ...blob.keymap }
+    // Thay TRỌN cụm chứ không Object.assign: bỏ ghim một field = XOÁ khoá đó khỏi
+    // file, nên merge sẽ giữ lại giá trị cũ và hoàn tác đúng thao tác vừa làm.
+    if (isObj(blob.infra)) applyInfra(blob.infra as InfraContext)
+  }
+
+  // Ghi đè toàn bộ cụm `infra` trên một object reactive (không thay được tham chiếu
+  // vì các component đã bind vào nó): xoá khoá không còn, gán khoá còn lại.
+  function applyInfra(next: InfraContext): void {
+    const clean = compactInfraContext(next)
+    for (const field of INFRA_FIELDS) {
+      const value = clean[field]
+      if (value === undefined) delete infra[field]
+      else infra[field] = value
+    }
   }
 
   // Read the user tier once per app session, then push the merged snapshot back so
@@ -792,6 +817,7 @@ export const useSettingsStore = defineStore('settings', () => {
       translate,
       context,
       keymap,
+      infra,
     ],
     () => {
       if (typeof window === 'undefined') return
@@ -1114,6 +1140,14 @@ export const useSettingsStore = defineStore('settings', () => {
     githubAccount.value = login.trim()
   }
 
+  // Ngữ cảnh hạ tầng mặc định của toàn app (ADR 0088 §7). Nhận TRỌN cụm: field
+  // vắng mặt nghĩa là bỏ ghim (khoá bị xoá), field '' nghĩa là "cố ý không ghim" —
+  // ở tầng cuối hai cái cho ra cùng kết quả, nhưng vẫn giữ đúng '' vì tầng trên
+  // (phiên/project) đọc nó theo ngữ nghĩa "dừng kế thừa".
+  const setInfra = (next: InfraContext) => {
+    applyInfra(next)
+  }
+
   // Resolve the dock side for a view, falling back to 'right' for unknown views.
   const workspaceDockOf = (view: string): WorkspaceDockSide => workspacePanel.dock[view] ?? 'right'
   const setWorkspaceDock = (view: string, side: WorkspaceDockSide) => {
@@ -1148,6 +1182,7 @@ export const useSettingsStore = defineStore('settings', () => {
     translate,
     context,
     keymap,
+    infra,
     savedTick,
     layerProjectId,
     projectLayer,
@@ -1192,6 +1227,7 @@ export const useSettingsStore = defineStore('settings', () => {
     setWorkspacePath,
     hydrateAppPaths,
     setGithubAccount,
+    setInfra,
     setWorkspaceDock,
     setWorkspaceLeftWidth,
     setWorkspaceRightWidth,

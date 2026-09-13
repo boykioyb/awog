@@ -1,0 +1,15 @@
+{
+  "infra.confirm.title": "{action} · {target}",
+  "infra.confirm.run": "Run",
+  "infra.confirm.copyCommand": "Copy command",
+  "infra.confirm.blocked": "AWOG will not run this command. Copy it and run it yourself if you mean to.",
+  "infra.confirm.tech": "Technical details",
+  "infra.confirm.logged": "Recorded in the activity log",
+  "infra.confirm.production": "Production",
+  "infra.confirm.typeToConfirm": "Type {name} to confirm",
+  "infra.confirm.ctx.accountId": "Account",
+  "infra.confirm.ctx.profile": "Profile",
+  "infra.confirm.ctx.region": "Region",
+  "infra.confirm.ctx.cluster": "Cluster",
+  "infra.confirm.ctx.namespace": "Namespace"
+}

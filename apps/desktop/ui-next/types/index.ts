@@ -30,6 +30,32 @@ export interface ProjectLlmDefaults {
   responseStyleNoMarkdown?: boolean
 }
 
+// Ngữ cảnh hạ tầng đang ghim (ADR 0088 §7) — AWS profile/region/account, kubectl
+// context/namespace, thư mục làm việc của terraform. Mirror của `InfraContext` ở
+// sidecar (`infra/run.ts`), nơi các giá trị này trở thành cờ `--profile`/`--context`
+// mà sidecar TỰ chèn vào argv.
+//
+// Kế thừa ba tầng theo TỪNG TRƯỜNG: phiên → project → toàn app.
+//   - field vắng mặt → kế thừa tiếp xuống tầng dưới
+//   - field ''       → cố ý KHÔNG ghim, DỪNG kế thừa
+//   - field có giá trị → ghim
+// Đây đúng ngữ nghĩa `githubAccount` đang dùng (xem utils/project-gh-account.ts).
+export interface InfraContext {
+  // AWS profile name (`--profile`).
+  profile?: string
+  // AWS region (`--region`).
+  region?: string
+  // AWS account id — chỉ để hiển thị + ghi nhật ký + phân loại production; KHÔNG
+  // bao giờ thành cờ.
+  accountId?: string
+  // kubectl context (`--context`).
+  cluster?: string
+  // kubectl namespace (`--namespace`).
+  namespace?: string
+  // Thư mục làm việc của terraform (`-chdir=`).
+  workspace?: string
+}
+
 export interface Project {
   id: string
   name: string
@@ -47,6 +73,10 @@ export interface Project {
   // push/fetch/pull AND the GH Issues/PR tabs. '' = active gh account; undefined
   // = inherit the app-level default (settings.githubAccount); a login pins it.
   githubAccount?: string
+  // Ngữ cảnh hạ tầng mặc định của project (ADR 0088 §7) — tầng giữa giữa phiên và
+  // `settings.infra`. Phiên mới trong project này ĐÓNG BĂNG giá trị hiệu lực lúc
+  // tạo, nên sửa ở đây không đổi tài khoản của phiên đang chạy dở.
+  infra?: InfraContext
 }
 
 // A git repo discovered inside a project folder. A project may be a container
