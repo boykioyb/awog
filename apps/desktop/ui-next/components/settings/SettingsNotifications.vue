@@ -57,7 +57,6 @@
 // interval, projects, connection check) lives in Settings → Git.
 import { computed, onMounted, ref } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { previewNativeNotification, type GhNativeProbe } from '~/composables/useGhNotifications'
 import { useSettingsStore } from '~/stores/settings'
 import type { NotifyDelivery, ToastPosition } from '~/stores/settings'
@@ -102,7 +101,11 @@ const positionOptions = computed<AppSelectOption[]>(() =>
 // The sample carries an action so the clickable variant (accent hover + chevron)
 // is what the user sees — the shape most real toasts take.
 function previewToast(): void {
-  pushActionToast(t('settings.notifications.position.preview'), 'info', { action: () => {} })
+  useToast().add({
+    title: t('settings.notifications.position.preview'),
+    color: 'info',
+    onClick: () => {},
+  })
 }
 const toastPosition = computed<string>({
   get: () => store.notifications.toastPosition,

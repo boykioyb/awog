@@ -119,7 +119,6 @@
 import { computed, ref } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
 import type { CatRow } from '~/composables/useSessionContextUsage'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { formatTokenCount } from '~/utils/context-window'
 
 const props = defineProps<{ session: Session }>()
@@ -157,9 +156,11 @@ const compacting = computed(() => props.session.compacting === true)
 function onCompact() {
   if (compacting.value) return
   void store.compactSession(props.session.id).then((r) => {
-    if (r === 'compacted') pushActionToast(t('sessions.command.notice.compacted'), 'success')
-    else if (r === 'nothing') pushActionToast(t('sessions.command.notice.nothingToCompact'), 'info')
-    else pushActionToast(t('sessions.command.notice.compactFailed'), 'error')
+    if (r === 'compacted')
+      useToast().add({ title: t('sessions.command.notice.compacted'), color: 'success' })
+    else if (r === 'nothing')
+      useToast().add({ title: t('sessions.command.notice.nothingToCompact'), color: 'info' })
+    else useToast().add({ title: t('sessions.command.notice.compactFailed'), color: 'error' })
   })
 }
 </script>

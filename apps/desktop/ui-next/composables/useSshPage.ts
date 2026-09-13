@@ -3,7 +3,6 @@ import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { useI18n } from '~/composables/useI18n'
 import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
 import { useSshApi } from '~/composables/useSshApi'
-import { useToasts } from '~/composables/useToasts'
 import { useSessionsStore } from '~/stores/sessions'
 import {
   useSshStore,
@@ -32,7 +31,7 @@ export function useSshPage() {
   const store = useSshStore()
   const sshApi = useSshApi()
   const { t } = useI18n()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
 
   // External selection control for LibraryView — set after a save so the new /
   // edited host is auto-selected.
@@ -81,10 +80,10 @@ export function useSshPage() {
           password: secret.password,
         })
       }
-      pushToast(t('ssh.toast.saved', { name: saved.name }), 'success')
+      toast.add({ title: t('ssh.toast.saved', { name: saved.name }), color: 'success' })
     } catch (err) {
       console.error('[ssh] save host failed', err)
-      pushToast(t('ssh.toast.saveFailed', { error: errText(err) }), 'error')
+      toast.add({ title: t('ssh.toast.saveFailed', { error: errText(err) }), color: 'error' })
       return
     }
     closeEditor()
@@ -127,10 +126,10 @@ export function useSshPage() {
         const cred = buildIdentityCredential(saved.id, secret)
         if (cred) await store.setCredential(cred)
       }
-      pushToast(t('ssh.toast.identitySaved', { name: saved.name }), 'success')
+      toast.add({ title: t('ssh.toast.identitySaved', { name: saved.name }), color: 'success' })
     } catch (err) {
       console.error('[ssh] save identity failed', err)
-      pushToast(t('ssh.toast.saveFailed', { error: errText(err) }), 'error')
+      toast.add({ title: t('ssh.toast.saveFailed', { error: errText(err) }), color: 'error' })
       return
     }
     closeIdentityEditor()
@@ -149,7 +148,7 @@ export function useSshPage() {
       candidates.value = await store.importConfig()
     } catch (err) {
       console.error('[ssh] importConfig failed', err)
-      pushToast(t('ssh.toast.importFailed', { error: errText(err) }), 'error')
+      toast.add({ title: t('ssh.toast.importFailed', { error: errText(err) }), color: 'error' })
     } finally {
       importLoading.value = false
     }
@@ -165,13 +164,13 @@ export function useSshPage() {
     }
     try {
       const res = await store.importConfigApply(aliases)
-      pushToast(
-        t('ssh.toast.imported', { imported: res.imported, skipped: res.skipped }),
-        'success',
-      )
+      toast.add({
+        title: t('ssh.toast.imported', { imported: res.imported, skipped: res.skipped }),
+        color: 'success',
+      })
     } catch (err) {
       console.error('[ssh] importConfigApply failed', err)
-      pushToast(t('ssh.toast.importFailed', { error: errText(err) }), 'error')
+      toast.add({ title: t('ssh.toast.importFailed', { error: errText(err) }), color: 'error' })
     }
     closeImport()
   }
@@ -208,14 +207,17 @@ export function useSshPage() {
         const wasId = p.host.id
         await store.deleteHost(wasId)
         if (selectKey.value === wasId) selectKey.value = store.hosts[0]?.id ?? null
-        pushToast(t('ssh.toast.deleted', { name: p.host.name }), 'success')
+        toast.add({ title: t('ssh.toast.deleted', { name: p.host.name }), color: 'success' })
       } else {
         await store.deleteIdentity(p.identity.id)
-        pushToast(t('ssh.toast.identityDeleted', { name: p.identity.name }), 'success')
+        toast.add({
+          title: t('ssh.toast.identityDeleted', { name: p.identity.name }),
+          color: 'success',
+        })
       }
     } catch (err) {
       console.error('[ssh] delete failed', err)
-      pushToast(t('ssh.toast.deleteFailed', { error: errText(err) }), 'error')
+      toast.add({ title: t('ssh.toast.deleteFailed', { error: errText(err) }), color: 'error' })
     }
   }
 
@@ -230,16 +232,18 @@ export function useSshPage() {
   // Test: auth-only probe (may itself trigger a host-key prompt). No-op offline.
   const onTest = async (h: SshHost) => {
     if (!store.available) {
-      pushToast(t('ssh.toast.comingSoon'), 'info')
+      toast.add({ title: t('ssh.toast.comingSoon'), color: 'info' })
       return
     }
-    pushToast(t('ssh.toast.testing', { name: h.name }), 'info')
+    toast.add({ title: t('ssh.toast.testing', { name: h.name }), color: 'info' })
     try {
       const res = await sshApi.test(h.id)
-      if (res.status === 'connected') pushToast(t('ssh.toast.testOk', { name: h.name }), 'success')
-      else pushToast(t('ssh.toast.testFailed', { error: res.error ?? '' }), 'error')
+      if (res.status === 'connected')
+        toast.add({ title: t('ssh.toast.testOk', { name: h.name }), color: 'success' })
+      else
+        toast.add({ title: t('ssh.toast.testFailed', { error: res.error ?? '' }), color: 'error' })
     } catch (err) {
-      pushToast(t('ssh.toast.testFailed', { error: errText(err) }), 'error')
+      toast.add({ title: t('ssh.toast.testFailed', { error: errText(err) }), color: 'error' })
     }
   }
 
@@ -357,9 +361,6 @@ export function useSshPage() {
     openRowMenu,
     rowMenuItems,
     onRowMenuSelect,
-    // toasts
-    toasts,
-    toastColor,
   }
 }
 

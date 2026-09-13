@@ -101,16 +101,6 @@
       @confirm="confirmDelete"
       @cancel="cancelDelete"
     />
-
-    <!-- transient toasts -->
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -172,8 +162,6 @@ const {
   cancelDelete,
   deleteDescription,
   confirmDelete,
-  toasts,
-  toastColor,
 } = useHooksPage()
 
 // The editor exposes its live draft + script context; the LLM edit modals read

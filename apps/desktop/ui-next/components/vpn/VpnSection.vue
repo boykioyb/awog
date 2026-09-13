@@ -80,7 +80,6 @@ import VpnEditor, { type VpnCredentialSecret } from '~/components/vpn/VpnEditor.
 import VpnEmptyState from '~/components/vpn/VpnEmptyState.vue'
 import VpnLogModal from '~/components/vpn/VpnLogModal.vue'
 import { useConfirm } from '~/composables/useConfirm'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { pickFile } from '~/composables/useFolderPicker'
 import { useVpnStore, type VpnImportDraft, type VpnProfile } from '~/stores/vpn'
 
@@ -131,7 +130,7 @@ async function openImport(): Promise<void> {
     editing.value = null
     editorOpen.value = true
   } catch (err) {
-    pushActionToast(t('vpn.import.failed', { error: errText(err) }), 'error')
+    useToast().add({ title: t('vpn.import.failed', { error: errText(err) }), color: 'error' })
   }
 }
 
@@ -147,9 +146,9 @@ async function onSave(profile: VpnProfile, secret?: VpnCredentialSecret): Promis
       await store.setCredential({ id: saved.id, ...secret })
       await store.loadAll()
     }
-    pushActionToast(t('vpn.toast.saved', { name: saved.name }), 'success')
+    useToast().add({ title: t('vpn.toast.saved', { name: saved.name }), color: 'success' })
   } catch (err) {
-    pushActionToast(t('vpn.toast.saveFailed', { error: errText(err) }), 'error')
+    useToast().add({ title: t('vpn.toast.saveFailed', { error: errText(err) }), color: 'error' })
     return
   }
   editorOpen.value = false
@@ -165,9 +164,9 @@ async function askDelete(profile: VpnProfile): Promise<void> {
   if (!ok) return
   try {
     await store.deleteProfile(profile.id)
-    pushActionToast(t('vpn.toast.deleted', { name: profile.name }), 'success')
+    useToast().add({ title: t('vpn.toast.deleted', { name: profile.name }), color: 'success' })
   } catch (err) {
-    pushActionToast(t('vpn.toast.deleteFailed', { error: errText(err) }), 'error')
+    useToast().add({ title: t('vpn.toast.deleteFailed', { error: errText(err) }), color: 'error' })
   }
 }
 
@@ -177,18 +176,21 @@ async function askDelete(profile: VpnProfile): Promise<void> {
 async function onConnect(profile: VpnProfile): Promise<void> {
   try {
     await store.up(profile.id)
-    pushActionToast(t('vpn.toast.connected', { name: profile.name }), 'success')
+    useToast().add({ title: t('vpn.toast.connected', { name: profile.name }), color: 'success' })
   } catch (err) {
-    pushActionToast(t('vpn.toast.connectFailed', { error: errText(err) }), 'error')
+    useToast().add({ title: t('vpn.toast.connectFailed', { error: errText(err) }), color: 'error' })
   }
 }
 
 async function onDisconnect(profile: VpnProfile): Promise<void> {
   try {
     await store.down(profile.id)
-    pushActionToast(t('vpn.toast.disconnected', { name: profile.name }), 'success')
+    useToast().add({ title: t('vpn.toast.disconnected', { name: profile.name }), color: 'success' })
   } catch (err) {
-    pushActionToast(t('vpn.toast.disconnectFailed', { error: errText(err) }), 'error')
+    useToast().add({
+      title: t('vpn.toast.disconnectFailed', { error: errText(err) }),
+      color: 'error',
+    })
   }
 }
 
@@ -208,7 +210,7 @@ async function onChallengeSubmit(code: string): Promise<void> {
   try {
     await store.submitChallenge(ch.id, code)
   } catch (err) {
-    pushActionToast(t('vpn.toast.connectFailed', { error: errText(err) }), 'error')
+    useToast().add({ title: t('vpn.toast.connectFailed', { error: errText(err) }), color: 'error' })
   }
 }
 

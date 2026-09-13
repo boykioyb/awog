@@ -2,7 +2,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { useI18n } from '~/composables/useI18n'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
 import {
   useConnectionsStore,
@@ -25,7 +24,7 @@ export function useConnectionsPage() {
   const settings = useSettingsStore()
   const sc = useSidecar()
   const { t } = useI18n()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
 
   // Provider-agnostic creator account (mirrors Sessions' default resolution). Null
   // id → the panel shows a "connect an account" hint and refuses to send.
@@ -52,12 +51,13 @@ export function useConnectionsPage() {
     try {
       await store.loadSources()
       if (!opts.silent) {
-        if (!sc.available) pushToast('Engine offline — showing cached connections', 'info')
-        else pushToast(`Loaded ${store.sources.length} connections`, 'info')
+        if (!sc.available)
+          toast.add({ title: 'Engine offline — showing cached connections', color: 'info' })
+        else toast.add({ title: `Loaded ${store.sources.length} connections`, color: 'info' })
       }
     } catch (err) {
       console.error('[connections] refresh failed', err)
-      pushToast('Refresh failed — see console', 'error')
+      toast.add({ title: 'Refresh failed — see console', color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -111,10 +111,10 @@ export function useConnectionsPage() {
       editorOpen.value = true
     } catch (err) {
       console.error('[connections] discoverPreset failed', err)
-      pushToast(
-        `Could not load preset: ${err instanceof Error ? err.message : 'see console'}`,
-        'error',
-      )
+      toast.add({
+        title: `Could not load preset: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -180,10 +180,13 @@ export function useConnectionsPage() {
       const saved = await store.saveSource(data, editTarget.value?.slug)
       selectedSlug.value = saved.slug
       if (credential) await store.setApiCredential({ sourceId: saved.id, ...credential })
-      pushToast(`Saved ${saved.slug}`, 'success')
+      toast.add({ title: `Saved ${saved.slug}`, color: 'success' })
     } catch (err) {
       console.error('[connections] save failed', err)
-      pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Save failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
       return
     }
     closeEditor()
@@ -195,7 +198,10 @@ export function useConnectionsPage() {
       await store.toggleSource(s.slug)
     } catch (err) {
       console.error('[connections] toggle failed', err)
-      pushToast(`Toggle failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Toggle failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
   const onToggleTool = async (s: Source, toolName: string) => {
@@ -203,7 +209,7 @@ export function useConnectionsPage() {
       await store.toggleToolDeny(s.slug, toolName)
     } catch (err) {
       console.error('[connections] toggle tool failed', err)
-      pushToast('Tool toggle failed — see console', 'error')
+      toast.add({ title: 'Tool toggle failed — see console', color: 'error' })
     }
   }
 
@@ -248,9 +254,15 @@ export function useConnectionsPage() {
       .startOAuth(source.slug)
       .then((result) => {
         if (result.kind === 'connected') {
-          pushToast(t('connections.toast.oauthConnected', { slug: source.slug }), 'success')
+          toast.add({
+            title: t('connections.toast.oauthConnected', { slug: source.slug }),
+            color: 'success',
+          })
         } else if (result.kind === 'failed') {
-          pushToast(t('connections.toast.oauthFailed', { error: result.error }), 'error')
+          toast.add({
+            title: t('connections.toast.oauthFailed', { error: result.error }),
+            color: 'error',
+          })
         }
         // canceled → silent
         done(result)
@@ -258,7 +270,7 @@ export function useConnectionsPage() {
       .catch((err) => {
         const msg = err instanceof Error ? err.message : String(err)
         console.error('[connections] oauth failed', err)
-        pushToast(t('connections.toast.oauthError', { error: msg }), 'error')
+        toast.add({ title: t('connections.toast.oauthError', { error: msg }), color: 'error' })
         done({ kind: 'failed', error: msg })
       })
   }
@@ -289,10 +301,13 @@ export function useConnectionsPage() {
       if (selectedSlug.value === wasSlug) {
         selectedSlug.value = store.sources[0]?.slug ?? null
       }
-      pushToast(`Deleted ${s.slug}`, 'success')
+      toast.add({ title: `Deleted ${s.slug}`, color: 'success' })
     } catch (err) {
       console.error('[connections] delete failed', err)
-      pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Delete failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -307,10 +322,10 @@ export function useConnectionsPage() {
       await sc.revealSourceFolder(s.slug)
     } catch (err) {
       console.error('[connections] reveal failed', err)
-      pushToast(
-        `Could not open folder: ${err instanceof Error ? err.message : 'see console'}`,
-        'error',
-      )
+      toast.add({
+        title: `Could not open folder: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -393,8 +408,5 @@ export function useConnectionsPage() {
     openRowMenu,
     rowMenuItems,
     onRowMenuSelect,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

@@ -2,7 +2,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useProjects } from '~/composables/useProjects'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
 import { useSkillsStore, type Skill } from '~/stores/skills'
 
@@ -17,7 +16,7 @@ export function useSkillsPage() {
   const settings = useSettingsStore()
   const sc = useSidecar()
   const { projects } = useProjects()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
   const { t } = useI18n()
 
   // Project list for the scope picker + tier hints (id/name/path).
@@ -55,13 +54,15 @@ export function useSkillsPage() {
       await store.loadSkills(ids)
       if (!opts.silent) {
         const delta = store.skills.length - before
-        if (!sc.available) pushToast('Engine offline — showing cached skills', 'info')
-        else if (delta > 0) pushToast(`Loaded ${store.skills.length} skills (+${delta})`, 'success')
-        else pushToast(`Loaded ${store.skills.length} skills`, 'info')
+        if (!sc.available)
+          toast.add({ title: 'Engine offline — showing cached skills', color: 'info' })
+        else if (delta > 0)
+          toast.add({ title: `Loaded ${store.skills.length} skills (+${delta})`, color: 'success' })
+        else toast.add({ title: `Loaded ${store.skills.length} skills`, color: 'info' })
       }
     } catch (err) {
       console.error('[skills] refresh failed', err)
-      pushToast('Refresh failed — see console', 'error')
+      toast.add({ title: 'Refresh failed — see console', color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -77,11 +78,11 @@ export function useSkillsPage() {
   // freshly imported tiers show up, then report what landed.
   const onImported = async (n: number): Promise<void> => {
     if (!n) {
-      pushToast(t('library.import.none'), 'info')
+      toast.add({ title: t('library.import.none'), color: 'info' })
       return
     }
     await refresh({ silent: true })
-    pushToast(t('library.import.done', { n }), 'success')
+    toast.add({ title: t('library.import.done', { n }), color: 'success' })
   }
 
   // --- create (chat-driven) ------------------------------------------------
@@ -119,10 +120,16 @@ export function useSkillsPage() {
     try {
       const saved = await store.saveSkill(payload.skill, payload.previousId)
       selectedKey.value = store.skillKey(saved)
-      pushToast(isRename ? `Renamed to /${saved.id}` : `Saved /${saved.id}`, 'success')
+      toast.add({
+        title: isRename ? `Renamed to /${saved.id}` : `Saved /${saved.id}`,
+        color: 'success',
+      })
     } catch (err) {
       console.error('[skills] save failed', err)
-      pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Save failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
       return
     }
     closeEditor()
@@ -143,10 +150,10 @@ export function useSkillsPage() {
     try {
       const saved = await store.saveSkill(updated)
       selectedKey.value = store.skillKey(saved)
-      pushToast('Skill updated', 'success')
+      toast.add({ title: 'Skill updated', color: 'success' })
     } catch (err) {
       console.error('[skills] body edit save failed', err)
-      pushToast('Failed to save edit — see console', 'error')
+      toast.add({ title: 'Failed to save edit — see console', color: 'error' })
       return
     }
     closeBodyEdit()
@@ -157,10 +164,13 @@ export function useSkillsPage() {
     try {
       const copy = await store.duplicateSkill(s)
       selectedKey.value = store.skillKey(copy)
-      pushToast(`Duplicated to /${copy.id}`, 'success')
+      toast.add({ title: `Duplicated to /${copy.id}`, color: 'success' })
     } catch (err) {
       console.error('[skills] duplicate failed', err)
-      pushToast(`Duplicate failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Duplicate failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -188,10 +198,13 @@ export function useSkillsPage() {
       if (selectedKey.value === wasKey) {
         selectedKey.value = store.skills[0] ? store.skillKey(store.skills[0]) : null
       }
-      pushToast(`Deleted /${s.id}`, 'success')
+      toast.add({ title: `Deleted /${s.id}`, color: 'success' })
     } catch (err) {
       console.error('[skills] delete failed', err)
-      pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Delete failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -236,8 +249,5 @@ export function useSkillsPage() {
     confirmDelete,
     // config import
     onImported,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

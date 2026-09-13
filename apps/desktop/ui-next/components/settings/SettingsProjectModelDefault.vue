@@ -88,21 +88,27 @@ async function applyToAll() {
       modelId: modelId.value,
     })
     if (ok > 0 && failed === 0) {
-      pushActionToast(t('settingsDefaults.projectModel.applied', { model, n: ok }), 'success')
+      useToast().add({
+        title: t('settingsDefaults.projectModel.applied', { model, n: ok }),
+        color: 'success',
+      })
     } else if (ok > 0) {
       // Some projects couldn't be updated (e.g. their folder was moved/deleted,
       // which projects.upsert rejects) — apply what we could, flag the rest.
-      pushActionToast(
-        t('settingsDefaults.projectModel.appliedPartial', { model, n: ok, failed }),
-        'info',
-      )
+      useToast().add({
+        title: t('settingsDefaults.projectModel.appliedPartial', { model, n: ok, failed }),
+        color: 'info',
+      })
     } else {
       // Nothing applied — surface the real sidecar error (e.g. "Path does not
       // exist: …") so the cause is visible rather than a generic failure.
-      pushActionToast(firstError ?? t('settingsDefaults.projectModel.failed'), 'error')
+      useToast().add({
+        title: firstError ?? t('settingsDefaults.projectModel.failed'),
+        color: 'error',
+      })
     }
   } catch {
-    pushActionToast(t('settingsDefaults.projectModel.failed'), 'error')
+    useToast().add({ title: t('settingsDefaults.projectModel.failed'), color: 'error' })
   } finally {
     applying.value = false
   }

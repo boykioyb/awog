@@ -1,5 +1,4 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { useConfirm } from '~/composables/useConfirm'
 import type { AwogGatewayStatus, AwogPairingInfo, AwogRemoteDevice } from '~/types/awog-bridge'
 
@@ -43,7 +42,10 @@ export function useRemoteGateway() {
       status.value = s
       devices.value = d
     } catch (err) {
-      pushActionToast(t('settings.devices.loadFailed', { error: errText(err) }), 'error')
+      useToast().add({
+        title: t('settings.devices.loadFailed', { error: errText(err) }),
+        color: 'error',
+      })
     }
   }
 
@@ -56,7 +58,10 @@ export function useRemoteGateway() {
       status.value = await gw.setEnabled(on)
       if (!on) pairing.value = null
     } catch (err) {
-      pushActionToast(t('settings.devices.toggleFailed', { error: errText(err) }), 'error')
+      useToast().add({
+        title: t('settings.devices.toggleFailed', { error: errText(err) }),
+        color: 'error',
+      })
     }
   }
 
@@ -68,7 +73,10 @@ export function useRemoteGateway() {
     try {
       pairing.value = await gw.createPairing()
     } catch (err) {
-      pushActionToast(t('settings.devices.pairFailed', { error: errText(err) }), 'error')
+      useToast().add({
+        title: t('settings.devices.pairFailed', { error: errText(err) }),
+        color: 'error',
+      })
     } finally {
       pairingBusy.value = false
     }
@@ -90,9 +98,15 @@ export function useRemoteGateway() {
       await gw.revokeDevice(device.id)
       // Optimistic removal for snappiness; onDevicesChanged reconciles the truth.
       devices.value = devices.value.filter((d) => d.id !== device.id)
-      pushActionToast(t('settings.devices.revoked', { label: device.label }), 'success')
+      useToast().add({
+        title: t('settings.devices.revoked', { label: device.label }),
+        color: 'success',
+      })
     } catch (err) {
-      pushActionToast(t('settings.devices.revokeFailed', { error: errText(err) }), 'error')
+      useToast().add({
+        title: t('settings.devices.revokeFailed', { error: errText(err) }),
+        color: 'error',
+      })
     }
   }
 

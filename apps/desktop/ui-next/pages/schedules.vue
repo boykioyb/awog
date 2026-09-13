@@ -49,10 +49,6 @@
       @confirm="onDelete"
       @cancel="pendingDelete = null"
     />
-
-    <div v-for="tt in toasts" :key="tt.id" class="toast" :style="{ borderColor: tt.color }">
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -78,18 +74,8 @@ const editorOpen = ref(false)
 const editTarget = ref<Schedule | null>(null)
 const pendingDelete = ref<Schedule | null>(null)
 
-type Toast = { id: number; text: string; color: string }
-const toasts = ref<Toast[]>([])
-let toastSeq = 0
-
-function toast(text: string, color = 'var(--accentBorder)'): void {
-  toastSeq += 1
-  const item: Toast = { id: toastSeq, text, color }
-  toasts.value.push(item)
-  setTimeout(() => {
-    toasts.value = toasts.value.filter((x) => x.id !== item.id)
-  }, 2600)
-}
+// The page's own toast queue is gone — notifications go to the app-wide one.
+const { add: toast } = useToast()
 
 onMounted(() => void store.loadSchedules())
 
@@ -108,9 +94,12 @@ async function onSave(input: ScheduleInput): Promise<void> {
   try {
     await store.saveSchedule(input)
     editorOpen.value = false
-    toast(t('schedules.toast.saved'))
+    toast({ title: t('schedules.toast.saved'), color: 'success' })
   } catch (err) {
-    toast(err instanceof Error ? err.message : t('schedules.toast.failed'), 'var(--danger)')
+    toast({
+      title: err instanceof Error ? err.message : t('schedules.toast.failed'),
+      color: 'error',
+    })
   }
 }
 
@@ -119,16 +108,19 @@ async function onDelete(): Promise<void> {
   pendingDelete.value = null
   if (!target) return
   await store.removeSchedule(target.id)
-  toast(t('schedules.toast.deleted'))
+  toast({ title: t('schedules.toast.deleted'), color: 'success' })
 }
 
 async function onRunNow(s: Schedule): Promise<void> {
   try {
     const run = await store.runNow(s.id)
-    if (run?.status === 'skipped') toast(t('schedules.toast.skipped'), 'var(--warn)')
-    else toast(t('schedules.toast.started'))
+    if (run?.status === 'skipped') toast({ title: t('schedules.toast.skipped'), color: 'warning' })
+    else toast({ title: t('schedules.toast.started'), color: 'success' })
   } catch (err) {
-    toast(err instanceof Error ? err.message : t('schedules.toast.failed'), 'var(--danger)')
+    toast({
+      title: err instanceof Error ? err.message : t('schedules.toast.failed'),
+      color: 'error',
+    })
   }
 }
 </script>

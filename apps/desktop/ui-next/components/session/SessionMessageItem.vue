@@ -560,7 +560,7 @@ async function guarded(kind: GuardKind, run: (id: number, i: number) => void) {
   if (!(await confirm(guardDialog(kind, lost)))) return
   const now = store.active
   if (store.activeId !== id || !now || now.msgs.length !== lenAtOpen) {
-    pushActionToast(t('sessions.guard.stale'), 'error')
+    useToast().add({ title: t('sessions.guard.stale'), color: 'error' })
     return
   }
   run(id, i)

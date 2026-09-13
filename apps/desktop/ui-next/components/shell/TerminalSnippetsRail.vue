@@ -112,7 +112,6 @@
 import { computed, ref } from 'vue'
 import TerminalSnippetEditor from '~/components/shell/TerminalSnippetEditor.vue'
 import { useConfirm } from '~/composables/useConfirm'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { useTerminalSnippetsStore, type TerminalSnippet } from '~/stores/terminalSnippets'
 
 const props = defineProps<{
@@ -145,15 +144,15 @@ const visible = computed(() =>
 function run(snippet: TerminalSnippet): void {
   if (!props.canRun) return
   emit('run', snippet.command)
-  pushActionToast(t('terminalSnippet.ran', { name: snippet.name }), 'success')
+  useToast().add({ title: t('terminalSnippet.ran', { name: snippet.name }), color: 'success' })
 }
 
 async function copy(snippet: TerminalSnippet): Promise<void> {
   try {
     await navigator.clipboard.writeText(snippet.command)
-    pushActionToast(t('terminalSnippet.copied'), 'success')
+    useToast().add({ title: t('terminalSnippet.copied'), color: 'success' })
   } catch {
-    pushActionToast(t('terminalSnippet.copyFailed'), 'error')
+    useToast().add({ title: t('terminalSnippet.copyFailed'), color: 'error' })
   }
 }
 

@@ -721,10 +721,22 @@ body[data-theme-family='cute'] :is(.bar, .ctxbar, .rlbar2, .slider, .sld) {
    Menus / popovers / modals: bigger radius, the soft ramp, and a short fade with a
    3px rise on open. The scrim is light so a modal does not slam the room dark.
    ════════════════════════════════════════════════════════════════════════════ */
-body[data-theme-family='cute'] :is(.smenu, .pop, .stylemenu, .styinfocard, .toast) {
+body[data-theme-family='cute'] :is(.smenu, .pop, .stylemenu, .styinfocard) {
   border-radius: var(--r-card);
   border-color: var(--border);
   box-shadow: var(--shadow-md);
+  animation: cute-pop var(--dur-panel) var(--ease);
+}
+/* Toasts get the same surface, but their animation MUST stay gated to the open
+   state: a toast also has a `closed` state (Reka UI holds it mounted until that
+   animation ends), and an ungated `animation: cute-pop` replayed the ENTRANCE on
+   the way out — the toast visibly popped back in before vanishing. `border-color`
+   is left alone too: it carries the toast's success/error/warning accent. */
+body[data-theme-family='cute'] .tst {
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-md);
+}
+body[data-theme-family='cute'] .tst[data-state='open'] {
   animation: cute-pop var(--dur-panel) var(--ease);
 }
 body[data-theme-family='cute'] :is(.smenu .mi, .stylemenu .mi, .pi) {
@@ -1241,7 +1253,8 @@ body[data-theme-family='cute'] .tcard:hover {
 }
 @media (prefers-reduced-motion: reduce) {
   body[data-theme-family='cute']
-    :is(.smenu, .pop, .stylemenu, .styinfocard, .toast, .pal, .setmodal, .codepanel) {
+    :is(.smenu, .pop, .stylemenu, .styinfocard, .pal, .setmodal, .codepanel),
+  body[data-theme-family='cute'] .tst[data-state='open'] {
     animation: none;
   }
   body[data-theme-family='cute'] :is(.btn, .iconbtn, .qopt):active,

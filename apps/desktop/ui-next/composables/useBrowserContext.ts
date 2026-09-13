@@ -1,4 +1,3 @@
-import { pushActionToast } from '~/composables/useActionToasts'
 import type {
   AwogBrowserPageContext,
   AwogBrowserPick,
@@ -96,7 +95,7 @@ export function useBrowserContext() {
   const store = useSessionsStore()
 
   const say = (key: string, kind: 'info' | 'error' = 'info', params?: Record<string, string>) =>
-    pushActionToast(t(`sessions.browserCtx.${key}`, params), kind)
+    useToast().add({ title: t(`sessions.browserCtx.${key}`, params), color: kind })
 
   const reportFailure = (err: unknown) =>
     say('failed', 'error', { err: err instanceof Error ? err.message : String(err) })
@@ -207,7 +206,7 @@ export async function openBrowserTab(url: string): Promise<void> {
   const { t } = useI18n()
   const api = bridgeOf()
   if (!api) {
-    pushActionToast(t('sessions.browserCtx.unavailable'))
+    useToast().add({ title: t('sessions.browserCtx.unavailable') })
     return
   }
   const target = normalizeUrl(url)
@@ -217,13 +216,13 @@ export async function openBrowserTab(url: string): Promise<void> {
     const panel = useWorkspacePanel()
     // `toggleView` là toggle thật: gọi khi view đang mở sẽ ĐÓNG nó.
     if (!panel.openViews.value.includes('Browser')) panel.toggleView('Browser')
-    if (target) pushActionToast(t('sessions.browserCtx.opened', { url: target }))
+    if (target) useToast().add({ title: t('sessions.browserCtx.opened', { url: target }) })
   } catch (err) {
-    pushActionToast(
-      t('sessions.browserCtx.openFailed', {
+    useToast().add({
+      title: t('sessions.browserCtx.openFailed', {
         err: err instanceof Error ? err.message : String(err),
       }),
-      'error',
-    )
+      color: 'error',
+    })
   }
 }

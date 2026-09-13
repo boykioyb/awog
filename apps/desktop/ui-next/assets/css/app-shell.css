@@ -994,7 +994,14 @@ textarea.gcpta {
      thẳng hàng với transcript chứ không phải với mép cột detail. */
   padding: 0 var(--padX);
   box-shadow: inset 0 -1px 0 var(--border);
-  overflow: hidden;
+  /* KHÔNG `overflow: hidden`. Mọi popover của chip (checklist · đánh dấu · SSH) neo
+     `position: absolute` BÊN TRONG hàng này; hàng chỉ cao 30px nên một cái clip ở
+     đây cắt sạch chúng — bấm chip thì `popOpen` vẫn lật, popover vẫn render, mà
+     người dùng không thấy gì. Đó chính là lỗi "nhấn vào to-do không hoạt động".
+
+     Clip cũng không cần cho việc chống tràn: `.ctxchip` đã `flex: 0 1 auto` +
+     `min-width: 0` và `.ctxchip-lbl` tự cắt ellipsis, nên hàng chật thì chip co lại
+     chứ không đẩy nhau ra ngoài. */
 }
 /* Chip của strip. Viền `--borderStrong` chứ không phải `--border`: ở light theme
    --border (8% đen) chỉ đủ làm đường phân cách, không đủ vẽ đường bao của một vật
@@ -1336,8 +1343,7 @@ textarea.gcpta {
    rgba(0,0,0,.5) prototype shadows were dark-only and read as heavy grey slabs on
    a light background). */
 .smenu,
-.pop,
-.toast {
+.pop {
   box-shadow: var(--shadow-md);
 }
 .setmodal,

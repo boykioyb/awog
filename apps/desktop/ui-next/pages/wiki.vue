@@ -131,15 +131,6 @@
       @close="menu.close()"
       @select="onMenuSelect"
     />
-
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -157,14 +148,13 @@ import { useWikiManager, type WikiTreeNode } from '~/composables/useWikiManager'
 import { useConfirm } from '~/composables/useConfirm'
 import { useContextMenu } from '~/composables/useContextMenu'
 import { useTextPrompt } from '~/composables/useTextPrompt'
-import { useToasts } from '~/composables/useToasts'
 import type { MenuItem } from '~/composables/useContextMenu'
 import type { WikiPage, WikiSearchHit } from '~/stores/wiki'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
 const { prompt } = useTextPrompt()
-const { toasts, pushToast, toastColor } = useToasts()
+const toast = useToast()
 
 const {
   store,
@@ -221,10 +211,10 @@ async function openHit(hit: WikiSearchHit): Promise<void> {
 
 async function onSave(): Promise<void> {
   const ok = await save()
-  pushToast(
-    ok ? t('wiki.toast.saved') : store.lastError || t('wiki.toast.saveFailed'),
-    ok ? 'success' : 'error',
-  )
+  toast.add({
+    title: ok ? t('wiki.toast.saved') : store.lastError || t('wiki.toast.saveFailed'),
+    color: ok ? 'success' : 'error',
+  })
 }
 
 // "+" on a tree row (or the context menu) — create a page nested under that node.
@@ -254,7 +244,7 @@ async function onNewChild(node: WikiTreeNode): Promise<void> {
   if (!name) return
   const slug = slugifyName(name)
   if (!slug) {
-    pushToast(t('wiki.toast.badName'), 'error')
+    toast.add({ title: t('wiki.toast.badName'), color: 'error' })
     return
   }
   const page = await createPage({
@@ -263,7 +253,7 @@ async function onNewChild(node: WikiTreeNode): Promise<void> {
     path: `${node.path}/${slug}`,
     title: name.trim(),
   })
-  if (!page) pushToast(store.lastError || t('wiki.toast.createFailed'), 'error')
+  if (!page) toast.add({ title: store.lastError || t('wiki.toast.createFailed'), color: 'error' })
 }
 
 async function onNewPage(): Promise<void> {
@@ -281,7 +271,7 @@ async function onNewPage(): Promise<void> {
     ...(current?.projectId ? { projectId: current.projectId } : {}),
     path,
   })
-  if (!page) pushToast(store.lastError || t('wiki.toast.createFailed'), 'error')
+  if (!page) toast.add({ title: store.lastError || t('wiki.toast.createFailed'), color: 'error' })
 }
 
 // "Nhập" now opens the target picker; the OS dialog comes after the destination is
@@ -322,10 +312,10 @@ async function onNewSpace(): Promise<void> {
     source: current?.source ?? 'global',
     ...(current?.projectId ? { projectId: current.projectId } : {}),
   })
-  pushToast(
-    id ? t('wiki.toast.spaceCreated') : store.lastError || t('wiki.toast.spaceFailed'),
-    id ? 'success' : 'error',
-  )
+  toast.add({
+    title: id ? t('wiki.toast.spaceCreated') : store.lastError || t('wiki.toast.spaceFailed'),
+    color: id ? 'success' : 'error',
+  })
 }
 
 async function onDrop(event: DragEvent): Promise<void> {
@@ -348,21 +338,22 @@ async function onDrop(event: DragEvent): Promise<void> {
 function reportImport(): void {
   const report = lastImport.value
   if (!report) {
-    if (store.lastError) pushToast(store.lastError, 'error')
+    if (store.lastError) toast.add({ title: store.lastError, color: 'error' })
     return
   }
   if (report.imported === 0 && report.skipped.length === 0) return
   const skipped = report.skipped.length
-  pushToast(
-    skipped > 0
-      ? t('wiki.toast.importedPartial', {
-          n: report.imported,
-          skipped,
-          reason: report.skipped[0]?.reason ?? '',
-        })
-      : t('wiki.toast.imported', { n: report.imported }),
-    skipped > 0 ? 'info' : 'success',
-  )
+  toast.add({
+    title:
+      skipped > 0
+        ? t('wiki.toast.importedPartial', {
+            n: report.imported,
+            skipped,
+            reason: report.skipped[0]?.reason ?? '',
+          })
+        : t('wiki.toast.imported', { n: report.imported }),
+    color: skipped > 0 ? 'info' : 'success',
+  })
 }
 
 async function onDelete(): Promise<void> {
@@ -467,9 +458,9 @@ async function onMenuSelect(id: string): Promise<void> {
   if (id === 'copy') {
     try {
       await navigator.clipboard.writeText(page.path)
-      pushToast(t('wiki.toast.pathCopied'), 'success')
+      toast.add({ title: t('wiki.toast.pathCopied'), color: 'success' })
     } catch {
-      pushToast(t('wiki.toast.copyFailed'), 'error')
+      toast.add({ title: t('wiki.toast.copyFailed'), color: 'error' })
     }
     return
   }
@@ -497,10 +488,10 @@ async function onRename(page: WikiPage): Promise<void> {
   })
   if (!next || next === page.path) return
   const ok = await renamePage(page, next)
-  pushToast(
-    ok ? t('wiki.toast.renamed') : store.lastError || t('wiki.toast.renameFailed'),
-    ok ? 'success' : 'error',
-  )
+  toast.add({
+    title: ok ? t('wiki.toast.renamed') : store.lastError || t('wiki.toast.renameFailed'),
+    color: ok ? 'success' : 'error',
+  })
 }
 </script>
 

@@ -49,7 +49,10 @@ watch(
   () => {
     if (!open.value) return
     if (savedToastTimer) clearTimeout(savedToastTimer)
-    savedToastTimer = setTimeout(() => pushActionToast(t('settings.saved'), 'success'), 500)
+    savedToastTimer = setTimeout(
+      () => useToast().add({ title: t('settings.saved'), color: 'success' }),
+      500,
+    )
   },
 )
 

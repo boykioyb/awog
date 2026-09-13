@@ -1,7 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import type { Session } from '~/composables/useSessionsData'
 import { searchableSegments } from '~/utils/transcript-text'
-import { pushActionToast } from '~/composables/useActionToasts'
 
 // State behind the "Bookmarked (N)" bar (docs/features/session-transcript-navigation.md
 // §A1). Bookmarks are READING anchors: they never enter the prompt and never leave
@@ -117,7 +116,7 @@ export function useSessionBookmarks(session: () => Session) {
     // Fail loud, and only within this view: the row goes dangling so the next click
     // can't scroll somewhere else, but the anchor stays on disk.
     unreachable.value = new Set(unreachable.value).add(row.id)
-    pushActionToast(t('sessions.bookmark.notFound'), 'error')
+    useToast().add({ title: t('sessions.bookmark.notFound'), color: 'error' })
   }
 
   function remove(row: BookmarkRow): void {

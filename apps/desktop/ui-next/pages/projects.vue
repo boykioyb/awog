@@ -83,16 +83,6 @@
       @close="closeInstallTemplate"
       @installed="onTemplateInstalled"
     />
-
-    <!-- transient toasts -->
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -154,8 +144,6 @@ const {
   closeInstallTemplate,
   onTemplateInstalled,
   onImported,
-  toasts,
-  toastColor,
 } = useProjectsPage()
 
 const onSelect = (id: string) => {

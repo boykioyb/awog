@@ -26,7 +26,6 @@
 import type { MenuItem } from '~/composables/useContextMenu'
 import { useConfirm } from '~/composables/useConfirm'
 import { useLinkOpen } from '~/composables/useLinkOpen'
-import { pushActionToast } from '~/composables/useActionToasts'
 
 const props = withDefaults(
   defineProps<{
@@ -74,10 +73,10 @@ const items = computed<MenuItem[]>(() => [
 ])
 
 const fail = (err: unknown): void => {
-  pushActionToast(
-    t('browser.toast.failed', { message: err instanceof Error ? err.message : String(err) }),
-    'error',
-  )
+  useToast().add({
+    title: t('browser.toast.failed', { message: err instanceof Error ? err.message : String(err) }),
+    color: 'error',
+  })
 }
 
 const onScreenshot = async (): Promise<void> => {
@@ -91,8 +90,10 @@ const onScreenshot = async (): Promise<void> => {
     const rel = res.path.startsWith(root)
       ? res.path.slice(root.length).replace(/^[/\\]+/, '')
       : res.path
-    pushActionToast(t('browser.toast.screenshot', { path: rel }), 'success', {
-      action: () => void window.awog?.revealPath(root, rel).catch(() => {}),
+    useToast().add({
+      title: t('browser.toast.screenshot', { path: rel }),
+      color: 'success',
+      onClick: () => void window.awog?.revealPath(root, rel).catch(() => {}),
     })
   } catch (err) {
     fail(err)
@@ -110,7 +111,7 @@ const onClearData = async (): Promise<void> => {
   if (!ok) return
   try {
     await api.clearData()
-    pushActionToast(t('browser.toast.cleared'), 'success')
+    useToast().add({ title: t('browser.toast.cleared'), color: 'success' })
   } catch (err) {
     fail(err)
   }

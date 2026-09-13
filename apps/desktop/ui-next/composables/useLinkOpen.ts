@@ -100,12 +100,12 @@ export function useLinkOpen() {
     const sessions = useSessionsStore()
     const inSession = !!sessions.active
     const failed = (err: unknown): void => {
-      pushActionToast(
-        useI18n().t('link.openFailed', {
+      useToast().add({
+        title: useI18n().t('link.openFailed', {
           message: err instanceof Error ? err.message : String(err),
         }),
-        'error',
-      )
+        color: 'error',
+      })
     }
 
     // TRONG SESSION: mở khung TRƯỚC, không await gì cả.

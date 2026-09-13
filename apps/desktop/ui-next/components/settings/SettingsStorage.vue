@@ -122,11 +122,6 @@ import type { SessionUsage, StorageScan } from '~/composables/useStorageApi'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
-// pushActionToast, NOT useToasts(): useToasts() hands each caller its OWN queue
-// that the caller has to render itself, so calling it from here queued toasts
-// into an array nothing displayed — the buttons did their work in silence.
-// The singleton's host is mounted at the layout ROOT, which is also what makes
-// it visible above the Settings modal rather than trapped under it.
 const projects = useProjectsStore()
 const api = useStorageApi()
 
@@ -225,10 +220,13 @@ const reclaimable = computed(() => {
 function reportCleanup(res: { freedBytes?: number; count?: number }, key: 'freed' | 'freedFiles') {
   const bytes = res.freedBytes ?? 0
   if (bytes <= 0) {
-    pushActionToast(t('settings.storage.nothingToClean'), 'info')
+    useToast().add({ title: t('settings.storage.nothingToClean'), color: 'info' })
     return
   }
-  pushActionToast(t(`settings.storage.${key}`, { size: fmt(bytes), n: res.count ?? 0 }), 'success')
+  useToast().add({
+    title: t(`settings.storage.${key}`, { size: fmt(bytes), n: res.count ?? 0 }),
+    color: 'success',
+  })
 }
 
 async function onPrune() {
@@ -245,7 +243,7 @@ async function onPrune() {
     reportCleanup(await api.pruneSnapshots(Number(olderThanDays.value)), 'freed')
     await refresh()
   } catch {
-    pushActionToast(t('settings.storage.failed'), 'error')
+    useToast().add({ title: t('settings.storage.failed'), color: 'error' })
   } finally {
     busy.value = false
   }
@@ -269,7 +267,7 @@ async function onOrphans() {
     reportCleanup(await api.deleteOrphans(), 'freedFiles')
     await refresh()
   } catch {
-    pushActionToast(t('settings.storage.failed'), 'error')
+    useToast().add({ title: t('settings.storage.failed'), color: 'error' })
   } finally {
     busy.value = false
   }
@@ -287,10 +285,13 @@ async function onDeleteSession(s: SessionUsage) {
   busy.value = true
   try {
     await api.deleteSession(s.id)
-    pushActionToast(t('settings.storage.freed', { size: fmt(s.totalBytes), n: 1 }), 'success')
+    useToast().add({
+      title: t('settings.storage.freed', { size: fmt(s.totalBytes), n: 1 }),
+      color: 'success',
+    })
     await refresh()
   } catch {
-    pushActionToast(t('settings.storage.failed'), 'error')
+    useToast().add({ title: t('settings.storage.failed'), color: 'error' })
   } finally {
     busy.value = false
   }

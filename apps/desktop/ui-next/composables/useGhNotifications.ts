@@ -21,7 +21,6 @@
 import { computed, ref, watch } from 'vue'
 import { githubSlugFromRemote } from '~/components/project/data'
 import { useSidecar } from '~/composables/useSidecar'
-import { pushActionToast } from '~/composables/useActionToasts'
 import {
   fetchGhInbox,
   setGhInbox,
@@ -234,9 +233,11 @@ function nativeNotify(n: GhNotification): void {
 function present(n: GhNotification): void {
   const nativeOnly = useSettingsStore().notifications.delivery === 'native' && osDeliverable()
   if (!nativeOnly) {
-    pushActionToast(toastText(n), 'info', {
+    useToast().add({
+      title: toastText(n),
+      color: 'info',
       icon: n.type === 'PullRequest' ? 'fork' : 'alert',
-      action: () => openNotification(n),
+      onClick: () => openNotification(n),
     })
   }
   nativeNotify(n)
@@ -289,7 +290,8 @@ async function poll(): Promise<void> {
 
     for (const n of fresh.slice(0, MAX_TOASTS)) present(n)
     const overflow = fresh.length - MAX_TOASTS
-    if (overflow > 0) pushActionToast(t('github.notify.more', { n: overflow }), 'info')
+    if (overflow > 0)
+      useToast().add({ title: t('github.notify.more', { n: overflow }), color: 'info' })
   } catch (err) {
     // Poll failures are silent by design (gh not installed / not authed / rate
     // limited): a toast every minute would be worse than the missing feature. The

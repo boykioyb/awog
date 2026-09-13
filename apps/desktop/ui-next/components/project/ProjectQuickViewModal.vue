@@ -86,18 +86,6 @@
     @close="actions.closeInstallTemplate"
     @installed="actions.onTemplateInstalled"
   />
-
-  <!-- Action toasts (`.toast` is fixed-positioned at z:140 → above the peek). -->
-  <Teleport to="body">
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
-  </Teleport>
 </template>
 
 <script setup lang="ts">
@@ -117,7 +105,6 @@ import InstallTemplateDialog from '~/components/templates/InstallTemplateDialog.
 import { useProjectModal, type ProjectDeepLink } from '~/composables/useProjectModal'
 import { useProjectView } from '~/composables/useProjectView'
 import { useProjectActions } from '~/composables/useProjectActions'
-import { useToasts } from '~/composables/useToasts'
 import { useProjectsStore } from '~/stores/projects'
 import type { Project } from '~/types'
 
@@ -140,11 +127,9 @@ const project = computed<Project | null>(() => {
 })
 const view = useProjectView(() => project.value?.id ?? null)
 
-// Shared management flows, scoped to the peeked project + a local toast queue.
-const { toasts, pushToast, toastColor } = useToasts()
+// Shared management flows, scoped to the peeked project.
 const actions = useProjectActions({
   currentProject: () => project.value,
-  pushToast,
 })
 
 // Launch an action: close the peek first (its z:120 overlay would otherwise hide the

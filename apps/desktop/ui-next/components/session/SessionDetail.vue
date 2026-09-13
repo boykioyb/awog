@@ -375,7 +375,6 @@ import {
   previewRefFromAttachment,
   usePreview,
 } from '~/composables/usePreview'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 import { rawMarkdownForSelection } from '~/utils/selection-markdown'
@@ -457,7 +456,7 @@ watch(
     jumpTimer = setTimeout(() => {
       if (!jumpEid.value) return
       clearJump()
-      pushActionToast(t('sessionsSearch.jump.failed'), 'error')
+      useToast().add({ title: t('sessionsSearch.jump.failed'), color: 'error' })
     }, JUMP_WAIT_MS)
   },
   { immediate: true },
@@ -477,14 +476,14 @@ watch(
     const i = props.session.msgs.findIndex((m) => m.eid === eid)
     clearJump()
     if (i < 0) {
-      pushActionToast(t('sessionsSearch.jump.notFound'), 'error')
+      useToast().add({ title: t('sessionsSearch.jump.notFound'), color: 'error' })
       return
     }
     // The transcript re-windows + scrolls to the bottom on (re)activation; let that
     // settle so the deliberate jump is the LAST scroll, not the one that gets undone.
     await nextTick()
     if (transcriptSurface.value && (await scrollToMessage(i)) !== 'ok')
-      pushActionToast(t('sessionsSearch.jump.failed'), 'error')
+      useToast().add({ title: t('sessionsSearch.jump.failed'), color: 'error' })
   },
   { flush: 'post' },
 )

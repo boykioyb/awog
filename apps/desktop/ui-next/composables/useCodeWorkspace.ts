@@ -46,8 +46,6 @@ function languageOf(path: string): string | undefined {
   return ext ? EXT_LANG[ext] : undefined
 }
 
-export type CodeToast = { id: number; text: string; kind: 'success' | 'error' }
-
 export function useCodeWorkspace(projectId: string) {
   const sc = useSidecar()
   const fs = useFsApi()
@@ -74,16 +72,10 @@ export function useCodeWorkspace(projectId: string) {
   // Files the user clicked before Monaco was ready (flushed on editor `ready`).
   const pending: { path: string; content: string; language?: string }[] = []
 
-  // ── Toasts ────────────────────────────────────────────────────────────────
-  const toasts = ref<CodeToast[]>([])
-  let toastSeq = 0
-  function pushToast(text: string, kind: CodeToast['kind']): void {
-    const id = ++toastSeq
-    toasts.value.push({ id, text, kind })
-    setTimeout(() => {
-      toasts.value = toasts.value.filter((tt) => tt.id !== id)
-    }, 2600)
-  }
+  // Notifications go to the app-wide toast queue (useToast) — the code workspace
+  // had its own in-panel queue, which meant a save error here looked nothing like a
+  // save error anywhere else in the app.
+  const toast = useToast()
 
   // ── Open / close / activate ─────────────────────────────────────────────
   async function openFile(path: string): Promise<void> {
@@ -98,13 +90,13 @@ export function useCodeWorkspace(projectId: string) {
     try {
       const fc = await fs.readFile(root.value, path)
       if (fc.isBinary) {
-        pushToast(`Cannot open binary file: ${basename(path)}`, 'error')
+        toast.add({ title: `Cannot open binary file: ${basename(path)}`, color: 'error' })
         return
       }
       content = fc.content
       if (fc.language) language = fc.language
     } catch {
-      pushToast(`Failed to open ${basename(path)}`, 'error')
+      toast.add({ title: `Failed to open ${basename(path)}`, color: 'error' })
       return
     }
     tabs.value.push({ path, name: basename(path), language, dirty: false })
@@ -152,10 +144,10 @@ export function useCodeWorkspace(projectId: string) {
     try {
       await fs.writeFile(root.value, tab.path, value)
       tab.dirty = false
-      pushToast(`Saved ${tab.name}`, 'success')
+      toast.add({ title: `Saved ${tab.name}`, color: 'success' })
     } catch (err) {
       const msg = err instanceof Error && err.message ? err.message : 'Save failed'
-      pushToast(msg, 'error')
+      toast.add({ title: msg, color: 'error' })
     }
   }
 
@@ -167,7 +159,8 @@ export function useCodeWorkspace(projectId: string) {
       if (tgt.kind === 'file') void openFile(tgt.path)
     },
     onChanged: (dir) => void tree.reload(dir),
-    notify: (text, kind) => pushToast(text, kind === 'success' ? 'success' : 'error'),
+    notify: (text, kind) =>
+      toast.add({ title: text, color: kind === 'success' ? 'success' : 'error' }),
   })
 
   // ── File-tree controller (handed to EditorFileTree) ──────────────────────
@@ -224,7 +217,5 @@ export function useCodeWorkspace(projectId: string) {
     onChange,
     onCursorChange,
     onEditorReady,
-    // toasts
-    toasts: computed(() => toasts.value),
   }
 }

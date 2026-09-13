@@ -88,16 +88,6 @@
       @confirm="confirmDelete"
       @cancel="cancelDelete"
     />
-
-    <!-- transient toasts -->
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -155,8 +145,6 @@ const {
   pendingDeleteName,
   confirmDelete,
   onRun,
-  toasts,
-  toastColor,
 } = useWorkflowsPage()
 
 // Tier label rendered in the canvas toolbar chip.

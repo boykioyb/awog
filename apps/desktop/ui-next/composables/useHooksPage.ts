@@ -1,7 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useProjects } from '~/composables/useProjects'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
 import { useHooksStore, type Hook, type HookConfig } from '~/stores/hooks'
 
@@ -15,7 +14,7 @@ export function useHooksPage() {
   const settings = useSettingsStore()
   const sc = useSidecar()
   const { projects } = useProjects()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
 
   // Project list for the scope picker + tier hints (id/name).
   const projectList = computed(() => projects.value.map((p) => ({ id: p.id, name: p.name })))
@@ -52,13 +51,15 @@ export function useHooksPage() {
       await store.loadHooks(ids)
       if (!opts.silent) {
         const delta = store.hooks.length - before
-        if (!sc.available) pushToast('Engine offline — showing cached hooks', 'info')
-        else if (delta > 0) pushToast(`Loaded ${store.hooks.length} hooks (+${delta})`, 'success')
-        else pushToast(`Loaded ${store.hooks.length} hooks`, 'info')
+        if (!sc.available)
+          toast.add({ title: 'Engine offline — showing cached hooks', color: 'info' })
+        else if (delta > 0)
+          toast.add({ title: `Loaded ${store.hooks.length} hooks (+${delta})`, color: 'success' })
+        else toast.add({ title: `Loaded ${store.hooks.length} hooks`, color: 'info' })
       }
     } catch (err) {
       console.error('[hooks] refresh failed', err)
-      pushToast('Refresh failed — see console', 'error')
+      toast.add({ title: 'Refresh failed — see console', color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -104,10 +105,16 @@ export function useHooksPage() {
     try {
       const saved = await store.saveHook(hook)
       selectedKey.value = store.hookKey(saved)
-      pushToast(isUpdate ? `Saved ${saved.name}` : `Created ${saved.name}`, 'success')
+      toast.add({
+        title: isUpdate ? `Saved ${saved.name}` : `Created ${saved.name}`,
+        color: 'success',
+      })
     } catch (err) {
       console.error('[hooks] save failed', err)
-      pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Save failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
       return
     }
     closeEditor()
@@ -171,7 +178,7 @@ export function useHooksPage() {
       await store.toggleHook(h)
     } catch (err) {
       console.error('[hooks] toggle failed', err)
-      pushToast('Toggle failed — see console', 'error')
+      toast.add({ title: 'Toggle failed — see console', color: 'error' })
     }
   }
 
@@ -183,12 +190,15 @@ export function useHooksPage() {
       await store.runHookOnce(h)
       const last = h.recentRuns[0]
       if (last && last.exitCode === 0)
-        pushToast(`Ran ${h.name} · OK (${last.durationMs}ms)`, 'success')
-      else if (last) pushToast(`Ran ${h.name} · exit ${last.exitCode}`, 'error')
-      else pushToast(`Ran ${h.name}`, 'info')
+        toast.add({ title: `Ran ${h.name} · OK (${last.durationMs}ms)`, color: 'success' })
+      else if (last) toast.add({ title: `Ran ${h.name} · exit ${last.exitCode}`, color: 'error' })
+      else toast.add({ title: `Ran ${h.name}`, color: 'info' })
     } catch (err) {
       console.error('[hooks] run-once failed', err)
-      pushToast(`Run failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Run failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     } finally {
       running.value = null
     }
@@ -199,10 +209,10 @@ export function useHooksPage() {
     if (!h.projectId) return
     try {
       await store.trustHooks(h.projectId, [h.id])
-      pushToast(`Trusted ${h.name}`, 'success')
+      toast.add({ title: `Trusted ${h.name}`, color: 'success' })
     } catch (err) {
       console.error('[hooks] trust failed', err)
-      pushToast('Trust failed — see console', 'error')
+      toast.add({ title: 'Trust failed — see console', color: 'error' })
     }
   }
 
@@ -230,10 +240,13 @@ export function useHooksPage() {
       if (selectedKey.value === wasKey) {
         selectedKey.value = store.hooks[0] ? store.hookKey(store.hooks[0]) : null
       }
-      pushToast(`Deleted ${h.name}`, 'success')
+      toast.add({ title: `Deleted ${h.name}`, color: 'success' })
     } catch (err) {
       console.error('[hooks] delete failed', err)
-      pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Delete failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -288,8 +301,5 @@ export function useHooksPage() {
     cancelDelete,
     deleteDescription,
     confirmDelete,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

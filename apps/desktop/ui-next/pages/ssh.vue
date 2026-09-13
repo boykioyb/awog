@@ -60,16 +60,6 @@
 
     <!-- host-key TOFU prompt (P2) is rendered app-wide by SshHostKeyHost in the
          default layout — the parked connect awaits the user's decision there. -->
-
-    <!-- transient toasts -->
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -124,7 +114,5 @@ const {
   openRowMenu,
   rowMenuItems,
   onRowMenuSelect,
-  toasts,
-  toastColor,
 } = useSshPage()
 </script>

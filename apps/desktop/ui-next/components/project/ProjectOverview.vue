@@ -208,17 +208,6 @@
         {{ t('projects.overview.removeProject') }}
       </button>
     </div>
-
-    <!-- Transient toasts (e.g. GitHub-account save). `.toast` is fixed-positioned
-         at z:140, so it sits above both the page and the quick-view modal. -->
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </div>
 </template>
 
@@ -236,7 +225,6 @@ import { useProjectModal } from '~/composables/useProjectModal'
 import { useProjectsStore } from '~/stores/projects'
 import { useSettingsStore } from '~/stores/settings'
 import { useGhAccounts } from '~/composables/useGhAccounts'
-import { useToasts } from '~/composables/useToasts'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { Project } from '~/types'
 
@@ -303,7 +291,7 @@ const llmLabel = computed(() => {
 // two sentinels for the inherit / active rows.
 const settings = useSettingsStore()
 const projectsStore = useProjectsStore()
-const { toasts, pushToast, toastColor } = useToasts()
+const toast = useToast()
 const { accounts: ghAccounts, load: loadGhAccounts } = useGhAccounts()
 onMounted(() => void loadGhAccounts())
 
@@ -341,10 +329,13 @@ async function onGhAccount(v: string) {
   else next.githubAccount = v === GH_ACTIVE ? '' : v
   try {
     await projectsStore.updateProject(next)
-    pushToast(t('projects.toast.ghAccountSaved', { name: props.project.name }), 'success')
+    toast.add({
+      title: t('projects.toast.ghAccountSaved', { name: props.project.name }),
+      color: 'success',
+    })
   } catch (err) {
     console.warn('[project] save githubAccount failed', err)
-    pushToast(t('projects.toast.ghAccountFailed'), 'error')
+    toast.add({ title: t('projects.toast.ghAccountFailed'), color: 'error' })
   }
 }
 </script>

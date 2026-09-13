@@ -78,15 +78,6 @@
       <p>{{ ready === null ? t('editor.loading') : t('editor.projectNotFound') }}</p>
     </div>
 
-    <!-- Toasts -->
-    <Teleport to="body">
-      <div class="codetoasts">
-        <div v-for="toast in toasts" :key="toast.id" class="codetoast" :class="toast.kind">
-          {{ toast.text }}
-        </div>
-      </div>
-    </Teleport>
-
     <!-- Shared file context menu (right-click a tree row). -->
     <ContextMenu
       :open="fileMenu.menu.value !== null"
@@ -140,7 +131,6 @@ const {
   onChange,
   onCursorChange,
   onEditorReady,
-  toasts,
 } = ctrl
 
 // Bind the editor pane's exposed handle into the controller's editorRef so its
@@ -314,31 +304,5 @@ onMounted(() => {
   justify-content: center;
   gap: 9px;
   color: var(--textDim);
-}
-
-.codetoasts {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.codetoast {
-  padding: 8px 12px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgEl);
-  color: var(--text);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-}
-.codetoast.success {
-  border-color: var(--add);
-  color: var(--add);
-}
-.codetoast.error {
-  border-color: var(--danger);
-  color: var(--danger);
 }
 </style>

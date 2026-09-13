@@ -416,7 +416,6 @@
 // one project; rows hide their project label since the tab already names it.
 import type { Session, SortBy } from '~/composables/useSessionsData'
 import { PROJECT_COLOR_DEFAULT } from '~/composables/useProjectColors'
-import { pushActionToast } from '~/composables/useActionToasts'
 import {
   highlightSnippet,
   SESSION_SEARCH_MIN_CHARS,
@@ -537,7 +536,7 @@ async function openHit(h: SessionSearchHit) {
     opened = await store.openByEngineId(h.sessionId)
   }
   if (!opened) {
-    pushActionToast(t('sessionsSearch.open.notFound'), 'error')
+    useToast().add({ title: t('sessionsSearch.open.notFound'), color: 'error' })
     return
   }
   const s = store.sessions.find((x) => x.engineId === h.sessionId)
@@ -789,7 +788,7 @@ async function ctxCopyPath() {
   const engineId = ctxSessionId.value
   ctx.value = null
   if (!engineId) {
-    pushActionToast(t('sessions.ctx.notSaved'), 'info')
+    useToast().add({ title: t('sessions.ctx.notSaved'), color: 'info' })
     return
   }
   // Main derives the absolute path from the engineId (invariant #4). Browser-dev
@@ -805,7 +804,7 @@ function ctxOpenFinder() {
   const engineId = ctxSessionId.value
   ctx.value = null
   if (!engineId) {
-    pushActionToast(t('sessions.ctx.notSaved'), 'info')
+    useToast().add({ title: t('sessions.ctx.notSaved'), color: 'info' })
     return
   }
   if (sc.available) void sc.revealSessionFolder(engineId).catch(() => undefined)

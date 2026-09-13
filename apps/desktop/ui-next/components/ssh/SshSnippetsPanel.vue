@@ -95,7 +95,6 @@
 import { ref } from 'vue'
 import SshSnippetEditor from '~/components/ssh/SshSnippetEditor.vue'
 import { useConfirm } from '~/composables/useConfirm'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { useSshApi } from '~/composables/useSshApi'
 import { useSshSnippetsStore, type SshSnippet } from '~/stores/sshSnippets'
 
@@ -112,21 +111,21 @@ async function run(snippet: SshSnippet): Promise<void> {
   try {
     // Append a newline so the command executes in the remote shell.
     await api.write(props.connId, `${snippet.command}\n`)
-    pushActionToast(t('ssh.snippet.ran', { name: snippet.name }), 'success')
+    useToast().add({ title: t('ssh.snippet.ran', { name: snippet.name }), color: 'success' })
   } catch (err) {
-    pushActionToast(
-      t('ssh.snippet.runFailed', { error: err instanceof Error ? err.message : '' }),
-      'error',
-    )
+    useToast().add({
+      title: t('ssh.snippet.runFailed', { error: err instanceof Error ? err.message : '' }),
+      color: 'error',
+    })
   }
 }
 
 async function copy(snippet: SshSnippet): Promise<void> {
   try {
     await navigator.clipboard.writeText(snippet.command)
-    pushActionToast(t('ssh.snippet.copied'), 'success')
+    useToast().add({ title: t('ssh.snippet.copied'), color: 'success' })
   } catch {
-    pushActionToast(t('ssh.snippet.copyFailed'), 'error')
+    useToast().add({ title: t('ssh.snippet.copyFailed'), color: 'error' })
   }
 }
 

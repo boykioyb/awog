@@ -1,7 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useNewTaskModal } from '~/composables/useNewTaskModal'
 import { useProjects } from '~/composables/useProjects'
-import { useToasts } from '~/composables/useToasts'
 import {
   useWorkflowGen,
   type WorkflowAgent,
@@ -24,7 +23,7 @@ export function useWorkflowsPage() {
   const store = useWorkflowsStore()
   const newTaskModal = useNewTaskModal()
   const { projects } = useProjects()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
   const gen = useWorkflowGen()
 
   const projectList = computed(() => projects.value.map((p) => ({ id: p.id, name: p.name })))
@@ -183,7 +182,7 @@ export function useWorkflowsPage() {
     selectedWorkflowId.value = wf.id
     selectedNodeId.value = null
     creatorOpen.value = false
-    pushToast(`Created "${draft.name}"`, 'success')
+    toast.add({ title: `Created "${draft.name}"`, color: 'success' })
   }
 
   // --- rename --------------------------------------------------------------
@@ -226,7 +225,7 @@ export function useWorkflowsPage() {
       selectedNodeId.value = null
     }
     pendingDeleteId.value = null
-    pushToast(`Deleted "${name}"`, 'success')
+    toast.add({ title: `Deleted "${name}"`, color: 'success' })
   }
 
   // --- run → New Task ------------------------------------------------------
@@ -292,8 +291,5 @@ export function useWorkflowsPage() {
     confirmDelete,
     // run → New Task modal (shared host)
     onRun,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

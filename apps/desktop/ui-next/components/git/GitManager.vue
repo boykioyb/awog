@@ -240,15 +240,6 @@
       @submit="onPush"
       @close="pushOpen = false"
     />
-
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </div>
 </template>
 
@@ -283,7 +274,7 @@ const props = defineProps<{ projectId?: string }>()
 const { t } = useI18n()
 const store = useGitStore()
 const { confirm } = useConfirm()
-const { toasts, pushToast, toastColor } = useToasts()
+const toast = useToast()
 
 // Pinned branches (persisted per project) — floated to the top of the sidebar.
 const pins = useGitBranchPins(() => store.currentProjectId)
@@ -300,12 +291,35 @@ function gitErrorMessage(code: string | null, fallback: string): string {
   return fallback || t('git.error.UNKNOWN')
 }
 
+// A git failure is usually several lines of git's own stderr, so it gets longer on
+// screen than a plain acknowledgement AND a close button — the old one-line toast
+// ellipsized the message away after 3.2s, which is exactly when you need to read it.
+const GIT_ERROR_MS = 10_000
+
+// `git.error.<CODE>` gives a friendly headline for the codes we know; git's own
+// message then goes in the body so nothing is dropped. An unmapped failure has only
+// the raw message, and it becomes the headline with no body.
+function surfaceGitError(code: string | null, message: string): void {
+  const resolved = gitErrorMessage(code, message)
+  const [head, ...rest] = resolved.split('\n')
+  const detail = [rest.join('\n').trim(), resolved === message ? '' : message.trim()]
+    .filter(Boolean)
+    .join('\n\n')
+  toast.add({
+    title: head ?? resolved,
+    ...(detail ? { description: detail } : {}),
+    color: 'error',
+    duration: GIT_ERROR_MS,
+    close: true,
+  })
+}
+
 // Any mutating op that fails surfaces via store.lastError (instead of a silent
 // console.warn) → toast it so the user sees what happened.
 watch(
   () => store.lastError,
   (e) => {
-    if (e) pushToast(gitErrorMessage(e.code, e.message), 'error')
+    if (e) surfaceGitError(e.code, e.message)
   },
 )
 
@@ -314,7 +328,7 @@ watch(
 watch(
   () => store.lastNotice,
   (n) => {
-    if (n) pushToast(t(n.key, n.params ?? {}), 'success')
+    if (n) toast.add({ title: t(n.key, n.params ?? {}), color: 'success' })
   },
 )
 
@@ -337,11 +351,11 @@ async function switchBranch(name: string) {
     // leaves behind ("No local changes to save") → checkout stays refused.
     if (!(await store.stashSave(undefined, { includeUntracked: true }))) return
     const retry = await store.checkoutBranch(name)
-    if (retry.ok) pushToast(t('git.checkoutDirty.stashed', { name }), 'success')
-    else pushToast(gitErrorMessage(retry.code, retry.message), 'error')
+    if (retry.ok) toast.add({ title: t('git.checkoutDirty.stashed', { name }), color: 'success' })
+    else surfaceGitError(retry.code, retry.message)
     return
   }
-  pushToast(gitErrorMessage(res.code, res.message), 'error')
+  surfaceGitError(res.code, res.message)
 }
 
 // Delete a local branch via a confirm modal that also offers deleting the
@@ -392,12 +406,13 @@ async function runDelete(b: BranchInfo, deleteRemote: boolean) {
 // local delete still succeeded).
 function finishDelete(name: string, res: DeleteBranchResult) {
   if (!res.ok) {
-    pushToast(gitErrorMessage(res.code, res.message), 'error')
+    surfaceGitError(res.code, res.message)
     return
   }
   if (pins.isPinned(name)) pins.toggle(name)
-  if (res.remoteError) pushToast(t('git.deleteBranch.remoteFailed', { name }), 'error')
-  else pushToast(t('git.deleteBranch.deleted', { name }), 'success')
+  if (res.remoteError)
+    toast.add({ title: t('git.deleteBranch.remoteFailed', { name }), color: 'error' })
+  else toast.add({ title: t('git.deleteBranch.deleted', { name }), color: 'success' })
 }
 
 // ── View state (component-local; not git data) ──
@@ -1285,7 +1300,7 @@ async function onRemoveRemote(name: string) {
   if (section.value.kind === 'remote' && section.value.name === name) {
     section.value = { kind: 'local-changes' }
   }
-  pushToast(t('git.remote.removed', { name }), 'success')
+  toast.add({ title: t('git.remote.removed', { name }), color: 'success' })
 }
 
 onMounted(async () => {

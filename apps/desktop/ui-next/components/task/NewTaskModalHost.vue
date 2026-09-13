@@ -9,14 +9,6 @@
     @save="onSave"
     @cancel="close"
   />
-  <div
-    v-for="tt in toasts"
-    :key="tt.id"
-    class="toast"
-    :style="{ borderColor: toastColor(tt.kind) }"
-  >
-    {{ tt.text }}
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -29,14 +21,13 @@ import NewTaskModal from '~/components/task/NewTaskModal.vue'
 import { useNewTaskModal } from '~/composables/useNewTaskModal'
 import { useNewTaskData, type WorkflowOption } from '~/composables/useNewTaskData'
 import { useTasksStore, type CreateTaskInput } from '~/stores/tasks'
-import { useToasts } from '~/composables/useToasts'
 import { useI18n } from '~/composables/useI18n'
 
 const { open, seed, close } = useNewTaskModal()
 const data = useNewTaskData()
 const store = useTasksStore()
 const { t } = useI18n()
-const { toasts, pushToast, toastColor } = useToasts()
+const toast = useToast()
 
 // Load the modal's data (workflows/projects/connections) when it opens.
 watch(open, (v) => {
@@ -48,6 +39,6 @@ function onSave(input: CreateTaskInput): void {
   const snapshot = wf ? { id: wf.id, name: wf.name, nodes: wf.nodes, edges: wf.edges } : undefined
   const task = store.createTask(input, snapshot)
   close()
-  pushToast(t('tasks.toast.created', { title: task.title }), 'success')
+  toast.add({ title: t('tasks.toast.created', { title: task.title }), color: 'success' })
 }
 </script>

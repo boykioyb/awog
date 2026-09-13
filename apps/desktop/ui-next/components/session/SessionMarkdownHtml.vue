@@ -7,7 +7,6 @@
 </template>
 
 <script setup lang="ts">
-import { pushActionToast } from '~/composables/useActionToasts'
 // Renders a single markdown HTML run produced by useMarkdown (one segment between mermaid
 // blocks). Split out of SessionTextBlock so each run is an independent node — letting
 // mermaid segments render as live <MermaidView> diagrams in between (SoC).
@@ -108,7 +107,7 @@ async function onRunCommand(command: string, alt: boolean): Promise<void> {
     if (!ok) return
   }
   const wrote = await terminalRun.run(id, cmd, alt)
-  if (!wrote) pushActionToast(t('sessions.code.runFailed'), 'error')
+  if (!wrote) useToast().add({ title: t('sessions.code.runFailed'), color: 'error' })
 }
 
 const addCodeBlockControls = useCodeBlockAttacher({

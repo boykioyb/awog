@@ -167,7 +167,6 @@ import type { WorkspaceDockSide } from '~/stores/settings'
 import { useBrowserContext } from '~/composables/useBrowserContext'
 import { useBrowserPins } from '~/composables/useBrowserPins'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
-import { pushActionToast } from '~/composables/useActionToasts'
 
 // 'panel' = view của workspace panel (có dock/expand/popout), 'window' = cửa sổ
 // popout (những nút đó vô nghĩa: OS lo, và nó đã ở cửa sổ riêng rồi).
@@ -271,10 +270,10 @@ onUnmounted(() => {
 // ── Trang → chat / bản dịch ─────────────────────────────────────────────────
 
 const fail = (err: unknown): void => {
-  pushActionToast(
-    t('browser.toast.failed', { message: err instanceof Error ? err.message : String(err) }),
-    'error',
-  )
+  useToast().add({
+    title: t('browser.toast.failed', { message: err instanceof Error ? err.message : String(err) }),
+    color: 'error',
+  })
 }
 
 // Nhận RECT chứ không phải MouseEvent: nó chỉ còn được gọi từ menu hành động, nơi

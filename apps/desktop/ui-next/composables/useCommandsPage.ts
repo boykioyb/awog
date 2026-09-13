@@ -2,7 +2,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useProjects } from '~/composables/useProjects'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
 import { useCommandsStore, type Command } from '~/stores/commands'
 
@@ -24,7 +23,7 @@ export function useCommandsPage() {
   const settings = useSettingsStore()
   const sc = useSidecar()
   const { projects } = useProjects()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
   const { t } = useI18n()
 
   // Project list for the scope picker + tier hints (id/name).
@@ -62,14 +61,18 @@ export function useCommandsPage() {
       await store.loadCommands(ids)
       if (!opts.silent) {
         const delta = store.commands.length - before
-        if (!sc.available) pushToast('Engine offline — showing cached commands', 'info')
+        if (!sc.available)
+          toast.add({ title: 'Engine offline — showing cached commands', color: 'info' })
         else if (delta > 0)
-          pushToast(`Loaded ${store.commands.length} commands (+${delta})`, 'success')
-        else pushToast(`Loaded ${store.commands.length} commands`, 'info')
+          toast.add({
+            title: `Loaded ${store.commands.length} commands (+${delta})`,
+            color: 'success',
+          })
+        else toast.add({ title: `Loaded ${store.commands.length} commands`, color: 'info' })
       }
     } catch (err) {
       console.error('[commands] refresh failed', err)
-      pushToast('Refresh failed — see console', 'error')
+      toast.add({ title: 'Refresh failed — see console', color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -85,11 +88,11 @@ export function useCommandsPage() {
   // freshly imported tiers show up, then report what landed.
   const onImported = async (n: number): Promise<void> => {
     if (!n) {
-      pushToast(t('library.import.none'), 'info')
+      toast.add({ title: t('library.import.none'), color: 'info' })
       return
     }
     await refresh({ silent: true })
-    pushToast(t('library.import.done', { n }), 'success')
+    toast.add({ title: t('library.import.done', { n }), color: 'success' })
   }
 
   // --- create (AI prompt → draft) ------------------------------------------
@@ -126,10 +129,16 @@ export function useCommandsPage() {
     try {
       const saved = await store.saveCommand(command)
       selectedKey.value = store.commandKey(saved)
-      pushToast(isNew ? `Saved /${saved.name}` : `Updated /${saved.name}`, 'success')
+      toast.add({
+        title: isNew ? `Saved /${saved.name}` : `Updated /${saved.name}`,
+        color: 'success',
+      })
     } catch (err) {
       console.error('[commands] save failed', err)
-      pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Save failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
       return
     }
     closeEditor()
@@ -176,10 +185,10 @@ export function useCommandsPage() {
     try {
       const saved = await store.saveCommand(updated)
       selectedKey.value = store.commandKey(saved)
-      pushToast('Command updated', 'success')
+      toast.add({ title: 'Command updated', color: 'success' })
     } catch (err) {
       console.error('[commands] body edit save failed', err)
-      pushToast('Failed to save edit — see console', 'error')
+      toast.add({ title: 'Failed to save edit — see console', color: 'error' })
       return
     }
     closeBodyEdit()
@@ -191,7 +200,7 @@ export function useCommandsPage() {
       await store.toggleCommand(c.id, c.source ?? 'global', c.projectId)
     } catch (err) {
       console.error('[commands] toggle failed', err)
-      pushToast('Toggle failed — see console', 'error')
+      toast.add({ title: 'Toggle failed — see console', color: 'error' })
     }
   }
 
@@ -200,10 +209,13 @@ export function useCommandsPage() {
     try {
       const copy = await store.duplicateCommand(c)
       selectedKey.value = store.commandKey(copy)
-      pushToast(`Duplicated to /${copy.name}`, 'success')
+      toast.add({ title: `Duplicated to /${copy.name}`, color: 'success' })
     } catch (err) {
       console.error('[commands] duplicate failed', err)
-      pushToast(`Duplicate failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Duplicate failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -231,10 +243,13 @@ export function useCommandsPage() {
       if (selectedKey.value === wasKey) {
         selectedKey.value = store.commands[0] ? store.commandKey(store.commands[0]) : null
       }
-      pushToast(`Deleted /${c.name}`, 'success')
+      toast.add({ title: `Deleted /${c.name}`, color: 'success' })
     } catch (err) {
       console.error('[commands] delete failed', err)
-      pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Delete failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -283,9 +298,6 @@ export function useCommandsPage() {
     confirmDelete,
     // config import
     onImported,
-    // toasts
-    toasts,
-    toastColor,
   }
 }
 

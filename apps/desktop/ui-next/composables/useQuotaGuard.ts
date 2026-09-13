@@ -1,4 +1,4 @@
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSessionsStore } from '~/stores/sessions'
 import type { QuotaAction } from '~/stores/sessions'
@@ -23,33 +23,25 @@ import { useAccounts } from '~/composables/useAccounts'
 // block-new is accurate before any turn runs) and force-refreshes an account right
 // after one of its sessions settles a turn (quota just changed).
 //
-// One app-lifetime mount (QuotaGuardHost in the layout). The toast queue is owned
-// here and rendered by the host. SoC: orchestrates store + settings + accounts only.
-
-export type QuotaToast = { id: string; text: string; action?: QuotaAction }
+// Notifications go to the app-wide toast queue (useToast) rendered by AppToaster —
+// the guard no longer owns a queue or a host. SoC: orchestrates store + settings +
+// accounts only.
 
 const TOAST_TTL_MS = 6000
 const POLL_MS = 60_000
 
-// Module-level toast queue so the host renders exactly what the guard pushes.
-const toasts = ref<QuotaToast[]>([])
-
 // Push a quota toast. Exported (module-level, no Vue context needed) so the store
 // can surface the "new session blocked" reason from create() — the single gate —
 // without importing i18n into the store. An actionable toast (`action` present, e.g.
-// "switch account & retry") is NOT auto-dismissed — it waits for the user to click the
-// button or the toast body, so the action never vanishes mid-decision.
+// "switch account & retry") is NOT auto-dismissed (`duration: 0`) — it waits for the
+// user, so the action never vanishes mid-decision.
 export function pushQuotaToast(text: string, action?: QuotaAction): void {
-  const id = `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
-  toasts.value = [...toasts.value, action ? { id, text, action } : { id, text }]
-  if (action) return
-  setTimeout(() => {
-    toasts.value = toasts.value.filter((tt) => tt.id !== id)
-  }, TOAST_TTL_MS)
-}
-
-export function dismissQuotaToast(id: string): void {
-  toasts.value = toasts.value.filter((tt) => tt.id !== id)
+  useToast().add({
+    title: text,
+    color: 'warning',
+    duration: action ? 0 : TOAST_TTL_MS,
+    ...(action ? { actions: [{ label: action.label, onClick: action.run }] } : {}),
+  })
 }
 
 export function useQuotaGuard() {
@@ -62,12 +54,18 @@ export function useQuotaGuard() {
   // When the store refuses a new session (create) or a new turn (send) on an
   // over-quota account, surface the reason. The store owns the gate but has no i18n;
   // it passes the account label + which gate fired back.
+  // The action's label is the TARGET account's name; the button copy around it
+  // ("Switch to {account}") is composed here, where i18n lives — the toast host is
+  // generic and the store has no i18n.
   store.onQuotaBlocked((account, kind, action) =>
     pushQuotaToast(
       t(kind === 'send' ? 'sessions.quota.blockedSend' : 'sessions.quota.blocked', {
         account: account || t('sessions.quota.account'),
       }),
-      action,
+      action && {
+        label: t('sessions.quota.switchTo', { account: action.label }),
+        run: action.run,
+      },
     ),
   )
 
@@ -155,6 +153,4 @@ export function useQuotaGuard() {
     stop()
     if (timer) clearInterval(timer)
   })
-
-  return { toasts }
 }

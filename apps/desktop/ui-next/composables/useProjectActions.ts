@@ -9,7 +9,6 @@ import { useSidecar } from '~/composables/useSidecar'
 import { useI18n } from '~/composables/useI18n'
 import { useAgentsStore } from '~/stores/agents'
 import { pickFolder } from '~/composables/useFolderPicker'
-import type { ToastKind } from '~/composables/useToasts'
 import type { Project } from '~/types'
 import type { ProjectEditorSavePayload } from '~/components/project/types'
 
@@ -20,15 +19,15 @@ import type { ProjectEditorSavePayload } from '~/components/project/types'
 // modal drive the same actions from one source (SoC: no page selection / hydrate
 // lifecycle here — those stay in the page-controller).
 //
-// Toast-agnostic: the caller injects `pushToast` (and renders its own queue) so this
-// composable never assumes where messages surface. `currentProject` scopes the
+// Notifications go straight to the app-wide toast queue (useToast) — there is one
+// toast surface now, so there is nothing for the caller to inject. `currentProject`
+// scopes the
 // template dialogs (which target "the" project). `onSaved` lets the caller react to a
 // create/clone/update (e.g. the page re-selects the saved project); the quick-view
 // omits it — store.updateProject already re-renders its store-derived project.
 
 export type UseProjectActionsOptions = {
   currentProject: () => Project | null
-  pushToast: (text: string, kind?: ToastKind) => void
   onSaved?: (saved: Project) => void
 }
 
@@ -38,14 +37,14 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
   const agentsStore = useAgentsStore()
   const sc = useSidecar()
   const { t } = useI18n()
-  const { pushToast } = opts
+  const toast = useToast()
 
   // --- config import (banner) ----------------------------------------------
   // `.claude`/`.agents` copied into `.awog`: confirm + re-hydrate so counts (and
   // project-tier agents) reflect the import. Shared so the quick-view's Overview
   // banner works too.
   const onImported = async (n: number): Promise<void> => {
-    if (n > 0) pushToast(t('projects.toast.imported', { n }), 'success')
+    if (n > 0) toast.add({ title: t('projects.toast.imported', { n }), color: 'success' })
     try {
       await store.hydrate()
     } catch (err) {
@@ -86,7 +85,7 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
       let saved: Project
       if (payload.kind === 'update') {
         saved = await store.updateProject(payload.project)
-        pushToast(t('projects.toast.saved', { name: saved.name }), 'success')
+        toast.add({ title: t('projects.toast.saved', { name: saved.name }), color: 'success' })
       } else if (payload.kind === 'link') {
         saved = await store.linkProject({
           name: payload.data.name,
@@ -96,7 +95,7 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
           gitRemote: payload.data.gitRemote,
           gitBranch: payload.data.gitBranch,
         })
-        pushToast(t('projects.toast.linked', { name: saved.name }), 'success')
+        toast.add({ title: t('projects.toast.linked', { name: saved.name }), color: 'success' })
       } else {
         editorProgress.value = t('projects.editor.cloning')
         saved = await store.cloneProject({
@@ -106,7 +105,7 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
           description: payload.data.description,
           language: payload.data.language,
         })
-        pushToast(t('projects.toast.cloned', { name: saved.name }), 'success')
+        toast.add({ title: t('projects.toast.cloned', { name: saved.name }), color: 'success' })
       }
       opts.onSaved?.(saved)
     } catch (err) {
@@ -147,7 +146,7 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
   }
   const onLlmSaved = async (saved: Project) => {
     opts.onSaved?.(saved)
-    pushToast(t('projects.toast.llmSaved', { name: saved.name }), 'success')
+    toast.add({ title: t('projects.toast.llmSaved', { name: saved.name }), color: 'success' })
     closeLlm()
   }
 
@@ -170,10 +169,10 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
     pendingDelete.value = null
     try {
       await store.deleteProject(p.id)
-      pushToast(t('projects.toast.deleted', { name: p.name }), 'success')
+      toast.add({ title: t('projects.toast.deleted', { name: p.name }), color: 'success' })
     } catch (err) {
       console.error('[projects] delete failed', err)
-      pushToast(t('projects.toast.deleteFail'), 'error')
+      toast.add({ title: t('projects.toast.deleteFail'), color: 'error' })
     }
   }
 
@@ -188,7 +187,7 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
       else await sc.openPath(p.path, '.')
     } catch (err) {
       console.warn('[projects] openCode failed', err)
-      pushToast(t('projects.toast.openCodeFail'), 'error')
+      toast.add({ title: t('projects.toast.openCodeFail'), color: 'error' })
     }
   }
 
@@ -221,7 +220,10 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
     saveTemplateOpen.value = false
   }
   const onTemplateSaved = (e: { name: string; count: number }) => {
-    pushToast(t('projects.toast.templateSaved', { name: e.name, count: e.count }), 'success')
+    toast.add({
+      title: t('projects.toast.templateSaved', { name: e.name, count: e.count }),
+      color: 'success',
+    })
   }
 
   const openInstallTemplate = async () => {
@@ -234,10 +236,10 @@ export function useProjectActions(opts: UseProjectActionsOptions) {
     installTemplateOpen.value = false
   }
   const onTemplateInstalled = (e: { installed: number; skipped: number }) => {
-    pushToast(
-      t('projects.toast.templateInstalled', { installed: e.installed, skipped: e.skipped }),
-      'success',
-    )
+    toast.add({
+      title: t('projects.toast.templateInstalled', { installed: e.installed, skipped: e.skipped }),
+      color: 'success',
+    })
   }
 
   return {

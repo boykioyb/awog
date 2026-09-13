@@ -1,7 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useNewTaskModal } from '~/composables/useNewTaskModal'
-import { useToasts } from '~/composables/useToasts'
 import { useTasksStore, type Task } from '~/stores/tasks'
 
 // Page-controller for /tasks — owns selection, the New Task modal flow, the
@@ -13,7 +12,7 @@ import { useTasksStore, type Task } from '~/stores/tasks'
 export function useTasksPage() {
   const store = useTasksStore()
   const { t } = useI18n()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
   const { openModal } = useNewTaskModal()
 
   // ── selection ───────────────────────────────────────────────────────────────
@@ -35,18 +34,18 @@ export function useTasksPage() {
   // ── lifecycle handlers (forwarded from TaskDetail) ───────────────────────────
   const approve = (taskId: string, nodeId: string) => {
     store.approvePhase(taskId, nodeId)
-    pushToast(t('tasks.toast.approved'), 'success')
+    toast.add({ title: t('tasks.toast.approved'), color: 'success' })
   }
   const rerun = (taskId: string, nodeId: string, instruction: string) => {
     store.rerunPhase(taskId, nodeId, instruction)
-    pushToast(t('tasks.toast.rerun'), 'info')
+    toast.add({ title: t('tasks.toast.rerun'), color: 'info' })
   }
   const discuss = (taskId: string, nodeId: string, runVersion: number, text: string) => {
     store.discussPhase(taskId, nodeId, runVersion, text)
   }
   const cancel = (taskId: string) => {
     store.cancelTask(taskId)
-    pushToast(t('tasks.toast.canceled'), 'info')
+    toast.add({ title: t('tasks.toast.canceled'), color: 'info' })
   }
   const pause = (taskId: string) => store.pauseTask(taskId)
   const resume = (taskId: string) => store.resumeTask(taskId)
@@ -69,7 +68,7 @@ export function useTasksPage() {
     if (!task) return
     pendingDelete.value = null
     store.deleteTask(task.id)
-    pushToast(t('tasks.toast.deleted'), 'success')
+    toast.add({ title: t('tasks.toast.deleted'), color: 'success' })
   }
 
   return {
@@ -95,8 +94,5 @@ export function useTasksPage() {
     cancelDelete,
     deleteDescription,
     confirmDelete,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

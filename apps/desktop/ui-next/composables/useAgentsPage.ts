@@ -2,7 +2,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useProjects } from '~/composables/useProjects'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import { useConnectionsStore } from '~/stores/connections'
 import { useSettingsStore } from '~/stores/settings'
 import { useAgentsStore, type Agent } from '~/stores/agents'
@@ -19,7 +18,7 @@ export function useAgentsPage() {
   const connections = useConnectionsStore()
   const sc = useSidecar()
   const { projects } = useProjects()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
   const { t } = useI18n()
 
   // Project list for the scope picker + tier hints (id/name).
@@ -62,13 +61,15 @@ export function useAgentsPage() {
       await Promise.all([store.loadAgents(ids), connections.loadServers()])
       if (!opts.silent) {
         const delta = store.agents.length - before
-        if (!sc.available) pushToast('Engine offline — showing cached agents', 'info')
-        else if (delta > 0) pushToast(`Loaded ${store.agents.length} agents (+${delta})`, 'success')
-        else pushToast(`Loaded ${store.agents.length} agents`, 'info')
+        if (!sc.available)
+          toast.add({ title: 'Engine offline — showing cached agents', color: 'info' })
+        else if (delta > 0)
+          toast.add({ title: `Loaded ${store.agents.length} agents (+${delta})`, color: 'success' })
+        else toast.add({ title: `Loaded ${store.agents.length} agents`, color: 'info' })
       }
     } catch (err) {
       console.error('[agents] refresh failed', err)
-      pushToast('Refresh failed — see console', 'error')
+      toast.add({ title: 'Refresh failed — see console', color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -84,11 +85,11 @@ export function useAgentsPage() {
   // freshly imported tiers show up, then report what landed.
   const onImported = async (n: number): Promise<void> => {
     if (!n) {
-      pushToast(t('library.import.none'), 'info')
+      toast.add({ title: t('library.import.none'), color: 'info' })
       return
     }
     await refresh({ silent: true })
-    pushToast(t('library.import.done', { n }), 'success')
+    toast.add({ title: t('library.import.done', { n }), color: 'success' })
   }
 
   // --- create (chat-driven) ------------------------------------------------
@@ -130,10 +131,16 @@ export function useAgentsPage() {
     try {
       const saved = await store.saveAgent(payload.agent, payload.previousId)
       selectedKey.value = store.agentKey(saved)
-      pushToast(isRename ? `Renamed to ${saved.id}` : `Saved ${saved.id}`, 'success')
+      toast.add({
+        title: isRename ? `Renamed to ${saved.id}` : `Saved ${saved.id}`,
+        color: 'success',
+      })
     } catch (err) {
       console.error('[agents] save failed', err)
-      pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Save failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
       return
     }
     closeEditor()
@@ -154,10 +161,10 @@ export function useAgentsPage() {
     try {
       const saved = await store.saveAgent(updated)
       selectedKey.value = store.agentKey(saved)
-      pushToast('Agent updated', 'success')
+      toast.add({ title: 'Agent updated', color: 'success' })
     } catch (err) {
       console.error('[agents] body edit save failed', err)
-      pushToast('Failed to save edit — see console', 'error')
+      toast.add({ title: 'Failed to save edit — see console', color: 'error' })
       return
     }
     closeBodyEdit()
@@ -168,10 +175,13 @@ export function useAgentsPage() {
     try {
       const copy = await store.duplicateAgent(a)
       selectedKey.value = store.agentKey(copy)
-      pushToast(`Duplicated to ${copy.id}`, 'success')
+      toast.add({ title: `Duplicated to ${copy.id}`, color: 'success' })
     } catch (err) {
       console.error('[agents] duplicate failed', err)
-      pushToast(`Duplicate failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Duplicate failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -199,10 +209,13 @@ export function useAgentsPage() {
       if (selectedKey.value === wasKey) {
         selectedKey.value = store.agents[0] ? store.agentKey(store.agents[0]) : null
       }
-      pushToast(`Deleted ${a.id}`, 'success')
+      toast.add({ title: `Deleted ${a.id}`, color: 'success' })
     } catch (err) {
       console.error('[agents] delete failed', err)
-      pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Delete failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -249,8 +262,5 @@ export function useAgentsPage() {
     confirmDelete,
     // config import
     onImported,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

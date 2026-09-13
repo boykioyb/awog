@@ -1,7 +1,6 @@
 import { computed } from 'vue'
 import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { isArchive, type SftpBrowser } from '~/composables/useSftpBrowser'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { copyText } from '~/utils/clipboard'
 import type { SftpEntry, CompressFormat } from '~/composables/useSshApi'
 
@@ -163,13 +162,13 @@ export function useSftpContextMenu(browser: SftpBrowser) {
           await copyText(
             browser.cwd.value === '.' ? only.name : `${browser.cwd.value}/${only.name}`,
           )
-          pushActionToast(t('ssh.sftp.ctx.copiedPath'), 'success')
+          useToast().add({ title: t('ssh.sftp.ctx.copiedPath'), color: 'success' })
         }
         break
       case 'copyname':
         if (only) {
           await copyText(only.name)
-          pushActionToast(t('ssh.sftp.ctx.copiedName'), 'success')
+          useToast().add({ title: t('ssh.sftp.ctx.copiedName'), color: 'success' })
         }
         break
       case 'delete':

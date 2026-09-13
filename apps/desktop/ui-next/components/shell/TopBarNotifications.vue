@@ -177,7 +177,6 @@ import {
   openNotification,
   useGhNotificationsStatus,
 } from '~/composables/useGhNotifications'
-import { pushActionToast } from '~/composables/useActionToasts'
 import {
   refreshPrWatch,
   togglePrWatch,
@@ -370,7 +369,10 @@ async function onTogglePrWatch(row: PrRow, watchIt: boolean): Promise<void> {
     })
   } catch (err) {
     // Trần danh sách / gh không sẵn sàng: nói ra, đừng để cái công tắc bật hụt im lặng.
-    pushActionToast(err instanceof Error ? err.message : t('ghWatch.toggleFailed'), 'error')
+    useToast().add({
+      title: err instanceof Error ? err.message : t('ghWatch.toggleFailed'),
+      color: 'error',
+    })
   } finally {
     prBusy.value = false
   }

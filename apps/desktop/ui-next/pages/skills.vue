@@ -73,16 +73,6 @@
       @confirm="confirmDelete"
       @cancel="cancelDelete"
     />
-
-    <!-- transient toasts -->
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -132,8 +122,6 @@ const {
   deleteDescription,
   confirmDelete,
   onImported,
-  toasts,
-  toastColor,
 } = useSkillsPage()
 
 // Project list enriched with the on-disk path (for tier hints in editor/detail).

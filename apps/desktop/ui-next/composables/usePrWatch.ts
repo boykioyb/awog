@@ -16,7 +16,6 @@
 //
 // SoC: không `gh`, không fs — sidecar giữ CLI. Module này lo state + trình bày.
 import { computed, ref } from 'vue'
-import { pushActionToast } from '~/composables/useActionToasts'
 import { useSidecar } from '~/composables/useSidecar'
 
 export type PrCiState = 'pass' | 'fail' | 'pending' | 'none'
@@ -168,9 +167,11 @@ export async function pollPrWatch(): Promise<void> {
       toasted.set(change.id, key)
       const bad =
         change.reasons.includes('ci-failed') || change.reasons.includes('review-changes-requested')
-      pushActionToast(changeText(change), bad ? 'error' : 'info', {
+      useToast().add({
+        title: changeText(change),
+        color: bad ? 'error' : 'info',
         icon: 'fork',
-        action: () => {
+        onClick: () => {
           const item = items.value.find((i) => i.id === change.id)
           if (item?.url) void useLinkOpen().openLink(item.url)
         },

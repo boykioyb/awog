@@ -1,7 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useProjects } from '~/composables/useProjects'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import {
   useTemplatesStore,
   type ProjectTemplate,
@@ -24,7 +23,7 @@ export function useTemplatesPage() {
   const store = useTemplatesStore()
   const sc = useSidecar()
   const { projects } = useProjects()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
   const { t } = useI18n()
 
   // Project roster (id + name) for the Save-as / Install pickers.
@@ -42,12 +41,13 @@ export function useTemplatesPage() {
     try {
       await store.loadTemplates()
       if (!opts.silent) {
-        if (!sc.available) pushToast('Engine offline — showing cached templates', 'info')
-        else pushToast(`Loaded ${store.templates.length} templates`, 'info')
+        if (!sc.available)
+          toast.add({ title: 'Engine offline — showing cached templates', color: 'info' })
+        else toast.add({ title: `Loaded ${store.templates.length} templates`, color: 'info' })
       }
     } catch (err) {
       console.error('[templates] refresh failed', err)
-      pushToast('Refresh failed — see console', 'error')
+      toast.add({ title: 'Refresh failed — see console', color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -94,10 +94,10 @@ export function useTemplatesPage() {
   }
 
   const onSaved = (e: { name: string; count: number }) => {
-    pushToast(
-      `Saved template "${e.name}" (${e.count} ${e.count === 1 ? 'entity' : 'entities'})`,
-      'success',
-    )
+    toast.add({
+      title: `Saved template "${e.name}" (${e.count} ${e.count === 1 ? 'entity' : 'entities'})`,
+      color: 'success',
+    })
   }
 
   // After a GitHub fetch: imported bundles are already in the store list. If
@@ -107,13 +107,16 @@ export function useTemplatesPage() {
     const { imported, skipped } = result
     const first = imported[0]
     if (imported.length === 1 && first) {
-      pushToast(`Fetched "${first.name}"`, 'success')
+      toast.add({ title: `Fetched "${first.name}"`, color: 'success' })
       installFixedTemplateId.value = first.id
       installDialogOpen.value = true
     } else if (imported.length > 1) {
-      pushToast(`Fetched ${imported.length} templates (${skipped.length} skipped)`, 'success')
+      toast.add({
+        title: `Fetched ${imported.length} templates (${skipped.length} skipped)`,
+        color: 'success',
+      })
     } else {
-      pushToast(`Nothing imported (${skipped.length} skipped)`, 'error')
+      toast.add({ title: `Nothing imported (${skipped.length} skipped)`, color: 'error' })
     }
   }
 
@@ -122,7 +125,7 @@ export function useTemplatesPage() {
   // chọn project đích — bước ĐƯA VÀO PROJECT là một quyết định riêng, không phải
   // hệ quả tự động của việc cài về thư viện.
   const onDiscoverInstalled = (e: { name: string; templateId: string }) => {
-    pushToast(t('templatesDiscover.installedToast', { name: e.name }), 'success')
+    toast.add({ title: t('templatesDiscover.installedToast', { name: e.name }), color: 'success' })
     installFixedTemplateId.value = e.templateId
     installDialogOpen.value = true
   }
@@ -142,21 +145,23 @@ export function useTemplatesPage() {
     try {
       const check = await store.checkUpdate(tpl.id)
       if (!check.hasRemote) {
-        pushToast(t('templatesUpdate.noRemote'), 'info')
+        toast.add({ title: t('templatesUpdate.noRemote'), color: 'info' })
         return
       }
       if (!check.hasUpdate) {
-        pushToast(t('templatesUpdate.upToDate'), 'info')
+        toast.add({ title: t('templatesUpdate.upToDate'), color: 'info' })
         return
       }
       updateCheck.value = check
       updateTemplateName.value = tpl.name
       updateDialogOpen.value = true
     } catch (err) {
-      pushToast(
-        t('templatesUpdate.checkFailed', { err: err instanceof Error ? err.message : String(err) }),
-        'error',
-      )
+      toast.add({
+        title: t('templatesUpdate.checkFailed', {
+          err: err instanceof Error ? err.message : String(err),
+        }),
+        color: 'error',
+      })
     } finally {
       checkingUpdate.value = false
     }
@@ -170,11 +175,11 @@ export function useTemplatesPage() {
     // `keptLocal` không phải thay đổi trên đĩa — đếm nó vào là nói quá việc đã làm.
     const applied =
       result.status === 'updated' ? result.applied.filter((a) => a.action !== 'keptLocal') : []
-    pushToast(t('templatesUpdate.applied', { n: applied.length }), 'success')
+    toast.add({ title: t('templatesUpdate.applied', { n: applied.length }), color: 'success' })
   }
 
   const onInstalled = (e: { installed: number; skipped: number }) => {
-    pushToast(`Installed ${e.installed}, skipped ${e.skipped}`, 'success')
+    toast.add({ title: `Installed ${e.installed}, skipped ${e.skipped}`, color: 'success' })
   }
 
   // --- delete --------------------------------------------------------------
@@ -191,10 +196,10 @@ export function useTemplatesPage() {
     pendingDelete.value = null
     try {
       await store.remove(tpl.id)
-      pushToast(`Deleted "${tpl.name}"`, 'success')
+      toast.add({ title: `Deleted "${tpl.name}"`, color: 'success' })
     } catch (err) {
       console.error('[templates] delete failed', err)
-      pushToast('Delete failed — see console', 'error')
+      toast.add({ title: 'Delete failed — see console', color: 'error' })
     }
   }
 
@@ -237,8 +242,5 @@ export function useTemplatesPage() {
     askDelete,
     cancelDelete,
     confirmDelete,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

@@ -126,16 +126,6 @@
       @confirm="confirmDelete"
       @cancel="cancelDelete"
     />
-
-    <!-- transient toasts -->
-    <div
-      v-for="tt in toasts"
-      :key="tt.id"
-      class="toast"
-      :style="{ borderColor: toastColor(tt.kind) }"
-    >
-      {{ tt.text }}
-    </div>
   </section>
 </template>
 
@@ -225,8 +215,6 @@ const {
   openRowMenu,
   rowMenuItems,
   onRowMenuSelect,
-  toasts,
-  toastColor,
 } = useConnectionsPage()
 
 // Built-in SSH entry first, then the configured sources.

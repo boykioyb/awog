@@ -74,7 +74,6 @@ import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useFileContextMenu } from '~/composables/useFileContextMenu'
 import { useFsApi } from '~/composables/useFsApi'
 import { useTextPrompt } from '~/composables/useTextPrompt'
-import { pushActionToast } from '~/composables/useActionToasts'
 
 const props = defineProps<{ session: Session }>()
 
@@ -170,7 +169,10 @@ async function createAtRoot(kind: 'file' | 'dir'): Promise<void> {
     else await fs.createDir(r, name)
     await reloadDir('')
   } catch (err) {
-    pushActionToast(err instanceof Error && err.message ? err.message : String(err), 'error')
+    useToast().add({
+      title: err instanceof Error && err.message ? err.message : String(err),
+      color: 'error',
+    })
   }
 }
 

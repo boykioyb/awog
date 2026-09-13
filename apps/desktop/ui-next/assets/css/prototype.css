@@ -484,8 +484,6 @@
   .pop .o.on{border-color:var(--accent);color:var(--accent);background:var(--accentDim)}
   .pop .sld{height:5px;background:var(--bgActive);border-radius:var(--r-pill);position:relative;margin:4px 6px 2px}
   .pop .sld i{position:absolute;width:14px;height:14px;border-radius:50%;background:var(--accent);top:-5px}
-  .toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-btn);padding:11px 16px;display:flex;align-items:center;gap:16px;font-size: var(--fs-sm);line-height:var(--lh-sm);box-shadow:0 16px 44px rgba(0,0,0,.5);z-index:140}
-  .toast a{color:var(--accent);cursor:pointer;font-weight:600}
 
   /* list filter + grouping + resize */
   .list{flex:0 0 auto}

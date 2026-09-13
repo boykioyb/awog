@@ -515,7 +515,6 @@ import type {
 import { useComposerData } from '~/composables/useComposerData'
 import { useWikiStore } from '~/stores/wiki'
 import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
-import { pushActionToast } from '~/composables/useActionToasts'
 import {
   BUILTIN_COMMANDS,
   findBuiltin,
@@ -637,11 +636,11 @@ function onCommand(builtinId: string, arg = '') {
     // line + a locked Send button for the whole RPC (result surfaces as a toast).
     void store.compactSession(store.activeId).then((r) => {
       if (r === 'compacted') {
-        pushActionToast(t('sessions.command.notice.compacted'), 'success')
+        useToast().add({ title: t('sessions.command.notice.compacted'), color: 'success' })
       } else if (r === 'nothing') {
-        pushActionToast(t('sessions.command.notice.nothingToCompact'), 'info')
+        useToast().add({ title: t('sessions.command.notice.nothingToCompact'), color: 'info' })
       } else {
-        pushActionToast(t('sessions.command.notice.compactFailed'), 'error')
+        useToast().add({ title: t('sessions.command.notice.compactFailed'), color: 'error' })
       }
     })
   } else if (cmd.action.type === 'style') {

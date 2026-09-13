@@ -2,7 +2,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useProjects } from '~/composables/useProjects'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import { useSettingsStore } from '~/stores/settings'
 import { useRulesStore, type Rule } from '~/stores/rules'
 
@@ -17,7 +16,7 @@ export function useRulesPage() {
   const settings = useSettingsStore()
   const sc = useSidecar()
   const { projects } = useProjects()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
   const { t } = useI18n()
 
   // Project list for the scope picker + tier hints (id/name).
@@ -55,13 +54,15 @@ export function useRulesPage() {
       await store.loadRules(ids)
       if (!opts.silent) {
         const delta = store.rules.length - before
-        if (!sc.available) pushToast('Engine offline — showing cached rules', 'info')
-        else if (delta > 0) pushToast(`Loaded ${store.rules.length} rules (+${delta})`, 'success')
-        else pushToast(`Loaded ${store.rules.length} rules`, 'info')
+        if (!sc.available)
+          toast.add({ title: 'Engine offline — showing cached rules', color: 'info' })
+        else if (delta > 0)
+          toast.add({ title: `Loaded ${store.rules.length} rules (+${delta})`, color: 'success' })
+        else toast.add({ title: `Loaded ${store.rules.length} rules`, color: 'info' })
       }
     } catch (err) {
       console.error('[rules] refresh failed', err)
-      pushToast('Refresh failed — see console', 'error')
+      toast.add({ title: 'Refresh failed — see console', color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -77,11 +78,11 @@ export function useRulesPage() {
   // freshly imported tiers show up, then report what landed.
   const onImported = async (n: number): Promise<void> => {
     if (!n) {
-      pushToast(t('library.import.none'), 'info')
+      toast.add({ title: t('library.import.none'), color: 'info' })
       return
     }
     await refresh({ silent: true })
-    pushToast(t('library.import.done', { n }), 'success')
+    toast.add({ title: t('library.import.done', { n }), color: 'success' })
   }
 
   // --- create (chat-driven, one-shot rules.generate) -----------------------
@@ -100,10 +101,13 @@ export function useRulesPage() {
     try {
       const saved = await store.saveRule(payload.rule)
       selectedKey.value = store.ruleKey(saved)
-      pushToast(`Saved ${saved.name}`, 'success')
+      toast.add({ title: `Saved ${saved.name}`, color: 'success' })
     } catch (err) {
       console.error('[rules] create failed', err)
-      pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Save failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
       return
     }
     closeCreator()
@@ -125,10 +129,16 @@ export function useRulesPage() {
     try {
       const saved = await store.saveRule(payload.rule, payload.previousId)
       selectedKey.value = store.ruleKey(saved)
-      pushToast(isRename ? `Renamed to ${saved.name}` : `Saved ${saved.name}`, 'success')
+      toast.add({
+        title: isRename ? `Renamed to ${saved.name}` : `Saved ${saved.name}`,
+        color: 'success',
+      })
     } catch (err) {
       console.error('[rules] save failed', err)
-      pushToast(`Save failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Save failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
       return
     }
     closeEditor()
@@ -149,10 +159,10 @@ export function useRulesPage() {
     try {
       const saved = await store.saveRule(updated)
       selectedKey.value = store.ruleKey(saved)
-      pushToast('Rule updated', 'success')
+      toast.add({ title: 'Rule updated', color: 'success' })
     } catch (err) {
       console.error('[rules] body edit save failed', err)
-      pushToast('Failed to save edit — see console', 'error')
+      toast.add({ title: 'Failed to save edit — see console', color: 'error' })
       return
     }
     closeBodyEdit()
@@ -187,10 +197,13 @@ export function useRulesPage() {
       if (selectedKey.value === wasKey) {
         selectedKey.value = store.rules[0] ? store.ruleKey(store.rules[0]) : null
       }
-      pushToast(`Deleted ${r.name}`, 'success')
+      toast.add({ title: `Deleted ${r.name}`, color: 'success' })
     } catch (err) {
       console.error('[rules] delete failed', err)
-      pushToast(`Delete failed: ${err instanceof Error ? err.message : 'see console'}`, 'error')
+      toast.add({
+        title: `Delete failed: ${err instanceof Error ? err.message : 'see console'}`,
+        color: 'error',
+      })
     }
   }
 
@@ -235,8 +248,5 @@ export function useRulesPage() {
     confirmDelete,
     // config import
     onImported,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

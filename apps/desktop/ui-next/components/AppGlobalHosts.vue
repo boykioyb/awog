@@ -10,11 +10,12 @@
   <NewTaskModalHost />
   <ConfirmDialogHost />
   <TextPromptHost />
-  <QuotaGuardHost />
   <!-- SSH host-key TOFU prompt: an SSH connect can be triggered from a session's
        terminal, so the prompt must exist wherever a session is rendered. -->
   <SshHostKeyHost />
-  <ActionToastHost />
+  <!-- The app's single toast surface (useToast) — every notification in the app
+       lands here, from any scope, in both the main window and a session popout. -->
+  <AppToaster />
 
   <!-- Shared full-window file preview + the corner "minimize dock" (parked
        previews/sessions/tasks/terminal) — docs/features/minimize-dock.md. -->
@@ -41,4 +42,10 @@
 // or a "Run as task" from inside a session must work identically in both windows,
 // and one list is the only way to keep that true as hosts are added.
 defineOptions({ name: 'AppGlobalHosts' })
+
+// The usage-quota guard used to live in its own host component purely because it
+// owned a toast queue to render. It doesn't any more (it pushes to useToast like
+// everything else), so it just needs an app-lifetime setup scope to hang its poll
+// timer and watcher on — this one.
+useQuotaGuard()
 </script>

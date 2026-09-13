@@ -1,7 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useSidecar } from '~/composables/useSidecar'
-import { useToasts } from '~/composables/useToasts'
 import { useI18n } from '~/composables/useI18n'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
@@ -20,7 +19,7 @@ export function useProjectsPage() {
   const store = useProjectsStore()
   const sc = useSidecar()
   const { t } = useI18n()
-  const { toasts, pushToast, toastColor } = useToasts()
+  const toast = useToast()
 
   // Live stores used only to hydrate the read-only overview sources on mount (the
   // derivation itself lives in useProjectView). App-lifetime singletons, re-entry
@@ -51,7 +50,6 @@ export function useProjectsPage() {
   // Scoped to the selected project; re-selects the saved project after create/clone.
   const actions = useProjectActions({
     currentProject: () => selected.value,
-    pushToast,
     onSaved: (saved) => {
       selectedId.value = saved.id
     },
@@ -65,12 +63,16 @@ export function useProjectsPage() {
     try {
       await store.hydrate()
       if (!opts.silent) {
-        if (!sc.available) pushToast(t('projects.toast.offline'), 'info')
-        else pushToast(t('projects.toast.loaded', { n: store.projects.length }), 'info')
+        if (!sc.available) toast.add({ title: t('projects.toast.offline'), color: 'info' })
+        else
+          toast.add({
+            title: t('projects.toast.loaded', { n: store.projects.length }),
+            color: 'info',
+          })
       }
     } catch (err) {
       console.error('[projects] refresh failed', err)
-      pushToast(t('projects.toast.refreshFail'), 'error')
+      toast.add({ title: t('projects.toast.refreshFail'), color: 'error' })
     } finally {
       refreshing.value = false
     }
@@ -101,8 +103,5 @@ export function useProjectsPage() {
     refresh,
     // shared CRUD / management actions + their modal state
     ...actions,
-    // toasts
-    toasts,
-    toastColor,
   }
 }

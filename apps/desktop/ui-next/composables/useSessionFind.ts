@@ -3,7 +3,6 @@ import type { Session, SessionMessage } from '~/composables/useSessionsData'
 import type { TranscriptSurface } from '~/composables/useTranscriptSurface'
 import { normalizeSearchText, searchableSegments } from '~/utils/transcript-text'
 import { clearMatches, findAllRanges, wrapMatches } from '~/utils/find-in-dom'
-import { pushActionToast } from '~/composables/useActionToasts'
 
 // Find-in-session for SessionDetail (docs/features/session-transcript-navigation.md §4).
 //
@@ -184,7 +183,7 @@ export function useSessionFind(options: {
       }
       currentIndex.value = start
       highlightCurrent()
-      pushActionToast(t('sessions.find.notFoundJump'), 'error')
+      useToast().add({ title: t('sessions.find.notFoundJump'), color: 'error' })
     } finally {
       navigating = false
     }
