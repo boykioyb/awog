@@ -110,7 +110,7 @@ chat (WhatsApp "Media, links and docs"). Ba nhóm, chọn bằng segmented contr
 
 | Nhóm | Nguồn |
 |---|---|
-| **Media** | ảnh/video/audio đến từ: file user đính kèm, file session ghi/sửa (step Write/Edit), file model bàn giao (`send_user_file` → `FilesBlock`) |
+| **Media** | ảnh/video/audio đến từ: file user đính kèm, file session ghi/sửa (step Write/Edit), file model bàn giao (`send_user_file` → `FilesBlock`). Ô thumbnail vuông, tên file **2 dòng, ngắt ở bất kỳ đâu** (tên CleanShot không có khoảng trắng để ngắt; một dòng ellipsis ở ~85px chỉ ra `CleanSh…`); ô tile tự `overflow: hidden` + `align-items: stretch` để tên dài không bao giờ vẽ đè sang ô bên cạnh — `<button>` mang UA style mà reset của app không đụng tới nên hai dòng này là **bắt buộc**, không phải khai lại mặc định |
 | **Link** | mọi URL http(s) trong text của cả 3 role (markdown `[title](url)` lấy luôn title làm nhãn) + `target` của step web (WebFetch/WebSearch) + issue/PR liên kết của phiên (`aboutGhUrl`). Mỗi hàng có **nút copy URL** (glyph lật thành ✓ 1,5s) bên cạnh vùng bấm-để-mở. Cắt URL: dừng ở backtick đóng inline-code (`` `https://…/login` `` từng lọt thành `…/login%60`); dedupe bỏ qua dấu `/` cuối; nhãn **giữ `#hash`** để hai link cùng issue khác anchor không hiện thành hai hàng y hệt |
 | **Tài liệu** | file để **đọc**: `md/mdx · txt/rtf · pdf · csv/tsv · doc(x) · xls(x) · ppt(x) · ipynb · htm(l)` — allowlist đóng ở `DOC_EXT` |
 

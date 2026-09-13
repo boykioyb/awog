@@ -272,6 +272,12 @@ watch(filePreview.imagesVersion, () => {
 .wsmld-tile {
   display: flex;
   flex-direction: column;
+  /* `stretch` and `hidden` are BOTH load-bearing, not defaults restated: a <button>
+     carries UA styles no reset touches, so the name box is pinned to the tile width
+     here rather than trusted to inherit it, and the tile clips its own paint so a
+     long filename can never be drawn over the neighbouring tile. */
+  align-items: stretch;
+  overflow: hidden;
   gap: 4px;
   padding: 0;
   border: none;
@@ -300,13 +306,22 @@ watch(filePreview.imagesVersion, () => {
 .wsmld-tile:hover .wsmld-tileic {
   border-color: var(--accentBorder);
 }
+/* Two lines, broken anywhere. One nowrap line ellipsised at ~85px showed "CleanSh…"
+   of "CleanShot 2026-09-12 at 06.34.22@2x.png" — a label that names nothing. Screenshot
+   filenames have no spaces to break at, hence `anywhere`; `-webkit-box` + line-clamp is
+   the recipe that works on this Chromium (same as TopBarNotifyRow). Full name on hover
+   via the tile's title. */
 .wsmld-tilename {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  width: 100%;
+  min-width: 0;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textDim);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 /* Link / doc rows — same rhythm as the context-files rows above them. The shell owns
    the divider + hover; `.wsmld-rowmain` is the clickable body. A link row needs both
