@@ -254,10 +254,60 @@ export function buildCurrentStateBlock(
   return `<current_state>\n${lines.join('\n')}\n</current_state>`
 }
 
+// ─── Ngữ cảnh hạ tầng (ADR 0088 §4, task 0.15) ───────────────────────────────
+
+/**
+ * Ngữ cảnh hạ tầng đang ghim, rút gọn đủ cho prompt. CỐ Ý không tái dùng
+ * `InfraContext` của `infra/run.ts`: block này tốn token ở MỌI lượt, nên nó chỉ
+ * mang đúng bốn thứ model cần để nói đúng tên tài khoản — thêm trường nào thì
+ * trả bằng token của mọi lượt, mọi phiên.
+ */
+export interface InfraContextSummary {
+  /** Tên profile AWS. Không có nó thì coi như chưa ghim gì. */
+  profile: string
+  accountId?: string | undefined
+  region?: string | undefined
+  /** Account người dùng đã đánh dấu production (ADR 0088 — theo account id). */
+  isProduction?: boolean | undefined
+}
+
+/**
+ * Block `<infra_context>` cho MỘT lượt, dùng chung cả hai runtime. Trả về
+ * `undefined` khi phiên chưa ghim gì — không ghim mà vẫn in ra một block rỗng
+ * chỉ dạy model rằng khối này thường vô nghĩa.
+ *
+ * Đi trên TURN PROMPT chứ không phải system prompt: người dùng đổi account giữa
+ * phiên được, mà sửa system prompt thì vô hiệu cả tiền tố cache (xem chú thích
+ * đầu file).
+ *
+ * TODO(0.8): bốn call site của `buildCurrentStateBlock` (`runtime/run-stream.ts`,
+ * `runtime/claude-sdk/run-stream.ts`, `runtime/codex/run-stream.ts`) và
+ * `buildOneShotContextBlock` phải nối `args.infra` vào đây khi
+ * `SessionHeader.infra` có thật.
+ */
+export function buildInfraContextBlock(
+  infra: InfraContextSummary | undefined,
+): string | undefined {
+  if (!infra?.profile) return undefined
+  const lines = [
+    `AWS profile: ${infra.profile}`,
+    `Account: ${infra.accountId ?? 'unknown'}${infra.isProduction ? ' — marked PRODUCTION' : ''}`,
+    `Region: ${infra.region ?? 'not set'}`,
+    'Name this account out loud before you propose any infrastructure command, so the user can ' +
+      'catch a wrong target before it runs.',
+    'Do not run write or destructive commands on your own: propose the exact command and let the ' +
+      'user approve it.',
+  ]
+  return `<infra_context>\n${lines.join('\n')}\n</infra_context>`
+}
+
 // Convenience wrapper for the one-shot paths (tasks, subagents) that want both
 // blocks in the system prompt and have no separate turn prompt to split across.
 // A task node is a single request, so there is no cache prefix to protect.
-export async function buildOneShotContextBlock(cwd: string | undefined): Promise<string> {
+export async function buildOneShotContextBlock(
+  cwd: string | undefined,
+  infra?: InfraContextSummary | undefined,
+): Promise<string> {
   let snapshot: WorkspaceSnapshot | undefined
   try {
     snapshot = await collectWorkspaceSnapshot(cwd)
@@ -266,5 +316,10 @@ export async function buildOneShotContextBlock(cwd: string | undefined): Promise
       err: err instanceof Error ? err.message : String(err),
     })
   }
-  return `${buildEnvironmentBlock(cwd, snapshot)}\n\n${buildCurrentStateBlock(snapshot)}`
+  const blocks = [buildEnvironmentBlock(cwd, snapshot), buildCurrentStateBlock(snapshot)]
+  // Task node cũng chạy được lệnh hạ tầng, nên nó cần biết mình đang trỏ vào
+  // account nào y như phiên chat.
+  const infraBlock = buildInfraContextBlock(infra)
+  if (infraBlock) blocks.push(infraBlock)
+  return blocks.join('\n\n')
 }

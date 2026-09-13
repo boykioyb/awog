@@ -12,6 +12,7 @@ import { readdir, rm } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import { log } from '../util/logger.js'
 import type {
+  InfraContext,
   Session,
   SessionBookmark,
   SessionMessage,
@@ -121,6 +122,7 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.aboutTaskId !== undefined) summary.aboutTaskId = h.aboutTaskId
   if (h.aboutSshHostId !== undefined) summary.aboutSshHostId = h.aboutSshHostId
   if (h.aboutGhUrl !== undefined) summary.aboutGhUrl = h.aboutGhUrl
+  if (h.infra !== undefined) summary.infra = h.infra
   if (h.parentSessionId !== undefined) summary.parentSessionId = h.parentSessionId
   if (h.compaction) summary.hasCompaction = true
   if (h.lastPreview) summary.lastPreview = h.lastPreview
@@ -325,6 +327,33 @@ class SessionManager {
     // Flush ngay (không chỉ debounce): archive là một hành động rời rạc của người dùng
     // — thoát app trong cửa sổ 500ms sẽ nuốt mất cờ vừa bật (cùng lý do với
     // createSession/saveSession, ADR 0062 D-2).
+    await sessionPersistenceQueue.flush(id)
+    return true
+  }
+
+  // Ghim ngữ cảnh hạ tầng của phiên (ADR 0088 §7). Tách khỏi updateMetadata vì bỏ
+  // ghim phải XOÁ HẲN key: `infra: {}` trên đĩa đọc ra là "có ghim nhưng rỗng",
+  // trong khi thứ người dùng vừa chọn là "quay về kế thừa project/app" — mà spread
+  // patch không xoá được key và `exactOptionalPropertyTypes` cấm gán `undefined`.
+  //
+  // `updatedAt` KHÔNG bump, cùng lý do với setArchived: đổi ngữ cảnh là thao tác
+  // cấu hình của con người, không phải hoạt động của phiên.
+  // Trả false khi id không tồn tại để RPC báo lỗi thay vì im lặng nuốt.
+  async setInfra(id: string, infra: InfraContext): Promise<boolean> {
+    const m = this.sessions.get(id)
+    if (!m) {
+      log.warn('session-manager: setInfra on unknown session', { id })
+      return false
+    }
+    if (Object.values(infra).some((v) => v !== undefined)) {
+      m.header = { ...m.header, infra }
+    } else {
+      const { infra: _cleared, ...rest } = m.header
+      m.header = rest
+    }
+    this.persistSession(m)
+    // Flush ngay: đổi tài khoản là hành động rời rạc, thoát app trong 500ms mà mất
+    // nó nghĩa là lượt sau chạy trên tài khoản cũ.
     await sessionPersistenceQueue.flush(id)
     return true
   }

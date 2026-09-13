@@ -89,15 +89,35 @@ const ALLOW_ENV = [
   'TMPDIR',
 ] as const
 
+// Ngữ cảnh hạ tầng của phiên (ADR 0088, task 0.13). Chỉ TÊN — profile và region
+// không phải bí mật; credential vẫn nằm trong `~/.aws` và do chính CLI resolve.
+export interface ShellInfraContext {
+  awsProfile?: string | undefined
+  awsRegion?: string | undefined
+}
+
 // Build the filtered env for a spawned shell command. DO_NOT_TRACK is set as
 // defense-in-depth for AWOG invariant #5 (no telemetry): any tool the command
 // shells out to that honors the standard can never phone home.
-export function filteredShellEnv(): NodeJS.ProcessEnv {
+//
+// `AWS_PROFILE` CỐ Ý không nằm trong ALLOW_ENV: env của tiến trình AWOG không
+// được lặng lẽ quyết định lệnh chạy trên account nào. Nó chỉ vào đây khi người
+// gọi truyền ngữ cảnh phiên vào — tức khi người dùng đã CHỌN một account.
+//
+// Region đi thành HAI biến: `AWS_REGION` (CLI v2, SDK đời mới) và
+// `AWS_DEFAULT_REGION` (CLI v1 + SDK cũ + phần lớn script có sẵn trong repo).
+// Đặt một cái là một nửa công cụ trong cùng lệnh chạy ở region khác.
+export function filteredShellEnv(opts?: ShellInfraContext): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {}
   for (const k of ALLOW_ENV) {
     const v = process.env[k]
     if (v !== undefined) out[k] = v
   }
   out.DO_NOT_TRACK = '1'
+  if (opts?.awsProfile) out.AWS_PROFILE = opts.awsProfile
+  if (opts?.awsRegion) {
+    out.AWS_REGION = opts.awsRegion
+    out.AWS_DEFAULT_REGION = opts.awsRegion
+  }
   return out
 }

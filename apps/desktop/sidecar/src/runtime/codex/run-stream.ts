@@ -252,6 +252,14 @@ export async function runStreamCodex(
       },
       args.settings.sshApprovalMode ?? 'prompt',
       args.cwd,
+      // Ngữ cảnh hạ tầng của phiên (ADR 0088 §5b) — cột ma trận và nội dung prompt
+      // duyệt đều lấy từ đây; vắng nó là cổng quyền tính nhầm sang tài khoản thường.
+      args.settings.infra || args.settings.infraFloor
+        ? {
+            ...(args.settings.infra ? { context: args.settings.infra } : {}),
+            ...(args.settings.infraFloor ? { sessionFloor: args.settings.infraFloor } : {}),
+          }
+        : undefined,
     ),
     args.budget,
     startedAtMs,

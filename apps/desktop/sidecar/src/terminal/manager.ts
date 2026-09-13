@@ -102,7 +102,15 @@ const SENSITIVE_SUFFIX = /(_TOKEN|_KEY|_SECRET)$/i
 // node child). A real terminal must not leak the host process's runtime flags.
 const HOST_RUNTIME_VARS = ['ELECTRON_RUN_AS_NODE', 'NODE_OPTIONS', 'ELECTRON_NO_ATTACH_CONSOLE']
 
-function sanitizedEnv(): Record<string, string> {
+// Ngữ cảnh hạ tầng của phiên (ADR 0088, task 0.13) — chỉ TÊN, không bí mật.
+// Nhờ vậy người dùng gõ `aws s3 ls` trong terminal của phiên là trúng đúng
+// account đang hiện trên thanh ngữ cảnh, không phải profile `default`.
+export interface TerminalInfraContext {
+  awsProfile?: string | undefined
+  awsRegion?: string | undefined
+}
+
+function sanitizedEnv(infra?: TerminalInfraContext): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(process.env)) {
     if (value === undefined) continue
@@ -115,6 +123,17 @@ function sanitizedEnv(): Record<string, string> {
   out.TERM_PROGRAM = 'AWOG'
   out.COLORTERM = 'truecolor'
   if (!out.LANG) out.LANG = 'en_US.UTF-8'
+  // Ghi ĐÈ (không phải "chỉ điền khi trống"): phiên đã ghim một account thì cái
+  // đang ghim mới là sự thật, còn `AWS_PROFILE` thừa hưởng từ môi trường của
+  // AWOG chính là thứ hay trỏ vào production mà không ai để ý. Bộ lọc
+  // SENSITIVE_SUFFIX ở trên GIỮ NGUYÊN — nó vẫn chặn AWS_SECRET_ACCESS_KEY /
+  // AWS_SESSION_TOKEN, và ta cố tình chỉ truyền tên profile.
+  if (infra?.awsProfile) out.AWS_PROFILE = infra.awsProfile
+  // Hai biến region, xem chú thích ở `runtime/tools/shell.ts`.
+  if (infra?.awsRegion) {
+    out.AWS_REGION = infra.awsRegion
+    out.AWS_DEFAULT_REGION = infra.awsRegion
+  }
   return out
 }
 
@@ -162,6 +181,10 @@ class TerminalManager {
     sessionId: string
     cols: number
     rows: number
+    // Ngữ cảnh hạ tầng đang ghim (ADR 0088, task 0.13). Tuỳ chọn vì đường truyền
+    // chưa có: TODO(0.8) — `methods/terminal.ts` phải lấy từ `SessionHeader.infra`
+    // → `Project.infra` → `settings.infra` và truyền xuống đây.
+    infra?: TerminalInfraContext | undefined
   }): Promise<{ terminalId: string }> {
     if (!isAbsolute(params.workspaceRoot)) {
       throw new Error('workspaceRoot must be absolute')
@@ -183,7 +206,7 @@ class TerminalManager {
       cols: params.cols,
       rows: params.rows,
       cwd: params.workspaceRoot,
-      env: sanitizedEnv(),
+      env: sanitizedEnv(params.infra),
     })
 
     const record: TerminalRecord = {

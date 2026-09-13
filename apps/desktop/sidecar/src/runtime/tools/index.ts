@@ -43,6 +43,7 @@ import { createSourceTools } from './source-tools.js'
 import { createSurfaceTools } from './surface-tools.js'
 import { createWikiTools } from './wiki-tools.js'
 import { createMemoryTools } from './memory-tools.js'
+import { createInfraTools, type CreateInfraToolsOptions } from './infra-tools.js'
 import { createTodoWriteTool } from './builtin-stubs.js'
 import { getReadRegistry } from './read-registry.js'
 import type { TodoSink } from './builtin-stubs.js'
@@ -117,6 +118,15 @@ export interface ToolFilter {
     autoWrite: boolean
     hasBodies: boolean
   }
+  // Tool hạ tầng (ADR 0088 §4): aws_profiles · infra_context, cộng aws_cli KHI
+  // phiên đã ghim profile. Vắng mặt = không advertise tool nào, nên một người
+  // dùng không đụng hạ tầng không trả một token schema nào.
+  // TODO(0.8): chỗ dựng filter (`runtime/chat-toolset.ts` cho phiên,
+  // `runtime/invoke.ts` cho task) phải truyền xuống từ `SessionHeader.infra` →
+  // `Project.infra` → `settings.infra` khi task 0.8 xong; tới lúc đó trường này
+  // chưa có ai set và nhóm tool im lặng vắng mặt — đúng ý muốn cho tới khi cổng
+  // quyền (0.7) + infosec audit #1 (0.17) xong.
+  includeInfraTools?: CreateInfraToolsOptions
   // Checklist persistence: when set, TodoWrite also writes its list to the session's
   // Session.todos, which is what lets the user edit the checklist and have the edit
   // survive the model's next TodoWrite (sessions/todo-context.ts). Set ONLY by the
@@ -278,6 +288,9 @@ export function createAwogToolDefinitions(
     ...(filter.includeWikiTools ? createWikiTools(filter.includeWikiTools) : []),
     // Memory (ADR 0073 part B) — write tools only when the user opted in.
     ...(filter.includeMemoryTools ? createMemoryTools(filter.includeMemoryTools) : []),
+    // Hạ tầng (ADR 0088 §4): `aws_cli` chèn cờ ngữ cảnh phía sidecar, nên agent
+    // không thoát ra được account khác — thứ mà tiêm env không làm nổi.
+    ...(filter.includeInfraTools ? createInfraTools(filter.includeInfraTools) : []),
   ] as AgentTool[]
 
   return applyFilter(all, filter)

@@ -16,12 +16,13 @@
 //   commands.fs-changed   — slash-command file added/removed/modified
 //   wiki.fs-changed       — wiki page added/removed/modified (ADR 0073)
 //   memory.fs-changed     — memory fact added/removed/modified (ADR 0073)
+//   infra.fs-changed      — ~/.aws/{config,credentials} changed (ADR 0088, task 0.16)
 //
 // Each event payload: { tier?: string, path?: string, type: 'add'|'change'|'unlink' }
 // UI subscribes once and re-hydrates the matching store on event arrival.
 
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { existsSync } from 'node:fs'
 import { emit } from './transport/stdio.js'
 import { log } from './util/logger.js'
@@ -33,6 +34,11 @@ import { listProjects } from './projects/store.js'
 // the mutating RPCs, has to drop that cache.
 import { invalidateWikiCache } from './wiki/inject.js'
 import { invalidateMemoryCache } from './memory/inject.js'
+// Đường dẫn hai file cấu hình AWS — lấy từ chính module đọc chúng (`infra/aws`) chứ
+// không dựng lại `join(homedir(), '.aws', …)` ở đây: nó honor `AWS_CONFIG_FILE` /
+// `AWS_SHARED_CREDENTIALS_FILE`, và watcher mà nhìn một chỗ còn `infra.contexts` đọc
+// chỗ khác thì UI đứng im đúng lúc file đổi.
+import { awsConfigPath, awsCredentialsPath } from './infra/aws/profiles.js'
 
 const DEBOUNCE_MS = 500
 const RESCAN_PROJECTS_MS = 30_000 // re-check registered projects every 30s
@@ -49,6 +55,7 @@ type WatchKind =
   | 'ssh-hosts'
   | 'ssh-identities'
   | 'vpn-profiles'
+  | 'infra'
 
 interface Watcher {
   close: () => Promise<void> | void
@@ -107,7 +114,43 @@ function userDirs(): DirSpec[] {
     { kind: 'ssh-hosts', dir: join(awogHome(), 'ssh-hosts') },
     { kind: 'ssh-identities', dir: join(awogHome(), 'ssh-identities') },
     { kind: 'vpn-profiles', dir: join(awogHome(), 'vpn-profiles') },
+    ...awsDirs(),
   ]
+}
+
+// ─── `~/.aws` (ADR 0088, task 0.16) ──────────────────────────────────────────
+// `aws sso login` / `aws configure` chạy NGOÀI app đổi danh sách profile, nên UI
+// phải tươi theo mà không cần reload. Đường này khác mọi kind ở trên ba điểm, và
+// cả ba đều có lý do:
+//
+//   1. `~/.aws` nằm NGOÀI workspace ⇒ `fs.*` chặn (ADR 0022). Đây là đường đọc
+//      riêng của sidecar — nhưng nó chỉ đọc TÊN ĐƯỜNG DẪN: watcher không mở file,
+//      không parse, không gửi nội dung đi đâu. UI nghe `infra.fs-changed` rồi gọi
+//      `infra.contexts`, nơi parser allowlist-key đã vứt secret tại chỗ (§1).
+//   2. Allowlist CỨNG đúng hai file. `~/.aws` còn chứa `sso/cache/*.json` và
+//      `cli/cache/*.json` — token SSO thật, xoay liên tục. Watch cả cây vừa bắn
+//      event rác vừa kể cho UI biết những file đó tồn tại. `depth: 0` chặn
+//      traversal xuống thư mục con, `relevantFile('infra', …)` chặn nốt phần còn
+//      lại ở cùng cấp.
+//   3. Watch THƯ MỤC CHA chứ không watch thẳng hai file: `aws configure` tạo
+//      `credentials` khi nó chưa tồn tại, mà chokidar bỏ qua im lặng một đường dẫn
+//      ENOENT (nó không quay lại xem file có xuất hiện chưa). Watch thư mục thì
+//      lần tạo đầu tiên cũng là một sự kiện `add` — đã đo.
+//
+// Giới hạn đã biết, cố ý không vá: nếu CHÍNH `~/.aws` chưa tồn tại lúc sidecar
+// khởi động thì không có gì được watch, và lần `aws configure` đầu tiên trên máy
+// đó chỉ hiện sau khi khởi động lại (hoặc lần kế tiếp UI gọi `infra.contexts`).
+// Vá nó nghĩa là watch cả `$HOME` — cái giá quá đắt cho một lần trong đời máy, và
+// mọi watcher khác trong file này cũng đúng như vậy.
+function awsWatchedFiles(): string[] {
+  return [awsConfigPath(), awsCredentialsPath()].map((p) => resolve(p))
+}
+
+function awsDirs(): DirSpec[] {
+  // Hai file gần như luôn cùng một thư mục; env trỏ chúng đi hai nơi thì thành hai
+  // watcher. Set để trường hợp thường không dựng hai watcher trên cùng `~/.aws`.
+  const dirs = new Set(awsWatchedFiles().map((f) => dirname(f)))
+  return [...dirs].map((dir) => ({ kind: 'infra' as const, dir, depth: 0 }))
 }
 
 function projectDirs(projectPath: string): DirSpec[] {
@@ -296,6 +339,10 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   if (kind === 'ssh-hosts' || kind === 'ssh-identities' || kind === 'vpn-profiles') {
     return lower.endsWith('.json') && !lower.includes('.tmp.')
   }
+  // infra: ĐÚNG hai file cấu hình AWS, so bằng đường dẫn đầy đủ. So `lower` (đã
+  // hạ chữ) sẽ nhận nhầm một `~/.aws/Config` khác trên filesystem phân biệt hoa
+  // thường, nên nhánh này so nguyên văn với allowlist.
+  if (kind === 'infra') return awsWatchedFiles().includes(resolve(path))
   return false
 }
 

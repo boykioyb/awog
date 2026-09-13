@@ -91,6 +91,9 @@ function execCapture(bin: string, args: string[], cwd: string): Promise<ExecOutc
       args,
       {
         cwd,
+        // Không truyền ngữ cảnh hạ tầng (ADR 0088, task 0.13): ở đây chỉ có
+        // rg/grep/git-grep — chúng không gọi AWS, nên thêm `AWS_PROFILE` chỉ là
+        // mở rộng bề mặt env mà không đổi được hành vi nào.
         env: filteredShellEnv(),
         windowsHide: true,
         timeout: SEARCH_TIMEOUT_MS,

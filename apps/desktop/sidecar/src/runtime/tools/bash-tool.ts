@@ -128,6 +128,10 @@ export function createBashTool(
       return new Promise<AgentToolResult<BashDetails>>((resolveResult) => {
         const child = spawn(shell.bin, [shell.flag, params.command], {
           cwd,
+          // Không truyền ngữ cảnh hạ tầng: `Bash` chưa có đường nhận nó.
+          // TODO(0.8): truyền `{ awsProfile, awsRegion }` của phiên xuống đây khi
+          // `SessionHeader.infra` có thật, để `Bash("aws …")` chạy đúng account đã
+          // ghim thay vì rơi về profile `default` (ADR 0088 §6).
           env: filteredShellEnv(),
           windowsHide: true,
         })

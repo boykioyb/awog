@@ -36,6 +36,20 @@ const BudgetSchema = z.object({
   maxWallclockMs: z.number().int().nonnegative().optional(),
 })
 
+// Ngữ cảnh hạ tầng đóng băng lúc tạo phiên (ADR 0088 §7). Chỉ đọc ở nhánh
+// 'create': sau đó phiên chỉ đổi qua `infra.setSessionContext` (có ghi nhật ký).
+// Nếu nhánh 'update-metadata' cũng nhận field này thì bản `infra` cũ mà một cửa sổ
+// khác đang giữ sẽ ghi đè lần đổi vừa rồi ở mỗi lần đổi tên/ghim phiên — tức âm
+// thầm chuyển tài khoản, đúng thứ tính năng này sinh ra để chặn.
+const InfraContextSchema = z.object({
+  profile: z.string().max(200).optional(),
+  region: z.string().max(64).optional(),
+  accountId: z.string().max(64).optional(),
+  cluster: z.string().max(200).optional(),
+  namespace: z.string().max(200).optional(),
+  workspace: z.string().max(500).optional(),
+})
+
 const PinnedContextSchema = z.object({
   files: z.array(z.string()).optional(),
   notes: z.string().optional(),
@@ -72,6 +86,8 @@ const SessionSchema = z.object({
   // Fork lineage.
   parentSessionId: z.string().optional(),
   forkFromMessageId: z.string().optional(),
+  // Ngữ cảnh hạ tầng đóng băng lúc tạo (ADR 0088). Xem InfraContextSchema.
+  infra: InfraContextSchema.optional(),
 })
 
 const Params = z.object({
@@ -94,6 +110,22 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
     base.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown
   }
   return base
+}
+
+// Dựng lại object bỏ hẳn key không có mặt (exactOptionalPropertyTypes). Ngữ cảnh
+// rỗng hoàn toàn ⇒ undefined: header không mang `infra: {}` vô nghĩa.
+function toInfraContext(
+  parsed: z.infer<typeof InfraContextSchema> | undefined,
+): Session['infra'] {
+  if (!parsed) return undefined
+  const c: NonNullable<Session['infra']> = {}
+  if (parsed.profile !== undefined) c.profile = parsed.profile
+  if (parsed.region !== undefined) c.region = parsed.region
+  if (parsed.accountId !== undefined) c.accountId = parsed.accountId
+  if (parsed.cluster !== undefined) c.cluster = parsed.cluster
+  if (parsed.namespace !== undefined) c.namespace = parsed.namespace
+  if (parsed.workspace !== undefined) c.workspace = parsed.workspace
+  return Object.keys(c).length ? c : undefined
 }
 
 function toSession(parsed: z.infer<typeof SessionSchema>): Session {
@@ -123,6 +155,8 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.workspaceFolder !== undefined) base.workspaceFolder = parsed.workspaceFolder
   if (parsed.parentSessionId !== undefined) base.parentSessionId = parsed.parentSessionId
   if (parsed.forkFromMessageId !== undefined) base.forkFromMessageId = parsed.forkFromMessageId
+  const infra = toInfraContext(parsed.infra)
+  if (infra) base.infra = infra
   return base
 }
 
@@ -178,6 +212,8 @@ register('sessions.upsert', async (raw) => {
   if (session.budget !== undefined) patch.budget = session.budget
   if (session.parentSessionId !== undefined) patch.parentSessionId = session.parentSessionId
   if (session.forkFromMessageId !== undefined) patch.forkFromMessageId = session.forkFromMessageId
+  // `infra` CỐ Ý không có trong patch — xem InfraContextSchema. Đường ghi duy nhất
+  // sau lúc tạo là `infra.setSessionContext`.
   await updateSessionMetadata(session.id, patch)
   return { session }
 })

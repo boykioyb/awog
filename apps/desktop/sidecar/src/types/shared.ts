@@ -1,5 +1,13 @@
 // Shared types across sidecar modules. Names mirror RPC payload shape.
 
+// Ngữ cảnh hạ tầng (ADR 0088). Khai ở `infra/run.ts` — nhà của cổng chạy lệnh —
+// và chỉ import kiểu về đây, để phiên/project không dựng một bản sao lệch pha
+// với thứ mà `run()` thật sự chèn vào argv.
+import type { InfraContext } from '../infra/run.js'
+import type { InfraMode } from '../infra/policy.js'
+
+export type { InfraContext }
+
 export type ProviderName = 'anthropic' | 'openai' | 'google'
 
 export type AuthMode = 'oauth' | 'apikey'
@@ -174,6 +182,14 @@ export interface SessionSettings {
   responseStyleNoMarkdown?: boolean
   // SSH tool approval mode (ADR 0064 P2). Undefined = 'prompt' (ask every call).
   sshApprovalMode?: SshApprovalMode
+  // Trần mà PHIÊN tự siết xuống cho lệnh hạ tầng (ADR 0088 §5b). Chỉ siết được,
+  // không nới được — `decide()` cưỡng chế bằng `strictest()`. Đi theo lượt như
+  // `sshApprovalMode`; vắng mặt ⇒ chỉ ma trận ở Settings có hiệu lực.
+  infraFloor?: InfraMode
+  // Ngữ cảnh hạ tầng đang ghim, đi THEO LƯỢT xuống cổng quyền (ADR 0088 §5, §7).
+  // Không có nó thì `decide()` tính mọi lời gọi vào cột `normal` và prompt duyệt
+  // không nêu được account — tức cột `production` của ma trận thành hàng chết.
+  infra?: InfraContext
 }
 
 // One ordered slice of an assistant turn (ADR 0032). Either a run of reply text
@@ -480,6 +496,15 @@ export interface Session {
   // thread/resume), in which case the runtime starts a fresh thread instead.
   codexThreadId?: string
   codexToolSignature?: string
+  // Ngữ cảnh hạ tầng ĐÓNG BĂNG lúc tạo phiên (ADR 0088 §2, §7): bản sao của ngữ
+  // cảnh hiệu lực (project → toàn app) tại thời điểm phiên ra đời. Đóng băng chứ
+  // không tra lại mỗi lần dùng, vì đổi mặc định của project sau đó KHÔNG được âm
+  // thầm chuyển tài khoản của một phiên đang chạy dở. Sau đó chỉ đổi khi người
+  // dùng chủ động đổi, qua `infra.setSessionContext` (có ghi nhật ký).
+  //
+  // Theo TỪNG TRƯỜNG: field vắng mặt = kế thừa tiếp xuống project/app; field bằng
+  // '' = cố ý không ghim và DỪNG kế thừa (đúng ngữ nghĩa `githubAccount`).
+  infra?: InfraContext
 }
 
 // Lightweight list-row projection of a Session WITHOUT `messages` (ADR 0048).
@@ -523,6 +548,10 @@ export interface SessionSummary {
   aboutSshHostId?: string
   // GitHub issue/PR this session was opened from — mirrors Session.aboutGhUrl.
   aboutGhUrl?: string
+  // Ngữ cảnh hạ tầng đã đóng băng (ADR 0088) — mirrors Session.infra. Có mặt trên
+  // hàng danh sách để chip ngữ cảnh hiện ĐÚNG ngay khi mở phiên, thay vì hiện giá
+  // trị kế thừa rồi nhảy sang giá trị ghim khi transcript nạp xong.
+  infra?: InfraContext
   // Fork parent (its session id) — surfaced on the list row so the fork-tree graph
   // can be built from sessions.list without loading every transcript. Mirrors
   // Session.parentSessionId.
@@ -802,6 +831,11 @@ export interface Project {
   // push/fetch/pull AND the GH Issues/PR tabs. '' = active gh account; absent =
   // inherit the app-level default (settings.githubAccount). A concrete login pins.
   githubAccount?: string
+  // Ngữ cảnh hạ tầng mặc định của project (ADR 0088 §7) — tầng giữa của chuỗi kế
+  // thừa phiên → project → toàn app. Phiên mới trong project này đóng băng giá trị
+  // hiệu lực tại lúc tạo; field vắng mặt = kế thừa tiếp lên `settings.infra`,
+  // field '' = cố ý không ghim và dừng kế thừa.
+  infra?: InfraContext
 }
 
 // ─── Skill ─────────────────────────────────────────────────────────────────

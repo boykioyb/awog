@@ -24,6 +24,7 @@ import { listWorkflows } from '../workflows/store.js'
 import { listHosts } from '../ssh/store.js'
 import { createSubagentTools, type SubagentSink, type SubagentToolset } from './tools/task-tool.js'
 import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
+import { createInfraTools } from './tools/infra-tools.js'
 import { createSshTools } from './tools/ssh-tools.js'
 import type { BeforeToolCall } from './permission.js'
 import { log } from '../util/logger.js'
@@ -253,6 +254,27 @@ export async function buildChatToolset(
       ...(args.sshTerminalConnId ? { terminalConnId: args.sshTerminalConnId } : {}),
     }).filter((t) => isToolAllowed(t.name, filter))
     tools.push(...sshTools)
+  }
+
+  // Tool hạ tầng (ADR 0088 §4): CHỈ có mặt khi phiên đã ghim ngữ cảnh — không ghim
+  // thì "ngữ cảnh được chỉ định" không tồn tại, và một tool chạy lệnh AWS mà không
+  // biết mình ở tài khoản nào là đúng thứ cả thiết kế này sinh ra để chặn.
+  // Mọi lời gọi đi qua `runInfra()` (chèn cờ ngữ cảnh, từ chối cờ ghi đè, ghi nhật
+  // ký) và qua ma trận quyền ở `permission.ts`.
+  if (args.settings.infra && Object.keys(args.settings.infra).length > 0) {
+    const filter = {
+      ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+      ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+    }
+    const infraTools = createInfraTools({
+      context: args.settings.infra,
+      // Phiên chat có `makeBeforeToolCall` park lượt và hỏi người dùng ⇒ lớp `ask`
+      // đến được tool nghĩa là đã có người duyệt. Task node KHÔNG có cổng đó, nên
+      // nó không được truyền cờ này (audit #1 F4).
+      gated: true,
+      ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+    }).filter((t) => isToolAllowed(t.name, filter))
+    tools.push(...infraTools)
   }
 
   return { ...built, tools, ...(subagents ? { subagents } : {}) }

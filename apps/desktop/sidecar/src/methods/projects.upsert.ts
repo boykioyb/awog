@@ -36,6 +36,19 @@ const LlmDefaultsSchema = z.object({
   responseStyleNoMarkdown: z.boolean().optional(),
 })
 
+// Ngữ cảnh hạ tầng mặc định của project (ADR 0088 §7) — tầng giữa của chuỗi kế
+// thừa phiên → project → toàn app. Cap độ dài khớp `InfraAuditContextSchema` để giá
+// trị lưu được ở đây không bị chính nhật ký từ chối sau này. '' là hợp lệ: nó có
+// nghĩa "cố ý không ghim, dừng kế thừa" (đúng ngữ nghĩa `githubAccount`).
+const InfraContextSchema = z.object({
+  profile: z.string().max(200).optional(),
+  region: z.string().max(64).optional(),
+  accountId: z.string().max(64).optional(),
+  cluster: z.string().max(200).optional(),
+  namespace: z.string().max(200).optional(),
+  workspace: z.string().max(500).optional(),
+})
+
 const ProjectSchema = z.object({
   id: ProjectIdSchema,
   name: z.string().min(1).max(120),
@@ -50,6 +63,8 @@ const ProjectSchema = z.object({
   // gh account login (or '' for the active account). Length caps a gh login (39)
   // with headroom; '' is allowed (means "active account").
   githubAccount: z.string().max(60).optional(),
+  // Ngữ cảnh hạ tầng mặc định của project. Vắng mặt = kế thừa `settings.infra`.
+  infra: InfraContextSchema.optional(),
 })
 
 const Params = z.object({
@@ -151,6 +166,19 @@ register('projects.upsert', async (raw) => {
   }
   // Omitted → dropped (inherit the app default). '' preserved (active account).
   if (incoming.githubAccount !== undefined) project.githubAccount = incoming.githubAccount
+  // Cùng luật: bỏ field ⇒ project quay về kế thừa `settings.infra`. Gán từng khoá
+  // một (không spread cả object đã parse) để giữ đúng nếp chống mass-assignment của
+  // hàm này, và để `exactOptionalPropertyTypes` không nuốt phải `undefined`.
+  if (incoming.infra !== undefined) {
+    const infra: NonNullable<Project['infra']> = {}
+    if (incoming.infra.profile !== undefined) infra.profile = incoming.infra.profile
+    if (incoming.infra.region !== undefined) infra.region = incoming.infra.region
+    if (incoming.infra.accountId !== undefined) infra.accountId = incoming.infra.accountId
+    if (incoming.infra.cluster !== undefined) infra.cluster = incoming.infra.cluster
+    if (incoming.infra.namespace !== undefined) infra.namespace = incoming.infra.namespace
+    if (incoming.infra.workspace !== undefined) infra.workspace = incoming.infra.workspace
+    if (Object.keys(infra).length) project.infra = infra
+  }
 
   await saveProject(project)
   // Cổng quyền cache `projectId → path` cho mỗi lời gọi tool. Đường dẫn vừa đổi

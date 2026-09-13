@@ -166,6 +166,14 @@ export async function runStreamPi(
       // cwd THẬT của lượt: luật viết đường dẫn tương đối phải giải theo thư mục
       // lệnh sẽ chạy, không phải đường dẫn project (ADR 0080).
       args.cwd,
+      // Ngữ cảnh hạ tầng của phiên (ADR 0088 §5b) — cột ma trận và nội dung prompt
+      // duyệt đều lấy từ đây; vắng nó là cổng quyền tính nhầm sang tài khoản thường.
+      args.settings.infra || args.settings.infraFloor
+        ? {
+            ...(args.settings.infra ? { context: args.settings.infra } : {}),
+            ...(args.settings.infraFloor ? { sessionFloor: args.settings.infraFloor } : {}),
+          }
+        : undefined,
     ),
     args.budget,
     Date.now(),

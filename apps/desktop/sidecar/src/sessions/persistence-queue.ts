@@ -55,6 +55,11 @@ type HeaderMetadataSignature = {
   archivedAt: string | undefined
   todos: SessionHeader['todos']
   bookmarks: SessionHeader['bookmarks']
+  // Ngữ cảnh hạ tầng (ADR 0088): cũng là metadata do RPC `infra.setSessionContext`
+  // sửa, nên thiếu nó ở đây thì một lần đổi tài khoản từ cửa sổ khác bị lần ghi
+  // thân bài kế tiếp lặng lẽ ghi đè — đúng kiểu "âm thầm đổi account" mà cả tính
+  // năng này sinh ra để chặn.
+  infra: SessionHeader['infra']
 }
 
 function headerMetadataSignature(header: SessionHeader): string {
@@ -71,6 +76,7 @@ function headerMetadataSignature(header: SessionHeader): string {
     archivedAt: header.archivedAt,
     todos: header.todos,
     bookmarks: header.bookmarks,
+    infra: header.infra,
   }
   return JSON.stringify(sig)
 }
@@ -96,11 +102,17 @@ function mergeHeaderWithExternalMetadata(
         ...(disk.archivedAt !== undefined ? { archivedAt: disk.archivedAt } : {}),
       }
     : {}
+  // `infra` lấy TRỌN theo đĩa, cùng lý do với cặp archived: bỏ ghim ngữ cảnh chính
+  // là XOÁ HẲN key (session-manager setInfra), nên "chỉ copy khi đĩa có" sẽ giữ lại
+  // bản ghim cũ của local và hoàn tác đúng thao tác vừa làm bên ngoài.
+  const { infra: _localInfra, ...restNoInfra } = rest
+  const diskInfra: Pick<SessionHeader, 'infra'> = disk.infra ? { infra: disk.infra } : {}
   return {
-    ...rest,
+    ...restNoInfra,
     title: disk.title,
     projectId: disk.projectId,
     ...diskArchived,
+    ...diskInfra,
     ...(disk.pinned !== undefined ? { pinned: disk.pinned } : {}),
     ...(disk.disabledTools !== undefined ? { disabledTools: disk.disabledTools } : {}),
     ...(disk.mcpServerIds !== undefined ? { mcpServerIds: disk.mcpServerIds } : {}),

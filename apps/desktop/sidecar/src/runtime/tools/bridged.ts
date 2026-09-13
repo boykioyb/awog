@@ -23,6 +23,7 @@ import { BROWSER_MCP_SERVER, BROWSER_TOOL_NAME } from './browser-tool.js'
 import { DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES } from './dev-server-tool.js'
 import { CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES } from './code-index-tool.js'
 import { SESSION_MESSAGING_MCP_SERVER, SESSION_MESSAGING_TOOL_NAMES } from './session-tools.js'
+import { INFRA_MCP_SERVER, INFRA_TOOL_NAMES } from './infra-tools.js'
 
 // Nguồn: DẪN XUẤT từ chính các hằng danh sách tool mà mỗi server export, chứ
 // không chép tay tên tool. Thêm một tool vào `SURFACE_TOOL_NAMES` là bảng này tự
@@ -37,6 +38,7 @@ const BRIDGED_SERVERS: readonly (readonly [string, readonly string[]])[] = [
   [DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES],
   [CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES],
   [SESSION_MESSAGING_MCP_SERVER, SESSION_MESSAGING_TOOL_NAMES],
+  [INFRA_MCP_SERVER, INFRA_TOOL_NAMES],
   ['awogwiki', ['wiki_search', 'wiki_read', 'wiki_write', 'wiki_delete']],
   ['awogmemory', ['memory_remember', 'memory_forget', 'memory_read']],
   [

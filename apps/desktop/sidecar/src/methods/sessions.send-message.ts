@@ -90,6 +90,8 @@ const SessionSettingsSchema = z.object({
   // SSH tool approval mode (ADR 0064 P2). Gates the linked-host SSH tools. Default
   // 'prompt' (omitted) — ask before every gated SSH call.
   sshApprovalMode: z.enum(['prompt', 'session', 'auto']).optional(),
+  // Trần của phiên cho lệnh hạ tầng (ADR 0088 §5b) — chỉ siết, không nới.
+  infraFloor: z.enum(['auto', 'ask', 'block']).optional(),
 })
 
 // User attachment on the outgoing message (L1: untrusted UI payload). Image
@@ -292,6 +294,7 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
     base.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown
   }
   if (parsed.sshApprovalMode !== undefined) base.sshApprovalMode = parsed.sshApprovalMode
+  if (parsed.infraFloor !== undefined) base.infraFloor = parsed.infraFloor
   return base
 }
 
@@ -997,10 +1000,15 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // The same list as data — the Claude SDK path seeds its task-tool tracker from it
   // (see RunStreamArgs.sessionTodos); the Pi path never reads it.
   let sessionTodos: TodoItem[] | undefined
+  // Ngữ cảnh hạ tầng (ADR 0088 §7) đọc từ HEADER TRÊN ĐĨA, không lấy từ payload UI:
+  // nó được đóng băng lúc tạo phiên, và một renderer cũ gửi lên bản cũ sẽ đổi tài
+  // khoản mà lệnh chạy vào — đúng thứ "ngữ cảnh được chỉ định" sinh ra để chặn.
+  let sessionInfra: SessionSettings['infra']
   try {
     const withTodos = await loadSession(params.sessionId)
     sessionChecklist = buildSessionChecklistBlock(withTodos?.todos)
     if (withTodos?.todos?.length) sessionTodos = withTodos.todos
+    if (withTodos?.infra) sessionInfra = withTodos.infra
   } catch {
     /* best-effort: never block the turn on the checklist block */
   }
@@ -1344,7 +1352,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         // none (`ui-next`), the transcript folded from JSONL above. The runner
         // treats history as read-only SessionMessage[].
         history: historyForRun,
-        settings: toSessionSettings(params.settings),
+        settings: sessionInfra
+          ? { ...toSessionSettings(params.settings), infra: sessionInfra }
+          : toSessionSettings(params.settings),
         ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(cwd ? { cwd } : {}),
         ...(params.projectId ? { projectId: params.projectId } : {}),

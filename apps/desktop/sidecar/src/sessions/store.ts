@@ -13,6 +13,7 @@
 
 import { log } from '../util/logger.js'
 import type {
+  InfraContext,
   Session,
   SessionCompaction,
   SessionMessage,
@@ -112,6 +113,14 @@ export async function compactSession(
 export async function setSessionArchived(id: string, archived: boolean): Promise<boolean> {
   await sessionManager.ensureLoaded()
   return sessionManager.setArchived(id, archived)
+}
+
+// Ghim ngữ cảnh hạ tầng của một phiên (ADR 0088 §7). Ngữ cảnh KHÔNG có trường nào
+// được định nghĩa = bỏ ghim (xoá hẳn key, phiên quay về kế thừa project → app).
+// Trả false khi id không tồn tại.
+export async function setSessionInfra(id: string, infra: InfraContext): Promise<boolean> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setInfra(id, infra)
 }
 
 // Đọc thô các dòng JSONL của một phiên (nền cho `sessions.listEvents`). `null` khi

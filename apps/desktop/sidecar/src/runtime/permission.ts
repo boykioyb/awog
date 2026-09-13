@@ -42,6 +42,14 @@
 //        `guardedByDeny` below for why this is deliberately narrow.
 //   F5 — Tasks finally have a gate: `makeTaskToolGate` (deny-only, never prompts).
 //
+// Lệnh hạ tầng (ADR 0088, 2026-09-12):
+//   - `aws_cli` / `tf_cli` / `kubectl_cli` / `infra_action` / `infra_context` đi
+//     qua MA TRẬN quyền ở Settings (`infra/policy.ts`), không qua `AgentMode`.
+//     Nhánh đó nằm TRƯỚC `execute` / auto-approve / accept-edits vì Settings là
+//     trần và phiên chỉ siết thêm được (§5b) — cùng khuôn với nhánh SSH.
+//   - `Bash(aws …)` vẫn đi đường cũ, nhưng KHÔNG nhớ được bằng "Always allow" và
+//     không luật ALLOW nào phủ được (§6, task 0.14): mỗi lần gọi là một lần hỏi.
+//
 // Contract: beforeToolCall must NOT throw. Any error → fail safe = block, so a
 // bug can never silently let an unapproved write through.
 
@@ -74,6 +82,19 @@ import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool
 import { isDevServerToolName, isMutatingDevServerAction } from './tools/dev-server-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
+// Ma trận quyền hạ tầng (ADR 0088 §5). `classify` + `decide` là hàm THUẦN;
+// `loadInfraPolicy` đọc đĩa nhưng đã tự phòng thủ (không bao giờ ném, có cache).
+import { CONTEXT_BLOCKED_BINARIES, CONTEXT_SWITCH_CLASS, classify } from '../infra/classify.js'
+import { decide } from '../infra/policy.js'
+import { loadInfraPolicy } from '../infra/policy-store.js'
+import { recordInfraAction } from '../infra/audit/store.js'
+import type { InfraAccountKind, InfraMode } from '../infra/policy.js'
+import type { InfraCommandClass, InfraTool } from '../infra/types.js'
+import type { InfraContext } from '../infra/run.js'
+import {
+  AWS_CLI_TOOL_NAME,
+  INFRA_CONTEXT_TOOL_NAME,
+} from './tools/infra-tools.js'
 import { log } from '../util/logger.js'
 
 // Tools that mutate the workspace or execute code. Everything else is read-only
@@ -166,6 +187,23 @@ function buildRuleSuggestion(
   args: unknown,
   sessionId: string | undefined,
 ): PermissionRuleSuggestion | null {
+  // Lệnh hạ tầng chạy qua `Bash` không có luật nào an toàn để nhớ (ADR 0088 §6,
+  // task 0.14): quyền của chúng thuộc về ma trận ở Settings, nơi nhìn thấy được
+  // và hết hạn được. Trả null ⇒ không có nút "Always allow" ⇒ mỗi lần gọi là một
+  // lần hỏi.
+  // Quét cả chuỗi, không chỉ token đầu: `sh -c "aws s3 rb …"` mà vẫn hiện nút
+  // "Always allow" thì luật ALLOW ghi xuống đĩa và phủ vĩnh viễn (audit #1 F2).
+  const bashCommand = toolName === 'Bash' ? argBag(args)?.command : undefined
+  const infraBinary =
+    bashInfraBinary(toolName, args) ??
+    (typeof bashCommand === 'string' ? anyInfraBinary(bashCommand) : null)
+  if (infraBinary) {
+    log.info('permission gate: no remembered rule for an infrastructure command', {
+      toolName,
+      binary: infraBinary,
+    })
+    return null
+  }
   const rule = suggestRuleText(toolName, args)
   if (!rule) return null
   const parsed = parsePermissionRule(rule)
@@ -204,6 +242,342 @@ function sourceIdOfTool(name: string): string | null {
   const rest = name.slice(5)
   const sep = rest.indexOf('__')
   return sep > 0 ? rest.slice(0, sep) : null
+}
+
+// ─── Lệnh hạ tầng (ADR 0088 §5, §5b, §6) ────────────────────────────────────
+// Cổng cho `aws_cli` / `tf_cli` / `kubectl_cli` / `infra_action` / `infra_context`.
+// Khác mọi nhánh khác ở một điểm: quyền KHÔNG đến từ `AgentMode` mà từ **ma trận
+// cài đặt**, nên nhánh này nằm TRƯỚC `execute` / auto-approve / accept-edits —
+// giống hệt nhánh SSH, và vì cùng một lý do: Settings là trần, không mode nào nới
+// được (ADR 0088 §5b).
+
+/** Tool AWOG gọi thẳng một CLI, và CLI đứng sau nó. */
+// Tên lấy từ chính hằng số mà `infra-tools.ts` export — hardcode chuỗi ở đây thì
+// một lần đổi tên tool sẽ ÂM THẦM gỡ cổng quyền (tool chạy, gate không nhận ra).
+const INFRA_CLI_TOOLS: Record<string, InfraTool> = {
+  [AWS_CLI_TOOL_NAME]: 'aws',
+  tf_cli: 'terraform',
+  kubectl_cli: 'kubectl',
+}
+// `infra_action` (task 3.10) lái màn Explorer nên CLI nằm trong chính args;
+// `infra_context` là lời gọi đổi ngữ cảnh nội bộ — lớp của nó là hằng số, không
+// suy được từ argv (xem CONTEXT_SWITCH_CLASS).
+const INFRA_ACTION_TOOL = 'infra_action'
+const INFRA_CONTEXT_TOOL = INFRA_CONTEXT_TOOL_NAME
+const INFRA_GATED_TOOLS = [
+  ...Object.keys(INFRA_CLI_TOOLS),
+  INFRA_ACTION_TOOL,
+  INFRA_CONTEXT_TOOL,
+]
+
+// Tên TRẦN của một tool hạ tầng, kể cả khi nó đến dưới dạng bắc cầu của nhánh
+// Claude SDK (`mcp__awoginfra__aws_cli`) — khuôn của `sshToolName`. Chỉ so tên
+// trần thì lời gọi bắc cầu đi vòng qua cả ma trận.
+function infraToolName(name: string): string | null {
+  for (const n of INFRA_GATED_TOOLS) if (name === n || name.endsWith(`__${n}`)) return n
+  return null
+}
+
+const MAX_COMMAND_CHARS = 4000
+
+function argBag(args: unknown): Record<string, unknown> | null {
+  return args && typeof args === 'object' && !Array.isArray(args)
+    ? (args as Record<string, unknown>)
+    : null
+}
+
+/** `args: string[]` của tool, hoặc null khi lời gọi không đọc được. */
+function infraArgv(args: unknown): string[] | null {
+  const bag = argBag(args)
+  if (!bag) return null
+  for (const key of ['args', 'argv']) {
+    const raw = bag[key]
+    if (Array.isArray(raw) && raw.every((v) => typeof v === 'string')) return [...raw]
+  }
+  return null
+}
+
+function infraCliOf(bare: string, args: unknown): InfraTool | null {
+  const fixed = INFRA_CLI_TOOLS[bare]
+  if (fixed) return fixed
+  const raw = argBag(args)?.tool
+  if (raw === 'aws' || raw === 'terraform' || raw === 'kubectl') return raw
+  return null
+}
+
+/**
+ * Dòng lệnh ĐÚNG NHƯ sẽ chạy, kể cả cờ ngữ cảnh mà sidecar chèn — prompt duyệt
+ * phải cho thấy account/cluster thật, và câu từ chối phải là thứ người dùng
+ * copy ra terminal chạy được (ADR 0088 §5, §6).
+ *
+ * ⚠ Đây là BẢN SAO có chủ đích của `withContext()` trong `infra/run.ts` (hàm đó
+ * private và `run.ts` nằm ngoài phạm vi được sửa). Sửa luật chèn cờ ở đó thì
+ * phải sửa luôn ở đây, nếu không prompt sẽ mô tả một lệnh khác với lệnh chạy.
+ */
+export function describeInfraCommand(
+  tool: InfraTool,
+  argv: readonly string[],
+  ctx?: InfraContext | undefined,
+): string {
+  const parts: string[] = [tool]
+  if (tool === 'terraform') {
+    if (ctx?.workspace) parts.push(`-chdir=${ctx.workspace}`)
+    parts.push(...argv)
+  } else {
+    parts.push(...argv)
+    if (tool === 'aws') {
+      if (ctx?.profile) parts.push('--profile', ctx.profile)
+      if (ctx?.region) parts.push('--region', ctx.region)
+    } else {
+      if (ctx?.cluster) parts.push('--context', ctx.cluster)
+      if (ctx?.namespace) parts.push('--namespace', ctx.namespace)
+    }
+  }
+  const line = parts.join(' ')
+  return line.length > MAX_COMMAND_CHARS ? `${line.slice(0, MAX_COMMAND_CHARS - 1)}…` : line
+}
+
+/** Mô tả gọn một lời gọi không có argv (`infra_action` dạng view/action). */
+function describeOpaqueCall(bare: string, args: unknown): string {
+  const bag = argBag(args)
+  if (!bag) return bare
+  const words = Object.entries(bag)
+    .filter(([, v]) => typeof v === 'string' || typeof v === 'number')
+    .map(([k, v]) => `${k}=${String(v)}`)
+  const line = words.length > 0 ? `${bare} ${words.join(' ')}` : bare
+  return line.length > MAX_COMMAND_CHARS ? `${line.slice(0, MAX_COMMAND_CHARS - 1)}…` : line
+}
+
+type InfraCall = { name: string; class: InfraCommandClass; command: string }
+
+
+// `infra_context` đổi ngữ cảnh khi lời gọi mang field ghi (`set`/`profile`/…).
+// Đọc thủ công vì args là dữ liệu L1 không tin: hình dạng lạ ⇒ coi như ĐANG ĐỔI
+// (fail-safe — đoán sai theo chiều nới quyền mới là leo thang).
+function isInfraContextSwitchCall(args: unknown): boolean {
+  if (args === null || typeof args !== 'object') return false
+  const keys = Object.keys(args as Record<string, unknown>)
+  if (keys.length === 0) return false
+  const READ_ONLY_KEYS = new Set(['sessionId', 'detail', 'verbose'])
+  return keys.some((k) => !READ_ONLY_KEYS.has(k))
+}
+
+/** Lời gọi hạ tầng đã đọc được, hoặc null nếu tool này không phải tool hạ tầng. */
+function readInfraCall(toolName: string, args: unknown, ctx?: InfraContext): InfraCall | null {
+  const bare = infraToolName(toolName)
+  if (!bare) return null
+  if (bare === INFRA_CONTEXT_TOOL) {
+    // ⚠ Ở pha này `infra_context` CHỈ ĐỌC ngữ cảnh đang ghim (xem `infra-tools.ts`),
+    // nên nó là lớp `read`. Xếp `context-switch` sẽ khiến một lệnh thuần đọc đi hỏi
+    // người dùng trên tài khoản production — phiền mà không mua được an toàn nào.
+    // Khi tool này có thêm thao tác ĐỔI ngữ cảnh, nhánh đổi đó (và chỉ nhánh đó)
+    // mới mang `CONTEXT_SWITCH_CLASS`; hàng `context-switch` của ma trận nằm chờ
+    // sẵn cho lúc ấy.
+    const switching = isInfraContextSwitchCall(args)
+    return {
+      name: bare,
+      class: switching ? CONTEXT_SWITCH_CLASS : 'read',
+      command: describeOpaqueCall(bare, args),
+    }
+  }
+  const cli = infraCliOf(bare, args)
+  const argv = infraArgv(args)
+  // Không đọc được lời gọi ⇒ `write` (fail-safe, ADR 0088 §5): chi phí đoán sai
+  // là một lần hỏi thừa, chiều ngược lại là chạy một lệnh ghi không ai kịp nhìn.
+  if (!cli || !argv) {
+    return { name: bare, class: 'write', command: describeOpaqueCall(bare, args) }
+  }
+  return { name: bare, class: classify(cli, argv), command: describeInfraCommand(cli, argv, ctx) }
+}
+
+/** Ngữ cảnh + trần của phiên mà cổng quyền áp cho lệnh hạ tầng. */
+export interface InfraGateConfig {
+  /** Ngữ cảnh phiên đang ghim (task 0.8). Vắng ⇒ prompt không nêu được account. */
+  context?: InfraContext | undefined
+  /**
+   * Trần mà PHIÊN tự siết xuống (ADR 0088 §5b). Chỉ siết được, không nới được —
+   * `decide()` cưỡng chế điều đó, ở đây chỉ truyền qua.
+   */
+  sessionFloor?: InfraMode | undefined
+}
+
+/** Payload kèm theo prompt duyệt — UI tô đỏ khi `accountKind === 'production'`. */
+type InfraPromptPayload = {
+  kind: 'infra'
+  tool: string
+  command: string
+  commandClass: InfraCommandClass
+  accountKind: InfraAccountKind
+  mode: InfraMode
+  reason: string
+  /** Bypass tạm thời còn lại (giây) — UI đếm ngược; vắng ⇒ không có bypass. */
+  bypassSecondsLeft?: number
+  profile?: string
+  accountId?: string
+  region?: string
+  context?: string
+  namespace?: string
+  workspace?: string
+}
+
+function infraPromptPayload(
+  call: InfraCall,
+  verdict: {
+    mode: InfraMode
+    reason: string
+    accountKind: InfraAccountKind
+    bypassSecondsLeft?: number
+  },
+  ctx: InfraContext | undefined,
+): InfraPromptPayload {
+  return {
+    kind: 'infra',
+    tool: call.name,
+    command: call.command,
+    commandClass: call.class,
+    accountKind: verdict.accountKind,
+    mode: verdict.mode,
+    reason: verdict.reason,
+    // Bypass tạm thời còn bao lâu — thẻ duyệt đếm ngược bằng số này. `decide()`
+    // đã tính, không chuyển tiếp thì người duyệt không biết cửa còn mở mấy phút.
+    ...(verdict.bypassSecondsLeft !== undefined
+      ? { bypassSecondsLeft: verdict.bypassSecondsLeft }
+      : {}),
+    ...(ctx?.profile ? { profile: ctx.profile } : {}),
+    ...(ctx?.accountId ? { accountId: ctx.accountId } : {}),
+    ...(ctx?.region ? { region: ctx.region } : {}),
+    ...(ctx?.cluster ? { context: ctx.cluster } : {}),
+    ...(ctx?.namespace ? { namespace: ctx.namespace } : {}),
+    ...(ctx?.workspace ? { workspace: ctx.workspace } : {}),
+  }
+}
+
+function infraBlockReason(call: InfraCall, kind: InfraAccountKind): string {
+  const where = kind === 'production' ? 'a PRODUCTION account' : 'this account'
+  return `AWOG không chạy lệnh này — the infrastructure policy blocks ${call.class} commands on ${where}. Run it yourself if you mean to: ${call.command}. Change this in Settings → Infrastructure.`
+}
+
+// ─── `Bash(aws …)` (ADR 0088 §6, task 0.14) ─────────────────────────────────
+// Lệnh hạ tầng chạy qua `Bash` KHÔNG được nhớ bằng nút "Always allow": có hai
+// nguồn sự thật về quyền hạ tầng thì người dùng sẽ tin nhầm cái yếu hơn, và một
+// luật `Bash(aws *)` cấp trọn quyền cloud bằng một cú bấm — thứ mà ma trận cố ý
+// bắt phải mở ở nơi nhìn thấy được và hết hạn được.
+
+// Tiền tố không phải là binary thật, chỉ là vỏ bọc. Bỏ qua chúng để
+// `sudo aws …` / `AWS_PROFILE=prod aws …` không lách được danh sách.
+const COMMAND_WRAPPERS = new Set(['sudo', 'doas', 'env', 'nohup', 'time', 'command', 'exec'])
+const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/
+
+/** Tên binary đứng đầu một chuỗi lệnh shell, đã bỏ đường dẫn và đuôi `.exe`. */
+function leadingBinary(command: string): string | null {
+  for (const token of command.trim().split(/\s+/)) {
+    if (!token) continue
+    if (ENV_ASSIGN_RE.test(token)) continue
+    const base = (token.split(/[/\\]/).pop() ?? token).toLowerCase().replace(/\.exe$/, '')
+    if (COMMAND_WRAPPERS.has(base)) continue
+    return base
+  }
+  return null
+}
+
+/**
+ * Binary hạ tầng mà lời gọi `Bash` này chạy, hoặc null. Chỉ soi token ĐẦU: quét
+ * cả chuỗi sẽ bắt nhầm `git commit -m "fix aws creds"` và giấu nút "Always
+ * allow" của một lệnh vô hại. Lệnh ghép (`a && aws …`) vốn đã không có nút đó —
+ * `ruleSubject` từ chối mọi chuỗi có toán tử shell.
+ */
+function bashInfraBinary(toolName: string, args: unknown): string | null {
+  if (toolName !== 'Bash') return null
+  const command = argBag(args)?.command
+  if (typeof command !== 'string') return null
+  const bin = leadingBinary(command)
+  return bin && CONTEXT_BLOCKED_BINARIES.includes(bin) ? bin : null
+}
+
+
+/**
+ * Lệnh hạ tầng chạy qua `Bash` phải đi qua **cùng ma trận** với tool `aws_cli`
+ * (ADR 0088 §6). Trước bản này chỉ có nút "Always allow" bị gỡ — còn `execute`
+ * mode và auto-approve vẫn cho chạy thẳng, và không dòng nhật ký nào được ghi.
+ * Infosec audit #1 bắt lỗ này ở 5/7 chiều rà soát độc lập.
+ *
+ * Tách argv từ chuỗi shell là việc KHÔNG thể làm đúng hoàn toàn, nên ở đây chỉ
+ * cần đúng theo một chiều: đọc được sạch ⇒ phân lớp thật; đọc không sạch (có
+ * toán tử shell, dấu nháy, thay thế lệnh) ⇒ ép `write`, tức luôn hỏi. Không có
+ * nhánh nào dẫn tới `read` từ một chuỗi không chắc chắn.
+ */
+const SHELL_META_RE = /[|&;<>()$`\\"']/
+
+/**
+ * Binary hạ tầng ở BẤT KỲ vị trí nào trong chuỗi (audit #1 F2).
+ *
+ * `leadingBinary()` chỉ soi token đầu và bỏ qua wrapper, nên `sh -c "aws …"` trả
+ * `"sh"`, `env -i aws …` trả `"-i"`, `timeout 60 aws …` trả `"timeout"` — cả ba
+ * đều LỌT khỏi nhánh hạ tầng, và tệ hơn: nút "Always allow" mọc lại vì
+ * `buildRuleSuggestion` hỏi cùng một hàm. Đo thật trên 9 dạng bọc: 7 lọt.
+ *
+ * Hàm này quét mọi token. Đắt hơn và bắt nhầm nhiều hơn (`git commit -m "fix aws"`),
+ * nên CHỈ dùng cho quyết định "có phải lệnh hạ tầng không" — nơi bắt nhầm chỉ tốn
+ * một lần hỏi — chứ không dùng để phân lớp.
+ */
+function anyInfraBinary(command: string): string | null {
+  for (const token of command.split(/[\s"']+/)) {
+    if (!token) continue
+    const base = (token.split(/[/\\]/).pop() ?? token).toLowerCase().replace(/\.exe$/, '')
+    if (CONTEXT_BLOCKED_BINARIES.includes(base)) return base
+  }
+  return null
+}
+
+function bashInfraCall(toolName: string, args: unknown): { tool: InfraTool; argv: string[]; clean: boolean } | null {
+  if (toolName !== 'Bash') return null
+  const rawCommand = argBag(args)?.command
+  if (typeof rawCommand !== 'string') return null
+  // Token đầu trước; không thấy thì quét cả chuỗi để bắt dạng bọc.
+  const bin = bashInfraBinary(toolName, args) ?? anyInfraBinary(rawCommand)
+  if (!bin) return null
+  const tool = INFRA_CLI_TOOLS[`${bin}_cli`] ?? (bin === 'aws' || bin === 'kubectl' || bin === 'terraform' ? (bin as InfraTool) : null)
+  if (!tool) return null // helm/gcloud/az: chưa có adapter — vẫn chặn always-allow, nhưng không phân lớp được
+  const command = argBag(args)?.command
+  if (typeof command !== 'string') return null
+  const clean = !SHELL_META_RE.test(command)
+  const tokens = command.trim().split(/\s+/).filter(Boolean)
+  const idx = tokens.findIndex((t) => {
+    const base = (t.split(/[/\\]/).pop() ?? t).toLowerCase().replace(/\.exe$/, '')
+    return base === bin
+  })
+  return { tool, argv: idx >= 0 ? tokens.slice(idx + 1) : [], clean }
+}
+
+
+/**
+ * Hai đường trên đĩa mà agent KHÔNG được ghi, ở bất kỳ mode nào (infosec audit #1):
+ *   · `~/.awog/infra-policy.json` — chính ma trận quyền. Ghi được nó là tự mở
+ *     toàn bộ cổng, và làm thế không để lại dấu vì `infra.policy.set` mới là
+ *     đường có ghi nhật ký.
+ *   · `~/.awog/infra-audit/` — nhật ký hoạt động. Sửa/xoá được bằng chứng thì
+ *     bằng chứng hết là bằng chứng.
+ *
+ * Đây là hàng rào ĐỘ SÂU, không phải hàng rào kín: với `Bash` ta chỉ so chuỗi,
+ * nên một script tự ghép đường dẫn vẫn lọt. Nó chặn đường thẳng và làm đường
+ * vòng trở nên rõ ràng là cố ý — chốt thật nằm ở chỗ agent không nên có quyền
+ * ghi vào `~/.awog` ngay từ đầu, việc của một mốc sau.
+ */
+const PROTECTED_PATH_RE = /infra-policy\.json|infra-audit[/\\]/
+
+function touchesProtectedPath(toolName: string, args: unknown): boolean {
+  const bag = argBag(args)
+  if (!bag) return false
+  if (toolName === 'Bash') {
+    const command = bag.command
+    return typeof command === 'string' && PROTECTED_PATH_RE.test(command)
+  }
+  if (!WRITE_TOOLS.has(toolName)) return false
+  for (const key of ['file_path', 'path', 'notebook_path']) {
+    const v = bag[key]
+    if (typeof v === 'string' && PROTECTED_PATH_RE.test(v)) return true
+  }
+  return false
 }
 
 // ─── Approved argument override (`updatedInput`) ────────────────────────────
@@ -411,6 +785,11 @@ export function makeBeforeToolCall(
   // như trước. Đường dẫn tương đối vẫn chỉ có hiệu lực theo chiều DENY dù gốc đến
   // từ đâu: gốc suy ra có thể sai, mà đoán sai theo chiều CẤP QUYỀN là leo thang.
   cwd?: string,
+  // Ngữ cảnh hạ tầng đang ghim + trần của phiên (ADR 0088 §5b). Vắng mặt ⇒ nhánh
+  // hạ tầng vẫn chạy (ma trận vẫn được áp) nhưng prompt không nêu được
+  // account/region, và mọi lời gọi rơi vào cột `normal`. Người gọi nối vào ở task
+  // 0.8 (`SessionHeader.infra`) và 0.12 (tool `aws_cli`).
+  infraGate?: InfraGateConfig,
 ): BeforeToolCall {
   const promptSourceIds =
     sourceGate?.promptSourceIds && sourceGate.promptSourceIds.length > 0
@@ -488,7 +867,16 @@ export function makeBeforeToolCall(
       // (session, host, tool) (F2); `offerAlwaysAllow=false` hides the "Always allow"
       // button, which no-ops for the SSH gate (it consults sshApprovalMode, not the
       // general allowlist — a dead button in 'prompt' mode, F6).
-      opts?: { rememberKey?: string; offerAlwaysAllow?: boolean },
+      // Nhánh hạ tầng thêm `decisionReason` (payload có cấu trúc: dòng lệnh,
+      // account, lớp lệnh) và `description` (dòng lệnh dạng chữ cho bề mặt không
+      // biết gì về hạ tầng). Cả hai đi thẳng vào `session.permission-request`
+      // (sessions.send-message.ts) nên không cần đổi gì ở tầng phiên.
+      opts?: {
+        rememberKey?: string
+        offerAlwaysAllow?: boolean
+        decisionReason?: unknown
+        description?: string
+      },
     ): Promise<BeforeToolCallResult | undefined> => {
       const rememberKey = opts?.rememberKey ?? toolName
       const offerAlwaysAllow = opts?.offerAlwaysAllow ?? true
@@ -518,6 +906,8 @@ export function makeBeforeToolCall(
           signal: signal ?? new AbortController().signal,
           toolUseID: toolUseId,
           suggestions,
+          ...(opts?.decisionReason !== undefined ? { decisionReason: opts.decisionReason } : {}),
+          ...(opts?.description !== undefined ? { description: opts.description } : {}),
         })
         if (result.behavior === 'allow') {
           // "Always allow" for a GENERAL tool is persisted by sessions.permission
@@ -661,6 +1051,57 @@ export function makeBeforeToolCall(
       })
     }
 
+    // Lệnh hạ tầng (ADR 0088 §5, §5b): quyền đến từ MA TRẬN ở Settings, không từ
+    // `AgentMode`. Đặt ở đây — trước `execute` / auto-approve / accept-edits —
+    // chính là luật "Settings là trần": không mode nào nới được ô đã đặt ở
+    // Settings, và phiên chỉ siết thêm được (`sessionFloor`).
+    const infraCall = readInfraCall(toolName, context.args, infraGate?.context)
+    if (infraCall) {
+      // plan mode là read-only theo lời hứa, nên nó chặn CỨNG mọi lớp không phải
+      // `read` trước khi hỏi ma trận — giống nhánh SSH. Nếu để ma trận quyết thì
+      // một ô `auto` sẽ cho lệnh ghi chạy giữa lúc đang lập kế hoạch, trong khi
+      // `Write` cùng phiên bị chặn.
+      if (mode === 'plan' && infraCall.class !== 'read') {
+        return {
+          block: true,
+          reason: `Blocked in plan mode: ${infraCall.command} is a ${infraCall.class} command and is not allowed while planning.`,
+        }
+      }
+      // Cổng quyền KHÔNG được ném (hợp đồng đầu file). Đọc chính sách đã tự
+      // phòng thủ; nhánh catch ở đây là lưới cuối và nó rơi về "hỏi", không rơi
+      // về "cho chạy".
+      let verdict: { mode: InfraMode; reason: string; accountKind: InfraAccountKind }
+      try {
+        const policy = await loadInfraPolicy()
+        verdict = decide({
+          policy,
+          class: infraCall.class,
+          ...(infraGate?.context?.accountId ? { accountId: infraGate.context.accountId } : {}),
+          ...(infraGate?.sessionFloor ? { sessionFloor: infraGate.sessionFloor } : {}),
+        })
+      } catch (err) {
+        log.warn('permission gate: infra policy lookup failed, asking instead', {
+          toolName,
+          err: err instanceof Error ? err.message : String(err),
+        })
+        verdict = { mode: 'ask', reason: 'matrix', accountKind: 'normal' }
+      }
+
+      if (verdict.mode === 'block') {
+        return { block: true, reason: infraBlockReason(infraCall, verdict.accountKind) }
+      }
+      // 'auto' = ô ma trận (hoặc bypass tạm thời) cho chạy thẳng. Nhật ký vẫn có
+      // đúng một dòng — `infra.run` ghi tại chỗ chạy, không phải tại cổng này.
+      if (verdict.mode === 'auto') return undefined
+      // 'ask' — park chờ người duyệt. Không có nút "Always allow": nhớ được một
+      // lệnh hạ tầng là dựng nguồn sự thật thứ hai cạnh ma trận (ADR 0088 §6).
+      return promptViaUi(false, {
+        offerAlwaysAllow: false,
+        decisionReason: infraPromptPayload(infraCall, verdict, infraGate?.context),
+        description: infraCall.command,
+      })
+    }
+
     // `Artifact` mang một ĐƯỜNG DẪN CỤC BỘ ra khỏi máy thành trang có URL lưu bền.
     // Chặn ở đây, TRƯỚC mọi nới lỏng theo mode: `execute` và auto-approve đi vòng
     // qua lời hỏi theo đúng thiết kế, nên "đã hỏi rồi" không phải hàng rào cuối cho
@@ -683,12 +1124,108 @@ export function makeBeforeToolCall(
       }
     }
 
+    // Chặn trước mọi thứ khác: không mode nào, không luật ALLOW nào, không
+    // auto-approve nào nới được đường ghi vào ma trận quyền và nhật ký.
+    if (touchesProtectedPath(toolName, context.args)) {
+      return {
+        block: true,
+        reason:
+          'AWOG không cho ghi vào chính sách quyền hạ tầng hoặc nhật ký hoạt động. ' +
+          'Đổi ma trận ở Settings → Hạ tầng; nhật ký chỉ người dùng dọn được.',
+      }
+    }
+
     const builtInGated = isGatedTool(toolName, context.args)
     const promptTrust = isPromptTrustTool(toolName)
 
     // Non-mutating built-in tool AND not a trust:'prompt' source tool: always allow
     // (a DENY rule for it was already applied above).
     if (!builtInGated && !promptTrust) return undefined
+
+    // ── Lệnh hạ tầng chạy qua `Bash` (ADR 0088 §6) ────────────────────────────
+    // Đặt TRƯỚC execute/auto-approve: nếu để sau, `execute` mode trả `undefined`
+    // và lệnh chạm tài khoản thật chạy thẳng, không ai hỏi và không dòng nhật ký
+    // nào — chính lỗ mà infosec audit #1 tìm ra ở 5/7 chiều.
+    const bashInfra = bashInfraCall(toolName, context.args)
+    if (bashInfra) {
+      // Chuỗi shell không đọc sạch được ⇒ ép `write` (luôn hỏi). Không có đường
+      // nào từ một chuỗi không chắc chắn dẫn tới `read`.
+      const cls = bashInfra.clean ? classify(bashInfra.tool, bashInfra.argv) : 'write'
+      let verdict: { mode: InfraMode; reason: string; accountKind: InfraAccountKind }
+      try {
+        const policy = await loadInfraPolicy()
+        // ⚠ KHÔNG chấm theo account đang ghim (audit #1 F3). `Bash` chưa nhận được
+        // `AWS_PROFILE` (bash-tool.ts vẫn gọi `filteredShellEnv()` trần), nên lệnh
+        // thật chạy bằng profile `default` — mà ADR 0088 tự viết: "`default` rất
+        // thường là production". Chấm theo account ghim sẽ in ra thẻ duyệt một cái
+        // tên account mà lệnh KHÔNG chạm tới: duyệt nhầm có chứng cứ giả, tệ hơn là
+        // không có chứng cứ. Nên tới khi env được luồn xuống, nhánh này luôn dùng
+        // cột `production` — cột siết hơn — và không nêu account nào cả.
+        verdict = decide({
+          policy,
+          class: cls,
+          accountId: '__unverified__',
+          ...(infraGate?.sessionFloor ? { sessionFloor: infraGate.sessionFloor } : {}),
+        })
+        verdict = { ...verdict, accountKind: 'production' }
+      } catch {
+        // Cổng quyền không được ném: chính sách đọc hỏng ⇒ rơi về "hỏi".
+        verdict = { mode: 'ask', reason: 'matrix', accountKind: 'normal' }
+      }
+      if (mode === 'plan' && cls !== 'read') {
+        return { block: true, reason: `Blocked in plan mode: ${toolName} is not allowed while planning.` }
+      }
+      // Ghi nhật ký cho ĐƯỜNG BASH (audit #1 F5). `runInfra()` không tham gia đường
+      // này mà nhật ký lại được ghi ở đó, nên trước bản vá mọi lệnh hạ tầng chạy
+      // qua `Bash` — kể cả lệnh vừa được duyệt, kể cả lớp phá huỷ — không để lại
+      // dòng nào. Câu "app đã làm gì trên account của tôi" vì thế trả lời SAI theo
+      // hướng trấn an. Ghi cả khi verdict là `auto`.
+      const noteBash = (decision: 'auto' | 'approved' | 'blocked'): void => {
+        void recordInfraAction({
+          actor: 'agent:assistant',
+          ...(sessionId ? { sessionId } : {}),
+          surface: 'session',
+          tool: 'Bash',
+          argv: bashInfra.argv,
+          context: {},
+          class: cls,
+          decision,
+          result: { summary: String(argBag(context.args)?.command ?? '').slice(0, 400) },
+        }).catch(() => {
+          /* nhật ký hỏng không được chặn cổng quyền — lỗi đã log ở tầng store */
+        })
+      }
+
+      if (verdict.mode === 'block') {
+        noteBash('blocked')
+        return {
+          block: true,
+          reason: infraBlockReason(
+            { name: toolName, class: cls, command: String(argBag(context.args)?.command ?? '') },
+            verdict.accountKind,
+          ),
+        }
+      }
+      if (verdict.mode === 'ask') {
+        noteBash('approved')
+        // Cùng payload với tool `aws_cli` nên thẻ duyệt vẽ được account/lớp lệnh —
+        // trước bản này đường Bash chỉ ra một thẻ trơn, người duyệt không biết
+        // lệnh chạm tài khoản nào. `offerAlwaysAllow: false`: lệnh hạ tầng không
+        // bao giờ nhớ được (task 0.14).
+        return promptViaUi(false, {
+          offerAlwaysAllow: false,
+          // `undefined` ngữ cảnh: xem chú thích F3 ở trên — không in account mà lệnh
+          // sẽ không chạm tới. Thẻ duyệt vẫn có dòng lệnh đầy đủ và lớp lệnh.
+          decisionReason: infraPromptPayload(
+            { name: toolName, class: cls, command: String(argBag(context.args)?.command ?? '') },
+            verdict,
+            undefined,
+          ),
+        })
+      }
+      noteBash('auto')
+      // `auto`: rơi xuống, đi tiếp đường thường bên dưới.
+    }
 
     // execute mode: no gate (the user opted into full access) — unless the gate
     // cannot read this call while a DENY rule for the tool exists (F4).
@@ -704,7 +1241,14 @@ export function makeBeforeToolCall(
 
     // An ALLOW rule matched this call's CONTENT (this exact command / this file),
     // not merely its tool name — skip the prompt.
-    if (ruleDecision === 'allow') return undefined
+    //
+    // Trừ lệnh hạ tầng chạy qua `Bash` (ADR 0088 §6, task 0.14): một luật
+    // `Bash(aws …)` — dù được ghi từ trước lúc có ma trận, hay viết tay — không
+    // được phủ chúng, nếu không sẽ có hai nguồn sự thật về quyền hạ tầng và người
+    // dùng tin nhầm cái yếu hơn. Nút "Always allow" đã bị gỡ ở `buildRuleSuggestion`;
+    // dòng này bịt nốt đường luật CŨ, nên mỗi lần gọi là một lần hỏi.
+    const infraBash = bashInfraBinary(toolName, context.args)
+    if (ruleDecision === 'allow' && !infraBash) return undefined
 
     // Auto-approve (Settings → Sessions): allow gated tools without prompting. Sits
     // after the plan-mode block (planning stays read-only) but before the ask path.
