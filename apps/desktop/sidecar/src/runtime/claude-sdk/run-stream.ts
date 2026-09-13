@@ -35,6 +35,7 @@ import { log } from '../../util/logger.js'
 import type { RunNonStreamArgs, RunStreamResult, StreamCallbacks } from '../../sessions/runner.js'
 import type { ContextChars, SessionAttachment, TodoItem } from '../../types/shared.js'
 import { makeBeforeToolCall, withTurnBudget, type BeforeToolCall } from '../permission.js'
+import type { AskUserQuestionFn } from '../permission-types.js'
 import { buildRulesPrompt, extractTurnPaths } from '../../rules/inject.js'
 import { buildStylePrompt } from '../../style/styles.js'
 import {
@@ -520,6 +521,14 @@ export async function runStreamClaude(
       // cwd THẬT của lượt: luật viết đường dẫn tương đối phải giải theo thư mục
       // lệnh sẽ chạy, không phải đường dẫn project (ADR 0080).
       args.cwd,
+      // Ngữ cảnh hạ tầng của phiên (ADR 0088 §5b) — cột ma trận và nội dung prompt
+      // duyệt đều lấy từ đây; vắng nó là cổng quyền tính nhầm sang tài khoản thường.
+      args.settings.infra || args.settings.infraFloor
+        ? {
+            ...(args.settings.infra ? { context: args.settings.infra } : {}),
+            ...(args.settings.infraFloor ? { sessionFloor: args.settings.infraFloor } : {}),
+          }
+        : undefined,
     ),
     args.budget,
     Date.now(),
@@ -715,6 +724,41 @@ export async function runStreamClaude(
   }
   const claudeBinary = resolveClaudeBinary()
 
+  // ── Park CHỜ NGƯỜI ──────────────────────────────────────────────────────────
+  // Số lời hỏi người đang mở (AskUserQuestion, và elicitation của MCP — cả hai park
+  // trên cùng một promise ở sessions/questions.ts).
+  //
+  // LỖI THẬT: `waitingCount()` bên dưới chỉ đếm BACKGROUND TASK (shell nền, subagent,
+  // workflow). Một câu hỏi đang chờ người thì nó đếm ra 0, nên sau `result` ta tự
+  // `armIdleSettle()` — và 4 GIÂY sau (IDLE_SETTLE_MS) stdin đóng, CLI thoát code 1,
+  // `onAbort` unwind park bằng answers rỗng, thẻ lật sang "No answer given". Người
+  // dùng thấy đúng một nhịp nháy rồi câu hỏi tự trả lời "không chọn gì".
+  //
+  // Đây là cùng một lớp lỗi commit 4041c7d đã sửa cho background work; chỗ này bị bỏ
+  // sót vì park của câu hỏi không đi qua `liveBackground`.
+  //
+  // Cố ý KHÔNG gộp vào `waitingCount()`: nó điều khiển `armWaitCap()`, mà cap 30 phút
+  // + `stopTask` là ngữ nghĩa của background task. Một câu hỏi thì KHÔNG có hạn —
+  // người dùng trả lời lúc nào cũng được, và không có "task" nào để stop.
+  let humanParks = 0
+  const humanParked = (): boolean => humanParks > 0
+  // Gắn bộ đếm quanh handler mà CẢ HAI đường hỏi người đều dùng (gate của
+  // AskUserQuestion và handler elicitation), nên không đường nào đếm sót.
+  const askUserQuestion: AskUserQuestionFn | undefined = args.askUserQuestion
+    ? async (...a) => {
+        humanParks += 1
+        try {
+          return await args.askUserQuestion!(...a)
+        } finally {
+          humanParks -= 1
+          // Trả lời xong mà CLI vì lý do nào đó không phát thêm message nào thì lượt
+          // sẽ treo — nên arm lại nhịp settle. Bất kỳ message nào tới cũng huỷ nó
+          // (khối clearTimeout trong vòng lặp), nên đây chỉ là lưới an toàn.
+          if (sawResult && waitingCount() === 0 && !humanParked()) armIdleSettle()
+        }
+      }
+    : undefined
+
   const options: Options = {
     // `snapshot: true` (SDK 0.3.260+): record this conversation's system prompt once
     // and reuse it verbatim on every later request and `resume`, instead of rendering
@@ -768,13 +812,13 @@ export async function runStreamClaude(
     // never reaches this callback (bypassPermissions answers it first — the SDK warns
     // as much), so this adds no second permission path. Chat only: a task/subagent
     // leaves `askUserQuestion` undefined, and the tool stays off there.
-    ...(args.askUserQuestion
+    ...(askUserQuestion
       ? {
-          canUseTool: makeAskUserQuestionGate(args.askUserQuestion, cb),
+          canUseTool: makeAskUserQuestionGate(askUserQuestion, cb),
           // MCP elicitation (form / URL auth) → cùng thẻ câu hỏi, cùng park. Không
           // khai callback này thì SDK TỪ CHỐI TỰ ĐỘNG mọi request — một Source cần
           // cấp quyền qua trình duyệt sẽ hỏng câm (elicitation.ts).
-          onElicitation: makeElicitationHandler(args.askUserQuestion, cb),
+          onElicitation: makeElicitationHandler(askUserQuestion, cb),
         }
       : {}),
     // AWOG DOES render a per-task stop control (SessionBackgroundChips → the bg
@@ -1025,7 +1069,7 @@ export async function runStreamClaude(
   // window — any message cancels it — then end the turn instead of sitting until
   // the cap.
   const armGrace = (): void => {
-    if (graceTimer || closed || !parked || waitingCount() > 0) return
+    if (graceTimer || closed || !parked || waitingCount() > 0 || humanParked()) return
     graceTimer = setTimeout(
       () => closeInput('background settled, no continuation'),
       BACKGROUND_GRACE_MS,
@@ -1131,7 +1175,16 @@ export async function runStreamClaude(
         // that would close stdin at the start of the turn.
         if (m.state === 'idle' && sawResult) {
           const waiting = waitingCount()
-          if (waiting === 0) closeInput('session idle')
+          // `idle` = "không đang sinh chữ". Trong lúc chờ người trả lời thì CLI luôn
+          // idle — đóng stdin ở đây là tự giết câu hỏi của chính mình.
+          if (waiting === 0 && humanParked()) {
+            if (!loggedIdleWhileParked) {
+              loggedIdleWhileParked = true
+              log.info('claude-sdk idle while asking the user — holding the turn open', {
+                sessionId: args.sessionId,
+              })
+            }
+          } else if (waiting === 0) closeInput('session idle')
           else if (!loggedIdleWhileParked) {
             // Once per turn: this is the signal that used to end the turn here, and
             // the only way to tell a healthy park from a stale task set in the logs.
@@ -1278,7 +1331,13 @@ export async function runStreamClaude(
         const waiting = waitingCount()
         // NOT a close: `result` says a reply was produced, not that the turn is
         // over. Wait for `session_state_changed: idle` (or the settle timer).
-        if (waiting === 0) armIdleSettle()
+        if (waiting === 0 && humanParked()) {
+          // Chờ người: không đặt hạn nào cả. Cũng không `parked = true` / `armWaitCap()`
+          // — cap là cho background task, còn câu hỏi thì không có gì để stop.
+          log.info('claude-sdk turn parked on a question — no idle deadline', {
+            sessionId: args.sessionId,
+          })
+        } else if (waiting === 0) armIdleSettle()
         else {
           parked = true
           log.info('claude-sdk turn parked on background work', {

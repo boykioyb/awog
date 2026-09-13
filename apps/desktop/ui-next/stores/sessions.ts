@@ -11,12 +11,12 @@ import {
 } from '~/composables/useSessionsData'
 import { useAccounts } from '~/composables/useAccounts'
 import { useI18n } from '~/composables/useI18n'
-import { pushActionToast } from '~/composables/useActionToasts'
 import type { AccountOption } from '~/composables/useAccounts'
 import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import { PR_REVIEW_ACCOUNT_INHERIT, useSettingsStore } from '~/stores/settings'
-import type { ProviderName } from '~/types'
+import type { InfraContext, ProviderName } from '~/types'
+import { compactInfraContext, freezeInfraContext } from '~/utils/infra-context'
 import { useProjectsStore } from '~/stores/projects'
 import {
   CTX_DIVISOR,
@@ -228,6 +228,10 @@ type PermissionRequestPayload = {
   // `unknown` on purpose: parsePermSuggestion validates the shape at the boundary
   // — the payload is L1 and a rule string is rendered to the user verbatim.
   suggestions?: unknown
+  // Vì sao cổng quyền hỏi (ADR 0088 §5). Với lệnh hạ tầng nó mang nguyên cụm
+  // account/region/lớp lệnh mà thẻ duyệt cần để tô đỏ đúng tài khoản. `unknown`
+  // có chủ đích: `parseInfraPrompt` validate ở biên, payload là L1.
+  decisionReason?: unknown
 }
 
 const isChunk = (raw: unknown): raw is SessionChunkPayload => {
@@ -392,6 +396,9 @@ type SessionSummaryDto = {
   aboutSshHostId?: string
   // GitHub issue/PR this session was opened from — mirrors sidecar SessionSummary.
   aboutGhUrl?: string
+  // Ngữ cảnh hạ tầng đã đóng băng (ADR 0088) — mirrors sidecar SessionSummary.infra.
+  // Có trên hàng danh sách để chip hiện đúng ngay khi mở, không nháy giá trị kế thừa.
+  infra?: InfraContext
   // Fork parent (its session id) — mirrors sidecar SessionSummary; drives fork tree.
   parentSessionId?: string
   messageCount: number
@@ -463,6 +470,8 @@ type SessionGetDto = {
   }
   parentSessionId?: string
   forkFromMessageId?: string
+  // Ngữ cảnh hạ tầng đã đóng băng (ADR 0088) — mirrors sidecar Session.infra.
+  infra?: InfraContext
   // Reading anchors persisted in the session header (ADR 0074). The sidecar already
   // drops wrong-shaped entries when it parses the header, so this hydrates as-is.
   bookmarks?: SessionBookmark[]
@@ -511,6 +520,23 @@ interface SendMessageResult {
 // so browsing the UI off-shell fails VISIBLY instead of printing something that
 // reads like a model answer.
 const ENGINE_UNAVAILABLE = 'Engine unavailable — open this session in the AWOG desktop app'
+
+// Trần hạ tầng của phiên, đọc từ nhà tạm của InfraChip (`awog.infraSessionFloor`,
+// keyed theo engineId). Ở đây chỉ ĐỌC: chip là nơi duy nhất ghi. Giá trị lạ hoặc
+// storage hỏng ⇒ undefined = không siết thêm, để ma trận ở Settings quyết.
+function readInfraFloor(engineId: string | undefined): 'ask' | 'block' | undefined {
+  if (!engineId || typeof window === 'undefined') return undefined
+  try {
+    const raw = window.localStorage.getItem('awog.infraSessionFloor')
+    if (!raw) return undefined
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return undefined
+    const value = (parsed as Record<string, unknown>)[engineId]
+    return value === 'ask' || value === 'block' ? value : undefined
+  } catch {
+    return undefined
+  }
+}
 
 export const useSessionsStore = defineStore('sessions', () => {
   const sc = useSidecar()
@@ -1173,6 +1199,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.aboutTaskId) session.aboutTaskId = dto.aboutTaskId
     if (dto.aboutSshHostId) session.aboutSshHostId = dto.aboutSshHostId
     if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
+    if (dto.infra) session.infra = dto.infra
     if (dto.parentSessionId) session.parentSessionId = dto.parentSessionId
     return session
   }
@@ -1250,6 +1277,9 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (full.budget) target.budget = full.budget
         if (full.parentSessionId) target.parentSessionId = full.parentSessionId
         if (full.forkFromMessageId) target.forkFromMessageId = full.forkFromMessageId
+        // Đĩa là nguồn sự thật của ngữ cảnh đã ghim: một cửa sổ khác (hoặc popout)
+        // có thể vừa đổi nó qua infra.setSessionContext.
+        if (full.infra) target.infra = full.infra
         // Reading anchors (ADR 0074) live in the header, so they only come back on the
         // full read — including after a popout hands the session back (reclaimSession
         // clears `loaded` to force exactly this re-read).
@@ -1599,6 +1629,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     return { acct, model, level, mcpServerIds }
   }
 
+  // Ảnh chụp ngữ cảnh hạ tầng ĐÓNG BĂNG vào một phiên mới (ADR 0088 §2, §7): ý kiến
+  // của project rồi tới toàn app, giữ nguyên văn kể cả '' (xem freezeInfraContext).
+  // `undefined` khi không tầng nào có ý kiến — không có gì để đóng băng thì header
+  // không mang key `infra` rỗng.
+  function frozenInfraFor(projectId?: string): InfraContext | undefined {
+    const projectInfra = projectId ? projectsStore.projectById(projectId)?.infra : undefined
+    const frozen = freezeInfraContext(projectInfra, settingsStore.infra)
+    return Object.keys(frozen).length ? frozen : undefined
+  }
+
   // Global default account/model (no project context) — the quota gate + usage
   // refresh read this. Thin wrapper over defaultsForNewSession().
   function defaultAccountAndModel(): { acct: ReturnType<typeof accountById>; model: string } {
@@ -1735,6 +1775,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
     if (acct) session.accountId = acct.id
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
+    const frozenInfra = frozenInfraFor(session.project || undefined)
+    if (frozenInfra) session.infra = frozenInfra
     sessions.value.unshift(session)
     activate(id)
     if (useIpc) {
@@ -1794,6 +1836,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
     if (acct) session.accountId = acct.id
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
+    const frozenInfra = frozenInfraFor(session.project || undefined)
+    if (frozenInfra) session.infra = frozenInfra
     sessions.value.unshift(session)
     activate(id)
     if (useIpc) {
@@ -1830,6 +1874,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
     if (acct) session.accountId = acct.id
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
+    const frozenInfra = frozenInfraFor(session.project || undefined)
+    if (frozenInfra) session.infra = frozenInfra
     sessions.value.unshift(session)
     activate(id)
     if (useIpc) {
@@ -1925,6 +1971,28 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (useIpc) pushUpsert(s, 'update-metadata')
   }
 
+  // Ghim ngữ cảnh hạ tầng cho phiên (ADR 0088 §7). Không đi qua pushUpsert: ngữ cảnh
+  // có RPC riêng vì mỗi lần đổi phải để lại một dòng nhật ký (`class: 'context-switch'`)
+  // — đổi tài khoản là hành động phải truy được — và vì gửi kèm mọi lần đổi tên/ghim
+  // sẽ để bản `infra` cũ của cửa sổ này ghi đè lần đổi vừa làm ở cửa sổ kia.
+  //
+  // Lạc quan: chip đổi ngay rồi mới ghi. Trả false khi ghi hỏng để người gọi báo lại —
+  // im lặng ở đây nghĩa là người dùng tin phiên đã chuyển account mà thật ra thì chưa.
+  async function setInfraContext(id: number, next: InfraContext): Promise<boolean> {
+    const s = byId(id)
+    if (!s) return false
+    const context = compactInfraContext(next)
+    s.infra = context
+    if (!useIpc || !s.engineId) return true
+    try {
+      await sc.request('infra.setSessionContext', { sessionId: s.engineId, context })
+      return true
+    } catch (err) {
+      console.warn('[sessions] infra.setSessionContext failed', err)
+      return false
+    }
+  }
+
   // Replace a session's checklist with the user's edited list (optimistic, then
   // persisted). Not part of pushUpsert: the checklist has its own RPC because the
   // engine writes the same field from TodoWrite, and re-injects it into the next
@@ -1967,7 +2035,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       bookmarks: (s.bookmarks ?? []).map((b) => ({ id: b.id, at: b.at })),
     }).catch((err) => {
       console.warn('[sessions] sessions.updateBookmarks failed', err)
-      pushActionToast(useI18n().t('sessions.bookmark.saveFailed'), 'error')
+      useToast().add({ title: useI18n().t('sessions.bookmark.saveFailed'), color: 'error' })
     })
   }
 
@@ -2317,7 +2385,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (!s) return
     if (!s.engineId) {
-      pushActionToast(useI18n().t('sessionsSearch.archive.notSaved'), 'info')
+      useToast().add({ title: useI18n().t('sessionsSearch.archive.notSaved'), color: 'info' })
       return
     }
     const apply = (on: boolean) => {
@@ -2333,7 +2401,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     } catch (err) {
       apply(!archived)
       console.warn('[sessions] sessions.setArchived failed', err)
-      pushActionToast(useI18n().t('sessionsSearch.archive.failed'), 'error')
+      useToast().add({ title: useI18n().t('sessionsSearch.archive.failed'), color: 'error' })
     }
   }
 
@@ -3187,6 +3255,9 @@ export const useSessionsStore = defineStore('sessions', () => {
             // dropping it here, which forced the card to open its own bridge
             // listener at module load just to see it).
             const suggestion = parsePermSuggestion(p.suggestions)
+            // Cụm ngữ cảnh hạ tầng đi cùng CHÍNH sự kiện này; không park lại đây
+            // thì thẻ duyệt không bao giờ biết lệnh chạm tài khoản nào.
+            const infra = parseInfraPrompt(p.decisionReason)
             const block: PermBlock = {
               kind: 'perm',
               tool: p.toolName,
@@ -3194,6 +3265,7 @@ export const useSessionsStore = defineStore('sessions', () => {
               status: 'pending',
               eid: p.requestId,
               ...(suggestion ? { suggestion } : {}),
+              ...(infra ? { infra } : {}),
             }
             m.blocks.push(block)
           }
@@ -3468,6 +3540,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     // omitted only for sessions that never linked a host (undefined). See setAboutSshHost.
     if (s.aboutSshHostId !== undefined) session.aboutSshHostId = s.aboutSshHostId
     if (s.aboutGhUrl) session.aboutGhUrl = s.aboutGhUrl
+    // CHỈ ở 'create': sau đó đường ghi duy nhất là infra.setSessionContext (sidecar
+    // cũng bỏ qua field này ở nhánh update-metadata). Gửi kèm mọi lần đổi tên/ghim
+    // thì bản `infra` cũ của cửa sổ này sẽ ghi đè lần đổi vừa làm ở cửa sổ kia.
+    if (mode === 'create' && s.infra) session.infra = compactInfraContext(s.infra)
     if (s.pinnedContext) session.pinnedContext = s.pinnedContext
     if (s.workspaceFolder) session.workspaceFolder = s.workspaceFolder
     if (s.budget) session.budget = s.budget
@@ -3887,6 +3963,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (s.sshApprovalMode && s.sshApprovalMode !== 'prompt') {
       settings.sshApprovalMode = s.sshApprovalMode
     }
+    // Trần hạ tầng của phiên (ADR 0088 §5b). Nhà tạm là localStorage keyed theo
+    // engineId (xem InfraChip) — đọc ở ĐÂY vì cổng quyền nằm ở sidecar: không gửi
+    // theo lượt thì cái select "Quyền trong phiên" chỉ siết được chính nó, còn
+    // agent vẫn chạy dưới ma trận rộng hơn. Chỉ siết, không bao giờ nới.
+    const floor = readInfraFloor(s.engineId)
+    if (floor) settings.infraFloor = floor
     return settings
   }
 
@@ -4697,6 +4779,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setActive,
     create,
     createForTask,
+    setInfraContext,
     createForSshHost,
     remove,
     rename,
