@@ -128,6 +128,13 @@
           <InfraDashboards />
         </div>
 
+        <!-- Tab "Chi phí" (Mốc 7, 7.1–7.3): tháng này · dự báo · dò lãng phí · sinh
+             playbook dọn dẹp. Đứng SAU Bảng điều khiển vì nó trả lời câu hỏi tiếp theo
+             của cùng một người: "cái gì đang tốn, và bỏ được cái nào". -->
+        <div v-if="costMounted" v-show="tab === 'cost'" class="infra-pane">
+          <InfraCost />
+        </div>
+
         <!-- Tab "Báo cáo" (Mốc 6, 6.6): danh mục bốn loại. Mount lười vì màn này
              hỏi sidecar danh mục ngay khi mount; không có tab thì không có lời gọi. -->
         <div v-if="reportsMounted" v-show="tab === 'reports'" class="infra-pane">
@@ -273,6 +280,7 @@ type InfraTab =
   | 'logs'
   | 'monitoring'
   | 'dashboards'
+  | 'cost'
   | 'reports'
   | 'kubernetes'
   | 'accounts'
@@ -289,6 +297,7 @@ const TABS: readonly InfraTab[] = [
   'logs',
   'monitoring',
   'dashboards',
+  'cost',
   'reports',
   'kubernetes',
   'accounts',
@@ -302,6 +311,7 @@ const TAB_ICONS: Record<InfraTab, string> = {
   logs: 'table',
   monitoring: 'act',
   dashboards: 'panel',
+  cost: 'tag',
   reports: 'file',
   kubernetes: 'k8s',
   accounts: 'shield',
@@ -352,6 +362,12 @@ const monitoringMounted = ref(false)
  * mọi tab dữ liệu của trang này đã theo cùng một luật.
  */
 const dashboardsMounted = ref(false)
+/**
+ * Tab Chi phí (mốc 7) mount lười — và ở đây nó quan trọng hơn mọi tab khác: một lượt
+ * nạp là ba request `ce` TÍNH TIỀN. `useInfraCost` cấm tự chạy, nên mount cũng không tốn
+ * gì; mount lười chỉ để mọi tab dữ liệu của trang này giữ cùng một luật.
+ */
+const costMounted = ref(false)
 /** Tab Báo cáo (Mốc 6) mount lười: màn này hỏi danh mục ngay khi mount. */
 const reportsMounted = ref(false)
 const logsSeed = ref<LogsSeed | null>(null)
@@ -361,6 +377,7 @@ function selectTab(next: InfraTab): void {
   if (next === 'logs') logsMounted.value = true
   if (next === 'monitoring') monitoringMounted.value = true
   if (next === 'dashboards') dashboardsMounted.value = true
+  if (next === 'cost') costMounted.value = true
   if (next === 'reports') reportsMounted.value = true
   if (next === 'kubernetes') k8sMounted.value = true
   if (next === 'services') servicesMounted.value = true

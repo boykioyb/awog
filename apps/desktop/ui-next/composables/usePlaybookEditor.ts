@@ -176,6 +176,47 @@ export function usePlaybookEditor() {
   }
 
   /**
+   * Mở một bản nháp do MÁY dựng (mốc 7.3 — playbook dọn dẹp sinh từ phát hiện lãng phí).
+   *
+   * Vẫn là `mode: 'create'` và vẫn dừng ở trình soạn: bản nháp này chứa lệnh GHI trên
+   * tài khoản AWS, nên không có đường nào để nó xuống đĩa mà người dùng chưa nhìn thấy
+   * nội dung. Đây chính là chỗ họ nhìn.
+   */
+  function openGenerated(draft: {
+    name: string
+    description: string
+    kind: PlaybookKind
+    steps: readonly {
+      id: string
+      title: string
+      verb: string
+      tool: string
+      args: readonly string[]
+      note: string
+    }[]
+  }): void {
+    reset()
+    mode.value = 'create'
+    lockedId.value = null
+    form.name = draft.name
+    form.description = draft.description
+    form.kind = draft.kind
+    form.steps = draft.steps.map((s) => ({
+      id: s.id,
+      title: s.title,
+      // Giá trị đến từ sidecar nhưng vẫn thu hẹp ở biên: một `verb`/`tool` lạ lọt vào
+      // form sẽ đi thẳng tới lược đồ zod rồi hỏng ở lượt Lưu, xa chỗ gây ra nó.
+      verb: (EDITOR_VERBS as readonly string[]).includes(s.verb)
+        ? (s.verb as PlaybookVerb)
+        : 'check',
+      tool: (EDITOR_TOOLS as readonly string[]).includes(s.tool) ? (s.tool as InfraTool) : 'aws',
+      argsText: s.args.join('\n'),
+      note: s.note,
+    }))
+    open.value = true
+  }
+
+  /**
    * Sửa tại chỗ. Chỉ bản ghi được — `summary.source === 'builtin'` không tới được đây
    * (nút Sửa không hiện), và sidecar cũng chặn lần nữa.
    */
@@ -360,6 +401,7 @@ export function usePlaybookEditor() {
     openBlank,
     openDuplicate,
     openEdit,
+    openGenerated,
     close,
     addStep,
     removeStep,

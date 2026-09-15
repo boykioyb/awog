@@ -92,6 +92,9 @@ const AWS_READ_ALLOWLIST: Record<string, ReadonlySet<string>> = {
     'describe-snapshots',
     'describe-regions',
     'describe-availability-zones',
+    // Mốc 7 (dò lãng phí, 7.2). Thuần metadata: không positional nào là đường dẫn,
+    // không phát credential — cùng hạng với `describe-addresses` ngay trên.
+    'describe-nat-gateways',
   ]),
   s3api: new Set([
     'list-buckets',

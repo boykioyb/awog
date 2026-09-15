@@ -88,6 +88,9 @@ export const INFRA_SURFACES = [
   // lượt nạp của nó là một lô metric trả tiền, và sổ kiểm toán phải trả lời được
   // "lượt đó do ai bấm" — bảng hay Explorer.
   'dashboards',
+  // Màn Chi phí + dò lãng phí (mốc 7). Cũng là một màn trả tiền — `ce` tính $0.01 mỗi
+  // request — nên nó phải đứng riêng trong sổ vì đúng lý do như `dashboards`.
+  'cost',
 ] as const
 
 export type InfraSurface = (typeof INFRA_SURFACES)[number]
