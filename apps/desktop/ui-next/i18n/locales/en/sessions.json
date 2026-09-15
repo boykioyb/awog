@@ -298,6 +298,7 @@
   "sessions.message.tokens": "{tok} tok",
   "sessions.message.waiting": "Waiting…",
   "sessions.message.copy": "Copy",
+  "sessions.message.copied": "Copied",
   "sessions.message.more": "More actions",
   "sessions.message.fullscreen": "Full screen",
   "sessions.message.fullscreenTurn": "Full screen (whole turn)",

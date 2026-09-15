@@ -473,7 +473,26 @@ const plainText = computed(() => {
 function act(fn: (id: number, i: number) => void) {
   if (store.activeId != null && msgIndex.value >= 0) fn(store.activeId, msgIndex.value)
 }
-const copyText = () => void navigator.clipboard.writeText(plainText.value)
+// Phản hồi "đã copy" ngay trên nút: icon đổi sang dấu tick + tô accent trong ~1.4s
+// rồi tự trả về (2026-09-15). Không có phản hồi thì người dùng không biết cú bấm
+// đã ăn hay chưa — `navigator.clipboard.writeText` im lặng cả khi thành công lẫn
+// khi bị chặn quyền. Chỉ bật cờ khi ghi THẬT xong (await), nên tick = đã copy.
+const copied = ref(false)
+let copiedTimer: ReturnType<typeof setTimeout> | null = null
+async function copyText() {
+  try {
+    await navigator.clipboard.writeText(plainText.value)
+    copied.value = true
+    if (copiedTimer) clearTimeout(copiedTimer)
+    copiedTimer = setTimeout(() => (copied.value = false), 1400)
+  } catch {
+    // Clipboard bị chặn (quyền/ngữ cảnh không an toàn) — không tô tick giả.
+    copied.value = false
+  }
+}
+onBeforeUnmount(() => {
+  if (copiedTimer) clearTimeout(copiedTimer)
+})
 const quote = () => act(store.addQuote)
 
 // ── Destructive-action guard (docs/features/session-destructive-action-guard.md) ──
@@ -662,8 +681,14 @@ function toggleBookmark(): void {
 // Trước đây cả 10 (assistant) / 7 (user) icon đều nằm ngoài cùng một trọng số, nên
 // `Tua về đây` trông y hệt `Sao chép` — màu đỏ khi hover là cảnh báo duy nhất.
 // `danger` KHÔNG đồng nghĩa với "có hộp xác nhận": retryModel là danger nhưng ungated.
+const copyAction = computed<MsgAction>(() => ({
+  icon: copied.value ? 'check' : 'copy',
+  title: copied.value ? t('sessions.message.copied') : t('sessions.message.copy'),
+  run: copyText,
+  active: copied.value,
+}))
 const userPrimary = computed<MsgAction[]>(() => [
-  { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
+  copyAction.value,
   { icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen },
   ...(canBookmark.value
     ? [
@@ -686,7 +711,7 @@ const userOverflow = computed<(MsgAction | MsgSep)[]>(() => [
 ])
 
 const asstPrimary = computed<MsgAction[]>(() => [
-  { icon: 'copy', title: t('sessions.message.copy'), run: copyText },
+  copyAction.value,
   { icon: 'quote', title: t('sessions.message.quote'), run: quote },
   ...(canBookmark.value
     ? [

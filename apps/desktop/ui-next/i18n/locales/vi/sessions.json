@@ -298,6 +298,7 @@
   "sessions.message.tokens": "{tok} tok",
   "sessions.message.waiting": "Đang chờ…",
   "sessions.message.copy": "Sao chép",
+  "sessions.message.copied": "Đã sao chép",
   "sessions.message.more": "Thêm hành động",
   "sessions.message.fullscreen": "Toàn màn hình",
   "sessions.message.fullscreenTurn": "Toàn màn hình cả lượt",
