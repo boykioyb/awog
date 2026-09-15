@@ -196,6 +196,17 @@ const AWS_READ_ALLOWLIST: Record<string, ReadonlySet<string>> = {
   // nhật ký bằng luật theo CẶP cờ-giá-trị (xem `maskCredentialFlagValues` trong
   // `audit/store.ts`) chứ không dựa vào lớp lọc theo hình dạng.
   sso: new Set(['list-accounts', 'list-account-roles']),
+  // Mốc 7 (7.4). Chỉ ĐỌC ngân sách: `describe-budgets` trả hạn mức + mức đã tiêu.
+  // `create-budget`/`update-budget`/`delete-budget` CỐ Ý không có mặt ⇒ rơi vào
+  // `write`/`destructive` ⇒ phải qua cổng duyệt như mọi lệnh ghi khác.
+  budgets: new Set(['describe-budgets']),
+  // Mốc 7 (7.6). `lookup-events` là đọc thuần lịch sử API của tài khoản: không
+  // positional nào là đường dẫn, không phát credential.
+  //
+  // ⚠ Nó KHÔNG rẻ vô hạn: AWS cho 2 request/giây cho mỗi tài khoản, và bản ghi chỉ
+  // lùi được 90 ngày. Hai giới hạn đó nằm ở tầng gọi (`audit/trail.ts`), không ở đây
+  // — allowlist trả lời "được phép không", không trả lời "nên gọi bao nhiêu lần".
+  cloudtrail: new Set(['lookup-events']),
 }
 
 const AWS_DESTRUCTIVE_PREFIXES = ['delete-', 'terminate-', 'remove-', 'purge-']

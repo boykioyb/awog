@@ -114,6 +114,84 @@
         </template>
       </section>
 
+      <!-- ── 7.4 Ngân sách ──────────────────────────────────────────────── -->
+      <section class="ic-sec">
+        <div class="ic-sec-hd">
+          <span class="ic-sec-ttl">{{ t('infra.cost.budget.title') }}</span>
+          <span class="ic-hint">{{ t('infra.cost.budget.why') }}</span>
+          <span class="ic-gap" />
+          <button
+            class="btn sm"
+            type="button"
+            :disabled="budgetsLoading || !accountId"
+            :aria-busy="budgetsLoading"
+            @click="loadBudgets"
+          >
+            <Icon name="refresh" class="ic-ic" :class="budgetsLoading ? 'ic-spin' : ''" />
+            {{ t('infra.cost.budget.load') }}
+          </button>
+        </div>
+
+        <!-- Budgets đòi `--account-id` tường minh. Chưa giải được id thì nói ra và tắt
+             nút, thay vì để người dùng bấm vào một lệnh chắc chắn hỏng. -->
+        <p v-if="!accountId" class="ic-empty">{{ t('infra.cost.budget.noAccountId') }}</p>
+        <p v-else-if="budgetsError" class="ierr">{{ budgetsError }}</p>
+
+        <template v-if="budgets">
+          <ul v-if="budgets.length" class="ic-rows">
+            <li v-for="b in budgets" :key="b.name" class="ic-row">
+              <span class="ic-row-name">{{ b.name }}</span>
+              <span class="ic-muted">{{ b.timeUnit }}</span>
+              <span class="ic-row-val tnum">
+                {{ b.actualUsd === null ? '—' : usd(b.actualUsd) }}
+                /
+                {{ b.limitUsd === null ? '—' : usd(b.limitUsd) }}
+              </span>
+            </li>
+          </ul>
+          <p v-else class="ic-empty">{{ t('infra.cost.budget.none') }}</p>
+        </template>
+
+        <!-- Đặt ngân sách là lượt GHI duy nhất của tab này: nó đi qua ma trận quyền và
+             có thể dừng ở hộp duyệt. Ba ô, không hơn. -->
+        <div class="ic-budget-form">
+          <input
+            v-model="budgetName"
+            class="ic-inp"
+            type="text"
+            maxlength="100"
+            :placeholder="t('infra.cost.budget.namePlaceholder')"
+          />
+          <input
+            v-model.number="budgetLimit"
+            class="ic-inp ic-inp-sm"
+            type="number"
+            min="1"
+            step="1"
+            :placeholder="t('infra.cost.budget.limitPlaceholder')"
+          />
+          <input
+            v-model="budgetEmails"
+            class="ic-inp"
+            type="text"
+            autocomplete="off"
+            :placeholder="t('infra.cost.budget.emailsPlaceholder')"
+            :title="t('infra.cost.budget.emailsWhy')"
+          />
+          <button
+            class="btn sm pri"
+            type="button"
+            :disabled="!canSaveBudget"
+            :aria-busy="budgetSaving"
+            @click="onSaveBudget"
+          >
+            <Icon name="check" class="ic-ic" />
+            {{ t('infra.cost.budget.save') }}
+          </button>
+        </div>
+        <p class="ic-hint">{{ t('infra.cost.budget.thresholdWhy') }}</p>
+      </section>
+
       <!-- ── 7.2 Dò lãng phí ────────────────────────────────────────────── -->
       <section class="ic-sec">
         <div class="ic-sec-hd">
@@ -242,7 +320,7 @@
 <script setup lang="ts">
 // Lớp bind của tab Chi phí. Mọi state + RPC ở `useInfraCost()`; hình dạng lệnh AWS của
 // playbook dọn dẹp ở SIDECAR (`infra/cost/cleanup.ts`) — renderer không dựng argv.
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { findingKey, useInfraCost } from '~/composables/useInfraCost'
 import { usePlaybookEditor } from '~/composables/usePlaybookEditor'
 import type { WasteFinding } from '~/composables/useInfraCost'
@@ -251,6 +329,13 @@ const { t } = useI18n()
 const { openGenerated } = usePlaybookEditor()
 
 const {
+  accountId,
+  budgets,
+  budgetsLoading,
+  budgetsError,
+  budgetSaving,
+  loadBudgets,
+  saveBudget,
   hasAccount,
   sidecarAvailable,
   region,
@@ -278,6 +363,44 @@ const {
 } = useInfraCost()
 
 const building = ref(false)
+
+// ── 7.4 — ô nhập ngân sách ──────────────────────────────────────────────────
+const budgetName = ref('')
+const budgetLimit = ref<number | null>(null)
+/** Nhiều email ngăn bằng dấu phẩy; rỗng = ngân sách KHÔNG có thông báo (vẫn hữu ích). */
+const budgetEmails = ref('')
+
+const emailList = computed(() =>
+  budgetEmails.value
+    .split(',')
+    .map((e) => e.trim())
+    .filter((e) => e !== ''),
+)
+
+const canSaveBudget = computed(
+  () =>
+    !budgetSaving.value &&
+    Boolean(accountId.value) &&
+    budgetName.value.trim() !== '' &&
+    (budgetLimit.value ?? 0) > 0,
+)
+
+/**
+ * Ngân sách trùng tên ⇒ `update-budget` thay vì `create-budget`. Đoán sai chiều là một
+ * lỗi `DuplicateRecordException` mà người dùng không hiểu, hoặc một lượt tạo đè lên
+ * ngân sách đang có.
+ */
+async function onSaveBudget(): Promise<void> {
+  const name = budgetName.value.trim()
+  const limitUsd = budgetLimit.value ?? 0
+  const update = (budgets.value ?? []).some((b) => b.name === name)
+  const ok = await saveBudget({ name, limitUsd, emails: emailList.value, update })
+  if (ok) {
+    budgetName.value = ''
+    budgetLimit.value = null
+    budgetEmails.value = ''
+  }
+}
 
 /** Hai chữ số, luôn có ký hiệu tiền — mọi con số trên màn này là USD. */
 function usd(v: number): string {
@@ -563,6 +686,30 @@ async function onCleanup(): Promise<void> {
 .ic-res {
   font-family: var(--code); /* mono-ok: id tài nguyên, người dùng copy vào lệnh aws */
   word-break: break-all;
+}
+
+.ic-budget-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ic-inp {
+  flex: 1 1 200px;
+  min-width: 140px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bgInput);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+.ic-inp-sm {
+  flex: 0 0 110px;
+  min-width: 90px;
 }
 
 .ic-acts {

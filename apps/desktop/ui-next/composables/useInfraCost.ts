@@ -71,6 +71,16 @@ export type WasteReport = {
   region: string
 }
 
+/** Ngân sách (7.4) — khớp `sidecar/infra/cost/budgets.ts`. */
+export type Budget = {
+  name: string
+  budgetType: string
+  timeUnit: string
+  limitUsd: number | null
+  actualUsd: number | null
+  forecastUsd: number | null
+}
+
 export type CleanupDraftWire = {
   name: string
   description: string
@@ -89,6 +99,11 @@ type WasteWire =
     }
   | { ok: false; error: string }
 type DraftWire = { ok: true; draft: CleanupDraftWire }
+type BudgetListWire = { ok: true; budgets: Budget[] } | { ok: false; error: string }
+type BudgetSaveWire =
+  | { ok: true; blocked: false; ranOk: boolean; error: string }
+  | { ok: false; blocked: true; gate: { reason: string } }
+  | { ok: false; blocked?: undefined; error: string }
 
 // ─── Trạng thái mức module ──────────────────────────────────────────────────
 
@@ -112,6 +127,11 @@ const enabled = ref<Set<WasteCheck>>(
     'lb-no-targets',
   ]),
 )
+
+const budgets = ref<Budget[] | null>(null)
+const budgetsLoading = ref(false)
+const budgetsError = ref('')
+const budgetSaving = ref(false)
 
 /** Phát hiện người dùng tick để đưa vào playbook dọn dẹp. Khoá = `check + resourceId`. */
 const picked = ref<Set<string>>(new Set())
@@ -232,6 +252,90 @@ export function useInfraCost() {
     () => Math.round(pickedFindings.value.reduce((n, f) => n + (f.monthlyUsd ?? 0), 0) * 100) / 100,
   )
 
+  // ── 7.4 — ngân sách ───────────────────────────────────────────────────────
+
+  /** Budgets đòi `--account-id` tường minh; không đoán được từ profile. */
+  const accountId = computed(() => infraContext.effective.value.accountId ?? '')
+
+  async function loadBudgets(): Promise<void> {
+    if (budgetsLoading.value) return
+    if (!accountId.value) {
+      budgetsError.value = t('infra.cost.budget.noAccountId')
+      return
+    }
+    budgetsLoading.value = true
+    budgetsError.value = ''
+    try {
+      const res = await sc.request<BudgetListWire>('infra.budget-list', {
+        context: {
+          ...(context.value.profile ? { profile: context.value.profile } : {}),
+          accountId: accountId.value,
+        },
+        surface: 'cost',
+      })
+      if (!res.ok) {
+        budgetsError.value = res.error
+        return
+      }
+      budgets.value = res.budgets
+    } catch (err) {
+      budgetsError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      budgetsLoading.value = false
+    }
+  }
+
+  /**
+   * Tạo hoặc sửa một ngân sách. Đây là lượt GHI duy nhất của tab này, nên nó đi qua
+   * `runGated` ở sidecar và có thể về với nhánh "bị chặn, cần duyệt" — surface phải nói
+   * ra thay vì im lặng coi như hỏng.
+   */
+  async function saveBudget(input: {
+    name: string
+    limitUsd: number
+    emails: string[]
+    update: boolean
+  }): Promise<boolean> {
+    if (budgetSaving.value) return false
+    if (!accountId.value) {
+      toast.add({ title: t('infra.cost.budget.noAccountId'), color: 'error' })
+      return false
+    }
+    budgetSaving.value = true
+    try {
+      const res = await sc.request<BudgetSaveWire>('infra.budget-save', {
+        context: {
+          ...(context.value.profile ? { profile: context.value.profile } : {}),
+          accountId: accountId.value,
+        },
+        name: input.name,
+        limitUsd: input.limitUsd,
+        ...(input.emails.length ? { emails: input.emails } : {}),
+        update: input.update,
+        surface: 'cost',
+      })
+      if (!res.ok) {
+        toast.add({
+          title: res.blocked === true ? res.gate.reason : res.error,
+          color: res.blocked === true ? 'warning' : 'error',
+        })
+        return false
+      }
+      if (!res.ranOk) {
+        toast.add({ title: res.error, color: 'error' })
+        return false
+      }
+      toast.add({ title: t('infra.cost.budget.saved', { name: input.name }), color: 'success' })
+      await loadBudgets()
+      return true
+    } catch (err) {
+      toast.add({ title: err instanceof Error ? err.message : String(err), color: 'error' })
+      return false
+    } finally {
+      budgetSaving.value = false
+    }
+  }
+
   // ── 7.3 — sinh playbook dọn dẹp ───────────────────────────────────────────
 
   /**
@@ -278,6 +382,14 @@ export function useInfraCost() {
     paidEnabled,
     scanWaste,
     checks: WASTE_CHECKS,
+    // ngân sách
+    accountId,
+    budgets,
+    budgetsLoading,
+    budgetsError,
+    budgetSaving,
+    loadBudgets,
+    saveBudget,
     // chọn + dọn dẹp
     picked,
     togglePick,

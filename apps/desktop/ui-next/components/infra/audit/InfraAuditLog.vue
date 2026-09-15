@@ -195,12 +195,18 @@
         <pre class="ixa-json">{{ JSON.stringify(selected, null, 2) }}</pre>
       </aside>
     </div>
+
+    <!-- CloudTrail (Mốc 7, 7.6). Sổ ở trên là thứ AWOG chạy; khối này là thứ TÀI KHOẢN
+         bị chạm — kể cả do người khác, do Console, hay do một pipeline. Nó đứng DƯỚI,
+         đóng sẵn, và có nút riêng: sổ ở trên đọc một file cục bộ, còn nó gọi mạng. -->
+    <InfraTrailPanel />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
 import AppSelect from '~/components/common/AppSelect.vue'
+import InfraTrailPanel from '~/components/infra/audit/InfraTrailPanel.vue'
 import { useInfraAuditLog } from '~/composables/useInfraAuditLog'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import type { InfraAuditEntry } from '~/composables/useInfraResourcesApi'

@@ -91,6 +91,10 @@ export const INFRA_SURFACES = [
   // Màn Chi phí + dò lãng phí (mốc 7). Cũng là một màn trả tiền — `ce` tính $0.01 mỗi
   // request — nên nó phải đứng riêng trong sổ vì đúng lý do như `dashboards`.
   'cost',
+  // Màn Nhật ký (mốc 7, 7.6). Trước nay nó CHỈ đọc file cục bộ nên không cần tên trong
+  // sổ; từ khi tra CloudTrail (`lookup-events`) thì chính nó spawn CLI, và một lệnh
+  // không nói được nó đến từ màn nào là một dòng nhật ký thiếu mất cột "ai".
+  'audit',
 ] as const
 
 export type InfraSurface = (typeof INFRA_SURFACES)[number]
