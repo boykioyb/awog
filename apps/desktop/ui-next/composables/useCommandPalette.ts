@@ -13,8 +13,11 @@ export type PaletteCommand = {
   id: string
   label: string
   hint?: string
+  // Secondary dim label between `label` and `hint` — e.g. a session's project name
+  // or an AWS service's group. Purely informational; not fuzzy-matched.
+  meta?: string
   icon?: Component
-  section: 'navigate' | 'session'
+  section: 'navigate' | 'session' | 'project' | 'service'
   run: () => void
 }
 

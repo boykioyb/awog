@@ -45,6 +45,7 @@
                     {{ seg.text }}
                   </span>
                 </span>
+                <span v-if="entry.meta" class="cmdk-row-meta">{{ entry.meta }}</span>
                 <span v-if="entry.hint" class="cmdk-row-hint">{{ entry.hint }}</span>
               </button>
             </template>
@@ -62,9 +63,23 @@
 </template>
 
 <script setup lang="ts">
-import { ArrowRight, MessageSquarePlus, Search, Sparkles, Terminal, Wand2 } from 'lucide-vue-next'
+import {
+  ArrowRight,
+  Boxes,
+  Cloud,
+  FolderGit2,
+  MessageSquarePlus,
+  Search,
+  Sparkles,
+  Terminal,
+  Wand2,
+} from 'lucide-vue-next'
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useSessionsStore } from '~/stores/sessions'
+import { useProjects } from '~/composables/useProjects'
+import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
+import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
+import { useLinkOpen } from '~/composables/useLinkOpen'
 import {
   highlightSegments,
   rankCommands,
@@ -80,6 +95,10 @@ import {
 const { t } = useI18n()
 const { isOpen, close } = useCommandPalette()
 const store = useSessionsStore()
+const { projects, projectName } = useProjects()
+const { services: awsServices, pinnedServices, ensureCatalog } = useInfraExplorerCatalog()
+const { request: requestServiceOpen } = useInfraServiceOpen()
+const { openExternally } = useLinkOpen()
 const { start: startTour } = useTour()
 const { reset: rerunSetup } = useOnboarding()
 
@@ -132,12 +151,65 @@ const commands = computed<PaletteCommand[]>(() => {
     out.push({
       id: `session-${s.id}`,
       label: s.title,
+      // Show which project this session belongs to. Skip no-project sessions —
+      // a "Default" tag on every loose chat is noise, not information.
+      ...(s.project ? { meta: projectName(s.project) } : {}),
       hint: t('palette.session.jump'),
       icon: ArrowRight,
       section: 'session',
       run: () => {
         store.setActive(s.id)
         void navigateTo('/sessions')
+      },
+    })
+  }
+
+  // ── Projects (searchable) ──────────────────────────────────────────────────
+  // Selecting a project opens its most recent session (the "first" one the
+  // sessions list would show); if it has none yet, start a fresh session scoped
+  // to that project.
+  for (const p of projects.value) {
+    out.push({
+      id: `project-${p.id}`,
+      label: p.name,
+      hint: t('palette.project.open'),
+      icon: FolderGit2,
+      section: 'project',
+      run: () => {
+        const first = store.sessions.find((s) => s.project === p.id)
+        if (first) store.setActive(first.id)
+        else store.create(p.id)
+        void navigateTo('/sessions')
+      },
+    })
+  }
+
+  // ── AWS services ───────────────────────────────────────────────────────────
+  // Pinned services show even on an empty query; the rest surface only when the
+  // user types (the catalog is ~110 entries — flooding the empty palette buries
+  // everything else). Opening follows the /infra catalog's own semantics: a
+  // service with an in-app table opens /infra on that table; a console-only
+  // service opens the AWS Console in the browser.
+  const typing = query.value.trim().length > 0
+  const pinnedSet = new Set(pinnedServices.value)
+  const svcSource = typing
+    ? awsServices.value
+    : awsServices.value.filter((s) => pinnedSet.has(s.id))
+  for (const svc of svcSource) {
+    out.push({
+      id: `aws-${svc.id}`,
+      label: t(svc.label),
+      meta: t(`infra.explorer.group.${svc.group}`),
+      hint: t('palette.service.open'),
+      icon: svc.target.kind === 'console' ? Cloud : Boxes,
+      section: 'service',
+      run: () => {
+        if (svc.target.kind === 'console' && svc.consoleUrl) {
+          void openExternally(svc.consoleUrl)
+          return
+        }
+        requestServiceOpen(svc.id)
+        void navigateTo('/infra')
       },
     })
   }
@@ -181,6 +253,8 @@ type RenderGroup = { section: PaletteCommand['section']; label: string; entries:
 const grouped = computed<RenderGroup[]>(() => {
   const sections: { section: PaletteCommand['section']; label: string }[] = [
     { section: 'session', label: t('palette.section.session') },
+    { section: 'project', label: t('palette.section.project') },
+    { section: 'service', label: t('palette.section.service') },
     { section: 'navigate', label: t('palette.section.navigate') },
   ]
   let flat = 0
@@ -194,7 +268,8 @@ const grouped = computed<RenderGroup[]>(() => {
 })
 
 // Flat, ordered list matching the rendered rows — Enter runs activeIndex against
-// this so the cursor lines up with what the eye sees (sessions then navigate).
+// this so the cursor lines up with what the eye sees (sessions, projects,
+// services, then navigate).
 const flatEntries = computed<RenderEntry[]>(() => grouped.value.flatMap((g) => g.entries))
 
 function moveDown() {
@@ -215,11 +290,14 @@ function runActive() {
   if (entry) run(entry)
 }
 
-// On open: reset query + cursor, focus the input.
+// On open: reset query + cursor, focus the input, and load the AWS service
+// catalog (lazily — only once ⌘K is actually used, not at app boot). It just
+// serializes a constant on the sidecar; no CLI, no credentials.
 watch(isOpen, (open) => {
   if (!open) return
   query.value = ''
   activeIndex.value = 0
+  void ensureCatalog()
   nextTick(() => inputRef.value?.focus())
 })
 
@@ -334,6 +412,19 @@ watch(activeIndex, (i) => {
 .cmdk-row-label .hl {
   color: var(--accent);
   font-weight: 600;
+}
+.cmdk-row-meta {
+  flex-shrink: 0;
+  max-width: 40%;
+  padding: 1px 7px;
+  border-radius: var(--r-pill);
+  background: var(--bgActive);
+  color: var(--textDim);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cmdk-row-hint {
   flex-shrink: 0;
