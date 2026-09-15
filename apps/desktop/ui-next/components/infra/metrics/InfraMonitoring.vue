@@ -320,6 +320,10 @@ function onPin(chartKey: string): void {
   height: 100%;
   min-height: 0;
   gap: 8px;
+  /* Cùng lề với Logs · Bảng điều khiển · Chi phí · Báo cáo (14px 16px). Trước
+     2026-09-15 màn này là màn DUY NHẤT của nhóm có padding 0, nên nội dung dính sát
+     mép khung trong khi mọi tab anh em đều thụt vào 16px. */
+  padding: 14px 16px;
 }
 
 .im-tool {

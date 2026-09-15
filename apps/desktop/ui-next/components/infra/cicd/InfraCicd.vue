@@ -9,7 +9,7 @@
 
        SFC này chỉ ghép khối + bind. Mọi state/lời gọi RPC nằm ở `useInfraCicd()`
        (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
-  <div class="ic">
+  <div class="icd">
     <div class="ictool">
       <div class="ifield">
         <div class="ilbl">{{ t('infra.cicd.filter.source') }}</div>
@@ -605,12 +605,19 @@ function openPr(pr: { url: string }): void {
 </script>
 
 <style scoped>
-.ic {
+/* Root là `.icd`, KHÔNG phải `.ic`: `prototype.css` dành `.ic` cho inline code (mono ·
+   nền --bgActive). Trước 2026-09-15 màn này mang đúng tên đó nên toàn màn hiện bằng
+   monospace 12px trên nền xám. */
+.icd {
   display: flex;
   flex-direction: column;
   min-height: 0;
   height: 100%;
   gap: 8px;
+  /* Lề của riêng màn. Trước khi đổi tên, màn này KHÔNG khai padding và chỉ mượn
+     `1px 5px` của rule inline-code toàn cục — một con số không ai chọn cho một màn.
+     14px 16px là lề chung của Logs · Giám sát · Bảng · Chi phí · Báo cáo. */
+  padding: 14px 16px;
 }
 .ictool {
   display: flex;

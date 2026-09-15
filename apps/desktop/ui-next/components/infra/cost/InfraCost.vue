@@ -5,24 +5,24 @@
          · dưới  — "có gì đang đốt tiền mà không ai dùng" (nhiều `describe-*`, cộng metric
            nếu người dùng bật hai phép dò trả tiền).
        Không khối nào tự chạy; mỗi khối một nút. -->
-  <div class="ic">
-    <header class="ic-hd">
-      <div class="ic-hd-txt">
-        <h2 class="ic-ttl">{{ t('infra.cost.title') }}</h2>
-        <p class="ic-sub">{{ t('infra.cost.subtitle') }}</p>
+  <div class="icst">
+    <header class="icst-hd">
+      <div class="icst-hd-txt">
+        <h2 class="icst-ttl">{{ t('infra.cost.title') }}</h2>
+        <p class="icst-sub">{{ t('infra.cost.subtitle') }}</p>
       </div>
     </header>
 
-    <p v-if="!sidecarAvailable" class="ic-state">{{ t('infra.cost.noSidecar') }}</p>
-    <p v-else-if="!hasAccount" class="ic-state">{{ t('infra.cost.noProfile') }}</p>
+    <p v-if="!sidecarAvailable" class="icst-state">{{ t('infra.cost.noSidecar') }}</p>
+    <p v-else-if="!hasAccount" class="icst-state">{{ t('infra.cost.noProfile') }}</p>
 
     <template v-else>
       <!-- ── 7.1 Chi phí ────────────────────────────────────────────────── -->
-      <section class="ic-sec">
-        <div class="ic-sec-hd">
-          <span class="ic-sec-ttl">{{ t('infra.cost.month.title') }}</span>
-          <span class="ic-hint">{{ t('infra.cost.month.priceWhy') }}</span>
-          <span class="ic-gap" />
+      <section class="icst-sec">
+        <div class="icst-sec-hd">
+          <span class="icst-sec-ttl">{{ t('infra.cost.month.title') }}</span>
+          <span class="icst-hint">{{ t('infra.cost.month.priceWhy') }}</span>
+          <span class="icst-gap" />
           <button
             class="btn sm pri"
             type="button"
@@ -30,7 +30,7 @@
             :aria-busy="summaryLoading"
             @click="loadSummary(false)"
           >
-            <Icon name="play" class="ic-ic" />
+            <Icon name="play" class="icst-ic" />
             {{ t('infra.cost.month.load') }}
           </button>
           <button
@@ -40,7 +40,7 @@
             :title="t('infra.cost.month.reloadWhy')"
             @click="loadSummary(true)"
           >
-            <Icon name="refresh" class="ic-ic" :class="summaryLoading ? 'ic-spin' : ''" />
+            <Icon name="refresh" class="icst-ic" :class="summaryLoading ? 'icst-spin' : ''" />
             {{ t('infra.cost.month.reload') }}
           </button>
         </div>
@@ -48,34 +48,36 @@
         <p v-if="summaryError" class="ierr">{{ summaryError }}</p>
 
         <template v-if="summary">
-          <div class="ic-tiles">
-            <div class="ic-tile">
-              <span class="ic-tile-lbl">{{ t('infra.cost.tile.spent') }}</span>
-              <span class="ic-tile-val">{{ usd(summary.totalUsd) }}</span>
-              <span class="ic-tile-foot">{{ summary.periodStart }} → {{ summary.periodEnd }}</span>
+          <div class="icst-tiles">
+            <div class="icst-tile">
+              <span class="icst-tile-lbl">{{ t('infra.cost.tile.spent') }}</span>
+              <span class="icst-tile-val">{{ usd(summary.totalUsd) }}</span>
+              <span class="icst-tile-foot">
+                {{ summary.periodStart }} → {{ summary.periodEnd }}
+              </span>
             </div>
-            <div class="ic-tile">
-              <span class="ic-tile-lbl">{{ t('infra.cost.tile.forecast') }}</span>
+            <div class="icst-tile">
+              <span class="icst-tile-lbl">{{ t('infra.cost.tile.forecast') }}</span>
               <!-- Dự báo do AWS tính. Không có thì nói VÌ SAO, không hiện ô trống. -->
-              <span v-if="summary.forecastUsd !== null" class="ic-tile-val">
+              <span v-if="summary.forecastUsd !== null" class="icst-tile-val">
                 {{ usd(summary.forecastUsd) }}
               </span>
-              <span v-else class="ic-tile-val ic-muted">—</span>
-              <span class="ic-tile-foot">
+              <span v-else class="icst-tile-val ic-muted">—</span>
+              <span class="icst-tile-foot">
                 {{ summary.forecastError ?? t('infra.cost.tile.forecastWhy') }}
               </span>
             </div>
-            <div class="ic-tile">
-              <span class="ic-tile-lbl">{{ t('infra.cost.tile.previous') }}</span>
-              <span class="ic-tile-val">{{ usd(summary.previousTotalUsd) }}</span>
-              <span class="ic-tile-foot" :class="deltaUsd > 0 ? 'ic-up' : 'ic-down'">
+            <div class="icst-tile">
+              <span class="icst-tile-lbl">{{ t('infra.cost.tile.previous') }}</span>
+              <span class="icst-tile-val">{{ usd(summary.previousTotalUsd) }}</span>
+              <span class="icst-tile-foot" :class="deltaUsd > 0 ? 'icst-up' : 'icst-down'">
                 {{ deltaUsd >= 0 ? '+' : '' }}{{ usd(deltaUsd) }}
               </span>
             </div>
-            <div class="ic-tile">
-              <span class="ic-tile-lbl">{{ t('infra.cost.tile.calls') }}</span>
-              <span class="ic-tile-val">{{ usd(summary.estimatedUsd) }}</span>
-              <span class="ic-tile-foot">
+            <div class="icst-tile">
+              <span class="icst-tile-lbl">{{ t('infra.cost.tile.calls') }}</span>
+              <span class="icst-tile-val">{{ usd(summary.estimatedUsd) }}</span>
+              <span class="icst-tile-foot">
                 {{
                   summary.calls === 0
                     ? t('infra.cost.tile.fromCache', { d: summary.asOf })
@@ -85,27 +87,27 @@
             </div>
           </div>
 
-          <div class="ic-cols">
-            <div class="ic-col">
-              <span class="ic-col-ttl">{{ t('infra.cost.table.top') }}</span>
-              <ul class="ic-rows">
-                <li v-for="s in summary.services" :key="s.service" class="ic-row">
-                  <span class="ic-row-name">{{ s.service }}</span>
-                  <span class="ic-row-val tnum">{{ usd(s.amountUsd) }}</span>
+          <div class="icst-cols">
+            <div class="icst-col">
+              <span class="icst-col-ttl">{{ t('infra.cost.table.top') }}</span>
+              <ul class="icst-rows">
+                <li v-for="s in summary.services" :key="s.service" class="icst-row">
+                  <span class="icst-row-name">{{ s.service }}</span>
+                  <span class="icst-row-val tnum">{{ usd(s.amountUsd) }}</span>
                 </li>
-                <li v-if="summary.services.length === 0" class="ic-empty">
+                <li v-if="summary.services.length === 0" class="icst-empty">
                   {{ t('infra.cost.table.none') }}
                 </li>
               </ul>
             </div>
-            <div class="ic-col">
-              <span class="ic-col-ttl">{{ t('infra.cost.table.increases') }}</span>
-              <ul class="ic-rows">
-                <li v-for="s in summary.topIncreases" :key="s.service" class="ic-row">
-                  <span class="ic-row-name">{{ s.service }}</span>
-                  <span class="ic-row-val tnum ic-up">+{{ usd(s.deltaUsd) }}</span>
+            <div class="icst-col">
+              <span class="icst-col-ttl">{{ t('infra.cost.table.increases') }}</span>
+              <ul class="icst-rows">
+                <li v-for="s in summary.topIncreases" :key="s.service" class="icst-row">
+                  <span class="icst-row-name">{{ s.service }}</span>
+                  <span class="icst-row-val tnum ic-up">+{{ usd(s.deltaUsd) }}</span>
                 </li>
-                <li v-if="summary.topIncreases.length === 0" class="ic-empty">
+                <li v-if="summary.topIncreases.length === 0" class="icst-empty">
                   {{ t('infra.cost.table.noIncrease') }}
                 </li>
               </ul>
@@ -115,11 +117,11 @@
       </section>
 
       <!-- ── 7.4 Ngân sách ──────────────────────────────────────────────── -->
-      <section class="ic-sec">
-        <div class="ic-sec-hd">
-          <span class="ic-sec-ttl">{{ t('infra.cost.budget.title') }}</span>
-          <span class="ic-hint">{{ t('infra.cost.budget.why') }}</span>
-          <span class="ic-gap" />
+      <section class="icst-sec">
+        <div class="icst-sec-hd">
+          <span class="icst-sec-ttl">{{ t('infra.cost.budget.title') }}</span>
+          <span class="icst-hint">{{ t('infra.cost.budget.why') }}</span>
+          <span class="icst-gap" />
           <button
             class="btn sm"
             type="button"
@@ -127,44 +129,44 @@
             :aria-busy="budgetsLoading"
             @click="loadBudgets"
           >
-            <Icon name="refresh" class="ic-ic" :class="budgetsLoading ? 'ic-spin' : ''" />
+            <Icon name="refresh" class="icst-ic" :class="budgetsLoading ? 'icst-spin' : ''" />
             {{ t('infra.cost.budget.load') }}
           </button>
         </div>
 
         <!-- Budgets đòi `--account-id` tường minh. Chưa giải được id thì nói ra và tắt
              nút, thay vì để người dùng bấm vào một lệnh chắc chắn hỏng. -->
-        <p v-if="!accountId" class="ic-empty">{{ t('infra.cost.budget.noAccountId') }}</p>
+        <p v-if="!accountId" class="icst-empty">{{ t('infra.cost.budget.noAccountId') }}</p>
         <p v-else-if="budgetsError" class="ierr">{{ budgetsError }}</p>
 
         <template v-if="budgets">
-          <ul v-if="budgets.length" class="ic-rows">
-            <li v-for="b in budgets" :key="b.name" class="ic-row">
-              <span class="ic-row-name">{{ b.name }}</span>
-              <span class="ic-muted">{{ b.timeUnit }}</span>
-              <span class="ic-row-val tnum">
+          <ul v-if="budgets.length" class="icst-rows">
+            <li v-for="b in budgets" :key="b.name" class="icst-row">
+              <span class="icst-row-name">{{ b.name }}</span>
+              <span class="icst-muted">{{ b.timeUnit }}</span>
+              <span class="icst-row-val tnum">
                 {{ b.actualUsd === null ? '—' : usd(b.actualUsd) }}
                 /
                 {{ b.limitUsd === null ? '—' : usd(b.limitUsd) }}
               </span>
             </li>
           </ul>
-          <p v-else class="ic-empty">{{ t('infra.cost.budget.none') }}</p>
+          <p v-else class="icst-empty">{{ t('infra.cost.budget.none') }}</p>
         </template>
 
         <!-- Đặt ngân sách là lượt GHI duy nhất của tab này: nó đi qua ma trận quyền và
              có thể dừng ở hộp duyệt. Ba ô, không hơn. -->
-        <div class="ic-budget-form">
+        <div class="icst-budget-form">
           <input
             v-model="budgetName"
-            class="ic-inp"
+            class="icst-inp"
             type="text"
             maxlength="100"
             :placeholder="t('infra.cost.budget.namePlaceholder')"
           />
           <input
             v-model.number="budgetLimit"
-            class="ic-inp ic-inp-sm"
+            class="icst-inp ic-inp-sm"
             type="number"
             min="1"
             step="1"
@@ -172,7 +174,7 @@
           />
           <input
             v-model="budgetEmails"
-            class="ic-inp"
+            class="icst-inp"
             type="text"
             autocomplete="off"
             :placeholder="t('infra.cost.budget.emailsPlaceholder')"
@@ -185,19 +187,19 @@
             :aria-busy="budgetSaving"
             @click="onSaveBudget"
           >
-            <Icon name="check" class="ic-ic" />
+            <Icon name="check" class="icst-ic" />
             {{ t('infra.cost.budget.save') }}
           </button>
         </div>
-        <p class="ic-hint">{{ t('infra.cost.budget.thresholdWhy') }}</p>
+        <p class="icst-hint">{{ t('infra.cost.budget.thresholdWhy') }}</p>
       </section>
 
       <!-- ── 7.2 Dò lãng phí ────────────────────────────────────────────── -->
-      <section class="ic-sec">
-        <div class="ic-sec-hd">
-          <span class="ic-sec-ttl">{{ t('infra.cost.waste.title') }}</span>
-          <span class="ic-hint">{{ t('infra.cost.waste.regionWhy', { r: region || '—' }) }}</span>
-          <span class="ic-gap" />
+      <section class="icst-sec">
+        <div class="icst-sec-hd">
+          <span class="icst-sec-ttl">{{ t('infra.cost.waste.title') }}</span>
+          <span class="icst-hint">{{ t('infra.cost.waste.regionWhy', { r: region || '—' }) }}</span>
+          <span class="icst-gap" />
           <button
             class="btn sm pri"
             type="button"
@@ -205,24 +207,24 @@
             :aria-busy="wasteLoading"
             @click="scanWaste"
           >
-            <Icon name="search" class="ic-ic" :class="wasteLoading ? 'ic-spin' : ''" />
+            <Icon name="search" class="icst-ic" :class="wasteLoading ? 'icst-spin' : ''" />
             {{ t('infra.cost.waste.scan') }}
           </button>
         </div>
 
         <!-- Bảy công tắc. Hai phép trả tiền mang nhãn riêng và mặc định TẮT — bật chúng
              là thêm một lô `get-metric-data` vào lượt dò, và người dùng phải biết trước. -->
-        <div class="ic-checks">
+        <div class="icst-checks">
           <label
             v-for="c in checks"
             :key="c"
-            class="ic-check"
+            class="icst-check"
             :class="{ paid: paidChecks.includes(c) }"
             :title="t(`infra.cost.check.${c}.why`)"
           >
             <input type="checkbox" :checked="enabled.has(c)" @change="toggleCheck(c)" />
             {{ t(`infra.cost.check.${c}.label`) }}
-            <span v-if="paidChecks.includes(c)" class="ic-paid">
+            <span v-if="paidChecks.includes(c)" class="icst-paid">
               {{ t('infra.cost.waste.paid') }}
             </span>
           </label>
@@ -235,30 +237,30 @@
 
         <template v-if="report">
           <!-- Phép dò HỎNG phải hiện ra. Nuốt nó đi thì bảng trông như đã sạch. -->
-          <ul v-if="report.failed.length" class="ic-failed">
+          <ul v-if="report.failed.length" class="icst-failed">
             <li v-for="f in report.failed" :key="f.check">
               {{ t('infra.cost.waste.failed', { c: t(`infra.cost.check.${f.check}.label`) }) }}
               — {{ f.error }}
             </li>
           </ul>
 
-          <div class="ic-sum">
+          <div class="icst-sum">
             <span>
               {{ t('infra.cost.waste.found', { n: report.findings.length }) }}
               · {{ t('infra.cost.waste.total', { v: usd(report.totalMonthlyUsd) }) }}
             </span>
-            <span v-if="report.unpricedCount > 0" class="ic-muted">
+            <span v-if="report.unpricedCount > 0" class="icst-muted">
               {{ t('infra.cost.waste.unpriced', { n: report.unpricedCount }) }}
             </span>
-            <span v-if="pricing" class="ic-muted">
+            <span v-if="pricing" class="icst-muted">
               {{ t('infra.cost.waste.pricingWhy', { d: pricing.asOf, r: pricing.region }) }}
             </span>
           </div>
 
-          <table v-if="report.findings.length" class="ic-tbl">
+          <table v-if="report.findings.length" class="icst-tbl">
             <thead>
               <tr>
-                <th class="ic-pick">
+                <th class="icst-pick">
                   <input
                     type="checkbox"
                     :checked="picked.size === report.findings.length && picked.size > 0"
@@ -269,12 +271,12 @@
                 <th>{{ t('infra.cost.waste.col.check') }}</th>
                 <th>{{ t('infra.cost.waste.col.resource') }}</th>
                 <th>{{ t('infra.cost.waste.col.detail') }}</th>
-                <th class="ic-right">{{ t('infra.cost.waste.col.monthly') }}</th>
+                <th class="icst-right">{{ t('infra.cost.waste.col.monthly') }}</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="f in report.findings" :key="findingKey(f)">
-                <td class="ic-pick">
+                <td class="icst-pick">
                   <input
                     type="checkbox"
                     :checked="picked.has(findingKey(f))"
@@ -282,9 +284,9 @@
                   />
                 </td>
                 <td>{{ t(`infra.cost.check.${f.check}.label`) }}</td>
-                <td class="ic-res">{{ f.label }}</td>
-                <td class="ic-muted">{{ detailText(f) }}</td>
-                <td class="ic-right tnum">
+                <td class="icst-res">{{ f.label }}</td>
+                <td class="icst-muted">{{ detailText(f) }}</td>
+                <td class="icst-right tnum">
                   <!-- `null` hiện "—", KHÔNG hiện 0: "không biết giá" khác "miễn phí". -->
                   <template v-if="f.monthlyUsd === null">—</template>
                   <template v-else>
@@ -294,20 +296,20 @@
               </tr>
             </tbody>
           </table>
-          <p v-else class="ic-empty">{{ t('infra.cost.waste.clean') }}</p>
+          <p v-else class="icst-empty">{{ t('infra.cost.waste.clean') }}</p>
 
           <!-- ── 7.3 ──────────────────────────────────────────────────── -->
-          <div v-if="report.findings.length" class="ic-acts">
+          <div v-if="report.findings.length" class="icst-acts">
             <button
               class="btn sm pri"
               type="button"
               :disabled="pickedFindings.length === 0 || building"
               @click="onCleanup"
             >
-              <Icon name="book" class="ic-ic" />
+              <Icon name="book" class="icst-ic" />
               {{ t('infra.cost.cleanup.build', { n: pickedFindings.length }) }}
             </button>
-            <span v-if="pickedFindings.length" class="ic-hint">
+            <span v-if="pickedFindings.length" class="icst-hint">
               {{ t('infra.cost.cleanup.picked', { v: usd(pickedMonthlyUsd) }) }}
             </span>
           </div>
@@ -315,13 +317,13 @@
       </section>
       <!-- Luật 4 của infra-README: chip câu hỏi thay cho ô trống. Cùng khuôn với màn
            Giám sát — tắt khi chưa có số liệu nào, vì câu trả lời sẽ rỗng. -->
-      <div class="ic-ask">
-        <span class="ic-hint">{{ t('infra.cost.title') }}</span>
+      <div class="icst-ask">
+        <span class="icst-hint">{{ t('infra.cost.title') }}</span>
         <button
           v-for="s in askSuggestions"
           :key="s.key"
           type="button"
-          class="ic-chip"
+          class="icst-chip"
           :disabled="!hasSnapshot"
           @click="ask(s.text)"
         >
@@ -453,7 +455,10 @@ async function onCleanup(): Promise<void> {
 </script>
 
 <style scoped>
-.ic {
+/* Tiền tố `icst-`, KHÔNG phải `ic-`: `prototype.css` có một class TOÀN CỤC `.ic` là
+   inline code (mono · nền --bgActive · .92em). Đặt root màn là `.ic` thì cả màn bị
+   render như một đoạn code — đúng chuyện đã xảy ra ở đây và ở màn Triển khai. */
+.icst {
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -463,20 +468,20 @@ async function onCleanup(): Promise<void> {
   overflow-y: auto;
 }
 
-.ic-hd-txt {
+.icst-hd-txt {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.ic-ttl {
+.icst-ttl {
   margin: 0;
   font-size: var(--fs-lg);
   line-height: var(--lh-lg);
   color: var(--text);
 }
 
-.ic-sub {
+.icst-sub {
   margin: 0;
   max-width: 72ch;
   font-size: var(--fs-sm);
@@ -484,14 +489,14 @@ async function onCleanup(): Promise<void> {
   color: var(--textDim);
 }
 
-.ic-state {
+.icst-state {
   margin: 0;
   font-size: var(--fs-sm);
   line-height: var(--lh-md);
   color: var(--textDim);
 }
 
-.ic-sec {
+.icst-sec {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -499,36 +504,36 @@ async function onCleanup(): Promise<void> {
   border-top: 1px solid var(--border);
 }
 
-.ic-sec-hd {
+.icst-sec-hd {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.ic-sec-ttl {
+.icst-sec-ttl {
   font-size: var(--fs-md);
   line-height: var(--lh-md);
   color: var(--text);
 }
 
-.ic-hint {
+.icst-hint {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 
-.ic-gap {
+.icst-gap {
   flex: 1;
 }
 
-.ic-tiles {
+.icst-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
 }
 
-.ic-tile {
+.icst-tile {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -538,56 +543,56 @@ async function onCleanup(): Promise<void> {
   background: var(--bgPanel);
 }
 
-.ic-tile-lbl {
+.icst-tile-lbl {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textDim);
 }
 
-.ic-tile-val {
+.icst-tile-val {
   font-size: var(--fs-xl);
   line-height: var(--lh-xl);
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
-.ic-tile-foot {
+.icst-tile-foot {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 
-.ic-up {
+.icst-up {
   color: var(--amber);
 }
 
-.ic-down {
+.icst-down {
   color: var(--textFaint);
 }
 
-.ic-muted {
+.icst-muted {
   color: var(--textFaint);
 }
 
-.ic-cols {
+.icst-cols {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 10px;
 }
 
-.ic-col {
+.icst-col {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.ic-col-ttl {
+.icst-col-ttl {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   color: var(--textDim);
 }
 
-.ic-rows {
+.icst-rows {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -596,7 +601,7 @@ async function onCleanup(): Promise<void> {
   list-style: none;
 }
 
-.ic-row {
+.icst-row {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -605,7 +610,7 @@ async function onCleanup(): Promise<void> {
   line-height: var(--lh-sm);
 }
 
-.ic-row-name {
+.icst-row-name {
   flex: 1;
   min-width: 0;
   color: var(--text);
@@ -614,24 +619,24 @@ async function onCleanup(): Promise<void> {
   white-space: nowrap;
 }
 
-.ic-row-val {
+.icst-row-val {
   color: var(--textDim);
 }
 
-.ic-empty {
+.icst-empty {
   margin: 0;
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
   color: var(--textFaint);
 }
 
-.ic-checks {
+.icst-checks {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 14px;
 }
 
-.ic-check {
+.icst-check {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -641,7 +646,7 @@ async function onCleanup(): Promise<void> {
   white-space: nowrap;
 }
 
-.ic-paid {
+.icst-paid {
   padding: 0 6px;
   border: 1px solid var(--amberBorder);
   border-radius: var(--r-pill);
@@ -650,7 +655,7 @@ async function onCleanup(): Promise<void> {
   color: var(--amber);
 }
 
-.ic-failed {
+.icst-failed {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -661,7 +666,7 @@ async function onCleanup(): Promise<void> {
   color: var(--danger);
 }
 
-.ic-sum {
+.icst-sum {
   display: flex;
   align-items: baseline;
   gap: 10px;
@@ -671,14 +676,14 @@ async function onCleanup(): Promise<void> {
   color: var(--text);
 }
 
-.ic-tbl {
+.icst-tbl {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
 
-.ic-tbl th {
+.icst-tbl th {
   text-align: left;
   padding: 5px 8px;
   color: var(--textDim);
@@ -686,34 +691,34 @@ async function onCleanup(): Promise<void> {
   box-shadow: inset 0 -1px 0 var(--border);
 }
 
-.ic-tbl td {
+.icst-tbl td {
   padding: 5px 8px;
   color: var(--text);
   border-bottom: 1px solid var(--border);
   vertical-align: top;
 }
 
-.ic-right {
+.icst-right {
   text-align: right;
 }
 
-.ic-pick {
+.icst-pick {
   width: 28px;
 }
 
-.ic-res {
+.icst-res {
   font-family: var(--code); /* mono-ok: id tài nguyên, người dùng copy vào lệnh aws */
   word-break: break-all;
 }
 
-.ic-budget-form {
+.icst-budget-form {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.ic-inp {
+.icst-inp {
   flex: 1 1 200px;
   min-width: 140px;
   padding: 5px 8px;
@@ -725,19 +730,19 @@ async function onCleanup(): Promise<void> {
   line-height: var(--lh-sm);
 }
 
-.ic-inp-sm {
+.icst-inp-sm {
   flex: 0 0 110px;
   min-width: 90px;
 }
 
-.ic-acts {
+.icst-acts {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.ic-ask {
+.icst-ask {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -746,7 +751,7 @@ async function onCleanup(): Promise<void> {
   border-top: 1px solid var(--border);
 }
 
-.ic-chip {
+.icst-chip {
   padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
@@ -757,27 +762,27 @@ async function onCleanup(): Promise<void> {
   cursor: pointer;
 }
 
-.ic-chip:hover:not(:disabled) {
+.icst-chip:hover:not(:disabled) {
   border-color: var(--accentBorder);
   color: var(--accent);
 }
 
-.ic-chip:disabled {
+.icst-chip:disabled {
   opacity: 0.45;
   cursor: default;
 }
 
-.ic-ic {
+.icst-ic {
   width: var(--icon-xs);
   height: var(--icon-xs);
   flex-shrink: 0;
 }
 
-.ic-spin {
-  animation: ic-rot 1s linear infinite;
+.icst-spin {
+  animation: icst-rot 1s linear infinite;
 }
 
-@keyframes ic-rot {
+@keyframes icst-rot {
   to {
     transform: rotate(360deg);
   }
