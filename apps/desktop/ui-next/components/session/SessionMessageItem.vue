@@ -623,9 +623,24 @@ const openFullscreen = () => {
   const text = plainText.value
   if (!text.trim()) return
   const name = store.active?.title?.trim() || t('sessions.message.fullscreenName')
+  const sid = store.activeId
   void filePreview.root().then((root) => {
     const item: PreviewRef = { name, kind: 'markdown', text }
     if (root) item.workspaceRoot = root
+    // Bôi đen trong fullscreen → ghim trích dẫn như trong transcript (store.addQuote),
+    // và preview tập trích dẫn ở góc modal. Chỉ gắn hook khi có phiên + message hợp lệ;
+    // `list` đọc thẳng `followups` (reactive) để panel góc tự cập nhật khi thêm/xoá.
+    if (sid != null && msgIndex.value >= 0) {
+      item.quote = {
+        add: (sel: string) => store.addQuote(sid, msgIndex.value, sel),
+        list: () =>
+          (store.active?.followups ?? []).map((q, i) => ({
+            excerpt: q.excerpt,
+            note: q.note,
+            remove: () => store.removeQuote(sid, i),
+          })),
+      }
+    }
     openPreview(item)
   })
 }

@@ -9,6 +9,19 @@ import { computed, ref } from 'vue'
 // current item; `close()` clears it. Callers map their domain object (e.g. a
 // SessionAttachment) into a PreviewItem before calling `open`.
 
+// Trích dẫn (quote) trong chế độ toàn màn hình (2026-09-15). PreviewModal là viewer
+// CHUNG cho mọi file, nên nó không biết gì về session/message. Thay vì nhét phụ
+// thuộc session vào modal, bên MỞ fullscreen (SessionMessageItem) truyền hook này:
+// `add` ghim đoạn bôi đen thành một trích dẫn, `list` trả về tập trích dẫn hiện có
+// để modal vẽ preview ở góc. Vắng hook ⇒ modal không hiện nút Quote (đúng cho
+// preview file thường). `list` được gọi TRONG computed của modal nên phải đọc thẳng
+// nguồn reactive (vd `session.followups`) để preview tự cập nhật khi thêm/xoá.
+export type PreviewQuoteEntry = { excerpt: string; note?: string; remove: () => void }
+export type PreviewQuoteHook = {
+  add: (text: string) => void
+  list: () => PreviewQuoteEntry[]
+}
+
 // Mirrors PreviewModal's PreviewItem, declared here to avoid a circular import
 // (PreviewModal imports from this composable). The modal re-exports its own type
 // for prop typing; both shapes are kept in sync by hand (small, stable surface).
@@ -49,6 +62,9 @@ export type PreviewRef = {
   // in-memory fields / placeholder when absent or unavailable.
   workspaceRoot?: string
   path?: string
+  // Chỉ có mặt khi bên mở là một message của session (xem PreviewQuoteHook). Modal
+  // hiện nút Quote + panel preview trích dẫn ở góc khi field này tồn tại.
+  quote?: PreviewQuoteHook
 }
 
 // Single source of truth for mapping a filename/path → preview kind. Previously

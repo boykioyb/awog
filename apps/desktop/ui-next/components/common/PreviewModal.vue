@@ -285,6 +285,12 @@
           :style="{ left: `${pvSel.x}px`, top: `${pvSel.y}px` }"
           @mousedown.prevent
         >
+          <!-- Quote chỉ hiện khi bên mở là một message của session (truyền `quote`
+               hook) — preview file thường không có nút này. -->
+          <button v-if="shownItem.quote" class="pvseltr" @click="onPvQuote">
+            <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t('sessions.quote.action') }}
+          </button>
           <button class="pvseltr" @click="onPvTranslate">
             <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('translate.action') }}
@@ -296,6 +302,24 @@
             />
             {{ pvMdCopied ? t('common.copied') : t('common.copyMarkdown') }}
           </button>
+        </div>
+
+        <!-- Preview trích dẫn ở góc (2026-09-15): tập trích dẫn đã ghim từ fullscreen,
+             để người đọc thấy mình đã gom gì mà không phải rời màn hình. Chỉ hiện khi
+             bên mở là message của session (`quote` hook) VÀ đã có ít nhất một trích dẫn. -->
+        <div v-if="shownItem.quote && quoteEntries.length" class="pvquotes">
+          <div class="pvquotes-h">
+            <Icon name="quote" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            <span>{{ t('common.preview.quotes', { n: quoteEntries.length }) }}</span>
+          </div>
+          <div class="pvquotes-list">
+            <div v-for="(q, i) in quoteEntries" :key="i" class="pvquote">
+              <span class="pvquote-x">{{ q.excerpt }}</span>
+              <button class="pvquote-rm" :title="t('sessions.quote.remove')" @click="q.remove()">
+                <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+              </button>
+            </div>
+          </div>
         </div>
 
         <PreviewToolbar v-if="hasBar" :ctrl="ctrl" />
@@ -612,6 +636,22 @@ async function onPvCopyMarkdown() {
   }, 1400)
 }
 
+// Quote → ghim đoạn bôi đen thành một trích dẫn qua hook mà bên mở truyền vào
+// (SessionMessageItem). Modal không biết gì về session; nó chỉ gọi `add` rồi bỏ
+// selection. Panel preview ở góc (`quoteEntries`) hiện ngay khoản vừa thêm — đó
+// chính là phản hồi, nên không cần cờ "đã thêm" riêng.
+function onPvQuote() {
+  const s = pvSel.value
+  const hook = shownItem.value?.quote
+  if (!s || !hook) return
+  hook.add(s.text)
+  pvSel.value = null
+}
+
+// Tập trích dẫn để vẽ ở góc. `list()` đọc thẳng nguồn reactive (session.followups)
+// nên computed này tự chạy lại khi thêm/xoá trích dẫn.
+const quoteEntries = computed(() => shownItem.value?.quote?.list() ?? [])
+
 // Let the shared translation popover consume ESC first (it closes itself); only
 // then does ESC close the preview. Preview mounts before the popover, so this
 // guard runs before the popover's own ESC handler on the common case.
@@ -806,12 +846,83 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
 }
 .pvseltr:hover {
   border-color: var(--accentBorder);
   color: var(--accent);
+}
+/* Panel preview trích dẫn ở góc dưới-phải của card (position: relative). Neo trong
+   card chứ không fixed để nó ở cùng lớp với nội dung modal và không đè lên UI khác
+   của app. Trần chiều cao + cuộn để một tập trích dẫn dài không phủ kín màn đọc. */
+.pvquotes {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 110;
+  width: 300px;
+  max-width: calc(100% - 28px);
+  max-height: 45%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bgEl);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.pvquotes-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 11px;
+  border-bottom: 1px solid var(--border);
+  color: var(--textDim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+.pvquotes-list {
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pvquote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  background: var(--bgSubtle);
+  border-left: 2px solid var(--accentBorder);
+}
+.pvquote-x {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+  /* Kẹp 3 dòng: một trích dẫn dài vẫn gọn trong thẻ, không kéo panel dài ra. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.pvquote-rm {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: var(--r-xs);
+  color: var(--textFaint);
+  cursor: pointer;
+}
+.pvquote-rm:hover {
+  background: var(--dangerBg);
+  color: var(--danger);
 }
 /* Image viewport — a fixed frame (absolute inset 0 of the body) that clips whatever the
    image does. It deliberately does NOT try to size the image: the previous attempts
