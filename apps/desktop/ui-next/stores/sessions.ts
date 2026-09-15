@@ -377,6 +377,8 @@ type EngineSessionSettings = {
   accountId?: string
   mode?: string
   level?: ThinkingLevel
+  // Bậc Ultracode (ADR 0089) — persist cùng `level` trong header phiên.
+  ultracode?: boolean
   responseStyle?: string
   responseStyleNoMarkdown?: boolean
   // Per-session SSH tool approval mode (ADR 0064 P2).
@@ -1196,6 +1198,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.updatedAt) session.updatedAt = dto.updatedAt
     if (dto.settings?.accountId) session.accountId = dto.settings.accountId
     if (dto.settings?.level) session.thinkingLevel = dto.settings.level
+    if (dto.settings?.ultracode) session.ultracode = true
     if (dto.settings?.responseStyleNoMarkdown) session.noMarkdown = true
     if (dto.settings?.sshApprovalMode) session.sshApprovalMode = dto.settings.sshApprovalMode
     if (dto.disabledTools) session.disabledTools = [...dto.disabledTools]
@@ -2199,6 +2202,19 @@ export const useSessionsStore = defineStore('sessions', () => {
     const s = byId(id)
     if (!s) return
     s.thinkingLevel = level
+    // Ultracode LÀ một bậc của cùng cái picker (ADR 0089): chọn bậc khác = tắt nó.
+    // Để sót lại thì phiên gửi `--effort xhigh` trong khi hàng "Max" đang tick.
+    delete s.ultracode
+    if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+  // Bậc trên cùng của picker effort, chỉ nhánh Claude SDK (ADR 0089). Ghim kèm
+  // `extra-high` để mọi runtime khác — và mọi nơi chỉ đọc `thinkingLevel` — vẫn
+  // thấy một bậc hợp lệ tương đương (xhigh) thay vì giá trị cũ bất kỳ.
+  function setUltracode(id: number) {
+    const s = byId(id)
+    if (!s) return
+    s.thinkingLevel = 'extra-high'
+    s.ultracode = true
     if (useIpc) pushUpsert(s, 'update-metadata')
   }
   function setNoMarkdown(id: number, value: boolean) {
@@ -3986,6 +4002,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       mode,
     }
     if (s.accountId) settings.accountId = s.accountId
+    // Bậc Ultracode (ADR 0089) — chỉ gửi khi BẬT: `false` ở lớp settings sẽ ghi đè
+    // cấu hình người dùng tự đặt trong ~/.claude/settings.json. Nhánh Pi/Codex bỏ qua.
+    if (s.ultracode) settings.ultracode = true
     // Response style (ADR 0046): send the ENGINE SLUG (STYLE_DIRECTIVES key) — the
     // sidecar keys its directives by slug, so sending the display label silently
     // dropped the style. normalizeStyleSlug guards any stale label in s.style.
@@ -4757,6 +4776,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     activeId,
     active,
     activeCanSteer,
+    providerOf,
     activeProvider,
     selectedIds,
     selecting,
@@ -4833,6 +4853,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     applyLlmConfig,
     setStyle,
     setThinking,
+    setUltracode,
     setNoMarkdown,
     setSshApprovalMode,
     setAboutSshHost,

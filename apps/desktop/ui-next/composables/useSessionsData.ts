@@ -664,6 +664,11 @@ export type Session = {
   // ── Per-session model config (config popover → engine settings) ──────────
   // Reasoning effort → settings.level (default 'high' when unset).
   thinkingLevel?: ThinkingLevel
+  // Bậc "Ultracode" (ADR 0089): xhigh + điều phối dynamic-workflow, CHỈ có trên
+  // nhánh Claude SDK (provider anthropic). Nằm ngoài `thinkingLevel` vì trong SDK
+  // nó là một cờ riêng, nhưng trong PICKER nó là bậc thứ 6 — hai cái loại trừ nhau,
+  // xem setThinking/setUltracode ở store.
+  ultracode?: boolean
   // Response style (ADR 0046): suppress markdown in replies → responseStyleNoMarkdown.
   noMarkdown?: boolean
   // Session-scoped tool DENYLIST (Claude Code tool names) → params.disabledTools.

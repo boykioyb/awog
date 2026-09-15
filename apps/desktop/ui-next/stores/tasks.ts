@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import { useSettingsStore, type AutoCommitScope } from '~/stores/settings'
-import type { TodoStatus } from '~/types'
+import type { ThinkingLevel, TodoStatus } from '~/types'
 
 // Tasks store — dual-path live. When the Electron bridge is available
 // (`sc.available`) `loadTasks()` pulls the real task list over IPC and a lazy
@@ -134,6 +134,9 @@ export type Task = {
   autoCommitPerPhase?: boolean
   autoCommitScope?: AutoCommitScope
   autoCommitMessageTemplate?: string
+  // Mức suy luận chụp lúc tạo (Settings → Mặc định). Node của task chạy dưới mức
+  // này; trước đây engine ghim cứng 'medium' nên lựa chọn kia không tới được Tasks.
+  thinkingLevel?: ThinkingLevel
   workflowSnapshot?: WorkflowSlice
   phases: Record<string, TaskPhase>
 }
@@ -497,7 +500,9 @@ export const useTasksStore = defineStore('tasks', () => {
     // Snapshot the auto-commit Git settings at creation time. Settings live in the
     // renderer (localStorage); the sidecar can't read them, so they must travel in
     // the create payload. The engine persists them on the task for restart/rerun.
-    const gitSettings = useSettingsStore().git
+    const settingsStore = useSettingsStore()
+    const gitSettings = settingsStore.git
+    const thinkingLevel = settingsStore.defaults.thinkingLevel
     const commitCoAuthor = gitSettings.commitCoAuthor
     const autoCommitPerPhase = gitSettings.autoCommitPerPhase
     const autoCommitScope = gitSettings.autoCommitScope
@@ -517,6 +522,7 @@ export const useTasksStore = defineStore('tasks', () => {
       autoCommitPerPhase,
       autoCommitScope,
       autoCommitMessageTemplate,
+      thinkingLevel,
       phases,
     }
     if (snapshot) task.workflowSnapshot = snapshot
@@ -533,6 +539,7 @@ export const useTasksStore = defineStore('tasks', () => {
       autoCommitPerPhase,
       autoCommitScope,
       autoCommitMessageTemplate,
+      thinkingLevel,
     })
     return task
   }

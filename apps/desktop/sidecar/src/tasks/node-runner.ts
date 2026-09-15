@@ -287,7 +287,9 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     const settings: SessionSettings = {
       provider: agentCtx.provider ?? 'anthropic',
       modelId: agentCtx.model || DEFAULT_MODEL,
-      level: 'medium',
+      // Mức suy luận chụp lúc tạo task (Settings → Mặc định). Trước đây ghim cứng
+      // 'medium', nên lựa chọn của người dùng không bao giờ tới được Tasks.
+      level: task.thinkingLevel ?? 'medium',
       mode: 'execute',
       ...(agentCtx.accountId ? { accountId: agentCtx.accountId } : {}),
     }

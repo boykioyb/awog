@@ -84,6 +84,8 @@ const SessionSettingsSchema = z.object({
   level: ThinkingLevelSchema,
   mode: z.enum(['ask', 'accept-edits', 'plan', 'execute']),
   accountId: z.string().optional(),
+  // Bậc "Ultracode" (ADR 0089) — chỉ nhánh Claude SDK đọc; xem SessionSettings.
+  ultracode: z.boolean().optional(),
   // Response style (ADR 0046) — built-in style id + no-markdown modifier.
   responseStyle: z.string().optional(),
   responseStyleNoMarkdown: z.boolean().optional(),
@@ -289,6 +291,7 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
     mode: parsed.mode,
   }
   if (parsed.accountId !== undefined) base.accountId = parsed.accountId
+  if (parsed.ultracode !== undefined) base.ultracode = parsed.ultracode
   if (parsed.responseStyle !== undefined) base.responseStyle = parsed.responseStyle
   if (parsed.responseStyleNoMarkdown !== undefined) {
     base.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown

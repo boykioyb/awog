@@ -38,12 +38,12 @@ import { withBridgedAliases } from '../tools/bridged.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
   buildSdkEnv,
-  commitAttribution,
-  effortFromLevel,
+  effortFromSettings,
   makeForegroundOnlyHook,
   mapClaudeErrorToRpc,
   NO_BACKGROUND_PROMPT,
-  thinkingFromLevel,
+  sdkSettings,
+  thinkingFromSettings,
   toSdkMcpServers,
   toSdkModel,
 } from './shared.js'
@@ -296,10 +296,13 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     // Honor the task's snapshotted `commitCoAuthor` setting via the SDK flag-settings
     // layer. The claude_code preset otherwise adds Claude's own attribution regardless
     // (see commitAttribution).
-    settings: { attribution: commitAttribution(args.commitCoAuthor) },
+    settings: sdkSettings({
+      commitCoAuthor: args.commitCoAuthor,
+      ultracode: args.settings.ultracode,
+    }),
     includePartialMessages: true,
-    thinking: thinkingFromLevel(args.settings.level),
-    effort: effortFromLevel(args.settings.level),
+    thinking: thinkingFromSettings(args.settings),
+    effort: effortFromSettings(args.settings),
     // Chẩn đoán + cách ly cấu hình giống nhánh chat (tuning.ts).
     ...diagnosticsOptions('task'),
     ...CONFIG_ISOLATION_OPTIONS,

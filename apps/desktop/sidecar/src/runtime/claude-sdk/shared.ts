@@ -8,6 +8,7 @@ import type {
   EffortLevel,
   HookInput,
   HookJSONOutput,
+  Settings,
   ThinkingConfig,
 } from '@anthropic-ai/claude-agent-sdk'
 import { RpcError } from '../../transport/rpc.js'
@@ -27,6 +28,23 @@ import { CO_AUTHOR_TRAILER } from '../../git/co-author.js'
 export function commitAttribution(commitCoAuthor?: boolean): { commit: string; pr: string } {
   const text = commitCoAuthor === false ? '' : CO_AUTHOR_TRAILER
   return { commit: text, pr: text }
+}
+
+// Lớp `settings` (`--settings <json>` của CLI) cho một lần chạy. Hai thứ đi ở đây:
+//   - attribution: đè trailer commit/PR của preset claude_code (xem trên).
+//   - ultracode: bậc trên cùng của chính cái picker effort trong Claude Code —
+//     xhigh + điều phối dynamic-workflow (`sdk.d.ts` Settings.ultracode, ADR 0089).
+//     CLI đòi workflows bật + model hỗ trợ xhigh; thiếu điều kiện thì nó LẲNG LẶNG
+//     bỏ qua chứ không hỏng lượt, nên đây không phải đường ném lỗi. Cờ chỉ được
+//     GHI khi bật: gửi `ultracode: false` là ghi đè cả cấu hình người dùng tự đặt
+//     trong ~/.claude/settings.json (settingSources có 'user').
+export function sdkSettings(args: {
+  commitCoAuthor?: boolean | undefined
+  ultracode?: boolean | undefined
+}): Settings {
+  const settings: Settings = { attribution: commitAttribution(args.commitCoAuthor) }
+  if (args.ultracode) settings.ultracode = true
+  return settings
 }
 
 // Map a thrown error to the same RpcError codes the Pi path uses so the UI shows
@@ -265,6 +283,15 @@ export function effortFromLevel(level: ThinkingLevel): EffortLevel {
   }
 }
 
+// Effort thực sự gửi cho một lần chạy. `ultracode` LÀ một bậc của cùng cái picker
+// `/effort` trong Claude Code (xhigh + điều phối workflow), không phải một công tắc
+// chồng lên bậc khác — nên khi nó bật, effort là xhigh bất kể `level` đang là gì.
+// Không có chỗ này thì một phiên cũ mang `level: 'low'` + ultracode sẽ gửi đi
+// `--effort low` cạnh một cờ tự nhận là xhigh, và không ai biết cái nào thắng.
+export function effortFromSettings(s: { level: ThinkingLevel; ultracode?: boolean }): EffortLevel {
+  return s.ultracode ? 'xhigh' : effortFromLevel(s.level)
+}
+
 // AWOG ThinkingLevel → SDK extended-thinking config. `effort` alone guides depth
 // but does NOT emit thinking blocks; `thinking` must be enabled for the model to
 // produce (and stream) reasoning as thinking content. 'low' = thinking off is the
@@ -280,6 +307,15 @@ export function effortFromLevel(level: ThinkingLevel): EffortLevel {
 // collapses to the "Thinking…" placeholder. 'summarized' returns visible reasoning.
 export function thinkingFromLevel(level: ThinkingLevel): ThinkingConfig {
   return level === 'low' ? { type: 'disabled' } : { type: 'adaptive', display: 'summarized' }
+}
+
+// Cùng lý do với effortFromSettings: ultracode chạy ở xhigh, nên extended thinking
+// phải BẬT kể cả khi `level` còn sót lại giá trị 'low' (tắt thinking) từ trước.
+export function thinkingFromSettings(s: {
+  level: ThinkingLevel
+  ultracode?: boolean
+}): ThinkingConfig {
+  return s.ultracode ? { type: 'adaptive', display: 'summarized' } : thinkingFromLevel(s.level)
 }
 
 // ── Background work ─────────────────────────────────────────────────────────

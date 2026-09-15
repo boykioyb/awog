@@ -67,7 +67,26 @@
           <button v-for="[v, l] in THINK" :key="v" class="mi" @click="pickThink(v)">
             <span class="sb-mi-name">{{ l }}</span>
             <Icon
-              v-if="v === thinking"
+              v-if="v === thinking && !ultracodeOn"
+              name="check"
+              class="ck"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
+          </button>
+          <!-- Bậc thứ sáu, chỉ nhánh Claude SDK (ADR 0089). Cùng danh sách chứ không
+               phải một công tắc riêng: trong Claude Code nó LÀ một giá trị của
+               `/effort`, nên để nó thành checkbox thì sẽ có trạng thái "Thấp +
+               Ultracode" không ai giải thích được. Lời giải thích nằm ở `title` —
+               hàng `.mi` chỉ cao một dòng. -->
+          <button
+            v-if="ultracodeSupported"
+            class="mi"
+            :title="t('common.thinking.ultracodeHint')"
+            @click="pickUltracode"
+          >
+            <span class="sb-mi-name">{{ t('common.thinking.ultracode') }}</span>
+            <Icon
+              v-if="ultracodeOn"
               name="check"
               class="ck"
               style="width: var(--icon-sm); height: var(--icon-sm)"
@@ -168,6 +187,9 @@ const {
   thinking,
   thinkingLabel,
   thinkSupported,
+  ultracodeSupported,
+  ultracodeOn,
+  selectUltracode,
   THINK,
   selectThink,
   activeStyleId,
@@ -223,6 +245,10 @@ function pickAccount(a: AccountOption) {
 }
 function pickThink(v: ThinkingLevel) {
   selectThink(v)
+  close()
+}
+function pickUltracode() {
+  selectUltracode()
   close()
 }
 function pickStyle(slug: string) {

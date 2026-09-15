@@ -113,7 +113,7 @@
 
 | Option | Kiểu | Nghĩa | AWOG |
 |---|---|---|---|
-| `settings` | `string \| Settings` | Settings bổ sung (AWOG dùng cho `attribution` của commit) | 💬⚙️ |
+| `settings` | `string \| Settings` | Settings bổ sung — AWOG dùng cho `attribution` của commit **và `ultracode`** ([ADR 0089](../decisions/0089-ultracode-effort-tier.md)) | 💬⚙️ |
 | `managedSettings` | `Settings` | Settings tầng policy do tiến trình cha áp | — |
 | `settingSources` | `SettingSource[]` | Chọn nguồn settings trên đĩa được nạp | 💬⚙️ |
 

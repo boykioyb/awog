@@ -15,6 +15,9 @@ const SessionSettingsSchema = z.object({
   level: ThinkingLevelSchema,
   mode: z.enum(['ask', 'accept-edits', 'plan', 'execute']),
   accountId: z.string().optional(),
+  // Bậc "Ultracode" (ADR 0089) — persist cùng `level` vì nó LÀ một bậc của cùng
+  // cái picker: chọn xong mà mở lại app thấy tụt về Max thì đúng là mất lựa chọn.
+  ultracode: z.boolean().optional(),
   // Response style (ADR 0046) — persisted per session so it survives restart.
   responseStyle: z.string().optional(),
   responseStyleNoMarkdown: z.boolean().optional(),
@@ -105,6 +108,7 @@ function toSessionSettings(parsed: z.infer<typeof SessionSettingsSchema>): Sessi
     mode: parsed.mode,
   }
   if (parsed.accountId !== undefined) base.accountId = parsed.accountId
+  if (parsed.ultracode !== undefined) base.ultracode = parsed.ultracode
   if (parsed.responseStyle !== undefined) base.responseStyle = parsed.responseStyle
   if (parsed.responseStyleNoMarkdown !== undefined) {
     base.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown

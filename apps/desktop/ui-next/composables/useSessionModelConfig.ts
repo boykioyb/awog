@@ -178,11 +178,24 @@ export function useSessionModelConfig(session: () => Session) {
   )
   const thinkSupported = computed(() => !NO_THINK.has(selectedModel.value))
   const thinking = computed<ThinkingLevel>(() => session().thinkingLevel ?? 'high')
-  const thinkingLabel = computed(
-    () => THINK.value.find(([v]) => v === thinking.value)?.[1] ?? t('common.thinking.high'),
+  // Bậc "Ultracode" (ADR 0089) là bậc THỨ SÁU của chính picker này, nhưng chỉ tồn
+  // tại trên nhánh Claude SDK: SDK cấp nó như một cờ riêng trong `Settings` (xhigh
+  // + điều phối dynamic-workflow), không phải một giá trị của `effort`. Provider
+  // khác không có gì tương đương ⇒ ẩn hàng thay vì hiện một lựa chọn không chạy.
+  const ultracodeSupported = computed(
+    () => thinkSupported.value && store.providerOf(session()) === 'anthropic',
+  )
+  const ultracodeOn = computed(() => ultracodeSupported.value && !!session().ultracode)
+  const thinkingLabel = computed(() =>
+    ultracodeOn.value
+      ? t('common.thinking.ultracode')
+      : (THINK.value.find(([v]) => v === thinking.value)?.[1] ?? t('common.thinking.high')),
   )
   function selectThink(v: ThinkingLevel) {
     if (thinkSupported.value) store.setThinking(session().id, v)
+  }
+  function selectUltracode() {
+    if (ultracodeSupported.value) store.setUltracode(session().id)
   }
 
   // ── Response style + no-markdown ──
@@ -274,6 +287,9 @@ export function useSessionModelConfig(session: () => Session) {
     thinking,
     thinkingLabel,
     thinkSupported,
+    ultracodeSupported,
+    ultracodeOn,
+    selectUltracode,
     THINK,
     selectThink,
     activeStyleId,

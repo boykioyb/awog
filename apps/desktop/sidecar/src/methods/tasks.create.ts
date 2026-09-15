@@ -42,6 +42,9 @@ const Params = z.object({
   autoCommitPerPhase: z.boolean().optional(),
   autoCommitScope: z.enum(['workspace', 'artifacts-only']).optional(),
   autoCommitMessageTemplate: z.string().max(400).optional(),
+  // Snapshot mức suy luận (Settings → Mặc định). Cùng lý do với các snapshot trên:
+  // cấu hình sống ở renderer. Vắng mặt (caller cũ) ⇒ node-runner giữ 'medium'.
+  thinkingLevel: z.enum(['low', 'medium', 'high', 'extra-high', 'max']).optional(),
 })
 
 register('tasks.create', async (raw) => {
@@ -87,6 +90,7 @@ register('tasks.create', async (raw) => {
     ...(params.autoCommitMessageTemplate !== undefined
       ? { autoCommitMessageTemplate: params.autoCommitMessageTemplate }
       : {}),
+    ...(params.thinkingLevel !== undefined ? { thinkingLevel: params.thinkingLevel } : {}),
     phases,
   }
 

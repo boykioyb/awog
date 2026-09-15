@@ -97,10 +97,10 @@ import { resolveClaudeBinary } from './binary.js'
 import {
   backgroundTurnPrompt,
   buildSdkEnv,
-  commitAttribution,
-  effortFromLevel,
+  effortFromSettings,
   mapClaudeErrorToRpc,
-  thinkingFromLevel,
+  sdkSettings,
+  thinkingFromSettings,
   toSdkMcpServers,
   toSdkModel,
 } from './shared.js'
@@ -793,13 +793,17 @@ export async function runStreamClaude(
     // Honor the Git `commitCoAuthor` setting via the SDK flag-settings layer
     // (highest priority). The claude_code preset otherwise adds Claude's own
     // attribution regardless (see commitAttribution): on → AWOG trailer, off → hidden.
-    settings: { attribution: commitAttribution(args.commitCoAuthor) },
+    // Bậc Ultracode (ADR 0089) cũng đi ở lớp này.
+    settings: sdkSettings({
+      commitCoAuthor: args.commitCoAuthor,
+      ultracode: args.settings.ultracode,
+    }),
     includePartialMessages: true,
     // Thinking: enable adaptive extended thinking (except 'low' = off) + map the
     // level to Claude Code effort depth (shared.ts). effort alone won't emit
     // thinking blocks — `thinking` must be enabled for reasoning to stream.
-    thinking: thinkingFromLevel(args.settings.level),
-    effort: effortFromLevel(args.settings.level),
+    thinking: thinkingFromSettings(args.settings),
+    effort: effortFromSettings(args.settings),
     // Gate every tool through our PreToolUse hook; bypassPermissions so the SDK's
     // own (unreliable) permission path doesn't shadow it (ADR 0058 P4).
     permissionMode: 'bypassPermissions',

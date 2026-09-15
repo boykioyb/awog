@@ -106,6 +106,8 @@
   "common.thinking.high": "High",
   "common.thinking.extra-high": "Extra high",
   "common.thinking.max": "Max",
+  "common.thinking.ultracode": "Ultracode",
+  "common.thinking.ultracodeHint": "xhigh effort + dynamic workflow orchestration. Claude SDK (Anthropic) only — needs a model that supports xhigh, otherwise Claude Code silently leaves it off.",
   "common.aiUnavailable": "AI generation needs a running engine and a connected LLM account.",
   "common.clear": "Clear",
   "common.create": "Create",

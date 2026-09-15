@@ -175,6 +175,13 @@ export interface SessionSettings {
   level: ThinkingLevel
   mode: AgentMode
   accountId?: string
+  // Bậc "Ultracode" của Claude Code — CHỈ nhánh Claude SDK đọc (ADR 0089).
+  // KHÔNG phải một nấc của `level`: trong SDK nó là cờ riêng trong `Settings`
+  // (`sdk.d.ts` Settings.ultracode = xhigh effort + điều phối dynamic-workflow),
+  // nên `level` vẫn giữ đúng 5 bậc dùng chung cho cả ba runtime. Bật ⇒ effort
+  // gửi đi luôn là 'xhigh' và thinking luôn bật (xem effortFromSettings /
+  // thinkingFromSettings). Pi + Codex bỏ qua field này.
+  ultracode?: boolean
   // Response style (ADR 0046). Built-in style id (style/styles.ts) the session
   // replies in; undefined = default. `responseStyleNoMarkdown` strips markdown
   // from output (stacks on a style or applies alone). Sessions only.
@@ -1314,6 +1321,10 @@ export interface Task {
   autoCommitPerPhase?: boolean
   autoCommitScope?: 'workspace' | 'artifacts-only'
   autoCommitMessageTemplate?: string
+  // Mức suy luận (Settings → Mặc định) chụp lại lúc tạo task, cùng đường với các
+  // snapshot trên: sidecar không đọc được settings của renderer. Vắng mặt (task
+  // cũ) ⇒ node-runner giữ nguyên mặc định 'medium'.
+  thinkingLevel?: ThinkingLevel
   phases: Record<string, TaskPhase>
 }
 
