@@ -700,7 +700,7 @@ body[data-theme-family='cute'] :is(.tdck, .qcbox, .lcbox) {
    read as inset, not as a second stack of floating cards.
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute']
-  :is(.tile, .tcard, .pcard, .rowi, .pstat, .acard, .node, .gitlink, .todop, .wnode) {
+  :is(.tile, .tcard, .pcard, .rowi, .pstat, .acard, .node, .gitlink, .todop) {
   border-radius: var(--r-card);
 }
 body[data-theme-family='cute'] :is(.step, .stepc, .cluster, .fwcard, .gcard, .qchk, .qopt) {
@@ -749,7 +749,7 @@ body[data-theme-family='cute'] :is(.smenu .mi, .stylemenu .mi, .pi) {
 body[data-theme-family='cute'] :is(.smenu .mi:hover, .pi:hover, .pi.on) {
   background: var(--bgHover);
 }
-body[data-theme-family='cute'] :is(.setmodal, .pal, .codepanel) {
+body[data-theme-family='cute'] .setmodal {
   border-radius: var(--r-panel);
   border-color: var(--border);
   box-shadow: var(--shadow-lg);
@@ -869,12 +869,19 @@ body[data-theme-family='cute'] .codeblock pre {
   border: 0 !important;
   border-radius: 0 !important;
   padding: 13px 14px !important;
-  background: var(--codeBg) !important;
-  /* Safety net for LIGHT mode: the block is dark but `--text` is dark too, so any code
-     that is NOT carrying Shiki's inline token colors — the first paint before the
-     highlighter finishes loading, or a language outside its allowlist — would render
-     dark-on-dark. Declared WITHOUT `!important` on purpose: Shiki's inline color must
-     still win once it arrives (inline beats a normal author declaration). */
+  /* KHÔNG `!important` (sửa 2026-09-15): nền phải LUÔN theo Shiki. Token màu (inline
+     trên từng <span>) và nền đến từ hai cơ chế khác nhau — Shiki chọn theo `activeTheme`
+     (github-dark/light), nền lại do CSS ép — nên chúng lệch được. Khi Shiki tô theo
+     github-LIGHT (chữ TỐI) mà nền bị ép tối bằng `!important`, ta được chữ-tối-trên-nền-tối
+     → không đọc được (đúng lỗi người dùng gặp: theme Cute, block code chữ vô hình). Bỏ
+     `!important` ⇒ nền inline của Shiki (đi kèm token) thắng, nền và chữ LUÔN khớp. Trường
+     hợp bình thường không đổi hình thức: nền github-dark của Shiki đúng bằng --codeBg
+     (#24292e). Riêng .codeplain (chưa kịp highlight, không có nền inline) vẫn tối nhờ luật
+     `:is(pre.codeplain, …)` phía dưới. */
+  background: var(--codeBg);
+  /* Safety net cho .codeplain: nền tối nhưng --text cũng tối, nên code KHÔNG mang màu
+     token inline của Shiki sẽ tối-trên-tối. KHÔNG `!important` để màu inline của Shiki
+     vẫn thắng khi nó tới. */
   color: var(--termText);
   /* §9 "không chiếm quá nhiều chiều cao" — a long block scrolls in place. */
   max-height: 420px;
@@ -1257,7 +1264,7 @@ body[data-theme-family='cute'] .tcard:hover {
 }
 @media (prefers-reduced-motion: reduce) {
   body[data-theme-family='cute']
-    :is(.smenu, .pop, .stylemenu, .styinfocard, .pal, .setmodal, .codepanel),
+    :is(.smenu, .pop, .stylemenu, .styinfocard, .setmodal),
   body[data-theme-family='cute'] .tst[data-state='open'] {
     animation: none;
   }
