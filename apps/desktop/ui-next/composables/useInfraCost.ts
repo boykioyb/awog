@@ -12,6 +12,7 @@
 //     `get-metric-data` (tính theo metric × điểm).
 // Vì vậy hai phép dò trả tiền mặc định TẮT và có nhãn nói rõ trước khi bấm.
 import { computed, ref } from 'vue'
+import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import { useInfraContext } from '~/composables/useInfraContext'
 import { useSidecar } from '~/composables/useSidecar'
 import { useToast } from '~/composables/useToast'
@@ -144,6 +145,7 @@ export function useInfraCost() {
   const sc = useSidecar()
   const toast = useToast()
   const { t } = useI18n()
+  const { askAgent } = useInfraAskAgent()
   const infraContext = useInfraContext({ sessionId: null })
 
   const context = computed(() => {
@@ -359,6 +361,65 @@ export function useInfraCost() {
     }
   }
 
+  // ── Luật 4 của infra-README: chip câu hỏi thay cho ô trống ────────────────
+  //
+  // Mọi màn hạ tầng khác đều có; hai màn của mốc 7 trước đây là ngoại lệ duy nhất.
+  // README lấy đúng ví dụ "Tháng này tốn bao nhiêu?" cho màn này.
+  //
+  // GỬI KÈM ẢNH CHỤP SỐ LIỆU ĐANG XEM, không chỉ câu hỏi: agent trả lời được "vì sao
+  // tăng" chỉ khi nó thấy con số. Ảnh chụp dựng từ state đã nạp — không gọi thêm lời
+  // gọi tính tiền nào.
+
+  const askSuggestions = computed(() => [
+    { key: 'month', text: t('infra.cost.ask.month') },
+    { key: 'forecast', text: t('infra.cost.ask.forecast') },
+    { key: 'waste', text: t('infra.cost.ask.waste') },
+  ])
+
+  /** Có gì để kể chưa — chip tắt khi cả hai khối đều chưa nạp. */
+  const hasSnapshot = computed(() => summary.value !== null || report.value !== null)
+
+  function snapshotText(): string {
+    const lines: string[] = []
+    const sum = summary.value
+    if (sum) {
+      lines.push(`Kỳ ${sum.periodStart} → ${sum.periodEnd}`)
+      lines.push(`Đã phát sinh: $${sum.totalUsd.toFixed(2)}`)
+      lines.push(`Tháng trước: $${sum.previousTotalUsd.toFixed(2)}`)
+      if (sum.forecastUsd !== null) lines.push(`Dự báo cuối tháng: $${sum.forecastUsd.toFixed(2)}`)
+      if (sum.services.length) {
+        lines.push('Dịch vụ tốn nhất:')
+        for (const svc of sum.services) {
+          lines.push(
+            `  ${svc.service}: $${svc.amountUsd.toFixed(2)} (kỳ trước $${svc.previousUsd.toFixed(2)})`,
+          )
+        }
+      }
+    }
+    const rep = report.value
+    if (rep) {
+      lines.push('')
+      lines.push(
+        `Lãng phí: ${String(rep.findings.length)} phát hiện, ~$${rep.totalMonthlyUsd.toFixed(2)}/tháng (ước lượng)`,
+      )
+      for (const f of rep.findings.slice(0, 20)) {
+        const money = f.monthlyUsd === null ? 'chưa định giá' : `$${f.monthlyUsd.toFixed(2)}/tháng`
+        lines.push(`  [${f.check}] ${f.label} — ${money}`)
+      }
+    }
+    return lines.join('\n')
+  }
+
+  async function ask(text: string): Promise<void> {
+    const snap = snapshotText()
+    const label = t('infra.cost.title')
+    if (!snap) {
+      await askAgent(text, label)
+      return
+    }
+    await askAgent(`${text}\n\n\`\`\`\n${snap}\n\`\`\``, label)
+  }
+
   return {
     // ngữ cảnh
     context,
@@ -397,5 +458,9 @@ export function useInfraCost() {
     pickedFindings,
     pickedMonthlyUsd,
     buildCleanupDraft,
+    // hỏi agent (luật 4)
+    askSuggestions,
+    hasSnapshot,
+    ask,
   }
 }

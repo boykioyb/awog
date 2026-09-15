@@ -25,6 +25,7 @@
 // là tự tay dựng đúng cái bẫy đó. Một hệ quả đi kèm: mẫu Chi phí khai `unit: 'USD'` mà
 // metric thật có đơn vị `None` — không gửi thì nó vẫn đúng.
 import { computed, ref } from 'vue'
+import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import { useInfraContext } from '~/composables/useInfraContext'
 import { useSidecar } from '~/composables/useSidecar'
 import { useSessionsStore } from '~/stores/sessions'
@@ -252,6 +253,7 @@ export function useInfraDashboards() {
   const sc = useSidecar()
   const toast = useToast()
   const { t } = useI18n()
+  const { askAgent } = useInfraAskAgent()
   const infraContext = useInfraContext({ sessionId: null })
   const sessionsStore = useSessionsStore()
 
@@ -742,6 +744,43 @@ export function useInfraDashboards() {
     return true
   }
 
+  // ── Luật 4 của infra-README: chip câu hỏi thay cho ô trống ────────────────
+  //
+  // Ảnh chụp là BẢNG ĐANG XEM (tên biểu đồ + chuỗi + có điểm hay không), dựng từ state
+  // đã nạp — không thêm lời gọi metric tính tiền nào.
+
+  const askSuggestions = computed(() => [
+    { key: 'explain', text: t('infra.dashboard.ask.explain') },
+    { key: 'anomaly', text: t('infra.dashboard.ask.anomaly') },
+  ])
+
+  const hasSnapshot = computed(() => opened.value !== null && loadedAt.value !== null)
+
+  function snapshotText(): string {
+    const board = opened.value
+    if (!board) return ''
+    const lines = [`Bảng: ${board.name}`, `Cửa sổ: ${windowLabel.value}`]
+    for (const c of charts.value) {
+      lines.push(`${c.title} (${c.unit})`)
+      for (const s of c.series) {
+        lines.push(
+          `  ${s.label}: ${s.missing ? 'thiếu dữ liệu' : `${String(s.points.length)} điểm`}`,
+        )
+      }
+    }
+    return lines.join('\n')
+  }
+
+  async function ask(text: string): Promise<void> {
+    const snap = snapshotText()
+    const label = t('infra.dashboard.title')
+    if (!snap) {
+      await askAgent(text, label)
+      return
+    }
+    await askAgent(`${text}\n\n\`\`\`\n${snap}\n\`\`\``, label)
+  }
+
   return {
     // ngữ cảnh
     context,
@@ -796,5 +835,9 @@ export function useInfraDashboards() {
     appendChart,
     takenKeys,
     deleteDashboard,
+    // hỏi agent (luật 4)
+    askSuggestions,
+    hasSnapshot,
+    ask,
   }
 }

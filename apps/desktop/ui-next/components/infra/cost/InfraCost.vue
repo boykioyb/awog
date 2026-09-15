@@ -313,6 +313,21 @@
           </div>
         </template>
       </section>
+      <!-- Luật 4 của infra-README: chip câu hỏi thay cho ô trống. Cùng khuôn với màn
+           Giám sát — tắt khi chưa có số liệu nào, vì câu trả lời sẽ rỗng. -->
+      <div class="ic-ask">
+        <span class="ic-hint">{{ t('infra.cost.title') }}</span>
+        <button
+          v-for="s in askSuggestions"
+          :key="s.key"
+          type="button"
+          class="ic-chip"
+          :disabled="!hasSnapshot"
+          @click="ask(s.text)"
+        >
+          {{ s.text }}
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -360,6 +375,9 @@ const {
   pickedFindings,
   pickedMonthlyUsd,
   buildCleanupDraft,
+  askSuggestions,
+  hasSnapshot,
+  ask,
 } = useInfraCost()
 
 const building = ref(false)
@@ -717,6 +735,36 @@ async function onCleanup(): Promise<void> {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.ic-ask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.ic-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--textDim);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  cursor: pointer;
+}
+
+.ic-chip:hover:not(:disabled) {
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+
+.ic-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .ic-ic {

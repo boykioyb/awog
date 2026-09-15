@@ -1,4 +1,7 @@
 {
+  "infra.cost.ask.forecast": "Will this month go over budget?",
+  "infra.cost.ask.month": "What does this month cost, and why did it rise?",
+  "infra.cost.ask.waste": "Which of these can I drop right now without breaking anything?",
   "infra.cost.budget.emailsPlaceholder": "Alert emails, comma separated (optional)",
   "infra.cost.budget.emailsWhy": "No address means no notification. The budget still shows its limit and spend here.",
   "infra.cost.budget.limitPlaceholder": "Limit USD",

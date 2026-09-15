@@ -1,4 +1,7 @@
 {
+  "infra.cost.ask.forecast": "Cuối tháng sẽ vượt ngân sách không?",
+  "infra.cost.ask.month": "Tháng này tốn bao nhiêu, và vì sao tăng?",
+  "infra.cost.ask.waste": "Khoản nào bỏ được ngay mà không ảnh hưởng gì?",
   "infra.cost.budget.emailsPlaceholder": "Email nhận cảnh báo, ngăn bằng dấu phẩy (không bắt buộc)",
   "infra.cost.budget.emailsWhy": "Không có địa chỉ thì không có thông báo. Ngân sách vẫn hiện hạn mức và mức đã tiêu ở đây.",
   "infra.cost.budget.limitPlaceholder": "Hạn mức USD",

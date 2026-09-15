@@ -197,6 +197,22 @@
       <p v-if="!hasAccount" class="ierr">{{ t('infra.monitoring.noProfile') }}</p>
       <p v-else-if="error" class="ierr">{{ error }}</p>
 
+      <!-- Luật 4 của infra-README: chip câu hỏi. Tắt khi bảng chưa nạp số liệu —
+           hỏi "có gì bất thường" trên một bảng trống thì không có câu trả lời. -->
+      <div class="idb-ask">
+        <span class="idb-meta">{{ t('infra.dashboard.title') }}</span>
+        <button
+          v-for="s in askSuggestions"
+          :key="s.key"
+          type="button"
+          class="idb-chip"
+          :disabled="!hasSnapshot"
+          @click="ask(s.text)"
+        >
+          {{ s.text }}
+        </button>
+      </div>
+
       <div class="idb-grid">
         <MetricChart
           v-for="c in charts"
@@ -278,6 +294,9 @@ const {
   saving,
   save,
   deleteDashboard,
+  askSuggestions,
+  hasSnapshot,
+  ask,
 } = useInfraDashboards()
 
 // Đọc thư mục, không chạm CLI và không tốn tiền — nên nạp được ngay khi tab mount.
@@ -508,6 +527,34 @@ async function remove(s: DashboardSummary): Promise<void> {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 10px;
+}
+
+.idb-ask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.idb-chip {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--textDim);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  cursor: pointer;
+}
+
+.idb-chip:hover:not(:disabled) {
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+
+.idb-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .idb-ic {
