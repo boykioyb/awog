@@ -42,6 +42,11 @@
        `useShareExport`, nên bên gọi chỉ cần `openShare(subject)` là hộp hiện ra,
        không phải tự render nó. -->
   <ShareExportModal />
+
+  <!-- Chọn LOẠI cho một báo cáo agent vừa viết, trước khi hộp xuất ở trên mở ra
+       (mốc 6.6). Ở đây vì bên gọi nó là transcript — mà transcript có mặt ở cả cửa
+       sổ chính lẫn cửa sổ phiên tách rời. -->
+  <InfraReportPublishDialog />
 </template>
 
 <script setup lang="ts">

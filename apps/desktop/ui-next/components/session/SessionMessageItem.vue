@@ -193,6 +193,10 @@ const props = defineProps<{ message: SessionMessage; fallbackWhen: string; msgIn
 const { t } = useI18n()
 const settings = useSettingsStore()
 const store = useSessionsStore()
+// Xuất bản trả lời này thành báo cáo hạ tầng (mốc 6.6). Transcript là ĐIỂM NỐI duy
+// nhất giữa "agent viết xong" và hộp xuất — màn Báo cáo không thể là nó, vì lúc bấm
+// "Hỏi agent" thì chưa có gì để xuất. Xem đầu `useInfraReportPublish.ts`.
+const { publishReport: publishAsReport } = useInfraReportPublish()
 
 // The latest TodoWrite step renders inline as a transcript step once the docked banner
 // yields (all done / turn ended). `inlineTodoStep` is that block (or null while it's
@@ -645,6 +649,17 @@ const openFullscreen = () => {
   })
 }
 
+/**
+ * Đưa bản trả lời này sang hộp xuất với tư cách một báo cáo hạ tầng (mốc 6.6).
+ *
+ * `projectId` lấy từ PHIÊN chứ không từ message: nó quyết định trang Wiki lưu ở tier
+ * project hay tier global. `Session.project` chính là id đó ('' = tab Default), và
+ * composable tự quy '' về "không có project".
+ */
+function publishReport(): void {
+  publishAsReport(plainText.value, { projectId: store.active?.project })
+}
+
 // UI-3 — fullscreen the WHOLE turn (activities + gates + final response), rendered live
 // via SessionTurnFullscreen (reuses `grouped` for realtime streaming). Distinct from
 // openFullscreen above, which shows only the final response text in the PreviewModal.
@@ -744,6 +759,11 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
   // Response-only fullscreen only earns a row when there's prose to read.
   ...(plainText.value.trim()
     ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
+    : []),
+  // Xuất thành báo cáo hạ tầng — cũng chỉ khi có văn xuôi: một lượt chỉ có tool thì
+  // không có gì để thành báo cáo, và `publishReport` sẽ trả false mà không nói gì.
+  ...(plainText.value.trim()
+    ? [{ icon: 'file', title: t('sessions.message.report'), run: publishReport }]
     : []),
   // Whole-turn fullscreen (activities + gates + response) — always available for an
   // assistant turn, incl. tool-only turns with no final response (AC3.9).

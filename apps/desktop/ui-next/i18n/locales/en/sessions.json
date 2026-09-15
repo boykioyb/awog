@@ -302,6 +302,7 @@
   "sessions.message.more": "More actions",
   "sessions.message.fullscreen": "Full screen",
   "sessions.message.fullscreenTurn": "Full screen (whole turn)",
+  "sessions.message.report": "Export as infra report",
   "sessions.message.fullscreenName": "Message",
   "sessions.message.fork": "Fork to a new session",
   "sessions.message.edit": "Edit & resend",
