@@ -372,8 +372,8 @@ Kho playbook là **Markdown + frontmatter** 2 tier (`~/.awog/playbooks/<id>.md` 
 
 ### Còn nợ của mốc 5
 
-- **Không soạn được playbook trong app.** `infra.playbook-save` / `-delete` có ở sidecar và đã bọc trong `usePlaybooksApi`, nhưng **không component nào gọi** — thêm một playbook nghĩa là đặt file tay vào `~/.awog/playbooks/`. Trang `/playbooks` hiện là đọc · chạy · chia sẻ.
-- **`kind: 'deployment'` chưa có bản nào.** Hai builtin đều `instruction`; nhóm "deployment" của danh sách rỗng cho tới khi có người đặt file tay. Đường chạy thì đã có sẵn cho cả hai loại.
+- ~~Không soạn được playbook trong app.~~ **Bù ngày 2026-09-15** — nút "Kế hoạch mới" (menu Trống / Nhân bản) cộng Sửa · Nhân bản · Xoá ở đầu màn chi tiết, qua `PlaybookEditor.vue` + `usePlaybookEditor.ts`. Ba điểm của trình soạn đáng nhớ: đối số nhập **mỗi dòng một cái** (không phải chuỗi shell — `args` là mảng theo hợp đồng); **lưu được bản còn thiếu bước quay lui** (đúng như sidecar, vốn chỉ chặn ở `submit`) nên luật rollback ở đây là CẢNH BÁO; và tier project phải chọn **dự án nào** vì trang này liệt kê playbook của mọi project và không có phiên để suy ra.
+- **`kind: 'deployment'` chưa có bản nào.** Hai builtin đều `instruction`; nhóm "deployment" của danh sách rỗng cho tới khi có người tạo một bản loại đó. Chọn được loại trong trình soạn rồi, nhưng chưa có bản dựng sẵn nào để đối chiếu.
 - **QA trong Electron thật** — cổng đã xanh là `vitest` (**95 test / 6 file** cho `graph` + `playbook`; 989 test cho cả `src/infra`) · `pnpm typecheck` · `pnpm lint`. Chưa màn nào được bấm trong app đóng gói.
 - **Credential AWS thật** — năm resolver mới kiểm bằng JSON mẫu; chưa lần nào dựng graph từ một tài khoản sống, nên chưa biết hình dạng thật ở độ sâu 4 có đọc được không.
 - **Chưa chạy playbook `do` nào thật** — `runGated` · preflight · quay lui dựng ngược mới có test đơn vị. Đường quay lui đặc biệt: nó chỉ được thử ở nơi **không có gì để mất**.
