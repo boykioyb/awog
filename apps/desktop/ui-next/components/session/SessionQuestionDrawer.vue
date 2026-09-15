@@ -135,14 +135,28 @@ const onDismiss = (): void => {
      ngăn kéo lại là lối ra — đó là việc của nút gập. */
   min-height: 7em;
   max-height: 52vh;
-  margin: 0 0 8px;
-  padding: 10px 12px 12px;
+  /* Lùi đúng `--padX` hai bên: `.composer` đệm `var(--padX)` rồi mới tới `.cbox`, và
+     `.msgs` cũng đệm chừng ấy — ba khối xếp chồng trong một cột thì phải chung một
+     lề trái, đó là lý do `--padX` tồn tại. Không có dòng này thì ngăn kéo trải hết
+     cột, rộng hơn ô soạn 22px mỗi bên, và cả cụm đọc ra lệch.
+     Lề ở ĐÂY chứ không phải padding trên `.qdrw`: <Collapse> cắt overflow ngay ở
+     `.collapsible-in`, nên chỗ trống phải nằm BÊN TRONG hộp cắt thì bóng đổ hai bên
+     mới có đất mà vẽ. */
+  margin: 0 var(--padX) 8px;
+  /* Đây là lề TRONG duy nhất của cả thẻ: thân câu hỏi bỏ khung của nó (`.qdrw-body`
+     bên dưới) nên không còn lớp đệm thứ hai nào nữa. 12px là đệm của một cái chip,
+     không phải của một tấm thẻ bo `--r-card` — chữ dính mép. */
+  padding: 12px 15px 14px;
   background: var(--bgCard, var(--bg));
   border: 1px solid var(--accentBorder, var(--border));
   border-radius: var(--r-card);
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
-  /* Trượt lên: <Collapse> lo chiều cao, dòng này lo cảm giác "đẩy từ composer lên". */
-  animation: qdrw-rise 0.22s ease both;
+  /* Trồi lên TỪ ô soạn: <Collapse> lo chiều cao, dòng này lo cảm giác. Gốc biến đổi
+     ở ĐÁY (phía ô soạn) nên nó nở ra từ dưới lên chứ không phải rơi từ trên xuống,
+     và đường cong ease-out mạnh cho nó vọt lên rồi dừng hẳn — giống một tấm trượt
+     ra khỏi ô soạn, không phải một hộp mới xuất hiện. */
+  transform-origin: bottom center;
+  animation: qdrw-rise 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 /* Gập rồi thì chẳng còn hàng nút nào để chừa chỗ — sàn trên biến mất, ngăn kéo
    thu về đúng một hàng. */
@@ -151,7 +165,7 @@ const onDismiss = (): void => {
 }
 @keyframes qdrw-rise {
   from {
-    transform: translateY(8px);
+    transform: translateY(16px) scaleY(0.985);
     opacity: 0;
   }
   to {
@@ -241,10 +255,18 @@ const onDismiss = (): void => {
   border: none;
   padding: 0;
 }
-/* NỀN hổ phách của `.gate` thì GIỮ: nó là thứ nói "đang chờ bạn", và ở đây nó tô
-   đúng vùng câu hỏi trong khung ngăn kéo. (Có thử bỏ: theme Cute khai
-   `body[data-theme-family] .gcard.gate` = (0,3,1) và nạp cuối, nên muốn thắng phải
-   `!important` — không đáng, mà bỏ nền cũng chẳng hơn.) */
+/* Bỏ NỀN hổ phách của `.gate` khi thẻ nằm trong ngăn kéo. Ở transcript mảng màu đó
+   có việc: nhặt thẻ câu hỏi ra khỏi dòng tin nhắn trôi qua. Ở đây thì không còn việc
+   gì — viền accent của ngăn kéo, hàng "Agent đang hỏi bạn" và chỗ đứng ngay trên ô
+   soạn đã nói đủ — mà nó lại chạy sát mép trong của thẻ (thân bỏ đệm của mình), nên
+   chữ và ô chọn dính vào cạnh mảng màu: đọc ra chật.
+   Phải là tổ hợp DÀI chứ không phải `!important`: theme Cute khai
+   `body[data-theme-family='cute'] .gcard.gate` = (0,3,1) và nạp sau prototype.css,
+   nên muốn thắng thì phải hơn về số class — `.qdrw-in .qdrw-fold[data-v] .gcard.gate`
+   = (0,5,0). Chỉ đụng `background`: bo góc/khung đã do `.qdrw-body` gỡ. */
+.qdrw-in .qdrw-fold :deep(.gcard.gate) {
+  background: transparent;
+}
 .qdrw-body > :deep(*) {
   flex: none;
 }
