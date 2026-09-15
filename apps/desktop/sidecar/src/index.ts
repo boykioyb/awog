@@ -157,9 +157,11 @@ import './methods/infra.graph.js'
 import './methods/infra.playbook.js'
 // Phiên bong bóng (góc phải màn hình) — thư mục làm việc riêng `awog-infra`.
 import './methods/infra.bubble-workspace.js'
-// Mốc 6 — Giám sát (docs/features/infra-monitoring-reports.md).
+// Mốc 6 — Giám sát, báo cáo & bộ xuất
+// (docs/features/infra-monitoring-reports.md).
 import './methods/infra.metrics.js'
 import './methods/infra.alarms.js'
+import './methods/infra.share.js'
 import './methods/ssh.list.js'
 import './methods/ssh.upsert.js'
 import './methods/ssh.delete.js'
