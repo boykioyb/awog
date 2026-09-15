@@ -199,12 +199,10 @@ function buildRuleSuggestion(
   // task 0.14): quyền của chúng thuộc về ma trận ở Settings, nơi nhìn thấy được
   // và hết hạn được. Trả null ⇒ không có nút "Always allow" ⇒ mỗi lần gọi là một
   // lần hỏi.
-  // Quét cả chuỗi, không chỉ token đầu: `sh -c "aws s3 rb …"` mà vẫn hiện nút
-  // "Always allow" thì luật ALLOW ghi xuống đĩa và phủ vĩnh viễn (audit #1 F2).
-  const bashCommand = toolName === 'Bash' ? argBag(args)?.command : undefined
-  const infraBinary =
-    bashInfraBinary(toolName, args) ??
-    (typeof bashCommand === 'string' ? anyInfraBinary(bashCommand) : null)
+  // Một phép quét duy nhất, dùng chung với `bashInfraCall`: hai bên lệch nhau thì
+  // nút "Always allow" mọc lại đúng trên lệnh mà nhánh dưới vừa phân lớp là hạ
+  // tầng — luật ALLOW ghi xuống đĩa và phủ vĩnh viễn (audit #1 F2).
+  const infraBinary = bashInfraBinary(toolName, args)
   if (infraBinary) {
     log.info('permission gate: no remembered rule for an infrastructure command', {
       toolName,
@@ -527,35 +525,152 @@ function infraBlockReason(call: InfraCall, kind: InfraAccountKind): string {
 
 // Tiền tố không phải là binary thật, chỉ là vỏ bọc. Bỏ qua chúng để
 // `sudo aws …` / `AWS_PROFILE=prod aws …` không lách được danh sách.
-const COMMAND_WRAPPERS = new Set(['sudo', 'doas', 'env', 'nohup', 'time', 'command', 'exec'])
+// `xargs`/`watch` có mặt vì chúng CHẠY đối số của mình: `xargs aws s3 rb …` là
+// một lệnh hạ tầng thật, chỉ khoác thêm một lớp.
+const COMMAND_WRAPPERS = new Set([
+  'sudo',
+  'doas',
+  'env',
+  'nohup',
+  'time',
+  'command',
+  'exec',
+  'xargs',
+  'watch',
+])
+// Shell tự chạy một lệnh khác ở token kế: `sh -c "aws s3 rb …"`. Thiếu nhóm này
+// thì phép quét theo vị trí bỏ sót đúng dạng bọc mà `anyInfraBinary` cũ sinh ra
+// để bắt, và đó là dạng mà một model muốn lách sẽ chọn.
+const SHELL_BINARIES = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish'])
+// Toán tử NGĂN CÁCH hai lệnh — token đứng sau là token ở vị trí lệnh.
+const SEPARATOR_RE = /^[;|&(){}!]+$/
+// Chuyển hướng KHÔNG mở đầu một lệnh: thứ đứng sau `>`/`<` là tên tệp, không
+// phải tên chương trình. Vẫn cắt token ở đó, nhưng không đánh dấu vị trí lệnh —
+// nếu không thì `echo x > aws` bị coi là một lệnh `aws`.
+const REDIRECT_RE = /^[<>]+$/
+// Cắt một token thành các mảnh quanh toán tử shell và GIỮ LẠI toán tử: theo
+// khoảng trắng thì `cd x;aws s3 ls` là hai token, cắt ra mới thấy `aws` đứng sau
+// `;`.
+const SHELL_OPERATOR_SPLIT = /([;|&(){}<>!`]+)/
 const ENV_ASSIGN_RE = /^[A-Za-z_][A-Za-z0-9_]*=/
 
-/** Tên binary đứng đầu một chuỗi lệnh shell, đã bỏ đường dẫn và đuôi `.exe`. */
-function leadingBinary(command: string): string | null {
-  for (const token of command.trim().split(/\s+/)) {
-    if (!token) continue
-    if (ENV_ASSIGN_RE.test(token)) continue
-    const base = (token.split(/[/\\]/).pop() ?? token).toLowerCase().replace(/\.exe$/, '')
-    if (COMMAND_WRAPPERS.has(base)) continue
-    return base
-  }
-  return null
+/**
+ * Tên binary của một token: bỏ đường dẫn, dấu nháy bao quanh và đuôi `.exe`.
+ *
+ * Bỏ dấu nháy ở đây chứ không ở khâu tách token: `argv` đi thẳng vào nhật ký
+ * hoạt động, và cắt nháy khỏi nó là ghi một dòng lệnh khác với lệnh đã chạy.
+ */
+function binaryName(token: string): string {
+  const bare = token.replace(/^["'`]+/, '').replace(/["'`]+$/, '')
+  return (bare.split(/[/\\]/).pop() ?? bare).toLowerCase().replace(/\.exe$/, '')
+}
+
+/** Token của một chuỗi shell. Dùng chung để `argv` và phép quét nhìn cùng một mảng. */
+function shellTokens(command: string): string[] {
+  return command.trim().split(/\s+/).filter(Boolean)
 }
 
 /**
- * Binary hạ tầng mà lời gọi `Bash` này chạy, hoặc null. Chỉ soi token ĐẦU: quét
- * cả chuỗi sẽ bắt nhầm `git commit -m "fix aws creds"` và giấu nút "Always
- * allow" của một lệnh vô hại. Lệnh ghép (`a && aws …`) vốn đã không có nút đó —
- * `ruleSubject` từ chối mọi chuỗi có toán tử shell.
+ * Index của binary hạ tầng ở **vị trí lệnh** trong `tokens`, hoặc -1.
+ *
+ * Chỉ token có thể LÀ lệnh mới được đem so: token đầu chuỗi, token đứng sau một
+ * toán tử ngăn cách (`;`, `&&`, `|`, `(`, `!`…), và token mở đầu thân lệnh của
+ * một shell (`sh -c "…"`). Một token nằm ở vị trí ĐỐI SỐ thì không chạy gì cả.
+ *
+ * Bản trước (`anyInfraBinary`) quét thẳng mọi token trong chuỗi, nên
+ * `rg 'aws' src`, `git log --grep aws` hay `grep -rn aws docs/` đều bị coi là
+ * lệnh hạ tầng: thẻ duyệt đổi bố cục sang dạng hạ tầng, dán chip PRODUCTION, và
+ * nút "Always allow" biến mất khỏi một lệnh hoàn toàn vô hại. Comment của hàm đó
+ * định giá cái sai này là "chỉ tốn một lần hỏi" — cái giá thật đúng bằng cả ba
+ * triệu chứng người dùng báo.
+ *
+ * Trả về INDEX chứ không phải tên: `bashInfraCall` cần nó để cắt `argv`, và
+ * `findIndex` theo tên sẽ bắt đúng cái token ĐỐI SỐ xuất hiện trước đó
+ * (`rg aws && aws s3 rb …`) rồi cắt `argv` sai chỗ.
+ *
+ * ⚠ Chỗ còn hở, biết trước: một vỏ bọc có cờ nhận GIÁ TRỊ riêng (`sudo -u root
+ * aws …`) đẩy `root` vào vị trí lệnh, nên `aws` đứng sau bị bỏ qua. Vẫn còn cổng
+ * hỏi thường của `Bash` chặn ở dưới; thứ mất chỉ là bố cục thẻ hạ tầng và sự
+ * phủ của luật cũ. Không có bảng arity của từng vỏ bọc thì đây là giới hạn của
+ * phép đọc chuỗi, không phải thiếu sót sửa được bằng thêm một dòng.
+ */
+function infraBinIndex(tokens: readonly string[]): number {
+  let atCommandStart = true
+  for (let i = 0; i < tokens.length; i++) {
+    for (const chunk of (tokens[i] as string).split(SHELL_OPERATOR_SPLIT)) {
+      if (!chunk) continue
+      if (SEPARATOR_RE.test(chunk)) {
+        atCommandStart = true
+        continue
+      }
+      if (REDIRECT_RE.test(chunk)) {
+        atCommandStart = false
+        continue
+      }
+      if (!atCommandStart) continue
+      const base = binaryName(chunk)
+      if (CONTEXT_BLOCKED_BINARIES.includes(base)) return i
+      // Cờ của chính vỏ bọc đứng trước lệnh (`env -i aws …`, `sh -c "…"`): nó
+      // không phải một binary, nên lệnh vẫn chưa bắt đầu. Gặp một binary thật
+      // thì hết — wrapper, shell và phép gán env mới giữ được vị trí lệnh.
+      if (base.startsWith('-')) continue
+      atCommandStart =
+        COMMAND_WRAPPERS.has(base) || SHELL_BINARIES.has(base) || ENV_ASSIGN_RE.test(chunk)
+    }
+  }
+  return -1
+}
+
+/**
+ * Binary hạ tầng mà lời gọi `Bash` này chạy, hoặc null.
+ *
+ * Dùng cho hai chỗ chỉ cần biết CÓ hay KHÔNG: gỡ nút "Always allow"
+ * (`buildRuleSuggestion`) và chặn luật ALLOW cũ phủ lên lệnh hạ tầng. Cả hai đều
+ * hỏi cùng một câu với `bashInfraCall`, nên chúng phải nhìn cùng một phép quét —
+ * lệch nhau thì nút mọc lại đúng trên lệnh mà nhánh dưới vừa phân lớp là hạ tầng.
  */
 function bashInfraBinary(toolName: string, args: unknown): string | null {
   if (toolName !== 'Bash') return null
   const command = argBag(args)?.command
   if (typeof command !== 'string') return null
-  const bin = leadingBinary(command)
-  return bin && CONTEXT_BLOCKED_BINARIES.includes(bin) ? bin : null
+  const tokens = shellTokens(command)
+  const idx = infraBinIndex(tokens)
+  return idx < 0 ? null : binaryName(tokens[idx] as string)
 }
 
+/**
+ * Cờ trong chuỗi shell có thể đổi ngữ cảnh khỏi thứ phiên đã ghim. Khớp theo
+ * TIỀN TỐ: AWS CLI và kubectl đều nhận tên cờ viết tắt miễn là không mơ hồ
+ * (`--prof prod`), nên so khớp bằng nhau sẽ để lọt đúng dạng dễ gõ nhất.
+ *
+ * `-n` (namespace của kubectl) cố ý KHÔNG nằm trong đây: nó đổi namespace chứ
+ * không đổi account, mà cột của ma trận chấm theo account.
+ */
+const CONTEXT_OVERRIDE_RE =
+  /(^|\s)--?(prof|region|context|namespace|cluster|config)|(AWS_PROFILE|AWS_DEFAULT_REGION|AWS_REGION|AWS_CONFIG_FILE|KUBECONFIG)\s*=/i
+
+/**
+ * Account dùng để chấm cột cho một lệnh hạ tầng chạy qua `Bash`, hoặc `undefined`
+ * khi không trung thực được về nó.
+ *
+ * `undefined` KHÔNG phải "không biết nên bỏ qua" — `accountKindOf()` coi id rỗng
+ * là `production` (`policy.ts:91`), tức cột chặt nhất, và `decide()` sẽ trả
+ * `destructive: block`. Đó là hành vi đúng cho một lệnh mà ta không chứng minh
+ * được nó chạy trên account nào.
+ *
+ * Bản trước đi đường vòng: gửi sentinel `'__unverified__'` rồi tự gán đè
+ * `accountKind: 'production'` lên kết quả. Sentinel là chuỗi TRUTHY, nên
+ * `accountKindOf` rơi xuống nhánh so với `prodAccountIds` — danh sách rỗng trên
+ * máy này ⇒ trả `'normal'` ⇒ `aws s3 rb …` được chấm `ask` (duyệt được) trong
+ * khi thẻ hiện chip PRODUCTION. Nhãn và quyết định ngược nhau, và cú gán đè ở
+ * dòng cuối chỉ sửa được cái NHÌN THẤY: nó chạy SAU `decide()`, không đưa được
+ * `block` trở lại. Bỏ sentinel là đủ để hai thứ khớp nhau.
+ */
+function bashInfraAccountId(ctx: InfraContext | undefined, command: string): string | undefined {
+  if (!ctx?.accountId) return undefined
+  if (CONTEXT_OVERRIDE_RE.test(command)) return undefined
+  return ctx.accountId
+}
 
 /**
  * Lệnh hạ tầng chạy qua `Bash` phải đi qua **cùng ma trận** với tool `aws_cli`
@@ -570,47 +685,29 @@ function bashInfraBinary(toolName: string, args: unknown): string | null {
  */
 const SHELL_META_RE = /[|&;<>()$`\\"']/
 
-/**
- * Binary hạ tầng ở BẤT KỲ vị trí nào trong chuỗi (audit #1 F2).
- *
- * `leadingBinary()` chỉ soi token đầu và bỏ qua wrapper, nên `sh -c "aws …"` trả
- * `"sh"`, `env -i aws …` trả `"-i"`, `timeout 60 aws …` trả `"timeout"` — cả ba
- * đều LỌT khỏi nhánh hạ tầng, và tệ hơn: nút "Always allow" mọc lại vì
- * `buildRuleSuggestion` hỏi cùng một hàm. Đo thật trên 9 dạng bọc: 7 lọt.
- *
- * Hàm này quét mọi token. Đắt hơn và bắt nhầm nhiều hơn (`git commit -m "fix aws"`),
- * nên CHỈ dùng cho quyết định "có phải lệnh hạ tầng không" — nơi bắt nhầm chỉ tốn
- * một lần hỏi — chứ không dùng để phân lớp.
- */
-function anyInfraBinary(command: string): string | null {
-  for (const token of command.split(/[\s"']+/)) {
-    if (!token) continue
-    const base = (token.split(/[/\\]/).pop() ?? token).toLowerCase().replace(/\.exe$/, '')
-    if (CONTEXT_BLOCKED_BINARIES.includes(base)) return base
-  }
-  return null
-}
-
-function bashInfraCall(toolName: string, args: unknown): { tool: InfraTool; argv: string[]; clean: boolean } | null {
+function bashInfraCall(
+  toolName: string,
+  args: unknown,
+): { tool: InfraTool; argv: string[]; clean: boolean } | null {
   if (toolName !== 'Bash') return null
-  const rawCommand = argBag(args)?.command
-  if (typeof rawCommand !== 'string') return null
-  // Token đầu trước; không thấy thì quét cả chuỗi để bắt dạng bọc.
-  const bin = bashInfraBinary(toolName, args) ?? anyInfraBinary(rawCommand)
-  if (!bin) return null
-  const tool = INFRA_CLI_TOOLS[`${bin}_cli`] ?? (bin === 'aws' || bin === 'kubectl' || bin === 'terraform' ? (bin as InfraTool) : null)
-  if (!tool) return null // helm/gcloud/az: chưa có adapter — vẫn chặn always-allow, nhưng không phân lớp được
   const command = argBag(args)?.command
   if (typeof command !== 'string') return null
+  const tokens = shellTokens(command)
+  const idx = infraBinIndex(tokens)
+  if (idx < 0) return null
+  const bin = binaryName(tokens[idx] as string)
+  const tool =
+    INFRA_CLI_TOOLS[`${bin}_cli`] ??
+    (bin === 'aws' || bin === 'kubectl' || bin === 'terraform' ? (bin as InfraTool) : null)
+  if (!tool) return null // helm/gcloud/az: chưa có adapter — vẫn chặn always-allow, nhưng không phân lớp được
   const clean = !SHELL_META_RE.test(command)
-  const tokens = command.trim().split(/\s+/).filter(Boolean)
-  const idx = tokens.findIndex((t) => {
-    const base = (t.split(/[/\\]/).pop() ?? t).toLowerCase().replace(/\.exe$/, '')
-    return base === bin
-  })
-  return { tool, argv: idx >= 0 ? tokens.slice(idx + 1) : [], clean }
+  // `idx` là index của TOKEN, không phải của binary trong `argv` — `tokens` ở đây
+  // chính là mảng mà `infraBinIndex` đã soi, nên cắt thẳng được. Bản trước dò lại
+  // bằng `findIndex` theo TÊN, và gặp `rg aws && aws s3 rb …` thì khớp cái token
+  // đối số đứng trước rồi trả về `s3 rb …` như thể đó là `argv` của lệnh `aws` —
+  // sai cả lớp lẫn cờ, vì `classify()` đọc đúng chuỗi đó.
+  return { tool, argv: tokens.slice(idx + 1), clean }
 }
-
 
 /**
  * Ba đường trên đĩa mà agent KHÔNG được ghi, ở bất kỳ mode nào (infosec audit #1
@@ -864,8 +961,11 @@ export function makeBeforeToolCall(
   cwd?: string,
   // Ngữ cảnh hạ tầng đang ghim + trần của phiên (ADR 0088 §5b). Vắng mặt ⇒ nhánh
   // hạ tầng vẫn chạy (ma trận vẫn được áp) nhưng prompt không nêu được
-  // account/region, và mọi lời gọi rơi vào cột `normal`. Người gọi nối vào ở task
-  // 0.8 (`SessionHeader.infra`) và 0.12 (tool `aws_cli`).
+  // account/region. Cột account thì KHÔNG vì thế mà thành `normal`: thiếu account
+  // ⇒ bỏ hẳn `accountId` ⇒ `accountKindOf(undefined)` trả `production`
+  // (`policy.ts:91`), tức cột CHẶT NHẤT — một lệnh `destructive` bị `block` chứ
+  // không được duyệt. Người gọi nối vào ở task 0.8 (`SessionHeader.infra`) và 0.12
+  // (tool `aws_cli`).
   infraGate?: InfraGateConfig,
 ): BeforeToolCall {
   const promptSourceIds =
@@ -1236,25 +1336,29 @@ export function makeBeforeToolCall(
       let verdict: { mode: InfraMode; reason: string; accountKind: InfraAccountKind }
       try {
         const policy = await loadInfraPolicy()
-        // ⚠ KHÔNG chấm theo account đang ghim (audit #1 F3) — nhưng lý do đã HẸP đi
-        // sau khi env được luồn xuống (`bash-tool.ts` + `claude-sdk/shared.ts` đặt
-        // `AWS_PROFILE`/`AWS_DEFAULT_REGION` từ ngữ cảnh phiên), nên đọc lại kẻo
-        // tưởng nhánh này vẫn mù hoàn toàn:
-        //   · Lệnh KHÔNG kèm cờ thì nay chạy đúng profile đã ghim, và thẻ duyệt nêu
-        //     tên profile đó (xem `infraPromptPayload` bên dưới).
-        //   · Cái còn hở là chuỗi shell TỰ ĐỔI cờ (`aws … --profile prod`): không
-        //     đọc được thì không biết, mà `aws_cli` chặn cờ này bằng `findForbiddenFlag`
-        //     còn `Bash` thì không chặn được chuỗi tuỳ ý. Vì vậy CỘT vẫn là cột chặt
-        //     nhất (`production`): đoán sai theo chiều CẤP QUYỀN là leo thang, còn
-        //     đoán sai theo chiều hỏi thừa chỉ tốn một cú bấm.
+        // Account đã ghim, TRỪ khi chuỗi tự đổi ngữ cảnh (audit #1 F3).
+        //
+        // Env được luồn xuống rồi (`bash-tool.ts` + `claude-sdk/shared.ts` đặt
+        // `AWS_PROFILE`/`AWS_DEFAULT_REGION` từ ngữ cảnh phiên), nên lệnh KHÔNG
+        // kèm cờ thật sự chạy trên account đã ghim — chấm theo nó là chấm đúng
+        // thứ sẽ xảy ra, và thẻ duyệt nêu đúng tên profile đó.
+        //
+        // Cái còn hở là chuỗi TỰ ĐỔI cờ (`aws … --profile prod`): `aws_cli` chặn
+        // cờ này bằng `findForbiddenFlag`, còn `Bash` thì không chặn được chuỗi
+        // tuỳ ý. Gặp nó — hoặc phiên không ghim account nào — thì bỏ hẳn
+        // `accountId`, và `accountKindOf(undefined)` trả `production` THẬT: cột
+        // chặt nhất, `destructive` thành `block`. Đoán sai theo chiều cấp quyền là
+        // leo thang, nên chiều đó không được phép; đoán sai theo chiều hỏi thừa
+        // chỉ tốn một cú bấm.
+        const command = String(argBag(context.args)?.command ?? '')
+        const pinnedAccountId = bashInfraAccountId(infraGate?.context, command)
         verdict = decide({
           policy,
           class: cls,
-          accountId: '__unverified__',
+          ...(pinnedAccountId ? { accountId: pinnedAccountId } : {}),
           ...(infraGate?.sessionFloor ? { sessionFloor: infraGate.sessionFloor } : {}),
           ...(sensitive !== null ? { sensitiveRead: sensitive } : {}),
         })
-        verdict = { ...verdict, accountKind: 'production' }
       } catch {
         // Cổng quyền không được ném: chính sách đọc hỏng ⇒ rơi về "hỏi".
         verdict = { mode: 'ask', reason: 'matrix', accountKind: 'normal' }
