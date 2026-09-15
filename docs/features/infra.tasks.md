@@ -343,6 +343,45 @@ Người dùng: *"phần dịch vụ tôi thấy vẫn thiếu nhiều dịch v�
 
 ---
 
+## Mốc 5 — trạng thái thực tế (cập nhật 2026-09-15)
+
+**Đã land 5.1 → 5.7**, nhưng **5.2 và 5.3 không đủ như bảng kế hoạch mô tả** (xem hai dòng đầu bảng lệch). Cửa vào: tab **Topology** trong `/infra` + trang riêng `/playbooks`. Thiết kế: [infra-topology-graph.md](infra-topology-graph.md) · [playbooks.md](playbooks.md) · [aws-website-playbook.md](aws-website-playbook.md).
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 5.1 | Khung graph (VueFlow + layout DAG) · node type theo dịch vụ | xong — hai điểm lệch nhỏ về *cách* dùng lại, xem bảng dưới |
+| 5.2 | Resolver Route53 → CloudFront → behavior → API GW → Lambda/ECS → RDS/SQS · cạnh suy luận **nét đứt** | **một phần** — 5 resolver; `rds`·`sqs`·`s3`·`elb` là **lá**, có mặt làm node nhưng không mở rộng. Nét đứt: xong (`InfraGraphEdge.vue` `border-style: dashed` + nhãn nói rõ "suy luận") |
+| 5.3 | Dựng dần + nút mở rộng từng node + giới hạn độ sâu 4 | **hai trong ba** — `graph-expand` từng node xong; `INFRA_GRAPH_MAX_DEPTH = 4` xong; **"dựng dần" thì không** |
+| 5.4 | Playbook: định dạng + runner (check/do/verify/rollback · trạng thái theo ngữ cảnh · popup) | xong — 4 verb, 8 trạng thái, **mọi bước ghi qua `runGated` với `actor: playbook:<id>#<bước>`** |
+| 5.5 | Trang `/playbooks`: danh sách · chi tiết · sơ đồ ba hàng | xong — hàng 3 lấy từ graph thật, và **nói ra khi chưa có graph** thay vì vẽ bừa |
+| 5.6 | Vòng đời · cửa duyệt · preflight · quay lui dựng ngược · luật thiếu rollback thì không gửi duyệt được | xong — luật cưỡng chế ở `submit` (`canSubmit`), **không phải gợi ý ở UI** |
+| 5.7 | Hai playbook hướng dẫn dựng sẵn | xong — `static-site` + `teardown`, cả hai `kind: 'instruction'` |
+
+Kho playbook là **Markdown + frontmatter** 2 tier (`~/.awog/playbooks/<id>.md` + `{project}/.awog/playbooks/`), không phải JSON: một playbook là thứ người ta **đọc**, commit vào repo và dán vào issue. Phần máy đọc nằm trong một khối ` ```json ` ở thân file. `id` suy từ tên file, `tier` suy từ thư mục — cùng luật với wiki.
+
+### Sáu điểm lệch có chủ đích
+
+| Điểm | Kế hoạch / mặc định | Thực tế | Vì sao |
+|---|---|---|---|
+| **Chuỗi resolver (5.2)** | "… → Lambda/ECS → **RDS/SQS**" | resolver dừng ở `lambda`/`ecs`; `rds`·`sqs`·`s3`·`elb` **có mặt làm node** (suy từ env/config của Lambda/ECS) nhưng `hasGraphResolver` trả `false` ⇒ không mở rộng được | chúng là **lá của graph hôm nay**: một hàng đợi SQS hay một instance RDS không dẫn tiếp đi đâu trong mô hình "luồng request". Ghi thẳng trong mã, không phải bỏ sót |
+| **Dựng dần (5.3)** | "mỗi resolver xong là graph mọc thêm" | `infra.graph-resolve` chạy BFS **trong sidecar** rồi trả **cả graph trong một lượt**; không có event tiến độ nào | phần "mọc thêm" mà người dùng thật sự dùng là `graph-expand` **theo node**. Streaming tiến độ cho một lượt dựng cần một kênh event mới cho đúng một màn — chưa đổi lấy gì |
+| **Bố cục DAG (5.1)** | "layout DAG sẵn có ở `useWorkflowGen.ts:60`" | **chép lại thuật toán** (x theo rank đường-dài-nhất, y theo thứ tự trong rank) vào `useInfraGraph.ts` | hàm `layout()` gốc là hàm **cục bộ không export**. Chép ~40 dòng thuần rẻ hơn thêm `dagre`/`elkjs`, và rẻ hơn mở API của một composable khác chỉ để lấy một hàm |
+| **Node type theo dịch vụ (5.1)** | mỗi dịch vụ một node type | **hai** node type VueFlow (`service`, `external`) cùng trỏ **một** component `InfraGraphNode.vue`; dịch vụ phân biệt bằng **dữ liệu** (`node.service`) | thêm một dịch vụ thì chỉ thêm màu + biểu tượng, không phải thêm một component và một dòng đăng ký |
+| **Hàng "ảnh hưởng lan" (5.5)** | suy từ graph kiến trúc | cần graph **đã dựng**; chưa có thì hàng 3 hiện **bốn trạng thái riêng** (đang nạp · không khả dụng · lỗi · chưa dựng) kèm nút sang tab Topology | hàng này là thứ người duyệt nhìn để quyết định. Vẽ một hàng trống trông giống "không ảnh hưởng gì", mà đó là câu trả lời sai và nguy hiểm |
+| **Đóng băng hồ sơ chạy** (ngoài kế hoạch) | — | tới trạng thái cuối (`done`/`rolled-back`), bản ghi ghi thêm **một trang Wiki** (`mode: 'create'` ⇒ trùng đường dẫn là LỖI) và từ đó `persistRun` **từ chối mọi lần ghi** | "đã chạy cái gì, ai duyệt, bản nào" phải trả lời được sau đó. Bản ghi chạy cũng **chụp lại playbook lúc gửi duyệt**, nên sửa file sau khi duyệt không đổi thứ đã duyệt |
+
+### Còn nợ của mốc 5
+
+- **Không soạn được playbook trong app.** `infra.playbook-save` / `-delete` có ở sidecar và đã bọc trong `usePlaybooksApi`, nhưng **không component nào gọi** — thêm một playbook nghĩa là đặt file tay vào `~/.awog/playbooks/`. Trang `/playbooks` hiện là đọc · chạy · chia sẻ.
+- **`kind: 'deployment'` chưa có bản nào.** Hai builtin đều `instruction`; nhóm "deployment" của danh sách rỗng cho tới khi có người đặt file tay. Đường chạy thì đã có sẵn cho cả hai loại.
+- **QA trong Electron thật** — cổng đã xanh là `vitest` (**95 test / 6 file** cho `graph` + `playbook`; 989 test cho cả `src/infra`) · `pnpm typecheck` · `pnpm lint`. Chưa màn nào được bấm trong app đóng gói.
+- **Credential AWS thật** — năm resolver mới kiểm bằng JSON mẫu; chưa lần nào dựng graph từ một tài khoản sống, nên chưa biết hình dạng thật ở độ sâu 4 có đọc được không.
+- **Chưa chạy playbook `do` nào thật** — `runGated` · preflight · quay lui dựng ngược mới có test đơn vị. Đường quay lui đặc biệt: nó chỉ được thử ở nơi **không có gì để mất**.
+- **Agent chưa chạm graph lẫn playbook** — `runtime/tools/infra-tools.ts` không có tool nào đọc graph hay chạy playbook.
+- **`infosec audit #2`** — playbook là đường **chạy lệnh ghi theo kịch bản**; runner đã bắt buộc `runGated` + `actor` + nhật ký (ghi rõ "không phải đường vòng để bỏ qua ma trận quyền"), nhưng chính câu đó là thứ cần người thứ hai kiểm.
+
+---
+
 ## Mốc 6 — trạng thái thực tế (cập nhật 2026-09-15)
 
 **Đã land 6.1 → 6.7**, cộng **M4** của [infra-monitoring-reports.md](infra-monitoring-reports.md) §Lộ trình — hạng mục này có trong spec nhưng **không có dòng tương ứng trong bảng 6.x ở trên**, nên đây là việc ngoài kế hoạch của mốc, không phải một dòng bị bỏ sót.
