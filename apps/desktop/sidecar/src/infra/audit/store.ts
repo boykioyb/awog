@@ -84,6 +84,10 @@ export const INFRA_SURFACES = [
   'terminal',
   'pipeline',
   'settings',
+  // Bảng điều khiển tự lắp (mốc 6, M4). Một màn RIÊNG chứ không dùng lại `explorer`:
+  // lượt nạp của nó là một lô metric trả tiền, và sổ kiểm toán phải trả lời được
+  // "lượt đó do ai bấm" — bảng hay Explorer.
+  'dashboards',
 ] as const
 
 export type InfraSurface = (typeof INFRA_SURFACES)[number]

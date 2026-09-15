@@ -6,39 +6,65 @@
         <span class="mc-unit">{{ unitLabel }}</span>
         <!-- Một ngưỡng đang sửa được (đã có bản nháp) > cảnh báo đã có > chưa có gì.
              Ba nhánh loại trừ nhau: hiện nút "Đặt ngưỡng" cạnh cảnh báo đã có là mời
-             người dùng tạo cảnh báo thứ hai cho ĐÚNG metric đó mà không nói ra. -->
+             người dùng tạo cảnh báo thứ hai cho ĐÚNG metric đó mà không nói ra.
+             Bọc trong `showAlarm` vì bảng điều khiển dùng LẠI đúng biểu đồ này: ở đó
+             không có ngưỡng, không có bản nháp, và một nút "Đặt ngưỡng" bấm vào không
+             dẫn tới đâu cả. -->
+        <template v-if="showAlarm">
+          <button
+            v-if="threshold && threshold.editable"
+            class="mc-chip on"
+            type="button"
+            :title="t('infra.monitoring.alarm.dragHint')"
+          >
+            <Icon name="move" class="mc-ic" />
+            {{
+              t('infra.monitoring.alarm.thresholdValue', {
+                v: formatMetricValue(threshold.value, unit),
+              })
+            }}
+          </button>
+          <button
+            v-else-if="threshold"
+            class="mc-chip"
+            type="button"
+            :title="t('infra.monitoring.alarm.edit')"
+            @click="emit('alarm-edit')"
+          >
+            <Icon name="bell" class="mc-ic" />
+            {{ threshold.label }}
+          </button>
+          <button
+            v-else-if="hasData"
+            class="mc-chip"
+            type="button"
+            :title="t('infra.monitoring.alarm.create')"
+            @click="emit('alarm-create')"
+          >
+            <Icon name="plus" class="mc-ic" />
+            {{ t('infra.monitoring.alarm.create') }}
+          </button>
+        </template>
+        <!-- Hai chip icon-trần: tiêu đề biểu đồ đã chiếm chỗ, và cả hai hành động đều
+             có `title` + ngữ cảnh (đang ở màn Giám sát hay đang ở trong một bảng) nên
+             không cần nhãn chữ. -->
         <button
-          v-if="threshold && threshold.editable"
-          class="mc-chip on"
-          type="button"
-          :title="t('infra.monitoring.alarm.dragHint')"
-        >
-          <Icon name="move" class="mc-ic" />
-          {{
-            t('infra.monitoring.alarm.thresholdValue', {
-              v: formatMetricValue(threshold.value, unit),
-            })
-          }}
-        </button>
-        <button
-          v-else-if="threshold"
+          v-if="pinnable"
           class="mc-chip"
           type="button"
-          :title="t('infra.monitoring.alarm.edit')"
-          @click="emit('alarm-edit')"
+          :title="t('infra.monitoring.pin')"
+          @click="emit('pin')"
         >
-          <Icon name="bell" class="mc-ic" />
-          {{ threshold.label }}
+          <Icon name="pin" class="mc-ic" />
         </button>
         <button
-          v-else-if="hasData"
+          v-if="removable"
           class="mc-chip"
           type="button"
-          :title="t('infra.monitoring.alarm.create')"
-          @click="emit('alarm-create')"
+          :title="t('infra.dashboard.removeChart')"
+          @click="emit('remove')"
         >
-          <Icon name="plus" class="mc-ic" />
-          {{ t('infra.monitoring.alarm.create') }}
+          <Icon name="minus" class="mc-ic" />
         </button>
       </span>
     </div>
@@ -241,14 +267,26 @@ const props = withDefaults(
     incidents: IncidentBand[]
     threshold: ChartThreshold | null
     loading?: boolean
+    /**
+     * Mặc định TẮT, và bật ở đúng một chỗ (`InfraMonitoring`) — cả chuỗi nút cảnh báo
+     * là chuyện của màn Giám sát. Bảng điều khiển dùng lại component này nhưng không
+     * có ngưỡng lẫn bản nháp, nên ba nút kia ở đó là ba nút chết.
+     */
+    showAlarm?: boolean
+    /** Hiện chip "ghim vào bảng điều khiển". Chỉ màn Giám sát bật. */
+    pinnable?: boolean
+    /** Hiện chip "bỏ khỏi bảng". Chỉ tab Bảng điều khiển bật, và chỉ khi còn biểu đồ khác. */
+    removable?: boolean
   }>(),
-  { loading: false },
+  { loading: false, showAlarm: false, pinnable: false, removable: false },
 )
 
 const emit = defineEmits<{
   'threshold-change': [value: number]
   'alarm-create': []
   'alarm-edit': []
+  pin: []
+  remove: []
 }>()
 
 const { t } = useI18n()

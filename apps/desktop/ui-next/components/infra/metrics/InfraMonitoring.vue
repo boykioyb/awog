@@ -143,9 +143,12 @@
             :incidents="incidents"
             :threshold="thresholds[c.key] ?? null"
             :loading="loading"
+            :show-alarm="true"
+            :pinnable="true"
             @alarm-create="openDraft(c.key)"
             @alarm-edit="openDraft(c.key)"
             @threshold-change="setThreshold"
+            @pin="onPin(c.key)"
           />
         </div>
 
@@ -196,7 +199,9 @@
 // LUẬT KHÔNG TỰ CHẠY nằm ở `useInfraMetrics`: màn này KHÔNG có `onMounted` nào nạp
 // số liệu, và không có hẹn giờ. Cú bấm "Nạp", hoặc một khoảng thời gian được gieo
 // từ tab Nhật ký, là hai đường vào duy nhất.
-import { formatAxisTime, useInfraMetrics } from '~/composables/useInfraMetrics'
+import { formatAxisTime, MONITOR_CHARTS, useInfraMetrics } from '~/composables/useInfraMetrics'
+import { useInfraDashboardPin } from '~/composables/useInfraDashboardPin'
+import type { DashboardChart } from '~/composables/useInfraDashboards'
 
 const {
   sidecarAvailable,
@@ -261,6 +266,51 @@ const dirtyLabel = computed(() =>
     shown: formatAxisTime(windowRef.value?.startMs ?? 0, 86_400),
   }),
 )
+
+const { requestPin } = useInfraDashboardPin()
+
+/**
+ * Dựng biểu đồ để ghim từ spec của chính màn này.
+ *
+ * PHẢI TRA LẠI `MONITOR_CHARTS`, không dùng được `c` (một `ChartView`): bản vẽ chỉ mang
+ * `key`/`label`/`color`/`shade` — đủ để VẼ, không đủ để DỰNG QUERY. Namespace, metric,
+ * stat và tài nguyên nằm ở spec, và bảng điều khiển cần cả bốn thứ đó vì nó nạp số liệu
+ * ở một màn khác, không có `MONITOR_CHARTS` bên cạnh.
+ *
+ * CHỌN TỪNG TRƯỜNG, KHÔNG SPREAD. `DashboardChart` là payload đi lên sidecar, và một cú
+ * spread là cách để `points`/`missing` của bản vẽ lọt vào file trên đĩa — chúng không có
+ * trong lược đồ zod nên lượt lưu hỏng, nhưng chỉ hỏng ở đúng người bấm nút.
+ *
+ * `targetValue` chỉ có mặt khi ô tài nguyên KHÔNG rỗng: `z.string().min(1)` của lược đồ
+ * từ chối chuỗi rỗng, mà `dimensionsFor` cũng bỏ qua giá trị rỗng — nên gửi đi một chuỗi
+ * rỗng vừa là lỗi lược đồ vừa là một gợi ý không có nghĩa.
+ */
+function onPin(chartKey: string): void {
+  const spec = MONITOR_CHARTS.find((s) => s.key === chartKey)
+  if (!spec) return
+  const chart: DashboardChart = {
+    key: spec.key,
+    title: t(`infra.monitoring.chart.${spec.key}`),
+    kind: spec.kind,
+    unit: spec.unit,
+    series: spec.series.map((s) => {
+      const targetValue = targets.value[s.target].trim()
+      return {
+        key: s.key,
+        namespace: s.namespace,
+        metricName: s.metricName,
+        stat: s.stat,
+        label: s.label,
+        color: s.color,
+        shade: s.shade,
+        dimensions: [],
+        target: s.target,
+        ...(targetValue ? { targetValue } : {}),
+      }
+    }),
+  }
+  requestPin(chart)
+}
 </script>
 
 <style scoped>

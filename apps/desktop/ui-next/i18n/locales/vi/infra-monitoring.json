@@ -94,6 +94,7 @@
   "infra.monitoring.alarm.stateChangedAt": "ở trạng thái này từ {t}",
   "infra.monitoring.alarm.reason": "Lý do",
   "infra.monitoring.alarm.none": "Biểu đồ này chưa có cảnh báo nào.",
+  "infra.monitoring.pin": "Ghim vào bảng điều khiển",
 
   "infra.monitoring.operator.GreaterThanThreshold": "lớn hơn",
   "infra.monitoring.operator.GreaterThanOrEqualToThreshold": "lớn hơn hoặc bằng",

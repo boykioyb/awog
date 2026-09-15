@@ -120,6 +120,14 @@
           <InfraMonitoring />
         </div>
 
+        <!-- Tab "Bảng điều khiển" (Mốc 6, M4): bảng tự lắp + ba mẫu dựng sẵn. Đứng
+             NGAY SAU Giám sát vì nó là chỗ những biểu đồ ghim từ đó đi tới. Mount
+             lười cùng luật với các tab dữ liệu khác; `useInfraDashboards` cấm tự nạp
+             số liệu, nên mở tab chỉ đọc file chứ không gọi `get-metric-data`. -->
+        <div v-if="dashboardsMounted" v-show="tab === 'dashboards'" class="infra-pane">
+          <InfraDashboards />
+        </div>
+
         <!-- Tab "Báo cáo" (Mốc 6, 6.6): danh mục bốn loại. Mount lười vì màn này
              hỏi sidecar danh mục ngay khi mount; không có tab thì không có lời gọi. -->
         <div v-if="reportsMounted" v-show="tab === 'reports'" class="infra-pane">
@@ -209,6 +217,12 @@
       :selected="selected"
       @close="closeExport"
     />
+
+    <!-- Hộp "ghim biểu đồ vào một bảng" (Mốc 6, M4). Host Ở ĐÂY chứ không ở
+         `AppGlobalHosts`: cú bấm mở nó nằm trong tab Giám sát của chính trang này,
+         nên nó không cần sống ở cửa sổ nào khác. Nó tự đọc trạng thái từ
+         `useInfraDashboardPin()` — không props, không emit. -->
+    <InfraDashboardPinDialog />
   </section>
 </template>
 
@@ -258,6 +272,7 @@ type InfraTab =
   | 'audit'
   | 'logs'
   | 'monitoring'
+  | 'dashboards'
   | 'reports'
   | 'kubernetes'
   | 'accounts'
@@ -273,6 +288,7 @@ const TABS: readonly InfraTab[] = [
   'audit',
   'logs',
   'monitoring',
+  'dashboards',
   'reports',
   'kubernetes',
   'accounts',
@@ -285,6 +301,7 @@ const TAB_ICONS: Record<InfraTab, string> = {
   audit: 'book',
   logs: 'table',
   monitoring: 'act',
+  dashboards: 'panel',
   reports: 'file',
   kubernetes: 'k8s',
   accounts: 'shield',
@@ -329,6 +346,12 @@ const auditMounted = ref(false)
  * mount lười giữ cho mọi tab dữ liệu của trang này có cùng một luật.
  */
 const monitoringMounted = ref(false)
+/**
+ * Tab Bảng điều khiển (Mốc 6, M4) mount lười: nó đọc danh sách bảng của cả hai tier
+ * ngay khi mount. Đọc thư mục thì rẻ, nhưng vẫn là một lượt I/O không ai hỏi — và
+ * mọi tab dữ liệu của trang này đã theo cùng một luật.
+ */
+const dashboardsMounted = ref(false)
 /** Tab Báo cáo (Mốc 6) mount lười: màn này hỏi danh mục ngay khi mount. */
 const reportsMounted = ref(false)
 const logsSeed = ref<LogsSeed | null>(null)
@@ -337,6 +360,7 @@ let seedNonce = 0
 function selectTab(next: InfraTab): void {
   if (next === 'logs') logsMounted.value = true
   if (next === 'monitoring') monitoringMounted.value = true
+  if (next === 'dashboards') dashboardsMounted.value = true
   if (next === 'reports') reportsMounted.value = true
   if (next === 'kubernetes') k8sMounted.value = true
   if (next === 'services') servicesMounted.value = true

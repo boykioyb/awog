@@ -94,6 +94,7 @@
   "infra.monitoring.alarm.stateChangedAt": "in this state since {t}",
   "infra.monitoring.alarm.reason": "Reason",
   "infra.monitoring.alarm.none": "No alarms configured for this chart.",
+  "infra.monitoring.pin": "Pin to a dashboard",
 
   "infra.monitoring.operator.GreaterThanThreshold": "greater than",
   "infra.monitoring.operator.GreaterThanOrEqualToThreshold": "greater than or equal to",
