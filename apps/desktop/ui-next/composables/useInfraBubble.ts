@@ -15,11 +15,16 @@
 //     TỪNG lượt từ trường này, nên kể cả project có bị đổi sau đó thì "folder tương
 //     tác" vẫn là `awog-infra`.
 //
-// VÌ SAO STATE NẰM Ở MODULE (không phải trong component). Bong bóng cần sống ngoài
-// mọi trang: nó được mở từ `/infra`, từ một phiên chat, hay từ một lần "Hỏi agent"
-// ở bất kỳ màn nào. Một state trong component nghĩa là mỗi lần đổi trang là mất
-// phiên đang thu nhỏ — đúng thứ mà "mini session" sinh ra để tránh. Khuôn này là
-// khuôn của `useMinimizeDock` (một nguồn sự thật, đọc được từ mọi nơi).
+// VÌ SAO STATE NẰM Ở MODULE (không phải trong component). Một state trong component
+// nghĩa là mỗi lần rời `/infra` là mất phiên đang thu nhỏ — đúng thứ mà "mini
+// session" sinh ra để tránh. Khuôn này là khuôn của `useMinimizeDock` (một nguồn sự
+// thật, đọc được từ mọi nơi).
+//
+// ⚠ STATE sống ngoài mọi trang, nhưng KHUNG thì KHÔNG. Từ 2026-09-15 `<InfraBubble>`
+// chỉ được vẽ trên `/infra` (gate ở `layouts/default.vue`): ở `/sessions` nó đứng
+// ngay cạnh ô soạn tin của một phiên thật và đè lên nút Gửi. Đừng đọc file này rồi
+// kết luận bong bóng hiện ở mọi màn — hai câu đó khác nhau, và chỗ quyết định là
+// layout chứ không phải đây.
 //
 // KHÔNG BAO GIỜ TỰ TẠO PHIÊN KHI CHƯA AI HỎI. `ensure()` chỉ chạy khi mở bong bóng
 // hoặc khi "Hỏi agent → phiên mới": tạo một phiên là một lượt gọi provider (tốn

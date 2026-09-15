@@ -44,13 +44,24 @@
     <!-- Phiên bong bóng ở góc phải (mini session, thư mục riêng `awog-infra`).
          Cố ý ở lại ĐÂY chứ không vào AppGlobalHosts: một cửa sổ popout ĐÃ là một
          phiên, nên thêm một phiên thu nhỏ nổi bên trong nó là hai điều khiển cho
-         cùng một việc. -->
-    <InfraBubble />
+         cùng một việc.
+
+         CHỈ VẼ TRÊN `/infra` (yêu cầu người dùng 2026-09-15). Nó là phụ tá của màn
+         hạ tầng, không phải một nút chat toàn app: ở `/sessions` nó đứng ngay cạnh
+         ô soạn tin của MỘT PHIÊN THẬT và đè lên nút Gửi — hai điều khiển cho cùng
+         một việc, đúng thứ đoạn trên vừa nói.
+
+         GATE Ở CHỖ VẼ, KHÔNG Ở STATE. `useInfraBubble` giữ state ở mức module và
+         phải giữ nguyên như vậy: rời `/infra` rồi quay lại thì phiên đang mở dở vẫn
+         còn. Không đường nào khác hỏng vì gate này — mọi `openBubble()` đều nằm
+         trong `/infra`, còn "Hỏi agent → phiên mới" đi qua `seedIntoNewSession()`,
+         thứ chỉ tạo phiên và gieo draft chứ không cần bong bóng hiện ra. -->
+    <InfraBubble v-if="onInfraPage" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCommandPalette } from '~/composables/useCommandPalette'
 import { startCicdNotifications } from '~/composables/useCicdNotify'
@@ -65,6 +76,9 @@ import { useSettingsStore } from '~/stores/settings'
 
 const { isOpen, close } = useCommandPalette()
 const route = useRoute()
+
+/** Bong bóng hạ tầng chỉ sống trên màn AWS — xem comment ở chỗ vẽ nó. */
+const onInfraPage = computed(() => route.path === '/infra')
 
 // Compact responsive shell (≤1100px): nav rail + list become off-canvas drawers.
 // initResponsiveShell binds the viewport listener once; closing on navigation means
