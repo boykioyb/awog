@@ -2,7 +2,10 @@
 // Shape mirrors apps/desktop/sidecar/src/storage/scan.ts.
 import { useSidecar } from './useSidecar'
 
-export interface SessionUsage {
+// Named `Storage…` on purpose: `useSessionsData.ts` already exports a
+// `SessionUsage` (token/cost usage), and two composables exporting the same
+// name makes Nuxt's auto-import pick one arbitrarily.
+export interface StorageSessionUsage {
   id: string
   title: string
   projectId: string | null
@@ -34,7 +37,7 @@ export interface StorageScan {
   orphanCount: number
   orphanNames: string[]
   projects: ProjectUsage[]
-  sessions: SessionUsage[]
+  sessions: StorageSessionUsage[]
 }
 
 export interface PruneResult {

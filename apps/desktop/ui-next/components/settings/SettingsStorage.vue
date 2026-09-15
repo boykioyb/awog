@@ -118,7 +118,7 @@
 // cleanups offered here follow that measurement rather than guesswork —
 // snapshots were 70% of it and stray *.bak debris another 26%, while the
 // conversations themselves were 6%.
-import type { SessionUsage, StorageScan } from '~/composables/useStorageApi'
+import type { StorageScan, StorageSessionUsage } from '~/composables/useStorageApi'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
@@ -273,7 +273,7 @@ async function onOrphans() {
   }
 }
 
-async function onDeleteSession(s: SessionUsage) {
+async function onDeleteSession(s: StorageSessionUsage) {
   const ok = await confirm({
     title: t('settings.storage.deleteSessionTitle'),
     description: t('settings.storage.deleteSessionBody', {
