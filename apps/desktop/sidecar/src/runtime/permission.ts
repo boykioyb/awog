@@ -82,6 +82,7 @@ import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool
 import { isDevServerToolName, isMutatingDevServerAction } from './tools/dev-server-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
+import { INFRA_APP_MUTATING_TOOL_NAMES } from './tools/infra-app-tools.js'
 // Ma trận quyền hạ tầng (ADR 0088 §5). `classify` + `decide` là hàm THUẦN;
 // `loadInfraPolicy` đọc đĩa nhưng đã tự phòng thủ (không bao giờ ném, có cache).
 import {
@@ -112,7 +113,15 @@ const EXEC_TOOLS = new Set(['Bash'])
 // Tools that spawn durable background work (ADR 0055): RunWorkflow kicks off a
 // Task. Gated like a mutation so it prompts in ask/accept-edits and runs only in
 // execute mode (in plan mode it isn't even registered).
-const SPAWN_TOOLS = new Set(['RunWorkflow'])
+// `create_session` cũng nằm ở đây: nó tạo một phiên mới rồi xếp việc cho nó, tức
+// một lượt LLM sẽ chạy (và tính tiền) ở một bề mặt khác. Nó đi qua cầu MCP trên nhánh
+// Claude SDK nên phải khớp CẢ tên trần lẫn tên đã bắc cầu
+// (`mcp__awogsessions__create_session`) — xem `isSpawnTool` ngay dưới.
+const SPAWN_TOOLS = new Set(['RunWorkflow', 'create_session'])
+function isSpawnTool(name: string): boolean {
+  if (SPAWN_TOOLS.has(name)) return true
+  return [...SPAWN_TOOLS].some((n) => name.endsWith(`__${n}`))
+}
 // SSH tools that act on the LINKED remote host (ADR 0064 P2), all gated via the
 // per-session sshApprovalMode (NOT the general AgentMode). MUTATING = command /
 // file write (higher consequence — also blocked in plan mode). READ = remote read
@@ -155,6 +164,14 @@ function isWikiMutatingTool(name: string): boolean {
   return WIKI_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
 }
 
+// Tool tạo ra một thực thể trong app của người dùng (một bảng điều khiển, một kế hoạch
+// dọn dẹp). Gate như `wiki_write` và vì đúng lý do đó: nó ghi vào không gian của họ.
+// KHÔNG đổi gì trên AWS — kế hoạch dọn dẹp mới chỉ là file, chạy nó vẫn phải qua vòng
+// đời duyệt của runner. Khớp cả hai cách gọi tên, nếu không lời gọi bắc cầu lọt cổng.
+function isInfraAppMutatingTool(name: string): boolean {
+  return INFRA_APP_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
+}
+
 // browser_tool is one tool with mixed actions: navigate/click/fill mutate (gate);
 // screenshot/extract are read-only (don't gate). Decided per-call from args.
 function isGatedTool(name: string, args: unknown): boolean {
@@ -178,10 +195,11 @@ function isGatedTool(name: string, args: unknown): boolean {
   return (
     WRITE_TOOLS.has(name) ||
     EXEC_TOOLS.has(name) ||
-    SPAWN_TOOLS.has(name) ||
+    isSpawnTool(name) ||
     SSH_GATED_TOOLS.has(name) ||
     isSourceMutatingTool(name) ||
-    isWikiMutatingTool(name)
+    isWikiMutatingTool(name) ||
+    isInfraAppMutatingTool(name)
   )
 }
 

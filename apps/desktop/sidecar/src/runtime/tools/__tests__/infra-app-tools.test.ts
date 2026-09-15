@@ -1,0 +1,125 @@
+// Tool "tài nguyên phía AWOG" của các màn hạ tầng (mốc 6–7).
+//
+// Ba tính chất được khoá ở đây là hàng rào, không phải tiện ích:
+//   · DANH SÁCH GHI phải đúng bằng hai tool ghi. Thiếu một cái là một lượt ghi vào không
+//     gian của người dùng lọt qua cổng quyền; thừa một cái là bắt duyệt một phép đọc.
+//   · TIER `project` phải bị từ chối khi phiên không thuộc project nào — im lặng rơi về
+//     `global` là ghi vào chỗ người dùng không chọn.
+//   · Không tool nào đi ra AWS khi chưa ghim profile: nó phải trả lỗi có tên chứ không
+//     spawn một lệnh chắc chắn hỏng.
+//
+// Run với vitest: `npx vitest run src/runtime/tools/__tests__/infra-app-tools.test.ts`
+import { describe, expect, it } from 'vitest'
+import {
+  INFRA_APP_MUTATING_TOOL_NAMES,
+  INFRA_APP_TOOL_NAMES,
+  createInfraAppTools,
+} from '../infra-app-tools.js'
+
+function toolsOf(opts: Parameters<typeof createInfraAppTools>[0]) {
+  const list = createInfraAppTools(opts)
+  return new Map(list.map((t) => [t.name, t]))
+}
+
+async function runTool(
+  name: string,
+  params: unknown,
+  opts: Parameters<typeof createInfraAppTools>[0],
+): Promise<{ text: string; isError: boolean }> {
+  const tool = toolsOf(opts).get(name)
+  if (!tool) throw new Error(`tool ${name} không tồn tại`)
+  // `execute` nhận (id, params) — id chỉ để gắn vào step, không ảnh hưởng nhánh nào.
+  const res = (await (tool.execute as (id: string, p: unknown) => Promise<unknown>)(
+    'test',
+    params,
+  )) as { content: { text: string }[]; details?: { isError?: boolean } }
+  return { text: res.content.map((c) => c.text).join('\n'), isError: res.details?.isError === true }
+}
+
+describe('bộ tool', () => {
+  it('cấp đúng năm tool, và danh sách tên khớp thứ nhà máy trả về', () => {
+    const names = [...toolsOf({ context: {} }).keys()]
+    expect(names).toHaveLength(INFRA_APP_TOOL_NAMES.length)
+    expect(new Set(names)).toEqual(new Set(INFRA_APP_TOOL_NAMES))
+  })
+
+  it('danh sách GHI đúng bằng hai tool ghi — không thiếu, không thừa', () => {
+    // Thiếu ⇒ một lượt ghi lọt cổng quyền. Thừa ⇒ bắt duyệt một phép đọc.
+    expect([...INFRA_APP_MUTATING_TOOL_NAMES].sort()).toEqual(
+      ['infra_cleanup_plan', 'infra_dashboard_create'].sort(),
+    )
+    for (const n of INFRA_APP_MUTATING_TOOL_NAMES) {
+      expect(INFRA_APP_TOOL_NAMES).toContain(n)
+    }
+  })
+
+  it('mọi tool đều có mô tả, và hai tool tốn tiền nói ra điều đó', () => {
+    const tools = toolsOf({ context: {} })
+    for (const t of tools.values()) expect(t.description.length).toBeGreaterThan(40)
+    expect(tools.get('infra_cost_summary')?.description).toMatch(/COSTS MONEY/)
+    expect(tools.get('infra_waste_scan')?.description).toMatch(/COSTS? MONEY/i)
+  })
+})
+
+describe('tier project', () => {
+  const noProject = { context: {} }
+
+  it('xin tier project khi phiên không có project ⇒ lỗi có tên, KHÔNG rơi về global', async () => {
+    const res = await runTool(
+      'infra_dashboard_create',
+      { name: 'Thử', tier: 'project', charts: [{ key: 'c1', title: 'A', kind: 'line', unit: 'Count', series: [] }] },
+      noProject,
+    )
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/not pinned to a project/)
+  })
+
+  it('kế hoạch dọn dẹp cũng vậy', async () => {
+    const res = await runTool(
+      'infra_cleanup_plan',
+      { name: 'Dọn', tier: 'project', findings: [{ check: 'eip-idle', resourceId: 'eipalloc-1' }] },
+      noProject,
+    )
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/not pinned to a project/)
+  })
+})
+
+describe('chưa ghim profile', () => {
+  it('cost summary từ chối sớm thay vì spawn lệnh chắc chắn hỏng', async () => {
+    const res = await runTool('infra_cost_summary', {}, { context: {} })
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/No AWS profile/)
+  })
+
+  it('waste scan từ chối sớm', async () => {
+    const res = await runTool('infra_waste_scan', {}, { context: {} })
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/No AWS profile/)
+  })
+})
+
+describe('kiểm tham số trước khi chạm đĩa', () => {
+  it('bảng không có biểu đồ nào bị từ chối', async () => {
+    const res = await runTool('infra_dashboard_create', { name: 'Trống', charts: [] }, { context: {} })
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/at least one chart/)
+  })
+
+  it('danh sách phát hiện rỗng bị từ chối', async () => {
+    const res = await runTool('infra_cleanup_plan', { name: 'Dọn', findings: [] }, { context: {} })
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/No findings/)
+  })
+
+  it('phát hiện mang `check` lạ bị loại, và lượt gọi nói ra bộ hợp lệ', async () => {
+    // Model bịa một tên phép dò ⇒ không được im lặng tạo một kế hoạch rỗng.
+    const res = await runTool(
+      'infra_cleanup_plan',
+      { name: 'Dọn', findings: [{ check: 'khong-ton-tai', resourceId: 'x' }] },
+      { context: {} },
+    )
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/Valid checks:/)
+  })
+})

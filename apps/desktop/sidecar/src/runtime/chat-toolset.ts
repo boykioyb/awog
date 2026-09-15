@@ -25,6 +25,7 @@ import { listHosts } from '../ssh/store.js'
 import { createSubagentTools, type SubagentSink, type SubagentToolset } from './tools/task-tool.js'
 import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workflow-tool.js'
 import { createInfraTools } from './tools/infra-tools.js'
+import { createInfraAppTools } from './tools/infra-app-tools.js'
 import { createSshTools } from './tools/ssh-tools.js'
 import type { BeforeToolCall } from './permission.js'
 import { log } from '../util/logger.js'
@@ -279,6 +280,15 @@ export async function buildChatToolset(
       ...(args.sessionId ? { sessionId: args.sessionId } : {}),
     }).filter((t) => isToolAllowed(t.name, filter))
     tools.push(...infraTools)
+
+    // Cùng điều kiện, cùng bộ lọc: tài nguyên phía AWOG của các màn hạ tầng (bảng điều
+    // khiển · chi phí · dò lãng phí · kế hoạch dọn dẹp). Tách file vì lý do thay đổi
+    // khác nhau — bên kia chạy lệnh trên tài khoản, bên này chạm thứ AWOG tự giữ.
+    const infraAppTools = createInfraAppTools({
+      context: args.settings.infra,
+      ...(args.projectId ? { projectId: args.projectId } : {}),
+    }).filter((t) => isToolAllowed(t.name, filter))
+    tools.push(...infraAppTools)
   }
 
   return { ...built, tools, ...(subagents ? { subagents } : {}) }
