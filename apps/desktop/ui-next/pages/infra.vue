@@ -1,42 +1,48 @@
 <template>
   <section class="page on" data-page="infra">
     <div class="infra-shell">
-      <!-- Thanh section (docs/features/infra-explorer.md). Mười mục:
-           Tổng quan (2.8) · Dịch vụ (3.1–3.8) · Topology (Mốc 5)
-           · Triển khai (Mốc 4) · Nhật ký (3.9) · Logs (2.1–2.7)
-           · Giám sát (6.3–6.4) · Báo cáo (6.6) · Kubernetes · Tài khoản (Mốc 1).
+      <!-- ĐIỀU HƯỚNG HAI TẦNG (2026-09-15). Trước đó là MỘT hàng 12 tab phẳng —
+           ở cỡ cửa sổ thường nó xuống hai dòng, và hàng thứ hai trông như một
+           thanh khác chứ không phải phần tiếp của thanh thứ nhất.
 
-           "Dịch vụ" là MỘT tab, hai mặt: danh mục (3.8) và bảng tài nguyên (3.1).
-           Trước 2026-09-14 chúng là hai tab ngang hàng ("Dịch vụ" + "Khám phá"),
-           nhưng danh mục không có dữ liệu nào của riêng nó và nút "+ Dịch vụ" ở
-           cột trái của bảng chỉ để nhảy sang tab kia — hai tab nói về một việc.
+           Tầng 1 = SÁU NHÓM theo CÂU HỎI người dùng đang hỏi, không theo dịch vụ AWS:
+             · Tổng quan  — "mọi thứ có ổn không"
+             · Tài nguyên — "tôi đang có những gì"      (Dịch vụ · Topology · Kubernetes)
+             · Sức khoẻ   — "nó đang chạy thế nào"      (Giám sát · Bảng · Logs)
+             · Chi phí    — "tốn bao nhiêu, bỏ được gì"
+             · Thay đổi   — "ai vừa đổi gì"             (Triển khai · Nhật ký · Báo cáo)
+             · Tài khoản  — "tôi đang đứng ở account nào"
 
-           Tab Kubernetes vào đây — chứ không nằm trong chip của phiên — vì chip
-           trả lời "phiên này dùng cluster nào", còn câu hỏi của người mới là "máy
-           tôi có cluster nào / file kubeconfig ở đâu / thêm cluster mới thế nào".
-           Việc ghim ngữ cảnh cho phiên vẫn thuộc chip (ADR 0088 §7).
+           Tầng 2 chỉ hiện khi nhóm có NHIỀU HƠN MỘT màn. Nhóm một màn (Tổng quan ·
+           Chi phí · Tài khoản) không sinh ra một hàng chứa đúng một nút — đó là
+           chrome không mang tin.
 
-           Tab Logs được MOUNT LƯỜI (`logsMounted`): mở /infra không được tự gọi
-           `describe-log-groups` (một lời gọi CLI dùng credential) chỉ vì tab tồn
-           tại. Lần đầu người dùng bấm vào Logs thì nó mới nạp, và sau đó giữ
-           nguyên (`v-show`) để đổi tab qua lại không mất câu lệnh đang gõ. -->
-      <!-- Hàng trên của trang: tab (bên trái) + thanh ngữ cảnh AWS (bên phải).
+           `tab` VẪN LÀ NGUỒN SỰ THẬT, nhóm chỉ suy ra từ nó. Mọi đường vào sẵn có
+           (`requestGraphOpen` từ /playbooks, khoảng thời gian gieo từ Logs sang Giám
+           sát) đều gọi `selectTab` và không cần biết nhóm tồn tại.
+
+           NHỚ MÀN CUỐI CỦA MỖI NHÓM: quay lại "Sức khoẻ" thì về đúng màn vừa xem,
+           không phải luôn nhảy về màn đầu nhóm.
+
+           Mount lười giữ nguyên cho mọi tab dữ liệu: mở /infra không được gọi
+           `describe-log-groups` hay một lô metric chỉ vì một tab tồn tại. -->
+      <!-- Hàng trên của trang: nhóm (bên trái) + thanh ngữ cảnh AWS (bên phải).
            Thanh ngữ cảnh nằm NGOÀI `role="tablist"`: nó không phải một tab, và
            nhét một control khác loại vào trong tablist là nói dối screen reader. -->
       <div class="infra-top">
-        <div class="infra-sections" role="tablist" :aria-label="t('infra.tab.label')">
+        <div class="infra-sections" role="tablist" :aria-label="t('infra.nav.label')">
           <button
-            v-for="item in TABS"
-            :key="item"
+            v-for="g in GROUPS"
+            :key="g.id"
             class="infra-section-tab"
-            :class="{ active: tab === item }"
+            :class="{ active: activeGroup === g.id }"
             type="button"
             role="tab"
-            :aria-selected="tab === item"
-            @click="selectTab(item)"
+            :aria-selected="activeGroup === g.id"
+            @click="selectGroup(g.id)"
           >
-            <Icon :name="TAB_ICONS[item]" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t(`infra.tab.${item}`) }}
+            <Icon :name="GROUP_ICONS[g.id]" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t(`infra.nav.${g.id}`) }}
           </button>
         </div>
 
@@ -53,6 +59,28 @@
           @select-region="setRegion"
           @manage="selectTab('accounts')"
         />
+      </div>
+
+      <!-- Tầng 2. Chỉ tồn tại khi nhóm có nhiều hơn một màn — xem comment trên. -->
+      <div
+        v-if="subTabs.length > 1"
+        class="infra-subs"
+        role="tablist"
+        :aria-label="t(`infra.nav.${activeGroup}`)"
+      >
+        <button
+          v-for="item in subTabs"
+          :key="item"
+          class="infra-sub-tab"
+          :class="{ active: tab === item }"
+          type="button"
+          role="tab"
+          :aria-selected="tab === item"
+          @click="selectTab(item)"
+        >
+          <Icon :name="TAB_ICONS[item]" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          {{ t(`infra.tab.${item}`) }}
+        </button>
       </div>
 
       <div class="infra-body">
@@ -284,24 +312,8 @@ type InfraTab =
   | 'reports'
   | 'kubernetes'
   | 'accounts'
-// `monitoring` và `reports` CHÈN SAU `logs` chứ không xếp lại thứ tự cũ: màn Giám
-// sát là cặp song sinh của Logs (cùng trục thời gian, đổi khoảng cho nhau), còn Báo
-// cáo là thứ gộp Logs + Giám sát + Nhật ký lại. Xếp lại các tab đã ship chỉ để có
-// một thứ tự "đẹp" là bắt người dùng học lại vị trí cũ mà không đổi lấy gì.
-const TABS: readonly InfraTab[] = [
-  'overview',
-  'services',
-  'graph',
-  'delivery',
-  'audit',
-  'logs',
-  'monitoring',
-  'dashboards',
-  'cost',
-  'reports',
-  'kubernetes',
-  'accounts',
-]
+// Thứ tự hiển thị nay do `GROUPS` quyết (xem dưới) — không còn một mảng phẳng thứ
+// hai, vì hai danh sách cùng nói về thứ tự là hai chỗ để quên đồng bộ khi thêm màn.
 const TAB_ICONS: Record<InfraTab, string> = {
   overview: 'home',
   services: 'layers',
@@ -314,6 +326,31 @@ const TAB_ICONS: Record<InfraTab, string> = {
   cost: 'tag',
   reports: 'file',
   kubernetes: 'k8s',
+  accounts: 'shield',
+}
+
+/**
+ * SÁU NHÓM của tầng 1, gom theo CÂU HỎI chứ không theo dịch vụ AWS — xem comment ở
+ * template. Thứ tự là thứ tự người ta hỏi: có ổn không → có những gì → chạy thế nào
+ * → tốn bao nhiêu → ai đổi gì → tôi đang ở account nào.
+ */
+type InfraGroupId = 'overview' | 'resources' | 'health' | 'cost' | 'changes' | 'accounts'
+
+const GROUPS: readonly { id: InfraGroupId; tabs: readonly InfraTab[] }[] = [
+  { id: 'overview', tabs: ['overview'] },
+  { id: 'resources', tabs: ['services', 'graph', 'kubernetes'] },
+  { id: 'health', tabs: ['monitoring', 'dashboards', 'logs'] },
+  { id: 'cost', tabs: ['cost'] },
+  { id: 'changes', tabs: ['delivery', 'audit', 'reports'] },
+  { id: 'accounts', tabs: ['accounts'] },
+]
+
+const GROUP_ICONS: Record<InfraGroupId, string> = {
+  overview: 'home',
+  resources: 'layers',
+  health: 'act',
+  cost: 'tag',
+  changes: 'zap',
   accounts: 'shield',
 }
 
@@ -384,6 +421,35 @@ function selectTab(next: InfraTab): void {
   if (next === 'delivery') deliveryMounted.value = true
   if (next === 'audit') auditMounted.value = true
   tab.value = next
+  const group = GROUPS.find((g) => g.tabs.includes(next))
+  if (group) lastTabOf.value = { ...lastTabOf.value, [group.id]: next }
+}
+
+/**
+ * Nhóm suy TỪ tab, không phải một state thứ hai. Hai state cho cùng một vị trí là hai
+ * chỗ để lệch nhau — và mọi đường vào sẵn có (`requestGraphOpen`, khoảng gieo từ Logs)
+ * chỉ biết đặt `tab`.
+ */
+const activeGroup = computed<InfraGroupId>(
+  () => GROUPS.find((g) => g.tabs.includes(tab.value))?.id ?? 'overview',
+)
+
+const subTabs = computed<readonly InfraTab[]>(
+  () => GROUPS.find((g) => g.id === activeGroup.value)?.tabs ?? [],
+)
+
+/**
+ * Màn xem gần nhất của mỗi nhóm. Quay lại "Sức khoẻ" mà luôn rơi về Giám sát là bắt
+ * người dùng bấm lại lần thứ hai mỗi lần ghé qua nhóm khác.
+ */
+const lastTabOf = ref<Partial<Record<InfraGroupId, InfraTab>>>({})
+
+function selectGroup(id: InfraGroupId): void {
+  const group = GROUPS.find((g) => g.id === id)
+  if (!group) return
+  const remembered = lastTabOf.value[id]
+  const next = remembered && group.tabs.includes(remembered) ? remembered : group.tabs[0]
+  if (next) selectTab(next)
 }
 
 /** Mở mặt danh mục (nút "Tất cả dịch vụ" ở cột trái của khung Explorer). */
@@ -650,6 +716,47 @@ function onRelogin(name: string): void {
   color: var(--text);
   background: var(--accentDim);
   border-color: var(--accentBorder);
+  font-weight: 650;
+}
+
+/* Tầng 2. Khác tầng 1 về THỨ BẬC chứ không chỉ về cỡ: tầng trên là pill accent-tint,
+   tầng này là chữ + gạch chân accent. Dùng lại pill ở đây thì hai hàng trông ngang
+   hàng nhau và người đọc không biết cái nào chứa cái nào.
+
+   KHÔNG dùng nền xám cho mục đang chọn (.claude/rules/nuxt-vue.md §UI patterns) — màu
+   accent + thanh 2px là luật chọn của cả app. */
+.infra-subs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 6px 16px 0;
+  flex: 0 0 auto;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.infra-sub-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px 7px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--textMuted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 550;
+  cursor: default;
+}
+
+.infra-sub-tab:hover {
+  color: var(--text);
+}
+
+.infra-sub-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
   font-weight: 650;
 }
 
