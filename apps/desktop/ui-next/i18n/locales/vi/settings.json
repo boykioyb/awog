@@ -237,6 +237,8 @@
   "settings.notifications.sessionEvents.desc": "Xong lượt / cần chú ý. Chỉ bắn khi cửa sổ không focus — session đang mở thì đã thấy trực tiếp rồi.",
   "settings.notifications.github.name": "Thông báo GitHub",
   "settings.notifications.github.desc": "Theo dõi project nào và bao lâu một lần thì cấu hình ở Settings → Git.",
+  "settings.notifications.cicd.name": "Triển khai",
+  "settings.notifications.cicd.desc": "Lần chạy pipeline thất bại, và lần chạy đang chờ bạn duyệt. Kiểm tra mỗi 5 phút — mỗi lượt tốn vài lời gọi AWS/gh.",
   "settings.nav.wiki": "Wiki",
   "settings.nav.memory": "Bộ nhớ",
   "settings.wiki.heading": "Ngữ cảnh Wiki",

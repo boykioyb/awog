@@ -90,11 +90,20 @@ function underAllowedPrefix(resolved: string, platform: NodeJS.Platform): boolea
 // hardcode theo OS (`candidatesFor`), nên một realpath được bảo lãnh chỉ có tác
 // dụng khi CHÍNH một ứng viên hardcode trỏ tới nó — muốn lợi dụng thì đã phải
 // ghi được vào `/usr/local/bin` từ trước (invariant #8).
+/** Kết quả thử một ứng viên: dùng được, bị allowlist từ chối, hay không có. */
+type CandidateResult =
+  | { kind: 'ok'; path: string }
+  // File THẬT + chạy được, chỉ vướng allowlist prefix chưa bảo lãnh. Đây là ca
+  // duy nhất mà một cú bấm "bảo lãnh" giải quyết được — nên nó phải được trả về
+  // chứ không bị nuốt thành `null`.
+  | { kind: 'outside-allowlist'; path: string }
+  | null
+
 async function validateCandidate(
   candidate: string,
   platform: NodeJS.Platform,
   vouched: readonly string[],
-): Promise<string | null> {
+): Promise<CandidateResult> {
   try {
     const resolved = await realpath(candidate)
     const info = await stat(resolved)
@@ -103,34 +112,56 @@ async function validateCandidate(
     if (platform !== 'win32') {
       await access(resolved, fsConstants.X_OK)
     }
-    if (underAllowedPrefix(resolved, platform)) return resolved
-    return vouched.includes(resolved) ? resolved : null
+    if (underAllowedPrefix(resolved, platform)) return { kind: 'ok', path: resolved }
+    if (vouched.includes(resolved)) return { kind: 'ok', path: resolved }
+    return { kind: 'outside-allowlist', path: resolved }
   } catch {
     return null
   }
 }
 
-const resolveCache = new Map<InfraTool, Promise<string | null>>()
+export type InfraBinaryResolution = {
+  /** Realpath đã verify, hoặc null khi không có bản cài nào dùng được. */
+  path: string | null
+  /**
+   * Realpath của ứng viên ĐẦU TIÊN có thật nhưng nằm ngoài allowlist prefix (vd
+   * `/usr/local/bin/kubectl` → `/Applications/OrbStack.app/…`). UI dùng nó để mời
+   * người dùng bảo lãnh bằng một cú bấm thay vì bắt họ tự dò đường dẫn.
+   */
+  rejectedPath: string | null
+}
+
+const resolveCache = new Map<InfraTool, Promise<InfraBinaryResolution>>()
+
+/**
+ * Dò một lần rồi memoize theo vòng đời tiến trình.
+ */
+export async function resolveInfraBinaryDetail(tool: InfraTool): Promise<InfraBinaryResolution> {
+  const cached = resolveCache.get(tool)
+  if (cached) return cached
+  const pending = (async (): Promise<InfraBinaryResolution> => {
+    const platform = process.platform
+    const vouched = await loadVouchedBinaryPaths()
+    let rejectedPath: string | null = null
+    for (const candidate of candidatesFor(tool, platform)) {
+      // eslint-disable-next-line no-await-in-loop
+      const result = await validateCandidate(candidate, platform, vouched)
+      if (!result) continue
+      if (result.kind === 'ok') return { path: result.path, rejectedPath }
+      if (!rejectedPath) rejectedPath = result.path
+    }
+    return { path: null, rejectedPath }
+  })()
+  resolveCache.set(tool, pending)
+  return pending
+}
 
 /**
  * Dò một lần rồi memoize theo vòng đời tiến trình. Trả realpath đã verify, hoặc
  * null khi không có bản cài nào nằm trong allowlist.
  */
 export async function resolveInfraBinary(tool: InfraTool): Promise<string | null> {
-  const cached = resolveCache.get(tool)
-  if (cached) return cached
-  const pending = (async () => {
-    const platform = process.platform
-    const vouched = await loadVouchedBinaryPaths()
-    for (const candidate of candidatesFor(tool, platform)) {
-      // eslint-disable-next-line no-await-in-loop
-      const valid = await validateCandidate(candidate, platform, vouched)
-      if (valid) return valid
-    }
-    return null
-  })()
-  resolveCache.set(tool, pending)
-  return pending
+  return (await resolveInfraBinaryDetail(tool)).path
 }
 
 /**
@@ -207,11 +238,25 @@ export function installHint(tool: InfraTool): string {
 export async function infraBinaryStatus(): Promise<InfraBinaryStatus[]> {
   return Promise.all(
     INFRA_TOOLS.map(async (tool): Promise<InfraBinaryStatus> => {
-      const path = await resolveInfraBinary(tool)
+      const { path, rejectedPath } = await resolveInfraBinaryDetail(tool)
       if (!path) {
-        return { tool, found: false, path: null, version: null, hint: installHint(tool) }
+        return {
+          tool,
+          found: false,
+          path: null,
+          version: null,
+          hint: installHint(tool),
+          rejectedPath,
+        }
       }
-      return { tool, found: true, path, version: await probeVersion(tool, path), hint: null }
+      return {
+        tool,
+        found: true,
+        path,
+        version: await probeVersion(tool, path),
+        hint: null,
+        rejectedPath: null,
+      }
     }),
   )
 }

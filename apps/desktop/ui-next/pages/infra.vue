@@ -1,0 +1,555 @@
+<template>
+  <section class="page on" data-page="infra">
+    <div class="infra-shell">
+      <!-- Thanh section (docs/features/infra-explorer.md). Sáu mục đang mở:
+           Tổng quan (2.8) · Dịch vụ (3.1–3.8) · Nhật ký (3.9)
+           · Logs (2.1–2.7) · Kubernetes · Tài khoản (Mốc 1).
+           Graph/playbook vẫn là chỗ trống ở các mốc sau.
+
+           "Dịch vụ" là MỘT tab, hai mặt: danh mục (3.8) và bảng tài nguyên (3.1).
+           Trước 2026-09-14 chúng là hai tab ngang hàng ("Dịch vụ" + "Khám phá"),
+           nhưng danh mục không có dữ liệu nào của riêng nó và nút "+ Dịch vụ" ở
+           cột trái của bảng chỉ để nhảy sang tab kia — hai tab nói về một việc.
+
+           Tab Kubernetes vào đây — chứ không nằm trong chip của phiên — vì chip
+           trả lời "phiên này dùng cluster nào", còn câu hỏi của người mới là "máy
+           tôi có cluster nào / file kubeconfig ở đâu / thêm cluster mới thế nào".
+           Việc ghim ngữ cảnh cho phiên vẫn thuộc chip (ADR 0088 §7).
+
+           Tab Logs được MOUNT LƯỜI (`logsMounted`): mở /infra không được tự gọi
+           `describe-log-groups` (một lời gọi CLI dùng credential) chỉ vì tab tồn
+           tại. Lần đầu người dùng bấm vào Logs thì nó mới nạp, và sau đó giữ
+           nguyên (`v-show`) để đổi tab qua lại không mất câu lệnh đang gõ. -->
+      <!-- Hàng trên của trang: tab (bên trái) + thanh ngữ cảnh AWS (bên phải).
+           Thanh ngữ cảnh nằm NGOÀI `role="tablist"`: nó không phải một tab, và
+           nhét một control khác loại vào trong tablist là nói dối screen reader. -->
+      <div class="infra-top">
+        <div class="infra-sections" role="tablist" :aria-label="t('infra.tab.label')">
+          <button
+            v-for="item in TABS"
+            :key="item"
+            class="infra-section-tab"
+            :class="{ active: tab === item }"
+            type="button"
+            role="tab"
+            :aria-selected="tab === item"
+            @click="selectTab(item)"
+          >
+            <Icon :name="TAB_ICONS[item]" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t(`infra.tab.${item}`) }}
+          </button>
+        </div>
+
+        <!-- Tài khoản + region dùng cho MỌI thứ bên dưới (bảng tài nguyên, danh
+             mục, Logs, Kubernetes). Đặt ở hàng tab vì đây là chỗ duy nhất trên
+             trang luôn hiển thị, ở mọi tab. -->
+        <InfraContextBar
+          :profiles="allProfiles"
+          :profile="defaultProfile"
+          :region="pinnedRegion"
+          :loading="loading"
+          :error="error"
+          @select-profile="setDefaultProfile"
+          @select-region="setRegion"
+          @manage="selectTab('accounts')"
+        />
+      </div>
+
+      <div class="infra-body">
+        <div v-show="tab === 'overview'" class="infra-pane">
+          <InfraOverview @open-logs="onOpenLogs" />
+        </div>
+
+        <!-- Tab "Dịch vụ": danh mục mở ra TRƯỚC (mặc định), chọn một dịch vụ thì
+             danh mục nhường chỗ cho bảng của chính khung Explorer — cột dịch vụ đã
+             ghim vẫn nguyên ở bên trái. Hai mặt nằm trong cùng một tab nên không có
+             cú nhảy tab nào ở giữa. -->
+        <div v-show="tab === 'services'" class="infra-pane">
+          <InfraServicesCatalog
+            v-if="servicesMounted"
+            v-show="catalogOpen"
+            :services="services"
+            :groups="groups"
+            :pinned="pinnedServices"
+            :in-use="inUseServices"
+            :row-hits="rowHits"
+            :closable="openedView"
+            :loading="catalogLoading"
+            :error="catalogError"
+            :mock="catalogMock"
+            @pin="togglePin"
+            @open-target="onServiceTarget"
+            @open-view="onServiceView"
+            @console="openUrl"
+            @close="catalogOpen = false"
+            @retry="retryCatalog"
+          />
+          <InfraExplorer
+            v-if="servicesMounted"
+            v-show="!catalogOpen"
+            ref="explorerRef"
+            @open-catalog="openCatalog"
+            @open-tab="selectTab"
+            @rows="onRowsChanged"
+          />
+        </div>
+
+        <div v-if="auditMounted" v-show="tab === 'audit'" class="infra-pane">
+          <InfraAuditLog />
+        </div>
+
+        <div v-if="logsMounted" v-show="tab === 'logs'" class="infra-pane">
+          <InfraLogs :seed="logsSeed" />
+        </div>
+
+        <!-- Tab "Triển khai" (Mốc 4): bảng xuyên nguồn GitHub Actions · CodePipeline
+             · CodeBuild · Amplify. Mount lười cùng lý do với Logs: mở `/infra`
+             không được chạy `gh run list` cho mọi dự án và vài lệnh `aws` chỉ vì
+             tab tồn tại. Nó cũng KHÔNG tự làm mới — chỉ nạp khi mở tab hoặc bấm ↻. -->
+        <div v-if="deliveryMounted" v-show="tab === 'delivery'" class="infra-pane">
+          <InfraCicd @open-logs="onOpenCicdLogs" />
+        </div>
+
+        <div v-if="k8sMounted" v-show="tab === 'kubernetes'" class="infra-pane">
+          <InfraKubernetes />
+        </div>
+
+        <div v-show="tab === 'accounts'" class="infra-pane">
+          <InfraAccounts
+            v-model:search="search"
+            :profiles="profiles"
+            :all-profiles="allProfiles"
+            :loading="loading"
+            :error="error"
+            :selected="selected"
+            :default-profile="defaultProfile"
+            @select="select"
+            @new-profile="openNewProfile"
+            @edit="openEditProfile"
+            @duplicate="refresh"
+            @delete="refresh"
+            @set-default="setDefaultProfile"
+            @check-identity="refresh"
+            @import="openImport"
+            @import-sso="openSsoImport"
+            @console-login="openConsoleLogin"
+            @account-id-resolved="pinAccountIdForDefault"
+            @export="openExport"
+          />
+        </div>
+      </div>
+    </div>
+
+    <!-- thêm / sửa profile (A3) -->
+    <AwsProfileEditor
+      :open="overlay === 'editor'"
+      :profile="editTarget"
+      :profiles="allProfiles"
+      :default-region="pinnedRegion"
+      @save="onEditorSaved"
+      @cancel="closeEditor"
+      @relogin="onRelogin"
+    />
+
+    <!-- nhập: dán khối / file / CSV (A4) -->
+    <AwsProfileImport
+      :open="overlay === 'import'"
+      :profiles="allProfiles"
+      @close="closeImport"
+      @done="onImportDone"
+    />
+
+    <!-- nhập từ SSO: login → list-accounts/roles → tick hàng loạt (A5) -->
+    <AwsSsoImport
+      :open="overlay === 'sso-import'"
+      :profiles="allProfiles"
+      @close="closeSsoImport"
+      @done="onSsoImportDone"
+    />
+
+    <!-- đăng nhập Console (`aws login`) — đường ít thao tác nhất, không sinh khoá
+         dài hạn và không cần terminal -->
+    <AwsConsoleLogin
+      :open="overlay === 'console-login'"
+      :profiles="allProfiles"
+      :default-region="pinnedRegion"
+      :preset-profile="consoleLoginTarget"
+      @close="closeConsoleLogin"
+      @done="onConsoleLoginDone"
+    />
+
+    <!-- xuất cấu hình / kèm khoá có rào (A6) -->
+    <AwsProfileExport
+      :open="overlay === 'export'"
+      :profiles="allProfiles"
+      :selected="selected"
+      @close="closeExport"
+    />
+  </section>
+</template>
+
+<script setup lang="ts">
+// /infra — Tài khoản (Mốc 1, ADR 0088 §1b + docs/features/aws-profile-manager.md).
+// Trang CHỈ điều phối: thanh section (khung cho Explorer sau này) + màn danh
+// sách/chi tiết profile (<InfraAccounts>) + 4 overlay CRUD/nhập/xuất. Toàn bộ
+// state/luồng nằm ở useInfraPage() (page-controller, khuôn useSshPage.ts); trang
+// không tự gọi RPC và không import `useAwsProfilesApi` trực tiếp.
+import AwsProfileEditor from '~/components/infra/AwsProfileEditor.vue'
+import InfraKubernetes from '~/components/infra/InfraKubernetes.vue'
+import InfraLogs from '~/components/infra/logs/InfraLogs.vue'
+import InfraOverview from '~/components/infra/InfraOverview.vue'
+import AwsConsoleLogin from '~/components/infra/AwsConsoleLogin.vue'
+import AwsProfileExport from '~/components/infra/AwsProfileExport.vue'
+import AwsProfileImport from '~/components/infra/AwsProfileImport.vue'
+import AwsSsoImport from '~/components/infra/AwsSsoImport.vue'
+import InfraAccounts from '~/components/infra/InfraAccounts.vue'
+import InfraAuditLog from '~/components/infra/audit/InfraAuditLog.vue'
+import InfraContextBar from '~/components/infra/InfraContextBar.vue'
+import InfraCicd from '~/components/infra/cicd/InfraCicd.vue'
+import InfraExplorer from '~/components/infra/explorer/InfraExplorer.vue'
+import InfraServicesCatalog from '~/components/infra/explorer/InfraServicesCatalog.vue'
+import { OVERVIEW_ERRORS_WINDOW_SECONDS } from '~/composables/useInfraOverview'
+import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
+import { useInfraPage } from '~/composables/useInfraPage'
+import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
+import { useLinkOpen } from '~/composables/useLinkOpen'
+import type { InfraCatalogService } from '~/composables/useInfraResourcesApi'
+import type { LogsSeed } from '~/composables/useInfraLogs'
+
+const { t } = useI18n()
+
+// Ba mục của thanh section. `overview` đứng đầu và là mặc định: `/infra` trả lời
+// "mọi thứ có ổn không" trước khi trả lời "có những tài khoản nào"
+// (docs/features/infra-explorer.md §Màn mở đầu).
+type InfraTab = 'overview' | 'services' | 'delivery' | 'audit' | 'logs' | 'kubernetes' | 'accounts'
+const TABS: readonly InfraTab[] = [
+  'overview',
+  'services',
+  'delivery',
+  'audit',
+  'logs',
+  'kubernetes',
+  'accounts',
+]
+const TAB_ICONS: Record<InfraTab, string> = {
+  overview: 'home',
+  services: 'layers',
+  delivery: 'zap',
+  audit: 'book',
+  logs: 'table',
+  kubernetes: 'k8s',
+  accounts: 'shield',
+}
+
+const tab = ref<InfraTab>('overview')
+/** Tab Logs chỉ được mount sau cú bấm đầu tiên (xem comment ở template). */
+const logsMounted = ref(false)
+/**
+ * Tab Kubernetes mount lười cùng lý do: mở `/infra` không được tự đọc
+ * `~/.kube/config` chỉ vì tab tồn tại. Khác Logs ở chỗ đây là đọc FILE, không
+ * phải gọi CLI dùng credential — nhưng vẫn chỉ nạp khi người dùng hỏi.
+ */
+const k8sMounted = ref(false)
+/**
+ * Tab Triển khai (Mốc 4) mount lười: một lượt nạp là nhiều tiến trình `aws` cộng
+ * một `gh run list` cho MỖI dự án có remote GitHub — mở `/infra` không được làm
+ * việc đó sau lưng người dùng.
+ */
+const deliveryMounted = ref(false)
+/**
+ * Tab Dịch vụ (danh mục 3.8 + bảng 3.1–3.7) mount lười cùng lý do với Logs: mở
+ * `/infra` không được đọc danh mục, không được dò quyền, cũng không được chạm CLI
+ * chỉ vì tab tồn tại. Khác Logs ở chỗ nó KHÔNG tốn lời gọi nào cho tới khi người
+ * dùng chọn một dịch vụ — `useInfraExplorer` cấm `watch`/`onMounted` gọi `list`.
+ */
+const servicesMounted = ref(false)
+/**
+ * Mặt nào của tab Dịch vụ đang hiện: danh mục (`true`, mặc định) hay bảng tài
+ * nguyên (`false`). Mặc định là danh mục vì đó là câu hỏi đầu tiên ("tôi có những
+ * dịch vụ gì?") và nó không tốn lời gọi nào.
+ */
+const catalogOpen = ref(true)
+/** Đã từng mở một view chưa — nút "Quay lại" của danh mục chỉ có nghĩa khi có. */
+const openedView = ref(false)
+/** Nhật ký chỉ đọc dữ liệu cục bộ; vẫn mount lười cho nhất quán. */
+const auditMounted = ref(false)
+const logsSeed = ref<LogsSeed | null>(null)
+let seedNonce = 0
+
+function selectTab(next: InfraTab): void {
+  if (next === 'logs') logsMounted.value = true
+  if (next === 'kubernetes') k8sMounted.value = true
+  if (next === 'services') servicesMounted.value = true
+  if (next === 'delivery') deliveryMounted.value = true
+  if (next === 'audit') auditMounted.value = true
+  tab.value = next
+}
+
+/** Mở mặt danh mục (nút "Tất cả dịch vụ" ở cột trái của khung Explorer). */
+function openCatalog(): void {
+  servicesMounted.value = true
+  catalogOpen.value = true
+}
+
+// ── Danh mục + ghim (task 3.8) ──────────────────────────────────────────────
+// Danh mục và ghim là state MỌC MODULE (`useInfraExplorerCatalog`) vì hai tab cùng
+// đọc chúng: ghim ở tab Dịch vụ phải đổi sidebar của tab Explorer.
+const {
+  services,
+  groups,
+  pinnedServices,
+  togglePin,
+  ensureCatalog,
+  catalogLoading,
+  catalogError,
+  catalogMock,
+  retryCatalog,
+} = useInfraExplorerCatalog()
+const explorerRef = useTemplateRef<InstanceType<typeof InfraExplorer>>('explorerRef')
+// Danh mục + ghim là mặc định của `/infra → Dịch vụ`, nên nạp ngay khi trang mở
+// (nó chỉ serialize hằng số ở sidecar — không chạm CLI, không tốn credential).
+void ensureCatalog()
+
+/** Dòng đang có trên màn Explorer, để ⌘K của tab Dịch vụ tìm được cả dữ liệu. */
+const explorerRows = ref<
+  { viewId: string; label: string; name: string; values?: Record<string, string> }[]
+>([])
+
+const rowHits = computed(() => explorerRows.value)
+const inUseServices = computed(() => {
+  const set = new Set<string>()
+  for (const r of explorerRows.value) {
+    const svc = services.value.find((s) => s.target.kind === 'view' && s.target.viewId === r.viewId)
+    if (svc) set.add(svc.id)
+  }
+  return set
+})
+
+const { openExternally } = useLinkOpen()
+
+function openUrl(url: string): void {
+  void openExternally(url)
+}
+
+/** Một mục trong danh mục: tab nội bộ mở ngay, view thì chuyển tab rồi mở view. */
+async function onServiceTarget(target: InfraCatalogService['target']): Promise<void> {
+  if (target.kind === 'console') {
+    if (target.url) openUrl(target.url)
+    return
+  }
+  if (target.kind === 'tab') {
+    selectTab(target.tab)
+    return
+  }
+  await onServiceView({ viewId: target.viewId })
+}
+
+/**
+ * Mở một view từ danh mục: danh mục nhường chỗ cho bảng (cùng một tab), rồi nhờ
+ * `InfraExplorer` mở view. Khung Explorer mount lười nên phải chờ một nhịp sau khi
+ * bật `v-if` — gọi trước đó là gọi vào `null`. Đây là lý do `InfraExplorer` expose
+ * `openView` qua `defineExpose`.
+ */
+async function onServiceView(payload: {
+  viewId: string
+  values?: Record<string, string>
+}): Promise<void> {
+  // `openedView` bật TRƯỚC khi mở: từ đây danh mục có một chỗ để quay về.
+  openedView.value = true
+  selectTab('services')
+  catalogOpen.value = false
+  await nextTick()
+  explorerRef.value?.openView(payload.viewId, payload.values)
+}
+
+// ── ⌘K palette → mở một dịch vụ ─────────────────────────────────────────────
+// Palette (⌘K) chỉ ghi MỘT id dịch vụ vào cầu nối mọc-module `useInfraServiceOpen`
+// rồi điều hướng tới `/infra`; trang phân giải id đó theo danh mục nó đã sở hữu và
+// mở bằng CHÍNH `onServiceTarget` (view → bảng, tab → chuyển tab). Dịch vụ mức
+// `console` do palette tự mở ngoài trình duyệt nên không tới được đây.
+//
+// `immediate: true` xử lý ca mount mới (palette đặt id TRƯỚC khi trang mount); khi
+// trang đang sống (KeepAlive) thì watcher bắt luôn lần đặt id kế tiếp. `consume()`
+// lấy-và-xoá nên cùng một dịch vụ mở lại lần sau vẫn kích hoạt (null → id là một
+// thay đổi). `services` là state chia sẻ với palette nên khi tới đây đã có dữ liệu.
+const { pending: pendingServiceOpen, consume: consumeServiceOpen } = useInfraServiceOpen()
+watch(
+  pendingServiceOpen,
+  (id) => {
+    if (!id) return
+    consumeServiceOpen()
+    const svc = services.value.find((s) => s.id === id)
+    if (svc) void onServiceTarget(svc.target)
+  },
+  { immediate: true },
+)
+
+/** Explorer báo lên danh sách dòng đang có (cho ⌘K của tab Dịch vụ). */
+function onRowsChanged(
+  rows: { viewId: string; label: string; name: string; values?: Record<string, string> }[],
+): void {
+  explorerRows.value = rows
+}
+
+/** Tổng quan → "Mở trong Logs": gieo câu lệnh rồi chuyển tab. KHÔNG chạy truy vấn. */
+function onOpenLogs(query: string): void {
+  logsMounted.value = true
+  logsSeed.value = { query, windowSeconds: OVERVIEW_ERRORS_WINDOW_SECONDS, nonce: ++seedNonce }
+  tab.value = 'logs'
+}
+
+/**
+ * Triển khai → "mở log của bước này" (CodeBuild): log build nằm ở CloudWatch nên
+ * việc đọc nó thuộc tab Logs. Gieo ĐÚNG group + câu lọc theo stream rồi chuyển tab
+ * — KHÔNG chạy truy vấn (chạy là cú bấm của người dùng, và nó tốn tiền).
+ */
+function onOpenCicdLogs(group: string, stream: string): void {
+  logsMounted.value = true
+  // Tên stream có thể chứa `"` (CloudWatch cho phép) — nhét nguyên vào chuỗi lọc
+  // là làm hỏng cú pháp truy vấn ngay từ lúc gieo.
+  const safe = stream.replace(/["\\]/g, '')
+  const filters = safe ? ` | filter @logStream like "${safe}"` : ''
+  logsSeed.value = {
+    query: `fields @timestamp, @message${filters} | sort @timestamp desc | limit 200`,
+    windowSeconds: 3600,
+    nonce: ++seedNonce,
+    group,
+  }
+  tab.value = 'logs'
+}
+
+const {
+  profiles,
+  allProfiles,
+  loading,
+  error,
+  search,
+  selected,
+  defaultProfile,
+  select,
+  setDefaultProfile,
+  setRegion,
+  pinAccountIdForDefault,
+  overlay,
+  editTarget,
+  openNewProfile,
+  openEditProfile,
+  closeEditor,
+  openImport,
+  closeImport,
+  openSsoImport,
+  closeSsoImport,
+  openExport,
+  closeExport,
+  onEditorSaved,
+  onImportDone,
+  onSsoImportDone,
+  refresh,
+  pinnedRegion,
+  consoleLoginTarget,
+  openConsoleLogin,
+  closeConsoleLogin,
+  onConsoleLoginDone,
+} = useInfraPage()
+
+// "Đăng nhập lại" trong màn sửa của profile `login`: đóng editor rồi mở modal
+// đăng nhập với ĐÚNG tên profile đó (không gợi ý tên mới — xem presetProfile).
+function onRelogin(name: string): void {
+  closeEditor()
+  openConsoleLogin(name)
+}
+</script>
+
+<style scoped>
+.infra-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+/* Hàng trên: tab + thanh ngữ cảnh. `flex-wrap` vì ở cửa sổ hẹp (720px) sáu tab
+   đã chiếm gần hết hàng — thanh ngữ cảnh xuống dòng dưới, và đường kẻ dưới cùng
+   vẫn là của cả hàng. */
+.infra-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /* Đáy phải có đệm: tab đang chọn có nền + viền riêng, sát đường kẻ dưới thì
+     pill dính vào đường phân cách và trông như bị cắt chân. */
+  padding: 10px 16px 8px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  box-shadow: inset 0 -1px 0 var(--border);
+}
+
+.infra-sections {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.infra-section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--r-btn);
+  background: transparent;
+  color: var(--textMuted);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  /* 550/650 chứ không phải 400 kế thừa từ `body`: ở 12px, độ đậm mảnh làm nhãn
+     tab khó đọc trên nền tối (ảnh chụp 2026-09-14: "text trên tab hơi mỏng khó
+     đọc"). Đây là dãy độ đậm có sẵn của app — `.li .ttl` dùng 550, `.iov-title`
+     dùng 650 — nên tab vẫn nằm trong hệ, không phải một cỡ mới. */
+  font-weight: 550;
+  cursor: default;
+}
+
+.infra-section-tab.active {
+  color: var(--text);
+  background: var(--accentDim);
+  border-color: var(--accentBorder);
+  font-weight: 650;
+}
+
+.infra-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* Mỗi pane lấp hết chỗ còn lại của .infra-body và tự quản vùng cuộn của nó.
+
+   LUÔN là một <div> BỌC, KHÔNG bao giờ gắn thẳng class này lên component con: Vue
+   đưa scope-id của cha xuống phần tử gốc của component con, nên `.infra-pane` sẽ
+   ĐÈ `display` của chính khung đó. Đo được trên khung Explorer — `.ixe` là grid
+   hai cột, bị ép thành flex-column nên cột "Dịch vụ đã ghim" chảy xuống nằm trên
+   bảng (ảnh chụp 2026-09-14). */
+.infra-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Phần tử gốc của khung bên trong lấp hết pane và tự cuộn. */
+.infra-pane > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Bóng của nút và skin card của bảng KHÔNG khai ở đây nữa — chúng là quy tắc toàn
+   app (`.btn` ở prototype.css, `.tblcard` ở app-shell.css) sau khi người dùng chốt
+   "áp dụng theo hướng global cho toàn bộ app" (2026-09-15). Bản cũ khoanh vùng bằng
+   `.infra-shell :deep(.btn)` vì khi đó đổi `.btn` toàn cục là ngoài phạm vi yêu cầu;
+   phạm vi ấy nay đã đổi. Giữ lại một bản sao ở đây sẽ thành định nghĩa thứ hai về
+   "nút nổi" — hai chỗ để sửa, hai chỗ để lệch. */
+</style>

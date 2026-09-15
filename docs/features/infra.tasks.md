@@ -165,7 +165,7 @@
 |---|---|---|
 | 8.1 | View **ECS/Fargate** (scale · redeploy · quay bản · exec vào container) · **EKS** · **Lambda** · **Amplify** | L |
 | 8.2 | View **CloudFormation** (resource · events · template Monaco · change set) · **VPC** (subnet · route · SG) | M |
-| 8.3 | Parser `~/.kube/config` allowlist-key + ngữ cảnh kubectl trong chip | M |
+| 8.3 | ~~Parser `~/.kube/config` allowlist-key + ngữ cảnh kubectl trong chip~~ **đã code 2026-09-13** (`infra/kubectl/kubeconfig.ts` + `InfraKubectlChip.vue`; kèm `tf_cli`/`kubectl_cli` cho agent và chip Terraform — xem `session-infra-context.md` P1/P2) | M |
 | 8.4 | Màn **Kubernetes**: workloads · log viewer · **exec qua node-pty** · **port-forward panel** (khuôn `SshForwardPanel`) | L |
 | 8.5 | Terraform: workspace + `plan -out` → `show -json` → **Plan viewer** bảng `+ ~ -` | L |
 | 8.6 | Playbook nâng cao: sinh nháp từ `terraform plan`/change set; agent điền impact + rollback từ graph; hồ sơ sau khi chạy | L |
@@ -230,3 +230,113 @@ Kèm: `redactString` áp lên stdout/stderr **trước khi clamp** (cắt trư�
 - **Ghi vào `~/.awog` vẫn trong tầm với của agent qua `Bash`** — bản vá #5 chặn theo chuỗi đường dẫn, là hàng rào độ sâu chứ không kín. Chốt thật: agent không nên có quyền ghi vào `~/.awog`.
 - **`describeInfraCommand` là bản sao có chủ đích** của `withContext()` trong `run.ts` — gộp khi được phép chạm file đó.
 - **`context.workspace` kẹp 500 ký tự**, dài hơn thì lượt ghi nhật ký ném và mất cả lệnh lẫn dấu vết.
+
+---
+
+## Mốc 1 — trạng thái thực tế (cập nhật 2026-09-14)
+
+**Đã land 1.1 → 1.6** (2026-09-13): trình soạn INI phẫu thuật + sao lưu/ghi nguyên tử/verify đọc lại · màn **Tài khoản** (danh sách nhóm theo kiểu · chi tiết · đặt mặc định · kiểm tra danh tính) · thêm/sửa/nhân bản/xoá theo kiểu form · nhập (dán khối · file credentials/config · CSV của IAM) **có màn xem trước** · nhập từ SSO · xuất cấu hình / kèm khoá có rào / sao chép lệnh `aws configure set`.
+
+**Còn nợ:**
+
+- **1.7 infosec audit #2 — chưa chạy.** [aws-profile-manager.md](aws-profile-manager.md) ghi nợ một lượt re-audit cho **A3/A5/A6** — ba đường ghi có secret (form static · nhập · nhập SSO). Đây là nợ đã biết, không phải việc bị bỏ quên.
+
+**Bổ sung 2026-09-14** (yêu cầu người dùng, ngoài kế hoạch gốc): Region thành **dropdown** danh sách chuẩn + **tự dò khi ô trống** (region của chính profile → region đang ghim của app → profile `default`); thêm nút **Kiểm tra** chạy được **trước khi ghi** (khoá vừa gõ đi bằng env); ba ô secret **nạp giá trị thật** từ `~/.aws/credentials` khi mở form sửa. Chi tiết + ba điểm lệch: [aws-profile-manager.md](aws-profile-manager.md) §"Điểm lệch có chủ đích so với bản spec đầu".
+
+## Mốc 2 — trạng thái thực tế (cập nhật 2026-09-14)
+
+**Đã land 2.1 → 2.9.** Cửa vào: tab **Logs** và tab **Tổng quan** trong `/infra`.
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 2.1 | Chọn nhiều nhóm log (+ pattern) · khoảng thời gian · `start-query` → poll → huỷ | xong — **nút Huỷ từng làm màn kẹt**, sửa 2026-09-14 (xem §"Huỷ kẹt") |
+| 2.2 | Bảng kết quả · JSON chi tiết · copy · gửi vào chat | xong — "gửi vào chat" đi qua hộp chọn đích của mốc 3 |
+| 2.3 | Monaco + Monarch tokenizer cú pháp Insights + gợi ý trường từ kết quả trước | xong — **kèm `⌘Enter` / `⌘.`** (nối 2026-09-14) |
+| 2.4 | Thư viện câu lệnh: mẫu sẵn · đã lưu · lịch sử (2 tầng `.awog`) | xong |
+| 2.5 | Histogram SVG **kéo-zoom** | xong |
+| 2.6 | Ước lượng GB **trước khi chạy** + `bytesScanned` thật + không bao giờ auto-run | xong |
+| 2.7 | Lọc nhanh tại chỗ · chip mức độ · facet bấm-để-chèn-`filter` | xong |
+| 2.8 | Màn Tổng quan: 6 thẻ đèn + câu giải thích + chip hỏi agent | xong **một phần** — **2/6** thẻ có nguồn (Lỗi · Máy chủ), 4 thẻ còn lại chờ mốc 4/7 |
+| 2.9 | Tool `logs_query` / `logs_tail_window` | xong |
+
+### Điểm lệch của mốc 2
+
+| Điểm | Kế hoạch | Thực tế | Vì sao |
+|---|---|---|---|
+| **4 trong 6 thẻ Tổng quan** | mỗi thẻ có đèn xanh/vàng/đỏ từ dữ liệu thật | hai thẻ có nguồn sống: **Lỗi 1 giờ qua** (Insights, hai bước Ước lượng → Chạy) và **Máy chủ** (`ec2 describe-instances`, nút *Đọc máy chủ EC2*, nối 2026-09-14). Bốn thẻ còn lại (Website · Chi phí · TLS · Deploy) hiện **đèn xám** + câu *"chưa đọc được…"* + chip hỏi agent | Nguồn của bốn thẻ kia nằm ở mốc 4/7 (CloudFront-Route53-ACM = 4.1, Amplify = 4.2–4.6, Cost Explorer = 7.1). Hiện đèn xanh cho một thứ chưa kiểm tra là **nói dối** — hỏng đúng chức năng của màn "có ổn không". Ghi lại để không ai đọc đèn xám thành đèn xanh |
+
+**Thẻ Máy chủ — luật riêng của nó.** Nút *Đọc máy chủ EC2* là GỌI AWS thật (dùng credential), nên nó chỉ chạy sau cú bấm, không có `onMounted`/`watch` nào gọi hộ. Đổi profile/region thì `watch` **chỉ XOÁ** kết quả cũ, và một con dấu `serversEpoch` vứt câu trả lời của lượt đã cũ — không có con dấu đó, `describe-instances` (1–3 giây) đáp xuống sau khi `watch` đã dọn, tức đúng con số nói dối mà luật đầu file cấm. Đọc được thì thẻ nói đúng thứ EC2 vừa kể (tổng số máy, bao nhiêu `running`, tên máy không `running`), và còn `NextToken` thì nói rõ *"mới đọc một trang"* + hiện nút đọc tiếp — im lặng về chuyện đó là biến một trần 200 dòng thành một tổng. Lỗi quyền/CLI hiện **câu lỗi**, không bị nuốt thành "0 máy chủ".
+
+**Thẻ Lỗi 1 giờ qua — cùng con dấu, siết thêm một bậc** (sửa 2026-09-14). Thẻ này chạy Insights hai bước (Ước lượng → Chạy) và **tính tiền mỗi request**, nên đổi profile/region giữa chừng không chỉ là chuyện hiển thị: vòng poll cũ hỏi tiếp bằng credential mới là một đường rò dữ liệu, còn câu trả lời cũ đáp xuống thẻ mới là con số nói dối. Nay `errorsEpoch` (song sinh với `serversEpoch`) + `activeCtx` (ảnh chụp ngữ cảnh lúc `start`) làm hai việc: (a) `watch([profile, region])` **huỷ query đang chạy** bằng chính ngữ cảnh cũ, và (b) cả vòng poll lẫn hàm huỷ đều dùng `activeCtx` đã đóng băng, còn `finally` chỉ ghi state khi `epoch` chưa đổi. Đo trên trình duyệt (engine giả): chạy query trên `prod-admin` rồi đổi sang `dev-sandbox` → `infra.logs-query-cancel` gửi đi với `{queryId, profile: prod-admin, region}` và **không còn một lượt `logs-query-status` nào**; thẻ về trạng thái chỉ-còn-ghi-chú với nút *Ước lượng*.
+
+### Huỷ kẹt — lỗi thật của mốc 2, sửa 2026-09-14
+
+Cả hai vòng poll (`useInfraLogs.poll`, và vòng của thẻ Lỗi trong `useInfraOverview`) đều chờ nhịp bằng `await new Promise(r => { timer = setTimeout(r, 1500) })`, còn hàm huỷ thì `clearTimeout(timer)`. **`clearTimeout` không đánh thức một Promise đang chờ** — nó bỏ mặc Promise đó treo vĩnh viễn. Dây hậu quả: `poll()` không bao giờ trả về → `run()` không bao giờ tới `finally` → `running` kẹt `true` → bấm Huỷ xong màn vẫn hiện *"Đang chạy…"* và **không chạy được câu nào nữa** cho tới khi rời tab. Lỗi chỉ lộ khi cú huỷ rơi đúng lúc vòng lặp đang đợi nhịp (là trạng thái chiếm phần lớn thời gian), nên nó không lộ ra ở test mock.
+
+Sửa bằng cách giữ `resolve` của nhịp đang treo (`pollWake` / `timerWake`) và gọi nó trong hàm huỷ; thêm một nhịp kiểm tra `cancelled` sau `await` để vòng lặp thoát ngay thay vì hỏi thêm một lượt `get-query-results` sau khi người dùng đã bảo dừng. Đo lại trên trình duyệt (engine giả, 2026-09-14): `⌘Enter` → `estimate` + 2 × `query-start` (biểu đồ mật độ đang bật) → `⌘.` → `logs-query-cancel`, runbar về **"Chạy"**, nút bật lại, và chạy lại được lần thứ hai; thẻ Lỗi cũng từ **"Huỷ"** về **"Chạy (~0.0050 USD)"**. Cùng cách đo cho `⌘Enter`: hàng đang chọn **không** bị chèn dòng mới (Monaco mặc định bind `⌘Enter` = insert-line-after, nên nếu listener capture không thắng thì editor đã có thêm một dòng), và `⌘.` không rơi ký tự chấm vào editor.
+
+## Mốc 3 — trạng thái thực tế (cập nhật 2026-09-14)
+
+**Đã land 3.1 → 3.10.** Cửa vào: tab **Dịch vụ** (danh mục 3.8 + bảng tài nguyên 3.1–3.7 — gộp làm một sau phản hồi người dùng 2026-09-14) · **Nhật ký** (3.9) trong `/infra`. Chi tiết từng việc: [infra-explorer.md](infra-explorer.md) §"Trạng thái thực tế (Mốc 3)" và [infra-audit-log.md](infra-audit-log.md) §"Trạng thái thực tế".
+
+### Ba điểm lệch của mốc 3
+
+| # | Kế hoạch | Thực tế | Vì sao |
+|---|---|---|---|
+| 3.7 | EC2 + **Kết nối SSM mở terminal** | **chưa làm** phần SSM; vẫn còn nút Console ↗ | `session start-session` cần đường PTY + một đích terminal trong tab — việc của khung PTY (E7/E8), không nên nhét vào bảng EC2 |
+| 3.8 | hàng **"đang dùng"** lấy từ Cost Explorer + tagging API | "đang dùng" = service của view **đang có dòng** | `ce get-cost-and-usage` **tính tiền mỗi request** ⇒ thuộc việc 7.1 của mốc 7. Không bịa số |
+| 3.1 | tìm kiếm đẩy xuống CLI khi service hỗ trợ filter | lọc tại client trên số dòng **ĐÃ NẠP**, có nhãn nói rõ điều đó | Cờ `--filters` khác nhau theo từng service; ô tìm kiếm giả vờ đẩy xuống CLI là hứa điều khung bảng không giữ được |
+
+### Việc ngoài kế hoạch — bong bóng phiên (bổ sung 2026-09-14)
+
+Người dùng yêu cầu thêm một **phiên thu nhỏ ở góc phải màn hình**: thư mục tương tác riêng `awog-infra`, "Mở full" điều hướng **về phiên** (không phải `/infra`), mọi nút "Hỏi agent" có hai lựa chọn (phiên hiện tại / phiên mới), và trong bong bóng xem được **toàn bộ danh sách phiên**. Đặc tả: [infra-bubble-session.md](infra-bubble-session.md).
+
+### Việc ngoài kế hoạch — thanh ngữ cảnh + cột trái đầy đủ (bổ sung 2026-09-14)
+
+Ba yêu cầu từ ảnh chụp của người dùng: bỏ dải rỗng khi thu gọn cột dịch vụ · **đưa ô chọn tài khoản lên hàng tab** và bắt dịch vụ đọc theo tài khoản đó · cột trái hiện **cả danh mục**, chia nhóm gập được (trước chỉ có danh sách ghim). Đây là việc **nằm trong spec** — [infra-explorer.md](infra-explorer.md) §"Bố cục màn hình" vốn đã chốt "thanh ngữ cảnh đầu trang là control DUY NHẤT chọn tài khoản" — nhưng chưa ai làm ở mốc 3. Chi tiết + số đo: cùng file, §"Ba sửa đổi theo ảnh chụp thứ tư (2026-09-14)".
+
+**Còn thiếu ở thanh này:** `cluster` (giữ ở tab Kubernetes) và nhãn cảnh báo cho tài khoản production (cần `accountKindOf()` của sidecar theo từng lời gọi).
+
+### Việc ngoài kế hoạch — mở rộng danh mục 39 → 102 dịch vụ (bổ sung 2026-09-14)
+
+Người dùng: *"phần dịch vụ tôi thấy vẫn thiếu nhiều dịch vụ như valkey?"* rồi *"tôi nghĩ cứ thêm hết đi cho phong phú"*. Valkey hoá ra không phải dịch vụ thiếu — nó là engine của ElastiCache/MemoryDB, nên câu mô tả của thẻ ElastiCache mới là chỗ sai (nay kể đủ Redis/Valkey/Memcached); phần "thiếu dịch vụ" thì đúng. Danh mục nay có **102 dịch vụ + Kubernetes**, thêm **nhóm thứ 11 "Dữ liệu & AI"**, mọi thẻ Console đều có deep link đã kiểm bằng HTTP (200/302 so với 404). Hai lỗi phát hiện dọc đường: thẻ CloudFormation in ra khoá i18n thô (`about.cfn` lệch với service id) và một dịch vụ mức Console có thể bị thêm mà thiếu dòng `svcConsole` (nay có test khoá lại). Số đo + cách kiểm slug: [infra-explorer.md](infra-explorer.md) §"Mở rộng danh mục 39 → 102 dịch vụ (2026-09-14)".
+
+### Còn nợ chung của mốc 1–3
+
+- **QA trong Electron thật** — cả ba mốc mới có unit test + `typecheck` + `lint`; **chưa ai bấm thử trong app**. Mọi tuyên bố "xanh" ở trên là xanh của cổng tĩnh.
+- **infosec audit #2** (nợ từ mốc 1, xem trên).
+- **Nhật ký N4/N5** — tool `audit_query`/`audit_summary` cho agent và dòng thời gian sự cố.
+- **Nhật ký: tự hết hạn** — `pruneExpired()` có trong store nhưng **chưa ai gọi**; chưa có khoá Settings 30/90/365/vĩnh viễn.
+- **Nhật ký: nút "Hỏi agent" / "Chạy lại" trên từng dòng** — mới có ↗ nhảy về phiên.
+- **4/6 thẻ Tổng quan** chưa có nguồn dữ liệu (xem mốc 2 — hai thẻ có nguồn là *Lỗi 1 giờ qua* và *Máy chủ*).
+
+## Mốc 4 — trạng thái thực tế (cập nhật 2026-09-14)
+
+**Đã land 4.1 → 4.6.** Cửa vào: tab **Triển khai** trong `/infra` (4.1 còn thêm sáu view vào tab **Dịch vụ**). Chi tiết kiến trúc + luật đã cài trong code: [infra-cicd.md](infra-cicd.md) §"Trạng thái thực tế".
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 4.1 | CloudFront (+ tạo invalidation, lịch sử) · API Gateway · Route53 · ACM | xong |
+| 4.2 | Bảng xuyên nguồn, **GitHub Actions trước** | xong |
+| 4.3 | Chi tiết lần chạy: cột bước · log từng bước · artifact · nối PR đã có | xong — log CodeBuild **gieo sang tab Logs** thay vì dựng viewer thứ hai |
+| 4.4 | Chạy lại · huỷ · kích hoạt · **duyệt bước thủ công** | xong — mọi thao tác ghi đi qua `runGated()` + vào nhật ký |
+| 4.5 | Nối thông báo vào hộp bell + toast | xong — **nguồn mặc định TẮT**, bật ở Settings → Thông báo |
+| 4.6 | Nguồn AWS: CodePipeline · CodeBuild · Amplify job | xong |
+
+### Bốn điểm lệch có chủ đích
+
+| Điểm | Kế hoạch / mặc định | Thực tế | Vì sao |
+|---|---|---|---|
+| **4.5 bật/tắt** | thông báo đi vào hộp bell + toast như mọi nguồn khác | công tắc riêng `notifications.cicdEvents`, **mặc định tắt**, nhịp **sàn 5 phút**, lượt poll đầu im lặng để dựng mốc | một lượt kiểm tra là **nhiều tiến trình `aws` cộng một `gh run list` mỗi dự án**; chạy nền mặc định chính là thứ mà luật "không auto-refresh" của màn này cấm |
+| **Log từng bước của CodeBuild** | 4.3: "log từng bước stream" | bấm bước ⇒ **gieo log group sang tab Logs** (viewer đã có, đã redact), không dựng viewer thứ hai | log của CodeBuild nằm ở CloudWatch Logs; AWOG không có lý do đọc nó bằng đường thứ hai |
+| **Xem secret của pipeline** | bảng hành động ghi "xem biến môi trường / secret — lớp đọc" | chỉ **TÊN**; `codebuild: batch-get-builds` bị xếp vào `AWS_SENSITIVE_READ_OPS` (production ⇒ phải có người duyệt) | payload trả về **VALUE** của biến `PLAINTEXT`; nới từ tên sang giá trị là một quyết định, không phải một lần sửa nhỏ |
+| **Kích hoạt chạy mới trên AWS** | "`gh workflow run` với input; Amplify `start-job`" | form workflow + git ref **chỉ có ở GitHub**; CodePipeline/CodeBuild/Amplify bấm là chạy | pipeline/build/app đã nằm trong `ref` của dòng — thêm ô nhập nữa là thêm chỗ để gõ sai một thứ AWS đã biết |
+
+### Còn nợ của mốc 4
+
+- **QA trong Electron thật** — như mốc 1–3: cổng đã xanh là `vitest` (sidecar, 719 test của `src/infra`) · `pnpm typecheck` · `pnpm lint` (cả hai app).
+- **Credential AWS thật** — CLI trên máy dev trả `ExpiredToken` ⇒ mọi đường AWS của mốc 4 mới được kiểm bằng JSON mẫu.
+- **`gh` đã đăng nhập** — các đường GitHub Actions của mốc 4 chưa chạy thật lần nào.
+- **Tài khoản production** — nhánh "đọc bị siết nhịp ⇒ hiện `blocked` + xin vé ⇒ gọi lại kèm vé" mới có test đơn vị, chưa gặp cổng thật.
+- **Agent chạy lại pipeline** (vế hai của C5) — `runtime/tools/infra-tools.ts` chưa có tool nào chạm tới màn này; nút *Hỏi agent* mới đẩy log vào phiên.
+- **`infosec audit #2`** vẫn treo từ mốc 1 (xem trên).

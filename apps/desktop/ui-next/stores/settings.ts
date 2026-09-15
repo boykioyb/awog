@@ -199,6 +199,11 @@ export interface NotificationSettings {
   // notificationsEnabled). Session events only ever fire on an unfocused window
   // — the open session already shows them live.
   sessionEvents: boolean
+  // Pipeline hỏng / đang chờ duyệt (docs/features/infra-cicd.md, Mốc 4 task 4.5).
+  // MẶC ĐỊNH TẮT: một lượt kiểm tra là nhiều tiến trình `aws` cộng một `gh run
+  // list` mỗi dự án, nên nó phải là lựa chọn của người dùng. Nhịp nằm trong
+  // `useCicdNotify` (sàn 5 phút), không phải một ô cấu hình thứ hai ở đây.
+  cicdEvents: boolean
 }
 
 // LLM used by the selection-to-translate feature (docs/features/selection-translate.md).
@@ -404,6 +409,7 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   // where desktop notifications usually live.
   toastPosition: 'bottom-right',
   sessionEvents: true,
+  cicdEvents: false,
 }
 
 const DEFAULT_CONTEXT: ContextSettings = {

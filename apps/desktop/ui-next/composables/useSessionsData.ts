@@ -235,6 +235,15 @@ export type InfraPrompt = {
   /** Luôn là 'ask' khi thẻ này tồn tại — 'auto'/'block' không park prompt nào. */
   mode: InfraDecisionMode
   reason: InfraDecisionReason
+  /**
+   * Lệnh chạy trong một CHUỖI SHELL (`Bash`), không phải qua tool CLI của AWOG.
+   * Khác biệt có hậu quả: sidecar luồn `AWS_PROFILE`/`AWS_DEFAULT_REGION` xuống
+   * tiến trình con nên ngữ cảnh ghim là MẶC ĐỊNH thật, nhưng chuỗi shell vẫn tự
+   * đổi được bằng `--profile`/`--region` mà cổng quyền không đọc ra được (xem
+   * `bashInfraCall` ở sidecar). Thẻ duyệt phải nói ra, kẻo nó hứa một tài khoản
+   * mà lệnh có thể không chạm tới.
+   */
+  shell?: boolean
   profile?: string
   accountId?: string
   region?: string
@@ -307,6 +316,9 @@ export function parseInfraPrompt(raw: unknown): InfraPrompt | undefined {
     accountKind: isInfraAccountKind(p.accountKind) ? p.accountKind : 'production',
     mode: isInfraMode(p.mode) ? p.mode : 'ask',
     reason: isInfraReason(p.reason) ? p.reason : 'matrix',
+    // Vắng ⇒ `false`: mọi payload dựng trước trường này đều là đường tool CLI
+    // (`aws_cli`…), tức ngữ cảnh là CHỈ ĐỊNH chứ không phải mặc định.
+    ...(p.shell === true ? { shell: true } : {}),
   }
   for (const key of INFRA_CONTEXT_FIELDS) {
     const v = p[key]
@@ -337,6 +349,20 @@ export type PermBlock = {
   // chào nút "Always allow": nhớ một lệnh hạ tầng là dựng nguồn sự thật thứ hai
   // cạnh ma trận (ADR 0088 §6).
   infra?: InfraPrompt
+  // tool_use id của CHÍNH lời gọi mà thẻ này xin quyền (`toolUseID` của event).
+  // Step của cùng lời gọi mang đúng id đó, nên đây là sợi dây duy nhất nối thẻ với
+  // kết quả của lệnh — không có nó thì thẻ chỉ biết nói "✓ Cho phép", còn output
+  // nằm trong khối bước đã thu gọn bên dưới (người dùng bấm Cho phép xong không
+  // thấy lệnh trả về gì).
+  toolUseId?: string
+  // Kết quả lệnh, CHÉP từ step khi nó chạy xong (khớp qua toolUseId ở trên). Chép
+  // chứ không giữ tham chiếu: upsertStep thay nguyên object của block khi step về
+  // thêm một lần nữa, nên một tham chiếu sẽ trỏ vào bản cũ.
+  detail?: string
+  detailKind?: StepDetailKind
+  // Chip kết quả ngắn của step ("✓", "exit 254") — exit khác 0 là thứ phải đọc
+  // được ngay trên thẻ, không phải mở khối bước ra mới thấy.
+  result?: string
 }
 export type SteerBlock = { kind: 'steer'; text: string }
 export type ErrorBlock = { kind: 'error'; text: string }

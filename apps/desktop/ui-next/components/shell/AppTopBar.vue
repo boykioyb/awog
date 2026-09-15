@@ -64,6 +64,9 @@ const TITLE_KEYS: Record<string, string> = {
   '/connections': 'nav.connections',
   '/hooks': 'nav.hooks',
   '/settings': 'nav.settings',
+  // `/infra` trước đây rơi vào nhánh mặc định ⇒ thanh trên hiện "AWOG". Mục menu
+  // đã đổi tên thành "AWS" (2026-09-14) nên tiêu đề trang đi theo cùng một nguồn.
+  '/infra': 'nav.infra',
 }
 
 const { t } = useI18n()

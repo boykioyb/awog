@@ -47,6 +47,13 @@
     >
       <SettingsTog v-model="githubEnabled" />
     </SettingsField>
+
+    <SettingsField
+      :name="t('settings.notifications.cicd.name')"
+      :desc="t('settings.notifications.cicd.desc')"
+    >
+      <SettingsTog v-model="cicdEnabled" />
+    </SettingsField>
   </div>
 </template>
 
@@ -156,5 +163,11 @@ const sessionEvents = computed<boolean>({
 const githubEnabled = computed<boolean>({
   get: () => store.githubNotify.enabled,
   set: (value) => (store.githubNotify.enabled = value),
+})
+// Pipeline hỏng / chờ duyệt. Tắt là vòng poll dừng hẳn (useCicdNotify tự dọn
+// danh sách) — không phải chỉ ẩn toast.
+const cicdEnabled = computed<boolean>({
+  get: () => store.notifications.cicdEvents,
+  set: (value) => (store.notifications.cicdEvents = value),
 })
 </script>

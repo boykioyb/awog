@@ -1,0 +1,13 @@
+{
+  "infra.ask.chooseCurrent": "Into the current session",
+  "infra.ask.chooseCurrentHint": "Appends to the open session's composer instead of overwriting what you typed.",
+  "infra.ask.chooseNew": "Open a new session",
+  "infra.ask.chooseNewHint": "Creates a session in awog-infra (the separate infra folder) and puts the content there.",
+  "infra.ask.chooseTitle": "Where should this go?",
+  "infra.ask.copiedInstead": "Could not open a new session — copied to the clipboard instead",
+  "infra.ask.copyFailed": "Could not copy to the clipboard",
+  "infra.ask.done": "Added to the open session's message box",
+  "infra.ask.doneNew": "Opened a new infra session and put the content in its composer",
+  "infra.ask.noSession": "No session is open — copied to the clipboard instead of sending",
+  "infra.ask.preview": "What will be sent"
+}

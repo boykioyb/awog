@@ -1,0 +1,13 @@
+{
+  "infra.ask.chooseCurrent": "Vào phiên hiện tại",
+  "infra.ask.chooseCurrentHint": "Nối thêm vào ô soạn tin của phiên đang mở, không ghi đè thứ bạn đã gõ.",
+  "infra.ask.chooseNew": "Mở phiên mới",
+  "infra.ask.chooseNewHint": "Tạo một phiên trong awog-infra (thư mục hạ tầng riêng) và đính nội dung vào đó.",
+  "infra.ask.chooseTitle": "Gửi nội dung này đi đâu?",
+  "infra.ask.copiedInstead": "Không mở được phiên mới — đã chép vào clipboard",
+  "infra.ask.copyFailed": "Không chép được vào clipboard",
+  "infra.ask.done": "Đã đính vào ô soạn tin của phiên đang mở",
+  "infra.ask.doneNew": "Đã mở phiên hạ tầng mới và đính nội dung vào ô soạn tin",
+  "infra.ask.noSession": "Chưa có phiên nào đang mở — đã chép vào clipboard thay vì gửi",
+  "infra.ask.preview": "Nội dung sẽ gửi"
+}

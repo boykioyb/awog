@@ -30,4 +30,10 @@ export type InfraBinaryStatus = {
   version: string | null
   /** Gợi ý cài đặt, chỉ có khi `found === false`. */
   hint: string | null
+  /**
+   * Realpath của một bản cài CÓ THẬT nhưng nằm ngoài allowlist prefix (task 0.1b).
+   * UI mời người dùng bảo lãnh đúng đường dẫn này; `null` khi không có gì để bảo
+   * lãnh (chưa cài, hoặc bản cài đã nằm trong allowlist).
+   */
+  rejectedPath: string | null
 }

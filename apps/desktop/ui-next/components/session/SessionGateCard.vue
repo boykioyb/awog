@@ -122,6 +122,17 @@
         <Icon name="alert" />
         <span>{{ t('sessionsPerm.savedDowngraded') }}</span>
       </div>
+      <!-- Kết quả lệnh vừa được duyệt, chép từ step của CHÍNH lời gọi này (xem
+           attachPermResult trong store). Không có dòng này thì thẻ chỉ nói "Đã cho
+           phép", còn output nằm trong khối bước mặc định thu gọn bên dưới — người
+           vừa bấm Cho phép đọc ra như thể lệnh không trả về gì. -->
+      <div v-if="permOutput" class="pout">
+        <div class="pouthead">
+          <span>{{ t('sessions.step.output') }}</span>
+          <span v-if="permExit" class="poutexit">{{ permExit }}</span>
+        </div>
+        <pre class="cvcode plain poutbody">{{ permOutput }}</pre>
+      </div>
     </template>
     <div v-else class="resolved den">{{ t('sessions.gate.denied') }}</div>
   </div>
@@ -159,7 +170,12 @@
 // (`forms` + the active tab) stays local UI working-state until "Submit" commits it.
 // Accepts the full block union; only the gate kinds match a branch (others render
 // nothing) so the parent's v-else can pass an un-narrowed AssistantBlock cleanly.
-import type { AssistantBlock, InfraCommandClass, InfraPrompt } from '~/composables/useSessionsData'
+import type {
+  AssistantBlock,
+  InfraCommandClass,
+  InfraPrompt,
+  StepDetailKind,
+} from '~/composables/useSessionsData'
 import { useSessionPermissionRule } from '~/composables/useSessionPermissionRule'
 
 const props = defineProps<{ block: AssistantBlock }>()
@@ -307,9 +323,30 @@ const infraNotes = computed<string[]>(() => {
   if (!i) return []
   const notes: string[] = []
   if (!hasInfraContext.value) notes.push(t('infraGate.noAccount'))
+  // Ngữ cảnh ghim CÓ, nhưng lệnh đi qua chuỗi shell: nó là mặc định (sidecar luồn
+  // `AWS_PROFILE` xuống tiến trình con), không phải chỉ định — chuỗi tự đổi được
+  // bằng `--profile`. Nói đúng mức thì thẻ vẫn hữu ích; im lặng ở đây là hứa hộ
+  // một tài khoản mà lệnh có thể không chạm tới.
+  else if (i.shell) notes.push(t('infraGate.hint.shell'))
   if (i.reason === 'bypass') notes.push(t('infraGate.hint.bypass'))
   else if (i.reason === 'session-narrowed') notes.push(t('infraGate.hint.narrowed'))
   return notes
+})
+
+// ── Kết quả lệnh trên thẻ đã duyệt ────────────────────────────────────────────
+// Chỉ hiện kết quả DẠNG CHỮ: diff/file đã có nguyên một khối bước ngay dưới thẻ,
+// chép lại vào thẻ là nhân đôi cả một file vào transcript mà không thêm gì.
+const RESULT_KINDS: readonly StepDetailKind[] = ['terminal', 'text', 'list']
+const permOutput = computed<string>(() => {
+  const b = props.block
+  if (b.kind !== 'perm' || !b.detail) return ''
+  return b.detailKind == null || RESULT_KINDS.includes(b.detailKind) ? b.detail : ''
+})
+// Mã thoát chỉ đáng in khi KHÁC 0: dấu "✓" của lệnh thành công là nhiễu ngay cạnh
+// chính output vừa hiện ra, còn `exit 254` là thứ đọc trước cả nội dung.
+const permExit = computed<string>(() => {
+  const r = props.block.kind === 'perm' ? props.block.result : ''
+  return r && r !== '✓' ? r : ''
 })
 
 const onAllow = (): void => {
@@ -424,9 +461,15 @@ const onRetry = (): void => {
   font-weight: 650;
   color: var(--danger);
 }
-/* Dòng lệnh ĐÚNG NHƯ sắp chạy. Cuộn ngang chứ KHÔNG xuống dòng: một lệnh bị bẻ
-   dòng đọc ra thành nhiều lệnh, và `--profile prod` rơi xuống dòng dưới là đúng
-   chi tiết mà người duyệt cần thấy dính liền với lệnh. */
+/* Dòng lệnh ĐÚNG NHƯ sắp chạy. XUỐNG DÒNG chứ không cuộn ngang.
+   Bản đầu để `white-space: pre` + `overflow-x: auto` với lý do "một lệnh bị bẻ dòng
+   đọc ra thành nhiều lệnh" — đúng về nguyên tắc, nhưng trên thực tế phần ĐUÔI bị
+   đẩy ra ngoài tầm nhìn và thanh cuộn ngang không hiện trên thanh này (macOS ẩn
+   scrollbar), nên người duyệt đọc `aws sts get-caller-identity … | env | grep -c
+   '^AWS_'` mà không thấy `'^AWS_'`. Một lệnh dài bị cắt cụt tệ hơn một lệnh bị bẻ
+   dòng: chữ vẫn nguyên văn (không thêm/bớt ký tự nào) nên copy ra terminal vẫn chạy
+   đúng, và `overflow-wrap: anywhere` chỉ bẻ khi token không còn chỗ — cờ ngắn vẫn
+   nằm nguyên trên dòng của nó. */
 .icmd {
   margin-top: 9px;
   padding: 7px 10px;
@@ -437,8 +480,8 @@ const onRetry = (): void => {
   background: var(--bgActive);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
-  white-space: pre;
-  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   user-select: text;
 }
 .ichips {
@@ -467,5 +510,42 @@ const onRetry = (): void => {
   color: var(--amber);
   border-color: var(--amberBorder);
   background: var(--amberDim);
+}
+/* ── Kết quả của lệnh vừa được duyệt ─────────────────────────────────────────
+   Nằm SAU hàng "Đã cho phép" vì đó là thứ tự thời gian thật (duyệt → chạy → kết
+   quả), và cách hàng luật đã ghi. Nhãn nhỏ phía trên để "Kết quả" không bị đọc lẫn
+   vào dòng lệnh ở đầu thẻ. */
+.pout {
+  margin-top: 9px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+}
+.pouthead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 650;
+  color: var(--textDim);
+}
+.poutexit {
+  font-family: var(--code); /* mono-ok: mã thoát là chữ của máy */
+  font-weight: 550;
+  color: var(--danger);
+}
+/* Xuống dòng chứ không cuộn ngang — cùng lý do như `.icmd`: output dài (một dòng
+   JSON lỗi AWS) mà để `pre` là phần đuôi biến mất khỏi tầm mắt trên thanh này. */
+.poutbody {
+  margin: 0;
+  padding: 2px 0 0;
+  border: none;
+  background: transparent;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textMuted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
 }
 </style>

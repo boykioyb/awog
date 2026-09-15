@@ -1,6 +1,6 @@
 # Feature — CI/CD: theo dõi và điều khiển pipeline
 
-- **Trạng thái:** Planned — chưa code
+- **Trạng thái:** **Đã code (2026-09-14)** — tab **Triển khai** trong `/infra`, bốn nguồn, hành động ghi, thông báo. **Chưa QA trong Electron thật** và **chưa chạy bằng credential AWS thật**; xem §"Trạng thái thực tế" cuối file
 - **ADR:** [0088](../decisions/0088-session-infra-context.md) (ngữ cảnh + ma trận quyền), [ADR 0049](../decisions/0049-github-pr-issue-tabs.md) (gh CLI đã có trong app)
 - **Route:** `/infra` → **Triển khai**; và chip trạng thái trên thẻ Tổng quan
 - **Anh em:** [infra-audit-log.md](infra-audit-log.md) (mọi thao tác pipeline đều vào nhật ký), [cloudwatch-logs.md](cloudwatch-logs.md) (log build dùng chung viewer)
@@ -81,3 +81,46 @@ Phụ thuộc: P0 của [session-infra-context.md](session-infra-context.md) cho
 - Log build là dữ liệu **L1**: clamp + redact trước khi vào chat hoặc nhật ký. Log CI nổi tiếng là hay chứa token in nhầm.
 - Biến môi trường / secret của pipeline: **chỉ liệt kê tên**. Không có nút xem giá trị ở v1.
 - Duyệt bước thủ công trên môi trường production đi theo **cột production** của ma trận quyền — mặc định phải có người bấm.
+
+## Trạng thái thực tế (Mốc 4, 2026-09-14)
+
+Đã code **4.1 → 4.6**. Cửa vào: tab **Triển khai** trong `/infra` (4.1 còn bổ sung sáu view vào tab **Dịch vụ**: `cloudfront.distributions` + `cloudfront.invalidations` · `apigateway.restApis` · `apigatewayv2.httpApis` · `acm.certificates` · `route53.records`). Danh sách việc + điểm lệch: [infra.tasks.md](infra.tasks.md) §"Mốc 4 — trạng thái thực tế".
+
+### Nằm ở đâu
+
+| Tầng | File |
+|---|---|
+| Kiểu chung + thang trạng thái | `apps/desktop/sidecar/src/infra/cicd/types.ts` |
+| GitHub Actions (`gh`) | `…/cicd/github.ts` |
+| CodePipeline · CodeBuild · Amplify (`aws`) | `…/cicd/aws.ts` |
+| Ghép nguồn + hành động + nhật ký | `…/cicd/index.ts` |
+| Cổng quyền (allowlist + op đọc nhạy cảm) | `…/infra/classify.ts` |
+| RPC | `src/methods/infra.cicd-{runs,run,log,action,workflows}.ts` |
+| Vỏ gọi + điều khiển trang | `composables/useInfraCicdApi.ts` · `useInfraCicd.ts` |
+| Màn | `components/infra/cicd/InfraCicd.vue` |
+| Thông báo | `composables/useCicdNotify.ts` (poll) + tab "Triển khai" của bell (`components/shell/TopBarNotifications.vue`) |
+
+### Bốn luật đã cài trong code (không phải trong tài liệu)
+
+1. **UI không bao giờ gửi argv.** Hàng của bảng mang một `ref` chỉ chứa **id** (tên pipeline, tên project, `pipelineExecutionId`, `buildId`…); sidecar tra ngữ cảnh rồi dựng `aws`/`gh` argv sau khi `safeToken()` kiểm. `cwd` của `gh` vẫn là `project.path` đọc từ đĩa, không phải đường dẫn renderer gửi lên.
+2. **Vé duyệt do sidecar cấp.** Cổng chặn ⇒ sidecar trả `blocked` + vé; UI mở hộp duyệt hạ tầng (`useConfirm` `kind: 'infra'`) rồi gọi lại **y hệt payload** kèm vé. Không có đường nào để renderer tự khai "đã duyệt".
+3. **Chỉ tên, không giá trị.** `codebuildRunDetail()` chỉ lấy `.name` của `environment.environmentVariables`; `batch-get-builds` nằm trong `AWS_SENSITIVE_READ_OPS` (production ⇒ phải có người bấm) chính vì payload của nó có VALUE của biến `PLAINTEXT`.
+4. **Hỏng một nguồn không làm trắng bảng.** `infra.cicd-runs` trả về **mỗi nguồn một `CicdSourceResult`**, tự khai `error` · `blocked` · `note` (bị cắt bớt). Bảng thiếu nguồn mà im lặng là bảng trả lời sai câu "có gì hỏng không".
+
+Đo được bằng test: `src/infra/cicd/__tests__/*` khoá cả bốn luật trên (redact **trước** khi clamp · `SUPER-SECRET` không được xuất hiện ở bất kỳ trường nào · token duyệt CodePipeline do sidecar đọc, **không** đi qua UI · nguồn bị cổng chặn giữa vòng lặp trả về nguồn rỗng chứ không trả bảng nửa vời).
+
+### Thông báo: vì sao mặc định TẮT
+
+Task 4.5 nói "pipeline hỏng đi vào chính hộp bell + toast đã có". Nó đi vào **đúng** đường đó — thêm một tab "Triển khai" trong bell (cạnh hộp thư GitHub và danh sách PR đang theo dõi), và mọi lời gọi đi qua `useCicdNotify` với đúng ngữ nghĩa kênh gửi của Settings → Thông báo (`toast` / `native` / `both`). Khác một điểm: **nguồn này mặc định tắt** (`notifications.cicdEvents`).
+
+Vì một lượt kiểm tra là **nhiều tiến trình `aws` cộng một `gh run list` cho mỗi dự án** — đúng thứ mà luật 1 của màn này cấm làm sau lưng người dùng. Chạy nền mặc định là tự chạy; nên nó là lựa chọn, nhịp bị chặn sàn **5 phút**, lượt poll ĐẦU TIÊN trên máy chỉ dựng mốc im lặng (không toast một loạt lần chạy đã hỏng từ trước), và tắt công tắc thì vòng poll dừng hẳn + danh sách bị xoá.
+
+Trên tài khoản **production**, lượt poll có thể bị cổng chặn ở CodeBuild (op đọc nhạy cảm) — nguồn đó đơn giản là không có hàng trong danh sách thông báo, không có vé nào được tự cấp.
+
+### Còn nợ (chuyển tiếp)
+
+- **QA trong Electron thật**: chưa ai bấm thử. `pnpm typecheck` + `pnpm lint` + `vitest` xanh ở cả hai app là xanh của **cổng tĩnh**.
+- **Credential AWS thật**: CLI trên máy này trả `ExpiredToken` ⇒ mọi đường AWS của mốc 4 mới được test bằng JSON mẫu, chưa qua `aws` thật.
+- **`gh` thật**: các đường GitHub của mốc 4 chưa chạy với một `gh` đã đăng nhập.
+- **`cicd-runs` chưa chạy trên tài khoản production** ⇒ nhánh "đọc bị siết nhịp + xin vé" mới có test đơn vị.
+- **Agent chạy lại pipeline sau khi sửa** (vế thứ hai của C5): nút *Hỏi agent* đẩy log của bước hỏng (đã redact + clamp) vào phiên, nhưng `runtime/tools/infra-tools.ts` **chưa có tool nào chạm tới màn này** (`infra_view`/`infra_action` chỉ đi qua danh mục tài nguyên) — vòng lặp khép kín "agent sửa rồi chạy lại" vẫn phải bấm tay ở tab Triển khai.

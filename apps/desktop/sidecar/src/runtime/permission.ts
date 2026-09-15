@@ -84,16 +84,24 @@ import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
 // Ma trận quyền hạ tầng (ADR 0088 §5). `classify` + `decide` là hàm THUẦN;
 // `loadInfraPolicy` đọc đĩa nhưng đã tự phòng thủ (không bao giờ ném, có cache).
-import { CONTEXT_BLOCKED_BINARIES, CONTEXT_SWITCH_CLASS, classify } from '../infra/classify.js'
+import {
+  CONTEXT_BLOCKED_BINARIES,
+  CONTEXT_SWITCH_CLASS,
+  classify,
+  sensitiveReadOf,
+} from '../infra/classify.js'
 import { decide } from '../infra/policy.js'
 import { loadInfraPolicy } from '../infra/policy-store.js'
 import { recordInfraAction } from '../infra/audit/store.js'
+import { infraAuditContext } from '../infra/run.js'
 import type { InfraAccountKind, InfraMode } from '../infra/policy.js'
 import type { InfraCommandClass, InfraTool } from '../infra/types.js'
 import type { InfraContext } from '../infra/run.js'
 import {
   AWS_CLI_TOOL_NAME,
   INFRA_CONTEXT_TOOL_NAME,
+  LOGS_QUERY_TOOL_NAME,
+  LOGS_TAIL_TOOL_NAME,
 } from './tools/infra-tools.js'
 import { log } from '../util/logger.js'
 
@@ -268,6 +276,12 @@ const INFRA_GATED_TOOLS = [
   ...Object.keys(INFRA_CLI_TOOLS),
   INFRA_ACTION_TOOL,
   INFRA_CONTEXT_TOOL,
+  // ⚠ Hai tool Mốc 2 (2.9). KHÔNG có mặt ở đây thì chúng đi vòng qua ma trận
+  // hoàn toàn: `infraToolName()` trả null ⇒ `readInfraCall()` trả null ⇒ cổng
+  // quyền coi đây là tool thường và cho chạy. Chúng là lệnh TỐN TIỀN (Insights
+  // tính theo GB quét) nên đây là dòng bắt buộc, không phải trang trí.
+  LOGS_QUERY_TOOL_NAME,
+  LOGS_TAIL_TOOL_NAME,
 ]
 
 // Tên TRẦN của một tool hạ tầng, kể cả khi nó đến dưới dạng bắc cầu của nhánh
@@ -348,7 +362,13 @@ function describeOpaqueCall(bare: string, args: unknown): string {
   return line.length > MAX_COMMAND_CHARS ? `${line.slice(0, MAX_COMMAND_CHARS - 1)}…` : line
 }
 
-type InfraCall = { name: string; class: InfraCommandClass; command: string }
+type InfraCall = {
+  name: string
+  class: InfraCommandClass
+  command: string
+  /** Lệnh `read` trả về NỘI DUNG log ⇒ `decide()` siết lên `ask` ở production. */
+  sensitive?: string | undefined
+}
 
 
 // `infra_context` đổi ngữ cảnh khi lời gọi mang field ghi (`set`/`profile`/…).
@@ -382,12 +402,43 @@ function readInfraCall(toolName: string, args: unknown, ctx?: InfraContext): Inf
   }
   const cli = infraCliOf(bare, args)
   const argv = infraArgv(args)
+  // Hai tool log (Mốc 2 việc 2.9) KHÔNG chạy một dòng `aws` trực tiếp — chúng gọi
+  // module `infra/aws/logs.ts` (ước lượng GB trước, poll sau). Nên lớp của chúng
+  // không suy được từ argv, và phải khai tường minh ở đây:
+  //   · `logs_query` TỐN TIỀN (Insights tính theo GB) ⇒ `write` ⇒ luôn hỏi;
+  //   · `logs_tail_window` là `read` nhưng TRẢ NỘI DUNG log ⇒ gắn `sensitive` để
+  //     `decide()` siết lên `ask` ở production, đúng như `aws_cli logs
+  //     filter-log-events`.
+  // Bỏ nhánh này thì cả hai rơi xuống `write` + mô tả rỗng: vẫn an toàn (hỏi
+  // nhiều hơn) nhưng prompt duyệt không nói được người dùng đang duyệt cái gì.
+  if (bare === LOGS_QUERY_TOOL_NAME || bare === LOGS_TAIL_TOOL_NAME) {
+    const bag = argBag(args)
+    const groups = Array.isArray(bag?.logGroups)
+      ? (bag.logGroups as unknown[]).filter((g): g is string => typeof g === 'string')
+      : []
+    const where = groups.length > 0 ? groups.join(' ') : '(no log group)'
+    const detail =
+      bare === LOGS_QUERY_TOOL_NAME && typeof bag?.query === 'string' ? ` :: ${bag.query}` : ''
+    const line = `${bare} ${where}${detail}`
+    return {
+      name: bare,
+      class: bare === LOGS_QUERY_TOOL_NAME ? 'write' : 'read',
+      command: line.length > MAX_COMMAND_CHARS ? `${line.slice(0, MAX_COMMAND_CHARS - 1)}…` : line,
+      ...(bare === LOGS_TAIL_TOOL_NAME ? { sensitive: 'logs filter-log-events' } : {}),
+    }
+  }
   // Không đọc được lời gọi ⇒ `write` (fail-safe, ADR 0088 §5): chi phí đoán sai
   // là một lần hỏi thừa, chiều ngược lại là chạy một lệnh ghi không ai kịp nhìn.
   if (!cli || !argv) {
     return { name: bare, class: 'write', command: describeOpaqueCall(bare, args) }
   }
-  return { name: bare, class: classify(cli, argv), command: describeInfraCommand(cli, argv, ctx) }
+  const sensitive = sensitiveReadOf(cli, argv)
+  return {
+    name: bare,
+    class: classify(cli, argv),
+    command: describeInfraCommand(cli, argv, ctx),
+    ...(sensitive !== null ? { sensitive } : {}),
+  }
 }
 
 /** Ngữ cảnh + trần của phiên mà cổng quyền áp cho lệnh hạ tầng. */
@@ -412,6 +463,14 @@ type InfraPromptPayload = {
   reason: string
   /** Bypass tạm thời còn lại (giây) — UI đếm ngược; vắng ⇒ không có bypass. */
   bypassSecondsLeft?: number
+  /**
+   * Lệnh đi qua một CHUỖI SHELL (`Bash`) chứ không phải tool CLI của AWOG.
+   * Ngữ cảnh kèm theo vẫn là thật, nhưng là MẶC ĐỊNH của tiến trình con (sidecar
+   * luồn `AWS_PROFILE`/`AWS_DEFAULT_REGION`), không phải chỉ định: chuỗi shell tự
+   * đổi được bằng `--profile`/`--region` mà cổng quyền không đọc ra nổi. Thẻ duyệt
+   * dùng cờ này để nói đúng mức — xem `bashInfraCall`.
+   */
+  shell?: boolean
   profile?: string
   accountId?: string
   region?: string
@@ -429,6 +488,8 @@ function infraPromptPayload(
     bypassSecondsLeft?: number
   },
   ctx: InfraContext | undefined,
+  /** Lệnh chạy trong chuỗi shell (`Bash`) ⇒ ngữ cảnh là mặc định, không phải chỉ định. */
+  shell = false,
 ): InfraPromptPayload {
   return {
     kind: 'infra',
@@ -438,6 +499,7 @@ function infraPromptPayload(
     accountKind: verdict.accountKind,
     mode: verdict.mode,
     reason: verdict.reason,
+    ...(shell ? { shell: true } : {}),
     // Bypass tạm thời còn bao lâu — thẻ duyệt đếm ngược bằng số này. `decide()`
     // đã tính, không chuyển tiếp thì người duyệt không biết cửa còn mở mấy phút.
     ...(verdict.bypassSecondsLeft !== undefined
@@ -551,21 +613,36 @@ function bashInfraCall(toolName: string, args: unknown): { tool: InfraTool; argv
 
 
 /**
- * Hai đường trên đĩa mà agent KHÔNG được ghi, ở bất kỳ mode nào (infosec audit #1):
+ * Ba đường trên đĩa mà agent KHÔNG được ghi, ở bất kỳ mode nào (infosec audit #1
+ * + audit #2 của Mốc 1):
  *   · `~/.awog/infra-policy.json` — chính ma trận quyền. Ghi được nó là tự mở
  *     toàn bộ cổng, và làm thế không để lại dấu vì `infra.policy.set` mới là
  *     đường có ghi nhật ký.
  *   · `~/.awog/infra-audit/` — nhật ký hoạt động. Sửa/xoá được bằng chứng thì
  *     bằng chứng hết là bằng chứng.
+ *   · `~/.awog/infra/account-ids.json` — account id đã phân giải theo profile
+ *     (A8, `infra/aws/account-ids.ts`). Đây không phải cache trang trí: lý do
+ *     tồn tại của nó là để `accountKindOf()` HẠ một tài khoản từ `production`
+ *     xuống `normal`, tức mở ô `destructive/production = block`. Nó là ĐẦU VÀO
+ *     của ma trận, nên phải được che như chính ma trận.
+ *     ⚠ Trường `fp` trong file đó KHÔNG phải chữ ký: nó băm metadata mà agent
+ *     đọc được bằng `cat ~/.aws/config`, bằng một thuật toán nằm trong repo này
+ *     — tự tính lại được. Vân tay chống LỆCH CẤU HÌNH, quyền ghi file mới là
+ *     thứ chống giả mạo.
  *
  * Đây là hàng rào ĐỘ SÂU, không phải hàng rào kín: với `Bash` ta chỉ so chuỗi,
  * nên một script tự ghép đường dẫn vẫn lọt. Nó chặn đường thẳng và làm đường
  * vòng trở nên rõ ràng là cố ý — chốt thật nằm ở chỗ agent không nên có quyền
  * ghi vào `~/.awog` ngay từ đầu, việc của một mốc sau.
+ *
+ * Khớp theo ĐUÔI đường dẫn chứ không theo đường tuyệt đối: một chuỗi shell thì
+ * chưa được resolve (`~`, `$HOME`, đường tương đối đều chưa thành đường thật),
+ * nên so đường tuyệt đối sẽ trượt hết. Cái giá là một file cùng tên trong
+ * workspace cũng bị chặn — hướng fail-safe, và tên đủ riêng để không va vào đâu.
  */
-const PROTECTED_PATH_RE = /infra-policy\.json|infra-audit[/\\]/
+const PROTECTED_PATH_RE = /infra-policy\.json|infra-audit[/\\]|infra[/\\]account-ids\.json/
 
-function touchesProtectedPath(toolName: string, args: unknown): boolean {
+export function touchesProtectedPath(toolName: string, args: unknown): boolean {
   const bag = argBag(args)
   if (!bag) return false
   if (toolName === 'Bash') {
@@ -1078,6 +1155,7 @@ export function makeBeforeToolCall(
           class: infraCall.class,
           ...(infraGate?.context?.accountId ? { accountId: infraGate.context.accountId } : {}),
           ...(infraGate?.sessionFloor ? { sessionFloor: infraGate.sessionFloor } : {}),
+          ...(infraCall.sensitive !== undefined ? { sensitiveRead: infraCall.sensitive } : {}),
         })
       } catch (err) {
         log.warn('permission gate: infra policy lookup failed, asking instead', {
@@ -1151,21 +1229,30 @@ export function makeBeforeToolCall(
       // Chuỗi shell không đọc sạch được ⇒ ép `write` (luôn hỏi). Không có đường
       // nào từ một chuỗi không chắc chắn dẫn tới `read`.
       const cls = bashInfra.clean ? classify(bashInfra.tool, bashInfra.argv) : 'write'
+      // Chuỗi shell không đọc sạch thì KHÔNG suy được op nào ⇒ không suy được
+      // "đây có phải lệnh đọc nội dung log không". Bỏ qua ở đó là chiều an toàn:
+      // `cls` đã bị ép `write`, tức đằng nào cũng phải hỏi.
+      const sensitive = bashInfra.clean ? sensitiveReadOf(bashInfra.tool, bashInfra.argv) : null
       let verdict: { mode: InfraMode; reason: string; accountKind: InfraAccountKind }
       try {
         const policy = await loadInfraPolicy()
-        // ⚠ KHÔNG chấm theo account đang ghim (audit #1 F3). `Bash` chưa nhận được
-        // `AWS_PROFILE` (bash-tool.ts vẫn gọi `filteredShellEnv()` trần), nên lệnh
-        // thật chạy bằng profile `default` — mà ADR 0088 tự viết: "`default` rất
-        // thường là production". Chấm theo account ghim sẽ in ra thẻ duyệt một cái
-        // tên account mà lệnh KHÔNG chạm tới: duyệt nhầm có chứng cứ giả, tệ hơn là
-        // không có chứng cứ. Nên tới khi env được luồn xuống, nhánh này luôn dùng
-        // cột `production` — cột siết hơn — và không nêu account nào cả.
+        // ⚠ KHÔNG chấm theo account đang ghim (audit #1 F3) — nhưng lý do đã HẸP đi
+        // sau khi env được luồn xuống (`bash-tool.ts` + `claude-sdk/shared.ts` đặt
+        // `AWS_PROFILE`/`AWS_DEFAULT_REGION` từ ngữ cảnh phiên), nên đọc lại kẻo
+        // tưởng nhánh này vẫn mù hoàn toàn:
+        //   · Lệnh KHÔNG kèm cờ thì nay chạy đúng profile đã ghim, và thẻ duyệt nêu
+        //     tên profile đó (xem `infraPromptPayload` bên dưới).
+        //   · Cái còn hở là chuỗi shell TỰ ĐỔI cờ (`aws … --profile prod`): không
+        //     đọc được thì không biết, mà `aws_cli` chặn cờ này bằng `findForbiddenFlag`
+        //     còn `Bash` thì không chặn được chuỗi tuỳ ý. Vì vậy CỘT vẫn là cột chặt
+        //     nhất (`production`): đoán sai theo chiều CẤP QUYỀN là leo thang, còn
+        //     đoán sai theo chiều hỏi thừa chỉ tốn một cú bấm.
         verdict = decide({
           policy,
           class: cls,
           accountId: '__unverified__',
           ...(infraGate?.sessionFloor ? { sessionFloor: infraGate.sessionFloor } : {}),
+          ...(sensitive !== null ? { sensitiveRead: sensitive } : {}),
         })
         verdict = { ...verdict, accountKind: 'production' }
       } catch {
@@ -1180,6 +1267,12 @@ export function makeBeforeToolCall(
       // qua `Bash` — kể cả lệnh vừa được duyệt, kể cả lớp phá huỷ — không để lại
       // dòng nào. Câu "app đã làm gì trên account của tôi" vì thế trả lời SAI theo
       // hướng trấn an. Ghi cả khi verdict là `auto`.
+      // Ngữ cảnh đã ghim ĐI VÀO nhật ký (trước đây là `{}`). Không phải trang trí:
+      // sidecar luồn `AWS_PROFILE`/`AWS_DEFAULT_REGION` xuống shell (xem
+      // `bash-tool.ts` + `claude-sdk/shared.ts`), nên profile ở đây mô tả đúng thứ
+      // `aws …` không kèm cờ sẽ dùng. Bỏ trống thì câu "app đã chạm account nào"
+      // không trả lời được cho đúng những lệnh chạy qua shell.
+      const bashCtx = infraAuditContext(infraGate?.context)
       const noteBash = (decision: 'auto' | 'approved' | 'blocked'): void => {
         void recordInfraAction({
           actor: 'agent:assistant',
@@ -1187,7 +1280,7 @@ export function makeBeforeToolCall(
           surface: 'session',
           tool: 'Bash',
           argv: bashInfra.argv,
-          context: {},
+          context: bashCtx,
           class: cls,
           decision,
           result: { summary: String(argBag(context.args)?.command ?? '').slice(0, 400) },
@@ -1214,12 +1307,18 @@ export function makeBeforeToolCall(
         // bao giờ nhớ được (task 0.14).
         return promptViaUi(false, {
           offerAlwaysAllow: false,
-          // `undefined` ngữ cảnh: xem chú thích F3 ở trên — không in account mà lệnh
-          // sẽ không chạm tới. Thẻ duyệt vẫn có dòng lệnh đầy đủ và lớp lệnh.
+          // Ngữ cảnh đã ghim ĐI VÀO payload, kèm cờ `shell` (§F3 ở trên). Bản đầu
+          // truyền `undefined` vì `Bash` chưa nhận `AWS_PROFILE` — khi đó thẻ nêu
+          // tên account là nói về một tài khoản lệnh KHÔNG chạm tới. Nay env đã
+          // được luồn xuống, nên tên đó là MẶC ĐỊNH thật; chỗ duy nhất còn hở là
+          // chuỗi shell tự đổi cờ, và `shell: true` là thứ nói ra điều đó thay vì
+          // im lặng (hoặc tệ hơn: in ra "không ghim tài khoản nào" — sai hẳn, vì
+          // phiên CÓ ghim).
           decisionReason: infraPromptPayload(
             { name: toolName, class: cls, command: String(argBag(context.args)?.command ?? '') },
             verdict,
-            undefined,
+            infraGate?.context,
+            true,
           ),
         })
       }

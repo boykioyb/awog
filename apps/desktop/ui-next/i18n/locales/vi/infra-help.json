@@ -1,0 +1,17 @@
+{
+  "infra.help.title": "Chưa có credential?",
+  "infra.help.intro": "AWS CLI — và do đó AWOG — cần credential mà nó dùng được. Account ID/alias + IAM username + mật khẩu chỉ dùng được ở trang đăng nhập Console, nên nó phải đi qua một trong hai đường dưới đây.",
+  "infra.help.consoleTitle": "Cách 1 — Đăng nhập Console (khuyến nghị)",
+  "infra.help.consoleBody": "Đóng hộp thoại này rồi bấm Thêm profile → Đăng nhập Console ở thanh trên: AWOG mở trình duyệt, bạn đăng nhập bằng chính bộ ba đó, xong. Không sinh khoá dài hạn, không phải gõ lệnh. (Muốn tự làm trong terminal thì lệnh tương đương là aws login.)",
+  "infra.help.keyTitle": "Cách 2 — tạo access key",
+  "infra.help.step1": "Mở trang đăng nhập AWS, vào bằng Account ID/alias + IAM username + mật khẩu.",
+  "infra.help.step2": "Vào IAM → Users → user của bạn → tab Security credentials.",
+  "infra.help.step3": "Create access key → chọn Command Line Interface (CLI).",
+  "infra.help.step4Csv": "Tải file *_accessKeys.csv rồi quay lại đây chọn đúng file đó.",
+  "infra.help.step4Static": "Tải file *_accessKeys.csv rồi dán Access key ID và Secret access key vào hai ô bên trên.",
+  "infra.help.openSignIn": "Mở trang đăng nhập AWS",
+  "infra.help.openDocs": "Hướng dẫn của AWS",
+  "infra.help.blockedTitle": "Không thấy nút Create access key, hoặc bị AccessDenied?",
+  "infra.help.blockedBody": "Tổ chức của bạn đã chặn khoá dài hạn. Xin quản trị viên start URL của IAM Identity Center rồi dùng Nhập → Từ SSO (tương đương aws configure sso trong terminal), hoặc ARN của một role bạn được phép assume.",
+  "infra.help.passwordNote": "AWOG không bao giờ hỏi mật khẩu Console, và mật khẩu không đi vào ~/.aws — đừng dán nó ở đây."
+}

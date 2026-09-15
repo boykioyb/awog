@@ -65,6 +65,13 @@ function clampOutput(buf: string): string {
 export function createBashTool(
   cwd: string,
   bg?: BashBackgroundContext,
+  // Ngữ cảnh hạ tầng phiên đã ghim (ADR 0088 §6, invariant #7). Chỉ hai trường
+  // tới được đây: `profile`/`region` thành `AWS_PROFILE`/`AWS_DEFAULT_REGION`.
+  // Đây là thứ khiến một lệnh `aws …` KHÔNG kèm cờ chạy đúng tài khoản phiên đã
+  // ghim; thiếu nó thì lệnh rơi về profile `default`, mà `default` rất thường là
+  // production — trong khi thẻ duyệt vẫn nói phiên đã ghim một tài khoản khác.
+  // Vắng ngữ cảnh (phiên không đụng hạ tầng) ⇒ không thêm biến nào.
+  infra?: { profile?: string | undefined; region?: string | undefined },
 ): AgentTool<typeof BashParams, BashDetails> {
   return {
     name: 'Bash',
@@ -128,11 +135,13 @@ export function createBashTool(
       return new Promise<AgentToolResult<BashDetails>>((resolveResult) => {
         const child = spawn(shell.bin, [shell.flag, params.command], {
           cwd,
-          // Không truyền ngữ cảnh hạ tầng: `Bash` chưa có đường nhận nó.
-          // TODO(0.8): truyền `{ awsProfile, awsRegion }` của phiên xuống đây khi
-          // `SessionHeader.infra` có thật, để `Bash("aws …")` chạy đúng account đã
-          // ghim thay vì rơi về profile `default` (ADR 0088 §6).
-          env: filteredShellEnv(),
+          // Ngữ cảnh hạ tầng của phiên (ADR 0088 §6): `Bash("aws …")` chạy đúng
+          // account đã ghim thay vì rơi về profile `default`.
+          env: filteredShellEnv(
+            infra?.profile || infra?.region
+              ? { awsProfile: infra.profile, awsRegion: infra.region }
+              : undefined,
+          ),
           windowsHide: true,
         })
         let stdout = ''

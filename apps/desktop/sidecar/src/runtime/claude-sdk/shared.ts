@@ -57,7 +57,17 @@ export function mapClaudeErrorToRpc(err: unknown): RpcError {
 // Build the SDK subprocess env carrying the Anthropic credential. We do NOT
 // mutate the sidecar's own process.env (that would race across concurrent
 // sessions on different accounts) — the token lives only in the child's env.
-export function buildSdkEnv(cred: Credential): Record<string, string> {
+//
+// `infra` là ngữ cảnh hạ tầng phiên đã ghim (ADR 0088 §6, invariant #7). Nó vào
+// ĐÂY vì `Bash` trên đường này KHÔNG phải tool của AWOG: nó là tool của CLI, và
+// CLI chạy như tiến trình con — nên env của tiến trình con là chỗ DUY NHẤT đặt
+// được `AWS_PROFILE`. Không có nó thì `aws sts get-caller-identity` (không cờ)
+// trong một phiên đã ghim `229015218011_Offshore-Developer` trả về `default`,
+// trong khi thẻ duyệt vẫn nói phiên đã ghim tài khoản kia.
+export function buildSdkEnv(
+  cred: Credential,
+  infra?: { profile?: string | undefined; region?: string | undefined },
+): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(process.env)) {
     if (typeof v === 'string') env[k] = v
@@ -88,6 +98,15 @@ export function buildSdkEnv(cred: Credential): Record<string, string> {
   // (TASK_CHECKLIST_PROMPT); asking for TodoWrite here earns only
   // "No such tool available: TodoWrite" and a wasted round-trip.
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1'
+  // Ngữ cảnh đã ghim → biến môi trường của CLI (và của mọi `Bash` nó spawn).
+  // Ghi SAU vòng copy `process.env` ở trên: giá trị phiên đã ghim phải thắng một
+  // `AWS_PROFILE` lỡ nằm trong env của chính sidecar, cùng luật với `infraEnv()`
+  // ở `infra/run.ts`. Không ghim gì thì không thêm biến nào — hành vi cũ nguyên vẹn.
+  if (infra?.profile) env.AWS_PROFILE = infra.profile
+  if (infra?.region) {
+    env.AWS_REGION = infra.region
+    env.AWS_DEFAULT_REGION = infra.region
+  }
   // `system/session_state_changed` is the CLI's AUTHORITATIVE turn-over signal
   // ("'idle' fires after heldBackResult flushes and the bg-agent do-while exits"),
   // and it is emitted only behind this env flag. run-stream needs it: without it

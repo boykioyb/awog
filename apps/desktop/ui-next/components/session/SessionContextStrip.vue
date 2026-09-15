@@ -61,6 +61,10 @@
     <!-- Hạ tầng (ADR 0088): chip tự quản popover + màu của nó, đúng khuôn chip SSH
          phía trên. Nó cũng tự ẩn khi phiên không ghim ngữ cảnh nào. -->
     <InfraChip :session="session" />
+    <!-- kubectl + Terraform (ADR 0088 §7, P1/P2): cùng hàng, mỗi chip tự ẩn khi
+         máy/project không có gì để chọn. -->
+    <InfraKubectlChip :session="session" />
+    <InfraTerraformChip :session="session" />
 
     <SessionTodoPanel :session="session" variant="chip" />
     <SessionBookmarkBar :session="session" variant="chip" />
@@ -128,9 +132,12 @@ const { bannerVisible } = useSessionTodo(() => props.session)
 const hasBookmarks = computed(
   () => !!props.session.loaded && (props.session.bookmarks?.length ?? 0) > 0,
 )
-// Khớp với `pinned` trong InfraChip.vue — chip hạ tầng ở P0 chỉ nói về AWS.
-const { effective: infraContext } = useInfraContext(() => ({ sessionId: props.session.id }))
-const hasInfra = computed(() => !!infraContext.value.profile || !!infraContext.value.region)
+// Hàng phải hiện khi có tool hạ tầng NÀO để bật/tắt — không chỉ khi AWS đã ghim.
+// Phiên mới mặc định không ghim gì (mỗi tool một công tắc độc lập, mặc định TẮT),
+// nên nếu vẫn gate theo "đã ghim AWS" thì các chip không mount được và không còn
+// đường bật. `useInfraChipsPresence` đọc khả dụng máy/project một lần.
+const { load: loadInfraPresence, anyVisible: hasInfra } = useInfraChipsPresence(() => props.session)
+onMounted(() => void loadInfraPresence())
 const show = computed(
   () =>
     !!props.session.aboutTaskId ||

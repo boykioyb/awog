@@ -1,0 +1,16 @@
+{
+  "infra.bubble.title": "Phiên hạ tầng",
+  "infra.bubble.projectDescription": "Phiên hạ tầng riêng — thư mục làm việc awog-infra, tách khỏi repo đang mở.",
+  "infra.bubble.quota": "Hạn mức đã chặn nên chưa tạo được phiên hạ tầng",
+  "infra.bubble.provisioning": "Đang chuẩn bị thư mục awog-infra…",
+  "infra.bubble.open": "Mở phiên hạ tầng",
+  "infra.bubble.expand": "Mở full",
+  "infra.bubble.sessions": "Danh sách phiên",
+  "infra.bubble.chat": "Về hội thoại",
+  "infra.bubble.close": "Đóng bong bóng",
+  "infra.bubble.placeholder": "Hỏi về hạ tầng… (Enter để gửi, Shift+Enter xuống dòng)",
+  "infra.bubble.stop": "Dừng",
+  "infra.bubble.working": "Đang chạy…",
+  "infra.bubble.empty": "Chưa có tin nào. Hỏi một câu để bắt đầu.",
+  "infra.bubble.noSessions": "Chưa có phiên nào"
+}

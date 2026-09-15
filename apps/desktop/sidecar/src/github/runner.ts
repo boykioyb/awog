@@ -52,6 +52,15 @@ const DEFAULT_MAX_BUFFER = 16 * 1024 * 1024
 interface ExecOpts {
   cwd?: string | undefined
   env: NodeJS.ProcessEnv
+  /** Thân request gửi vào stdin con (`gh api --input -`); xem `runGh`. */
+  stdin?: string | undefined
+  /**
+   * Trần thời gian của RIÊNG lời gọi này. Mặc định `DEFAULT_TIMEOUT` (30s), đủ cho
+   * mọi lệnh metadata. Chỉ `gh run view --log` cần nới: nó tải cả gói log của một
+   * job và có thể lâu hơn 30s trên job dài — cắt giữa đường ở đó là mất log mà
+   * người dùng vừa bấm xem.
+   */
+  timeoutMs?: number | undefined
 }
 
 type ExecOutcome =
@@ -63,7 +72,7 @@ type ExecOutcome =
 
 function execOnce(args: readonly string[], opts: ExecOpts): Promise<ExecOutcome> {
   return new Promise<ExecOutcome>((resolveOutcome) => {
-    execFile(
+    const child = execFile(
       'gh',
       [...args],
       {
@@ -71,7 +80,7 @@ function execOnce(args: readonly string[], opts: ExecOpts): Promise<ExecOutcome>
         env: opts.env,
         windowsHide: true,
         maxBuffer: DEFAULT_MAX_BUFFER,
-        timeout: DEFAULT_TIMEOUT,
+        timeout: opts.timeoutMs ?? DEFAULT_TIMEOUT,
       },
       (err, stdoutBuf, stderrBuf) => {
         const decode = (v: string | Buffer | undefined | null): string => {
@@ -100,6 +109,9 @@ function execOnce(args: readonly string[], opts: ExecOpts): Promise<ExecOutcome>
         resolveOutcome({ ok: true, stdout })
       },
     )
+    // `gh api --input -` đọc thân request từ stdin. Ghi rồi ĐÓNG ngay: để mở là
+    // tiến trình con chờ tới hết timeout.
+    if (opts.stdin !== undefined) child.stdin?.end(opts.stdin)
   })
 }
 
@@ -233,12 +245,18 @@ export async function runGh(
   args: readonly string[],
   cwd: string,
   account?: string,
+  opts: { stdin?: string; timeoutMs?: number } = {},
 ): Promise<string> {
   const env = await resolveGhEnv(account)
   // Log the subcommand only (args[0..1]) — never the full args (no token here,
   // but keep logging minimal and stable) and never the env.
   log.info('gh exec', { sub: args.slice(0, 2).join(' ') })
-  const outcome = await execOnce(args, { cwd, env })
+  const outcome = await execOnce(args, {
+    cwd,
+    env,
+    ...(opts.stdin !== undefined ? { stdin: opts.stdin } : {}),
+    ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
+  })
   if (outcome.ok) return outcome.stdout
   throwForOutcome(outcome)
 }

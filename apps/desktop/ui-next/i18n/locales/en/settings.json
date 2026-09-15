@@ -237,6 +237,8 @@
   "settings.notifications.sessionEvents.desc": "Turn finished / needs your attention. Only fires while the window isn't focused — an open session already shows it live.",
   "settings.notifications.github.name": "GitHub notifications",
   "settings.notifications.github.desc": "Which projects to watch, and how often, is configured in Settings → Git.",
+  "settings.notifications.cicd.name": "Deploys",
+  "settings.notifications.cicd.desc": "Failed pipeline runs, and runs waiting for your approval. Checked every 5 minutes — each pass costs a few AWS/gh calls.",
   "settings.nav.wiki": "Wiki",
   "settings.nav.memory": "Memory",
   "settings.wiki.heading": "Wiki context",

@@ -129,6 +129,7 @@ const groups = computed<NavGroup[]>(() => [
       { to: '/git', icon: 'git', label: 'nav.git', dot: true },
       { to: '/connections', icon: 'conn', label: 'nav.connections' },
       { to: '/ssh', icon: 'ssh', label: 'nav.ssh' },
+      { to: '/infra', icon: 'layers', label: 'nav.infra' },
       { to: '/hooks', icon: 'hooks', label: 'nav.hooks' },
     ],
   },

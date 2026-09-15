@@ -2,11 +2,11 @@
   "infraGate.title": "Lệnh hạ tầng",
   "infraGate.sentence.read": "Agent muốn chạy một lệnh chỉ đọc trên hạ tầng.",
   "infraGate.sentence.write": "Agent muốn chạy một lệnh thay đổi hạ tầng.",
-  "infraGate.sentence.destructive": "Agent muốn chạy một lệnh phá huỷ — xoá hoặc gỡ bỏ tài nguyên.",
+  "infraGate.sentence.destructive": "Agent muốn chạy một lệnh xoá tài nguyên — thao tác này không hoàn tác được.",
   "infraGate.sentence.context-switch": "Agent muốn đổi ngữ cảnh hạ tầng đang ghim.",
   "infraGate.class.read": "Đọc",
   "infraGate.class.write": "Ghi",
-  "infraGate.class.destructive": "Phá huỷ",
+  "infraGate.class.destructive": "Xoá",
   "infraGate.class.context-switch": "Đổi ngữ cảnh",
   "infraGate.chip.production": "PRODUCTION",
   "infraGate.chip.account": "tài khoản {value}",
@@ -19,6 +19,7 @@
   "infraGate.chip.narrowed": "phiên đã siết quyền",
   "infraGate.hint.bypass": "Bypass tạm thời đang bật, nên lệnh cùng lớp chạy thẳng không hỏi cho tới lúc hết hạn.",
   "infraGate.hint.narrowed": "Phiên này tự siết quyền hạ tầng của nó, nên bạn vẫn bị hỏi ở chỗ mà Settings đã cho phép.",
+  "infraGate.hint.shell": "Lệnh chạy trong một chuỗi shell: profile ở trên là MẶC ĐỊNH của phiên, còn chuỗi vẫn tự đổi được bằng cờ riêng — nên ma trận chấm ở mức chặt nhất.",
   "infraGate.noAccount": "Không ghim tài khoản nào — lệnh chạy trên thứ mà chính CLI tự giải ra.",
   "infraGate.noRemember": "Lệnh hạ tầng không bao giờ được nhớ — mỗi lần gọi là một lần hỏi. Muốn đổi thì mở ma trận quyền ở Settings → Hạ tầng."
 }

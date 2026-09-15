@@ -1,6 +1,6 @@
 # Họ tính năng Infra — bản đồ đọc
 
-Năm tài liệu, một ADR. Đọc theo thứ tự này khi onboard:
+Một ADR + các tài liệu dưới đây. Đọc theo thứ tự này khi onboard:
 
 | # | Tài liệu | Trả lời câu hỏi | Ưu tiên |
 |---|---|---|---|
@@ -15,6 +15,20 @@ Năm tài liệu, một ADR. Đọc theo thứ tự này khi onboard:
 | 8 | [infra-cicd.md](infra-cicd.md) | **CI/CD**: GitHub Actions + CodePipeline + Amplify trong một bảng, xem log build, chạy lại, duyệt deploy | cao |
 | 9 | [infra-monitoring-reports.md](infra-monitoring-reports.md) | **Giám sát & báo cáo**: biểu đồ số liệu, cảnh báo, bảng điều khiển, và 4 loại báo cáo lưu vào Wiki | cao |
 | 10 | [playbooks.md](playbooks.md) | **Playbook**: trang riêng · kế hoạch triển khai trực quan · ảnh hưởng lan suy từ graph · quay lui · hồ sơ sau khi chạy | cao |
+| 11 | [infra-bubble-session.md](infra-bubble-session.md) | **Bong bóng phiên**: phiên thu nhỏ ở góc phải · thư mục riêng `awog-infra` · "Mở full" về phiên · "Hỏi agent" chọn đích | mới 2026-09-14 |
+
+## Trạng thái theo mốc
+
+| Mốc | Nội dung | Trạng thái |
+|---|---|---|
+| 0 | Nền & lát cắt kiểm chứng | đã land (2026-09-13) |
+| 1 | Tài khoản (A1–A6) | đã land (2026-09-13) — **nợ infosec audit #2** |
+| 2 | Logs & Tổng quan (2.1–2.9) | đã land (2026-09-14) — 2/6 thẻ Tổng quan có nguồn, 4 thẻ chờ mốc 4/7 |
+| 3 | Explorer: khung + bốn màn đầu (3.1–3.10) | đã land (2026-09-14) — trừ **SSM terminal** |
+| 4 | Delivery/CI-CD: CloudFront-APIGW-Route53-ACM (4.1) + bảng CI/CD bốn nguồn (4.2–4.6) | đã land (2026-09-14) — thông báo **mặc định tắt**; chưa QA thật |
+| 5 → 8 | Graph/Playbook · Giám sát/Báo cáo · Chi phí/An toàn/CloudTrail · Container/K8s | chưa |
+
+Chi tiết + điểm lệch từng mốc: **[infra.tasks.md](infra.tasks.md)** §"trạng thái thực tế". **Toàn bộ mốc 1–4 chưa QA trong Electron thật** — các cổng đã xanh là `vitest` (sidecar) · `typecheck` · `lint`. Mốc 4 còn chưa chạy bằng **credential AWS thật** (CLI trên máy dev trả `ExpiredToken`) và chưa chạy bằng một `gh` đã đăng nhập.
 
 ## Luật thiết kế của cả họ: người không rành kỹ thuật cũng dùng được
 

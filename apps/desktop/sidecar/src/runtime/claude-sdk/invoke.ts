@@ -362,7 +362,9 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     //
     // Muốn node task publish được thì thứ phải thêm là một công tắc opt-in per-node
     // ĐI KÈM cách hiển thị nó ra UI — không phải một dòng env.
-    env: buildSdkEnv(cred),
+    // Cùng luật với đường chat: ngữ cảnh hạ tầng của node (khi có) đi vào env của
+    // CLI, để `aws …` trong `Bash` của node chạm đúng tài khoản đã ghim.
+    env: buildSdkEnv(cred, args.settings.infra),
     // Packaged builds: bundled native binary (ADR 0058 P3); dev auto-discovers.
     ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
   }

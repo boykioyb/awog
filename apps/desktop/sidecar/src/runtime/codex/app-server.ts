@@ -107,6 +107,13 @@ export class CodexDaemon {
     // eight of their MCP servers and their model through a custom provider. It
     // is set explicitly here rather than trusted from the ambient env, and any
     // inherited CODEX_HOME is overridden.
+    // ⚠ Daemon này DÙNG CHUNG cho mọi phiên cùng `codexHome` (xem `daemons` bên
+    // dưới), nên env ở đây KHÔNG thể mang thứ thuộc về một phiên. Cụ thể: ngữ cảnh
+    // hạ tầng đã ghim (`AWS_PROFILE`/`AWS_DEFAULT_REGION`, ADR 0088 §6) không luồn
+    // được xuống `shell` của Codex theo đường này — hai phiên ghim hai tài khoản
+    // khác nhau sẽ tranh nhau một biến. Hai runtime kia đã luồn được vì tiến trình
+    // con của chúng là PER-TURN (`tools/bash-tool.ts`, `claude-sdk/shared.ts`);
+    // đường này cần một cơ chế per-thread của Codex trước khi làm được.
     const child = spawn(bin, ['app-server'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, CODEX_HOME: this.codexHome },

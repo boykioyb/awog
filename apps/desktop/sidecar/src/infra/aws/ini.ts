@@ -27,6 +27,11 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'sso_account_id',
   'sso_role_name',
   'sso_session',
+  // Thêm ở Mốc 1 (A5): block `[sso-session x]` do AWOG tự ghi phải mang khoá này,
+  // và `write.ts` verify bằng cách ĐỌC LẠI qua chính parser này — khoá nào ghi
+  // được mà đọc không thấy thì bước verify báo hỏng rồi cuốn ngược cả lần ghi.
+  // Giá trị là hằng `sso:account:access` (phạm vi OIDC), không phải credential.
+  'sso_registration_scopes',
   'role_arn',
   'source_profile',
   'mfa_serial',
@@ -34,6 +39,10 @@ const ALLOWED_KEYS: ReadonlySet<string> = new Set([
   'duration_seconds',
   'credential_process',
   'x_security_token_expires',
+  // `aws login` (aws-cli 2.35.9+): ĐỊNH DANH phiên console, không phải credential
+  // — token thật nằm trong `~/.aws/login/cache`. Đọc thấy khoá này là điều kiện
+  // để `deriveKind()` xếp profile vào nhóm `login` thay vì `unknown`.
+  'login_session',
 ])
 
 // Hai khoá này chỉ quy thành `hasStaticKeys`. `aws_access_key_id` tự nó không
@@ -101,7 +110,11 @@ export function parseAwsIni(raw: string): AwsIniFile {
     if (first === 59 /* ; */ || first === 35 /* # */) continue
 
     if (first === 91 /* [ */) {
-      const close = line.lastIndexOf(']')
+      // Dấu `]` ĐẦU TIÊN: botocore và configparser đều dùng
+      // `\[(?P<header>[^]]+)\]`, nên tên section dừng ở `]` đầu tiên còn phần
+      // đuôi (`[profile dev] ; bucket [prod]`) bị bỏ qua. Lấy `lastIndexOf` thì
+      // AWOG đọc ra một tên section khác hẳn cái AWS CLI đang dùng.
+      const close = line.indexOf(']')
       // `[abc` thiếu ngoặc đóng: bỏ luôn, và huỷ section hiện tại để các khoá
       // bên dưới không bị gán nhầm vào section trước đó.
       if (close <= 1) {

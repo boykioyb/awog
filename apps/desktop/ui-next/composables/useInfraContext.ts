@@ -56,10 +56,22 @@ export function useInfraContext(scope?: MaybeRefOrGetter<InfraScope | undefined>
   const projectValue = computed<InfraContext | undefined>(() => project.value?.infra)
   const appValue = computed<InfraContext>(() => settingsStore.infra)
 
-  /** Ngữ cảnh thật sự đang có hiệu lực — thứ đi vào argv của lệnh. */
-  const effective = computed<InfraContext>(() =>
-    resolveInfraContext(sessionValue.value, projectValue.value, appValue.value),
-  )
+  /**
+   * Ngữ cảnh thật sự đang có hiệu lực — thứ đi vào argv của lệnh.
+   *
+   * TRONG PHIÊN (có `session`): CHỈ lấy field phiên tự ghim, KHÔNG kế thừa
+   * project/app (2026-09-15). Mỗi tool là một công tắc độc lập bật/tắt ngay trên
+   * chip của phiên, mặc định TẮT; và sidecar cũng chỉ đọc `Session.infra`, nên
+   * "hiệu lực" mà UI hiện phải khớp đúng thứ đi vào lệnh — hiện một profile app mà
+   * lệnh sẽ không dùng là nói dối về tài khoản đang chạy.
+   *
+   * NGOÀI phiên (`sessionId: null` — trang `/infra`, Settings, env terminal): giữ
+   * nguyên kế thừa ba tầng phiên → project → app.
+   */
+  const effective = computed<InfraContext>(() => {
+    if (session.value) return compactInfraContext(sessionValue.value)
+    return resolveInfraContext(sessionValue.value, projectValue.value, appValue.value)
+  })
 
   /**
    * Ghim cho PHIÊN đang xét. Trả false khi không có phiên trong phạm vi hoặc khi

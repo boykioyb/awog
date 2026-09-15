@@ -20,7 +20,7 @@ import { log } from '../util/logger.js'
 import { resolveInfraBinary, installHint } from './binary.js'
 import { classify, findCredentialOp, findForbiddenFlag, findLeakyFlag } from './classify.js'
 import { recordInfraAction } from './audit/store.js'
-import type { InfraDecision, InfraSurface } from './audit/store.js'
+import type { InfraAuditEntry, InfraDecision, InfraSurface } from './audit/store.js'
 import type { InfraCommandClass, InfraTool } from './types.js'
 import { filteredShellEnv } from '../runtime/tools/shell.js'
 import { redactString } from '../sessions/redact.js'
@@ -54,6 +54,60 @@ export type InfraRunRequest = {
   timeoutMs?: number | undefined
   /** Trần mỗi luồng, mặc định 256 KiB. */
   maxOutputBytes?: number | undefined
+  /**
+   * Biến môi trường GHI ĐÈ cho riêng lời gọi này (trộn SAU `infraEnv()`).
+   *
+   * Hai người dùng, cả hai đều là module nội bộ của sidecar:
+   *   · `console-login.ts` — chặn một file cấu hình mà CLI sẽ tự ghi (trỏ
+   *     `AWS_CONFIG_FILE` vào file tạm để đường ghi vào `~/.aws` thật vẫn là
+   *     `applyAwsIniEdits`).
+   *   · `infra.identity-check` (nhánh `secrets`) — đưa bộ khoá người dùng VỪA
+   *     GÕ vào form sửa cho `sts get-caller-identity`, để kiểm tra TRƯỚC khi
+   *     ghi. Env chứ không phải cờ: argv của tiến trình con đọc được từ `ps`
+   *     của mọi user và từ log kiểm toán, env thì không.
+   *
+   * Đường của AGENT (`infra.run` / `infra-tools.ts`) không có tham số này và
+   * không được thêm: env là bề mặt đổi ngữ cảnh (invariant #7) y như `--profile`.
+   */
+  env?: Record<string, string> | undefined
+  /**
+   * Nhận output NGAY KHI tiến trình in ra, thay vì đợi nó kết thúc.
+   *
+   * Chỉ `console-login.ts` dùng: `aws login` in URL đăng nhập ra stdout rồi MỚI
+   * chờ người dùng (tới 300s), nên UI chỉ hiện được URL đó nếu nó được đẩy lên
+   * ngay lúc in. Đường của AGENT (`infra.run`/`infra-tools.ts`) không truyền
+   * tham số này — output đầy đủ vẫn nằm trong `InfraRunResult` như cũ.
+   *
+   * Chuỗi nhận được ĐÃ qua `redactString` nhưng theo TỪNG mẩu: một bí mật bị
+   * cắt đôi giữa hai mẩu thì regex không khớp được. Vì vậy callback này chỉ
+   * dành cho việc bóc URL (không phải kênh hiển thị output), và người nhận
+   * KHÔNG được chuyển nguyên văn nó cho UI.
+   */
+  onOutput?: ((chunk: string, stream: 'stdout' | 'stderr') => void) | undefined
+  /** Hủy cứng: `AbortController` của người gọi (xem `console-login.ts`). */
+  signal?: AbortSignal | undefined
+  /**
+   * Chi phí ĐÃ BIẾT TRƯỚC của lời gọi này, ghi vào dòng nhật ký.
+   *
+   * Chỉ `logs.ts` dùng: CloudWatch Insights tính tiền theo GB quét, và câu "lần
+   * đó tốn bao nhiêu" phải trả lời được kể cả khi CLI không trả `bytesScanned`
+   * (lệnh hỏng, người dùng huỷ). Con số ở đây là ƯỚC LƯỢNG đã hiện cho người
+   * dùng trước khi họ bấm — không phải số đo.
+   */
+  cost?: { estimatedUsd?: number | undefined } | undefined
+  /**
+   * Ghi nhật ký cho lời gọi này. Mặc định `true` — và **chỉ lớp `read` mới được
+   * phép đặt `false`**.
+   *
+   * Lý do tồn tại: vòng POLL của Insights gọi `get-query-results` mỗi ~1.5s do
+   * CHÍNH APP sinh, không phải người dùng bấm. Ghi mỗi lần poll một dòng sẽ nhấn
+   * chìm nhật ký — mà nhật ký là bằng chứng, tiếng ồn làm nó mất giá trị. Lệnh
+   * `start-query` (dòng quyết định) vẫn được ghi đầy đủ.
+   *
+   * Hàng rào: `runInfra` TỰ ÉP về `true` cho mọi lớp khác `read`, nên không có
+   * đường nào giấu một lệnh ghi hay phá huỷ. Xem `write()` bên dưới.
+   */
+  audit?: boolean | undefined
 }
 
 export type InfraRunResult = {
@@ -87,6 +141,27 @@ const SHORT_FORBIDDEN: Record<InfraTool, readonly string[]> = {
   aws: [],
   kubectl: ['-n', '-s'],
   terraform: [],
+}
+
+/**
+ * Ngữ cảnh đã ghim, đúng khuôn mà nhật ký nhận.
+ *
+ * Một chỗ dựng DUY NHẤT cho cả hai đường ra CLI: tool CLI (`aws_cli`…) ghi ở
+ * `write()` dưới đây, còn `Bash("aws …")` ghi từ `runtime/permission.ts`. Hai bản
+ * sao sẽ lệch nhau ở đúng chỗ tệ nhất — bộ lọc theo profile ở màn Nhật ký sẽ đọc
+ * hai đường bằng hai khoá khác nhau, và câu "tuần này account đó bị chạm mấy lần"
+ * trả lời thiếu.
+ */
+export function infraAuditContext(ctx: InfraContext | undefined): InfraAuditEntry['context'] {
+  if (!ctx) return {}
+  return {
+    ...(ctx.profile !== undefined ? { profile: ctx.profile } : {}),
+    ...(ctx.accountId !== undefined ? { accountId: ctx.accountId } : {}),
+    ...(ctx.region !== undefined ? { region: ctx.region } : {}),
+    ...(ctx.cluster !== undefined ? { cluster: ctx.cluster } : {}),
+    ...(ctx.namespace !== undefined ? { namespace: ctx.namespace } : {}),
+    ...(ctx.workspace !== undefined ? { workspace: ctx.workspace } : {}),
+  }
 }
 
 function findExtraForbidden(tool: InfraTool, args: readonly string[]): string | null {
@@ -123,10 +198,53 @@ function withContext(tool: InfraTool, args: readonly string[], ctx: InfraContext
 // PATH/HOME/… và DO_NOT_TRACK, không mang credential của AWOG). Bù đúng ba biến
 // CẤU HÌNH mà chính người dùng đặt: nếu ta đọc profile theo `AWS_CONFIG_FILE` mà
 // CLI lại đọc `~/.aws/config` thì hai bên nói về hai tài khoản khác nhau.
-const CONFIG_PASSTHROUGH = ['AWS_CONFIG_FILE', 'AWS_SHARED_CREDENTIALS_FILE', 'KUBECONFIG']
+const CONFIG_PASSTHROUGH = [
+  'AWS_CONFIG_FILE',
+  'AWS_SHARED_CREDENTIALS_FILE',
+  'KUBECONFIG',
+  // `aws login` để TOKEN trong thư mục này chứ không trong `~/.aws/config`, nên
+  // profile AWOG ghi (`login_session = …`) chỉ dùng được nếu lần chạy sau của
+  // CLI đọc đúng chỗ đó. Không luồn biến này xuống thì hai bên nói về hai thư mục
+  // token khác nhau — đúng lỗi mà comment trên đã cảnh báo cho `AWS_CONFIG_FILE`.
+  'AWS_LOGIN_CACHE_DIRECTORY',
+]
 
-function infraEnv(): NodeJS.ProcessEnv {
-  const env = filteredShellEnv()
+/**
+ * Env của tiến trình con. `context` vào đây CHỈ cho hai công cụ KHÔNG phải aws.
+ *
+ * Vì sao cần: `aws` nhận ngữ cảnh bằng CỜ (`--profile`/`--region`, xem
+ * `withContext`) nên nó không cần env. Hai công cụ kia thì ngược lại:
+ *
+ *   · kubectl đọc credential của cluster qua chính kubeconfig. Với EKS, user block
+ *     là một **exec plugin** `aws eks get-token` — plugin đó resolve credential
+ *     từ env của TIẾN TRÌNH KUBECTL, không biết gì về profile phiên đã ghim. Không
+ *     luồn `AWS_PROFILE` xuống thì hoặc plugin báo "Unable to locate credentials",
+ *     hoặc tệ hơn: nó lặng lẽ lấy danh tính `[default]` của máy — tức lệnh chạy
+ *     trên account KHÁC trong khi chip vẫn nói profile đã ghim (invariant #7).
+ *     `aws eks update-kubeconfig` chỉ ghi `env: [AWS_PROFILE=…]` vào kubeconfig khi
+ *     người dùng truyền `--profile` lúc sinh file, nên phần lớn file trên máy
+ *     KHÔNG có khoá đó.
+ *   · terraform: AWS provider đọc `AWS_PROFILE`/`AWS_REGION` từ env. Provider khai
+ *     `profile = "…"` trong `.tf` vẫn thắng env (đúng thứ tự ưu tiên của chính
+ *     terraform), nên luồn vào không ghi đè lựa chọn tường minh của stack.
+ *
+ * Chiều ngược lại thì KHÔNG: không có biến nào ở đây gỡ được ngữ cảnh đã ghim —
+ * hai công cụ kia vẫn nhận `--context`/`-chdir=` từ argv do sidecar chèn.
+ *
+ * Giới hạn đã biết: nếu kubeconfig tự khai `exec.env: [AWS_PROFILE=other]` thì khoá
+ * trong FILE thắng env của ta (kubectl chạy plugin với env đó). Ta cố ý KHÔNG đọc
+ * khối `exec` (nó chứa đường dẫn lệnh + tham số), nên không cảnh báo được — đây là
+ * lý do `--profile` lúc chạy `aws eks update-kubeconfig` là cách sạch nhất.
+ *
+ * `AWS_PROFILE` CỐ Ý không nằm trong allowlist env của `filteredShellEnv`: env của
+ * tiến trình AWOG không được lặng lẽ quyết định lệnh chạy trên account nào. Nó chỉ
+ * vào đây khi NGƯỜI DÙNG đã ghim một profile cho phiên.
+ */
+function infraEnv(tool: InfraTool, context: InfraContext): NodeJS.ProcessEnv {
+  const pinsAwsIdentity = tool !== 'aws' && (context.profile || context.region)
+  const env = filteredShellEnv(
+    pinsAwsIdentity ? { awsProfile: context.profile, awsRegion: context.region } : undefined,
+  )
   for (const key of CONFIG_PASSTHROUGH) {
     const value = process.env[key]
     if (value !== undefined) env[key] = value
@@ -145,15 +263,21 @@ function clamp(text: string, max: number): { text: string; truncated: boolean } 
  * hợp lệ (`ok: false`), người gọi cần đọc `stderr`. Chỉ ném khi chính lời gọi sai.
  */
 export async function runInfra(req: InfraRunRequest): Promise<InfraRunResult> {
-  const { tool, args, context, timeoutMs, maxOutputBytes } = req
+  const { tool, args, context, timeoutMs, maxOutputBytes, env, onOutput, signal } = req
   const cls = classify(tool, args)
   const startedAt = Date.now()
+
+  // Chỉ lớp `read` mới được miễn ghi nhật ký; mọi lớp khác bị ép ghi. Đây là
+  // điểm DUY NHẤT quyết định chuyện đó, nên không call site nào tự miễn được.
+  // `audit: false` chỉ CÓ HIỆU LỰC với lớp `read`; mọi lớp khác bị ép ghi.
+  const shouldAudit = req.audit !== false || cls !== 'read'
 
   const write = async (
     result: InfraRunResult,
     summary: string | undefined,
     decision: InfraDecision,
   ): Promise<void> => {
+    if (!shouldAudit) return
     await recordInfraAction({
       actor: req.actor,
       ...(req.sessionId !== undefined ? { sessionId: req.sessionId } : {}),
@@ -161,14 +285,7 @@ export async function runInfra(req: InfraRunRequest): Promise<InfraRunResult> {
       surface: req.surface,
       tool: req.toolName,
       argv: [...args],
-      context: {
-        ...(context.profile !== undefined ? { profile: context.profile } : {}),
-        ...(context.accountId !== undefined ? { accountId: context.accountId } : {}),
-        ...(context.region !== undefined ? { region: context.region } : {}),
-        ...(context.cluster !== undefined ? { cluster: context.cluster } : {}),
-        ...(context.namespace !== undefined ? { namespace: context.namespace } : {}),
-        ...(context.workspace !== undefined ? { workspace: context.workspace } : {}),
-      },
+      context: infraAuditContext(context),
       class: cls,
       decision,
       result: {
@@ -176,6 +293,13 @@ export async function runInfra(req: InfraRunRequest): Promise<InfraRunResult> {
         durationMs: result.durationMs,
         ...(summary !== undefined ? { summary } : {}),
       },
+      ...(req.cost?.estimatedUsd !== undefined
+        ? {
+            cost: {
+              estimatedUsd: req.cost.estimatedUsd,
+            },
+          }
+        : {}),
     })
   }
 
@@ -242,14 +366,15 @@ export async function runInfra(req: InfraRunRequest): Promise<InfraRunResult> {
 
   const raw = await new Promise<{ code: number | null; stdout: string; stderr: string }>(
     (resolve) => {
-      execFile(
+      const child = execFile(
         bin,
         finalArgs,
         {
-          env: infraEnv(),
+          env: { ...infraEnv(tool, context), ...env },
           timeout: timeoutMs ?? DEFAULT_TIMEOUT_MS,
           maxBuffer: max * 4,
           windowsHide: true,
+          ...(signal ? { signal } : {}),
         },
         (err, stdout, stderr) => {
           const code =
@@ -261,6 +386,19 @@ export async function runInfra(req: InfraRunRequest): Promise<InfraRunResult> {
           resolve({ code, stdout, stderr: stderr || (err ? err.message : '') })
         },
       )
+      // `onOutput` là kênh PHỤ: `execFile` vẫn tự gom đủ stdout/stderr cho
+      // callback trên, nên thêm listener ở đây không đổi kết quả trả về.
+      if (onOutput) {
+        for (const [stream, readable] of [
+          ['stdout', child.stdout],
+          ['stderr', child.stderr],
+        ] as const) {
+          readable?.setEncoding('utf8')
+          readable?.on('data', (chunk: string) => {
+            onOutput(redactString(chunk), stream)
+          })
+        }
+      }
     },
   )
 

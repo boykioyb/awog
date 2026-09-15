@@ -106,6 +106,10 @@ export async function buildChatToolset(
       // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
       ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),
       ...(args.sourceApiEndpoints ? { sourceApiEndpoints: args.sourceApiEndpoints } : {}),
+      // Ngữ cảnh hạ tầng đã ghim → env của `Bash` (ADR 0088 §6). Không có dòng này
+      // thì `aws …` trong shell rơi về profile `default` trong khi thẻ duyệt nói
+      // phiên đã ghim tài khoản nào đó — tức chip nói một đằng, lệnh chạy một nẻo.
+      ...(args.settings.infra ? { bashInfra: args.settings.infra } : {}),
       // Background exec (ADR 0066): sessions only. Bash gains run_in_background +
       // a BashOutput tool; a background command outlives the turn and the session
       // is woken when it exits. Not in plan mode (Bash is read-only-blocked there).

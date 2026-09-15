@@ -54,13 +54,24 @@ export type InfraDecisionInput = {
    * nới được thì một phiên bị dẫn dụ có thể tự mở khoá cho chính nó.
    */
   sessionFloor?: InfraMode | undefined
+  /**
+   * Tên lệnh `read` mà KẾT QUẢ là NỘI DUNG log (`sensitiveReadOf()` trong
+   * `classify.ts`), hoặc undefined.
+   *
+   * Vì sao cần một trục riêng thay vì đổi `DEFAULT_MATRIX.read.production`:
+   * ma trận chỉ có hai chiều (lớp × loại tài khoản), nên hạ cả cột `read` của
+   * production xuống `ask` sẽ bắt mọi lệnh `describe-*` của Explorer phải hỏi
+   * người dùng ở Mốc 3 — trong khi thứ thật sự nguy hiểm chỉ là bốn op trả về
+   * NỘI DUNG log. Siết đúng chỗ thì hàng rào mới sống được lâu.
+   */
+  sensitiveRead?: string | undefined
   now?: number | undefined
 }
 
 export type InfraDecisionResult = {
   mode: InfraMode
   /** Vì sao ra mức đó — đi thẳng vào prompt duyệt và vào nhật ký. */
-  reason: 'matrix' | 'bypass' | 'session-narrowed'
+  reason: 'matrix' | 'bypass' | 'session-narrowed' | 'sensitive-read'
   accountKind: InfraAccountKind
   /** Còn bao nhiêu giây bypass, để UI đếm ngược. */
   bypassSecondsLeft?: number
@@ -102,6 +113,15 @@ export function decide(input: InfraDecisionInput): InfraDecisionResult {
     mode = 'auto'
     reason = 'bypass'
     bypassLeft = Math.round((until - now) / 1000)
+  }
+
+  // Đọc NỘI DUNG log trên production ⇒ luôn phải có người duyệt. Chỉ SIẾT được
+  // (không nới), và đứng TRƯỚC `sessionFloor` để trần của phiên vẫn áp lên trên.
+  // Bypass tạm thời cũng không gỡ được: van xả lúc chữa cháy không phải đường
+  // đưa log production vào context của model mà không ai nhìn.
+  if (input.sensitiveRead && kind === 'production' && RANK[mode] < RANK.ask) {
+    mode = 'ask'
+    reason = 'sensitive-read'
   }
 
   if (input.sessionFloor) {

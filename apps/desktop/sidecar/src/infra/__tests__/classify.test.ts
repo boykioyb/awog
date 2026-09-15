@@ -10,9 +10,16 @@ import {
   CONTEXT_SWITCH_CLASS,
   FORBIDDEN_FLAGS,
   classify,
+  findCredentialOp,
   findForbiddenFlag,
+  sensitiveReadOf,
 } from '../classify.js'
+import { join } from 'node:path'
+import { homedir } from 'node:os'
+import { infraCachePath } from '../cache.js'
 import type { InfraTool } from '../types.js'
+
+const CACHE_OUT = infraCachePath('b', 'k')
 
 describe('read', () => {
   it.each<[InfraTool, string[]]>([
@@ -142,5 +149,199 @@ describe('hard lists', () => {
     for (const bin of ['aws', 'terraform', 'kubectl', 'helm', 'gcloud', 'az']) {
       expect(CONTEXT_BLOCKED_BINARIES).toContain(bin)
     }
+  })
+})
+
+// ─── A5: liệt kê account/role của SSO ────────────────────────────────────────
+//
+// Hai lệnh này được THÊM vào allowlist `read` ở Mốc 1. Bài test dưới khoá lại cả
+// hai nửa của quyết định: nửa được mở, và nửa KHÔNG được mở cùng nó.
+describe('sso — liệt kê là read, phát credential thì không', () => {
+  it.each([['list-accounts'], ['list-account-roles']])('aws sso %s → read', (op) => {
+    expect(classify('aws', ['sso', op, '--output', 'json'])).toBe('read')
+  })
+
+  // `sso login` mở trình duyệt và ghi `~/.aws/sso/cache` — không phải đọc.
+  it('aws sso login vẫn là write', () => {
+    expect(classify('aws', ['sso', 'login', '--sso-session', 'corp'])).toBe('write')
+  })
+
+  // Đây là lệnh mà OUTPUT CHÍNH LÀ credential. Nó phải ở nguyên trong danh sách
+  // chặn cứng, không được "đi ké" vì hai anh em của nó vừa vào allowlist read.
+  it('aws sso get-role-credentials vẫn bị chặn cứng, không bao giờ là read', () => {
+    expect(findCredentialOp('aws', ['sso', 'get-role-credentials'])).toBe(
+      'sso get-role-credentials',
+    )
+    expect(classify('aws', ['sso', 'get-role-credentials'])).not.toBe('read')
+  })
+
+  // `--access-token` là credential đi qua argv (xem đầu `infra/aws/sso.ts`).
+  // Nó KHÔNG được rơi vào guard cờ ngữ cảnh — rơi vào thì `runInfra` từ chối
+  // thẳng và cả luồng A5 chết, mà nó không phải cờ ngữ cảnh.
+  it('--access-token không bị nhầm thành cờ ngữ cảnh', () => {
+    expect(findForbiddenFlag(['sso', 'list-accounts', '--access-token', 'x'])).toBe(null)
+    expect(findForbiddenFlag(['sso', 'list-account-roles', '--account-id', '229015218011'])).toBe(
+      null,
+    )
+  })
+})
+
+// Mốc 2 — "Quyết định còn treo": CloudWatch là nơi credential/PII hay nằm nhất
+// trong allowlist `read`, và Mốc 2 mở rộng đúng bề mặt đó. `sensitiveReadOf()` là
+// tên miền cho luật "đọc nội dung log thì phải hỏi ở production"; nó phải nhận
+// ĐÚNG bốn op trả nội dung, không nhận `describe-*` (metadata), và không bao giờ
+// tự nhận một op không tồn tại.
+describe('sensitiveReadOf — đọc NỘI DUNG log (Mốc 2)', () => {
+  it.each([
+    [['logs', 'filter-log-events'], 'logs filter-log-events'],
+    [['logs', 'get-log-events'], 'logs get-log-events'],
+    [['logs', 'get-query-results'], 'logs get-query-results'],
+    [['logs', 'start-query'], 'logs start-query'],
+  ])('%s ⇒ %s', (argv, expected) => {
+    expect(sensitiveReadOf('aws', argv)).toBe(expected)
+  })
+
+  it('metadata và op lạ KHÔNG bị coi là nhạy cảm', () => {
+    // `describe-log-groups` là thứ vẽ danh sách chọn group — chặn nó sẽ biến màn
+    // Logs thành chuỗi hộp duyệt vô nghĩa mà không mua được an toàn nào.
+    expect(sensitiveReadOf('aws', ['logs', 'describe-log-groups'])).toBe(null)
+    expect(sensitiveReadOf('aws', ['logs', 'describe-log-streams'])).toBe(null)
+    expect(sensitiveReadOf('aws', ['logs', 'stop-query'])).toBe(null)
+    expect(sensitiveReadOf('aws', ['ec2', 'describe-instances'])).toBe(null)
+    // Sai công cụ ⇒ không bao giờ nhận: `describe-instances` là op AWS, không
+    // phải động từ kubectl nào.
+    expect(sensitiveReadOf('kubectl', ['describe-instances'])).toBe(null)
+  })
+})
+
+// ─── Terraform/kubectl: các cặp (động từ, cờ) mà allowlist theo động từ không
+// diễn tả được — việc 13/20 của P1/P2.
+describe('terraform fmt / workspace', () => {
+  it.each<[string[]]>([
+    [['fmt', '-check']],
+    [['fmt', '-check=true']],
+    [['workspace', 'list']],
+    [['workspace', 'show']],
+  ])('%j → read', (args) => {
+    expect(classify('terraform', args)).toBe('read')
+  })
+
+  it.each<[string[]]>([
+    // `fmt` trần SỬA file .tf tại chỗ.
+    [['fmt']],
+    [['fmt', '-recursive']],
+    // `select` ĐỔI workspace ⇒ không bao giờ được chạy tự động.
+    [['workspace', 'select', 'staging']],
+    [['workspace', 'new', 'x']],
+    [['workspace', 'delete', 'x']],
+  ])('%j → write', (args) => {
+    expect(classify('terraform', args)).toBe('write')
+  })
+})
+
+describe('kubectl secret reading', () => {
+  it.each<[string[]]>([
+    [['get', 'secret', 'app', '-o', 'yaml']],
+    [['get', 'secrets', '-oyaml']],
+    [['get', 'secret/app', '-o=json']],
+    [['get', '--namespace', 'x', 'secret', 'app', '--output', 'yaml']],
+    // `custom-columns` in ra đúng field được chọn — cùng sức mạnh với `jsonpath`,
+    // nên nó phải nằm cùng nhóm bị chặn. Thiếu ca này thì đường vòng này im lặng.
+    [['get', 'secret', 'app', '-o', 'custom-columns=D:.data.password']],
+    [['get', 'secret', 'app', '-o', 'custom-columns-file=cols.txt']],
+  ])('findCredentialOp %j → blocked', (args) => {
+    expect(findCredentialOp('kubectl', args)).not.toBeNull()
+  })
+
+  it.each<[string[]]>([
+    // Bảng tên: không có giá trị nào của secret.
+    [['get', 'secrets']],
+    [['get', 'secret', 'app']],
+    // `describe` chỉ in tên khoá + số byte, không in giá trị.
+    [['describe', 'secret', 'app']],
+    // `-o wide` là bảng, không phải nội dung object.
+    [['get', 'pods', '-o', 'wide']],
+  ])('findCredentialOp %j → null', (args) => {
+    expect(findCredentialOp('kubectl', args)).toBeNull()
+  })
+})
+
+describe('sensitiveReadOf', () => {
+  it.each<[InfraTool, string[]]>([
+    ['kubectl', ['logs', 'pod/api-0']],
+    ['kubectl', ['get', 'configmap', 'x', '-o', 'yaml']],
+    ['kubectl', ['get', 'pods', '-o', 'custom-columns=NAME:.metadata.name']],
+    ['terraform', ['output']],
+    ['terraform', ['state', 'show', 'aws_s3_bucket.web']],
+    ['terraform', ['show']],
+  ])('%s %j → sensitive', (tool, args) => {
+    expect(sensitiveReadOf(tool, args)).not.toBeNull()
+  })
+
+  it.each<[InfraTool, string[]]>([
+    ['kubectl', ['get', 'pods']],
+    ['kubectl', ['top', 'nodes']],
+    ['kubectl', ['events', '-A']],
+    // Metadata thuần — vẫn chạy tự động.
+    ['terraform', ['validate']],
+    ['terraform', ['fmt', '-check']],
+    ['terraform', ['state', 'list']],
+    ['terraform', ['version']],
+  ])('%s %j → not sensitive', (tool, args) => {
+    expect(sensitiveReadOf(tool, args)).toBeNull()
+  })
+})
+
+// ─── Mốc 3: những op mới của Explorer ────────────────────────────────────────
+//
+// Ba nhóm, ba lý do khác nhau:
+//   · `presign` — sinh URL có hạn, KHÔNG đổi gì trên AWS ⇒ `read`;
+//   · `ecr describe-repositories` / `secretsmanager list-secrets` — metadata
+//     thuần, phục vụ mức "Danh sách" ⇒ `read`;
+//   · `s3api get-object` — lệnh ĐỌC nhưng GHI RA FILE. Nó chỉ là `read` khi đích
+//     nằm trong cache do sidecar sở hữu; một đường dẫn bất kỳ vẫn phải là `write`.
+//     Đây là ca quan trọng nhất của cả nhóm: nếu nó lọt thành `read`, một "lệnh
+//     đọc" trở thành nguyên thuỷ ghi file tuỳ ý.
+describe('Mốc 3 — op mới của Explorer', () => {
+  it.each<[string, string[]]>([
+    ['presign S3', ['s3', 'presign', 's3://bucket/key', '--expires-in', '900']],
+    ['ecr describe-repositories', ['ecr', 'describe-repositories']],
+    ['secretsmanager list-secrets', ['secretsmanager', 'list-secrets']],
+    ['iam simulate-principal-policy', ['iam', 'simulate-principal-policy', '--action-names', 'x']],
+    ['s3api get-object vào cache', ['s3api', 'get-object', '--bucket', 'b', '--key', 'k', CACHE_OUT]],
+  ])('%s → read', (_label, args) => {
+    expect(classify('aws', args)).toBe('read')
+  })
+
+  it('s3api get-object ra đường dẫn bất kỳ → write (KHÔNG phải read)', () => {
+    expect(
+      classify('aws', ['s3api', 'get-object', '--bucket', 'b', '--key', 'k', '/tmp/out.bin']),
+    ).toBe('write')
+  })
+
+  it('s3api get-object ra ~/.ssh → write', () => {
+    expect(
+      classify('aws', [
+        's3api',
+        'get-object',
+        '--bucket',
+        'b',
+        '--key',
+        'k',
+        join(homedir(), '.ssh', 'authorized_keys'),
+      ]),
+    ).toBe('write')
+  })
+
+  it('`..` trong đường dẫn không lách qua được hàng rào cache', () => {
+    const escaped = join(CACHE_OUT, '..', '..', '..', 'etc', 'passwd')
+    expect(classify('aws', ['s3api', 'get-object', '--bucket', 'b', '--key', 'k', escaped])).toBe(
+      'write',
+    )
+  })
+
+  it('op ghi mới vẫn là write, không lọt qua cùng đường', () => {
+    expect(classify('aws', ['s3api', 'put-object', '--bucket', 'b', '--key', 'k'])).toBe('write')
+    expect(classify('aws', ['iam', 'attach-role-policy'])).toBe('write')
   })
 })

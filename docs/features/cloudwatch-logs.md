@@ -1,6 +1,6 @@
 # Feature — CloudWatch Logs: đọc, lọc nâng cao, truy vết một request
 
-- **Trạng thái:** Planned — **ưu tiên số 1** trong họ Infra
+- **Trạng thái:** **Đã ship phần lớn 2026-09-13** (L1–L3 + L6, cây làm việc `feature/aws-infra`, chưa commit) — L4 live tail và L5 lần theo request còn nợ; xem "Trạng thái triển khai" ở cuối
 - **ADR:** [0088 — ngữ cảnh hạ tầng ghim theo phiên](../decisions/0088-session-infra-context.md)
 - **Route:** `/infra` → **Logs**; và tab **Logs** trong Session Workspace Panel
 - **Anh em:** [infra-explorer.md](infra-explorer.md) (khung màn hình), [infra-topology-graph.md](infra-topology-graph.md) (bấm một hop trên graph → mở đúng query ở đây)
@@ -119,3 +119,87 @@ Phụ thuộc: P0 của [session-infra-context.md](session-infra-context.md) (`i
 1. **Query đã lưu để ở đâu** — `~/.awog/cloudwatch-queries/` (khuôn snippet) hay một space trong Wiki (để agent đọc được và giải thích)? Đề xuất: `.awog` cho dữ liệu, và cho agent truy cập qua tool, không nhét vào Wiki.
 2. **`start-live-tail` (API mới, WebSocket) hay `logs tail --follow` (CLI)?** Đề xuất CLI — không thêm dependency, và CLI đã bọc sẵn phần khó.
 3. **Có cần tạo metric filter / alarm từ một query không?** (biến "query tìm lỗi" thành cảnh báo). Hữu ích nhưng là lệnh **ghi** — để sau L5, và luôn qua hộp xác nhận.
+
+## Trạng thái triển khai (2026-09-13) — Mốc 2
+
+Cây làm việc nhánh `feature/aws-infra`, **chưa commit**. Đây là bản mô tả những gì
+thực sự có trong code, không phải kế hoạch.
+
+### Đã có
+
+| Việc (`infra.tasks.md`) | Ở đâu |
+|---|---|
+| **2.1** chọn nhiều log group (có pattern) · khoảng thời gian · chạy Insights → poll → huỷ | `sidecar/src/infra/aws/logs.ts`; 5 method `infra.logs-groups/estimate/query-start/query-status/query-cancel`; UI `composables/useInfraLogs.ts` + `components/infra/logs/InfraLogsGroupPicker.vue` (trần 25 group, hai bên cùng chặn). **Nút Huỷ từng làm màn kẹt — sửa 2026-09-14, xem §"Sửa 2026-09-14"** |
+| **2.2** bảng kết quả · JSON chi tiết · copy · gửi vào chat | `components/infra/logs/InfraLogsResults.vue`; gửi chat đi qua `composables/useInfraAskAgent.ts` |
+| **2.3** Monaco + Monarch tokenizer + gợi ý trường + **phím tắt `⌘Enter`/`⌘.`** | `utils/monaco-insights.ts` (`awog-insights`), `components/infra/logs/InfraLogsQueryEditor.vue` (bắt phím ở pha capture trên wrapper — không đụng `MonacoEditor` dùng chung); gợi ý trường lấy từ kết quả lần chạy trước |
+| **2.4** thư viện: mẫu sẵn · đã lưu · lịch sử (2 tier `.awog`) | `sidecar/src/infra/logs/library.ts` (`~/.awog/infra/logs/queries.json`, 0700/0600, ghi nguyên tử), method `infra.logs-library`, UI `InfraLogsLibrary.vue` |
+| **2.5** histogram SVG kéo-zoom | `components/infra/logs/InfraLogsHistogram.vue`; câu chạy kèm do `buildHistogramQuery()` dựng |
+| **2.6** ước lượng GB trước · `bytesScanned` thật sau · **không bao giờ auto-run** | `infra.logs-estimate` (lịch sử → số đo, còn lại → tổng `storedBytes` = trần trên), `runInfra({ cost })` ghi số ước lượng vào nhật ký, `bytesScanned` hiện trên thanh trạng thái |
+| **2.7** lọc nhanh · chip mức độ · facet (bấm giá trị ⇒ chèn `filter`) | `components/infra/logs/InfraLogsFilters.vue` + `useInfraLogs.ts` (lọc tại chỗ, không tốn thêm lượt quét) |
+| **2.8** màn Tổng quan: 6 thẻ đèn + câu giải thích + chip câu hỏi | `components/infra/InfraOverview.vue` + `composables/useInfraOverview.ts`. **2/6 thẻ có nguồn sống**: *Lỗi 1 giờ qua* (Insights) và *Máy chủ* (`ec2.instances`, nút Đọc máy chủ EC2). **Đổi profile/region giữa chừng thì query đang chạy bị huỷ** (sửa 2026-09-14 — [infra.tasks.md](infra.tasks.md) §"Thẻ Lỗi 1 giờ qua") |
+| **2.9** tool `logs_query` / `logs_tail_window` | `sidecar/src/runtime/tools/infra-tools.ts` và `runtime/claude-sdk/infra-sdk-server.ts` (chỉ xuất hiện khi đã ghim profile), popup duyệt kèm ước lượng GB |
+
+### Quyết định đã chốt — thay cho "Quyết định còn treo"
+
+Đề bài để mở hai lựa chọn (bỏ nhóm `logs` khỏi `read = auto`, hoặc `read/production =
+ask`). Đã chọn **cách thứ ba, hẹp hơn cả hai**: chỉ bốn operation `read` mà kết quả
+**là nội dung log** (`start-query`, `get-query-results`, `get-log-events`,
+`filter-log-events`) bị siết lên `ask` **trên tài khoản production**.
+
+- `AWS_SENSITIVE_READ_OPS` + `sensitiveReadOf()` — `sidecar/src/infra/classify.ts`
+- `InfraDecisionInput.sensitiveRead` + lý do `'sensitive-read'` — `sidecar/src/infra/policy.ts`
+- Nối vào cổng quyền cho **cả hai** đường (tool của agent và `Bash`) —
+  `sidecar/src/runtime/permission.ts`
+
+Vì sao không chọn hai cách kia: bỏ cả nhóm `logs` khỏi `read` chặn nhầm
+`describe-log-groups` (thuần metadata, dùng để vẽ danh sách chọn) và biến màn Logs
+thành chuỗi hộp duyệt; hạ cả cột `read/production` xuống `ask` sẽ bắt mọi `describe-*`
+của Explorer hỏi người dùng ở Mốc 3 trong khi thứ nguy hiểm chỉ là bốn op. Luật chỉ
+**siết được**, đứng sau bypass và trước `sessionFloor`, nên không mở thêm đường nào.
+
+### Điểm lệch có chủ đích
+
+| Điểm | Spec | Thực tế | Vì sao |
+|---|---|---|---|
+| **`bin(auto)`** | histogram chạy `stats count(*) by bin(auto)` | `bin(1m/5m/1h/1d)` chọn theo độ dài cửa sổ (`histogramBucket()`) | CloudWatch **không có** đơn vị `auto`. Chọn sai bước chỉ làm biểu đồ thô/mịn hơn — không đổi dữ liệu, không đổi hoá đơn, nên không đáng thêm một lượt gọi `describe-log-groups` để đo |
+| **Histogram là truy vấn thứ hai** | "chạy kèm" | Chỉ tốn thêm khi câu gốc **chưa có** `stats`; `plannedQueries`/`plannedUsd` hiện con số thật của lần bấm kế tiếp và công tắc tắt được | Giấu một lượt quét thứ hai sau chữ "kèm" là cách trung thực nhất để người dùng mất tiền mà không biết |
+| **`⌘Enter` / `⌘.`** | chạy / huỷ bằng phím tắt trong Monaco | **Đã nối 2026-09-14**, nhưng KHÔNG qua `MonacoEditorHandle`: `InfraLogsQueryEditor.vue` gắn `@keydown.capture` trên wrapper của chính nó (Monaco gắn handler ở node con, nên capture của wrapper chạy trước), rồi `preventDefault()` + `stopPropagation()` và phát `run`/`cancel`; guard nằm nguyên ở `InfraLogs.onRun`/`onCancel` | Không mở rộng handle dùng chung thì không phải đụng vào `MonacoEditor.vue` — component mà editor code của cả app sống nhờ. Phím tắt chỉ làm đúng việc cú bấm vẫn làm, nên luật "không tự chạy" không bị nới |
+| **Màn Tổng quan** | 6 thẻ đèn cho 6 nguồn dữ liệu | Hai nguồn đã nối: thẻ "Lỗi 1 giờ qua" (hai bước Ước lượng → Chạy) và thẻ "Máy chủ" (`ec2 describe-instances`, nút Đọc máy chủ EC2); 4 thẻ còn lại hiện **đèn xám** + đường hỏi agent | Nguồn của từng thẻ nằm ở mốc sau: EC2 **đã có** (view `ec2.instances` của mốc 3) nên nối được ngay; CloudFront/Route53 và ACM ở việc **4.1**; Amplify/CI-CD ở việc **4.2–4.6**; chi phí (Cost Explorer) ở việc **7.1** — chưa có nguồn nào trong số đó. Hiện đèn xanh cho thứ chưa kiểm tra là nói dối người dùng |
+
+### Sửa 2026-09-14 — nút Huỷ làm màn kẹt
+
+`poll()` (và vòng poll của thẻ Lỗi) chờ nhịp bằng `await new Promise(r => { timer = setTimeout(r, POLL_MS) })`, còn hàm huỷ thì `clearTimeout(timer)`. `clearTimeout` **không** đánh thức một Promise đang chờ — nó bỏ mặc Promise đó treo vĩnh viễn, nên `poll()` không bao giờ trả về, `run()` không bao giờ tới `finally`, `running` kẹt `true`, và người dùng bấm Huỷ xong vẫn thấy *Đang chạy…* cùng nút Chạy bị vô hiệu **cho tới khi rời tab**.
+
+Sửa: giữ `resolve` của nhịp đang treo (`pollWake` ở `useInfraLogs.ts`, `timerWake` ở `useInfraOverview.ts`) và gọi nó trong hàm huỷ; thêm nhịp kiểm tra `cancelled` sau `await` để vòng lặp thoát ngay, không hỏi thêm một lượt `get-query-results` sau khi đã bảo dừng.
+
+Đo trên trình duyệt (engine giả): `⌘Enter` → `estimate` + 2 × `query-start` (biểu đồ mật độ bật) → `⌘.` → `logs-query-cancel` → runbar về **Chạy**, nút bật lại, chạy lại được lần hai. Thẻ Lỗi: **Huỷ** → **Chạy (~0.0050 USD)**. Lỗi này chỉ lộ khi cú huỷ rơi đúng lúc vòng lặp đang đợi nhịp — trạng thái chiếm phần lớn thời gian — nên test mock không bắt được.
+
+### Sửa 2026-09-14 — danh sách log group trắng vì `--limit` > 50
+
+Mở màn Logs là ô **Nhóm log** hiện nguyên văn câu của AWS, không có group nào:
+
+> An error occurred (InvalidParameterException) when calling the DescribeLogGroups operation: 1 validation error detected: Value at 'limit' failed to satisfy constraint: Member must have value less than or equal to 50
+
+`describe-log-groups` chỉ nhận **50 group mỗi lượt gọi** (`limit` của API có trần 50),
+nhưng `listLogGroups` truyền thẳng `--limit` của người gọi vào MỘT lượt: màn Logs xin
+`limit: 100` (`useInfraLogs.loadGroups`), còn trần phía sidecar là 500
+(`MAX_GROUP_LIMIT`) — cả hai đều vượt 50, nên AWS từ chối và danh sách chọn group
+không bao giờ vẽ được.
+
+Sửa: 50 trở thành trần **từng trang** (`GROUP_PAGE_LIMIT`), và `listLogGroups` nối
+trang bằng `nextToken` cho tới khi đủ `limit` (tối đa `MAX_GROUP_PAGES` = 10 lượt
+gọi ⇒ trần tổng 500 group vẫn giữ nguyên). Kèm theo: khử trùng theo tên trước khi
+trả (tên là `:key` của danh sách chọn), và **một trang lỗi giữa chừng làm hỏng cả
+lời gọi** thay vì trả về một danh sách cụt — trả cụt mà không nói gì sẽ khiến người
+dùng tưởng tài khoản chỉ có chừng ấy log group.
+
+Kiểm bằng 4 ca mới trong `apps/desktop/sidecar/src/infra/aws/__tests__/logs.test.ts`:
+không lượt gọi nào được gửi `--limit` > 50, trang nối đúng bằng `nextToken`, trang
+cụt thì dừng ngay, và lỗi ở trang hai thì cả lời gọi trả lỗi.
+
+### Chưa đo trên dữ liệu thật
+
+Máy này **không có phiên SSO sống**, nên toàn bộ đường log (`listLogGroups`,
+`startInsightsQuery`, `getInsightsResults`, `tailWindow`) chưa từng chạy trên
+CloudWatch thật: mọi test đều mock `runInfra`. Cần một lượt đo thật trước khi coi L1–L3
+là "đã nghiệm thu".

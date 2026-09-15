@@ -13,6 +13,7 @@
 // giống một positional, nên nó chỉ đẩy lệnh sang `write` — sai về phía an toàn.
 // Mọi cờ đổi ngữ cảnh đã bị `findForbiddenFlag()` chặn từ trước ở `infra.run`.
 
+import { isInsideInfraCache } from './cache.js'
 import type { InfraCommandClass, InfraTool } from './types.js'
 
 /**
@@ -101,7 +102,13 @@ const AWS_READ_ALLOWLIST: Record<string, ReadonlySet<string>> = {
     // positional `outfile` và ghi file ra đường dẫn tuỳ ý (audit #1, critical).
     'head-object',
   ]),
-  s3: new Set(['ls']),
+  // `presign` KHÔNG đổi gì trên AWS: nó sinh một URL có hạn từ chính credential
+  // đang dùng. Xếp nó là `read` là quyết định có chủ đích của Mốc 3 (task 3.6):
+  // người dùng cần "copy URL ký sẵn" mà không phải mở hộp duyệt cho một thao tác
+  // không thay đổi tài nguyên. Đổi lại, URL **không bao giờ** vào nhật ký: argv
+  // chỉ có `s3://bucket/key`, còn stdout (chứa URL) chỉ đi lên UI — `runInfra`
+  // chỉ ghi `summary` khi lệnh HỎNG, nên đường thành công không chạm đĩa.
+  s3: new Set(['ls', 'presign']),
   ecs: new Set([
     'list-clusters',
     'list-services',
@@ -138,14 +145,162 @@ const AWS_READ_ALLOWLIST: Record<string, ReadonlySet<string>> = {
   sqs: new Set(['list-queues', 'get-queue-attributes']),
   sns: new Set(['list-topics', 'list-subscriptions']),
   dynamodb: new Set(['list-tables', 'describe-table']),
+  // Mốc 3 (mức "Danh sách"): metadata của image/repository. `batch-get-image`
+  // KHÔNG có mặt — nó trả manifest + layer URI, không phải thứ bảng cần.
+  ecr: new Set(['describe-repositories', 'list-images']),
+  // `simulate-principal-policy` là ĐỌC: nó chỉ trả lời "ARN này có được làm action
+  // X không", không đổi gì. Task 3.3 dùng nó để ẩn nút ghi lúc mở màn. Cố ý KHÔNG
+  // có `attach-*`/`put-*`/`create-*` ở đây — IAM ghi vẫn phải hỏi.
+  iam: new Set(['simulate-principal-policy']),
+  // ⚠ CHỈ tên và mô tả. `get-secret-value` là lệnh PHÁT credential và nằm trong
+  // `CREDENTIAL_OPS` (bị từ chối cứng) — nó không bao giờ được thêm vào đây.
+  secretsmanager: new Set(['list-secrets', 'describe-secret']),
   amplify: new Set(['list-apps', 'list-branches', 'list-jobs', 'get-job']),
+  // Mốc 4 (màn Triển khai, task 4.6). CodePipeline/CodeBuild không có lệnh nào
+  // phát credential và không nhận positional là đường dẫn; các lệnh GHI của
+  // chúng (`start-pipeline-execution`, `retry-stage-execution`, `stop-*`,
+  // `put-approval-result`, `start-build`, `retry-build`, `start-job`, `stop-job`)
+  // CỐ Ý không có mặt ở đây ⇒ rơi vào `write` ⇒ phải hỏi.
+  //
+  // `batch-get-builds` là ca phải cân nhắc: nó trả `environment.environmentVariables`
+  // KÈM GIÁ TRỊ của biến loại PLAINTEXT. Vì vậy nó là `read` (metadata của build là
+  // thứ bảng cần) NHƯNG có mặt trong `AWS_SENSITIVE_READ_OPS` bên dưới — trên
+  // production nó luôn phải có người duyệt. Tầng màn Triển khai chỉ lấy `.name`.
+  codepipeline: new Set([
+    'list-pipelines',
+    'list-pipeline-executions',
+    'get-pipeline-state',
+    'get-pipeline-execution',
+    'list-action-executions',
+  ]),
+  codebuild: new Set([
+    'list-projects',
+    'list-builds-for-project',
+    'batch-get-builds',
+    'batch-get-projects',
+  ]),
   // `sts get-caller-identity` là lệnh "tôi đang là ai" — không phát credential.
   // `assume-role`/`get-session-token` TRẢ VỀ KHOÁ nên KHÔNG có mặt ở đây.
   sts: new Set(['get-caller-identity']),
+  // `sso list-accounts` / `list-account-roles` LIỆT KÊ account và role mà token
+  // SSO hiện có quyền thấy — chúng không phát credential nào (thứ phát credential
+  // là `sso get-role-credentials`, và nó nằm nguyên trong `CREDENTIAL_OPS` bên
+  // dưới, bị chặn CỨNG). Chúng cũng không nhận positional nào là đường dẫn.
+  // Thêm ở Mốc 1 (A5) cho luồng "khám phá account từ SSO".
+  //
+  // ⚠ Hai lệnh này nhận `--access-token <giá trị>`. Giá trị đó là credential và
+  // KHÔNG có hình dạng nào để `redactString` nhận ra, nên nó được che ở tầng
+  // nhật ký bằng luật theo CẶP cờ-giá-trị (xem `maskCredentialFlagValues` trong
+  // `audit/store.ts`) chứ không dựa vào lớp lọc theo hình dạng.
+  sso: new Set(['list-accounts', 'list-account-roles']),
 }
 
 const AWS_DESTRUCTIVE_PREFIXES = ['delete-', 'terminate-', 'remove-', 'purge-']
 const AWS_DESTRUCTIVE_EXACT = new Set(['rb', 'rm'])
+
+/**
+ * Lệnh ĐỌC mà KẾT QUẢ là NỘI DUNG log — khác `describe-*` ở chỗ chúng trả về
+ * nguyên văn dòng log của ứng dụng, tức đúng chỗ credential/PII hay nằm nhất
+ * trong cả allowlist `read`.
+ *
+ * ⚠ Vì sao cần một danh sách riêng thay vì bỏ luôn `logs` khỏi allowlist `read`:
+ * bỏ cả nhóm sẽ chặn nhầm `describe-log-groups` (thuần metadata, dùng để vẽ danh
+ * sách chọn) và biến màn Logs thành chuỗi hộp duyệt vô nghĩa. Ở đây chỉ đúng bốn
+ * op trả NỘI DUNG mới bị siết, và chỉ ở cột `production` — xem `decide()`.
+ *
+ * Hệ quả ở tầng quyền (`policy.decide`): trên tài khoản production, bốn op này
+ * nâng từ `auto` lên `ask` cho ĐƯỜNG CỦA AGENT. Đó là quyết định cho "Quyết định
+ * còn treo" của Mốc 2: agent không được tự kéo log production vào context model
+ * mà không có một cú bấm của người dùng.
+ */
+const AWS_SENSITIVE_READ_OPS: Record<string, ReadonlySet<string>> = {
+  logs: new Set(['start-query', 'get-query-results', 'get-log-events', 'filter-log-events']),
+  // `batch-get-builds` trả cả VALUE của biến môi trường loại PLAINTEXT (xem ghi
+  // chú ở `AWS_READ_ALLOWLIST`). Trên production nó phải qua người duyệt.
+  codebuild: new Set(['batch-get-builds']),
+}
+
+/**
+ * Lệnh này có phải "đọc nhưng trả NỘI DUNG log" không, để `decide()` siết lên
+ * `ask` ở production. Trả về tên `<service> <operation>` (để prompt duyệt nói
+ * đúng lý do) hoặc null.
+ */
+export function sensitiveReadOf(tool: InfraTool, args: readonly string[]): string | null {
+  if (tool === 'terraform') {
+    // Ba lệnh `read` của terraform in ra GIÁ TRỊ của state/output — trong đó có
+    // những thứ sinh tự động (mật khẩu DB, khoá) mà Terraform chỉ che khi tác giả
+    // đánh dấu `sensitive`. `validate` / `fmt -check` / `state list` / `version`
+    // thì thuần metadata, nên chúng vẫn là `read` chạy thẳng.
+    const sub = positionals(args)[0]
+    if (sub === 'output' || sub === 'show') return `terraform ${sub}`
+    if (sub === 'state' && positionals(args)[1] === 'show') return 'terraform state show'
+    return null
+  }
+  if (tool === 'kubectl') {
+    const words = positionals(args)
+    const sub = words[0]
+    if (sub === 'logs') return 'kubectl logs'
+    // `-o yaml|json|jsonpath|go-template` trả về NGUYÊN object, không phải bảng
+    // tóm tắt — configmap/secret-đã-che vẫn nằm trong đó. `-o wide` và bảng mặc
+    // định thì không, nên chúng vẫn chạy tự động.
+    if (sub === 'get' || sub === 'describe') {
+      return hasFullFormatFlag(args) ? `kubectl ${sub} -o <format>` : null
+    }
+    return null
+  }
+  const words = positionals(args)
+  const service = words[0]
+  const op = words[1]
+  if (!service || !op) return null
+  return AWS_SENSITIVE_READ_OPS[service]?.has(op) ? `${service} ${op}` : null
+}
+
+// `kubectl get … -o yaml|json|jsonpath|go-template|template` — tức là in ra nội
+// dung object chứ không phải bảng. pflag nhận cả `-o json` (hai token) lẫn
+// `-ojson`/`-o=json` (một token), nên phải dò cả ba dạng.
+const K8S_FULL_FORMATS: ReadonlySet<string> = new Set([
+  'yaml',
+  'json',
+  'jsonpath',
+  'jsonpath-as-json',
+  'go-template',
+  'go-template-file',
+  'template',
+  'templatefile',
+  // `custom-columns` chọn CỘT theo đường dẫn field — sức mạnh y hệt `jsonpath`,
+  // chỉ khác cách viết: `-o custom-columns=D:.data.password` in ra đúng giá trị
+  // đó. Thiếu hai tên này thì `kubectl get secret app -o custom-columns=…` lọt
+  // qua cả `findCredentialOp` (khoá đọc bị chặn) lẫn `sensitiveReadOf` — một
+  // đường vòng lấy credential mà không lớp nào nhìn thấy. Bản `-file` còn đọc
+  // file người dùng trỏ tới, nên cũng thuộc nhóm này.
+  'custom-columns',
+  'custom-columns-file',
+])
+
+/** Mọi token không bắt đầu bằng `-` (khác `positionals()` — hàm đó dừng ở cờ đầu tiên). */
+function nonFlagTokens(args: readonly string[]): string[] {
+  return args.filter((a) => a.length > 0 && !a.startsWith('-'))
+}
+
+export function hasFullFormatFlag(args: readonly string[]): boolean {
+  for (let i = 0; i < args.length; i += 1) {
+    const a = args[i]
+    let value: string | null = null
+    if (a === '-o' || a === '--output') value = args[i + 1] ?? null
+    else if (a.startsWith('-o=')) value = a.slice(3)
+    else if (a.startsWith('--output=')) value = a.slice('--output='.length)
+    else if (a.startsWith('-o') && a.length > 2 && !a.startsWith('--')) value = a.slice(2)
+    else if (a === '--template') value = args[i + 1] ?? null
+    else if (a.startsWith('--template=')) value = a.slice('--template='.length)
+    if (value === null) continue
+    const name = value.split('=')[0].trim()
+    if (name.startsWith('jsonpath') || name.startsWith('go-template') || name === 'template') {
+      return true
+    }
+    if (K8S_FULL_FORMATS.has(name)) return true
+  }
+  return false
+}
 
 // `aws configure` ghi/đọc thẳng `~/.aws`. `configure set credential_process …` là
 // một đường thực thi lệnh tuỳ ý mỗi lần CLI cần credential ⇒ phá huỷ, không phải
@@ -158,6 +313,16 @@ const TF_READ = new Set(['validate', 'output', 'show', 'version'])
 const TF_DESTRUCTIVE = new Set(['destroy', 'apply', 'import'])
 const TF_STATE_READ = new Set(['list', 'show'])
 const TF_STATE_DESTRUCTIVE = new Set(['rm'])
+// `terraform workspace list|show` chỉ đọc workspace đang có — nhưng KHÔNG nằm
+// trong bảng trên vì `workspace select|new|delete` cùng tiền tố đó lại ĐỔI ngữ
+// cảnh. Tách riêng để `select` không lọt vào `read` theo sau `list`.
+const TF_WORKSPACE_READ = new Set(['list', 'show'])
+// `terraform fmt` GHI LẠI file `.tf` tại chỗ; chỉ `fmt -check` là đọc. Đây là
+// đúng loại cặp `(động từ, cờ)` mà allowlist theo động từ không diễn tả được,
+// nên nó phải có nhánh riêng — bỏ sót thì một lệnh sửa file chạy tự động.
+function isTerraformFmtCheck(args: readonly string[]): boolean {
+  return args.some((a) => a === '-check' || a === '--check' || a.startsWith('-check='))
+}
 
 // ─── kubectl ────────────────────────────────────────────────────────────────
 const K8S_READ = new Set([
@@ -243,9 +408,42 @@ function classifyAws(args: readonly string[]): InfraCommandClass {
     return AWS_CONFIGURE_DESTRUCTIVE.has(op) ? 'destructive' : 'write'
   }
 
+  // Ngoại lệ DUY NHẤT của bảng: `s3api get-object` là lệnh ĐỌC nhưng ghi ra file.
+  // Bảng cố ý không có nó (audit #1: positional `outfile` tuỳ ý ⇒ nguyên thuỷ ghi
+  // file). Explorer cần nó để XEM TRƯỚC một object, nên nó được nâng lên `read`
+  // CHỈ KHI đích ghi nằm trong thư mục cache do sidecar sở hữu (infra/cache.ts).
+  // Mọi đường dẫn khác rơi tiếp xuống bảng ⇒ `write` như cũ.
+  if (service === 's3api' && op === 'get-object' && getObjectTargetIsCache(args)) {
+    return 'read'
+  }
+
   // Allowlist, không phải tiền tố. Op lạ ⇒ `write` ⇒ có người duyệt.
   if (AWS_READ_ALLOWLIST[service]?.has(op)) return 'read'
   return 'write'
+}
+
+/**
+ * Đích ghi của `s3api get-object` có nằm trong cache của sidecar không.
+ *
+ * Dạng lệnh: `s3api get-object --bucket B --key K <outfile>` — đích là token CUỐI
+ * CÙNG không phải cờ.
+ *
+ * ⚠ Nhận `args` THÔ, không phải `positionals(args)`. `positionals()` dừng ngay ở
+ * token đầu tiên bắt đầu bằng `-`, tức nó dừng ở `--bucket` và không bao giờ nhìn
+ * thấy đích — bản đầu của hàm này nhận `words` và vì thế luôn trả `false`, khiến
+ * cả nhánh `read` trở thành code chết (bảng ca bắt được).
+ *
+ * Quét từ CUỐI: đích luôn là tham số cuối, và một giá trị cờ tình cờ trùng tên
+ * trong cache cũng không mở được đường ghi ở chỗ khác — vì lệnh vẫn thiếu
+ * positional `outfile` và CLI sẽ tự lỗi.
+ */
+function getObjectTargetIsCache(args: readonly string[]): boolean {
+  for (let i = args.length - 1; i >= 2; i--) {
+    const w = args[i]
+    if (w === undefined || w.length === 0 || w.startsWith('-')) continue
+    return isInsideInfraCache(w)
+  }
+  return false
 }
 
 function classifyTerraform(args: readonly string[]): InfraCommandClass {
@@ -261,6 +459,13 @@ function classifyTerraform(args: readonly string[]): InfraCommandClass {
     if (TF_STATE_DESTRUCTIVE.has(verb)) return 'destructive'
     return TF_STATE_READ.has(verb) ? 'read' : 'write'
   }
+  if (sub === 'workspace') {
+    const verb = words[1]
+    if (!verb) return 'write'
+    return TF_WORKSPACE_READ.has(verb) ? 'read' : 'write'
+  }
+  // `fmt` chỉ `read` khi có `-check`; thiếu cờ đó nó sửa file tại chỗ.
+  if (sub === 'fmt') return isTerraformFmtCheck(args) ? 'read' : 'write'
   if (TF_DESTRUCTIVE.has(sub)) return 'destructive'
   return TF_READ.has(sub) ? 'read' : 'write'
 }
@@ -310,6 +515,26 @@ const CREDENTIAL_OPS: Record<string, ReadonlySet<string>> = {
 
 /** Tên lệnh phát credential nếu có, để chỗ gọi nói đúng lý do khi từ chối. */
 export function findCredentialOp(tool: InfraTool, args: readonly string[]): string | null {
+  if (tool === 'kubectl') {
+    // `kubectl get secret x -o yaml` in base64 của `data` — output CHÍNH LÀ
+    // credential, cùng loại với `aws secretsmanager get-secret-value` và cùng
+    // cách xử lý: chặn cứng, hiện lệnh cho người dùng tự chạy. KHÔNG chặn
+    // `kubectl get secrets` trần (bảng tên) hay `describe secret` (kubectl chỉ
+    // in tên khoá + số byte, không in giá trị) — chặn cả hai sẽ biến việc tra
+    // cứu bình thường thành lỗi mà không mua được an toàn nào.
+    if (positionals(args)[0] !== 'get') return null
+    // Quét MỌI token không phải cờ, không chỉ các positional đứng trước cờ đầu
+    // tiên: `kubectl get -n x secret app -o yaml` là dạng có thật, và `-n` bị
+    // `infra/run.ts` từ chối nên chỗ duy nhất nhìn thấy nó là đây. Đổi lại có
+    // thể dương tính giả khi một GIÁ TRỊ cờ tình cờ bằng `secret` (`-l app=secret`
+    // thì không khớp vì có dấu `=`); dương tính giả ở đây chỉ là một lần từ chối
+    // kèm câu "tự chạy trong terminal", tức chiều an toàn.
+    const isSecret = nonFlagTokens(args).some(
+      (w) => w === 'secret' || w === 'secrets' || w.startsWith('secret/') || w.startsWith('secrets/'),
+    )
+    if (!isSecret) return null
+    return hasFullFormatFlag(args) ? 'kubectl get secret -o <format>' : null
+  }
   if (tool !== 'aws') return null
   const words = positionals(args)
   const service = words[0]

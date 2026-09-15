@@ -40,6 +40,9 @@ export interface ProjectLlmDefaults {
 //   - field ''       → cố ý KHÔNG ghim, DỪNG kế thừa
 //   - field có giá trị → ghim
 // Đây đúng ngữ nghĩa `githubAccount` đang dùng (xem utils/project-gh-account.ts).
+/** Ba CLI mà sidecar gọi trực tiếp bằng arg array (mirror `InfraTool` của sidecar). */
+export type InfraTool = 'aws' | 'terraform' | 'kubectl'
+
 export interface InfraContext {
   // AWS profile name (`--profile`).
   profile?: string
@@ -54,6 +57,41 @@ export interface InfraContext {
   namespace?: string
   // Thư mục làm việc của terraform (`-chdir=`).
   workspace?: string
+}
+
+// Profile AWS — mirror 1-1 của `AwsProfile`/`AwsProfileKind`/`AwsProfileSource` ở
+// sidecar (apps/desktop/sidecar/src/infra/aws/profiles.ts). Đường ĐỌC (`infra.contexts`)
+// KHÔNG BAO GIỜ trả giá trị secret — chỉ hai boolean `hasStaticKeys`/`hasSessionToken`
+// (ADR 0088 §1, invariant #1). Đừng thêm field secret vào type này.
+export type AwsProfileKind = 'sso' | 'login' | 'assume-role' | 'process' | 'static' | 'unknown'
+
+/** Profile khai ở file nào. `both` = có cả config lẫn credentials. */
+export type AwsProfileSource = 'config' | 'credentials' | 'both'
+
+export type AwsProfile = {
+  name: string
+  region?: string
+  output?: string
+  kind: AwsProfileKind
+  ssoStartUrl?: string
+  ssoSession?: string
+  ssoAccountId?: string
+  ssoRoleName?: string
+  roleArn?: string
+  sourceProfile?: string
+  mfaSerial?: string
+  hasStaticKeys: boolean
+  hasSessionToken: boolean
+  /** ISO 8601, từ `x_security_token_expires` (credential tạm). */
+  expiresAt?: string
+  /**
+   * `login_session` của profile `login` (`aws login`): ARN định danh phiên, dạng
+   * `arn:aws:iam::<account id>:root`. KHÔNG phải secret — token nằm trong cache
+   * của CLI và AWOG không đọc tới. Là thứ duy nhất nói được profile này đang có
+   * phiên nào, và hai profile cùng ARN nghĩa là cùng một phiên.
+   */
+  loginSession?: string
+  source: AwsProfileSource
 }
 
 export interface Project {

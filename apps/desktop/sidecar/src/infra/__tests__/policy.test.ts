@@ -198,3 +198,86 @@ describe('chính sách rỗng an toàn', () => {
     expect(p.bypassUntil).toBeUndefined()
   })
 })
+
+// Mốc 2 — "Quyết định còn treo": mặc định `read = auto` cho agent tự chạy
+// `logs filter-log-events` trên production rồi đẩy log vào context model. Luật
+// chọn là SIẾT ĐÚNG CHỖ (bốn op trả nội dung), không hạ cả cột `read`.
+describe('sensitiveRead — đọc nội dung log (Mốc 2)', () => {
+  const prodPolicy = policy({ prodAccountIds: ['111122223333'] })
+
+  it('trên production: nội dung log ⇒ ask, và lý do nói đúng vì sao', () => {
+    const result = decide({
+      policy: prodPolicy,
+      class: 'read',
+      accountId: '111122223333',
+      sensitiveRead: 'logs filter-log-events',
+      now: NOW,
+    })
+    expect(result.mode).toBe('ask')
+    expect(result.reason).toBe('sensitive-read')
+    expect(result.accountKind).toBe('production')
+  })
+
+  it('trên tài khoản THƯỜNG: vẫn auto — không biến dev thành chuỗi hộp duyệt', () => {
+    const result = decide({
+      policy: policy(),
+      class: 'read',
+      accountId: '999988887777',
+      sensitiveRead: 'logs filter-log-events',
+      now: NOW,
+    })
+    expect(result.mode).toBe('auto')
+    expect(result.reason).toBe('matrix')
+  })
+
+  it('không có cờ nhạy cảm thì ma trận không đổi (không hồi quy `describe-*`)', () => {
+    const result = decide({
+      policy: prodPolicy,
+      class: 'read',
+      accountId: '111122223333',
+      now: NOW,
+    })
+    expect(result.mode).toBe('auto')
+    expect(result.reason).toBe('matrix')
+  })
+
+  it('bypass tạm thời KHÔNG gỡ được luật này — van xả không phải đường đưa log vào model', () => {
+    const result = decide({
+      policy: policy({ prodAccountIds: ['111122223333'], bypassUntil: bypassUntil(30) }),
+      class: 'read',
+      accountId: '111122223333',
+      sensitiveRead: 'logs filter-events',
+      now: NOW,
+    })
+    expect(result.mode).toBe('ask')
+    expect(result.reason).toBe('sensitive-read')
+  })
+
+  it('không bao giờ NỚI: lệnh đã ở mức chặt hơn thì giữ nguyên', () => {
+    const blocked = policy({
+      matrix: { ...DEFAULT_MATRIX, read: { normal: 'auto', production: 'block' } },
+      prodAccountIds: ['111122223333'],
+    })
+    const result = decide({
+      policy: blocked,
+      class: 'read',
+      accountId: '111122223333',
+      sensitiveRead: 'logs get-log-events',
+      now: NOW,
+    })
+    expect(result.mode).toBe('block')
+  })
+
+  it('phiên siết thêm vẫn áp lên trên luật nhạy cảm', () => {
+    const result = decide({
+      policy: prodPolicy,
+      class: 'read',
+      accountId: '111122223333',
+      sensitiveRead: 'logs get-log-events',
+      sessionFloor: 'block',
+      now: NOW,
+    })
+    expect(result.mode).toBe('block')
+    expect(result.reason).toBe('session-narrowed')
+  })
+})

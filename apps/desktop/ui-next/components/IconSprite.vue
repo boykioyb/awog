@@ -378,6 +378,16 @@
         <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
         <line x1="2" y1="2" x2="22" y2="22" />
       </symbol>
+      <symbol id="i-k8s" viewBox="0 0 24 24">
+        <path d="M12 2.6 20.2 7.4v9.2L12 21.4 3.8 16.6V7.4z" />
+        <circle cx="12" cy="12" r="2.3" />
+        <path d="M12 9.7V4.5M14 13.2l4.3 2.5M10 13.2l-4.3 2.5" />
+      </symbol>
+      <symbol id="i-terraform" viewBox="0 0 24 24">
+        <path d="M9.2 3.4 3.5 6.6v6.5l5.7 3.2 5.7-3.2V6.6z" />
+        <path d="M15.1 3.4l5.4 3.1v6.4" />
+        <path d="M9.2 17.2v3.4" />
+      </symbol>
       <symbol id="i-terminal" viewBox="0 0 24 24">
         <path d="m4 17 6-6-6-6" />
         <line x1="12" y1="19" x2="20" y2="19" />

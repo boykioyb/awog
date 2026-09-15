@@ -179,6 +179,54 @@ describe('secrets never reach the disk', () => {
     expect((await queryInfraAudit())[0]!.argv.join(' ')).not.toContain(TOKEN)
   })
 
+  // ⚠ Ca này khoá lại một lỗ ĐO ĐƯỢC, không phải suy đoán. Access token SSO là
+  // chuỗi opaque KHÔNG tiền tố, và `redactString()` cố ý không che chuỗi entropy
+  // cao trần (che thì nuốt luôn mọi SHA, mọi id). Nó lại nằm ở PHẦN TỬ RIÊNG của
+  // mảng argv, nên lớp lọc theo cặp `khoá=giá trị` — vốn cần cả hai trong CÙNG
+  // một chuỗi — cũng không thấy. Không có luật theo cặp cờ-giá-trị thì token đi
+  // thẳng xuống đĩa dưới dạng đọc được. (Mốc 1 A5: `aws sso list-accounts`.)
+  it('masks the value AFTER a credential flag, even with no recognisable shape', async () => {
+    const at = daysAgo(0)
+    const opaque = 'aoEXAMPLEopaquetokenwithnoshapeatall0123456789'
+    await recordInfraAction(
+      action({ at, argv: ['sso', 'list-accounts', '--access-token', opaque, '--output', 'json'] }),
+    )
+
+    const onDisk = await readFile(monthFileOf(at), 'utf8')
+    expect(onDisk).not.toContain(opaque)
+    const [entry] = await queryInfraAudit()
+    // Tên cờ ở lại: "đã truyền một access token ở đây" là thứ người đọc nhật ký cần.
+    expect(entry!.argv).toEqual([
+      'sso',
+      'list-accounts',
+      '--access-token',
+      '[redacted]',
+      '--output',
+      'json',
+    ])
+  })
+
+  it('masks the --flag=value form too', async () => {
+    const at = daysAgo(0)
+    const opaque = 'aoEXAMPLEopaquetokenwithnoshapeatall0123456789'
+    await recordInfraAction(action({ at, argv: ['sso', `--access-token=${opaque}`] }))
+    expect(await readFile(monthFileOf(at), 'utf8')).not.toContain(opaque)
+    expect((await queryInfraAudit())[0]!.argv[1]).toBe('--access-token=[redacted]')
+  })
+
+  // Cờ credential đứng sát một cờ khác (`--password-stdin` kiểu docker) không có
+  // giá trị rời — che tên cờ kế tiếp chỉ làm dòng nhật ký khó đọc, không thêm an toàn.
+  it('does not eat the next flag when the credential flag carries no value', async () => {
+    const at = daysAgo(0)
+    await recordInfraAction(action({ at, argv: ['login', '--password', '--output', 'json'] }))
+    expect((await queryInfraAudit())[0]!.argv).toEqual([
+      'login',
+      '--password',
+      '--output',
+      'json',
+    ])
+  })
+
   it('masks credentials embedded in a URL and in the result summary', async () => {
     const at = daysAgo(0)
     await recordInfraAction(

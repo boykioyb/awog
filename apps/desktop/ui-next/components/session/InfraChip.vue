@@ -3,17 +3,22 @@
        chip SSH trong SessionContextStrip: một chip mở popover của CHÍNH nó, và
        không ghim gì thì VẮNG MẶT khỏi DOM — hàng ngữ cảnh không mất pixel nào cho
        tính năng người dùng chưa dùng. -->
-  <span v-if="pinned" class="iwrap">
+  <span v-if="visible" class="iwrap">
     <button
       type="button"
       class="ctxchip"
-      :class="{ on: open, danger: isProd, warn: !isProd && bypassActive }"
+      :class="{
+        on: open,
+        acc: !pinned,
+        danger: pinned && isProd,
+        warn: pinned && !isProd && bypassActive,
+      }"
       :title="chipTitle"
       @click.stop="open = !open"
     >
       <Icon name="layers" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="ctxchip-lbl">{{ profileLabel }}</span>
-      <span class="ctxchip-sub">{{ chipSub }}</span>
+      <span class="ctxchip-lbl">{{ chipLabel }}</span>
+      <span v-if="chipSub" class="ctxchip-sub">{{ chipSub }}</span>
       <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
 
@@ -22,76 +27,86 @@
       <div class="pop ipop" @click.stop>
         <div class="pl">
           <span>{{ t('infra.pop.title') }}</span>
-          <span v-if="isProd" class="ibadge prod">{{ t('infra.pop.prod') }}</span>
+          <span v-if="pinned && isProd" class="ibadge prod">{{ t('infra.pop.prod') }}</span>
         </div>
 
-        <p v-if="bypassActive" class="iwarn">
-          {{ t('infra.pop.bypass', { left: bypassLeft }) }}
-        </p>
-
-        <!-- 1 · Profile -->
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.profile.label') }}</div>
-          <AppSelect
-            :model-value="effective.profile ?? ''"
-            :options="profileOptions"
-            :placeholder="t('infra.profile.placeholder')"
-            width="100%"
-            @update:model-value="onProfile"
-          />
-          <p v-if="profilesError" class="ierr">{{ profilesError }}</p>
-          <p v-else-if="loadingProfiles" class="ihint">{{ t('infra.profile.loading') }}</p>
-          <p v-else-if="!profiles.length" class="ihint">{{ t('infra.profile.empty') }}</p>
+        <!-- Công tắc on/off của tool AWS cho phiên (2026-09-15). Tắt = xoá field
+             AWS của phiên; bật = chọn sẵn một profile. -->
+        <div class="itoggle">
+          <span class="itoggle-lbl">{{ t('infra.toggle.aws') }}</span>
+          <SettingsTog :model-value="pinned" @update:model-value="setEnabled" />
         </div>
+        <p v-if="!pinned" class="ihint">{{ t('infra.toggle.awsHint') }}</p>
 
-        <!-- 2 · Region (rỗng = để chính profile quyết) -->
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.region.label') }}</div>
-          <AppSelect
-            :model-value="effective.region ?? ''"
-            :options="regionOptions"
-            width="100%"
-            @update:model-value="onRegion"
-          />
-        </div>
+        <template v-if="pinned">
+          <p v-if="bypassActive" class="iwarn">
+            {{ t('infra.pop.bypass', { left: bypassLeft }) }}
+          </p>
 
-        <!-- 3 · Quyền của phiên — chỉ siết xuống được (ADR 0088 §5b) -->
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.floor.label') }}</div>
-          <AppSelect
-            :model-value="floor"
-            :options="floorOptions"
-            width="100%"
-            @update:model-value="onFloor"
-          />
-          <p class="ihint">{{ t('infra.floor.note') }}</p>
-        </div>
+          <!-- 1 · Profile -->
+          <div class="ifield">
+            <div class="ilbl">{{ t('infra.profile.label') }}</div>
+            <AppSelect
+              :model-value="effective.profile ?? ''"
+              :options="profileOptions"
+              :placeholder="t('infra.profile.placeholder')"
+              width="100%"
+              @update:model-value="onProfile"
+            />
+            <p v-if="profilesError" class="ierr">{{ profilesError }}</p>
+            <p v-else-if="loadingProfiles" class="ihint">{{ t('infra.profile.loading') }}</p>
+            <p v-else-if="!profiles.length" class="ihint">{{ t('infra.profile.empty') }}</p>
+          </div>
 
-        <p v-if="saveError" class="ierr">{{ saveError }}</p>
+          <!-- 2 · Region (rỗng = để chính profile quyết) -->
+          <div class="ifield">
+            <div class="ilbl">{{ t('infra.region.label') }}</div>
+            <AppSelect
+              :model-value="effective.region ?? ''"
+              :options="regionOptions"
+              width="100%"
+              @update:model-value="onRegion"
+            />
+          </div>
 
-        <!-- 4 · Kiểm tra danh tính — lệnh DUY NHẤT ở đây chạm mạng, nên nó chỉ chạy
+          <!-- 3 · Quyền của phiên — chỉ siết xuống được (ADR 0088 §5b) -->
+          <div class="ifield">
+            <div class="ilbl">{{ t('infra.floor.label') }}</div>
+            <AppSelect
+              :model-value="floor"
+              :options="floorOptions"
+              width="100%"
+              @update:model-value="onFloor"
+            />
+            <p class="ihint">{{ t('infra.floor.note') }}</p>
+          </div>
+
+          <p v-if="saveError" class="ierr">{{ saveError }}</p>
+
+          <!-- 4 · Kiểm tra danh tính — lệnh DUY NHẤT ở đây chạm mạng, nên nó chỉ chạy
              khi người dùng bấm, và mọi lỗi hiện ra chữ đọc được. -->
-        <button
-          type="button"
-          class="iact"
-          :disabled="identityRunning || !awsAvailable"
-          @click="checkIdentity()"
-        >
-          <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ identityRunning ? t('infra.identity.running') : t('infra.identity.run') }}
-        </button>
-        <p v-if="!awsAvailable" class="ihint">{{ t('infra.identity.noBinary') }}</p>
-        <div v-if="identity" class="iout">
-          <div class="iout-row">
-            <span class="iout-k">{{ t('infra.identity.account') }}</span>
-            <span class="iout-v">{{ identity.accountId }}</span>
+          <button
+            type="button"
+            class="iact"
+            :disabled="identityRunning || !awsAvailable"
+            @click="checkIdentity()"
+          >
+            <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ identityRunning ? t('infra.identity.running') : t('infra.identity.run') }}
+          </button>
+          <p v-if="!awsAvailable" class="ihint">{{ t('infra.identity.noBinary') }}</p>
+          <div v-if="identity" class="iout">
+            <div class="iout-row">
+              <span class="iout-k">{{ t('infra.identity.account') }}</span>
+              <span class="iout-v">{{ identity.accountId }}</span>
+            </div>
+            <div v-if="identity.arn" class="iout-row">
+              <span class="iout-k">{{ t('infra.identity.arn') }}</span>
+              <span class="iout-v">{{ identity.arn }}</span>
+            </div>
           </div>
-          <div v-if="identity.arn" class="iout-row">
-            <span class="iout-k">{{ t('infra.identity.arn') }}</span>
-            <span class="iout-v">{{ identity.arn }}</span>
-          </div>
-        </div>
-        <p v-if="identityError" class="ierr">{{ identityError }}</p>
+          <p v-if="identityError" class="ierr">{{ identityError }}</p>
+        </template>
       </div>
     </template>
   </span>
@@ -123,7 +138,7 @@ const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
 const { confirm } = useConfirm()
 const sc = useSidecar()
-const { effective, sessionValue, setForSession } = useInfraContext(() => ({
+const { effective, sessionValue, appValue, setForSession } = useInfraContext(() => ({
   sessionId: props.session.id,
 }))
 
@@ -223,10 +238,13 @@ const saveError = ref<string | null>(null)
 
 const open = ref(false)
 
-// Chip chỉ nói về AWS ở P0 ⇒ "đã ghim" = có profile hoặc region. Luật này được
-// tính LẠI trong SessionContextStrip (`hasInfra`) vì cha phải biết TRƯỚC có nên
-// vẽ hàng 30px hay không — con không nói ngược lên cha được.
+// "Đã BẬT cho phiên này" = có profile hoặc region ghim. Công tắc on/off của chip
+// phản chiếu đúng trạng thái này (không thêm state riêng): tắt thì xoá field AWS
+// của phiên, bật thì chọn sẵn một profile để "bật" có nghĩa ngay.
 const pinned = computed(() => !!effective.value.profile || !!effective.value.region)
+// Hiện chip cả khi CHƯA bật, miễn máy có profile để bật (khớp chip kubectl): phiên
+// mới mặc định tắt hết, ẩn tiếp thì không còn đường bật AWS trong phiên.
+const visible = computed(() => pinned.value || profiles.value.length > 0)
 
 async function loadProfiles(): Promise<void> {
   if (!sc.available || loadingProfiles.value) return
@@ -288,12 +306,11 @@ async function loadStatus(): Promise<void> {
 }
 
 onMounted(() => {
-  // Nạp ngay khi chip có mặt: màu production là tín hiệu quan trọng nhất và nó
-  // không được đợi tới lúc người dùng mở popover.
-  if (pinned.value) {
-    void loadPolicy()
-    void loadProfiles()
-  }
+  // Nạp profile ngay cả khi chưa bật: `visible` cần biết máy có profile nào không
+  // (nếu không thì chip không có gì để bật ⇒ ẩn). Chính sách chỉ cần khi đã bật —
+  // màu production là tín hiệu quan trọng nhất và không đợi tới lúc mở popover.
+  void loadProfiles()
+  if (pinned.value) void loadPolicy()
 })
 
 watch(pinned, (now) => {
@@ -367,10 +384,15 @@ const FLOOR_SHORT: Record<InfraFloor, string> = {
   block: 'infra.floor.shortBlock',
 }
 
-const profileLabel = computed(() => effective.value.profile || t('infra.chip.noProfile'))
+// Bật → tên profile (thứ bị cắt khi hàng chật). Tắt → chỉ chữ "AWS", đọc ra ngay
+// là tool này đang tắt cho phiên.
+const chipLabel = computed(() =>
+  pinned.value ? effective.value.profile || t('infra.chip.noProfile') : t('infra.chip.aws'),
+)
 // `<profile> · <region> · <mức duyệt viết tắt>` — profile ở `.ctxchip-lbl` (nó là
-// cái được cắt khi hàng chật), phần còn lại ở `.ctxchip-sub`.
+// cái được cắt khi hàng chật), phần còn lại ở `.ctxchip-sub`. Tắt → "· tắt".
 const chipSub = computed(() => {
+  if (!pinned.value) return `· ${t('infra.chip.off')}`
   const parts: string[] = []
   if (effective.value.region) parts.push(effective.value.region)
   parts.push(t(FLOOR_SHORT[floor.value]))
@@ -421,6 +443,27 @@ async function pin(patch: InfraContext): Promise<void> {
   saveError.value = null
   const ok = await setForSession({ ...(sessionValue.value ?? {}), ...patch })
   if (!ok) saveError.value = t('infra.error.save')
+}
+
+// Công tắc on/off của tool AWS cho phiên (2026-09-15). Tắt = xoá field AWS (dừng
+// kế thừa, lệnh không nhận `--profile`/`--region`, ô duyệt không nêu AWS). Bật =
+// chọn sẵn một profile để "bật" có nghĩa ngay: ưu tiên mặc định toàn app nếu còn
+// trong `~/.aws`, không thì profile đầu tiên. Không có profile nào thì chip đã
+// không hiện, nên nhánh này luôn có cái để chọn.
+function setEnabled(on: boolean): void {
+  if (on === pinned.value) return
+  if (!on) {
+    identity.value = null
+    identityError.value = null
+    void pin({ profile: '', region: '', accountId: '' })
+    return
+  }
+  const appDefault = appValue.value.profile
+  const pick =
+    (appDefault && profiles.value.some((p) => p.name === appDefault) ? appDefault : '') ||
+    profiles.value[0]?.name ||
+    ''
+  if (pick) onProfile(pick)
 }
 
 function onProfile(next: string): void {
@@ -520,15 +563,10 @@ function parseIdentity(stdout: string): Identity | null {
 </script>
 
 <style scoped>
-.iwrap {
-  position: relative;
-  display: inline-flex;
-  flex: 0 1 auto;
-  min-width: 0;
-}
-/* Account production: tín hiệu quan trọng nhất của chip, nên nó thắng cả `warn`.
-   Biến thể này sống ở đây chứ không trong app-shell.css vì chỉ chip hạ tầng có
-   khái niệm "tài khoản đánh dấu production". */
+/* Biến thể "account production" sống ở đây chứ không trong app-shell.css: chỉ
+   chip hạ tầng AWS mới có khái niệm tài khoản đánh dấu production. Phần CSS còn
+   lại của chip (`.iwrap`, `.ipop`, `.ifield`, `.iact`, …) đã được nâng lên
+   `assets/css/app-shell.css` để ba chip hạ tầng dùng chung một bản. */
 .ctxchip.danger {
   border-color: var(--dangerBorder);
   color: var(--danger);
@@ -537,108 +575,5 @@ function parseIdentity(stdout: string): Identity | null {
 .ctxchip.danger .ctxchip-lbl,
 .ctxchip.danger .ctxchip-sub {
   color: inherit;
-}
-.ibackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-}
-/* Strip nằm ở ĐẦU cột chat nên popover mở XUỐNG (`.pop` mặc định là fixed). */
-.ipop {
-  position: absolute;
-  top: 128%;
-  left: 0;
-  z-index: 50;
-  width: 296px;
-}
-.ifield {
-  margin-top: 12px;
-}
-.ilbl {
-  margin-bottom: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.ihint {
-  margin: 6px 0 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.ierr {
-  margin: 6px 0 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--danger);
-}
-.iwarn {
-  margin: 8px 0 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--amber);
-}
-.ibadge {
-  padding: 1px 6px;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-xs);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.ibadge.prod {
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
-  color: var(--danger);
-}
-.iact {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  margin-top: 12px;
-  padding: 7px 9px;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: left;
-  cursor: pointer;
-}
-.iact:hover:not(:disabled) {
-  background: var(--bgHover);
-}
-.iact:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.iact .icn {
-  flex: 0 0 auto;
-  color: var(--textDim);
-}
-.iout {
-  display: grid;
-  gap: 4px;
-  margin-top: 10px;
-}
-.iout-row {
-  display: flex;
-  gap: 8px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-}
-.iout-k {
-  flex: 0 0 auto;
-  color: var(--textFaint);
-}
-.iout-v {
-  min-width: 0;
-  /* mono-ok: account id + ARN là định danh người dùng copy-paste sang terminal */
-  font-family: var(--code);
-  color: var(--text);
-  word-break: break-all;
 }
 </style>

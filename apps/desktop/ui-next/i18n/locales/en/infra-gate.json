@@ -19,6 +19,7 @@
   "infraGate.chip.narrowed": "narrowed by this session",
   "infraGate.hint.bypass": "A temporary bypass is on, so commands in this class are running without asking until it expires.",
   "infraGate.hint.narrowed": "This session narrowed its own infrastructure permissions, so you are asked even where Settings would allow it.",
+  "infraGate.hint.shell": "The command runs inside a shell string: the profile above is this session's DEFAULT, and the string can still switch it with its own flags — so the matrix applies its strictest column.",
   "infraGate.noAccount": "No account is pinned — the command runs against whatever the CLI resolves by itself.",
   "infraGate.noRemember": "Infrastructure commands are never remembered — every call asks. Open the permission matrix in Settings → Infrastructure to change that."
 }

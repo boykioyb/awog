@@ -308,11 +308,75 @@ function fitToLineCap(entry: InfraAuditEntry): { entry: InfraAuditEntry; line: s
   return { entry: minimal, line: JSON.stringify(minimal) }
 }
 
+/**
+ * Cờ CLI mà GIÁ TRỊ nằm ở PHẦN TỬ KẾ TIẾP của mảng argv.
+ *
+ * Vì sao cần một luật riêng: `redactString()` chạy trên TỪNG phần tử một, nên nó
+ * chỉ thấy `--access-token` ở phần tử i và một chuỗi trần ở phần tử i+1 — hai
+ * chuỗi rời không có ngữ cảnh nào nối chúng lại. Lớp lọc theo cặp `khoá=giá trị`
+ * của `redact.ts` cần cả hai nằm trong CÙNG một chuỗi (`--token abc` của một dòng
+ * lệnh), nên ở dạng mảng nó không khớp; và lớp lọc theo HÌNH DẠNG cố ý không bắt
+ * chuỗi entropy cao trần (che thì nuốt luôn mọi SHA, mọi id). Kết quả: một token
+ * SSO — chuỗi opaque không tiền tố — đi thẳng xuống đĩa dưới dạng đọc được.
+ *
+ * Đo được, không phải suy đoán: `aws sso list-accounts --access-token <token>`
+ * (Mốc 1 A5) là lời gọi đầu tiên trong repo truyền credential qua argv.
+ *
+ * Che ở ĐÂY chứ không ở call site vì đây là cổng duy nhất mà mọi argv đi qua
+ * trước khi chạm đĩa — call site quên che thì nhật ký hết là bằng chứng.
+ */
+const REDACTED_VALUE = '[redacted]'
+
+const CREDENTIAL_ARG_FLAGS: readonly string[] = [
+  '--access-token',
+  '--session-token',
+  '--refresh-token',
+  '--auth-token',
+  '--token',
+  '--password',
+  '--secret',
+  '--secret-access-key',
+  '--client-secret',
+  '--api-key',
+  '--apikey',
+]
+
+function isCredentialFlag(name: string): boolean {
+  return CREDENTIAL_ARG_FLAGS.includes(name.toLowerCase())
+}
+
+/**
+ * Thay giá trị đứng sau một cờ credential bằng placeholder. Giữ NGUYÊN tên cờ:
+ * "đã truyền một access token ở đây" chính là thứ người đọc nhật ký cần biết.
+ *
+ * Phần tử kế tiếp mở đầu bằng `--` thì KHÔNG che — đó là cờ tiếp theo, tức cờ
+ * credential này không mang giá trị rời (dạng `--password-stdin`), và che nhầm
+ * một tên cờ chỉ làm dòng nhật ký khó đọc mà không thêm an toàn nào.
+ */
+function maskCredentialFlagValues(argv: readonly string[]): string[] {
+  const out = [...argv]
+  for (let i = 0; i < out.length; i++) {
+    const raw = out[i]!
+    const eq = raw.indexOf('=')
+    if (eq > 0 && isCredentialFlag(raw.slice(0, eq))) {
+      out[i] = `${raw.slice(0, eq)}=${REDACTED_VALUE}`
+      continue
+    }
+    if (!isCredentialFlag(raw)) continue
+    const next = out[i + 1]
+    if (next === undefined || next.startsWith('--')) continue
+    out[i + 1] = REDACTED_VALUE
+    i++
+  }
+  return out
+}
+
 function buildEntry(input: InfraAuditInput): InfraAuditEntry {
   let cut = false
 
-  const dropped = Math.max(0, input.argv.length - (MAX_ARGV_ITEMS - 1))
-  const source = dropped > 0 ? input.argv.slice(0, MAX_ARGV_ITEMS - 1) : input.argv
+  const masked = maskCredentialFlagValues(input.argv)
+  const dropped = Math.max(0, masked.length - (MAX_ARGV_ITEMS - 1))
+  const source = dropped > 0 ? masked.slice(0, MAX_ARGV_ITEMS - 1) : masked
   const argv = source.map((arg) => {
     const clipped = clip(redactString(arg), MAX_ARGV_ITEM_CHARS)
     if (clipped.cut) cut = true

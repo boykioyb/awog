@@ -19,6 +19,7 @@
   "nav.git": "Git",
   "nav.connections": "Sources",
   "nav.ssh": "SSH",
+  "nav.infra": "AWS",
   "nav.hooks": "Hooks",
   "nav.settings": "Settings",
   "nav.collapse": "Collapse / expand sidebar"

@@ -109,6 +109,50 @@ import './methods/infra.contexts.js'
 import './methods/infra.run.js'
 import './methods/infra.policy.js'
 import './methods/infra.set-session-context.js'
+import './methods/infra.tf-workspaces.js'
+import './methods/infra.kube.js'
+import './methods/infra.profile-save.js'
+import './methods/infra.profile-secrets.js'
+import './methods/infra.profile-delete.js'
+import './methods/infra.profile-duplicate.js'
+import './methods/infra.identity-check.js'
+import './methods/infra.profile-import-preview.js'
+import './methods/infra.profile-import-apply.js'
+import './methods/infra.console-login.js'
+import './methods/infra.console-login-cancel.js'
+import './methods/infra.console-login-private.js'
+import './methods/infra.sso-login.js'
+import './methods/infra.sso-list.js'
+import './methods/infra.sso-create-profiles.js'
+import './methods/infra.profile-export.js'
+import './methods/infra.profile-export-commands.js'
+import './methods/infra.sso-sources.js'
+import './methods/infra.account-ids.js'
+import './methods/infra.resolve-account-ids.js'
+import './methods/infra.forget-account-ids.js'
+import './methods/infra.logs-groups.js'
+import './methods/infra.logs-estimate.js'
+import './methods/infra.logs-query-start.js'
+import './methods/infra.logs-query-status.js'
+import './methods/infra.logs-query-cancel.js'
+import './methods/infra.logs-library.js'
+// Mốc 3 — Explorer (docs/features/infra-explorer.md, docs/features/infra-audit-log.md)
+import './methods/infra.explorer.js'
+import './methods/infra.resource-list.js'
+import './methods/infra.resource-detail.js'
+import './methods/infra.resource-action.js'
+import './methods/infra.resource-probe.js'
+import './methods/infra.resource-console-url.js'
+import './methods/infra.cicd-runs.js'
+import './methods/infra.cicd-run.js'
+import './methods/infra.cicd-log.js'
+import './methods/infra.cicd-action.js'
+import './methods/infra.cicd-workflows.js'
+import './methods/infra.audit-query.js'
+import './methods/infra.audit-clean.js'
+import './methods/infra.audit-export.js'
+// Phiên bong bóng (góc phải màn hình) — thư mục làm việc riêng `awog-infra`.
+import './methods/infra.bubble-workspace.js'
 import './methods/ssh.list.js'
 import './methods/ssh.upsert.js'
 import './methods/ssh.delete.js'
@@ -430,7 +474,10 @@ async function handleLine(line: string): Promise<void> {
   try {
     msg = JSON.parse(line)
   } catch {
-    log.warn('bad json on stdin', { line })
+    // KHÔNG log `line`: một envelope méo của `infra.profile-save` mang nguyên
+    // giá trị `aws_secret_access_key` trong `params`, và `mask()` của logger che
+    // theo TÊN khoá nên không cứu được một chuỗi thô. Chỉ log thứ định danh được.
+    log.warn('bad json on stdin', { bytes: line.length })
     return
   }
 
@@ -446,7 +493,15 @@ async function handleLine(line: string): Promise<void> {
   }
 
   if (!isJsonRpcRequest(msg)) {
-    log.warn('bad envelope on stdin', { msg })
+    // Như trên: chỉ `method` (một tên, không phải dữ liệu) và danh sách TÊN
+    // trường — không bao giờ `params`.
+    log.warn('bad envelope on stdin', {
+      method:
+        typeof (msg as { method?: unknown }).method === 'string'
+          ? (msg as { method: string }).method
+          : undefined,
+      keys: typeof msg === 'object' && msg !== null ? Object.keys(msg) : [],
+    })
     return
   }
 

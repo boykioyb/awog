@@ -883,7 +883,10 @@ export async function runStreamClaude(
     // QUESTION_ENV chỉ đi cùng gate: nó bật schema mở rộng của AskUserQuestion, mà
     // tool đó chỉ tồn tại khi có `canUseTool` (ask-user-question.ts).
     env: {
-      ...buildSdkEnv(cred),
+      // Ngữ cảnh hạ tầng đã ghim → `AWS_PROFILE`/`AWS_DEFAULT_REGION` cho CLI (và
+      // mọi `Bash` nó spawn). Xem `buildSdkEnv`: trên đường này `Bash` là tool của
+      // CLI nên env của tiến trình con là chỗ duy nhất đặt được nó.
+      ...buildSdkEnv(cred, args.settings.infra),
       ...ARTIFACT_ENV,
       ...(args.askUserQuestion ? QUESTION_ENV : {}),
     },

@@ -29,6 +29,12 @@
        the delegated link-click listener is installed, so every <a> in whichever
        surface mounts this stack gets the same choice. -->
   <LinkOpenHost />
+
+  <!-- "Hỏi agent → phiên hiện tại hay phiên mới?" — host của lựa chọn đó. Nó phải
+       ở đây (chứ không ở màn hạ tầng) vì câu hỏi được nêu từ Logs, Tổng quan,
+       Explorer, Nhật ký và cả một phiên đang mở. Bong bóng phiên thì KHÔNG ở đây:
+       nó thuộc cửa sổ chính, xem layouts/default.vue. -->
+  <InfraAskTargetDialog />
 </template>
 
 <script setup lang="ts">

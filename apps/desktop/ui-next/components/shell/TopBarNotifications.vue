@@ -95,6 +95,37 @@
             @toggle="(watch) => onTogglePrWatch(row, watch)"
           />
         </template>
+        <!-- Tab "Triển khai": pipeline hỏng / đang chờ duyệt (useCicdNotify). Như
+             tab PR, đây là một danh sách KHÁC nên nó thay cả thân panel. -->
+        <template v-else-if="filter === 'cicd'">
+          <p v-if="cicdError" class="ntf-note err">{{ cicdError }}</p>
+          <p v-else-if="!cicdEnabled" class="ntf-note">{{ t('infra.cicd.notify.off') }}</p>
+          <p v-else-if="!cicdRuns.length" class="ntf-note">{{ t('infra.cicd.notify.empty') }}</p>
+          <button
+            v-for="run in cicdRuns"
+            :key="`${run.source}|${run.id}`"
+            class="ntf-cicd-row"
+            :class="{ wait: run.status === 'waiting' }"
+            type="button"
+            :title="t('infra.cicd.openOnHost')"
+            @click="openCicdRun(run)"
+          >
+            <span class="ntf-cicd-dot" :class="run.status" />
+            <span class="ntf-cicd-body">
+              <span class="ntf-cicd-title">{{ run.project }} · {{ run.title }}</span>
+              <span class="ntf-cicd-meta">
+                <span>{{ t(`infra.cicd.status.${run.status}`) }}</span>
+                <span v-if="run.stepName">
+                  · {{ t('infra.cicd.failedAtStep', { step: run.stepName }) }}
+                </span>
+                <span v-if="run.startedAt" class="ntf-cicd-when">
+                  · {{ formatRelativeAgo(run.startedAt, t, now) }}
+                </span>
+              </span>
+            </span>
+            <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          </button>
+        </template>
         <template v-else>
           <p v-if="error" class="ntf-note err">{{ error }}</p>
           <p v-else-if="!enabled" class="ntf-note">{{ t('github.inbox.off') }}</p>
@@ -164,6 +195,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useCicdNotifyStatus } from '~/composables/useCicdNotify'
 import { useConfirm } from '~/composables/useConfirm'
 import {
   markAllGhNotificationsRead,
@@ -183,6 +215,7 @@ import {
   useWatchedPrs,
   type PrWatchItem,
 } from '~/composables/usePrWatch'
+import type { CicdRun } from '~/composables/useInfraCicdApi'
 import { useSettingsModal } from '~/composables/useSettingsModal'
 import { useSessionsStore } from '~/stores/sessions'
 import { useSettingsStore } from '~/stores/settings'
@@ -193,9 +226,10 @@ import { formatRelativeAgo } from '~/utils/relative-time'
 // current, so opening the panel costs nothing. This component owns only the popover
 // and routes each row through the poller's own open path.
 
-// 'prs' = danh sách PR đang theo dõi CI/review (usePrWatch), không phải một bộ lọc
-// của hộp thư — nó thay cả thân panel.
-type InboxTab = 'all' | 'watched' | 'prs'
+// 'prs' = danh sách PR đang theo dõi CI/review (usePrWatch), 'cicd' = pipeline hỏng
+// / chờ duyệt (useCicdNotify). Cả hai là danh sách KHÁC, không phải một bộ lọc của
+// hộp thư — chúng thay cả thân panel.
+type InboxTab = 'all' | 'watched' | 'prs' | 'cicd'
 
 const { t } = useI18n()
 const now = useNow()
@@ -205,7 +239,12 @@ const { confirm } = useConfirm()
 const { items, loading, error, lastFetchedAt, unreadCount, authorOf } = useGhInbox()
 const { watchedProjectCount } = useGhNotificationsStatus()
 const { items: watchedPrs, lastError: prError } = useWatchedPrs()
+const { runs: cicdRuns, lastError: cicdError } = useCicdNotifyStatus()
 const sessions = useSessionsStore()
+
+// Nguồn này MẶC ĐỊNH TẮT (mỗi lượt kiểm tra tốn vài lời gọi `aws`/`gh`), nên tab
+// chỉ được mời khi nó đang bật — hoặc khi còn hàng của lượt poll trước.
+const cicdEnabled = computed(() => settings.notifications.cicdEvents)
 
 const open = ref(false)
 const filter = ref<InboxTab>('all')
@@ -280,6 +319,7 @@ const visibleTabs = computed<InboxTab[]>(() => {
   const tabs: InboxTab[] = ['all']
   if (hasUnwatched.value) tabs.push('watched')
   if (prRows.value.length) tabs.push('prs')
+  if (cicdEnabled.value || cicdRuns.value.length) tabs.push('cicd')
   return tabs
 })
 // If the filter stops being offered while it is active, fall back to Everything —
@@ -289,13 +329,18 @@ watch(visibleTabs, (tabs) => {
 })
 
 function tabLabel(tab: InboxTab): string {
-  return tab === 'prs' ? t('ghWatch.tab') : t(`github.inbox.tab.${tab}`)
+  if (tab === 'prs') return t('ghWatch.tab')
+  if (tab === 'cicd') return t('infra.cicd.notify.tab')
+  return t(`github.inbox.tab.${tab}`)
 }
 function tabHint(tab: InboxTab): string {
-  return tab === 'prs' ? t('ghWatch.tabHint') : t(`github.inbox.tabHint.${tab}`)
+  if (tab === 'prs') return t('ghWatch.tabHint')
+  if (tab === 'cicd') return t('infra.cicd.notify.tabHint')
+  return t(`github.inbox.tabHint.${tab}`)
 }
 function tabCount(tab: InboxTab): number {
   if (tab === 'prs') return prRows.value.length
+  if (tab === 'cicd') return cicdRuns.value.length
   return tab === 'all' ? items.value.length : watchedItems.value.length
 }
 
@@ -380,6 +425,13 @@ async function onTogglePrWatch(row: PrRow, watchIt: boolean): Promise<void> {
 
 function openPrExternal(url: string): void {
   if (url) void useLinkOpen().openLink(url)
+}
+
+// Mở lần chạy ở chính nguồn của nó (trang run của GitHub / console AWS). Panel đóng
+// lại vì hàng này dẫn người dùng RA KHỎI app — giống hàng thông báo GitHub.
+function openCicdRun(run: CicdRun): void {
+  close()
+  if (run.url) void useLinkOpen().openLink(run.url)
 }
 
 // Opening pulls a fresh list: the panel is a deliberate "what do I have right now?"
@@ -502,7 +554,7 @@ function openOnGithub(): void {
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-btn);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
   overflow: hidden;
 }
 .ntf-backdrop {
@@ -564,7 +616,7 @@ function openOnGithub(): void {
   gap: 5px;
   padding: 3px 9px;
   border: 1px solid transparent;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
@@ -670,7 +722,7 @@ function openOnGithub(): void {
   flex: 0 0 auto;
   padding: 1px 6px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   color: var(--textDim);
   font-size: 12px;
   line-height: 18px;
@@ -684,6 +736,65 @@ function openOnGithub(): void {
 }
 .ntf-grp-dot + .ntf-grp-n {
   margin-left: 0;
+}
+/* Hàng "Triển khai": chỉ ĐỌC + một cú bấm mở lần chạy ở chính nguồn của nó. Không
+   có nút "đã đọc" vì đây không phải hộp thư — một lần chạy hỏng tự rời danh sách
+   khi nó được chạy lại thành công, chứ không phải khi người ta bấm cho nó im. */
+.ntf-cicd-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  width: 100%;
+  padding: 8px 7px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.ntf-cicd-row:hover {
+  background: var(--bgHover);
+}
+.ntf-cicd-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--textDim);
+}
+.ntf-cicd-dot.failed {
+  background: var(--danger);
+}
+.ntf-cicd-dot.waiting {
+  background: var(--amber);
+}
+.ntf-cicd-row.wait .ntf-cicd-title {
+  color: var(--amber);
+}
+.ntf-cicd-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ntf-cicd-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ntf-cicd-meta {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  color: var(--textDim);
+  font-size: 12px;
+  line-height: 18px;
+}
+.ntf-cicd-when {
+  margin-left: auto;
 }
 .ntf-note {
   margin: 0;

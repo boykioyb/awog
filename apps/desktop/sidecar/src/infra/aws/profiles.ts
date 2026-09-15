@@ -22,7 +22,7 @@ import { join, resolve } from 'node:path'
 import { log } from '../../util/logger.js'
 import { parseAwsIni, type AwsIniFile, type AwsIniSection } from './ini.js'
 
-export type AwsProfileKind = 'sso' | 'assume-role' | 'process' | 'static' | 'unknown'
+export type AwsProfileKind = 'sso' | 'login' | 'assume-role' | 'process' | 'static' | 'unknown'
 
 /** Profile khai ở file nào. `both` = có cả config lẫn credentials. */
 export type AwsProfileSource = 'config' | 'credentials' | 'both'
@@ -43,13 +43,23 @@ export type AwsProfile = {
   hasSessionToken: boolean
   /** ISO 8601, từ `x_security_token_expires` (credential tạm). */
   expiresAt?: string
+  /**
+   * `login_session` của profile `aws login` (kind `login`): ARN định danh phiên,
+   * dạng `arn:aws:iam::<account>:root`. KHÔNG phải secret — token thật nằm trong
+   * `~/.aws/login/cache` của chính CLI, AWOG không đọc tới (xem `console-login.ts`).
+   *
+   * Cần lộ ra vì nó là thứ DUY NHẤT nói được "profile này đang có phiên đăng nhập
+   * nào": account id nằm ngay trong ARN, và hai profile cùng ARN nghĩa là cùng một
+   * phiên — ca người dùng tạo hai profile cho một tài khoản (2026-09-14).
+   */
+  loginSession?: string
   source: AwsProfileSource
 }
 
 // Cùng bộ ký tự AWS cho phép, và CỐ Ý rộng hơn `SSH_ID_RE`: profile thật trên
 // máy dev có dạng `229015218011_Offshore-Developer` — chữ hoa, gạch dưới, gạch
 // nối — nên một regex kiểu slug sẽ lặng lẽ nuốt mất profile của người dùng.
-const PROFILE_NAME_RE = /^[A-Za-z0-9._@:/+=-]{1,128}$/
+export const AWS_PROFILE_NAME_RE = /^[A-Za-z0-9._@:/+=-]{1,128}$/
 
 const SSO_SESSION_PREFIX = 'sso-session '
 const CONFIG_PROFILE_PREFIX = 'profile '
@@ -103,7 +113,7 @@ function mergeInto(
   section: AwsIniSection,
   source: 'config' | 'credentials',
 ): void {
-  if (!PROFILE_NAME_RE.test(name)) {
+  if (!AWS_PROFILE_NAME_RE.test(name)) {
     // Dữ liệu L1: bỏ qua chứ không throw. Cắt ngắn trước khi log vì tên là
     // chuỗi tuỳ ý từ file.
     log.warn('aws: skipping profile with invalid name', { name: name.slice(0, 64), source })
@@ -121,7 +131,12 @@ function mergeInto(
   prev.source = 'both'
 }
 
-function deriveKind(keys: Record<string, string>, hasStaticKeys: boolean): AwsProfileKind {
+/**
+ * Suy kiểu profile từ bộ khoá. Export vì màn xem trước của luồng NHẬP (Mốc 1 A4)
+ * phải phân loại một profile CHƯA nằm trong `~/.aws` — nếu nó tự suy lấy thì hai
+ * chỗ sẽ trôi ra khác nhau và cùng một profile hiện hai kiểu ở hai màn hình.
+ */
+export function deriveKind(keys: Record<string, string>, hasStaticKeys: boolean): AwsProfileKind {
   if (
     keys.sso_start_url ||
     keys.sso_session ||
@@ -131,6 +146,10 @@ function deriveKind(keys: Record<string, string>, hasStaticKeys: boolean): AwsPr
   ) {
     return 'sso'
   }
+  // `aws login` (aws-cli 2.35.9+): profile chỉ có `login_session`, CLI tự lấy
+  // credential tạm từ `~/.aws/login/cache`. Không nhận ra khoá này thì profile
+  // hiện ở nhóm "không rõ" và khoá đó bị bỏ khi xuất cấu hình.
+  if (keys.login_session) return 'login'
   if (keys.role_arn) return 'assume-role'
   if (keys.credential_process) return 'process'
   if (hasStaticKeys) return 'static'
@@ -173,6 +192,7 @@ function toProfile(
     hasStaticKeys: merged.hasStaticKeys,
     hasSessionToken: merged.hasSessionToken,
     ...opt('expiresAt', toIsoOrUndefined(keys.x_security_token_expires)),
+    ...opt('loginSession', keys.login_session),
     source: merged.source,
   }
 }

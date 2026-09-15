@@ -97,6 +97,10 @@ export interface ToolFilter {
   // run_in_background silently degrades to synchronous there. Not a filter per se,
   // but threaded here alongside the other per-turn tool-assembly options.
   backgroundExec?: { sessionId: string }
+  // Ngữ cảnh hạ tầng phiên đã ghim (ADR 0088 §6) → `AWS_PROFILE`/`AWS_DEFAULT_REGION`
+  // cho MỌI lệnh `Bash`, không chỉ cho tool CLI (`aws_cli`…). Vắng = không thêm biến
+  // nào. Đây là chỗ "ngữ cảnh được chỉ định" phủ tới cả lệnh chạy trong shell.
+  bashInfra?: { profile?: string | undefined; region?: string | undefined }
   // Chat-session marker: set for every chat turn INCLUDING plan mode. Distinct
   // from `backgroundExec`, which is deliberately off in plan mode because Bash is
   // blocked there. A read-only tool like `read_terminal` should still be reachable
@@ -205,7 +209,7 @@ export function createAwogToolDefinitions(
     createWriteTool(cwd, reads),
     createEditTool(cwd, reads),
     createMultiEditTool(cwd, reads),
-    createBashTool(cwd, filter.backgroundExec),
+    createBashTool(cwd, filter.backgroundExec, filter.bashInfra),
     // BashOutput + KillShell + monitor: poll / stop / WAIT ON a background shell
     // (ADR 0066). Sessions only (paired with Bash's run_in_background), and only
     // when backgroundExec is set. KillShell was advertised by the session Tools

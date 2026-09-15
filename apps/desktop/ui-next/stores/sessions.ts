@@ -16,7 +16,7 @@ import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import { PR_REVIEW_ACCOUNT_INHERIT, useSettingsStore } from '~/stores/settings'
 import type { InfraContext, ProviderName } from '~/types'
-import { compactInfraContext, freezeInfraContext } from '~/utils/infra-context'
+import { compactInfraContext } from '~/utils/infra-context'
 import { useProjectsStore } from '~/stores/projects'
 import {
   CTX_DIVISOR,
@@ -222,6 +222,10 @@ type PermissionRequestPayload = {
   requestId: string
   toolName: string
   input: Record<string, unknown>
+  // tool_use id của lời gọi (sidecar `sessions.send-message.ts` → `opts.toolUseID`).
+  // Cùng giá trị với `id` của step mà CLI phát ra cho lời gọi đó, nên nó là khoá
+  // duy nhất nối thẻ duyệt với kết quả của lệnh.
+  toolUseID?: string
   promptSentence?: string
   blockedPath?: string
   // Rule(s) the engine proposes for "Always allow" (PermissionUpdate[]). Left
@@ -1629,14 +1633,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     return { acct, model, level, mcpServerIds }
   }
 
-  // Ảnh chụp ngữ cảnh hạ tầng ĐÓNG BĂNG vào một phiên mới (ADR 0088 §2, §7): ý kiến
-  // của project rồi tới toàn app, giữ nguyên văn kể cả '' (xem freezeInfraContext).
-  // `undefined` khi không tầng nào có ý kiến — không có gì để đóng băng thì header
-  // không mang key `infra` rỗng.
-  function frozenInfraFor(projectId?: string): InfraContext | undefined {
-    const projectInfra = projectId ? projectsStore.projectById(projectId)?.infra : undefined
-    const frozen = freezeInfraContext(projectInfra, settingsStore.infra)
-    return Object.keys(frozen).length ? frozen : undefined
+  // Ngữ cảnh hạ tầng của một phiên MỚI: KHÔNG đóng băng gì (2026-09-15).
+  //
+  // Trước đây phiên đóng băng cả cụm `settings.infra` (freezeInfraContext copy MỌI
+  // field có mặt), nên một máy từng ghim cả profile AWS lẫn context kubectl ở tầng
+  // app sẽ nạp CẢ HAI vào mọi phiên mới — ô duyệt lệnh hiện đủ profile+region+
+  // context+namespace dù phiên chỉ định đụng một tool. Nay mỗi tool là một công tắc
+  // ĐỘC LẬP, bật/tắt ngay trên chip của phiên, và MẶC ĐỊNH TẮT: phiên mở ra không
+  // ghim gì, người dùng bật đúng tool cần dùng. `undefined` ⇒ header không mang key
+  // `infra`, và `useInfraContext` (trong phiên) không kế thừa xuống project/app nữa.
+  function frozenInfraFor(_projectId?: string): InfraContext | undefined {
+    return undefined
   }
 
   // Global default account/model (no project context) — the quota gate + usage
@@ -2770,11 +2777,38 @@ export const useSessionsStore = defineStore('sessions', () => {
     pushErrorBlock(m, errorMessage || fallback)
   }
 
+  // Chép kết quả của một step sang THẺ DUYỆT đang xin quyền cho chính lời gọi đó.
+  // Hai bên chỉ gặp nhau qua tool_use id (`toolUseID` của event quyền ↔ `step.id`),
+  // vì event quyền không mang chỉ số block nào — và thứ tự hai chiều đều xảy ra
+  // (step "running" có thể về trước khi thẻ được dựng, output chỉ có ở event sau).
+  // Không khớp được ⇒ không làm gì: thẻ vẫn đúng, chỉ thiếu phần kết quả.
+  function attachPermResult(eid: string, messageId: string, step: EngineStep): void {
+    if (step.kind !== 'tool') return
+    const m = findStreamingMsg(eid, messageId)
+    if (!m) return
+    const block = m.blocks.find(
+      (b): b is PermBlock => b.kind === 'perm' && b.toolUseId != null && b.toolUseId === step.id,
+    )
+    if (!block) return
+    const detail = engineStepDetail(step)
+    // Bản "running" không có detail — đừng ghi đè thứ đã có bằng undefined.
+    if (detail != null) {
+      block.detail = detail
+      if (step.detail?.kind) block.detailKind = step.detail.kind
+    }
+    const result = engineStepResult(step)
+    if (result != null) block.result = result
+  }
+
   // Upsert an engine step into the streaming assistant message's blocks. A
   // running → done repeat merges by eid in place; a new step closes the open text
   // run (so it splits the reply). Subagent steps (parentId) attach under their
   // parent step block's `sub.steps`.
   function upsertStep(eid: string, messageId: string, step: EngineStep) {
+    // Kết quả của lời gọi đã được duyệt phải tới được THẺ duyệt (chứ không chỉ
+    // khối bước nằm dưới nó, vốn mặc định thu gọn): người dùng vừa bấm "Cho phép"
+    // xong nhìn vào thẻ và không thấy lệnh trả về gì.
+    attachPermResult(eid, messageId, step)
     const m = findStreamingMsg(eid, messageId)
     if (!m) return
 
@@ -3264,6 +3298,9 @@ export const useSessionsStore = defineStore('sessions', () => {
               target,
               status: 'pending',
               eid: p.requestId,
+              // tool_use id của lời gọi — sợi dây duy nhất nối thẻ này với step phát
+              // ra kết quả của chính nó (xem attachPermResult).
+              ...(typeof p.toolUseID === 'string' ? { toolUseId: p.toolUseID } : {}),
               ...(suggestion ? { suggestion } : {}),
               ...(infra ? { infra } : {}),
             }

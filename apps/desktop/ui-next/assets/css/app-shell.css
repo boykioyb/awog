@@ -1068,6 +1068,516 @@ textarea.gcpta {
   color: inherit;
 }
 
+/* ── Chip hạ tầng: phần dùng chung của BA chip (AWS · kubectl · Terraform) ────
+   Trước đây khối này nằm scoped trong InfraChip.vue; khi thêm hai chip nữa thì
+   chép ba lần là ba bản sẽ lệch nhau. Đặt ở đây vì `.ctxchip` (nền của chúng)
+   cũng đã ở đây. Riêng biến thể `.ctxchip.danger` vẫn nằm trong InfraChip.vue —
+   chỉ nhánh AWS mới có khái niệm "tài khoản đánh dấu production". */
+.iwrap {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.ibackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+/* Hàng ngữ cảnh nằm ở ĐẦU cột chat nên popover mở XUỐNG (`.pop` mặc định fixed). */
+.ipop {
+  position: absolute;
+  top: 128%;
+  left: 0;
+  z-index: 50;
+  width: 296px;
+}
+/* Công tắc on/off ở đầu popover của ba chip hạ tầng (AWS · kubectl · Terraform).
+   Một hàng: nhãn trái + SettingsTog phải. Dùng chung nên đặt cạnh `.ipop`. */
+.itoggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.itoggle-lbl {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text);
+}
+.ifield {
+  margin-top: 12px;
+}
+.ilbl {
+  margin-bottom: 6px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textDim);
+}
+.ihint {
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--textFaint);
+}
+.ierr {
+  margin: 6px 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--danger);
+}
+.iwarn {
+  margin: 8px 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--amber);
+}
+.ibadge {
+  padding: 1px 6px;
+  border: 1px solid var(--borderStrong);
+  border-radius: var(--r-xs);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--textDim);
+}
+.ibadge.prod {
+  border-color: var(--dangerBorder);
+  background: var(--dangerDim);
+  color: var(--danger);
+}
+.iact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-top: 12px;
+  padding: 7px 9px;
+  border: 1px solid var(--borderStrong);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.iact:hover:not(:disabled) {
+  background: var(--bgHover);
+}
+.iact:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.iact .icn {
+  flex: 0 0 auto;
+  color: var(--textDim);
+}
+.iin {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: var(--bgInput);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.iin:focus {
+  outline: none;
+  border-color: var(--accentBorder);
+}
+.iout {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+}
+.iout-row {
+  display: flex;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+}
+.iout-k {
+  flex: 0 0 auto;
+  color: var(--textFaint);
+}
+.iout-v {
+  min-width: 0;
+  /* mono-ok: account id + ARN là định danh người dùng copy-paste sang terminal */
+  font-family: var(--code);
+  color: var(--text);
+  word-break: break-all;
+}
+
+/* ── Tab Kubernetes của `/infra` ─────────────────────────────────────────────
+   Bốn SFC của tab (`InfraKubernetes` · `InfraKubeClusters` · `InfraKubeWorkloads`
+   · `InfraKubeOutPane`) chia nhau khối dưới đây. Chép vào từng file scoped là bốn
+   bản sẽ lệch nhau ở lần sửa thứ ba — cùng lý do đã đưa khối chip lên đây. Các
+   class `.ifield/.ilbl/.ihint/.ierr/.iin/.ibadge/.iact/.iout*` phía trên cũng được
+   chúng dùng lại nguyên trạng.
+
+   HÌNH DẠNG MỘT MÀN (2026-09-14): tab này không được cuộn ở cấp trang. Chỉ có
+   HAI vùng được cuộn, và cả hai đều nằm trong khung của chính nó: thân modal
+   (`.ikm-body`) và bảng kết quả (`.ikscroll`). Mọi thứ từng xếp dọc trên trang —
+   bảng context, khối thêm cluster, khung log — đã dồn vào modal/drawer, vì câu
+   hỏi hằng ngày là "trong cluster này có gì" chứ không phải "máy tôi có cluster
+   nào". */
+.iksec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--bgSubtle);
+}
+.iksec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.iksec-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+.iksec-sub {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--textMuted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+.iksec-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+/* Hàng ô chọn (profile · region · namespace…): ô co giãn, nút giữ nguyên. */
+.ikgrid {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.ikgrid > .ifield {
+  flex: 1 1 160px;
+  min-width: 0;
+  margin: 0;
+}
+/* Một dòng lệnh để người dùng chép — chỉ dùng cho lệnh BỊ CHẶN và lệnh đã chạy. */
+.ikcmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ikcmd code {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bgInput);
+  color: var(--text);
+  /* mono-ok: dòng lệnh người dùng copy-paste sang terminal */
+  font-family: var(--code);
+  font-size: var(--fs-xs);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+/* Một dòng trong danh sách chọn (cluster EKS tìm được, container…). */
+.ikrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ikrow:last-child {
+  border-bottom: 0;
+}
+.ikrow-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+/* ── Một màn: thanh ngữ cảnh + khung bảng ──────────────────────────────────
+   `.ik` giữ CẢ trang trong một màn: thanh chọn (một dòng) + khung bảng lấp hết
+   phần còn lại. `overflow: hidden` ở đây là cố ý — nếu một khối nào đó tràn thì
+   đó là lỗi bố cục cần thấy, không phải thứ để trang tự cuộn. */
+.ik {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 10px 16px 14px;
+}
+.iktool {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+/* Ô chọn trên thanh: đủ rộng để đọc tên cluster, không giãn hết màn. */
+.iktool > .ifield {
+  margin: 0;
+  flex: 0 1 260px;
+  min-width: 0;
+}
+.iktool > .btn {
+  flex: 0 0 auto;
+}
+/* Số đếm cạnh nhãn (số cluster đọc được, số pod trong bảng…). */
+.ikcount {
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--accentDim);
+  color: var(--textMuted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-variant-numeric: tabular-nums;
+}
+/* Popover ⓘ của thanh ngữ cảnh: chú thích dài (danh tính kubectl dùng) không
+   chiếm chỗ trên màn, nhưng vẫn nằm trong một cú bấm. */
+.iknotewrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+.iknote {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 340px;
+  max-width: 84vw;
+  padding: 10px 12px;
+  z-index: 140;
+}
+.iknotetxt {
+  margin: 0;
+  color: var(--textMuted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  white-space: normal;
+}
+/* Vùng chính: chỉ BẢNG cuộn, phần đầu khung thì đứng yên. */
+.ikmain {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.ikmain-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.ikscroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── Modal của tab (quản lý cluster · output pod) ────────────────────────────
+   Khuôn giống modal Git (`.gpm-*`) nhưng để ở đây vì nó là CSS DÙNG CHUNG cho hai
+   SFC: hai bản scoped sẽ lệch nhau. Thân modal tự cuộn (`overflow-y: auto`) nên
+   nội dung dài không bao giờ đẩy trang phía sau. */
+.ikm-ovl {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+}
+.ikm-card {
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 94vw);
+  max-height: min(760px, 88vh);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bgEl);
+  border: 1px solid var(--borderStrong);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-lg);
+}
+.ikm-card.wide {
+  width: min(1180px, 94vw);
+}
+.ikm-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.ikm-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  color: var(--text);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+.ikm-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+.ikm-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  overflow-y: auto;
+}
+.ikm-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+}
+/* ── Trạng thái đang chạy của tab ───────────────────────────────────────────
+   Một hành động hạ tầng mất vài trăm ms tới vài giây (CLI thật). Không có ba thứ
+   dưới đây thì "đang chạy" và "không có gì xảy ra" trông y hệt nhau — và người
+   dùng bấm lại, thành hai lệnh. */
+/* Icon quay: dùng với <Icon name="refresh" class="ikspin">. */
+.ikspin {
+  animation: ik-spin 0.9s linear infinite;
+}
+@keyframes ik-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Dữ liệu cũ đang được thay: mờ đi, không bấm được, nhưng VẪN Ở CHỖ (biến mất rồi
+   hiện lại làm bố cục nhảy và mất chỗ đang đọc). */
+.ikdim {
+  opacity: 0.4;
+  pointer-events: none;
+  transition: opacity 0.15s var(--ease);
+}
+/* Phản hồi khi bấm: nút dịch xuống 1px và tối hơn một chút. `.ikm-card` phải nằm
+   trong danh sách vì modal Teleport ra body, ngoài cây `.ik`. */
+.ik .btn,
+.ikm-card .btn {
+  transition:
+    transform 0.08s var(--ease),
+    filter 0.14s var(--ease),
+    background 0.14s var(--ease),
+    color 0.14s var(--ease),
+    border-color 0.14s var(--ease);
+}
+.ik .btn:active:not(:disabled),
+.ikm-card .btn:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.94);
+}
+/* Cụm control tạm khoá (vd tab Log/Chi tiết trong lúc lệnh trước còn chạy). */
+.ikoff {
+  opacity: 0.5;
+  pointer-events: none;
+}
+/* Lọc dòng trong khung log/mô tả: một dòng = một khối, dòng khớp được tô nền +
+   vạch bên trái. Tô CẢ DÒNG (không tô từng ký tự khớp) là đủ để mắt bắt nhịp, và
+   không phải dựng DOM cho mọi lần khớp chuỗi trong một log 5000 dòng. */
+.iklines {
+  display: block;
+}
+.ikln {
+  display: block;
+}
+.ikln.ikhit {
+  background: var(--bgActive);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* Thanh lọc của khung log: một hàng ngang, gập được khi cửa sổ hẹp. */
+.iklogbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 0 0 auto;
+}
+/* Dòng "đang nạp" trong modal log/mô tả. */
+.ikload {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--textMuted);
+  font-size: var(--fs-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ikspin {
+    animation: none;
+  }
+  .ik .btn,
+  .ikm-card .btn {
+    transition: none;
+  }
+}
+
+/* Trong modal output, `pre` là vùng được cuộn: bỏ trần `max-height` của `.ikpre`
+   (trần đó dành cho khung nhúng) để nó lấp hết phần thân còn lại. */
+.ikm-body > .ikpre {
+  max-height: none;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Khung output: log của pod, `describe`, hay lệnh bị chặn. */
+.ikpre {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bgInput);
+  max-height: 420px;
+  overflow: auto;
+  color: var(--text);
+  /* mono-ok: log thô + output describe — cột do chương trình in ra */
+  font-family: var(--code);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-prose);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Hairline giữa hai nhóm hành động trong một menu — dùng để tách nhóm CẮT
    TRANSCRIPT (xoá phiên, tua lại, tạo lại) khỏi nhóm an toàn phía trên, để một cú
    bấm trượt không rơi thẳng vào hành động phá huỷ. Lề ngang thụt vào so với
@@ -1339,24 +1849,22 @@ textarea.gcpta {
   transition-duration: 0.05s;
 }
 
-/* Overlays share the elevation ramp so they're soft on light (the hardcoded
-   rgba(0,0,0,.5) prototype shadows were dark-only and read as heavy grey slabs on
-   a light background). */
-.smenu,
-.pop {
-  box-shadow: var(--shadow-md);
-}
-.setmodal,
-.pal,
-.codepanel,
-.lbimg {
-  box-shadow: var(--shadow-lg);
-}
-.pal,
-.codepanel {
-  border-radius: var(--r-panel);
-}
-.wnode {
+/* ── Bảng dữ liệu ở tầng TRANG tự nâng mình lên ──────────────────────────────
+   Một bảng nằm TRỰC TIẾP trên nền trang phải là một card, vì ở theme sáng `--bg`
+   (#fafbfc) khác `--bgPanel` (#ffffff) — bảng không nền chỉ còn cái viền để nhận
+   ra, và trông như một mớ chữ trôi (ảnh chụp màn Nhật ký, 2026-09-15). Ở theme tối
+   phần nền gần như không đổi, nhưng cái bóng vẫn là thứ duy nhất tách nó khỏi trang.
+
+   Bảng nằm TRONG một bề mặt đã nổi rồi thì KHÔNG nhận skin này: `.sprtable` và
+   `.acttable` đã ở trong `.tile`, `.ct` ở trong modal, `.odtable`/`.osgrid` là nội
+   dung tài liệu Word/Excel. Hai tầng bóng chồng nhau đọc thành lỗi, không phải độ sâu.
+
+   Chỉ chứa SKIN. Bố cục (flex · overflow · max-height · sticky header) thuộc về màn
+   sở hữu nó — đó là lý do class này không khai gì ngoài bốn dòng dưới. */
+.tblcard {
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--bgPanel);
   box-shadow: var(--shadow-sm);
 }
 

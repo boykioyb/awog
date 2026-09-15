@@ -41,6 +41,11 @@
     <OnboardingWizard />
     <TourHost />
     <AppGlobalHosts />
+    <!-- Phiên bong bóng ở góc phải (mini session, thư mục riêng `awog-infra`).
+         Cố ý ở lại ĐÂY chứ không vào AppGlobalHosts: một cửa sổ popout ĐÃ là một
+         phiên, nên thêm một phiên thu nhỏ nổi bên trong nó là hai điều khiển cho
+         cùng một việc. -->
+    <InfraBubble />
   </div>
 </template>
 
@@ -48,6 +53,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCommandPalette } from '~/composables/useCommandPalette'
+import { startCicdNotifications } from '~/composables/useCicdNotify'
 import { startGhNotifications } from '~/composables/useGhNotifications'
 import { useSettingsStore } from '~/stores/settings'
 
@@ -74,6 +80,12 @@ useNativeNotify()
 // new (docs/features/github-notifications.md). Main window only — a popout must
 // not double-toast. No-op until the user picks projects in Settings → Git.
 startGhNotifications()
+
+// Pipeline hỏng / đang chờ duyệt → hộp bell + toast (docs/features/infra-cicd.md,
+// Mốc 4 task 4.5). Mặc định TẮT: mỗi lượt kiểm tra là vài tiến trình `aws` cộng
+// một `gh run list` mỗi dự án, nên nó chỉ chạy khi người dùng bật ở
+// Settings → Thông báo. Main window only — popout không toast lần thứ hai.
+startCicdNotifications()
 
 // Drive the live system-tray status surface (rate limits / usage / running /
 // attention) + route tray menu clicks. No-op outside Electron.

@@ -1,0 +1,17 @@
+{
+  "infra.help.title": "No credentials yet?",
+  "infra.help.intro": "The AWS CLI — and therefore AWOG — needs credentials it can use. An Account ID/alias + IAM username + password only works at the Console sign-in page, so it has to go through one of the two paths below.",
+  "infra.help.consoleTitle": "Option 1 — Console sign-in (recommended)",
+  "infra.help.consoleBody": "Close this dialog, then click Add profile → Console sign-in in the toolbar: AWOG opens a browser, you sign in with that same trio, done. No long-lived keys, no commands to type. (The terminal equivalent is aws login.)",
+  "infra.help.keyTitle": "Option 2 — create an access key",
+  "infra.help.step1": "Open the AWS sign-in page and sign in with Account ID/alias + IAM username + password.",
+  "infra.help.step2": "Go to IAM → Users → your user → Security credentials tab.",
+  "infra.help.step3": "Create access key → choose Command Line Interface (CLI).",
+  "infra.help.step4Csv": "Download the *_accessKeys.csv file, then come back here and choose that file.",
+  "infra.help.step4Static": "Download the *_accessKeys.csv file, then paste the Access key ID and Secret access key into the two fields above.",
+  "infra.help.openSignIn": "Open the AWS sign-in page",
+  "infra.help.openDocs": "AWS guide",
+  "infra.help.blockedTitle": "No Create access key button, or AccessDenied?",
+  "infra.help.blockedBody": "Your organization blocks long-term keys. Ask an administrator for the IAM Identity Center start URL (then use Import → From SSO, the equivalent of aws configure sso in a terminal), or for the ARN of a role you are allowed to assume.",
+  "infra.help.passwordNote": "AWOG never asks for the Console password, and the password never goes into ~/.aws — do not paste it here."
+}

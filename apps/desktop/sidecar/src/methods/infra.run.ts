@@ -23,17 +23,9 @@
 
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { classify } from '../infra/classify.js'
-import { decide } from '../infra/policy.js'
-import { loadInfraPolicy } from '../infra/policy-store.js'
-import { runInfra } from '../infra/run.js'
-import { callFingerprint, consumeApproval, issueApproval } from '../infra/approvals.js'
-import { recordInfraAction, INFRA_SURFACES } from '../infra/audit/store.js'
-import { describeInfraCommand } from '../runtime/permission.js'
-import type { InfraDecision } from '../infra/audit/store.js'
-import type { InfraAccountKind, InfraMode } from '../infra/policy.js'
-import type { InfraRunResult } from '../infra/run.js'
-import type { InfraCommandClass } from '../infra/types.js'
+import { runGated } from '../infra/gated.js'
+import { INFRA_SURFACES } from '../infra/audit/store.js'
+import type { InfraGatedResult } from '../infra/gated.js'
 
 // Trần của `args`: đây là L1 (payload IPC). 200 phần tử × 4096 ký tự là thừa sức
 // cho mọi lệnh CLI thật, và chặn một payload phình to đi thẳng vào `execFile`.
@@ -78,97 +70,21 @@ const Params = z.object({
   timeoutMs: z.number().int().positive().max(600_000).optional(),
 })
 
-type Blocked = {
-  blocked: true
-  /** UI mở hộp duyệt rồi gọi lại kèm `approvalTicket`; `false` = ma trận chặn hẳn. */
-  requiresApproval: boolean
-  /** Chỉ có mặt khi `requiresApproval` — vé để gọi lại sau khi người dùng bấm. */
-  approvalTicket?: string
-  command: string
-  class: InfraCommandClass
-  accountKind: InfraAccountKind
-  mode: InfraMode
-  reason: string
-}
-
-type Ran = {
-  blocked: false
-  command: string
-  class: InfraCommandClass
-  accountKind: InfraAccountKind
-  decision: InfraDecision
-  result: InfraRunResult
-}
-
-register('infra.run', async (raw): Promise<Blocked | Ran> => {
+register('infra.run', async (raw): Promise<InfraGatedResult> => {
   const p = Params.parse(raw)
-  const cls = classify(p.tool, p.args)
-  const policy = await loadInfraPolicy()
-  const verdict = decide({
-    policy,
-    class: cls,
-    ...(p.context.accountId !== undefined ? { accountId: p.context.accountId } : {}),
-    ...(p.sessionFloor !== undefined ? { sessionFloor: p.sessionFloor } : {}),
-  })
-  const command = describeInfraCommand(p.tool, p.args, p.context)
-
-  // Nhật ký cho hai nhánh KHÔNG chạy. Nhánh chạy để `runInfra` tự ghi — task 0.6
-  // đòi đúng một dòng, ghi tại chỗ chạy chứ không phải tại call site.
-  const fingerprint = callFingerprint(p.tool, p.args, p.context)
-
-  const refuse = async (requiresApproval: boolean, reason: string): Promise<Blocked> => {
-    await recordInfraAction({
-      actor: 'human',
-      ...(p.sessionId !== undefined ? { sessionId: p.sessionId } : {}),
-      ...(p.messageId !== undefined ? { messageId: p.messageId } : {}),
-      surface: p.surface,
-      tool: p.toolName,
-      argv: [...p.args],
-      context: p.context,
-      class: cls,
-      decision: requiresApproval ? 'denied' : 'blocked',
-      result: { summary: reason },
-    })
-    return {
-      blocked: true,
-      requiresApproval,
-      ...(requiresApproval ? { approvalTicket: issueApproval(fingerprint) } : {}),
-      command,
-      class: cls,
-      accountKind: verdict.accountKind,
-      mode: verdict.mode,
-      reason,
-    }
-  }
-
-  if (verdict.mode === 'block') {
-    const where = verdict.accountKind === 'production' ? 'a PRODUCTION account' : 'this account'
-    return refuse(
-      false,
-      `AWOG không chạy lệnh này — the infrastructure policy blocks ${cls} commands on ${where}. Run it yourself if you mean to: ${command}. Change this in Settings → Infrastructure.`,
-    )
-  }
-  if (verdict.mode === 'ask' && !consumeApproval(p.approvalTicket, fingerprint)) {
-    return refuse(true, `This ${cls} command needs your approval before it can run: ${command}`)
-  }
-
-  // Ô ma trận nói `auto` VÌ bypass tạm thời thì nhật ký phải nói ra điều đó —
-  // đó là cả lý do `bypass-temp` tồn tại bên cạnh `auto` trong lược đồ nhật ký.
-  const decision: InfraDecision =
-    verdict.mode === 'auto' ? (verdict.reason === 'bypass' ? 'bypass-temp' : 'auto') : 'approved'
-
-  const result = await runInfra({
+  // Toàn bộ luật của cổng (classify → decide → vé duyệt → runInfra) nằm ở
+  // `infra/gated.ts`: RPC này chỉ còn là đường vào của bề mặt người dùng, để nó và
+  // `infra.kube` không thể lệch luật nhau.
+  return runGated({
     tool: p.tool,
     args: p.args,
     context: p.context,
-    actor: 'human',
     surface: p.surface,
     toolName: p.toolName,
-    decision,
+    ...(p.approvalTicket !== undefined ? { approvalTicket: p.approvalTicket } : {}),
+    ...(p.sessionFloor !== undefined ? { sessionFloor: p.sessionFloor } : {}),
     ...(p.sessionId !== undefined ? { sessionId: p.sessionId } : {}),
     ...(p.messageId !== undefined ? { messageId: p.messageId } : {}),
     ...(p.timeoutMs !== undefined ? { timeoutMs: p.timeoutMs } : {}),
   })
-
-  return { blocked: false, command, class: cls, accountKind: verdict.accountKind, decision, result }
 })
