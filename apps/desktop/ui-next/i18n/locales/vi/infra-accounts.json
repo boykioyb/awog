@@ -61,5 +61,7 @@
   "infra.tab.audit": "Nhật ký",
   "infra.tab.delivery": "Triển khai",
   "infra.tab.monitoring": "Giám sát",
+  "infra.tab.dashboards": "Bảng điều khiển",
+  "infra.tab.cost": "Chi phí",
   "infra.tab.reports": "Báo cáo"
 }

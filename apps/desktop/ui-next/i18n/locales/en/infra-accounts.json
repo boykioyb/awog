@@ -61,5 +61,7 @@
   "infra.tab.audit": "Activity log",
   "infra.tab.delivery": "Deploys",
   "infra.tab.monitoring": "Monitoring",
+  "infra.tab.dashboards": "Dashboards",
+  "infra.tab.cost": "Cost",
   "infra.tab.reports": "Reports"
 }
