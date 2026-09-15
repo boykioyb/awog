@@ -300,7 +300,9 @@
       :style="{ '--sel-x': `${quoteSel.x}px`, '--sel-y': `${quoteSel.y}px` }"
       @mousedown.prevent
     >
-      <button class="selquote" @click="openNote">
+      <!-- Quote chỉ khi selection nằm TRONG một message (cần neo `src`). Ngoài
+           message (AskQuestion, step log…) thì chỉ còn Translate + Copy MD. -->
+      <button v-if="quoteSel?.src != null" class="selquote" @click="openNote">
         <Icon name="quote" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('sessions.quote.action') }}
       </button>
@@ -658,7 +660,9 @@ const moreOpen = ref(false)
 
 // Selection-to-quote: highlight text in a message → floating Quote button → a note
 // popover; on Save the selection is marked (coloured + numbered) in place.
-type SelQuote = { text: string; src: number; x: number; y: number }
+// `src` null = selection nằm ngoài một message (AskQuestion, step log…): Translate +
+// Copy MD vẫn dùng được, chỉ Quote (cần neo message) là ẩn.
+type SelQuote = { text: string; src: number | null; x: number; y: number }
 const quoteSel = ref<SelQuote | null>(null)
 const notePop = ref<SelQuote | null>(null)
 const noteText = ref('')
@@ -706,19 +710,28 @@ function focusNoteInput() {
   })
 }
 
-// Validate the current selection lives inside a message and extract its text +
-// source index + bounding rect. Returns null when there is no valid selection.
-// Shared by the mouseup (onSelectQuote) and right-click (onQuoteContextMenu) triggers.
-function resolveSelectionQuote(): { text: string; src: number; rect: DOMRect } | null {
+// Validate the current selection lives inside the transcript column (.chat) and
+// extract its text + source message index (if any) + bounding rect. Returns null
+// when there is no valid selection. Shared by the mouseup (onSelectQuote) and
+// right-click (onQuoteContextMenu) triggers.
+//
+// `src` là `number | null` (mở rộng 2026-09-15): Translate + Copy MD phải chạy cho
+// MỌI text trong session — kể cả card AskQuestion, log step, plan card — không chỉ
+// trong bong bóng message. Chỉ Quote cần điểm neo message (`[data-mi]`), nên khi
+// selection nằm ngoài message thì `src = null` và nút Quote tự ẩn (Translate + Copy
+// MD vẫn hiện). Vẫn phải nằm trong `.chat` để không bật thanh này cho selection ở
+// composer / popover / modal khác.
+function resolveSelectionQuote(): { text: string; src: number | null; rect: DOMRect } | null {
   const sel = window.getSelection()
   const text = sel?.toString().trim() ?? ''
   if (!sel || sel.rangeCount === 0 || !text) return null
   const range = sel.getRangeAt(0)
   const node = range.commonAncestorContainer
   const startEl = node instanceof HTMLElement ? node : node.parentElement
-  const msgEl = startEl?.closest('[data-mi]')
-  if (!(msgEl instanceof HTMLElement)) return null
-  return { text, src: Number(msgEl.dataset.mi), rect: range.getBoundingClientRect() }
+  if (!startEl?.closest('.chat')) return null
+  const msgEl = startEl.closest('[data-mi]')
+  const src = msgEl instanceof HTMLElement ? Number(msgEl.dataset.mi) : null
+  return { text, src, rect: range.getBoundingClientRect() }
 }
 
 // mouseup: anchor the floating Quote button to the top-centre of the selection.
@@ -808,7 +821,10 @@ function selectionSources(mi: number): string[] {
 async function onCopyMarkdown() {
   const q = quoteSel.value
   if (!q) return
-  const md = rawMarkdownForSelection(selectionSources(q.src), q.text) ?? q.text
+  // Ngoài message (src null) không có nguồn markdown để ánh xạ ngược → copy thẳng
+  // text đã bôi đen. Trong message thì map về markdown gốc như cũ.
+  const md =
+    q.src != null ? (rawMarkdownForSelection(selectionSources(q.src), q.text) ?? q.text) : q.text
   try {
     await navigator.clipboard.writeText(md)
   } catch {
@@ -942,7 +958,9 @@ const {
 // there's no DOM mutation here (which would otherwise strip the rendered markdown).
 function saveQuote() {
   const np = notePop.value
-  if (!np) return
+  // src null không tới được đây (nút Quote ẩn ngoài message), nhưng addQuote cần một
+  // chỉ số message — chặn tường minh thay vì ép kiểu.
+  if (!np || np.src == null) return
   store.addQuote(props.session.id, np.src, np.text, noteText.value.trim())
   window.getSelection()?.removeAllRanges()
   notePop.value = null
