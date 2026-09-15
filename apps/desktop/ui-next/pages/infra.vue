@@ -163,6 +163,13 @@
           <InfraCost />
         </div>
 
+        <!-- Tab "Kế hoạch" — playbook. Đứng trong nhóm Thay đổi vì nó là thứ TẠO RA
+             thay đổi, cạnh Triển khai · Nhật ký · Báo cáo. Trước 2026-09-15 là trang
+             riêng `/playbooks` trên nav rail. -->
+        <div v-if="playbooksMounted" v-show="tab === 'playbooks'" class="infra-pane">
+          <InfraPlaybooks />
+        </div>
+
         <!-- Tab "Báo cáo" (Mốc 6, 6.6): danh mục bốn loại. Mount lười vì màn này
              hỏi sidecar danh mục ngay khi mount; không có tab thì không có lời gọi. -->
         <div v-if="reportsMounted" v-show="tab === 'reports'" class="infra-pane">
@@ -287,7 +294,8 @@ import InfraServicesCatalog from '~/components/infra/explorer/InfraServicesCatal
 import { OVERVIEW_ERRORS_WINDOW_SECONDS } from '~/composables/useInfraOverview'
 import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
 import { useInfraPage } from '~/composables/useInfraPage'
-import { useInfraGraphOpen } from '~/composables/useInfraGraphOpen'
+import { useInfraTabOpen } from '~/composables/useInfraTabOpen'
+import type { InfraTab } from '~/composables/useInfraTabOpen'
 import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
 import { useInfraWindowSync } from '~/composables/useInfraWindowSync'
 import { useLinkOpen } from '~/composables/useLinkOpen'
@@ -299,19 +307,6 @@ const { t } = useI18n()
 // Ba mục của thanh section. `overview` đứng đầu và là mặc định: `/infra` trả lời
 // "mọi thứ có ổn không" trước khi trả lời "có những tài khoản nào"
 // (docs/features/infra-explorer.md §Màn mở đầu).
-type InfraTab =
-  | 'overview'
-  | 'services'
-  | 'graph'
-  | 'delivery'
-  | 'audit'
-  | 'logs'
-  | 'monitoring'
-  | 'dashboards'
-  | 'cost'
-  | 'reports'
-  | 'kubernetes'
-  | 'accounts'
 // Thứ tự hiển thị nay do `GROUPS` quyết (xem dưới) — không còn một mảng phẳng thứ
 // hai, vì hai danh sách cùng nói về thứ tự là hai chỗ để quên đồng bộ khi thêm màn.
 const TAB_ICONS: Record<InfraTab, string> = {
@@ -324,6 +319,7 @@ const TAB_ICONS: Record<InfraTab, string> = {
   monitoring: 'act',
   dashboards: 'panel',
   cost: 'tag',
+  playbooks: 'listul',
   reports: 'file',
   kubernetes: 'k8s',
   accounts: 'shield',
@@ -341,7 +337,7 @@ const GROUPS: readonly { id: InfraGroupId; tabs: readonly InfraTab[] }[] = [
   { id: 'resources', tabs: ['services', 'graph', 'kubernetes'] },
   { id: 'health', tabs: ['monitoring', 'dashboards', 'logs'] },
   { id: 'cost', tabs: ['cost'] },
-  { id: 'changes', tabs: ['delivery', 'audit', 'reports'] },
+  { id: 'changes', tabs: ['delivery', 'playbooks', 'audit', 'reports'] },
   { id: 'accounts', tabs: ['accounts'] },
 ]
 
@@ -407,6 +403,12 @@ const dashboardsMounted = ref(false)
 const costMounted = ref(false)
 /** Tab Báo cáo (Mốc 6) mount lười: màn này hỏi danh mục ngay khi mount. */
 const reportsMounted = ref(false)
+/**
+ * Tab Kế hoạch (chuyển vào 2026-09-15) mount lười: `usePlaybooksManager` có `onMounted`
+ * nạp danh sách playbook của MỌI project đã đăng ký. Đọc file cục bộ thì rẻ, nhưng vẫn
+ * là I/O không ai hỏi khi người dùng chỉ mở /infra để xem Tổng quan.
+ */
+const playbooksMounted = ref(false)
 const logsSeed = ref<LogsSeed | null>(null)
 let seedNonce = 0
 
@@ -415,6 +417,7 @@ function selectTab(next: InfraTab): void {
   if (next === 'monitoring') monitoringMounted.value = true
   if (next === 'dashboards') dashboardsMounted.value = true
   if (next === 'cost') costMounted.value = true
+  if (next === 'playbooks') playbooksMounted.value = true
   if (next === 'reports') reportsMounted.value = true
   if (next === 'kubernetes') k8sMounted.value = true
   if (next === 'services') servicesMounted.value = true
@@ -554,13 +557,16 @@ watch(
 // Cầu nối thứ hai, cùng khuôn: `/playbooks` xin mở thẳng tab Topology khi nó không
 // suy được ảnh hưởng lan. `selectTab` là đường DUY NHẤT đổi tab (nó còn bật cờ mount
 // lười của các tab khác), nên đi qua đó chứ không gán thẳng `tab.value`.
-const { pending: pendingGraphOpen, consume: consumeGraphOpen } = useInfraGraphOpen()
+// Cầu nối "xin mở một tab" (`useInfraTabOpen`). Ba bên xin: màn Kế hoạch xin Topology
+// khi chưa dựng được ảnh hưởng lan, màn Chi phí xin Kế hoạch sau khi dựng bản nháp dọn
+// dẹp, và route cũ `/playbooks` xin Kế hoạch khi có người mở deep-link.
+const { pending: pendingTabOpen, consume: consumeTabOpen } = useInfraTabOpen()
 watch(
-  pendingGraphOpen,
-  (on) => {
-    if (!on) return
-    consumeGraphOpen()
-    selectTab('graph')
+  pendingTabOpen,
+  (want) => {
+    if (!want) return
+    consumeTabOpen()
+    selectTab(want)
   },
   { immediate: true },
 )

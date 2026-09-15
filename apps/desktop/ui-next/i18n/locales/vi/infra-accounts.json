@@ -69,6 +69,7 @@
   "infra.tab.logs": "Logs",
   "infra.tab.monitoring": "Giám sát",
   "infra.tab.overview": "Tổng quan",
+  "infra.tab.playbooks": "Kế hoạch",
   "infra.tab.reports": "Báo cáo",
   "infra.tab.services": "Dịch vụ"
 }

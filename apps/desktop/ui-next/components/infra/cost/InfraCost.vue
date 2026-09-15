@@ -339,11 +339,13 @@
 // playbook dọn dẹp ở SIDECAR (`infra/cost/cleanup.ts`) — renderer không dựng argv.
 import { computed, ref } from 'vue'
 import { findingKey, useInfraCost } from '~/composables/useInfraCost'
+import { useInfraTabOpen } from '~/composables/useInfraTabOpen'
 import { usePlaybookEditor } from '~/composables/usePlaybookEditor'
 import type { WasteFinding } from '~/composables/useInfraCost'
 
 const { t } = useI18n()
 const { openGenerated } = usePlaybookEditor()
+const { request: requestTab } = useInfraTabOpen()
 
 const {
   accountId,
@@ -437,9 +439,9 @@ function detailText(f: WasteFinding): string {
 /**
  * Sinh kế hoạch dọn dẹp rồi MỞ TRÌNH SOẠN — không lưu, không chạy.
  *
- * Trình soạn sống ở trang `/playbooks`, nên phải điều hướng sang đó: `usePlaybookEditor`
- * giữ state ở mức module nên bản nháp sống qua cú chuyển trang, nhưng component hộp
- * thoại chỉ được mount ở trang kia.
+ * Từ 2026-09-15 màn Kế hoạch là một TAB của chính `/infra`, nên đây chỉ còn là một cú
+ * đổi tab chứ không phải điều hướng. `usePlaybookEditor` giữ bản nháp ở mức module nên
+ * nó sống qua cú đổi tab; hộp thoại chỉ được mount trong tab kia.
  */
 async function onCleanup(): Promise<void> {
   building.value = true
@@ -447,7 +449,7 @@ async function onCleanup(): Promise<void> {
     const draft = await buildCleanupDraft()
     if (!draft) return
     openGenerated(draft)
-    await navigateTo('/playbooks')
+    requestTab('playbooks')
   } finally {
     building.value = false
   }

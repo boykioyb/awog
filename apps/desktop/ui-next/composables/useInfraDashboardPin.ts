@@ -3,7 +3,7 @@
 // VÌ SAO LÀ MỘT COMPOSABLE RIÊNG. Cú bấm nằm ở tab Giám sát (`MetricChart`), còn hộp thoại
 // được host ở `pages/infra.vue` — hai bề mặt không chung một vòng đời, và `app.vue` bọc
 // `<NuxtPage keepalive />` nên trang không remount khi quay lại. State để trong `ref` của
-// component gọi nó là mất giữa hai lần ghé màn. Cùng khuôn `useInfraGraphOpen` (16 dòng,
+// component gọi nó là mất giữa hai lần ghé màn. Cùng khuôn `useInfraTabOpen` (một cầu nối mọc-module nhỏ,
 // cũng chỉ để bắc một cú bấm sang một hộp thoại host ở chỗ khác).
 //
 // VÌ SAO TÁCH KHỎI `useInfraDashboards`. Bên kia là page-controller của một TAB: nó sở hữu

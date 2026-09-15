@@ -69,6 +69,7 @@
   "infra.tab.logs": "Logs",
   "infra.tab.monitoring": "Monitoring",
   "infra.tab.overview": "Overview",
+  "infra.tab.playbooks": "Plans",
   "infra.tab.reports": "Reports",
   "infra.tab.services": "Services"
 }

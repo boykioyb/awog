@@ -2,7 +2,7 @@
 //
 // TRẠNG THÁI Ở MỨC MODULE. Hai bề mặt mở cùng một hộp: nút "Kế hoạch mới" ở thanh công
 // cụ, và nút Sửa/Nhân bản ở đầu màn chi tiết. Để state trong `ref` của component nào thì
-// bề mặt kia không mở được nó. Cùng khuôn `useInfraDashboardPin`/`useInfraGraphOpen`.
+// bề mặt kia không mở được nó. Cùng khuôn `useInfraDashboardPin`/`useInfraTabOpen`.
 // Nhưng `useI18n()`/`useToast()` phải gọi TRONG thân hàm — chúng cần app instance.
 //
 // TÁCH KHỎI `usePlaybooksManager`. Bên kia là page-controller của cả trang: danh sách,

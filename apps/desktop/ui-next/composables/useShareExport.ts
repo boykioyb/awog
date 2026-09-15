@@ -15,7 +15,7 @@
 //
 // TRẠNG THÁI Ở MỌC MODULE. `app.vue` bọc `<NuxtPage keepalive />` nên trang không
 // remount khi quay lại; để state trong `ref` của composable là mất nó giữa hai lần
-// ghé màn (khuôn `useInfraGraphOpen`, `useInfraAskAgent`).
+// ghé màn (khuôn `useInfraTabOpen`, `useInfraAskAgent`).
 import { computed, reactive, ref } from 'vue'
 import { useFsApi } from '~/composables/useFsApi'
 import { saveFilePath } from '~/composables/useFolderPicker'

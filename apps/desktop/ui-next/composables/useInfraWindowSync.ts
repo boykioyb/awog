@@ -11,7 +11,7 @@ import { ref } from 'vue'
 // `/infra` KHÔNG remount khi quay lại, và hai màn này là hai TAB của cùng một trang —
 // không tab nào bị unmount. Một biến sống trong component sẽ chết cùng lần chuyển
 // tab, còn đọc query-param trong `onMounted` thì lần vào thứ hai im lặng không chạy.
-// Khuôn này giống `useInfraGraphOpen` / `useInfraServiceOpen`, KHÁC lý do thay đổi:
+// Khuôn này giống `useInfraTabOpen` / `useInfraServiceOpen`, KHÁC lý do thay đổi:
 // bên kia xin một TAB, bên này mang một KHOẢNG THỜI GIAN.
 //
 // VÌ SAO CÓ `nonce`: kéo đúng cùng một khoảng hai lần là chuyện thường (mắt đọc
