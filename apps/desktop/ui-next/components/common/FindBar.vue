@@ -108,7 +108,7 @@ function onEnter(e: KeyboardEvent) {
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-md);
 }
 .pvfico {
   width: var(--icon-sm);

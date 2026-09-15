@@ -124,7 +124,7 @@ const goTo = (i: number) => {
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 .ob-head {

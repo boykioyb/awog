@@ -526,7 +526,7 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgEl);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-md);
 }
 .mmb {
   display: grid;

@@ -218,7 +218,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   line-height: 12px;
   min-width: 18px;
   padding: 2px 6px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   text-align: center;
   color: var(--textDim);
   background: var(--bgHover);

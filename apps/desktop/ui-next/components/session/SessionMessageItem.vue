@@ -880,7 +880,7 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
   margin-left: 8px;
   padding: 1px 8px;
   border: 1px solid var(--accentBorder, var(--border));
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--accent);
   font-size: var(--fs-xs);

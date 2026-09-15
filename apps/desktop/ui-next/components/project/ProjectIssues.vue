@@ -439,7 +439,7 @@ function relativeWhen(iso: string): string {
   gap: 4px;
   padding: 1px 7px;
   border: 1px solid;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   white-space: nowrap;

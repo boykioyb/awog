@@ -222,7 +222,7 @@ onBeforeUnmount(unbindListeners)
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-btn);
   padding: 14px 15px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-lg);
   z-index: 251;
   transition:
     top 180ms ease,

@@ -361,7 +361,7 @@ onUnmounted(() => {
   background: var(--bgEl);
   border: 1px solid var(--border);
   color: var(--textDim);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   opacity: 0.72;
   transition:
@@ -404,7 +404,7 @@ onUnmounted(() => {
   background: var(--bgEl);
   border: 1px solid var(--border);
   color: var(--textDim);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
 .sjbtn:hover {

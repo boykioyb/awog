@@ -868,7 +868,7 @@ function relativeWhen(iso: string): string {
   font-variant-numeric: tabular-nums;
   line-height: 12px;
   padding: 2px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   background: var(--bgActive);
   color: var(--textDim);
   min-width: 18px;

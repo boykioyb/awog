@@ -220,7 +220,7 @@ const avatarStyle = computed(() => {
   font-size: 12px;
   line-height: 12px;
   padding: 3px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -232,7 +232,7 @@ const avatarStyle = computed(() => {
   font-weight: 500;
   line-height: 12px;
   padding: 3px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   color: var(--accent);
   background: var(--accentDim);
 }
@@ -244,7 +244,7 @@ const avatarStyle = computed(() => {
 .vpn-tag {
   padding: 1px 7px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);

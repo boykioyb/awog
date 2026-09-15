@@ -269,7 +269,7 @@ onMounted(async () => {
   line-height: var(--lh-xs);
   font-weight: 600;
   padding: 2px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   color: var(--textDim);
   white-space: nowrap;

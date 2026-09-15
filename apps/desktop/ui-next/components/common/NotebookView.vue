@@ -350,7 +350,7 @@ const cells = computed<RenderedCell[]>(() => {
 }
 .nbchip {
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   padding: 1px 8px;
 }
 .nbcell {

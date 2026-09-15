@@ -324,7 +324,7 @@ const nodeKey = (node: LayoutNode): string =>
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   background: var(--bgPanel);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 28%);
+  box-shadow: var(--shadow-sm);
   opacity: 0;
   /* Hidden ≠ inert: at opacity 0 the buttons still hit-tested, swallowing clicks and
      text selection in the pane's top-right corner. */

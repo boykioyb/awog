@@ -232,14 +232,16 @@ onBeforeUnmount(() => {
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-card);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-lg);
 }
 /* Production: the whole box is outlined red, not just a word inside it. */
 .icd-card.prod {
   border-color: var(--dangerBorder);
+  /* Ring + elevation: the 1px danger outline is a STATE marker, not depth, so it
+     stays hardcoded and keeps its place in the list; only the shadow half migrates. */
   box-shadow:
     0 0 0 1px var(--dangerBorder),
-    0 30px 80px rgba(0, 0, 0, 0.6);
+    var(--shadow-lg);
 }
 .icd-head {
   display: flex;
@@ -278,7 +280,7 @@ onBeforeUnmount(() => {
   gap: 5px;
   padding: 3px 8px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: var(--bgSubtle);
   color: var(--textMuted);
   font-size: var(--fs-xs);

@@ -578,7 +578,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
   user-select: none;
 }
 /* drag handle + active drag cursor */
@@ -606,7 +606,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   color: var(--textDim);
   background: var(--bgEl);
   border: 1px solid var(--border);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
 }
 .pvbardock:hover {
@@ -674,7 +674,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
 }
 .pvmenu.up {
   bottom: calc(100% + 8px);
@@ -743,7 +743,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   background: var(--bgActive);
   color: var(--text);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
 }
 .pvmsg.err {
   color: var(--danger);

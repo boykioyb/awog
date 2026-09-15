@@ -233,7 +233,7 @@ const hoverText = computed(() => {
   gap: 4px;
   padding: 2px 8px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   background: transparent;
   color: var(--textDim);
   cursor: pointer;

@@ -325,7 +325,7 @@ const forwardLabel = (fwd: PortForward): string => {
   line-height: 12px;
   padding: 3px 8px;
   border: 1px solid;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
 }
 .ssh-pill-dot {
@@ -340,7 +340,7 @@ const forwardLabel = (fwd: PortForward): string => {
   font-size: 12px;
   line-height: 12px;
   padding: 3px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   background: var(--bgHover);
 }

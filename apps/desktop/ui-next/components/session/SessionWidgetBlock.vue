@@ -281,7 +281,7 @@ const srcdoc = computed(() => (visible.value && !tooLarge.value ? buildDoc(props
   gap: 5px;
   padding: 3px 9px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   font-size: var(--fs-xs);

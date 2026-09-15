@@ -516,7 +516,6 @@ body[data-theme-family='cute'] .liact {
    SHAPE is themed here (an inline style always wins on color, by design). */
 body[data-theme-family='cute'] .statusbadge {
   padding: 2px 8px;
-  border-radius: var(--r-pill);
   font-family: var(--sans);
   font-weight: 600;
 }
@@ -634,9 +633,14 @@ body[data-theme-family='cute'] .iconbtn.on {
   color: var(--accent);
   border-color: transparent;
 }
-/* Chips + tags: outline pills, no gray fill. */
+/* Chips + tags: viền ngoài, không nền xám — và KHÔNG bo viên thuốc. Chip đứng ngay
+   cạnh nút (chip Mode cạnh Gửi/Dừng trong composer, chip repo cạnh nút của Git), mà
+   nút ở Cute là `--r-btn`: một viên thuốc bên cạnh một hình chữ nhật bo góc đọc ra
+   hai ngôn ngữ hình khác nhau trên cùng một hàng. `--r-sm` cho chip cao 22–24px là
+   cùng tỉ lệ với `--r-btn` trên nút cao 34px. Viên thuốc chỉ còn ở chỗ hình dạng
+   CHÍNH LÀ nghĩa: thanh tiến trình, slider, chấm chưa đọc, thumb thanh cuộn. */
 body[data-theme-family='cute'] :is(.chip, .tag, .gchip, .ghrepo, .pagent) {
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
 }
 body[data-theme-family='cute'] .chip {
@@ -1292,8 +1296,9 @@ body[data-theme-family='cute'] .chat {
 
 /* ══ Hàng ngữ cảnh của phiên (session-ui-refactor §3.2) ══════════════════════
    Class mới nên Cute chưa biết gì về nó — không skin thì một dải theo ngôn ngữ
-   `awog` sẽ nằm giữa app mint. Chip theo đúng luật chip của Cute ở §635: bo
-   viên thuốc, nền trong suốt, hover tô accent mềm. */
+   `awog` sẽ nằm giữa app mint. Chip theo đúng luật chip của Cute ở §635: bo theo
+   thang bán kính (`--r-sm`, không phải viên thuốc), nền trong suốt, hover tô accent
+   mềm. */
 body[data-theme-family='cute'] .ctxstrip {
   height: 34px;
   padding: 0 var(--padX);
@@ -1304,7 +1309,7 @@ body[data-theme-family='cute'] .ctxstrip {
 body[data-theme-family='cute'] .ctxchip {
   height: 24px;
   padding: 3px 12px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   border-color: color-mix(in srgb, var(--text) 12%, transparent);
 }

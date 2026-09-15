@@ -570,7 +570,7 @@ body.light[data-surface='deep'] {
 .gbadge {
   flex: 0 0 auto;
   padding: 2px 6px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   border: 1px solid transparent;
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
@@ -1673,20 +1673,20 @@ body[data-platform='linux']:has(.app) {
 /* Pressed: controls with no fill of their own dip to the neutral press tint.
    `.pri` is excluded — a filled button keeps its accent and darkens instead. */
 :is(
-  button,
-  [role='button'],
-  .btn,
-  .iconbtn,
-  .ni,
-  .li,
-  .gsi,
-  .chip,
-  .chipbtn,
-  .act,
-  .cact,
-  .codetab,
-  .shelltgl
-):not(.pri):active:not(:disabled) {
+    button,
+    [role='button'],
+    .btn,
+    .iconbtn,
+    .ni,
+    .li,
+    .gsi,
+    .chip,
+    .chipbtn,
+    .act,
+    .cact,
+    .codetab,
+    .shelltgl
+  ):not(.pri):active:not(:disabled) {
   background-color: var(--bgPress);
 }
 .btn.pri:active:not(:disabled) {

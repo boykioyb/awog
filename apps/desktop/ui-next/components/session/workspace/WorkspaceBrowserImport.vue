@@ -334,7 +334,7 @@ const clearAll = async (): Promise<void> => {
 }
 .wbi-tag {
   padding: 1px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   color: var(--textFaint);
   font-size: var(--fs-xs);

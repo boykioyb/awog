@@ -60,7 +60,7 @@ const sameUrl = (a: string, b: string): boolean =>
   gap: 6px;
   max-width: 150px;
   padding: 3px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   border: 1px solid var(--border);
   color: var(--textDim);

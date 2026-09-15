@@ -180,7 +180,7 @@ async function del(snippet: SshSnippet): Promise<void> {
   font-size: 12px;
   line-height: 12px;
   padding: 2px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   color: var(--textDim);
   background: var(--bgHover);
 }

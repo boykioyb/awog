@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-card);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-lg);
 }
 .bgo-head {
   display: flex;
@@ -167,7 +167,7 @@ onBeforeUnmount(() => {
 .bgo-status {
   padding: 1px 8px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);

@@ -255,7 +255,7 @@ watch(activeIndex, (i) => {
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
 .cmdk-search {

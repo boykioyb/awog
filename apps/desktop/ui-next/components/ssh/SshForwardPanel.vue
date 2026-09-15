@@ -228,7 +228,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 12px;
   padding: 3px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   background: var(--bgHover);
 }
@@ -277,7 +277,7 @@ onBeforeUnmount(() => {
   font-size: 12px;
   line-height: 12px;
   padding: 3px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   color: var(--textDim);
   background: var(--bgHover);
   flex: 0 0 auto;
@@ -301,7 +301,7 @@ onBeforeUnmount(() => {
   line-height: 12px;
   padding: 3px 8px;
   border: 1px solid currentColor;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   flex: 0 0 auto;
 }

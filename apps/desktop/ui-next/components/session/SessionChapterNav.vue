@@ -71,7 +71,7 @@ onUnmounted(() => document.removeEventListener('click', closeOnOutside))
   background: var(--bgEl);
   border: 1px solid var(--border);
   color: var(--textDim);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-sm);
   cursor: pointer;
   opacity: 0.72;
   transition:
@@ -102,7 +102,7 @@ onUnmounted(() => document.removeEventListener('click', closeOnOutside))
   border-radius: var(--r-sm);
   background: var(--bgEl);
   border: 1px solid var(--border);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-md);
 }
 .chaphead {
   padding: 4px 8px 6px;

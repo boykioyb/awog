@@ -212,7 +212,7 @@ const connectFirst = () => {
   height: 24px;
   padding: 0 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   font-size: 12px;
@@ -354,7 +354,7 @@ const connectFirst = () => {
 .sshx-card-tag {
   padding: 1px 7px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);

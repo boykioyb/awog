@@ -1408,7 +1408,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-md);
   cursor: pointer;
 }
 .selquote:hover {
@@ -1433,7 +1433,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
 }
 /* Once dragged/resized, anchor by explicit top-left (drop the selection transform). */
 .notepop.moved {

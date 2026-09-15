@@ -86,7 +86,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-card);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-lg);
 }
 .lcd-head {
   display: flex;

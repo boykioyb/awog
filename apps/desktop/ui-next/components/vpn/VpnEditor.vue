@@ -424,7 +424,7 @@ function parseTags(text: string): string[] {
   font-size: 12px;
   line-height: 12px;
   padding: 2px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   color: var(--accent);
   background: var(--accentDim);
   font-weight: 500;

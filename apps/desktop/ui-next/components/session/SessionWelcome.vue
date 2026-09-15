@@ -145,7 +145,7 @@ function useSuggestion(prompt: string) {
   align-items: center;
   gap: 5px;
   padding: 3px 9px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   font-size: 12px;
   line-height: 18px;
   color: var(--textDim);

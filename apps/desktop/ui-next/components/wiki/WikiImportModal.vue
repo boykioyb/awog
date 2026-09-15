@@ -161,7 +161,9 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: var(--shadow);
+  /* Was `var(--shadow)` — a token that does not exist anywhere in the design system,
+     so this centered modal rendered with NO shadow at all. Modal → top of the ramp. */
+  box-shadow: var(--shadow-lg);
 }
 .wim-head {
   display: flex;

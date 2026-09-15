@@ -175,7 +175,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-btn);
   overflow: hidden;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--shadow-lg);
 }
 .projmodal-head {
   flex: 0 0 auto;

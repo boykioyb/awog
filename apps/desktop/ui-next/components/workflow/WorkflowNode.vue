@@ -76,15 +76,16 @@ const onDelete = () => props.data.onDelete?.(props.id)
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-btn);
   padding: 10px 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-md);
   position: relative;
   cursor: pointer;
 }
 .wfnode.sel {
   border-color: var(--accent);
+  /* Ring + elevation: the 1px accent outline is the selection marker, not depth. */
   box-shadow:
     0 0 0 1px var(--accent),
-    0 8px 24px rgba(0, 0, 0, 0.4);
+    var(--shadow-md);
 }
 .wfn-hd {
   display: flex;

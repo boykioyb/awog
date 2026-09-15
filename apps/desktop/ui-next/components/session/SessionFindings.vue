@@ -131,7 +131,7 @@ function openFile(f: Finding): void {
 .fndsev {
   flex: 0 0 auto;
   padding: 1px 6px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);

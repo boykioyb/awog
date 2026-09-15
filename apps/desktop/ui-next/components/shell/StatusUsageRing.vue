@@ -158,7 +158,7 @@ function onFocus() {
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-btn);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-md);
 }
 .donut-wrap:hover .donut-pop {
   display: flex;

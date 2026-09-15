@@ -268,7 +268,7 @@ const onBackdrop = () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow-lg);
 }
 .wfpc-hd {
   display: flex;

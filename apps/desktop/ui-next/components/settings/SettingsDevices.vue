@@ -208,7 +208,7 @@ function platformLabel(platform: string): string {
   font-size: 12px;
   line-height: 12px;
   padding: 5px 10px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   border: 1px solid transparent;
   font-weight: 550;
 }

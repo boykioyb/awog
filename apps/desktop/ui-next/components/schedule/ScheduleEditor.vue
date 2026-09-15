@@ -468,7 +468,7 @@ function onSave(): void {
 .sef-day {
   padding: 5px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--textDim);
   font-size: var(--fs-sm);

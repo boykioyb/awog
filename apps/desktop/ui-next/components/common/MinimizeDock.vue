@@ -155,7 +155,7 @@ watch(
   border-radius: var(--r-btn);
   background: var(--bgEl);
   border: 1px solid var(--border);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--shadow-md);
   color: var(--text);
   cursor: pointer;
   text-align: left;
@@ -167,7 +167,7 @@ watch(
 .mdchip:hover {
   transform: translateY(-1px);
   border-color: var(--borderStrong);
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow-md);
 }
 .mddot {
   flex: 0 0 auto;

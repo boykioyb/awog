@@ -820,7 +820,7 @@ watch(
   align-items: center;
   gap: 5px;
   padding: 1px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   border: 1px solid var(--accentBorder);
   color: var(--accent);
   font-size: 12px;

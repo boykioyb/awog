@@ -228,13 +228,13 @@ onBeforeUnmount(() => {
   bottom: 12px;
   padding: 5px 12px;
   border: none;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   font-size: 12px;
   line-height: 18px;
   font-weight: 650;
   color: var(--accentText);
   background: var(--accent);
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-sm);
 }
 </style>

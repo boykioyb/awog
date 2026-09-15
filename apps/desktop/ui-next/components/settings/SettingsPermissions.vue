@@ -366,7 +366,7 @@ onMounted(() => {
 .permbadge {
   flex: 0 0 auto;
   padding: 2px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   border: 1px solid var(--accentBorder);
   color: var(--accent);
   font-size: var(--fs-xs);

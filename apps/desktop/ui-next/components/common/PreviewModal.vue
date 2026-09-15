@@ -949,7 +949,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   background: var(--bgEl);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 .pvdlgt {
   font-weight: 600;

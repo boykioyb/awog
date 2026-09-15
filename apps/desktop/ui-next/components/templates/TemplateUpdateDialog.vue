@@ -261,7 +261,7 @@ const onApply = async () => {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   padding: 2px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   border: 1px solid var(--border);
   color: var(--textMuted);
   flex: 0 0 auto;

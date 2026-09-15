@@ -226,7 +226,13 @@ onBeforeUnmount(() => {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: 4px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  /* `--shadow-lg`, không phải `--shadow-md` như `.smenu`/`.pop`: theo chính comment
+     z-index ở trên, menu này còn phải nổi TRÊN modal đang chứa nó (git sub-modal
+     = 150), mà modal dùng `--shadow-lg`. Lấy `--shadow-md` thì nó chìm vào modal.
+     Thay cho `0 8px 24px rgba(0,0,0,.32)` — bóng hardcode chỉ đúng ở theme tối,
+     sang theme sáng đọc thành quầng xám đặc, đúng lý do `app-shell.css:1838` đã
+     đổi `.smenu`/`.pop` sang ramp. */
+  box-shadow: var(--shadow-lg);
 }
 .aselopt {
   display: flex;

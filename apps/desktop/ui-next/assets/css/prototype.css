@@ -172,6 +172,20 @@
   .iconbtn:hover{border-color:var(--borderStrong);color:var(--text)}
   .btn{display:flex;align-items:center;gap:6px;font-size: var(--fs-sm);line-height:var(--lh-sm);font-weight:510;padding:7px 13px;border-radius:var(--r-sm);border:1px solid var(--border);color:var(--textMuted);cursor:pointer;white-space:nowrap;background:transparent}
   .btn .icn{width:var(--icon-sm);height:var(--icon-sm)}.btn:hover{border-color:var(--borderStrong);color:var(--text)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  /* Nút nổi cùng ramp bóng với card. Một quy tắc cho TOÀN app: `.btn` là chokepoint
+     duy nhất — 481 chỗ trong 170 file đều đi qua đây, và trước dòng này không file
+     nào tự đặt box-shadow cho nút.
+
+     Nền VẪN trong suốt, cố ý. Bóng đẹp nhất khi có nền để hắt xuống, nhưng đổ
+     --bgPanel cho .btn là đổi resting state của cả 481 nút và — tệ hơn — khoét lỗ
+     màu --bg trên mặt --bgEl ở theme tối (flat/deep để --bgPanel trùng --bg), tức
+     nút trong card lại sáng hơn card chứa nó.
+
+     Nút bị vô hiệu thì KHÔNG nổi: một control không bấm được mà vẫn trồi lên là
+     lời mời gọi bấm vào chỗ chết. */
+  .btn,.iconbtn{box-shadow:var(--shadow-sm)}
+  .btn:disabled,.iconbtn:disabled{box-shadow:none}
   .btn.pri{background:var(--accent);color:var(--accentText);border-color:transparent;font-weight:650}
   .btn.pri:hover{color:var(--accentText);filter:brightness(1.06)}
   .btn.sm{padding:5px 9px;font-size: var(--fs-sm);line-height:var(--lh-sm)}
@@ -206,7 +220,7 @@
   .dh .dt{font-size: var(--fs-lg);line-height:var(--lh-lg);font-weight:650}.dh .dsub{font-size: var(--fs-xs);line-height:var(--lh-xs);color:var(--textDim)}
   .dscroll{flex:1;overflow-y:auto;padding:18px}
 
-  .tag{font-size: var(--fs-xs);line-height:var(--lh-xs);font-weight:500;padding:2px 7px;border-radius:var(--r-pill);border:1px solid var(--border);color:var(--textDim);white-space:nowrap}
+  .tag{font-size: var(--fs-xs);line-height:var(--lh-xs);font-weight:500;padding:2px 7px;border-radius:var(--r-xs);border:1px solid var(--border);color:var(--textDim);white-space:nowrap}
   .tag.acc{color:var(--accent);border-color:var(--accentBorder)}
   .tag.warn{color:var(--amber);border-color:var(--amberBorder)}
   .chip{font-size: var(--fs-xs);line-height:var(--lh-xs);font-weight:500;padding:3px 9px;border-radius:var(--r-xs);border:1px solid var(--border);color:var(--textMuted);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;flex:0 0 auto}
@@ -258,7 +272,7 @@
   .usage{display:flex;justify-content:space-between;align-items:baseline;margin-top:11px}.usage .u1{font-size: var(--fs-xl);line-height:var(--lh-xl);font-weight:650}.usage .u2{font-size: var(--fs-xs);line-height:var(--lh-xs);font-variant-numeric:tabular-nums;color:var(--textDim)}
   .grow{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border)}.grow:first-of-type{border-top:none}
   .grow .rn{font-size: var(--fs-md);line-height:var(--lh-md);font-weight:600}.grow .br{font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);color:var(--textDim)}  /* mono-ok: git branch name */
-  .gchip{font-variant-numeric:tabular-nums;font-size: var(--fs-xs);line-height:var(--lh-xs);padding:2px 7px;border-radius:var(--r-pill);border:1px solid var(--border);color:var(--textDim)}
+  .gchip{font-variant-numeric:tabular-nums;font-size: var(--fs-xs);line-height:var(--lh-xs);padding:2px 7px;border-radius:var(--r-xs);border:1px solid var(--border);color:var(--textDim)}
   .gchip.m{color:var(--mod);border-color:rgba(251,191,36,.35)}.gchip.a{color:var(--accent);border-color:var(--accentBorder)}
   .ag{display:flex;align-items:center;gap:10px;margin-bottom:9px}.ag:last-child{margin-bottom:0}
   .ag .ab{width:26px;height:26px;border-radius:var(--r-xs);flex:0 0 auto;display:grid;place-items:center;font-size: var(--fs-xs);line-height:var(--lh-xs);font-weight:600}
@@ -471,11 +485,11 @@
   .slashint .sc{font-family:var(--code);color:var(--accent)}  /* mono-ok: slash command — a literal string the user types */.slashint .sd{color:var(--textDim);font-size: var(--fs-sm);line-height:var(--lh-sm)}
 
   /* menus / popovers / toast */
-  .smenu{position:fixed;background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-btn);padding:5px;box-shadow:0 16px 44px rgba(0,0,0,.5);z-index:130;min-width:168px}
+  .smenu{position:fixed;background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-btn);padding:5px;box-shadow:var(--shadow-md);z-index:130;min-width:168px}
   .smenu .mi{padding:8px 10px;border-radius:var(--r-xs);font-size: var(--fs-sm);line-height:var(--lh-sm);color:var(--textMuted);cursor:pointer;display:flex;align-items:center;gap:8px}
   .smenu .mi:hover{background:var(--bgHover);color:var(--text)}
   .smenu .mi .ck{margin-left:auto;color:var(--accent)}
-  .pop{position:fixed;background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-btn);padding:14px;box-shadow:0 18px 50px rgba(0,0,0,.55);z-index:130;width:284px;max-height:calc(100vh - 24px);overflow-y:auto}
+  .pop{position:fixed;background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-btn);padding:14px;box-shadow:var(--shadow-md);z-index:130;width:284px;max-height:calc(100vh - 24px);overflow-y:auto}
   .smenu{max-height:calc(100vh - 24px);overflow-y:auto}
   .pop .pr2{padding:11px 0;border-top:1px solid var(--border)}.pop .pr2:first-child{padding-top:0;border-top:none}
   .pop .pl{font-size: var(--fs-sm);line-height:var(--lh-sm);color:var(--textDim);margin-bottom:8px;display:flex;justify-content:space-between}
@@ -553,7 +567,7 @@
   .gl1 .brn{font-family:var(--code);color:var(--textMuted)}  /* mono-ok: git branch name */
   .glref{display:inline-flex;align-items:center;gap:6px;font-size: var(--fs-sm);line-height:var(--lh-sm);color:var(--blue);text-decoration:none;cursor:pointer}
   .glref:hover{text-decoration:underline}.glref .icn{color:var(--blue);width:var(--icon-xs);height:var(--icon-xs)}
-  .glref .st{padding:1px 6px;border-radius:var(--r-pill);font-size: var(--fs-xs);line-height:var(--lh-xs);border:1px solid currentColor}
+  .glref .st{padding:1px 6px;border-radius:var(--r-xs);font-size: var(--fs-xs);line-height:var(--lh-xs);border:1px solid currentColor}
 
   /* plan usage rate-limit rows (ctx popover) */
   .rlrow{display:flex;align-items:center;gap:10px;margin-top:9px}
@@ -647,7 +661,7 @@
 
   /* inline code + branch switcher */
   .ic{font-family:var(--code);font-size:.92em;background:var(--bgActive);padding:1px 5px;border-radius:var(--r-xs);color:var(--text)}  /* mono-ok: inline code */
-  .bswitch{display:inline-flex;align-items:center;gap:8px;font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);color:var(--textDim);border:1px solid var(--border);border-radius:var(--r-pill);padding:2px 8px;width:fit-content;margin-top:2px}  /* mono-ok: git branch name */
+  .bswitch{display:inline-flex;align-items:center;gap:8px;font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);color:var(--textDim);border:1px solid var(--border);border-radius:var(--r-xs);padding:2px 8px;width:fit-content;margin-top:2px}  /* mono-ok: git branch name */
   .bswitch .bx{cursor:pointer;color:var(--textMuted);font-size: var(--fs-md);line-height:14px}.bswitch .bx:hover{color:var(--text)}
 
   /* sidebar collapse toggle */
@@ -692,7 +706,7 @@
   .stylemenu .styinfo:focus{outline:none}
   .stylemenu .styinfo:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
   .stylemenu .styinfoicon{width:var(--icon-sm);height:var(--icon-sm)}
-  .styinfocard{background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-btn);padding:11px 12px;box-shadow:0 16px 44px rgba(0,0,0,.5);width:230px}
+  .styinfocard{background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-btn);padding:11px 12px;box-shadow:var(--shadow-md);width:230px}
   .styinfocard .styinfotitle{font-weight:600;color:var(--text);margin-bottom:5px}
   .styinfocard .styinfobody{font-size: var(--fs-sm);line-height:var(--lh-sm);color:var(--textMuted)}
 
@@ -804,7 +818,7 @@
 
   /* Settings modal */
   #setovl{align-items:center;padding-top:0}
-  .setmodal{width:640px;max-width:92vw;max-height:84vh;background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-panel);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.6)}
+  .setmodal{width:640px;max-width:92vw;max-height:84vh;background:var(--bgEl);border:1px solid var(--borderStrong);border-radius:var(--r-panel);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg)}
   .setmodalhd{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);font-size: var(--fs-lg);line-height:var(--lh-lg);font-weight:650;flex:0 0 auto}
   .setmodalhd>span{flex:1}
   .setmodalbody{overflow-y:auto;padding:16px 20px}
@@ -834,9 +848,9 @@
   .ghr1{display:flex;align-items:center;gap:8px;font-size: var(--fs-md);line-height:var(--lh-md)}.ghr1>.icn{color:var(--textDim);flex:0 0 auto}
   .ghnum{font-variant-numeric:tabular-nums;font-size: var(--fs-xs);line-height:var(--lh-xs);color:var(--textDim);flex:0 0 auto}
   .ghtitle{font-weight:550;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ghstate{font-size: var(--fs-xs);line-height:var(--lh-xs);padding:1px 7px;border-radius:var(--r-pill);border:1px solid;text-transform:capitalize;flex:0 0 auto}
+  .ghstate{font-size: var(--fs-xs);line-height:var(--lh-xs);padding:1px 7px;border-radius:var(--r-xs);border:1px solid;text-transform:capitalize;flex:0 0 auto}
   .ghr2{display:flex;align-items:center;gap:6px;margin-top:6px;font-size: var(--fs-xs);line-height:var(--lh-xs);color:var(--textDim);flex-wrap:wrap}
-  .ghlabel{font-size: var(--fs-xs);line-height:var(--lh-xs);padding:1px 7px;border-radius:var(--r-pill);border:1px solid}
+  .ghlabel{font-size: var(--fs-xs);line-height:var(--lh-xs);padding:1px 7px;border-radius:var(--r-xs);border:1px solid}
   .ghdrawer{border-left:1px solid var(--border);background:var(--bgPanel);display:flex;position:relative;overflow:hidden}
   .ghdwrsz{position:absolute;left:0;top:0;bottom:0;width:6px;cursor:col-resize;z-index:2}
   .ghdwrsz::after{content:"";position:absolute;left:2.5px;top:0;bottom:0;width:1px;background:var(--border)}.ghdwrsz:hover::after{background:var(--accent);width:2px}
@@ -866,7 +880,7 @@
   .prepo-n{font-size: var(--fs-md);line-height:var(--lh-md);font-weight:600}
   .prepo-br{font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);color:var(--textDim);display:flex;align-items:center;gap:4px}  /* mono-ok: git branch name */
   .pagents{display:flex;gap:7px;flex-wrap:wrap}
-  .pagent{display:inline-flex;align-items:center;gap:7px;font-size: var(--fs-sm);line-height:var(--lh-sm);border:1px solid var(--border);border-radius:var(--r-pill);padding:3px 10px 3px 4px;color:var(--text)}
+  .pagent{display:inline-flex;align-items:center;gap:7px;font-size: var(--fs-sm);line-height:var(--lh-sm);border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 10px 3px 4px;color:var(--text)}
   .pav{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size: var(--fs-xs);line-height:var(--lh-xs);font-weight:700;flex:0 0 auto}
   .kvrow{display:flex;gap:14px;padding:8px 0;border-top:1px solid var(--border);font-size: var(--fs-sm);line-height:var(--lh-sm)}
   .kvrow:first-of-type{border-top:none}
@@ -906,11 +920,10 @@
   .smenu .mi.dmi{color:var(--danger)}.smenu .mi.dmi .icn{color:var(--danger)}
   .smenu .mi.dmi:hover{background:var(--dangerBg)}
   /* gh repo badge */
-  .ghrepo{display:inline-flex;align-items:center;gap:3px;font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);color:var(--textMuted);background:var(--bgActive);border-radius:var(--r-pill);padding:1px 7px;flex:0 0 auto}  /* mono-ok: GitHub owner/repo slug */
+  .ghrepo{display:inline-flex;align-items:center;gap:3px;font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);color:var(--textMuted);background:var(--bgActive);border-radius:var(--r-xs);padding:1px 7px;flex:0 0 auto}  /* mono-ok: GitHub owner/repo slug */
   .ghrepo .icn{width:10px;height:10px;color:var(--textDim)}
   /* Project Code Workspace */
   #codeovl{align-items:center;padding:24px}
-  .codepanel{width:94vw;max-width:1240px;height:86vh;background:var(--bg);border:1px solid var(--borderStrong);border-radius:var(--r-card);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.6)}
   .codehd{display:flex;align-items:center;gap:9px;padding:10px 14px;border-bottom:1px solid var(--border);flex:0 0 auto}
   .codehd-t{font-weight:650;font-size: var(--fs-lg);line-height:var(--lh-lg)}.codehd-p{font-size: var(--fs-xs);line-height:var(--lh-xs);color:var(--textDim)}
   .codebody{flex:1;display:flex;min-height:0;overflow:hidden}
@@ -958,7 +971,7 @@
   .pav2.lg{width:30px;height:30px;font-size: var(--fs-xs);line-height:var(--lh-xs)}
   .ghhash{font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);color:var(--accent);flex:0 0 auto;width:64px;font-variant-numeric:tabular-nums}  /* mono-ok: commit SHA */
   .ghdate{font-size: var(--fs-xs);line-height:var(--lh-xs);color:var(--textDim);flex:0 0 auto;width:104px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
-  .ghref{display:inline-flex;align-items:center;gap:3px;font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);padding:1px 7px;border-radius:var(--r-pill);border:1px solid;flex:0 0 auto;max-width:220px;overflow:hidden;white-space:nowrap}  /* mono-ok: git ref — branch or tag name */
+  .ghref{display:inline-flex;align-items:center;gap:3px;font-size: var(--fs-xs);line-height:var(--lh-xs);font-family:var(--code);padding:1px 7px;border-radius:var(--r-xs);border:1px solid;flex:0 0 auto;max-width:220px;overflow:hidden;white-space:nowrap}  /* mono-ok: git ref — branch or tag name */
   .ghref .icn{width:10px;height:10px}
   .ghref.head{color:var(--accentText);background:var(--accent);border-color:var(--accent);font-weight:600}
   .ghref.branch{color:var(--textMuted);border-color:var(--border);background:var(--bgEl)}

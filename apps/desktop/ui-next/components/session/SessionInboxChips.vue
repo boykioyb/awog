@@ -129,7 +129,7 @@ function orgLabel(m: { origin: InboxOrigin; fromTitle: string }): string {
   padding: 1px 6px;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
   color: var(--accent);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
