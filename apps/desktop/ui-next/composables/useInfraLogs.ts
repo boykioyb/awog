@@ -506,6 +506,11 @@ export function useInfraLogs() {
     customStart,
     customEnd,
     windowSeconds,
+    // `windowMs` được export vì cầu nối khoảng-thời-gian (Mốc 6, 6.3) cần HAI MỐC
+    // TUYỆT ĐỐI để gieo sang màn Giám sát, không phải độ dài. Tính lại từ
+    // `windowPreset`/`customStart` ở màn kia là bản sao thứ hai của cùng một phép
+    // suy — và bản thứ hai thì sớm muộn lệch bản thứ nhất.
+    windowMs,
     windowValid,
     estimate,
     estimating,

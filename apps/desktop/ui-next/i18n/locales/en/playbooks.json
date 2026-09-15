@@ -55,6 +55,8 @@
   "playbooks.action.run": "Run",
   "playbooks.action.rollback": "Roll back",
   "playbooks.action.working": "Running…",
+  "playbooks.action.share": "Share",
+  "playbooks.action.shareRun": "Run report",
   "playbooks.variables.title": "Playbook variables",
   "playbooks.variables.required": "Required — fill these in before checking or running.",
   "playbooks.confirm.action": "Infrastructure playbook",

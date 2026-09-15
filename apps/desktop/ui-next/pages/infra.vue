@@ -1,10 +1,10 @@
 <template>
   <section class="page on" data-page="infra">
     <div class="infra-shell">
-      <!-- Thanh section (docs/features/infra-explorer.md). Sáu mục đang mở:
-           Tổng quan (2.8) · Dịch vụ (3.1–3.8) · Nhật ký (3.9)
-           · Logs (2.1–2.7) · Kubernetes · Tài khoản (Mốc 1).
-           Graph/playbook vẫn là chỗ trống ở các mốc sau.
+      <!-- Thanh section (docs/features/infra-explorer.md). Mười mục:
+           Tổng quan (2.8) · Dịch vụ (3.1–3.8) · Topology (Mốc 5)
+           · Triển khai (Mốc 4) · Nhật ký (3.9) · Logs (2.1–2.7)
+           · Giám sát (6.3–6.4) · Báo cáo (6.6) · Kubernetes · Tài khoản (Mốc 1).
 
            "Dịch vụ" là MỘT tab, hai mặt: danh mục (3.8) và bảng tài nguyên (3.1).
            Trước 2026-09-14 chúng là hai tab ngang hàng ("Dịch vụ" + "Khám phá"),
@@ -108,6 +108,22 @@
 
         <div v-if="logsMounted" v-show="tab === 'logs'" class="infra-pane">
           <InfraLogs :seed="logsSeed" />
+        </div>
+
+        <!-- Tab "Giám sát" (Mốc 6, 6.3–6.4) đứng NGAY SAU Logs: hai màn chia sẻ một
+             trục thời gian và đổi khoảng cho nhau (`useInfraWindowSync`), nên cặp
+             phải nằm cạnh nhau mới tìm thấy. Mount lười như Logs — `useInfraMetrics`
+             cố ý không tự nạp (mỗi lượt nạp là một lô `get-metric-data` tính tiền
+             theo số metric × số điểm), nhưng nó VẪN đăng ký một watcher nhận khoảng
+             gieo từ Logs, và watcher đó chỉ sống khi màn này đã mount. -->
+        <div v-if="monitoringMounted" v-show="tab === 'monitoring'" class="infra-pane">
+          <InfraMonitoring />
+        </div>
+
+        <!-- Tab "Báo cáo" (Mốc 6, 6.6): danh mục bốn loại. Mount lười vì màn này
+             hỏi sidecar danh mục ngay khi mount; không có tab thì không có lời gọi. -->
+        <div v-if="reportsMounted" v-show="tab === 'reports'" class="infra-pane">
+          <InfraReports />
         </div>
 
         <!-- Tab "Triển khai" (Mốc 4): bảng xuyên nguồn GitHub Actions · CodePipeline
@@ -216,12 +232,15 @@ import InfraContextBar from '~/components/infra/InfraContextBar.vue'
 import InfraCicd from '~/components/infra/cicd/InfraCicd.vue'
 import InfraExplorer from '~/components/infra/explorer/InfraExplorer.vue'
 import InfraGraph from '~/components/infra/graph/InfraGraph.vue'
+import InfraMonitoring from '~/components/infra/metrics/InfraMonitoring.vue'
+import InfraReports from '~/components/infra/reports/InfraReports.vue'
 import InfraServicesCatalog from '~/components/infra/explorer/InfraServicesCatalog.vue'
 import { OVERVIEW_ERRORS_WINDOW_SECONDS } from '~/composables/useInfraOverview'
 import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
 import { useInfraPage } from '~/composables/useInfraPage'
 import { useInfraGraphOpen } from '~/composables/useInfraGraphOpen'
 import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
+import { useInfraWindowSync } from '~/composables/useInfraWindowSync'
 import { useLinkOpen } from '~/composables/useLinkOpen'
 import type { InfraCatalogService } from '~/composables/useInfraResourcesApi'
 import type { LogsSeed } from '~/composables/useInfraLogs'
@@ -238,8 +257,14 @@ type InfraTab =
   | 'delivery'
   | 'audit'
   | 'logs'
+  | 'monitoring'
+  | 'reports'
   | 'kubernetes'
   | 'accounts'
+// `monitoring` và `reports` CHÈN SAU `logs` chứ không xếp lại thứ tự cũ: màn Giám
+// sát là cặp song sinh của Logs (cùng trục thời gian, đổi khoảng cho nhau), còn Báo
+// cáo là thứ gộp Logs + Giám sát + Nhật ký lại. Xếp lại các tab đã ship chỉ để có
+// một thứ tự "đẹp" là bắt người dùng học lại vị trí cũ mà không đổi lấy gì.
 const TABS: readonly InfraTab[] = [
   'overview',
   'services',
@@ -247,6 +272,8 @@ const TABS: readonly InfraTab[] = [
   'delivery',
   'audit',
   'logs',
+  'monitoring',
+  'reports',
   'kubernetes',
   'accounts',
 ]
@@ -257,6 +284,8 @@ const TAB_ICONS: Record<InfraTab, string> = {
   delivery: 'zap',
   audit: 'book',
   logs: 'table',
+  monitoring: 'act',
+  reports: 'file',
   kubernetes: 'k8s',
   accounts: 'shield',
 }
@@ -293,11 +322,22 @@ const catalogOpen = ref(true)
 const openedView = ref(false)
 /** Nhật ký chỉ đọc dữ liệu cục bộ; vẫn mount lười cho nhất quán. */
 const auditMounted = ref(false)
+/**
+ * Tab Giám sát (Mốc 6) mount lười. Không phải vì nó tự nạp — `useInfraMetrics` cấm
+ * điều đó — mà vì nó ĐĂNG KÝ một watcher nhận khoảng thời gian gieo từ Logs, và
+ * watcher chỉ sống khi màn đã mount. Mount sẵn cũng không tốn lời gọi nào, nhưng
+ * mount lười giữ cho mọi tab dữ liệu của trang này có cùng một luật.
+ */
+const monitoringMounted = ref(false)
+/** Tab Báo cáo (Mốc 6) mount lười: màn này hỏi danh mục ngay khi mount. */
+const reportsMounted = ref(false)
 const logsSeed = ref<LogsSeed | null>(null)
 let seedNonce = 0
 
 function selectTab(next: InfraTab): void {
   if (next === 'logs') logsMounted.value = true
+  if (next === 'monitoring') monitoringMounted.value = true
+  if (next === 'reports') reportsMounted.value = true
   if (next === 'kubernetes') k8sMounted.value = true
   if (next === 'services') servicesMounted.value = true
   if (next === 'delivery') deliveryMounted.value = true
@@ -417,6 +457,25 @@ watch(
   },
   { immediate: true },
 )
+
+// ── Cầu nối khoảng thời gian Logs ⇄ Giám sát (Mốc 6, 6.3) ────────────────────
+// PHẦN NÀY THUỘC TRANG, không thuộc composable nào: áp một khoảng vào một màn mà
+// người dùng không nhìn thấy là gieo vào chỗ trống. Mỗi màn tự tiêu thụ phần DỮ LIỆU
+// của mình (`InfraLogs` và `useInfraMetrics` đều có watcher riêng, đăng ký trên
+// instance của màn đó) — ở đây chỉ CHUYỂN TAB, và KHÔNG `consume`: tiêu thụ ở đây là
+// lấy mất mảnh dữ liệu mà màn kia đang chờ.
+//
+// Đi qua `selectTab` chứ không gán thẳng `tab.value`: tab mới còn phải bật cờ mount
+// lười, mà màn chưa mount thì watcher nhận-khoảng của nó chưa tồn tại. Thứ tự trong
+// cùng một tick là đúng: cờ bật trước, DOM cập nhật sau, watcher `immediate` của màn
+// vừa mount đọc được cú gieo còn nguyên đó.
+const { pendingLogs, pendingMonitoring } = useInfraWindowSync()
+watch(pendingLogs, (seed) => {
+  if (seed) selectTab('logs')
+})
+watch(pendingMonitoring, (seed) => {
+  if (seed) selectTab('monitoring')
+})
 
 /** Explorer báo lên danh sách dòng đang có (cho ⌘K của tab Dịch vụ). */
 function onRowsChanged(

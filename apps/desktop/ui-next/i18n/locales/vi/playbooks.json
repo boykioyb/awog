@@ -55,6 +55,8 @@
   "playbooks.action.run": "Chạy",
   "playbooks.action.rollback": "Quay lui",
   "playbooks.action.working": "Đang chạy…",
+  "playbooks.action.share": "Chia sẻ",
+  "playbooks.action.shareRun": "Báo cáo lượt chạy",
   "playbooks.variables.title": "Biến của playbook",
   "playbooks.variables.required": "Bắt buộc — điền trước khi kiểm tra hoặc chạy.",
   "playbooks.confirm.action": "Playbook hạ tầng",

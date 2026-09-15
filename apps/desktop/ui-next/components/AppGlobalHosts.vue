@@ -35,6 +35,13 @@
        Explorer, Nhật ký và cả một phiên đang mở. Bong bóng phiên thì KHÔNG ở đây:
        nó thuộc cửa sổ chính, xem layouts/default.vue. -->
   <InfraAskTargetDialog />
+
+  <!-- Bộ xuất · chia sẻ · báo cáo (mốc 6.5–6.7). Ở đây chứ không ở màn hạ tầng:
+       đối tượng được xuất có thể là một playbook (trang /playbooks), một lượt
+       chạy, hay một báo cáo — và trạng thái mở nằm ở MỌC MODULE của
+       `useShareExport`, nên bên gọi chỉ cần `openShare(subject)` là hộp hiện ra,
+       không phải tự render nó. -->
+  <ShareExportModal />
 </template>
 
 <script setup lang="ts">

@@ -89,6 +89,8 @@
             @approve="approve"
             @run="runPlan"
             @rollback="rollback"
+            @share="sharePlaybook"
+            @share-run="shareRun"
             @resolve-impact="resolveImpact"
             @open-graph="openGraph"
             @set-variable="setVariable"
@@ -105,9 +107,12 @@ import PlaybookList from '~/components/infra/playbook/PlaybookList.vue'
 import { useI18n } from '~/composables/useI18n'
 import { useInfraGraphOpen } from '~/composables/useInfraGraphOpen'
 import { usePlaybooksManager } from '~/composables/usePlaybooksManager'
+import { useShareExport } from '~/composables/useShareExport'
 
 const { t } = useI18n()
 const { request: requestGraphOpen } = useInfraGraphOpen()
+/** Bộ xuất dùng chung (6.5 · 6.7) — hộp thật được mount ở `AppGlobalHosts`. */
+const { openShare } = useShareExport()
 
 const {
   mode,
@@ -145,6 +150,43 @@ const {
 function openGraph(): void {
   requestGraphOpen()
   void navigateTo('/infra')
+}
+
+/**
+ * Chia sẻ playbook (6.7) — mở hộp xuất cho bản đang xem.
+ *
+ * KHÔNG dựng bản xuất ở đây. `infra.share-export` đọc lại chính file playbook
+ * trên đĩa theo `{source, projectId, id}` rồi mới dựng tài liệu, nên thứ người
+ * dùng nhận là ảnh chụp của playbook thật — không phải bản sao client đang giữ
+ * trong bộ nhớ, vốn có thể cũ hơn đĩa nếu file bị sửa ở cửa sổ khác.
+ *
+ * Mặc định mẫu `runbook` (người sẽ THỰC THI). Ai cần bản để duyệt thì đổi trong
+ * hộp xuất — bản đó bị sidecar BUỘC che, không phải một tuỳ chọn tắt được.
+ */
+function sharePlaybook(): void {
+  const s = current.value?.summary
+  if (!s) return
+  void openShare(
+    {
+      kind: 'playbook',
+      id: s.id,
+      source: s.source,
+      ...(s.projectId ? { projectId: s.projectId } : {}),
+      audience: 'runbook',
+    },
+    { label: current.value?.playbook.name ?? s.id },
+  )
+}
+
+/**
+ * Mẫu thứ ba — "báo cáo sau khi chạy". Đối tượng là BẢN GHI CHẠY chứ không phải
+ * playbook: nó kể việc đã xảy ra (bước nào chạy, hỏng ở đâu), thứ mà bản thân
+ * playbook không biết.
+ */
+function shareRun(): void {
+  const r = detailView.value.run
+  if (!r) return
+  void openShare({ kind: 'run', id: r.id }, { label: current.value?.playbook.name ?? r.id })
 }
 </script>
 

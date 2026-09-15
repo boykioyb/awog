@@ -159,6 +159,28 @@
           <Icon name="revert" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.action.rollback') }}
         </button>
+
+        <!-- Chia sẻ playbook (6.7). Nút chỉ MỞ hộp xuất: bản xuất do sidecar dựng
+             từ chính file playbook trên đĩa, nên client không có bản thứ hai để
+             lệch. Mẫu "để duyệt" BỊ BUỘC che — sidecar cưỡng chế, không phải một
+             công tắc người dùng tắt được. -->
+        <button class="btn sm" type="button" :disabled="view.busy" @click="emit('share')">
+          <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{ t('playbooks.action.share') }}
+        </button>
+
+        <!-- Mẫu thứ ba — "báo cáo sau khi chạy" — chỉ có nghĩa khi ĐÃ có lượt chạy:
+             nó kể lại việc đã xảy ra, không phải việc sẽ làm. -->
+        <button
+          v-if="view.run"
+          class="btn sm"
+          type="button"
+          :disabled="view.busy"
+          @click="emit('shareRun')"
+        >
+          <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{ t('playbooks.action.shareRun') }}
+        </button>
       </div>
 
       <p v-if="view.rollback.missing > 0" class="pb-block">
@@ -219,6 +241,8 @@ const emit = defineEmits<{
   approve: []
   run: []
   rollback: []
+  share: []
+  shareRun: []
   resolveImpact: []
   openGraph: []
   setVariable: [name: string, value: string]

@@ -101,6 +101,20 @@
           {{ t('infra.logs.run.copyQuery') }}
         </button>
 
+        <!-- Chiều Logs → Giám sát của cầu nối khoảng thời gian (6.3). Đối xứng với
+             nút "Mở trong Logs" ở màn kia: cùng một khoảng, hỏi câu khác ("bao nhiêu"
+             thay vì "chuyện gì đã xảy ra"). Không cần chạy truy vấn trước — khoảng
+             đang chọn trên thanh cửa sổ là thứ được mang sang. -->
+        <button
+          class="btn"
+          type="button"
+          :title="t('infra.logs.window.sendToMonitoringHint')"
+          @click="onSendToMonitoring"
+        >
+          <Icon name="forward" class="lgs-ic" />
+          {{ t('infra.logs.window.sendToMonitoring') }}
+        </button>
+
         <label class="lgs-check">
           <input v-model="histogramOn" type="checkbox" />
           {{ t('infra.logs.run.histogram') }}
@@ -197,6 +211,7 @@ import InfraLogsResults from '~/components/infra/logs/InfraLogsResults.vue'
 import { useAwsLogsApi } from '~/composables/useAwsLogsApi'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import { LOGS_WINDOW_PRESETS, useInfraLogs } from '~/composables/useInfraLogs'
+import { useInfraWindowSync } from '~/composables/useInfraWindowSync'
 import type { LogsSeed } from '~/composables/useInfraLogs'
 
 // `seed` cho phép màn khác (Tổng quan) mở tab này với một câu lệnh đã điền sẵn —
@@ -256,7 +271,11 @@ const {
   reloadLibrary,
   applyTemplate,
   zoomToWindow,
+  windowMs,
 } = useInfraLogs()
+
+/** Cầu nối khoảng thời gian hai chiều với màn Giám sát (6.3). */
+const bridge = useInfraWindowSync()
 
 const presets = LOGS_WINDOW_PRESETS
 
@@ -337,6 +356,23 @@ function onZoom(startMs: number, endMs: number): void {
   toast.add({ title: t('infra.logs.hist.zoomed'), color: 'info' })
 }
 
+/**
+ * Gieo cửa sổ đang chọn sang màn Giám sát (6.3, chiều Logs → Giám sát). Trang
+ * `/infra` nghe cùng cầu nối này để CHUYỂN tab — màn kia không thể tự hiện ra.
+ *
+ * `windowMs` là `null` khi khoảng nhập tay không hợp lệ (end ≤ start). Khi đó không
+ * gieo gì: `pushWindow` cũng từ chối, nhưng chặn ở đây thì người dùng nhận được lý
+ * do thay vì một cú bấm im lặng.
+ */
+function onSendToMonitoring(): void {
+  const win = windowMs.value
+  if (!win) {
+    toast.add({ title: t('infra.logs.window.invalid'), color: 'warning' })
+    return
+  }
+  bridge.pushWindow('monitoring', win.startMs, win.endMs, t('infra.logs.window.bridgeNote'))
+}
+
 async function onCopyQuery(): Promise<void> {
   await writeClipboard(query.value)
 }
@@ -370,6 +406,27 @@ async function onSendToChat(text: string): Promise<void> {
   })
   await askAgent(`${header}\n\n\`\`\`json\n${text}\n\`\`\``)
 }
+
+// Khoảng thời gian do màn Giám sát gieo sang (6.3). Chỉ ĐẶT khoảng, KHÔNG chạy: thu
+// hẹp cửa sổ là một cách giảm chi phí, tự chạy lại ngay sau đó thì người dùng không
+// kịp đọc con số ước lượng mới — cùng luật với cú bấm histogram.
+//
+// `immediate: true` để bắt ca gieo TRƯỚC khi tab này được mount (tab Logs mount lười,
+// cú gieo tới trong cùng tick với cú chuyển tab). `consumeWindow` xoá ngay: để lại thì
+// lần vào tab sau sẽ áp lại một khoảng cũ mà người dùng không hề yêu cầu.
+watch(
+  bridge.pendingLogs,
+  (seed) => {
+    if (!seed) return
+    const got = bridge.consumeWindow('logs')
+    if (!got) return
+    zoomToWindow(got.startMs, got.endMs)
+    // Cửa sổ vừa đổi mà không có gì chạy — nói ra, nếu không cú bấm bên kia trông
+    // như không có tác dụng. Câu mô tả do bên gieo đặt (nó biết mình gieo vì việc gì).
+    if (got.note) toast.add({ title: got.note, color: 'info' })
+  },
+  { immediate: true },
+)
 
 // Câu lệnh do màn khác gieo vào (Tổng quan → "Mở trong Logs"). Điền vào editor, KHÔNG
 // chạy: người dùng vẫn phải bấm Chạy và vẫn phải nhìn thấy ước lượng GB trước.

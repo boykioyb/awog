@@ -59,5 +59,7 @@
   "infra.tab.kubernetes": "Kubernetes",
   "infra.tab.services": "Dịch vụ",
   "infra.tab.audit": "Nhật ký",
-  "infra.tab.delivery": "Triển khai"
+  "infra.tab.delivery": "Triển khai",
+  "infra.tab.monitoring": "Giám sát",
+  "infra.tab.reports": "Báo cáo"
 }

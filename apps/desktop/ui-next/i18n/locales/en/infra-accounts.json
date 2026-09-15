@@ -59,5 +59,7 @@
   "infra.tab.kubernetes": "Kubernetes",
   "infra.tab.services": "Services",
   "infra.tab.audit": "Activity log",
-  "infra.tab.delivery": "Deploys"
+  "infra.tab.delivery": "Deploys",
+  "infra.tab.monitoring": "Monitoring",
+  "infra.tab.reports": "Reports"
 }
