@@ -46,6 +46,7 @@ import type {
   PlaybookStep,
   PlaybookStepRunStatus,
   PlaybookSummary,
+  PlaybookTier,
   PlaybookVariable,
 } from '~/composables/usePlaybooksApi'
 import type { InfraContext } from '~/types'
@@ -776,6 +777,69 @@ export function usePlaybooksManager() {
     localStorage.setItem(MODE_KEY, next)
   }
 
+  // ── Xoá ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Xoá bản đang mở. KHÔNG đi qua `gated()`: cổng quyền của mốc 5 là cổng cho lệnh
+   * chạm vào TÀI KHOẢN AWS, còn đây chỉ xoá một file trong `~/.awog/playbooks` — hỏi
+   * ma trận quyền ở đây là dạy người dùng rằng cái hộp đó không có nghĩa cố định.
+   * Vẫn phải xác nhận, vì file này có thể là bản người ta soạn cả buổi.
+   *
+   * Bản dựng sẵn không tới được đây (nút không hiện), và sidecar chặn lần thứ hai.
+   */
+  async function remove(): Promise<void> {
+    const cur = current.value
+    if (!cur || busy.value || cur.summary.source === 'builtin') return
+    const ok = await confirm({
+      title: t('playbooks.confirm.deleteTitle', { name: cur.playbook.name }),
+      description: t('playbooks.confirm.deleteBody'),
+      confirmLabel: t('playbooks.action.delete'),
+      kind: 'danger',
+    })
+    if (!ok) return
+    busy.value = true
+    try {
+      const res = await api.remove(scopeOf(cur.summary))
+      if (!res.ok) {
+        toast.add({ title: t(res.error), color: 'error' })
+        return
+      }
+      toast.add({
+        title: t('playbooks.toast.deleted', { name: cur.playbook.name }),
+        color: 'success',
+      })
+      selected.value = null
+      current.value = null
+      await load()
+    } catch (err) {
+      toast.add({ title: messageOf(err), color: 'error' })
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /**
+   * Sau khi hộp soạn ghi xong: nạp lại danh sách rồi MỞ đúng bản vừa lưu.
+   *
+   * Phải dò lại trong danh sách mới chứ không dựng `PlaybookSummary` tại chỗ: bản tóm
+   * tắt mang `issues` + số bước do sidecar tính, và bịa ra một bản ở đây là hiện một
+   * màn chi tiết nói về một file có thể đã khác.
+   */
+  async function afterEditorSaved(target: {
+    source: PlaybookTier
+    projectId: string
+    id: string
+  }): Promise<void> {
+    await load()
+    const found = summaries.value.find(
+      (s) =>
+        s.id === target.id &&
+        s.source === target.source &&
+        (s.projectId ?? '') === target.projectId,
+    )
+    if (found) await open(found)
+  }
+
   /**
    * Gói mọi thứ màn chi tiết cần vào MỘT prop. Mười lăm prop rời rạc trên cùng một
    * component là mười lăm chỗ để quên khi thêm một cờ; gói lại thì chữ ký của
@@ -835,5 +899,7 @@ export function usePlaybooksManager() {
     runPlan,
     rollback,
     resolveImpact,
+    remove,
+    afterEditorSaved,
   }
 }

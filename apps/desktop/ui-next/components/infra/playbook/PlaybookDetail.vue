@@ -52,6 +52,44 @@
             })
           }}
         </span>
+
+        <span class="pb-head-gap" />
+
+        <!-- Sửa · Nhân bản · Xoá. Icon-trần với `title`, theo luật hàng nút của
+             `*Detail.vue` (.claude/rules/nuxt-vue.md §UI patterns) — không trộn
+             nút-có-chữ vào cùng hàng.
+
+             Bản dựng sẵn chỉ được NHÂN BẢN: nó nằm trong mã, `-save`/`-delete` đều
+             từ chối nó, nên hiện nút Sửa ở đó là mời người dùng đâm vào một lỗi. -->
+        <button
+          v-if="writable"
+          class="pb-hbtn"
+          type="button"
+          :disabled="view.busy"
+          :title="t('playbooks.action.edit')"
+          @click="emit('edit')"
+        >
+          <Icon name="edit" class="pb-hic" />
+        </button>
+        <button
+          class="pb-hbtn"
+          type="button"
+          :disabled="view.busy"
+          :title="t('playbooks.action.duplicate')"
+          @click="emit('duplicate')"
+        >
+          <Icon name="copy" class="pb-hic" />
+        </button>
+        <button
+          v-if="writable"
+          class="pb-hbtn danger"
+          type="button"
+          :disabled="view.busy"
+          :title="t('playbooks.action.delete')"
+          @click="emit('delete')"
+        >
+          <Icon name="trash" class="pb-hic" />
+        </button>
       </header>
 
       <p v-if="playbook.description" class="pb-desc">{{ playbook.description }}</p>
@@ -246,9 +284,19 @@ const emit = defineEmits<{
   resolveImpact: []
   openGraph: []
   setVariable: [name: string, value: string]
+  edit: []
+  duplicate: []
+  delete: []
 }>()
 
 const { t } = useI18n()
+
+/**
+ * Ghi được hay không. `view.source` VẮNG MẶT khi chưa mở bản nào, và `undefined` ở đây
+ * phải là "không ghi được" — mặc định ngược lại sẽ loé hai nút ghi trong đúng một nhịp
+ * trước khi `source` về.
+ */
+const writable = computed(() => props.view.source !== undefined && props.view.source !== 'builtin')
 
 /** Dòng "quay lui": có thì nói phủ được bao nhiêu bước ghi, thiếu thì nói thẳng là thiếu. */
 const rollbackLabel = computed(() =>
@@ -267,6 +315,46 @@ function onVar(name: string, e: Event): void {
 </script>
 
 <style scoped>
+/* Hàng nút ở đầu màn chi tiết: đẩy ba nút ra mép phải. */
+.pb-head-gap {
+  flex: 1;
+}
+
+.pb-hbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: none;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+
+.pb-hbtn:hover:not(:disabled) {
+  background: var(--bgHover);
+  color: var(--text);
+}
+
+.pb-hbtn.danger:hover:not(:disabled) {
+  background: var(--dangerBg);
+  color: var(--danger);
+}
+
+.pb-hbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pb-hic {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
 .pb-detail {
   display: flex;
   flex-direction: column;

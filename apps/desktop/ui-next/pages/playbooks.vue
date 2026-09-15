@@ -6,12 +6,24 @@
   <section class="page on" data-page="playbooks">
     <div class="pb-shell">
       <div class="pb-top">
-        <!-- Soạn kế hoạch mới chưa thuộc mốc này (nguồn nháp tự động ở mốc sau) —
-             nút hiện ra ở đúng chỗ nó sẽ nằm nhưng TẮT, và nói vì sao (luật 3). -->
-        <button class="btn sm" type="button" disabled :title="t('playbooks.toolbar.newWhy')">
+        <!-- Soạn kế hoạch mới. Menu chứ không phải một hành động: "trống" và "nhân
+             bản bản đang mở" là hai điểm xuất phát rất khác nhau, và nhân bản là đường
+             DUY NHẤT để có bản của riêng mình từ một bản dựng sẵn (bản dựng sẵn nằm
+             trong mã, `-save` từ chối ghi vào đó).
+
+             `@click.stop` bắt buộc: `ContextMenu` đóng bằng listener click trên
+             `document`, nên mở bằng click trái mà không chặn nổi bọt thì nó đóng ngay
+             trong cùng một nhịp. -->
+        <button
+          ref="newBtn"
+          class="btn sm"
+          type="button"
+          :title="t('playbooks.toolbar.newWhy')"
+          @click.stop="openNewMenu"
+        >
           <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.toolbar.new') }}
-          <Icon name="chevron-down" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
 
         <!-- Một con số, không chia theo trạng thái: playbook KHÔNG có status — status
@@ -94,20 +106,39 @@
             @resolve-impact="resolveImpact"
             @open-graph="openGraph"
             @set-variable="setVariable"
+            @edit="onEdit"
+            @duplicate="onDuplicate"
+            @delete="remove"
           />
         </div>
       </div>
     </div>
+
+    <ContextMenu
+      :open="newMenuPos !== null"
+      :position="newMenuPos ?? { x: 0, y: 0 }"
+      :items="newMenuItems"
+      @close="newMenuPos = null"
+      @select="onNewMenuSelect"
+    />
+
+    <!-- Hộp soạn host Ở ĐÂY, không ở `AppGlobalHosts`: cả hai cú bấm mở nó (thanh công
+         cụ và đầu màn chi tiết) nằm trong chính trang này. -->
+    <PlaybookEditor @saved="afterEditorSaved" />
   </section>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import PlaybookDetail from '~/components/infra/playbook/PlaybookDetail.vue'
+import PlaybookEditor from '~/components/infra/playbook/PlaybookEditor.vue'
 import PlaybookList from '~/components/infra/playbook/PlaybookList.vue'
 import { useI18n } from '~/composables/useI18n'
 import { useInfraGraphOpen } from '~/composables/useInfraGraphOpen'
+import { usePlaybookEditor } from '~/composables/usePlaybookEditor'
 import { usePlaybooksManager } from '~/composables/usePlaybooksManager'
 import { useShareExport } from '~/composables/useShareExport'
+import type { MenuItem, MenuPos } from '~/composables/useContextMenu'
 
 const { t } = useI18n()
 const { request: requestGraphOpen } = useInfraGraphOpen()
@@ -136,7 +167,61 @@ const {
   runPlan,
   rollback,
   resolveImpact,
+  remove,
+  afterEditorSaved,
 } = usePlaybooksManager()
+
+const { openBlank, openDuplicate, openEdit } = usePlaybookEditor()
+
+// ── Soạn kế hoạch ───────────────────────────────────────────────────────────
+
+/**
+ * Menu của nút "Kế hoạch mới". Neo dưới NÚT chứ không dưới con trỏ: đây là menu của
+ * một nút trên thanh công cụ, và người dùng mong nó rơi ngay dưới nút đó dù họ bấm
+ * trúng mép nào.
+ */
+const newMenuPos = ref<MenuPos | null>(null)
+const newBtn = useTemplateRef<HTMLElement>('newBtn')
+
+const newMenuItems = computed<MenuItem[]>(() => [
+  { id: 'blank', label: t('playbooks.toolbar.newBlank'), icon: 'plus' },
+  {
+    id: 'duplicate',
+    label: t('playbooks.toolbar.newDuplicate'),
+    icon: 'copy',
+    // Không có bản nào đang mở thì không có gì để nhân bản — hàng vẫn hiện ra để
+    // người dùng biết nó tồn tại, nhưng tắt.
+    disabled: !current.value,
+  },
+])
+
+function openNewMenu(): void {
+  const el = newBtn.value
+  if (!el) return
+  const r = el.getBoundingClientRect()
+  newMenuPos.value = { x: r.left, y: r.bottom + 4 }
+}
+
+function onNewMenuSelect(id: string): void {
+  newMenuPos.value = null
+  if (id === 'blank') {
+    openBlank()
+    return
+  }
+  const cur = current.value
+  if (cur) openDuplicate(cur.playbook)
+}
+
+/** Sửa bản đang mở. Bản dựng sẵn không tới được đây — nút không hiện ở màn chi tiết. */
+function onEdit(): void {
+  const cur = current.value
+  if (cur) openEdit(cur.playbook, cur.summary)
+}
+
+function onDuplicate(): void {
+  const cur = current.value
+  if (cur) openDuplicate(cur.playbook)
+}
 
 /**
  * Nút "cần dựng graph trước" dẫn sang tab Topology của `/infra`. Ảnh hưởng lan chỉ
