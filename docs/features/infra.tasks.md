@@ -340,3 +340,51 @@ Người dùng: *"phần dịch vụ tôi thấy vẫn thiếu nhiều dịch v�
 - **Tài khoản production** — nhánh "đọc bị siết nhịp ⇒ hiện `blocked` + xin vé ⇒ gọi lại kèm vé" mới có test đơn vị, chưa gặp cổng thật.
 - **Agent chạy lại pipeline** (vế hai của C5) — `runtime/tools/infra-tools.ts` chưa có tool nào chạm tới màn này; nút *Hỏi agent* mới đẩy log vào phiên.
 - **`infosec audit #2`** vẫn treo từ mốc 1 (xem trên).
+
+---
+
+## Mốc 6 — trạng thái thực tế (cập nhật 2026-09-15)
+
+**Đã land 6.1 → 6.7**, cộng **M4** của [infra-monitoring-reports.md](infra-monitoring-reports.md) §Lộ trình — hạng mục này có trong spec nhưng **không có dòng tương ứng trong bảng 6.x ở trên**, nên đây là việc ngoài kế hoạch của mốc, không phải một dòng bị bỏ sót.
+
+Cửa vào: ba tab mới trong `/infra` — **Giám sát** · **Bảng điều khiển** · **Báo cáo** (tổng 11 tab) — cộng hộp xuất dùng chung mở được từ `/playbooks` và từ transcript phiên. Chi tiết thiết kế: [infra-monitoring-reports.md](infra-monitoring-reports.md).
+
+| # | Việc | Trạng thái |
+|---|---|---|
+| 6.1 | `MetricChart` SVG (đường · vùng · cột · lưới · nhãn trục · lớp hover) | xong — không thêm thư viện vẽ nào |
+| 6.2 | `get-metric-data` theo lô + cache + không tự làm mới | xong — cache theo `(profile, region, cửa sổ, query)`, TTL 10 phút, 64 entry; **không `onMounted`/`watch`/hẹn giờ nào gọi metric** |
+| 6.3 | Màn Giám sát: dải cảnh báo · ô số có mốc so sánh · lưới 4 biểu đồ · dải sự cố · đồng bộ khoảng với Logs | xong — đồng bộ hai chiều qua `useInfraWindowSync` |
+| 6.4 | Tạo/sửa cảnh báo từ chính biểu đồ + lịch sử alarm | xong — `put-metric-alarm` đi qua ma trận quyền; `describe-alarm-history` là đọc |
+| 6.5 | Bộ xuất dùng chung: Markdown · HTML một file không script · lớp che có xem trước · chân trang ghi nguồn · vào nhật ký | xong — xem bốn điểm lệch bên dưới |
+| 6.6 | Báo cáo: 4 loại · lưu Wiki · gửi chat · đặt lịch qua lịch chạy có sẵn | xong — 4 loại ở `REPORT_KINDS`; **chỉ `health-weekly` đặt lịch được** (xem bảng lệch) |
+| 6.7 | Chia sẻ playbook: 3 mẫu theo người đọc | xong — `SHARE_AUDIENCES = approval · runbook · post-run`; mẫu `approval` **ép bật lớp che** |
+| M4 | Bảng điều khiển tự lắp + 3 mẫu dựng sẵn | xong — tab **Bảng điều khiển**; ba bảng `website` · `api` · `cost` đúng tên spec; kho 2 tier `~/.awog/dashboards/<id>.json` + `{project}/.awog/dashboards/` |
+
+### Hai lỗ bịt ngày 2026-09-15
+
+Cả hai là **đường nối thiếu**, không phải tính năng thiếu — mã hai đầu đã có từ trước, chỉ không ai gọi.
+
+| Lỗ | Triệu chứng | Bịt bằng |
+|---|---|---|
+| **6.6 — báo cáo agent viết không vào được hộp xuất** | `buildReportShare` đã viết xong ở `share/templates.ts` và đường `kind: 'report'` của `useShareExport` đã đủ (lưu Wiki · gửi chat), nhưng `openShare` chỉ có **hai** caller, cả hai ở `/playbooks` | một hành động overflow trên message của trợ lý → `InfraReportPublishDialog` hỏi **loại** báo cáo → giao subject cho hộp xuất đã có. Loại không đoán được từ văn bản: nó quyết định thư mục Wiki và dòng nguồn |
+| **M4 — bảng điều khiển chưa tồn tại** | spec có, mã không | sidecar `infra/dashboard/{schema,builtin,store}.ts` + 4 RPC `infra.dashboard-*`; UI tab mới + `useInfraDashboards` + hộp ghim mở từ chip ghim trên `MetricChart` |
+
+### Sáu điểm lệch có chủ đích
+
+| Điểm | Kế hoạch / mặc định | Thực tế | Vì sao |
+|---|---|---|---|
+| **Đặt lịch báo cáo (6.6)** | cả 4 loại đặt lịch qua lịch chạy có sẵn | **chỉ `health-weekly`**; ba loại còn lại tắt nút và nói ra lý do qua `scheduleGapKey` | lịch chạy chỉ có nhịp ≤ 7 ngày · daily · weekly ⇒ `cost-monthly` **không biểu diễn được**; `activity`/`incident` thì cố ý chạy tay. Một nút bấm vào chỉ để nghe lại câu đang đọc là nhiễu |
+| **PDF (6.5)** | "HTML một file không script (+ print → PDF)" | không thêm thư viện PDF nào; `@media print` nằm **trong chính tệp HTML xuất ra** (`share/kit.ts`), Ctrl+P trên tệp đã lưu | spec nói rõ "không thêm thư viện PDF"; trình duyệt đã có sẵn đường in |
+| **Lớp che (6.5)** | "đi qua `redact.ts` trước khi ghi" | **hai lớp NỐI TIẾP**, không thay thế: `redact.ts` hỏi *"có phải bí mật không?"*, `share/mask.ts` hỏi *"có phải định danh hạ tầng không?"* (account id · ARN · endpoint nội bộ · tên bucket) | gộp làm một là tự tạo định nghĩa thứ hai về "bí mật". Hai công tắc riêng vì tên bucket "nhiều khi chính là thứ cần bàn" |
+| **AWOG không tự viết báo cáo** | màn Báo cáo = nơi tạo báo cáo | màn Báo cáo chỉ là **danh mục 4 loại**; nút chính mở một phiên với đúng câu lệnh của loại đó, **agent** đọc dữ liệu thật rồi viết | không có ô xem trước và không có nút xuất, vì thứ để xuất chưa tồn tại cho tới khi agent viết xong. Đó cũng là lý do transcript phải là điểm nối của 6.6 |
+| **`unit` của bảng điều khiển không lên dây (M4)** | — | bảng gửi query **không kèm `Unit`** | `unit` trong file là **nhãn hiển thị**, còn `Unit` gửi CloudWatch là **ràng buộc lọc**: lệch một chữ thì `get-metric-data` trả RỖNG *không báo lỗi*. Màn Giám sát gửi được vì ở đó `unit` là hằng của bộ spec; ở bảng nó là dữ liệu người dùng sửa tay |
+| **Nhật ký có surface riêng `dashboards` (M4)** | dùng lại `explorer` | thêm một giá trị vào `INFRA_SURFACES` | lượt nạp của bảng là một lô metric **trả tiền**; sổ kiểm toán phải trả lời được "lượt đó do màn nào bấm" |
+
+### Còn nợ của mốc 6
+
+- **QA trong Electron thật** — cổng đã xanh là `vitest` (sidecar, **989 test / 43 file** của `src/infra`) · `pnpm typecheck` (cả hai app) · `pnpm lint` + guard design-token. Chưa màn nào của mốc 6 được bấm trong app đóng gói.
+- **Credential AWS thật** — vẫn như mốc 4: mọi đường `get-metric-data` · `describe-alarms` · `put-metric-alarm` mới kiểm bằng JSON mẫu.
+- **Mẫu Chi phí chưa đo được** — `AWS/Billing` chỉ có metric khi tài khoản **đã bật billing alerts**, và chỉ phát ở `us-east-1`. Chưa bật thì bảng vẽ trắng; nhãn "không có dữ liệu" của nhánh đó chưa xác nhận trên tài khoản thật.
+- **Bảng trộn vùng phải gọi nhiều lượt** — `region` đi trong `context` của lời gọi chứ không phải của từng query. Ba bảng dựng sẵn đều đơn vùng nên hiện tại luôn đúng một lượt; bảng người dùng tự trộn vùng thì tách lượt, chưa đo chi phí thực tế của trường hợp đó.
+- **Agent chưa chạm bảng điều khiển** — `runtime/tools/infra-tools.ts` không có tool nào đọc/ghi bảng; agent chỉ tới được số liệu qua màn Giám sát.
+- **`infosec audit #2`** vẫn treo từ mốc 1. Mốc 6 thêm bốn bề mặt cần soi: lớp che (`share/mask.ts`) là hàng rào **duy nhất** trước khi nội dung rời máy; `put-metric-alarm` là lệnh ghi đổi hành vi tài khoản; kho bảng 2 tier ghi file theo `id` từ UI (`store.ts` đã chặn thoát thư mục + symlink, cần soi lại); báo cáo lưu Wiki là **dữ liệu sẽ vào context của LLM**.
