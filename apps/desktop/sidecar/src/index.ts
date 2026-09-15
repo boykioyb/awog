@@ -151,6 +151,10 @@ import './methods/infra.cicd-workflows.js'
 import './methods/infra.audit-query.js'
 import './methods/infra.audit-clean.js'
 import './methods/infra.audit-export.js'
+// Mốc 5 — Graph kiến trúc + luồng request (docs/features/infra-topology-graph.md)
+// và playbook hạ tầng (docs/features/playbooks.md).
+import './methods/infra.graph.js'
+import './methods/infra.playbook.js'
 // Phiên bong bóng (góc phải màn hình) — thư mục làm việc riêng `awog-infra`.
 import './methods/infra.bubble-workspace.js'
 import './methods/ssh.list.js'

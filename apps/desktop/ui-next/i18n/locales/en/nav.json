@@ -20,6 +20,7 @@
   "nav.connections": "Sources",
   "nav.ssh": "SSH",
   "nav.infra": "AWS",
+  "nav.playbooks": "Playbooks",
   "nav.hooks": "Hooks",
   "nav.settings": "Settings",
   "nav.collapse": "Collapse / expand sidebar"

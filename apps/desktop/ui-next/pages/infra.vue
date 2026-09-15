@@ -94,6 +94,14 @@
           />
         </div>
 
+        <!-- Tab "Topology" (Mốc 5): graph kiến trúc & luồng request. KHÔNG mount
+             lười như Logs/CICD/K8s — và cũng không cần: `useInfraGraph` cố ý không
+             tự chạy (không `onMounted`/`watch` nào gọi resolver sau lưng người dùng),
+             nên mount sẵn không tốn một lệnh CLI nào cho tới cú bấm đầu tiên. -->
+        <div v-show="tab === 'graph'" class="infra-pane">
+          <InfraGraph />
+        </div>
+
         <div v-if="auditMounted" v-show="tab === 'audit'" class="infra-pane">
           <InfraAuditLog />
         </div>
@@ -207,10 +215,12 @@ import InfraAuditLog from '~/components/infra/audit/InfraAuditLog.vue'
 import InfraContextBar from '~/components/infra/InfraContextBar.vue'
 import InfraCicd from '~/components/infra/cicd/InfraCicd.vue'
 import InfraExplorer from '~/components/infra/explorer/InfraExplorer.vue'
+import InfraGraph from '~/components/infra/graph/InfraGraph.vue'
 import InfraServicesCatalog from '~/components/infra/explorer/InfraServicesCatalog.vue'
 import { OVERVIEW_ERRORS_WINDOW_SECONDS } from '~/composables/useInfraOverview'
 import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
 import { useInfraPage } from '~/composables/useInfraPage'
+import { useInfraGraphOpen } from '~/composables/useInfraGraphOpen'
 import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
 import { useLinkOpen } from '~/composables/useLinkOpen'
 import type { InfraCatalogService } from '~/composables/useInfraResourcesApi'
@@ -221,10 +231,19 @@ const { t } = useI18n()
 // Ba mục của thanh section. `overview` đứng đầu và là mặc định: `/infra` trả lời
 // "mọi thứ có ổn không" trước khi trả lời "có những tài khoản nào"
 // (docs/features/infra-explorer.md §Màn mở đầu).
-type InfraTab = 'overview' | 'services' | 'delivery' | 'audit' | 'logs' | 'kubernetes' | 'accounts'
+type InfraTab =
+  | 'overview'
+  | 'services'
+  | 'graph'
+  | 'delivery'
+  | 'audit'
+  | 'logs'
+  | 'kubernetes'
+  | 'accounts'
 const TABS: readonly InfraTab[] = [
   'overview',
   'services',
+  'graph',
   'delivery',
   'audit',
   'logs',
@@ -234,6 +253,7 @@ const TABS: readonly InfraTab[] = [
 const TAB_ICONS: Record<InfraTab, string> = {
   overview: 'home',
   services: 'layers',
+  graph: 'branch',
   delivery: 'zap',
   audit: 'book',
   logs: 'table',
@@ -380,6 +400,20 @@ watch(
     consumeServiceOpen()
     const svc = services.value.find((s) => s.id === id)
     if (svc) void onServiceTarget(svc.target)
+  },
+  { immediate: true },
+)
+
+// Cầu nối thứ hai, cùng khuôn: `/playbooks` xin mở thẳng tab Topology khi nó không
+// suy được ảnh hưởng lan. `selectTab` là đường DUY NHẤT đổi tab (nó còn bật cờ mount
+// lười của các tab khác), nên đi qua đó chứ không gán thẳng `tab.value`.
+const { pending: pendingGraphOpen, consume: consumeGraphOpen } = useInfraGraphOpen()
+watch(
+  pendingGraphOpen,
+  (on) => {
+    if (!on) return
+    consumeGraphOpen()
+    selectTab('graph')
   },
   { immediate: true },
 )

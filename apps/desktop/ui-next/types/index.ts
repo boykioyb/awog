@@ -43,6 +43,15 @@ export interface ProjectLlmDefaults {
 /** Ba CLI mà sidecar gọi trực tiếp bằng arg array (mirror `InfraTool` của sidecar). */
 export type InfraTool = 'aws' | 'terraform' | 'kubectl'
 
+/** Lớp lệnh của một lời gọi hạ tầng — mirror `InfraCommandClass` của sidecar
+ * (apps/desktop/sidecar/src/infra/types.ts). `context-switch` KHÔNG suy được từ
+ * argv: nó mô tả lời gọi đổi ngữ cảnh nội bộ, nên đừng thu về ba giá trị. */
+export type InfraCommandClass = 'read' | 'write' | 'destructive' | 'context-switch'
+
+/** Ma trận quyền quyết gì cho một lớp lệnh trên một loại tài khoản — mirror
+ * `InfraMode` của sidecar (apps/desktop/sidecar/src/infra/policy.ts). */
+export type InfraMode = 'auto' | 'ask' | 'block'
+
 export interface InfraContext {
   // AWS profile name (`--profile`).
   profile?: string

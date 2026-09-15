@@ -17,10 +17,20 @@
 // (infosec audit #1 — payload IPC là L1, lời khai "người dùng đã duyệt" từ bên gọi
 // không chứng minh được gì).
 //
-// `actor: 'human'` là hằng số ở đây, có chủ đích: hàm này phục vụ ĐƯỜNG NGƯỜI
-// DÙNG BẤM. Agent đi đường khác (`runtime/tools/infra-tools.ts`) và tự chịu cổng
-// quyền của nó; trộn hai đường vào nhau là cách để nhật ký mất khả năng phân biệt
-// "agent tự chạy" với "người dùng bấm".
+// BA đường chạy lệnh, và `actor` là thứ phân biệt chúng trong nhật ký:
+//   · NGƯỜI DÙNG BẤM (Explorer, Logs, kubectl, phiên) — mặc định, `actor: 'human'`.
+//     Không call site nào phải truyền gì: bỏ trống `actor` là ra đúng giá trị cũ.
+//   · PLAYBOOK (`infra/playbook/runner.ts`) — đường thứ ba, và là đường DUY NHẤT
+//     truyền `actor` khác mặc định, dạng `playbook:<id>#<bước>` (regex ở
+//     `audit/store.ts`). Không có nó thì "cái này do ai bảo chạy" ở màn Nhật ký
+//     không trả lời được: một bước playbook chạy nền trông y hệt người dùng bấm.
+//   · AGENT đi đường khác (`runtime/tools/infra-tools.ts`) và tự chịu cổng quyền
+//     của nó; trộn đường đó vào đây là cách để nhật ký mất khả năng phân biệt
+//     "agent tự chạy" với "người dùng bấm".
+//
+// Vì sao playbook KHÔNG tự gọi `runInfra` mà vẫn đi qua hàm này: bốn bước dưới là
+// hàng rào quyền, và một bản sao thứ hai là chỗ để quên `decide()`. Playbook khác
+// người dùng ở *nhãn* (`actor`), không khác ở *luật*.
 import { classify } from './classify.js'
 import { decide } from './policy.js'
 import { loadInfraPolicy } from './policy-store.js'
@@ -40,6 +50,14 @@ export type InfraGateInput = {
   surface: InfraSurface
   /** Tên tool AWOG cho nhật ký (`infra_view`, `kube_pods`…), KHÔNG phải tên binary. */
   toolName: string
+  /**
+   * Ai bảo chạy: `'human'` (mặc định) | `'agent:<tên>'` | `'playbook:<id>#<bước>'` |
+   * `'schedule:<id>'` — đúng regex `actor` của `audit/store.ts`.
+   *
+   * Bỏ trống là `'human'`; chỉ runner playbook truyền giá trị khác, và nó luôn
+   * dựng chuỗi từ id playbook đã validate + số thứ tự bước.
+   */
+  actor?: string | undefined
   approvalTicket?: string | undefined
   sessionFloor?: 'auto' | 'ask' | 'block' | undefined
   sessionId?: string | undefined
@@ -72,6 +90,7 @@ export type InfraGatedRan = {
 export type InfraGatedResult = InfraGatedBlocked | InfraGatedRan
 
 export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
+  const actor = p.actor ?? 'human'
   const cls = classify(p.tool, p.args)
   const policy = await loadInfraPolicy()
   const verdict = decide({
@@ -87,7 +106,7 @@ export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
   // đòi đúng một dòng, ghi tại chỗ chạy chứ không phải tại call site.
   const refuse = async (requiresApproval: boolean, reason: string): Promise<InfraGatedBlocked> => {
     await recordInfraAction({
-      actor: 'human',
+      actor,
       ...(p.sessionId !== undefined ? { sessionId: p.sessionId } : {}),
       ...(p.messageId !== undefined ? { messageId: p.messageId } : {}),
       surface: p.surface,
@@ -130,7 +149,7 @@ export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
     tool: p.tool,
     args: p.args,
     context: p.context,
-    actor: 'human',
+    actor,
     surface: p.surface,
     toolName: p.toolName,
     decision,

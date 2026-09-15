@@ -2,6 +2,7 @@
   "infra.acc.section.accounts": "Tài khoản",
   "infra.tab.label": "Các mục AWS",
   "infra.tab.overview": "Tổng quan",
+  "infra.tab.graph": "Topology",
   "infra.tab.logs": "Logs",
   "infra.tab.accounts": "Tài khoản",
   "infra.acc.toolbar.new": "Thêm profile",

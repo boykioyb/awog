@@ -2,6 +2,7 @@
   "infra.acc.section.accounts": "Accounts",
   "infra.tab.label": "AWS sections",
   "infra.tab.overview": "Overview",
+  "infra.tab.graph": "Topology",
   "infra.tab.logs": "Logs",
   "infra.tab.accounts": "Accounts",
   "infra.acc.toolbar.new": "Add profile",
