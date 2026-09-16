@@ -83,7 +83,7 @@
       <p v-if="explainState?.loading" class="pbrief-state">
         {{ t('infraGate.brief.loading') }}
       </p>
-      <p v-else-if="explainState?.failed" class="pbrief-state">
+      <p v-else-if="explainState?.failed" class="pbrief-state" :title="explainState.error">
         {{ t('infraGate.brief.failed') }}
         <button class="pbrief-retry" type="button" @click="onRetryExplain">
           {{ t('infraGate.brief.retry') }}

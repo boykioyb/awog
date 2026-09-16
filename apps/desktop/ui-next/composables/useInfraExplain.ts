@@ -30,6 +30,12 @@ export interface ExplainState {
   loading: boolean
   /** `true` khi lượt gọi hỏng HOẶC mô hình trả về thứ không đọc được. */
   failed: boolean
+  /**
+   * Lý do hỏng, cho người đọc. Trước đây nó chỉ đi vào `console.warn`, nên người
+   * dùng thấy "Không diễn giải được" mà không biết là mất mạng hay chưa cấu hình
+   * tài khoản model — hai thứ họ xử lý khác hẳn nhau.
+   */
+  error: string
   result: CommandExplanation | null
 }
 
@@ -91,12 +97,13 @@ export function useInfraExplain() {
 
     const state = remember(
       key,
-      reactive<ExplainState>({ loading: true, failed: false, result: null }),
+      reactive<ExplainState>({ loading: true, failed: false, error: '', result: null }),
     )
 
     if (!sc.available) {
       state.loading = false
       state.failed = true
+      state.error = 'ENGINE_UNAVAILABLE'
       return state
     }
 
@@ -124,6 +131,7 @@ export function useInfraExplain() {
         console.warn('[infra] explain failed', err)
         state.loading = false
         state.failed = true
+        state.error = err instanceof Error ? err.message : String(err)
       })
 
     return state
