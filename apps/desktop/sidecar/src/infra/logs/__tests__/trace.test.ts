@@ -121,16 +121,28 @@ describe('messageLooksFailed', () => {
     'ERROR request failed',
     'Task timed out after 3.00 seconds',
     '{"level":"error","msg":"boom"}',
-    'response status 502 from upstream',
+    '{"statusCode":502}',
+    '{"statusCode": "503"}',
+    'status=500 upstream gone',
+    'http_status: 504',
+    '10.0.0.1 - - "GET /orders HTTP/1.1" 502 120',
   ])('bắt lỗi trong %s', (msg) => {
     expect(messageLooksFailed(msg)).toBe(true)
   })
 
+  // ⚠ Bốn ca ĐẦU là lỗi thật đã có trong bản ship 2026-09-16: vị từ cũ hỏi hai câu
+  // RỜI NHAU ("có 5xx đứng riêng" VÀ "có chữ status/code ở đâu đó"), nên một dòng
+  // log JSON khoẻ mạnh có `statusCode: 200` cạnh bất kỳ con số 5xx nào (latency,
+  // byte, số dòng) đều bị tô đỏ — và node tương ứng trên sơ đồ đỏ theo.
   it.each([
+    '{"statusCode":200,"latencyMs":512}',
+    '{"statusCode":200,"durationMs":530}',
+    '{"status":"ok","bytes":599}',
+    'request_code=abc took 599 ms',
     'INFO handled ok',
     // Số 5xx nằm trong một con số dài hơn KHÔNG phải mã trạng thái.
     'processed 15002 items',
-    // Không có chữ status/code thì một con số 5xx lẻ loi cũng không đủ để tô đỏ.
+    // Không có khoá trạng thái nào thì một con số 5xx lẻ loi cũng không đủ.
     'took 502 ms',
   ])('không tô đỏ nhầm %s', (msg) => {
     expect(messageLooksFailed(msg)).toBe(false)
@@ -173,6 +185,28 @@ describe('hopsFromRows', () => {
     ])
     expect(hops[0]?.gapToNextMs).toBe(400)
     expect(hops[1]?.gapToNextMs).toBeNull()
+  })
+
+  // ⚠ Lỗi thật của bản ship 2026-09-16: khoảng cách đo từ mốc ĐẦU tới mốc đầu, mà
+  // các lần ghé lại cùng một nhóm đã bị gộp làm MỘT chặng — một vòng retry 10 giây
+  // vì thế báo "cách chặng sau 10 s" trong khi cú bàn giao thật mất 100 ms.
+  it('khoảng cách đo từ dòng CUỐI của chặng, không phải dòng đầu', () => {
+    const hops = hopsFromRows([
+      row('/aws/lambda/a', '2026-09-16 10:00:00.000', 'thử lần 1'),
+      row('/aws/lambda/a', '2026-09-16 10:00:10.000', 'thử lần 2'),
+      row('/aws/lambda/b', '2026-09-16 10:00:10.100', 'nhận'),
+    ])
+    expect(hops[0]?.gapToNextMs).toBe(100)
+  })
+
+  it('hai chặng chồng lấn thì nói null, không trả số âm', () => {
+    const hops = hopsFromRows([
+      row('/aws/lambda/a', '2026-09-16 10:00:00.000', 'mở'),
+      row('/aws/lambda/b', '2026-09-16 10:00:01.000', 'con chạy'),
+      row('/aws/lambda/a', '2026-09-16 10:00:09.000', 'đóng'),
+    ])
+    // `a` kết thúc SAU khi `b` bắt đầu ⇒ không có khoảng cách nào để nói.
+    expect(hops[0]?.gapToNextMs).toBeNull()
   })
 
   it('KHÔNG bịa độ trễ xử lý ở nhánh log', () => {
@@ -318,6 +352,19 @@ describe('nhánh X-Ray', () => {
 })
 
 describe('traceOf', () => {
+  // ⚠ Lỗi thật của bản ship 2026-09-16: tổng lấy `lastAt` của PHẦN TỬ CUỐI mảng, mà
+  // mảng sắp theo mốc BẮT ĐẦU — segment bao ngoài (API Gateway mở đầu, đóng sau
+  // cùng) không bao giờ là phần tử cuối, nên tổng ra NGẮN HƠN chính `durationMs`
+  // đang hiện trên hàng đó.
+  it('tổng bao trọn chặng kết thúc muộn nhất, kể cả khi nó bắt đầu sớm nhất', () => {
+    const hops = hopsFromRows([
+      { '@log': 'a:/aws/apigw', '@timestamp': '2026-09-16 10:00:00.000', '@message': 'vào' },
+      { '@log': 'a:/aws/lambda/x', '@timestamp': '2026-09-16 10:00:00.200', '@message': 'chạy' },
+      { '@log': 'a:/aws/apigw', '@timestamp': '2026-09-16 10:00:05.000', '@message': 'ra' },
+    ])
+    expect(traceOf('abc', 'free', 'logs', hops, false, []).totalMs).toBe(5000)
+  })
+
   it('tổng thời gian đo từ mốc đầu tới mốc cuối', () => {
     const hops = hopsFromRows([
       { '@log': 'a:/aws/lambda/a', '@timestamp': '2026-09-16 10:00:00.000', '@message': 'x' },

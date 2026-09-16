@@ -26,7 +26,6 @@ export type TraceRunParams = {
   logGroups: string[]
   startMs: number
   endMs: number
-  estimatedUsd?: number | undefined
 }
 
 export function useInfraTrace(params: () => TraceRunParams) {
@@ -45,14 +44,29 @@ export function useInfraTrace(params: () => TraceRunParams) {
   /** Khoá i18n nói nhánh X-Ray đã thử và không dùng được. */
   const notes = ref<string[]>([])
   const bytesScanned = ref(0)
+  /** Ước lượng quét do SIDECAR tính bằng đúng câu lần-theo (không phải câu trong editor). */
+  const estimate = ref<{ bytes: number; usd: number; basis: 'history' | 'stored' } | null>(null)
   const ranAt = ref(0)
   /** `shallowRef`: dòng thời gian được THAY NGUYÊN KHỐI mỗi lượt, không sửa từng chặng. */
   const trace = shallowRef<AwsTrace | null>(null)
   /** Chặng đang mở để đọc log nguyên bản. */
   const openHopKey = ref('')
 
+  /**
+   * Số thứ tự của lượt lần theo ĐANG hợp lệ.
+   *
+   * ⚠ Bản đầu dùng một cờ `cancelled` DÙNG CHUNG cho mọi lượt, và nó hỏng đúng ở
+   * chuỗi thao tác thường gặp nhất: bấm Huỷ rồi bấm Lần theo lại ngay. Vòng poll cũ
+   * lúc đó đang nằm trong `await sleep(1500)`; `run()` đặt cờ về `false` TRƯỚC khi
+   * nó tỉnh, nên nó tỉnh dậy, thấy "chưa bị huỷ", và đi tiếp — với `queryId` đã trỏ
+   * sang truy vấn MỚI. Hai vòng cùng hỏi AWS một truy vấn, và vòng nào kết thúc
+   * trước cũng tắt `running` trong khi lượt thật vẫn đang chạy.
+   *
+   * Token theo lượt không có trạng thái trung gian nào để lỡ: một lượt chỉ còn hợp
+   * lệ khi số của nó VẪN là số hiện tại.
+   */
+  let runToken = 0
   let queryId = ''
-  let cancelled = false
 
   const canRun = computed(() => traceId.value.trim().length > 0 && !running.value)
   const hops = computed(() => trace.value?.hops ?? [])
@@ -62,6 +76,7 @@ export function useInfraTrace(params: () => TraceRunParams) {
     error.value = ''
     notes.value = []
     bytesScanned.value = 0
+    estimate.value = null
     trace.value = null
     openHopKey.value = ''
     queryId = ''
@@ -79,7 +94,7 @@ export function useInfraTrace(params: () => TraceRunParams) {
     const p = params()
     reset()
     running.value = true
-    cancelled = false
+    const token = (runToken += 1)
 
     let started: AwsTraceStartResult
     try {
@@ -88,19 +103,26 @@ export function useInfraTrace(params: () => TraceRunParams) {
         logGroups: p.logGroups,
         startMs: p.startMs,
         endMs: p.endMs,
-        ...(p.estimatedUsd !== undefined ? { estimatedUsd: p.estimatedUsd } : {}),
         ...(profile.value ? { profile: profile.value } : {}),
         ...(region.value ? { region: region.value } : {}),
       })
     } catch (err) {
+      if (token !== runToken) return
       running.value = false
       error.value = messageOf(err)
       return
     }
 
+    // Lượt này đã bị thay thế trong lúc `trace-start` đang bay ⇒ mọi thứ nó mang về
+    // thuộc về một câu hỏi người dùng không còn hỏi nữa.
+    if (token !== runToken) return
+
     if (!started.ok) {
       running.value = false
       error.value = started.error
+      // Nhánh lỗi vẫn có thể mang ghi chú (vd X-Ray đọc không được rồi mới phát hiện
+      // chưa chọn nhóm log) — bỏ nó đi là bỏ mất nửa lời giải thích.
+      notes.value = started.notes ?? []
       return
     }
 
@@ -112,16 +134,24 @@ export function useInfraTrace(params: () => TraceRunParams) {
     }
 
     notes.value = started.notes
+    estimate.value = started.estimate ?? null
     queryId = started.queryId
-    await poll(id)
+    await poll(id, started.limit, token)
   }
 
-  /** Vòng poll — cùng nhịp và cùng trần với truy vấn Insights thường. */
-  async function poll(id: string): Promise<void> {
+  /**
+   * Vòng poll của MỘT lượt — cùng nhịp và cùng trần với truy vấn Insights thường.
+   *
+   * `token` là thứ giữ cho vòng này biết mình còn thuộc về lượt hiện tại; mọi điểm
+   * nó tỉnh dậy sau một `await` đều phải hỏi lại, vì trong lúc ngủ người dùng có
+   * thể đã huỷ hoặc chạy một lượt khác.
+   */
+  async function poll(id: string, limit: number | undefined, token: number): Promise<void> {
     const startedAt = Date.now()
-    while (!cancelled) {
+    const queryIdOfRun = queryId
+    while (token === runToken) {
       await sleep(POLL_MS)
-      if (cancelled) break
+      if (token !== runToken) return
       if (Date.now() - startedAt > POLL_MAX_MS) {
         error.value = 'TIMEOUT'
         break
@@ -129,15 +159,18 @@ export function useInfraTrace(params: () => TraceRunParams) {
       let reply
       try {
         reply = await api.traceStatus({
-          queryId,
+          queryId: queryIdOfRun,
           id,
+          ...(limit !== undefined ? { limit } : {}),
           ...(profile.value ? { profile: profile.value } : {}),
           ...(region.value ? { region: region.value } : {}),
         })
       } catch (err) {
+        if (token !== runToken) return
         error.value = messageOf(err)
         break
       }
+      if (token !== runToken) return
       if (!reply.ok) {
         error.value = reply.error
         break
@@ -155,7 +188,9 @@ export function useInfraTrace(params: () => TraceRunParams) {
         break
       }
     }
-    running.value = false
+    // Chỉ lượt ĐANG hợp lệ mới được tắt đèn: một vòng cũ vừa thoát ra không được
+    // nói thay cho lượt mới đang chạy.
+    if (token === runToken) running.value = false
   }
 
   /**
@@ -163,7 +198,8 @@ export function useInfraTrace(params: () => TraceRunParams) {
    * thúc, nên ngừng poll là chưa đủ (cùng bài học với `infra.logs-query-cancel`).
    */
   async function cancel(): Promise<void> {
-    cancelled = true
+    // Tăng token = mọi vòng poll đang sống lập tức hết hợp lệ, kể cả vòng đang ngủ.
+    runToken += 1
     running.value = false
     if (!queryId) return
     const id = queryId
@@ -193,6 +229,7 @@ export function useInfraTrace(params: () => TraceRunParams) {
     error,
     notes,
     bytesScanned,
+    estimate,
     ranAt,
     trace,
     hops,

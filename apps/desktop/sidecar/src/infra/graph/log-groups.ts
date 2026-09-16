@@ -43,6 +43,27 @@ function resourceName(id: string): string {
 }
 
 /**
+ * Nhóm log của một hàm Lambda, hoặc `null` khi tên không dùng được.
+ *
+ * MỘT NHÀ CHO LUẬT NÀY. Nhánh X-Ray của `logs/trace.ts` cũng phải suy đúng thứ này
+ * từ tên segment, và bản đầu ở đó chép thiếu hai phép kiểm dưới đây — một segment
+ * tên `orders/create` cho ra `/aws/lambda/orders/create`, rồi UI mời người dùng bấm
+ * vào một nhóm log không thể tồn tại. Hai bản sao của một luật thì bản nào cũng có
+ * thể là bản sai.
+ *
+ * `name` thường đã là TÊN HÀM (resolver tách sẵn từ ARN); lỡ còn nguyên ARN thì cắt
+ * lấy phần sau `function:`. Còn `:` hoặc `/` sau khi cắt ⇒ đây không phải tên hàm,
+ * và ghép bừa vào sau `/aws/lambda/` là dựng ra một nhóm chắc chắn không có thật.
+ */
+export function lambdaLogGroup(name: string): string | null {
+  const trimmed = name.trim()
+  if (trimmed === '') return null
+  const fromArn = /:function:([^:/]+)/.exec(trimmed)
+  const fn = fromArn?.[1] ?? trimmed
+  return fn.includes(':') || fn.includes('/') ? null : `/aws/lambda/${fn}`
+}
+
+/**
  * Tên nhóm log/ tiền tố của một node, hoặc `null` khi không suy được.
  *
  * ⚠ Không có nhánh `ecs` theo khuôn: AWS KHÔNG ép ECS ghi vào `/ecs/<gì đó>` — nhóm
@@ -58,12 +79,8 @@ export function logGroupForNode(node: LogGroupNodeInput): NodeLogGroup | null {
   if (name === '') return null
 
   if (node.service === 'lambda') {
-    // `name` của node Lambda là TÊN HÀM (resolver tách sẵn từ ARN). Nếu vì lý do
-    // nào đó nó vẫn là một ARN thì cắt lấy phần sau `function:` — chứ không ghép
-    // nguyên ARN vào sau `/aws/lambda/`, thứ chắc chắn không tồn tại.
-    const fromArn = /:function:([^:/]+)/.exec(name)
-    const fn = fromArn?.[1] ?? name
-    return fn.includes(':') || fn.includes('/') ? null : { kind: 'exact', value: `/aws/lambda/${fn}` }
+    const group = lambdaLogGroup(name)
+    return group ? { kind: 'exact', value: group } : null
   }
 
   if (node.service === 'apigateway' || node.service === 'apigatewayv2') {

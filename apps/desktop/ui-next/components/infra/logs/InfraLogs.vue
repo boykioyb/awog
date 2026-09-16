@@ -131,6 +131,8 @@
           :can-run="canTrace"
           :error="traceError"
           :notes="traceNotes"
+          :estimate="traceEstimate"
+          :bytes-scanned="traceBytes"
           :open-hop-key="openHopKey"
           :has-groups="picked.length > 0"
           @run="onTraceRun"
@@ -391,6 +393,8 @@ const {
   running: tracing,
   error: traceError,
   notes: traceNotes,
+  estimate: traceEstimate,
+  bytesScanned: traceBytes,
   trace,
   openHopKey,
   canRun: canTrace,
@@ -402,7 +406,6 @@ const {
   logGroups: picked.value,
   startMs: windowMs.value?.startMs ?? 0,
   endMs: windowMs.value?.endMs ?? 0,
-  ...(estimate.value ? { estimatedUsd: estimate.value.usd } : {}),
 }))
 
 const traceHighlight = useInfraTraceHighlight()
@@ -413,12 +416,20 @@ const tabOpen = useInfraTabOpen()
  * Insights thật), để dòng nhật ký mang đúng con số và để người dùng thấy nó ở lần
  * sau — cùng luật với nút Chạy của chế độ nâng cao.
  */
+/**
+ * Chạy lần theo.
+ *
+ * ⚠ KHÔNG gọi `refreshEstimate()` ở đây nữa. Hàm đó ước lượng câu Insights đang nằm
+ * trong EDITOR của chế độ nâng cao — một câu khác hẳn câu lần-theo — và con số ấy
+ * vừa hiện ra cho người dùng đọc vừa đi vào dòng nhật ký, tức sổ kiểm toán trả lời
+ * sai đúng câu hỏi nó sinh ra để trả lời. Nay `infra.trace-start` tự ước lượng bằng
+ * chính câu nó sắp chạy, và trả con số đó về để panel hiện.
+ */
 async function onTraceRun(): Promise<void> {
   if (!windowValid.value) {
     toast.add({ title: t('infra.logs.window.invalid'), color: 'warning' })
     return
   }
-  if (picked.value.length > 0) await refreshEstimate()
   await runTrace()
 }
 
@@ -548,9 +559,15 @@ async function writeClipboard(text: string): Promise<void> {
  * thanh trạng thái sau khi chạy như mọi truy vấn khác.
  */
 async function onTraceFromRow(id: string): Promise<void> {
+  // Cùng guard với nút Lần theo: khoảng thời gian hỏng ⇒ `windowMs` là `null` ⇒ gửi
+  // `startMs: 0`, và zod ở `infra.trace-start` ném một lỗi thô lên panel thay vì một
+  // câu tiếng người. Bản đầu chỉ chặn ở `onTraceRun`, để hở đúng đường vào này.
+  if (!windowValid.value) {
+    toast.add({ title: t('infra.logs.window.invalid'), color: 'warning' })
+    return
+  }
   if (picked.value.length === 0 && tailGroup.value) picked.value = [tailGroup.value]
   mode.value = 'trace'
-  if (picked.value.length > 0) await refreshEstimate()
   await traceFrom(id)
 }
 

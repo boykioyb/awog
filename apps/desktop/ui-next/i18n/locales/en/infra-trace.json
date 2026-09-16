@@ -38,5 +38,9 @@
   "infra.trace.error.Cancelled": "The query was cancelled.",
   "infra.trace.error.Timeout": "AWS cancelled the query for running past its limit.",
   "infra.trace.error.Unknown": "AWS returned a status we do not recognise.",
-  "infra.trace.error.other": "Could not trace: {code}"
+  "infra.trace.error.other": "Could not trace: {code}",
+  "infra.trace.scanned": "scanned {size} · ~${usd}",
+  "infra.trace.estimate": "estimated scan {size} · ~${usd}",
+  "infra.trace.basisHistory": "(measured last time)",
+  "infra.trace.basisStored": "(upper bound)"
 }

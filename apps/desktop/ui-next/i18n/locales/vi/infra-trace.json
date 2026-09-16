@@ -38,5 +38,9 @@
   "infra.trace.error.Cancelled": "Truy vấn đã bị hủy.",
   "infra.trace.error.Timeout": "AWS đã hủy truy vấn vì quá thời gian cho phép.",
   "infra.trace.error.Unknown": "AWS trả về một trạng thái không nhận ra.",
-  "infra.trace.error.other": "Không lần theo được: {code}"
+  "infra.trace.error.other": "Không lần theo được: {code}",
+  "infra.trace.scanned": "đã quét {size} · ~${usd}",
+  "infra.trace.estimate": "ước lượng quét {size} · ~${usd}",
+  "infra.trace.basisHistory": "(theo số đo lần trước)",
+  "infra.trace.basisStored": "(trần trên)"
 }

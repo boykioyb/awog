@@ -167,6 +167,8 @@ export type AwsTrace = {
   notes: string[]
 }
 
+export type AwsTraceStartEstimate = { bytes: number; usd: number; basis: 'history' | 'stored' }
+
 export type AwsTraceStartResult =
   | { ok: true; mode: 'xray'; trace: AwsTrace }
   | {
@@ -175,9 +177,15 @@ export type AwsTraceStartResult =
       queryId: string
       kind: AwsTraceIdKind
       query: string
+      /** Trần dòng THẬT của lượt này — trả lại cho `traceStatus` để tính `truncated`. */
+      limit: number
+      /** Do SIDECAR tính bằng đúng câu lần-theo; vắng mặt khi ước lượng hỏng. */
+      estimate?: AwsTraceStartEstimate
       notes: string[]
     }
-  | { ok: false; error: string }
+  // Nhánh lỗi cũng mang `notes`: X-Ray hỏng rồi mới phát hiện chưa chọn nhóm log là
+  // HAI tin, và bỏ tin thứ hai đi là bỏ mất nửa lời giải thích.
+  | { ok: false; error: string; notes?: string[] }
 
 export type AwsTraceStatusResult =
   | {
@@ -256,21 +264,26 @@ export function useAwsLogsApi() {
     streams: (params: { logGroup: string; limit?: number; profile?: string; region?: string }) =>
       sidecar.request<AwsLogsStreamsResult>('infra.logs-streams', params),
 
-    // Lần theo một request (L5). NHÁNH LOG TỐN TIỀN — gọi sau khi đã hiện ước
-    // lượng như mọi truy vấn Insights khác; nhánh X-Ray thì không tính GB quét.
+    // Lần theo một request (L5). NHÁNH LOG TỐN TIỀN, và ước lượng do SIDECAR tính
+    // bằng đúng câu lần-theo rồi trả về trong `estimate` — renderer không khai con
+    // số nào vào nhật ký. Nhánh X-Ray không tính GB quét.
     traceStart: (params: {
       id: string
       logGroups: string[]
       startMs: number
       endMs: number
       limit?: number
-      estimatedUsd?: number
       profile?: string
       region?: string
     }) => sidecar.request<AwsTraceStartResult>('infra.trace-start', params),
 
-    traceStatus: (params: { queryId: string; id: string; profile?: string; region?: string }) =>
-      sidecar.request<AwsTraceStatusResult>('infra.trace-status', params),
+    traceStatus: (params: {
+      queryId: string
+      id: string
+      limit?: number
+      profile?: string
+      region?: string
+    }) => sidecar.request<AwsTraceStatusResult>('infra.trace-status', params),
 
     library: () => sidecar.request<AwsLogsLibraryResult>('infra.logs-library', { action: 'list' }),
     saveQuery: (params: AwsLogsSaveParams) =>

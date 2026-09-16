@@ -33,6 +33,26 @@
             · {{ t('infra.trace.total', { ms: formatMs(trace.totalMs) }) }}
           </span>
         </span>
+        <!-- Chi phí: số ĐO ĐƯỢC khi đã có, còn lúc đang chạy thì con số ước lượng
+             mà sidecar tính bằng CHÍNH câu lần-theo này. -->
+        <span v-if="bytesScanned > 0" class="ltr-meta">
+          {{
+            t('infra.trace.scanned', { size: formatBytes(bytesScanned), usd: usdOf(bytesScanned) })
+          }}
+        </span>
+        <span v-else-if="estimate" class="ltr-meta ltr-meta-dim">
+          {{
+            t('infra.trace.estimate', {
+              size: formatBytes(estimate.bytes),
+              usd: estimate.usd.toFixed(4),
+            })
+          }}
+          {{
+            estimate.basis === 'history'
+              ? t('infra.trace.basisHistory')
+              : t('infra.trace.basisStored')
+          }}
+        </span>
         <button
           v-if="trace && trace.hops.length > 0"
           class="btn sm"
@@ -85,7 +105,12 @@
           </button>
 
           <div class="ltr-sub">
-            <span>{{ t('infra.trace.lines', { n: hop.count }) }}</span>
+            <!-- `count` ở nhánh X-Ray đếm SEGMENT, không đếm dòng log — hiện "1 dòng"
+                 cạnh một chặng mà mở ra lại nói "không kèm dòng log nào" là tự mâu
+                 thuẫn. Nhãn này vì thế chỉ có nghĩa ở nhánh log. -->
+            <span v-if="trace?.source === 'logs'">
+              {{ t('infra.trace.lines', { n: hop.count }) }}
+            </span>
             <button
               v-if="hop.logGroup"
               class="ltr-link"
@@ -140,6 +165,10 @@ const props = defineProps<{
   canRun: boolean
   error: string
   notes: string[]
+  /** Ước lượng quét do sidecar tính bằng đúng câu lần-theo (nhánh log). */
+  estimate: { bytes: number; usd: number; basis: 'history' | 'stored' } | null
+  /** Byte THẬT đã quét của lượt vừa rồi — con số quyết định hoá đơn. */
+  bytesScanned: number
   openHopKey: string
   /** Đã chọn nhóm log nào chưa — quyết định câu nói ở trạng thái rỗng. */
   hasGroups: boolean
@@ -228,6 +257,20 @@ function clock(ms: number): string {
   return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}.${String(
     d.getMilliseconds(),
   ).padStart(3, '0')}`
+}
+
+/** Khớp `INSIGHTS_USD_PER_GB` của sidecar — đây chỉ là bản hiển thị. */
+const USD_PER_GB = 0.005
+
+function usdOf(bytes: number): string {
+  return ((bytes / 1024 ** 3) * USD_PER_GB).toFixed(4)
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${String(bytes)} B`
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MiB`
+  return `${(bytes / 1024 ** 3).toFixed(2)} GiB`
 }
 
 /** Mili-giây → chuỗi đọc được. Dưới 1s giữ nguyên ms, trên thì đổi sang giây. */

@@ -27,6 +27,7 @@
 
 import { z } from 'zod'
 import { runInfra } from '../run.js'
+import { lambdaLogGroup } from '../graph/log-groups.js'
 import type { InfraSurface } from '../audit/store.js'
 import type { InsightsRow, LogsOutcome } from '../aws/logs.js'
 
@@ -229,14 +230,33 @@ const ERROR_MARKERS = [
   "'level': 'error'",
 ]
 
+/**
+ * Mã trạng thái 5xx, nhưng CHỈ khi con số dính liền với khoá nói nó là mã trạng
+ * thái (`"statusCode": 502`, `status=503`, `"GET / HTTP/1.1" 502`).
+ *
+ * ⚠ Bản đầu hỏi hai câu RỜI NHAU — "có số 5xx nào không" VÀ "có chữ status/code ở
+ * đâu đó không" — nên `{"statusCode":200,"latencyMs":512}` bị tô đỏ: `512` là con
+ * số 5xx đứng riêng, còn chữ `status` nằm ở chỗ khác hẳn. Đo được trên bốn chuỗi
+ * log JSON thường gặp: cả bốn đều báo lỗi. Đó đúng là thứ chú thích ngay trên
+ * `ERROR_MARKERS` thề sẽ không làm — tô đỏ một chặng khoẻ đẩy người đang chữa cháy
+ * đi sai hướng, và hai điều kiện rời nhau chính là một regex "bắt hết" trá hình.
+ */
+const STATUS_5XX = [
+  // `status`/`statusCode`/`http_status`/`responseCode` + (`:`/`=`/khoảng trắng) + 5xx
+  /\b(?:http[_-]?)?(?:status|response)(?:[_-]?code)?\b["']?\s*[:=]\s*["']?5\d{2}\b/i,
+  // Access log kiểu Apache/ALB: `"GET /x HTTP/1.1" 502 1234`
+  /HTTP\/\d(?:\.\d)?"?\s+5\d{2}\b/,
+]
+
 export function messageLooksFailed(message: string): boolean {
   if (message.length === 0) return false
   for (const marker of ERROR_MARKERS) {
     if (message.includes(marker)) return true
   }
-  // Mã trạng thái 5xx của API Gateway/ALB: chỉ khi nó đứng RIÊNG như một token
-  // (`"status": 502`, ` 500 `), không phải khi nằm trong một số dài hơn.
-  return /(^|[^0-9])5\d{2}([^0-9]|$)/.test(message) && /status|code/i.test(message)
+  for (const re of STATUS_5XX) {
+    if (re.test(message)) return true
+  }
+  return false
 }
 
 /**
@@ -292,13 +312,27 @@ export function hopsFromRows(rows: readonly InsightsRow[]): TraceHop[] {
   return withGaps(hops)
 }
 
-/** Điền `gapToNextMs` cho một dãy chặng đã sắp theo thời gian. */
+/**
+ * Điền `gapToNextMs` cho một dãy chặng đã sắp theo thời gian.
+ *
+ * Đo từ mốc CUỐI của chặng này tới mốc đầu của chặng sau — đó mới là "khoảng cách"
+ * mà nhãn hứa. ⚠ Bản đầu đo từ mốc ĐẦU tới mốc đầu, mà các lần ghé lại cùng một
+ * log group đã bị gộp làm một chặng: một vòng retry 10 giây trong cùng hàm vì thế
+ * báo "cách chặng sau 10 s" trong khi cú bàn giao thật chỉ mất 100 ms.
+ *
+ * Chồng lấn (chặng sau bắt đầu TRƯỚC khi chặng này ghi dòng cuối) ⇒ `null`, không
+ * phải một số âm: hai chặng chạy song song thì không có khoảng cách nào để nói, và
+ * "−200 ms" đọc ra như một lỗi của app chứ không như một sự thật về hệ thống.
+ */
 function withGaps(hops: TraceHop[]): TraceHop[] {
   for (let i = 0; i < hops.length - 1; i += 1) {
     const here = hops[i]
     const next = hops[i + 1]
     if (!here || !next) continue
-    here.gapToNextMs = here.firstAt > 0 && next.firstAt > 0 ? next.firstAt - here.firstAt : null
+    const from = here.lastAt > 0 ? here.lastAt : here.firstAt
+    if (from <= 0 || next.firstAt <= 0) continue
+    const gap = next.firstAt - from
+    here.gapToNextMs = gap >= 0 ? gap : null
   }
   return hops
 }
@@ -312,10 +346,17 @@ export function traceOf(
   truncated: boolean,
   notes: readonly string[],
 ): InfraTrace {
-  const first = hops[0]
-  const last = hops[hops.length - 1]
+  // Từ mốc SỚM NHẤT tới mốc MUỘN NHẤT của cả trace.
+  //
+  // ⚠ Bản đầu lấy `hops[hops.length - 1].lastAt`, tức chặng có mốc BẮT ĐẦU muộn
+  // nhất (mảng sắp theo `firstAt`) — mà chặng kết thúc muộn nhất thường là chặng
+  // BAO ngoài: một segment API Gateway mở đầu và đóng sau cùng không bao giờ là
+  // phần tử cuối mảng. Hệ quả đo được: tổng ra ngắn hơn chính `durationMs` đang
+  // hiện trên một hàng, tức hai con số mâu thuẫn nhau trên cùng màn hình.
+  const starts = hops.map((h) => h.firstAt).filter((n) => n > 0)
+  const ends = hops.map((h) => h.lastAt).filter((n) => n > 0)
   const totalMs =
-    first && last && first.firstAt > 0 && last.lastAt > 0 ? last.lastAt - first.firstAt : null
+    starts.length > 0 && ends.length > 0 ? Math.max(...ends) - Math.min(...starts) : null
   return {
     id,
     kind,
@@ -424,9 +465,10 @@ function hopsFromSegment(seg: SegmentDoc, depth: number, out: TraceHop[]): void 
     service: serviceOfXraySegment(seg),
     label: name,
     // X-Ray không kể tên log group. Nối tên hàm Lambda sang log group là suy đoán
-    // ĐÚNG KHUÔN của AWS (`/aws/lambda/<tên hàm>`) — cùng luật với `log-groups.ts`
-    // của graph, và chỉ áp cho segment Lambda.
-    logGroup: serviceOfXraySegment(seg) === 'lambda' && name !== '?' ? `/aws/lambda/${name}` : null,
+    // ĐÚNG KHUÔN của AWS, nên nó đi qua CHÍNH hàm mà graph dùng thay vì chép luật
+    // sang đây — bản chép tay ở đây từng thiếu phép kiểm `:`/`/` và sinh ra
+    // `/aws/lambda/orders/create` cho một segment tên `orders/create`.
+    logGroup: serviceOfXraySegment(seg) === 'lambda' && name !== '?' ? lambdaLogGroup(name) : null,
     firstAt: start ?? 0,
     lastAt: end ?? start ?? 0,
     durationMs: start !== null && end !== null ? end - start : null,

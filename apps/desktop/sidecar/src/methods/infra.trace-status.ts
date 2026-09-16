@@ -20,6 +20,8 @@ const Params = z.object({
   queryId: z.string().min(1).max(128),
   /** Id đang lần theo — đi cùng để dòng thời gian tự nói nó thuộc về request nào. */
   id: z.string().min(1).max(200),
+  /** Trần dòng của CHÍNH lượt này, do `infra.trace-start` trả về. */
+  limit: z.number().int().positive().max(TRACE_ROW_LIMIT).optional(),
   profile: z.string().min(1).max(128).optional(),
   region: z.string().min(1).max(64).optional(),
   surface: z.enum(INFRA_SURFACES).default('logs'),
@@ -43,7 +45,10 @@ register('infra.trace-status', async (raw) => {
   // chặng mà nhìn vẫn như đủ — thứ sai nguy hiểm nhất ở màn này.
   const done = poll.value.status === 'Complete'
   const hops = done ? hopsFromRows(poll.value.rows) : []
-  const truncated = done && poll.value.rows.length >= TRACE_ROW_LIMIT
+  // So với trần THẬT của lượt đó, không phải hằng số: `trace-start` cho phép một
+  // `limit` nhỏ hơn, và so với 200 thì một lượt `limit: 50` trả về đủ 50 dòng vẫn
+  // im lặng — đúng lúc phải nói "có thể còn chặng chưa hiện".
+  const truncated = done && poll.value.rows.length >= (p.limit ?? TRACE_ROW_LIMIT)
 
   return {
     ok: true as const,
