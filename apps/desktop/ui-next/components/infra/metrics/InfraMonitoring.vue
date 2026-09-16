@@ -51,6 +51,8 @@
           type="text"
           autocomplete="off"
           spellcheck="false"
+          :placeholder="t('infra.monitoring.target.lbPh')"
+          :title="t('infra.monitoring.target.lbWhy')"
           @keydown.enter="load(false)"
         />
       </div>
@@ -63,6 +65,8 @@
           type="text"
           autocomplete="off"
           spellcheck="false"
+          :placeholder="t('infra.monitoring.target.instancePh')"
+          :title="t('infra.monitoring.target.instanceWhy')"
           @keydown.enter="load(false)"
         />
       </div>
@@ -98,6 +102,10 @@
         {{ t('infra.monitoring.window.sendToLogs') }}
       </button>
     </div>
+    <!-- Dòng này TỪNG TỒN TẠI trong i18n mà không màn nào render (`target.hint`),
+         nên hai ô tài nguyên đứng trần: không nhãn phụ, không placeholder, không
+         ai nói phải điền gì vào (người dùng hỏi thẳng 2026-09-16). -->
+    <p class="im-targethint">{{ t('infra.monitoring.target.hint') }}</p>
 
     <div class="im-status">
       <span class="ihint">
@@ -314,6 +322,16 @@ function onPin(chartKey: string): void {
 </script>
 
 <style scoped>
+/* Dòng giải thích hai ô tài nguyên. Nằm DƯỚI hàng công cụ chứ không cạnh từng ô:
+   nó nói về cả hai, và nhét vào giữa hàng thì hàng đó xuống dòng ở cửa sổ hẹp. */
+.im-targethint {
+  margin: 2px 0 10px;
+  max-width: 84ch;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-prose);
+  color: var(--textFaint);
+}
+
 .im {
   display: flex;
   flex-direction: column;

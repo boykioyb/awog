@@ -36,9 +36,13 @@
   "infra.monitoring.bridge.note": "window carried over from Monitoring",
 
   "infra.monitoring.target.heading": "Resource",
-  "infra.monitoring.target.lb": "Load balancer",
-  "infra.monitoring.target.instance": "Instance",
-  "infra.monitoring.target.hint": "Leave blank to query without a dimension. Every series belongs to one resource of each kind.",
+  "infra.monitoring.target.lb": "Load balancer (ALB)",
+  "infra.monitoring.target.instance": "Instance (EC2)",
+  "infra.monitoring.target.instanceWhy": "Narrows the Machine load chart to one EC2, as i-xxxxxxxx. The CPU line comes from AWS/EC2 so it is always there; the RAM line comes from the CloudWatch Agent running ON that machine, and stays empty without it.",
+  "infra.monitoring.target.lbWhy": "Narrows the first three charts — Calls, Server-side errors, Response time — to one ALB. The value is the TAIL of the load balancer ARN (app/<name>/<id>), not just the name: take the end of the arn:aws:elasticloadbalancing:… string the console or aws elbv2 describe-load-balancers returns.",
+  "infra.monitoring.target.instancePh": "i-0123456789abcdef0",
+  "infra.monitoring.target.lbPh": "app/my-alb/0123456789abcdef",
+  "infra.monitoring.target.hint": "Left empty, the query filters on no resource at all — CloudWatch then only returns series with no dimensions, and ALB and EC2 do not publish any, so the result is almost always empty and the tiles read “missing data”. This screen deliberately does NOT go looking for resources (each sweep is another round of billable AWS calls), so you paste the value in.",
 
   "infra.monitoring.chart.calls": "Requests",
   "infra.monitoring.chart.errors": "Server-side errors (5XX)",

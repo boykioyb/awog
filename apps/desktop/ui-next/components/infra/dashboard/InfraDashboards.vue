@@ -127,6 +127,8 @@
             type="text"
             autocomplete="off"
             spellcheck="false"
+            :placeholder="t('infra.monitoring.target.lbPh')"
+            :title="t('infra.monitoring.target.lbWhy')"
             @keydown.enter="load(false)"
           />
         </div>
@@ -138,6 +140,8 @@
             type="text"
             autocomplete="off"
             spellcheck="false"
+            :placeholder="t('infra.monitoring.target.instancePh')"
+            :title="t('infra.monitoring.target.instanceWhy')"
             @keydown.enter="load(false)"
           />
         </div>

@@ -36,9 +36,13 @@
   "infra.monitoring.bridge.note": "khoảng thời gian mang từ màn Giám sát",
 
   "infra.monitoring.target.heading": "Tài nguyên",
-  "infra.monitoring.target.lb": "Cân bằng tải",
-  "infra.monitoring.target.instance": "Máy chủ",
-  "infra.monitoring.target.hint": "Để trống thì truy vấn không kèm dimension. Mỗi loại tài nguyên dùng cho một nhóm chuỗi.",
+  "infra.monitoring.target.lb": "Cân bằng tải (ALB)",
+  "infra.monitoring.target.instance": "Máy chủ (EC2)",
+  "infra.monitoring.target.instanceWhy": "Lọc biểu đồ Sức tải máy về đúng một EC2, dạng i-xxxxxxxx. Đường CPU đến từ AWS/EC2 nên luôn có; đường RAM đến từ CloudWatch Agent chạy TRÊN máy đó, không cài agent thì nó rỗng.",
+  "infra.monitoring.target.lbWhy": "Lọc ba biểu đồ đầu — Lượt gọi, Lỗi phía máy chủ, Thời gian phản hồi — về đúng một ALB. Giá trị là PHẦN ĐUÔI của ARN load balancer (app/<tên>/<mã>), không phải mỗi cái tên: lấy ở cuối chuỗi arn:aws:elasticloadbalancing:… mà console hoặc aws elbv2 describe-load-balancers trả về.",
+  "infra.monitoring.target.instancePh": "i-0123456789abcdef0",
+  "infra.monitoring.target.lbPh": "app/ten-alb/0123456789abcdef",
+  "infra.monitoring.target.hint": "Để trống thì truy vấn không lọc theo tài nguyên nào — CloudWatch chỉ trả về chuỗi không có dimension, mà ALB và EC2 không phát ra chuỗi như vậy, nên kết quả gần như luôn rỗng và ô sẽ ghi “thiếu dữ liệu”. Màn này cố ý KHÔNG tự đi dò tài nguyên (mỗi lượt dò là thêm một loạt lời gọi AWS tính tiền), nên giá trị do bạn dán vào.",
 
   "infra.monitoring.chart.calls": "Lượt gọi",
   "infra.monitoring.chart.errors": "Lỗi phía máy chủ (5XX)",
