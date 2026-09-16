@@ -154,9 +154,13 @@ function onType(e: Event): void {
 
 /* `wrap` vì ở chế độ gõ tay còn thêm liên kết "Chọn từ danh sách"; cho nó xuống
    dòng trong 240px thay vì đẩy mục phình ra và làm gãy hàng của cha lần nữa. */
+/* `stretch`, KHÔNG `center`: nút làm mới cao 26px đứng cạnh ô chọn cao 34px trông
+   như một mẩu rơi vào giữa hàng (đo được 2026-09-16). Để nó kéo theo chiều cao
+   của hàng thì hai thứ bằng nhau mà không phải ghim một con số px nào — con số đó
+   sẽ sai ngay khi Appearance kéo cỡ chữ gốc. */
 .itg-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 6px;
   flex-wrap: wrap;
 }
@@ -206,6 +210,8 @@ function onType(e: Event): void {
 }
 
 .itg-link {
+  display: inline-flex;
+  align-items: center;
   padding: 0;
   border: none;
   background: transparent;

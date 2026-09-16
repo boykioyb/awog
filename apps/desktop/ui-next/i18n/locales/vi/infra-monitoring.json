@@ -48,7 +48,8 @@
   "infra.monitoring.target.lbWhy": "Lọc ba biểu đồ đầu — Lượt gọi, Lỗi phía máy chủ, Thời gian phản hồi — về đúng một ALB. Giá trị là PHẦN ĐUÔI của ARN load balancer (app/<tên>/<mã>), không phải mỗi cái tên: lấy ở cuối chuỗi arn:aws:elasticloadbalancing:… mà console hoặc aws elbv2 describe-load-balancers trả về.",
   "infra.monitoring.target.instancePh": "i-0123456789abcdef0",
   "infra.monitoring.target.lbPh": "app/ten-alb/0123456789abcdef",
-  "infra.monitoring.target.hint": "Để trống thì truy vấn không lọc theo tài nguyên nào — CloudWatch chỉ trả về chuỗi không có dimension, mà ALB và EC2 không phát ra chuỗi như vậy, nên kết quả gần như luôn rỗng và ô sẽ ghi “thiếu dữ liệu”. Màn này cố ý KHÔNG tự đi dò tài nguyên (mỗi lượt dò là thêm một loạt lời gọi AWS tính tiền), nên giá trị do bạn dán vào.",
+  "infra.monitoring.target.hint": "Để trống = không lọc theo tài nguyên, và biểu đồ sẽ rỗng: ALB và EC2 không phát chuỗi nào không có dimension.",
+  "infra.monitoring.target.hintWhy": "CloudWatch chỉ trả về chuỗi KHÔNG có dimension khi truy vấn không lọc, mà ALB và EC2 không phát ra chuỗi như vậy — nên mọi ô sẽ ghi \"thiếu dữ liệu\". Danh sách tài nguyên không tự nạp: mỗi lượt dò là thêm một loạt lời gọi AWS, nên nó nằm sau nút làm mới cạnh mỗi ô.",
 
   "infra.monitoring.chart.calls": "Lượt gọi",
   "infra.monitoring.chart.errors": "Lỗi phía máy chủ (5XX)",

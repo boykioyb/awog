@@ -69,36 +69,42 @@
         @submit="load(false)"
       />
 
-      <button
-        type="button"
-        class="btn pri"
-        :disabled="loading || !windowValid"
-        :aria-busy="loading"
-        @click="load(false)"
-      >
-        <Icon name="play" class="im-ic" />
-        {{ t('infra.monitoring.load') }}
-      </button>
-      <button
-        type="button"
-        class="btn"
-        :disabled="loading || !loadedAt"
-        :title="t('infra.monitoring.reloadHint')"
-        @click="reload()"
-      >
-        <Icon name="refresh" class="im-ic" :class="loading ? 'im-spin' : ''" />
-        {{ t('infra.monitoring.reload') }}
-      </button>
-      <button
-        type="button"
-        class="btn"
-        :disabled="!loadedAt"
-        :title="t('infra.monitoring.window.sendToLogsHint')"
-        @click="sendToLogs()"
-      >
-        <Icon name="forward" class="im-ic" />
-        {{ t('infra.monitoring.window.sendToLogs') }}
-      </button>
+      <!-- Ba nút là MỘT nhóm, không phải ba mục rời của thanh flex. Rời nhau thì
+           thanh gãy ở giữa chúng: ở cỡ cửa sổ thường "Nạp" ở lại hàng trên còn
+           "Nạp lại"/"Mở ở Nhật ký" rơi xuống hàng dưới, tách nút chính khỏi hai
+           nút anh em của nó (ảnh người dùng 2026-09-16). -->
+      <div class="im-acts">
+        <button
+          type="button"
+          class="btn pri"
+          :disabled="loading || !windowValid"
+          :aria-busy="loading"
+          @click="load(false)"
+        >
+          <Icon name="play" class="im-ic" />
+          {{ t('infra.monitoring.load') }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="loading || !loadedAt"
+          :title="t('infra.monitoring.reloadHint')"
+          @click="reload()"
+        >
+          <Icon name="refresh" class="im-ic" :class="loading ? 'im-spin' : ''" />
+          {{ t('infra.monitoring.reload') }}
+        </button>
+        <button
+          type="button"
+          class="btn"
+          :disabled="!loadedAt"
+          :title="t('infra.monitoring.window.sendToLogsHint')"
+          @click="sendToLogs()"
+        >
+          <Icon name="forward" class="im-ic" />
+          {{ t('infra.monitoring.window.sendToLogs') }}
+        </button>
+      </div>
     </div>
     <!-- Dòng này TỪNG TỒN TẠI trong i18n mà không màn nào render (`target.hint`),
          nên hai ô tài nguyên đứng trần: không nhãn phụ, không placeholder, không
@@ -110,7 +116,12 @@
     <p v-if="pickerError" class="im-targeterr" :title="pickerError">
       {{ t('infra.monitoring.target.listFailed', { err: pickerError }) }}
     </p>
-    <p class="im-targethint">{{ t('infra.monitoring.target.hint') }}</p>
+    <!-- MỘT dòng. Bản trước dài ba dòng và chiếm nhiều chỗ hơn cả thanh công cụ
+         ngay trên nó; phần giải thích đầy đủ chuyển vào `title`, và nửa sau của nó
+         (“giá trị do bạn dán vào”) nay đã sai vì hai ô đã thành picker. -->
+    <p class="im-targethint" :title="t('infra.monitoring.target.hintWhy')">
+      {{ t('infra.monitoring.target.hint') }}
+    </p>
 
     <div class="im-status">
       <span class="ihint">
@@ -185,12 +196,12 @@
       </div>
 
       <div class="im-ask">
-        <span class="ilbl">{{ t('infra.monitoring.title') }}</span>
+        <span class="im-asklbl">{{ t('infra.monitoring.title') }}</span>
         <button
           v-for="s in askSuggestions"
           :key="s.key"
           type="button"
-          class="mc-chip im-chip"
+          class="im-chip"
           :disabled="!loadedAt"
           @click="ask(s.text)"
         >
@@ -374,7 +385,10 @@ function onPin(chartKey: string): void {
 
 .im-targethint {
   margin: 2px 0 10px;
-  max-width: 84ch;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--fs-xs);
   line-height: var(--lh-prose);
   color: var(--textFaint);
@@ -484,11 +498,46 @@ function onPin(chartKey: string): void {
   gap: 6px;
 }
 
+.im-acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.im-asklbl {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textFaint);
+}
+
+/* Tự khai toàn bộ. Trước đây hàng này mượn `.mc-chip` — một class `<style scoped>`
+   của `MetricChart.vue`, nên nó KHÔNG BAO GIỜ với tới đây và ba chip câu hỏi
+   render thành chữ trần, đọc như một câu văn dính liền (ảnh người dùng
+   2026-09-16). Cùng hình với `.icst-chip` của màn Chi phí để hai màn là một họ. */
 .im-chip {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--textDim);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  cursor: pointer;
+}
+
+.im-chip:hover:not(:disabled) {
+  border-color: var(--accentBorder);
+  color: var(--accent);
+}
+
+.im-chip:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* Cửa sổ hẹp: lưới 2×2 nhường chỗ cho một cột, panel cảnh báo xuống dưới biểu đồ. */

@@ -48,7 +48,8 @@
   "infra.monitoring.target.lbWhy": "Narrows the first three charts — Calls, Server-side errors, Response time — to one ALB. The value is the TAIL of the load balancer ARN (app/<name>/<id>), not just the name: take the end of the arn:aws:elasticloadbalancing:… string the console or aws elbv2 describe-load-balancers returns.",
   "infra.monitoring.target.instancePh": "i-0123456789abcdef0",
   "infra.monitoring.target.lbPh": "app/my-alb/0123456789abcdef",
-  "infra.monitoring.target.hint": "Left empty, the query filters on no resource at all — CloudWatch then only returns series with no dimensions, and ALB and EC2 do not publish any, so the result is almost always empty and the tiles read “missing data”. This screen deliberately does NOT go looking for resources (each sweep is another round of billable AWS calls), so you paste the value in.",
+  "infra.monitoring.target.hint": "Left empty = no resource filter, and the charts come back empty: ALB and EC2 publish no dimensionless series.",
+  "infra.monitoring.target.hintWhy": "With no filter CloudWatch only returns series that have no dimensions, and ALB and EC2 publish none — so every tile reads \"missing data\". The resource list does not load by itself: each sweep is another round of AWS calls, so it sits behind the refresh button next to each box.",
 
   "infra.monitoring.chart.calls": "Requests",
   "infra.monitoring.chart.errors": "Server-side errors (5XX)",
