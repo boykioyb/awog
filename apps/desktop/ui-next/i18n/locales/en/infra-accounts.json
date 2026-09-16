@@ -60,7 +60,8 @@
   "infra.nav.resources": "Resources",
   "infra.tab.accounts": "Accounts",
   "infra.tab.audit": "Activity log",
-  "infra.tab.cost": "Cost",
+  "infra.tab.budgets": "Budgets",
+  "infra.tab.cost": "This month",
   "infra.tab.dashboards": "Dashboards",
   "infra.tab.delivery": "Deploys",
   "infra.tab.graph": "Topology",
@@ -71,5 +72,6 @@
   "infra.tab.overview": "Overview",
   "infra.tab.playbooks": "Plans",
   "infra.tab.reports": "Reports",
-  "infra.tab.services": "Services"
+  "infra.tab.services": "Services",
+  "infra.tab.waste": "Waste"
 }

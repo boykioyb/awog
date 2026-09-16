@@ -30,6 +30,8 @@ export type InfraTab =
   | 'monitoring'
   | 'dashboards'
   | 'cost'
+  | 'budgets'
+  | 'waste'
   | 'playbooks'
   | 'reports'
   | 'kubernetes'

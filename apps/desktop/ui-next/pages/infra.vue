@@ -159,8 +159,11 @@
         <!-- Tab "Chi phí" (Mốc 7, 7.1–7.3): tháng này · dự báo · dò lãng phí · sinh
              playbook dọn dẹp. Đứng SAU Bảng điều khiển vì nó trả lời câu hỏi tiếp theo
              của cùng một người: "cái gì đang tốn, và bỏ được cái nào". -->
-        <div v-if="costMounted" v-show="tab === 'cost'" class="infra-pane">
-          <InfraCost />
+        <!-- Ba tab con dùng CHUNG một instance: `useInfraCost()` là singleton cấp
+             module nên tách thành ba instance cũng vẫn một kho, nhưng một instance
+             thì cổng kiểm tài khoản và chip câu hỏi chỉ tồn tại một bản. -->
+        <div v-if="costMounted" v-show="COST_TABS.includes(tab)" class="infra-pane">
+          <InfraCost :view="costView" />
         </div>
 
         <!-- Tab "Kế hoạch" — playbook. Đứng trong nhóm Thay đổi vì nó là thứ TẠO RA
@@ -319,6 +322,8 @@ const TAB_ICONS: Record<InfraTab, string> = {
   monitoring: 'act',
   dashboards: 'panel',
   cost: 'tag',
+  budgets: 'flag',
+  waste: 'trash',
   playbooks: 'listul',
   reports: 'file',
   kubernetes: 'k8s',
@@ -336,7 +341,7 @@ const GROUPS: readonly { id: InfraGroupId; tabs: readonly InfraTab[] }[] = [
   { id: 'overview', tabs: ['overview'] },
   { id: 'resources', tabs: ['services', 'graph', 'kubernetes'] },
   { id: 'health', tabs: ['monitoring', 'dashboards', 'logs'] },
-  { id: 'cost', tabs: ['cost'] },
+  { id: 'cost', tabs: ['cost', 'budgets', 'waste'] },
   { id: 'changes', tabs: ['delivery', 'playbooks', 'audit', 'reports'] },
   { id: 'accounts', tabs: ['accounts'] },
 ]
@@ -349,6 +354,13 @@ const GROUP_ICONS: Record<InfraGroupId, string> = {
   changes: 'zap',
   accounts: 'shield',
 }
+
+/**
+ * Ba tab con của nhóm Chi phí. Khai thành hằng vì BA chỗ cần đúng cùng danh sách —
+ * điều kiện `v-show` của khung, cú mount lười, và phép suy `costView` — và ba chuỗi
+ * rời nhau là ba chỗ để quên khi thêm tab thứ tư.
+ */
+const COST_TABS: readonly InfraTab[] = ['cost', 'budgets', 'waste']
 
 const tab = ref<InfraTab>('overview')
 /** Tab Logs chỉ được mount sau cú bấm đầu tiên (xem comment ở template). */
@@ -416,7 +428,7 @@ function selectTab(next: InfraTab): void {
   if (next === 'logs') logsMounted.value = true
   if (next === 'monitoring') monitoringMounted.value = true
   if (next === 'dashboards') dashboardsMounted.value = true
-  if (next === 'cost') costMounted.value = true
+  if (COST_TABS.includes(next)) costMounted.value = true
   if (next === 'playbooks') playbooksMounted.value = true
   if (next === 'reports') reportsMounted.value = true
   if (next === 'kubernetes') k8sMounted.value = true
@@ -435,6 +447,11 @@ function selectTab(next: InfraTab): void {
  */
 const activeGroup = computed<InfraGroupId>(
   () => GROUPS.find((g) => g.tabs.includes(tab.value))?.id ?? 'overview',
+)
+
+/** Tab con đang mở, hoặc `cost` khi trang đang ở một nhóm khác (khung bị ẩn). */
+const costView = computed<'cost' | 'budgets' | 'waste'>(() =>
+  tab.value === 'budgets' || tab.value === 'waste' ? tab.value : 'cost',
 )
 
 const subTabs = computed<readonly InfraTab[]>(

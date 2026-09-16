@@ -60,7 +60,8 @@
   "infra.nav.resources": "Tài nguyên",
   "infra.tab.accounts": "Tài khoản",
   "infra.tab.audit": "Nhật ký",
-  "infra.tab.cost": "Chi phí",
+  "infra.tab.budgets": "Ngân sách",
+  "infra.tab.cost": "Tháng này",
   "infra.tab.dashboards": "Bảng điều khiển",
   "infra.tab.delivery": "Triển khai",
   "infra.tab.graph": "Topology",
@@ -71,5 +72,6 @@
   "infra.tab.overview": "Tổng quan",
   "infra.tab.playbooks": "Kế hoạch",
   "infra.tab.reports": "Báo cáo",
-  "infra.tab.services": "Dịch vụ"
+  "infra.tab.services": "Dịch vụ",
+  "infra.tab.waste": "Lãng phí"
 }
