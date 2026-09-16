@@ -57,10 +57,14 @@
           {{ chip.label }}
         </span>
       </div>
-      <div v-for="note in infraNotes" :key="note" class="pnote">
-        <Icon name="alert" />
-        <span>{{ note }}</span>
-      </div>
+      <!-- Ba câu trước khi bấm: sẽ làm gì · kết quả mong đợi · rủi ro. Nhãn đứng
+           trước để đọc lướt vẫn ra nghĩa; xem `infraBrief` cho luật dựng từng dòng. -->
+      <dl class="pbrief">
+        <template v-for="row in infraBrief" :key="row.label">
+          <dt class="pbrief-lbl">{{ row.label }}</dt>
+          <dd class="pbrief-txt" :class="row.tone">{{ row.text }}</dd>
+        </template>
+      </dl>
     </template>
     <div v-else>
       {{ t('sessions.gate.allowQuestion') }}
@@ -283,9 +287,6 @@ const CONTEXT_FIELDS = [
   'namespace',
   'workspace',
 ] as const
-const hasInfraContext = computed<boolean>(() =>
-  CONTEXT_FIELDS.some((f) => Boolean(infra.value?.[f])),
-)
 
 const infraChips = computed<InfraChip[]>(() => {
   const i = infra.value
@@ -315,22 +316,74 @@ const infraChips = computed<InfraChip[]>(() => {
   return chips
 })
 
-// Vì sao đang bị hỏi (hoặc vì sao lần sau sẽ không bị hỏi), và cảnh báo khi lời gọi
-// không ghim tài khoản nào — lúc đó CLI tự giải lấy, và `default` rất thường là
-// production.
-const infraNotes = computed<string[]>(() => {
+/**
+ * Ba câu trước khi bấm: SẼ LÀM GÌ · KẾT QUẢ MONG ĐỢI · RỦI RO.
+ *
+ * Thay cho các dòng chú thích rời rạc trước 2026-09-16 (trong đó có "Không ghim tài
+ * khoản nào…", một câu đúng nhưng đọc như cước chú). Người sắp bấm Cho phép cần trả
+ * lời được ba câu đó, và mấy dòng cũ chỉ trả lời câu thứ ba, một phần.
+ *
+ * ⚠ MỌI DÒNG PHẢI SUY RA ĐƯỢC TỪ PAYLOAD. AWOG không có bảng mô tả ngữ nghĩa cho mọi
+ * lệnh của ba CLI, nên nó KHÔNG viết văn về việc lệnh này làm gì — nó nói thứ nó biết
+ * chắc: binary + thao tác, ngữ cảnh lệnh sẽ rơi vào, hệ quả theo LỚP lệnh, và vì sao
+ * mức rủi ro là mức đang hiện. Bịa một câu "lệnh này sẽ xoá cluster của bạn" cho một
+ * op mà AWOG không biết còn tệ hơn im lặng.
+ */
+const infraBrief = computed<{ label: string; text: string; tone: '' | 'warn' | 'danger' }[]>(() => {
   const i = infra.value
   if (!i) return []
-  const notes: string[] = []
-  if (!hasInfraContext.value) notes.push(t('infraGate.noAccount'))
-  // Ngữ cảnh ghim CÓ, nhưng lệnh đi qua chuỗi shell: nó là mặc định (sidecar luồn
-  // `AWS_PROFILE` xuống tiến trình con), không phải chỉ định — chuỗi tự đổi được
-  // bằng `--profile`. Nói đúng mức thì thẻ vẫn hữu ích; im lặng ở đây là hứa hộ
-  // một tài khoản mà lệnh có thể không chạm tới.
-  else if (i.shell) notes.push(t('infraGate.hint.shell'))
-  if (i.reason === 'bypass') notes.push(t('infraGate.hint.bypass'))
-  else if (i.reason === 'session-narrowed') notes.push(t('infraGate.hint.narrowed'))
-  return notes
+
+  // ── 1. Sẽ làm gì: binary + thao tác, rút từ chính dòng lệnh sẽ chạy ──
+  const parts = i.command.trim().split(/\s+/)
+  const binary = parts[0] ?? i.tool
+  // `aws s3api head-bucket` ⇒ "s3api head-bucket"; `kubectl get ns` ⇒ "get ns".
+  const op = parts
+    .slice(1)
+    .filter((x) => !x.startsWith('-'))
+    .slice(0, 2)
+    .join(' ')
+  const where = [
+    i.profile ? t('infraGate.chip.profile', { value: i.profile }) : '',
+    i.region ? t('infraGate.chip.region', { value: i.region }) : '',
+    i.context ? t('infraGate.chip.context', { value: i.context }) : '',
+    i.namespace ? t('infraGate.chip.namespace', { value: i.namespace }) : '',
+  ].filter((x) => x !== '')
+
+  const what = op
+    ? t('infraGate.brief.what', { binary, op })
+    : t('infraGate.brief.whatBare', { binary })
+
+  const rows: { label: string; text: string; tone: '' | 'warn' | 'danger' }[] = [
+    {
+      label: t('infraGate.brief.label.what'),
+      text: where.length ? `${what} — ${where.join(' · ')}` : what,
+      tone: '',
+    },
+    {
+      label: t('infraGate.brief.label.expect'),
+      text: t(`infraGate.brief.expect.${i.commandClass}`),
+      tone: '',
+    },
+  ]
+
+  // ── 3. Rủi ro: ghép đúng những gì payload nói ra ──
+  const risks: string[] = []
+  // Đây là chỗ sự thật cũ của "noAccount" chuyển về — nó KHÔNG phải cước chú, nó là
+  // lý do thẻ đang hiện PRODUCTION: `accountKindOf` coi account chưa biết là
+  // production (fail-safe), nên người đọc phải biết badge kia đến từ đâu.
+  if (!i.accountId) risks.push(t('infraGate.brief.risk.unknownAccount'))
+  else if (i.accountKind === 'production') risks.push(t('infraGate.brief.risk.production'))
+  if (i.shell) risks.push(t('infraGate.brief.risk.shell'))
+  if (i.reason === 'bypass') risks.push(t('infraGate.hint.bypass'))
+  else if (i.reason === 'session-narrowed') risks.push(t('infraGate.hint.narrowed'))
+  if (risks.length === 0) risks.push(t(`infraGate.brief.risk.${i.commandClass}`))
+
+  rows.push({
+    label: t('infraGate.brief.label.risk'),
+    text: risks.join(' '),
+    tone: i.commandClass === 'destructive' ? 'danger' : isProdInfra.value ? 'warn' : '',
+  })
+  return rows
 })
 
 // ── Kết quả lệnh trên thẻ đã duyệt ────────────────────────────────────────────
@@ -382,6 +435,44 @@ const onRetry = (): void => {
 </script>
 
 <style scoped>
+/* Khối "sẽ làm gì · kết quả · rủi ro" của thẻ duyệt lệnh hạ tầng. Lưới hai cột để
+   nhãn thẳng hàng; ở cửa sổ hẹp nó tự xuống một cột. */
+.pbrief {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 10px;
+  margin: 8px 0 0;
+}
+
+.pbrief-lbl {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--textDim);
+  white-space: nowrap;
+}
+
+.pbrief-txt {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--textMuted);
+}
+
+.pbrief-txt.warn {
+  color: var(--amber);
+}
+
+.pbrief-txt.danger {
+  color: var(--danger);
+}
+
+@media (max-width: 560px) {
+  .pbrief {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
 /* Plan body = the model's markdown rendered as a document (SessionTextBlock).
    Replaces the old flat <ul> so headers/nested lists/bold/code survive. Breathing
    room from the approve/edit row (.cact mt:12) and the approved confirmation. */
