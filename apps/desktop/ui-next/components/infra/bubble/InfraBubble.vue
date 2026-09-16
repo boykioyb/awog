@@ -45,9 +45,12 @@
 
         <!-- Thư mục tương tác là `awog-infra` — "infra riêng", không phải repo
              đang mở. Hiện ra để người dùng biết phiên này đọc/ghi ở đâu. -->
+        <!-- Tên thư mục, không phải đường dẫn tuyệt đối: khung rộng 360px nên
+             `/Users/…/Projects/awog-infra` LUÔN bị cắt, và phần bị cắt lại đúng là
+             phần mang tin (tên ở cuối). Đường đầy đủ nằm ở `title`. -->
         <p class="ixb-path" :title="workspacePath">
           <Icon name="folder" />
-          {{ workspacePath || t('infra.bubble.provisioning') }}
+          {{ workspaceName || t('infra.bubble.provisioning') }}
         </p>
 
         <p v-if="provisionError" class="ixb-err">{{ provisionError }}</p>
@@ -133,6 +136,9 @@ const tone = computed<Tone>(() => {
   if (st === 'error') return 'error'
   return 'idle'
 })
+
+/** Đoạn cuối của đường dẫn — thứ người đọc cần, và thứ bị cắt mất khi hiện cả đường. */
+const workspaceName = computed(() => workspacePath.value.replace(/\/+$/, '').split('/').pop() ?? '')
 
 const provisioned = computed(() => !provisioning.value && workspacePath.value !== '')
 

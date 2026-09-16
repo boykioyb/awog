@@ -5,7 +5,7 @@
   "infra.bubble.copy": "Chép nội dung",
   "infra.bubble.empty": "Chưa có tin nào. Hỏi một câu để bắt đầu.",
   "infra.bubble.expand": "Mở full",
-  "infra.bubble.noSessions": "Chưa có phiên nào",
+  "infra.bubble.noSessions": "Chưa có phiên nào trong awog-infra. Danh sách này chỉ hiện phiên của thư mục đó.",
   "infra.bubble.open": "Mở phiên hạ tầng",
   "infra.bubble.placeholder": "Hỏi về hạ tầng… (Enter để gửi, Shift+Enter xuống dòng)",
   "infra.bubble.projectDescription": "Phiên hạ tầng riêng — thư mục làm việc awog-infra, tách khỏi repo đang mở.",

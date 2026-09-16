@@ -61,14 +61,32 @@ export function useInfraBubble() {
       : (sessions.sessions.find((s) => s.id === sessionId.value) ?? null),
   )
 
-  /** Toàn bộ phiên, mới nhất trước — "trong màn agent sẽ có hiển thị toàn bộ session". */
-  const allSessions = computed(() =>
-    [...sessions.sessions].sort((a, b) => {
-      const at = a.updatedAt ?? a.createdAt ?? ''
-      const bt = b.updatedAt ?? b.createdAt ?? ''
-      return at < bt ? 1 : at > bt ? -1 : 0
-    }),
-  )
+  /**
+   * Phiên CỦA RIÊNG project `awog-infra`, mới nhất trước.
+   *
+   * ⚠ ĐẢO HƯỚNG 2026-09-16. Bản đầu cố ý liệt kê TOÀN BỘ phiên, theo đúng câu
+   * người dùng lúc đó: "trong màn agent sẽ có hiển thị toàn bộ session cả danh
+   * sách". Hôm nay chính họ bác: "đang bị load cả các session khác vào? tôi chỉ
+   * muốn hiển thị các session của project infra đó thôi". Câu sau thắng — giữ lại
+   * câu trước ở đây để lần sau không ai đọc lịch sử rồi "sửa lại cho đúng yêu cầu
+   * gốc".
+   *
+   * Lọc theo `projectId` chứ không theo `workspaceFolder`: project là thứ danh
+   * sách phiên ở màn chính cũng lọc theo, nên hai chỗ nói cùng một ngôn ngữ. Chưa
+   * cấp phát xong project (`projectId` còn `null`) ⇒ rỗng, KHÔNG rơi về "tất cả":
+   * hiện nhầm cả danh sách của người dùng trong lúc chờ là đúng cái vừa bị bác.
+   */
+  const allSessions = computed(() => {
+    const pid = projectId.value
+    if (!pid) return []
+    return sessions.sessions
+      .filter((s) => s.project === pid)
+      .sort((a, b) => {
+        const at = a.updatedAt ?? a.createdAt ?? ''
+        const bt = b.updatedAt ?? b.createdAt ?? ''
+        return at < bt ? 1 : at > bt ? -1 : 0
+      })
+  })
 
   /**
    * Bảo đảm thư mục + project tồn tại. Tách khỏi `ensureSession()` vì "Hỏi agent →

@@ -5,7 +5,7 @@
   "infra.bubble.copy": "Copy text",
   "infra.bubble.empty": "No messages yet. Ask something to start.",
   "infra.bubble.expand": "Open full",
-  "infra.bubble.noSessions": "No session yet",
+  "infra.bubble.noSessions": "No session in awog-infra yet. This list only shows sessions from that folder.",
   "infra.bubble.open": "Open the infra session",
   "infra.bubble.placeholder": "Ask about the infrastructure… (Enter sends, Shift+Enter newline)",
   "infra.bubble.projectDescription": "A separate infra session — working folder awog-infra, kept apart from the open repo.",
