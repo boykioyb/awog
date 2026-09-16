@@ -4,13 +4,20 @@
        tab vì chúng là hai bước của cùng một việc — và không phải hai route vì bảng
        đang mở mang theo số liệu vừa nạp, thứ sẽ mất nếu điều hướng.
 
+       HAI MẶT, MỘT KHUÔN. Cả hai mặt xếp theo đúng thứ tự của mọi màn trong nhóm
+       (Giám sát · Chi phí): header đứng yên ở trên, thân cuộn ở dưới. Trước
+       2026-09-16 mặt danh sách có header còn mặt đang-mở thì không — tên bảng bị
+       nhét vào giữa thanh công cụ như một mục flex, nên nó trôi theo chỗ hàng gãy
+       và hai mặt của CÙNG MỘT TAB trông như hai màn của hai người viết khác nhau
+       (ảnh người dùng 2026-09-16).
+
        LUẬT KHÔNG TỰ CHẠY của `useInfraMetrics` áp nguyên ở đây: mở một bảng chỉ ĐỌC
        FILE, và chỉ cú bấm "Nạp" mới gọi `infra.metrics-query`. Danh sách thì nạp lúc
        mount — nó cũng chỉ là đọc thư mục, không chạm CLI, không tốn tiền. -->
   <div class="idb">
     <!-- ── Mặt danh sách ───────────────────────────────────────────────────── -->
     <template v-if="!opened">
-      <header class="idb-hd">
+      <header class="idb-hd is-stacked">
         <div class="idb-hd-txt">
           <h2 class="idb-ttl">{{ t('infra.dashboard.title') }}</h2>
           <p class="idb-sub">{{ t('infra.dashboard.subtitle') }}</p>
@@ -21,99 +28,95 @@
         </button>
       </header>
 
-      <p v-if="!sidecarAvailable" class="idb-state">{{ t('infra.dashboard.noSidecar') }}</p>
-      <p v-else-if="listError" class="ierr">{{ listError }}</p>
-      <p v-else-if="listLoading && summaries.length === 0" class="idb-state">
-        {{ t('infra.dashboard.loading') }}
-      </p>
+      <div class="idb-body">
+        <p v-if="!sidecarAvailable" class="idb-state">{{ t('infra.dashboard.noSidecar') }}</p>
+        <p v-else-if="listError" class="ierr">{{ listError }}</p>
+        <p v-else-if="listLoading && summaries.length === 0" class="idb-state">
+          {{ t('infra.dashboard.loading') }}
+        </p>
 
-      <!-- Danh sách KHÔNG BAO GIỜ rỗng thật: ba bản dựng sẵn luôn có mặt. Nhánh này
-           chỉ chạy khi sidecar trả về rỗng, tức là có gì đó sai — nói ra thay vì để
-           một khoảng trắng. -->
-      <p v-else-if="summaries.length === 0" class="idb-state">
-        {{ t('infra.dashboard.empty') }}
-      </p>
+        <!-- Danh sách KHÔNG BAO GIỜ rỗng thật: ba bản dựng sẵn luôn có mặt. Nhánh này
+             chỉ chạy khi sidecar trả về rỗng, tức là có gì đó sai — nói ra thay vì để
+             một khoảng trắng. -->
+        <p v-else-if="summaries.length === 0" class="idb-state">
+          {{ t('infra.dashboard.empty') }}
+        </p>
 
-      <ul v-else class="idb-list">
-        <li
-          v-for="s in summaries"
-          :key="`${s.source}:${s.projectId ?? ''}:${s.id}`"
-          class="idb-card"
-        >
-          <div class="idb-card-hd">
-            <h3 class="idb-name">{{ s.name }}</h3>
-            <span class="idb-badge" :class="`is-${s.source}`">{{ sourceLabel(s) }}</span>
-          </div>
+        <ul v-else class="idb-list">
+          <li
+            v-for="s in summaries"
+            :key="`${s.source}:${s.projectId ?? ''}:${s.id}`"
+            class="icard idb-card"
+          >
+            <div class="idb-card-hd">
+              <h3 class="idb-name">{{ s.name }}</h3>
+              <span class="idb-badge" :class="`is-${s.source}`">{{ sourceLabel(s) }}</span>
+            </div>
 
-          <p v-if="s.description" class="idb-desc">{{ s.description }}</p>
+            <p v-if="s.description" class="idb-desc">{{ s.description }}</p>
 
-          <p class="idb-meta">
-            {{ t('infra.dashboard.counts', { c: s.chartCount, s: s.seriesCount }) }}
-          </p>
+            <p class="idb-meta">
+              {{ t('infra.dashboard.counts', { c: s.chartCount, s: s.seriesCount }) }}
+            </p>
 
-          <!-- File hỏng vẫn được LIỆT KÊ, kèm lý do. Bỏ nó khỏi danh sách là để người
-               dùng đi tìm một bảng họ biết chắc mình đã tạo mà không hiểu vì sao mất. -->
-          <ul v-if="s.issues.length > 0" class="idb-issues">
-            <li v-for="(iss, i) in s.issues" :key="i" class="idb-issue">
-              <Icon name="alert" class="idb-ic" />
-              <span>{{ issueText(iss) }}</span>
-            </li>
-          </ul>
+            <!-- File hỏng vẫn được LIỆT KÊ, kèm lý do. Bỏ nó khỏi danh sách là để người
+                 dùng đi tìm một bảng họ biết chắc mình đã tạo mà không hiểu vì sao mất. -->
+            <ul v-if="s.issues.length > 0" class="idb-issues">
+              <li v-for="(iss, i) in s.issues" :key="i" class="idb-issue">
+                <Icon name="alert" class="idb-ic" />
+                <span>{{ issueText(iss) }}</span>
+              </li>
+            </ul>
 
-          <div class="idb-acts">
-            <button
-              class="btn sm pri"
-              type="button"
-              :disabled="openLoading || s.issues.length > 0"
-              @click="open(s)"
-            >
-              <Icon name="act" class="idb-ic" />
-              {{ t('infra.dashboard.open') }}
-            </button>
-            <button
-              v-if="s.source !== 'builtin'"
-              class="btn sm"
-              type="button"
-              :title="t('infra.dashboard.delete')"
-              @click="remove(s)"
-            >
-              <Icon name="trash" class="idb-ic" />
-              {{ t('infra.dashboard.delete') }}
-            </button>
-          </div>
-        </li>
-      </ul>
+            <div class="idb-acts">
+              <button
+                class="btn sm pri"
+                type="button"
+                :disabled="openLoading || s.issues.length > 0"
+                @click="open(s)"
+              >
+                <Icon name="act" class="idb-ic" />
+                {{ t('infra.dashboard.open') }}
+              </button>
+              <button
+                v-if="s.source !== 'builtin'"
+                class="btn sm"
+                type="button"
+                :title="t('infra.dashboard.delete')"
+                @click="remove(s)"
+              >
+                <Icon name="trash" class="idb-ic" />
+                {{ t('infra.dashboard.delete') }}
+              </button>
+            </div>
+          </li>
+        </ul>
 
-      <p v-if="openError" class="ierr">{{ openError }}</p>
+        <p v-if="openError" class="ierr">{{ openError }}</p>
+      </div>
     </template>
 
     <!-- ── Mặt một bảng đang mở ────────────────────────────────────────────── -->
     <template v-else>
-      <div class="idb-tool">
+      <!-- Nút quay lại đứng TRƯỚC tiêu đề, cùng khuôn với `InfraServicesCatalog` —
+           mặt khác của cùng cách đọc: bấm vào chỗ mình vừa đi qua. -->
+      <header class="idb-hd">
         <button class="btn sm" type="button" @click="back()">
           <Icon name="chev-left" class="idb-ic" />
           {{ t('infra.dashboard.back') }}
         </button>
-
-        <div class="idb-open-name">
-          <span class="idb-open-ttl">{{ opened.name }}</span>
-          <span v-if="readOnly" class="idb-ro">{{ t('infra.dashboard.readOnly') }}</span>
+        <div class="idb-hd-txt">
+          <h2 class="idb-ttl">{{ opened.name }}</h2>
         </div>
+        <span v-if="readOnly" class="idb-badge is-builtin">
+          {{ t('infra.dashboard.readOnly') }}
+        </span>
+      </header>
 
+      <div class="itoolbar ifields idb-tool">
         <div class="ifield">
           <div class="ilbl">{{ t('infra.monitoring.window.label') }}</div>
-          <div class="seg">
-            <span
-              v-for="p in windowPresets"
-              :key="p"
-              :class="{ on: windowPreset === p }"
-              role="button"
-              :aria-pressed="windowPreset === p"
-              @click="windowPreset = p"
-            >
-              {{ t(`infra.monitoring.window.preset.${p}`) }}
-            </span>
-          </div>
+          <InfraTimeRange v-model="win" :default-seconds="3 * 3600" />
         </div>
 
         <!-- Hai ô tài nguyên: cùng vai trò với màn Giám sát, và được GIEO từ
@@ -145,30 +148,37 @@
           @submit="load(false)"
         />
 
-        <button
-          type="button"
-          class="btn pri"
-          :disabled="loading || !hasAccount"
-          :aria-busy="loading"
-          @click="load(false)"
-        >
-          <Icon name="play" class="idb-ic" />
-          {{ t('infra.monitoring.load') }}
-        </button>
-        <button
-          type="button"
-          class="btn"
-          :disabled="loading || !loadedAt"
-          :title="t('infra.monitoring.reloadHint')"
-          @click="reload()"
-        >
-          <Icon name="refresh" class="idb-ic" :class="loading ? 'idb-spin' : ''" />
-          {{ t('infra.monitoring.reload') }}
-        </button>
+        <!-- MỘT nhóm, không phải hai mục rời của thanh flex — cùng lỗi đã sửa ở màn
+             Giám sát (b0f2729): rời nhau thì hàng gãy được ở GIỮA chúng và "Nạp lại"
+             rơi xuống hàng dưới, bỏ nút chính đứng một mình. -->
+        <div class="itoolgrp">
+          <button
+            type="button"
+            class="btn pri"
+            :disabled="loading || !hasAccount"
+            :aria-busy="loading"
+            @click="load(false)"
+          >
+            <Icon name="play" class="idb-ic" />
+            {{ t('infra.monitoring.load') }}
+          </button>
+          <button
+            type="button"
+            class="btn"
+            :disabled="loading || !loadedAt"
+            :title="t('infra.monitoring.reloadHint')"
+            @click="reload()"
+          >
+            <Icon name="refresh" class="idb-ic" :class="loading ? 'idb-spin' : ''" />
+            {{ t('infra.monitoring.reload') }}
+          </button>
+        </div>
 
         <!-- Lưu/Hoàn tác chỉ hiện khi bản làm việc ĐÃ LỆCH file. Một nút "Lưu" luôn
-             sáng trên một bảng chưa sửa gì là mời người dùng ghi đè vô cớ. -->
-        <template v-if="dirty">
+             sáng trên một bảng chưa sửa gì là mời người dùng ghi đè vô cớ. Nhóm
+             RIÊNG với Nạp/Nạp lại: hai việc khác nhau (ghi file · lấy số liệu), và
+             nhóm riêng cũng là chỗ hàng được phép gãy khi cửa sổ hẹp. -->
+        <div v-if="dirty" class="itoolgrp">
           <button type="button" class="btn pri" :disabled="saving" @click="save()">
             <Icon name="check" class="idb-ic" />
             {{ t('infra.dashboard.save') }}
@@ -177,10 +187,24 @@
             <Icon name="revert" class="idb-ic" />
             {{ t('infra.dashboard.undo') }}
           </button>
-        </template>
+        </div>
       </div>
 
-      <div class="im-status">
+      <!-- Lỗi dò danh sách đứng NGOÀI thanh công cụ (flex-wrap): một đoạn văn nằm
+           trong đó quyết định hàng gãy ở đâu và làm vỡ bố cục — lỗi thật ở màn
+           Giám sát 2026-09-16. Một dòng, toàn văn trong `title`. -->
+      <p v-if="pickerError" class="idb-targeterr" :title="pickerError">
+        {{ t('infra.monitoring.target.listFailed', { err: pickerError }) }}
+      </p>
+
+      <!-- Hai ô tài nguyên ở đây là ĐÚNG hai ô của màn Giám sát, nên chúng cần đúng
+           dòng giải thích đó. Thiếu nó thì màn này lặp lại câu hỏi người dùng đã
+           hỏi ở màn kia ("nhập tay thì biết nhập gì đâu"), chỉ muộn hơn một tab. -->
+      <p class="idb-targethint" :title="t('infra.monitoring.target.hintWhy')">
+        {{ t('infra.monitoring.target.hint') }}
+      </p>
+
+      <div class="idb-status">
         <span class="ihint">
           {{ t('infra.monitoring.window.showing', { span: windowLabel }) }}
           <template v-if="loadedAt">
@@ -197,55 +221,52 @@
         <span v-if="dirty" class="iwarn">{{ t('infra.dashboard.dirty') }}</span>
       </div>
 
-      <!-- Lỗi dò danh sách đứng NGOÀI thanh công cụ (flex-wrap): một đoạn văn nằm
-           trong đó quyết định hàng gãy ở đâu và làm vỡ bố cục — lỗi thật ở màn
-           Giám sát 2026-09-16. Một dòng, toàn văn trong `title`. -->
-      <p v-if="pickerError" class="idb-targeterr" :title="pickerError">
-        {{ t('infra.monitoring.target.listFailed', { err: pickerError }) }}
-      </p>
-
-      <InfraEmpty
-        v-if="!hasAccount"
-        :title="t('infra.empty.noProfile.title')"
-        :hint="t('infra.empty.noProfile.hint.charts')"
-        action="accounts"
-        :action-label="t('infra.empty.noProfile.action')"
-      />
-      <p v-else-if="error" class="ierr">{{ error }}</p>
-
-      <!-- Luật 4 của infra-README: chip câu hỏi. Tắt khi bảng chưa nạp số liệu —
-           hỏi "có gì bất thường" trên một bảng trống thì không có câu trả lời. -->
-      <div class="idb-ask">
-        <span class="idb-meta">{{ t('infra.dashboard.title') }}</span>
-        <button
-          v-for="s in askSuggestions"
-          :key="s.key"
-          type="button"
-          class="idb-chip"
-          :disabled="!hasSnapshot"
-          @click="ask(s.text)"
-        >
-          {{ s.text }}
-        </button>
-      </div>
-
-      <div class="idb-grid">
-        <MetricChart
-          v-for="c in charts"
-          :key="c.key"
-          :title="c.title"
-          :kind="c.kind"
-          :unit="c.unit"
-          :series="c.series"
-          :window="windowRef"
-          :window-seconds="windowSeconds"
-          :period-seconds="periodSeconds"
-          :incidents="[]"
-          :threshold="null"
-          :loading="loading"
-          :removable="!readOnly && canRemove"
-          @remove="removeChart(c.key)"
+      <div class="idb-body">
+        <InfraEmpty
+          v-if="!hasAccount"
+          :title="t('infra.empty.noProfile.title')"
+          :hint="t('infra.empty.noProfile.hint.charts')"
+          action="accounts"
+          :action-label="t('infra.empty.noProfile.action')"
         />
+        <p v-else-if="error" class="ierr">{{ error }}</p>
+
+        <div class="idb-grid">
+          <MetricChart
+            v-for="c in charts"
+            :key="c.key"
+            :title="c.title"
+            :kind="c.kind"
+            :unit="c.unit"
+            :series="c.series"
+            :window="windowRef"
+            :window-seconds="windowSeconds"
+            :period-seconds="periodSeconds"
+            :incidents="[]"
+            :threshold="null"
+            :loading="loading"
+            :removable="!readOnly && canRemove"
+            @remove="removeChart(c.key)"
+          />
+        </div>
+
+        <!-- Luật 4 của infra-README: chip câu hỏi. DƯỚI lưới biểu đồ, cùng chỗ với
+             màn Giám sát và màn Chi phí — chúng hỏi về thứ vừa đọc xong, nên đứng
+             trên nó là mời hỏi trước khi có gì để nhìn. Tắt khi bảng chưa nạp số
+             liệu: "có gì bất thường" trên một bảng trống thì không có câu trả lời. -->
+        <div class="idb-ask">
+          <span class="idb-asklbl">{{ t('infra.dashboard.title') }}</span>
+          <button
+            v-for="s in askSuggestions"
+            :key="s.key"
+            type="button"
+            class="idb-chip"
+            :disabled="!hasSnapshot"
+            @click="ask(s.text)"
+          >
+            {{ s.text }}
+          </button>
+        </div>
       </div>
     </template>
   </div>
@@ -268,6 +289,7 @@ import { useInfraDashboards } from '~/composables/useInfraDashboards'
 import { formatAxisTime } from '~/composables/useInfraMetrics'
 import { useInfraMonitorTargets } from '~/composables/useInfraMonitorTargets'
 import InfraTargetPicker from '~/components/infra/metrics/InfraTargetPicker.vue'
+import InfraTimeRange from '~/components/infra/InfraTimeRange.vue'
 import type {
   DashboardIssue,
   DashboardRef,
@@ -292,8 +314,7 @@ const {
   openDashboard,
   closeDashboard,
   targets,
-  windowPreset,
-  windowPresets,
+  win,
   windowSeconds,
   windowLabel,
   windowDirty,
@@ -390,28 +411,44 @@ async function remove(s: DashboardSummary): Promise<void> {
 .idb {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   padding: 14px 16px;
   height: 100%;
   min-height: 0;
-  overflow-y: auto;
+  /* KHÔNG cuộn ở đây. Cuộn là việc của `.idb-body`, cùng luật với `.im`/`.im-body`
+     của màn Giám sát: cuộn cả màn thì thanh công cụ — và cái nút "Nạp" trên đó —
+     trôi khỏi màn hình đúng lúc người dùng đang đọc biểu đồ và muốn đổi khoảng. */
+  overflow: hidden;
 }
 
 .idb-hd {
   display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Mặt danh sách có tiêu đề HAI dòng (tên + câu mô tả), nên nút bên phải phải căn
+   theo dòng tiêu đề chứ không theo giữa cả khối — căn giữa thì nút trôi xuống
+   ngang đoạn văn và không còn thuộc về tiêu đề nào. Mặt đang-mở chỉ có một dòng
+   nên giữ căn giữa. */
+.idb-hd.is-stacked {
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .idb-hd-txt {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 .idb-ttl {
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--fs-lg);
   line-height: var(--lh-lg);
   color: var(--text);
@@ -419,10 +456,22 @@ async function remove(s: DashboardSummary): Promise<void> {
 
 .idb-sub {
   margin: 0;
-  max-width: 68ch;
+  max-width: 72ch;
   font-size: var(--fs-sm);
   line-height: var(--lh-prose);
   color: var(--textDim);
+}
+
+/* Thân cuộn của CẢ HAI mặt. `min-height: 0` là thứ bắt buộc, không phải trang trí:
+   thiếu nó thì một flex item lấy chiều cao nội dung làm sàn và khối này không bao
+   giờ cuộn, nó chỉ đẩy dài ra khỏi khung. */
+.idb-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 4px;
 }
 
 .idb-state {
@@ -446,9 +495,6 @@ async function remove(s: DashboardSummary): Promise<void> {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
 }
 
 .idb-card-hd {
@@ -466,6 +512,9 @@ async function remove(s: DashboardSummary): Promise<void> {
   color: var(--text);
 }
 
+/* MỘT khuôn pill cho cả hai chỗ dùng: nhãn nguồn trên thẻ danh sách và nhãn
+   "chỉ đọc" trên header bảng đang mở. Trước đây là hai class (`.idb-badge` và
+   `.idb-ro`) khai y hệt nhau — hai bản sao là hai chỗ để trôi khỏi nhau. */
 .idb-badge {
   flex-shrink: 0;
   padding: 1px 7px;
@@ -521,60 +570,49 @@ async function remove(s: DashboardSummary): Promise<void> {
   flex-wrap: wrap;
 }
 
-.idb-tool {
+/* Bố cục + da ở `.itoolbar` (app-shell.css). */
+
+/* Cũng là một class mượn: `.im-status` chỉ tồn tại trong `<style scoped>` của
+   `InfraMonitoring.vue`, nên hàng trạng thái ở đây vốn không có flex và không có
+   gap — câu "đang xem 3h" và hai câu cảnh báo dính vào nhau thành một dòng chữ. */
+.idb-status {
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
   flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
-.idb-open-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.idb-open-ttl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.idb-ro {
-  padding: 1px 7px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.idb-inp {
-  width: 200px;
-  padding: 4px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
+/* HAI cột cố định, cùng luật với `.im-grid`. `auto-fit minmax(340px, 1fr)` cũ cho
+   ba cột ở bề rộng thường: ba biểu đồ chuỗi thời gian rộng ~380px đứng cạnh nhau
+   và biểu đồ thứ tư rơi xuống hàng dưới một mình (ảnh người dùng 2026-09-16). */
 .idb-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .idb-targeterr {
-  margin: 2px 0 6px;
+  margin: 2px 0 0;
+  flex-shrink: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-xs);
   line-height: var(--lh-prose);
   color: var(--amber);
+}
+
+.idb-targethint {
+  margin: 2px 0 0;
+  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-prose);
+  color: var(--textFaint);
 }
 
 .idb-ask {
@@ -584,7 +622,17 @@ async function remove(s: DashboardSummary): Promise<void> {
   flex-wrap: wrap;
 }
 
+.idb-asklbl {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textFaint);
+}
+
 .idb-chip {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 4px 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
@@ -605,9 +653,12 @@ async function remove(s: DashboardSummary): Promise<void> {
   cursor: default;
 }
 
+/* `--icon-sm`, KHÔNG `--icon-xs`: nút làm mới bên trong `InfraTargetPicker` đứng
+   ngay cạnh nút "Nạp" của màn này và dùng 14px. 12px ở đây làm hai icon cạnh nhau
+   trên CÙNG một hàng lệch cỡ. */
 .idb-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   flex-shrink: 0;
 }
 
@@ -618,6 +669,14 @@ async function remove(s: DashboardSummary): Promise<void> {
 @keyframes idb-rot {
   to {
     transform: rotate(360deg);
+  }
+}
+
+/* Cửa sổ hẹp: lưới nhường về một cột — cùng ngưỡng với màn Giám sát, vì cùng
+   biểu đồ và cùng bề rộng tối thiểu để đọc được trục thời gian. */
+@media (max-width: 1180px) {
+  .idb-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

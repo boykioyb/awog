@@ -10,7 +10,7 @@
        soạn vì thế nằm TRONG shell thay vì là anh em của nó; cả hai đều `position: fixed`
        / Teleport nên chỗ đứng trong cây DOM không đổi chỗ chúng hiện ra. -->
   <div class="pb-shell">
-    <div class="pb-top">
+    <div class="itoolbar pb-top">
       <!-- Soạn kế hoạch mới. Menu chứ không phải một hành động: "trống" và "nhân
            bản bản đang mở" là hai điểm xuất phát rất khác nhau, và nhân bản là đường
            DUY NHẤT để có bản của riêng mình từ một bản dựng sẵn (bản dựng sẵn nằm
@@ -39,22 +39,22 @@
         <span class="chip">{{ t('playbooks.count.total', { n: total }) }}</span>
       </span>
 
-      <span class="pb-top-gap" />
-
-      <button
-        class="btn sm"
-        type="button"
-        :disabled="loading"
-        :title="t('playbooks.toolbar.refresh')"
-        @click="load"
-      >
-        <Icon
-          name="refresh"
-          :class="{ ikspin: loading }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-        {{ t('playbooks.toolbar.refresh') }}
-      </button>
+      <div class="itoolgrp iend">
+        <button
+          class="btn sm"
+          type="button"
+          :disabled="loading"
+          :title="t('playbooks.toolbar.refresh')"
+          @click="load"
+        >
+          <Icon
+            name="refresh"
+            :class="{ ikspin: loading }"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
+          {{ t('playbooks.toolbar.refresh') }}
+        </button>
+      </div>
     </div>
 
     <div class="pb-body">
@@ -262,17 +262,10 @@ function shareRun(): void {
   min-width: 0;
 }
 
-/* Hàng công cụ: soạn mới · đếm · mức chi tiết · nạp lại. `flex-wrap` vì cửa sổ hẹp
-   thì cụm mức-chi-tiết + nạp lại xuống dòng, đường kẻ dưới vẫn là của cả hàng. */
+/* Hàng công cụ: soạn mới · đếm · mức chi tiết · nạp lại. Bố cục + da ở `.itoolbar`
+   (app-shell.css); `margin` giữ khoảng cách ngoài mà `padding` cũ cho. */
 .pb-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px 8px;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  row-gap: 8px;
-  box-shadow: inset 0 -1px 0 var(--border);
+  margin: 10px 16px 8px;
 }
 
 .pb-counts {
@@ -281,11 +274,6 @@ function shareRun(): void {
   gap: 4px;
   flex-wrap: wrap;
   min-width: 0;
-}
-
-/* Đẩy cụm bên phải ra mép. Ở cửa sổ hẹp nó thành 0 khi đã xuống dòng. */
-.pb-top-gap {
-  flex: 1 1 auto;
 }
 
 .pb-top-lbl {

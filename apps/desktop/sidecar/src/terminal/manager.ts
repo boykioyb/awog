@@ -199,7 +199,6 @@ class TerminalManager {
       throw new Error(`Too many terminals for this session (max ${MAX_PER_SESSION})`)
     }
 
-    const terminalId = `term-${Date.now().toString(36)}-${(this.idCounter += 1).toString(36)}`
     const shell = defaultShell()
     const proc = pty.spawn(shell, shellArgs(shell), {
       name: 'xterm-256color',
@@ -208,11 +207,59 @@ class TerminalManager {
       cwd: params.workspaceRoot,
       env: sanitizedEnv(params.infra),
     })
+    return { terminalId: this.track(proc, params.sessionId, params.workspaceRoot) }
+  }
 
+  // Spawn an ARBITRARY command in a PTY — the caller supplies file/args/env fully.
+  //
+  // SECURITY: unlike `create()` (which fixes the shell + strips secret env itself),
+  // this trusts the caller to have built a safe invocation. The one caller is
+  // `methods/infra.kube-exec.ts` (`kubectl exec -it`), where: the binary comes from
+  // `resolveInfraBinary` (allowlisted path), argv is built on the sidecar with the
+  // pod/container names run through DNS-1123 regexes and `--context`/`--namespace`
+  // injected by `withContext` (never from the UI), and env comes from `infraEnv`
+  // (which routes through `filteredShellEnv` → OAuth/API tokens stripped). Do NOT
+  // add a caller that forwards a UI-supplied file/args/env verbatim.
+  async spawnProcess(params: {
+    file: string
+    args: string[]
+    env: Record<string, string>
+    cwd: string
+    cols: number
+    rows: number
+    // Grouping key only (list/limit). Not a security boundary — the command safety
+    // is the caller's, per the note above.
+    sessionId: string
+  }): Promise<{ terminalId: string }> {
+    if (!isAbsolute(params.cwd)) throw new Error('cwd must be absolute')
+    const pty = await getPty()
+    if (!pty) throw new Error('Terminal unavailable: node-pty not installed')
+
+    const sessionCount = [...this.terminals.values()].filter(
+      (t) => t.sessionId === params.sessionId,
+    ).length
+    if (sessionCount >= MAX_PER_SESSION) {
+      throw new Error(`Too many terminals for this session (max ${MAX_PER_SESSION})`)
+    }
+
+    const proc = pty.spawn(params.file, params.args, {
+      name: 'xterm-256color',
+      cols: params.cols,
+      rows: params.rows,
+      cwd: params.cwd,
+      env: params.env,
+    })
+    return { terminalId: this.track(proc, params.sessionId, params.cwd) }
+  }
+
+  // Register a freshly spawned PTY: ring buffer + terminal.data/exit fan-out. Shared
+  // by create() and spawnProcess() so both stream + reap identically.
+  private track(proc: PtyProcess, sessionId: string, workspaceRoot: string): string {
+    const terminalId = `term-${Date.now().toString(36)}-${(this.idCounter += 1).toString(36)}`
     const record: TerminalRecord = {
       terminalId,
-      sessionId: params.sessionId,
-      workspaceRoot: params.workspaceRoot,
+      sessionId,
+      workspaceRoot,
       createdAt: Date.now(),
       pty: proc,
       buffer: '',
@@ -221,14 +268,14 @@ class TerminalManager {
 
     proc.onData((chunk) => {
       appendOutput(record, chunk)
-      emit('terminal.data', { terminalId, sessionId: params.sessionId, chunk })
+      emit('terminal.data', { terminalId, sessionId, chunk })
     })
     proc.onExit(({ exitCode, signal }) => {
       this.terminals.delete(terminalId)
-      emit('terminal.exit', { terminalId, sessionId: params.sessionId, exitCode, signal })
+      emit('terminal.exit', { terminalId, sessionId, exitCode, signal })
     })
 
-    return { terminalId }
+    return terminalId
   }
 
   write(terminalId: string, data: string): void {

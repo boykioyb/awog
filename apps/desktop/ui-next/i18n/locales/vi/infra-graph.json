@@ -69,5 +69,10 @@
   "infra.graph.act.expandWhy": "Chỉ đọc cấu hình của node này để đi thêm một bước — không thay đổi gì.",
   "infra.graph.error.engine": "Không kết nối được engine — kiểm tra engine đang chạy rồi thử lại.",
   "infra.graph.error.badRoot": "Điểm vào này không đọc được thành tài nguyên AWS — chọn lại điểm vào khác.",
-  "infra.graph.error.callFailed": "Các lệnh đọc cấu hình đều thất bại và không trả về thông báo cụ thể — kiểm tra quyền đọc của profile rồi thử lại."
+  "infra.graph.error.callFailed": "Các lệnh đọc cấu hình đều thất bại và không trả về thông báo cụ thể — kiểm tra quyền đọc của profile rồi thử lại.",
+  "infra.graph.error.tooManyApprovals": "Quá nhiều lệnh còn phải duyệt — thu hẹp điểm vào, hoặc nới lệnh đọc ở Cài đặt → Hạ tầng.",
+  "infra.graph.panel.openLogs": "Xem log của node này",
+  "infra.graph.trace.banner": "Đang tô đường đi của request {id} — {n} node trên đường.",
+  "infra.graph.trace.noMatch": "Không node nào của sơ đồ khớp với các chặng đã tìm được.",
+  "infra.graph.trace.clear": "Bỏ tô"
 }

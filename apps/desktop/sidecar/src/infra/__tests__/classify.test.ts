@@ -345,3 +345,75 @@ describe('Mốc 3 — op mới của Explorer', () => {
     expect(classify('aws', ['iam', 'attach-role-policy'])).toBe('write')
   })
 })
+
+// ─── Lệnh của màn Sơ đồ ──────────────────────────────────────────────────────
+//
+// Mọi lệnh mà `graph/resolvers.ts` phát ra đều là ĐỌC metadata, nhưng ba trong số
+// đó từng vắng mặt trong allowlist ⇒ rơi vào `write` ⇒ mỗi lượt dựng sơ đồ mở một
+// hộp duyệt cho một lệnh không đổi gì (lỗi thật 2026-09-16). Bảng dưới khoá lại
+// đúng bộ argv mà resolver dựng — sửa resolver mà quên allowlist là test này đỏ.
+describe('graph — lệnh dựng sơ đồ là read', () => {
+  it.each<[string, string[]]>([
+    ['route53 list-hosted-zones', ['route53', 'list-hosted-zones', '--max-items', '200']],
+    ['route53 get-hosted-zone', ['route53', 'get-hosted-zone', '--id', 'Z123']],
+    [
+      'route53 list-resource-record-sets',
+      ['route53', 'list-resource-record-sets', '--hosted-zone-id', 'Z123', '--max-items', '500'],
+    ],
+    ['cloudfront list-distributions', ['cloudfront', 'list-distributions', '--max-items', '200']],
+    ['apigateway get-rest-apis', ['apigateway', 'get-rest-apis', '--limit', '200']],
+    ['apigateway get-rest-api', ['apigateway', 'get-rest-api', '--rest-api-id', 'abc123']],
+    [
+      'apigateway get-resources',
+      ['apigateway', 'get-resources', '--rest-api-id', 'abc123', '--embed', 'methods'],
+    ],
+    [
+      'lambda get-function-configuration',
+      ['lambda', 'get-function-configuration', '--function-name', 'api'],
+    ],
+    [
+      'lambda list-event-source-mappings',
+      ['lambda', 'list-event-source-mappings', '--function-name', 'api'],
+    ],
+    ['ecs describe-services', ['ecs', 'describe-services', '--cluster', 'c', '--services', 's']],
+    [
+      'ecs describe-task-definition',
+      ['ecs', 'describe-task-definition', '--task-definition', 'td:1'],
+    ],
+  ])('%s → read', (_label, args) => {
+    expect(classify('aws', args)).toBe('read')
+  })
+
+  // Hai anh em cùng tiền tố `get-` của API Gateway GHI RA FILE (positional
+  // `outfile`) — đúng ca `s3api get-object` của audit #1. Chúng KHÔNG được đi ké
+  // vào allowlist chỉ vì `get-rest-api` vừa vào.
+  it('get-export / get-sdk vẫn là write — chúng ghi file', () => {
+    expect(
+      classify('aws', ['apigateway', 'get-export', '--rest-api-id', 'a', '--stage-name', 's', 'out.json']),
+    ).toBe('write')
+    expect(classify('aws', ['apigateway', 'get-sdk', '--rest-api-id', 'a', 'sdk.zip'])).toBe('write')
+  })
+})
+
+// ── X-Ray (L5 lần theo request · G3 lớp lưu lượng) ───────────────────────────
+//
+// Hai op đọc vừa vào allowlist. Điểm đáng đo không phải "chúng là read" mà là
+// RANH GIỚI: `batch-get-traces` trả nội dung do ứng dụng sinh ra nên phải bị siết
+// trên production, còn `get-service-graph` (số liệu tổng hợp) thì không — và
+// `get-trace-summaries`, thứ chưa ai gọi, vẫn phải rơi về `write`.
+describe('xray', () => {
+  it('hai op đã khai là read', () => {
+    expect(classify('aws', ['xray', 'batch-get-traces', '--trace-ids=1-a-b'])).toBe('read')
+    expect(classify('aws', ['xray', 'get-service-graph'])).toBe('read')
+  })
+
+  it('op chưa khai vẫn là write — allowlist chứ không phải tiền tố động từ', () => {
+    expect(classify('aws', ['xray', 'get-trace-summaries'])).toBe('write')
+    expect(classify('aws', ['xray', 'put-trace-segments'])).toBe('write')
+  })
+
+  it('segment document bị siết trên production, số liệu tổng hợp thì không', () => {
+    expect(sensitiveReadOf('aws', ['xray', 'batch-get-traces'])).toBe('xray batch-get-traces')
+    expect(sensitiveReadOf('aws', ['xray', 'get-service-graph'])).toBe(null)
+  })
+})

@@ -1,8 +1,8 @@
 <template>
-  <div class="lrs">
+  <div class="lrs" :class="{ fill }">
     <div v-if="rows.length === 0" class="lrs-empty">
       <Icon name="search" class="lrs-empty-ic" />
-      <p class="lrs-empty-txt">{{ t('infra.logs.results.empty') }}</p>
+      <p class="lrs-empty-txt">{{ emptyText || t('infra.logs.results.empty') }}</p>
     </div>
 
     <template v-else>
@@ -48,6 +48,18 @@
               <Icon name="message" class="lrs-ic" />
               {{ t('infra.logs.results.sendToChat') }}
             </button>
+            <!-- Chỉ hiện khi dòng này THẬT SỰ mang một id lần theo được. Không có
+                 id mà vẫn hiện nút là hứa một việc không làm được. -->
+            <button
+              v-if="rowTraceId"
+              class="btn sm"
+              type="button"
+              :title="t('infra.logs.results.traceTitle', { id: rowTraceId })"
+              @click="emit('trace', rowTraceId)"
+            >
+              <Icon name="branch" class="lrs-ic" />
+              {{ t('infra.logs.results.trace') }}
+            </button>
             <button class="btn sm" type="button" @click="selected = null">
               {{ t('infra.logs.results.close') }}
             </button>
@@ -68,11 +80,22 @@
 //
 // KHÔNG clipboard ở đây — component chỉ emit; chủ màn sở hữu `navigator.clipboard`
 // và toast, để thông báo nằm cùng chỗ với mọi thông báo khác của màn Logs.
+import { traceIdFromRow } from '~/utils/infra-trace-id'
 import type { AwsInsightsRow } from '~/composables/useAwsLogsApi'
 
-const props = defineProps<{ rows: AwsInsightsRow[]; copied?: boolean }>()
+const props = defineProps<{
+  rows: AwsInsightsRow[]
+  copied?: boolean
+  emptyText?: string
+  /** Kéo giãn bảng lấp đầy cột chính (layout Kibana 3/9) thay vì cao cố định. */
+  fill?: boolean
+}>()
 
-const emit = defineEmits<{ copy: [text: string]; 'send-to-chat': [text: string] }>()
+const emit = defineEmits<{
+  copy: [text: string]
+  'send-to-chat': [text: string]
+  trace: [id: string]
+}>()
 
 const { t } = useI18n()
 const selected = ref<number | null>(null)
@@ -90,6 +113,12 @@ const columns = computed<string[]>(() => {
 const selectedRow = computed<AwsInsightsRow | null>(() =>
   selected.value === null ? null : (props.rows[selected.value] ?? null),
 )
+
+/** Id lần theo được của dòng đang mở, hoặc `null` — xem `utils/infra-trace-id.ts`. */
+const rowTraceId = computed(() => {
+  const row = selectedRow.value
+  return row ? traceIdFromRow(row) : null
+})
 
 const detailText = computed(() => {
   const row = selectedRow.value
@@ -123,6 +152,21 @@ watch(
   flex-direction: column;
   min-height: 0;
   gap: 6px;
+}
+
+/* Layout Kibana 3/9: bảng lấp đầy cột chính thay vì cao cố định 340px. */
+.lrs.fill {
+  flex: 1 1 auto;
+}
+
+.lrs.fill .lrs-tablewrap {
+  flex: 1 1 auto;
+  max-height: none;
+}
+
+.lrs.fill .lrs-empty {
+  flex: 1 1 auto;
+  justify-content: center;
 }
 
 .lrs-empty {

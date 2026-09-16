@@ -44,8 +44,10 @@ export type KubeRow = {
 
 export type KubeOut = {
   open: boolean
-  /** 'logs' ⇒ có ô chọn container + số dòng; 'describe' ⇒ chỉ là text. */
-  mode: 'logs' | 'describe'
+  /** 'logs' ⇒ có ô chọn container + số dòng; 'describe' ⇒ chỉ là text;
+   *  'terminal' ⇒ shell tương tác (`kubectl exec -it`) — KHÔNG dùng `text`, một
+   *  component xterm sống chiếm chỗ. */
+  mode: 'logs' | 'describe' | 'terminal'
   title: string
   pod: string
   containers: string[]
@@ -287,15 +289,18 @@ export function useInfraKube() {
    * `blocked` (nếu có) giữ dòng lệnh để UI hiện lên.
    */
   async function call(
-    payload: Record<string, unknown> & { op: string },
+    payload: Record<string, unknown>,
     ui: { action: string; target: string; consequence: string; typeToConfirm?: string },
     ticket?: string,
+    // Mặc định `infra.kube` (một-shot). Shell tương tác đi qua `infra.kube.exec`
+    // nhưng dùng CHUNG vòng vé/duyệt này để `ask`/chặn không lệch giữa hai đường.
+    method = 'infra.kube',
   ): Promise<Record<string, unknown> | null> {
     blocked.value = null
     let raw: Record<string, unknown>
     try {
       const body = ticket ? { ...payload, approvalTicket: ticket } : payload
-      const answer = await sc.request<unknown>('infra.kube', body)
+      const answer = await sc.request<unknown>(method, body)
       if (!isRecord(answer)) throw new Error(t('infra.kube.error.unreadable'))
       raw = answer
     } catch (err) {
@@ -346,8 +351,8 @@ export function useInfraKube() {
     })
     if (!ok) return null
     // Vé gắn vân tay của đúng lời gọi này và chỉ dùng được một lần ⇒ gọi lại y
-    // nguyên payload cũ, không sửa gì giữa hai lượt.
-    return call(payload, ui, nextTicket)
+    // nguyên payload cũ, không sửa gì giữa hai lượt (cùng method).
+    return call(payload, ui, nextTicket, method)
   }
 
   function rowOf(raw: Record<string, unknown>): KubeRow[] {
@@ -501,6 +506,41 @@ export function useInfraKube() {
     return names.filter((n): n is string => typeof n === 'string')
   }
 
+  /**
+   * Mở một shell tương tác trong pod đang xem (`kubectl exec -it`). Đi qua CÙNG
+   * cổng duyệt như mọi thao tác khác (method `infra.kube.exec`), nhưng khi được
+   * duyệt thì sidecar spawn một PTY và trả `terminalId` — component xterm bám vào
+   * id đó qua các RPC `terminal.*` sẵn có.
+   *
+   * Trả về `{ id }` cho `TerminalTransport.create`; NÉM khi bị chặn/người dùng huỷ
+   * để `WorkspaceTerminal` hiện đúng lý do thay vì một khung trống.
+   */
+  async function startPodExec(cols: number, rows: number): Promise<{ id: string }> {
+    const pod = out.value.pod
+    if (!pod) throw new Error(t('infra.kube.exec.failed'))
+    const context: Record<string, string> = { cluster: pinnedCluster.value }
+    if (pinnedNamespace.value) context.namespace = pinnedNamespace.value
+    const payload: Record<string, unknown> = { context, pod, cols, rows }
+    // Dùng lại container đã chọn ở tab Logs nếu có; rỗng ⇒ để kubectl chọn container
+    // mặc định của pod.
+    if (out.value.container) payload.container = out.value.container
+    const raw = await call(
+      payload,
+      {
+        action: t('infra.kube.act.exec'),
+        target: pod,
+        consequence: t('infra.kube.act.execWhy'),
+      },
+      undefined,
+      'infra.kube.exec',
+    )
+    const id = raw && typeof raw.terminalId === 'string' ? raw.terminalId : ''
+    // `call` trả null khi bị chặn/huỷ (hộp duyệt đã nói lý do); `blocked.reason` giữ
+    // câu giải thích khi ma trận chặn hẳn hoặc CLI không chạy được.
+    if (!id) throw new Error(blocked.value?.reason || t('infra.kube.exec.failed'))
+    return { id }
+  }
+
   async function loadLogs(reloadContainers: boolean): Promise<void> {
     const pod = out.value.pod
     if (!pod || out.value.loading) return
@@ -601,10 +641,17 @@ export function useInfraKube() {
    * Đổi tab Log ⇄ Chi tiết của CÙNG một pod. Giữ nguyên số dòng đã chọn (người dùng
    * đã nói họ muốn bao nhiêu dòng, đổi tab không phải là ý định đổi nó).
    */
-  async function setOutMode(mode: 'logs' | 'describe'): Promise<void> {
+  async function setOutMode(mode: 'logs' | 'describe' | 'terminal'): Promise<void> {
     // Đang nạp thì bỏ qua: đổi tab giữa chừng là hai lệnh chồng nhau trên cùng một
     // khung, và kết quả về muộn của tab cũ sẽ nằm dưới tiêu đề của tab mới.
     if (!out.value.pod || out.value.mode === mode || out.value.loading) return
+    // Terminal là một component SỐNG (xterm + PTY), không phải ảnh chụp text. Chỉ
+    // đổi mode và để component tự lo — nó tự kích hoạt cổng duyệt + spawn khi mount.
+    // KHÔNG xoá `text`/`command`: đổi từ terminal về Logs lại thấy lại ảnh chụp cũ.
+    if (mode === 'terminal') {
+      out.value = { ...out.value, mode }
+      return
+    }
     out.value = { ...out.value, mode, text: '', error: '', command: '' }
     if (mode === 'logs') {
       // `loadLogs` tự bật cờ loading; bật trước ở đây thì nó early-return.
@@ -929,7 +976,7 @@ export function useInfraKube() {
     deletePod,
     blocked,
     copyCommand,
-    // log / describe
+    // log / describe / terminal
     out,
     openLogs,
     openDescribe,
@@ -938,6 +985,7 @@ export function useInfraKube() {
     setContainer,
     setTail,
     refreshOut,
+    startPodExec,
   }
 }
 

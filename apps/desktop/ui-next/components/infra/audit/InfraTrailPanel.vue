@@ -18,49 +18,53 @@
     </div>
 
     <template v-if="open">
-      <div class="itp-tool">
-        <div class="seg">
-          <span
-            v-for="r in ranges"
-            :key="r"
-            :class="{ on: range === r }"
-            role="button"
-            :aria-pressed="range === r"
-            @click="range = r"
-          >
-            {{ r }}
-          </span>
+      <div class="itoolbar itp-tool">
+        <div class="itoolgrp">
+          <div class="seg">
+            <span
+              v-for="r in ranges"
+              :key="r"
+              :class="{ on: range === r }"
+              role="button"
+              :aria-pressed="range === r"
+              @click="range = r"
+            >
+              {{ r }}
+            </span>
+          </div>
         </div>
 
-        <input
-          v-model="resourceName"
-          class="itp-inp"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          :placeholder="t('infra.trail.resourcePlaceholder')"
-          :title="t('infra.trail.resourceWhy')"
-          @keydown.enter="lookup"
-        />
+        <div class="itoolgrp igrow">
+          <input
+            v-model="resourceName"
+            class="itp-inp"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            :placeholder="t('infra.trail.resourcePlaceholder')"
+            :title="t('infra.trail.resourceWhy')"
+            @keydown.enter="lookup"
+          />
 
-        <button
-          class="btn sm pri"
-          type="button"
-          :disabled="loading || !hasAccount"
-          :aria-busy="loading"
-          @click="lookup"
-        >
-          <Icon name="search" class="itp-ic" :class="loading ? 'itp-spin' : ''" />
-          {{ t('infra.trail.lookup') }}
-        </button>
+          <button
+            class="btn sm pri"
+            type="button"
+            :disabled="loading || !hasAccount"
+            :aria-busy="loading"
+            @click="lookup"
+          >
+            <Icon name="search" class="itp-ic" :class="loading ? 'itp-spin' : ''" />
+            {{ t('infra.trail.lookup') }}
+          </button>
+        </div>
 
-        <label v-if="report" class="itp-chk">
+        <label v-if="report" class="itoolgrp itp-chk">
           <input v-model="externalOnly" type="checkbox" />
           {{ t('infra.trail.externalOnly') }}
         </label>
       </div>
 
-      <p v-if="!sidecarAvailable" class="ixa-state">{{ t('infra.trail.noSidecar') }}</p>
+      <p v-if="!sidecarAvailable" class="kt-state">{{ t('infra.trail.noSidecar') }}</p>
       <InfraEmpty
         v-else-if="!hasAccount"
         :title="t('infra.empty.noProfile.title')"
@@ -68,7 +72,7 @@
         action="accounts"
         :action-label="t('infra.empty.noProfile.action')"
       />
-      <p v-else-if="error" class="ixa-state err">{{ errorText }}</p>
+      <p v-else-if="error" class="kt-state err">{{ errorText }}</p>
 
       <template v-else-if="report">
         <p class="itp-sum">
@@ -79,48 +83,50 @@
           </span>
         </p>
 
-        <table v-if="visible.length" class="kt">
-          <thead>
-            <tr>
-              <th>{{ t('infra.trail.col.at') }}</th>
-              <th>{{ t('infra.trail.col.origin') }}</th>
-              <th>{{ t('infra.trail.col.event') }}</th>
-              <th>{{ t('infra.trail.col.who') }}</th>
-              <th>{{ t('infra.trail.col.resource') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="e in visible" :key="e.id">
-              <td class="itp-at">{{ hhmm(e.at) }}</td>
-              <td>
-                <!-- Nhãn mang `title` nói rõ đây là suy đoán, và dòng `awog` chỉ ra
+        <div v-if="visible.length" class="tblcard itp-tblwrap">
+          <table class="kt">
+            <thead>
+              <tr>
+                <th>{{ t('infra.trail.col.at') }}</th>
+                <th>{{ t('infra.trail.col.origin') }}</th>
+                <th>{{ t('infra.trail.col.event') }}</th>
+                <th>{{ t('infra.trail.col.who') }}</th>
+                <th>{{ t('infra.trail.col.resource') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="e in visible" :key="e.id">
+                <td class="itp-at">{{ hhmm(e.at) }}</td>
+                <td>
+                  <!-- Nhãn mang `title` nói rõ đây là suy đoán, và dòng `awog` chỉ ra
                      ĐƯỢC mốc sổ đã khớp. -->
-                <span
-                  class="itp-badge"
-                  :class="e.origin"
-                  :title="
-                    e.origin === 'awog'
-                      ? t('infra.trail.matchedWhy', { at: hhmm(e.matchedAt ?? e.at) })
-                      : t('infra.trail.externalWhy')
-                  "
-                >
-                  {{ t(`infra.trail.origin.${e.origin}`) }}
-                </span>
-              </td>
-              <td>
-                {{ e.name }}
-                <span v-if="e.errorCode" class="itp-err">{{ e.errorCode }}</span>
-              </td>
-              <td class="itp-muted">{{ e.username || '—' }}</td>
-              <!-- Đơn giản: đoạn cuối của ARN (tên tài nguyên). Chuyên sâu: nguyên
+                  <span
+                    class="itp-badge"
+                    :class="e.origin"
+                    :title="
+                      e.origin === 'awog'
+                        ? t('infra.trail.matchedWhy', { at: hhmm(e.matchedAt ?? e.at) })
+                        : t('infra.trail.externalWhy')
+                    "
+                  >
+                    {{ t(`infra.trail.origin.${e.origin}`) }}
+                  </span>
+                </td>
+                <td>
+                  {{ e.name }}
+                  <span v-if="e.errorCode" class="itp-err">{{ e.errorCode }}</span>
+                </td>
+                <td class="itp-muted">{{ e.username || '—' }}</td>
+                <!-- Đơn giản: đoạn cuối của ARN (tên tài nguyên). Chuyên sâu: nguyên
                    ARN, copy dán được. `title` giữ bản đầy đủ ở cả hai. -->
-              <td class="itp-res" :title="e.resources.join(' · ')">
-                {{ (isExpert ? e.resources : e.resources.map(shortRes)).join(' · ') || '—' }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-else class="ixa-state">{{ t('infra.trail.empty') }}</p>
+                <td class="itp-res" :title="e.resources.join(' · ')">
+                  {{ (isExpert ? e.resources : e.resources.map(shortRes)).join(' · ') || '—' }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p v-else class="tblcard kt-state">{{ t('infra.trail.empty') }}</p>
       </template>
     </template>
   </section>
@@ -232,11 +238,14 @@ function hhmm(iso: string): string {
   color: var(--textFaint);
 }
 
-.itp-tool {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+/* Bố cục + da của thanh nằm ở `.itoolbar`/`.itoolgrp` (app-shell.css). */
+
+/* Bảng CloudTrail có header dính (`.kt th` là `position: sticky`), mà sticky chỉ
+   bám vào một tổ tiên CÓ CUỘN — không có khung này thì nó dính vào vùng cuộn của
+   cả màn và trôi lên trên thanh công cụ. */
+.itp-tblwrap {
+  max-height: 420px;
+  overflow: auto;
 }
 
 .itp-inp {

@@ -1,6 +1,9 @@
 <template>
   <div class="ia">
-    <div class="ia-toolbar">
+    <!-- Card nổi, không còn là dải hairline: thanh này đứng ngay dưới dải hairline
+         của hàng tab, nên hai vạch mảnh chồng nhau đọc ra thành một vùng chrome
+         phẳng không có gì nổi lên. Cùng `.itoolbar` với mọi màn khác của khu. -->
+    <div class="itoolbar ia-toolbar">
       <!-- "Thêm profile" là MENU, không phải một hành động đơn: người dùng tới
            đây từ hai thế giới khác nhau — có sẵn bộ ba Account ID/alias + IAM
            username + mật khẩu (đăng nhập Console, không gõ gì thêm) hoặc có
@@ -648,13 +651,10 @@ function errText(err: unknown): string {
   min-height: 0;
 }
 
+/* Bố cục + da ở `.itoolbar`; `margin` giữ đúng khoảng cách ngoài mà `padding` cũ
+   cho, nhưng nay là khoảng cách CỦA CARD với mép pane. */
 .ia-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  flex: 0 0 auto;
-  box-shadow: inset 0 -1px 0 var(--border);
+  margin: 12px 16px;
 }
 
 .ia-menuwrap {

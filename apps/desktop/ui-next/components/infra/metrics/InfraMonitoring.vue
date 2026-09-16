@@ -7,41 +7,14 @@
        SFC này chỉ ghép khối + bind. Mọi state/lời gọi RPC nằm ở `useInfraMetrics()`
        (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
   <div class="im">
-    <div class="im-tool">
+    <!-- Thanh công cụ là một CARD (`.itoolbar`, app-shell.css): ở theme sáng nền
+         trang và nền panel gần như không phân biệt được, nên một hàng control trôi
+         thẳng trên trang đọc ra thành các nút rời chứ không phải một thanh. -->
+    <div class="itoolbar ifields im-tool">
       <div class="ifield">
         <div class="ilbl">{{ t('infra.monitoring.window.label') }}</div>
-        <div class="seg">
-          <span
-            v-for="p in windowPresets"
-            :key="p"
-            :class="{ on: windowPreset === p }"
-            role="button"
-            :aria-pressed="windowPreset === p"
-            @click="windowPreset = p"
-          >
-            {{ t(`infra.monitoring.window.preset.${p}`) }}
-          </span>
-          <span
-            :class="{ on: windowPreset === 'custom' }"
-            role="button"
-            :aria-pressed="windowPreset === 'custom'"
-            @click="windowPreset = 'custom'"
-          >
-            {{ t('infra.monitoring.window.custom') }}
-          </span>
-        </div>
+        <InfraTimeRange v-model="win" :default-seconds="3 * 3600" />
       </div>
-
-      <template v-if="windowPreset === 'custom'">
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.monitoring.window.from') }}</div>
-          <input v-model="customStart" class="im-inp" type="datetime-local" />
-        </div>
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.monitoring.window.to') }}</div>
-          <input v-model="customEnd" class="im-inp" type="datetime-local" />
-        </div>
-      </template>
 
       <InfraTargetPicker
         v-model="targets.lb"
@@ -73,7 +46,7 @@
            thanh gãy ở giữa chúng: ở cỡ cửa sổ thường "Nạp" ở lại hàng trên còn
            "Nạp lại"/"Mở ở Nhật ký" rơi xuống hàng dưới, tách nút chính khỏi hai
            nút anh em của nó (ảnh người dùng 2026-09-16). -->
-      <div class="im-acts">
+      <div class="itoolgrp">
         <button
           type="button"
           class="btn pri"
@@ -227,6 +200,7 @@ import { formatAxisTime, MONITOR_CHARTS, useInfraMetrics } from '~/composables/u
 import { useInfraDashboardPin } from '~/composables/useInfraDashboardPin'
 import { useInfraMonitorTargets } from '~/composables/useInfraMonitorTargets'
 import InfraTargetPicker from '~/components/infra/metrics/InfraTargetPicker.vue'
+import InfraTimeRange from '~/components/infra/InfraTimeRange.vue'
 import type { DashboardChart } from '~/composables/useInfraDashboards'
 
 const {
@@ -234,10 +208,7 @@ const {
   hasAccount,
   sidecarAvailable,
   targets,
-  windowPreset,
-  windowPresets,
-  customStart,
-  customEnd,
+  win,
   windowValid,
   windowLabel,
   windowDirty,
@@ -406,19 +377,8 @@ function onPin(chartKey: string): void {
   padding: 14px 16px;
 }
 
-.im-tool {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.ifield {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 140px;
-}
+/* Bố cục + da của thanh, và khuôn `.ifield` bên trong thanh, nay ở app-shell.css.
+   Bản khai `.ifield` ở đây từng là một trong BA bản khác nhau của khu hạ tầng. */
 
 .im-inp {
   width: 100%;
@@ -496,13 +456,6 @@ function onPin(chartKey: string): void {
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-}
-
-.im-acts {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
 }
 
 .im-asklbl {

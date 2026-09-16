@@ -42,6 +42,8 @@
   "infra.audit.export.done": "Đã xuất {n} dòng",
   "infra.audit.clean.title": "Dọn những dòng đang hiện",
   "infra.audit.clean.allTitle": "Dọn CẢ nhật ký",
+  "infra.audit.clean.short": "Dọn đang hiện",
+  "infra.audit.clean.allShort": "Dọn tất cả",
   "infra.audit.clean.ask": "XOÁ {n} dòng nhật ký đang hiện theo bộ lọc này? Không lấy lại được.",
   "infra.audit.clean.allAsk": "XOÁ TOÀN BỘ {n} dòng nhật ký của mọi tài khoản? Đây là mất đường truy vết của mọi hành động đã qua.",
   "infra.audit.clean.typeAsk": "Gõ chính xác “{word}” để xác nhận xoá cả nhật ký",

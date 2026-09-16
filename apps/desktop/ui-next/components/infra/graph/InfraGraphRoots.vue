@@ -2,7 +2,7 @@
   <!-- Chọn ĐIỂM VÀO của graph. Spec §"Giới hạn nói trước": account lớn không có nút
        "vẽ cả tài khoản" — luôn bắt đầu từ một điểm vào. Vì vậy đây là màn của trạng
        thái CHƯA có graph, và nó chịu trách nhiệm nói cách sửa khi chưa có gì để chọn. -->
-  <div class="igr">
+  <div class="icard igr">
     <p v-if="loading" class="igr-state">{{ t('infra.graph.roots.loading') }}</p>
 
     <template v-else-if="error">
@@ -87,9 +87,6 @@ const { t } = useI18n()
   max-height: 100%;
   overflow: auto;
   padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
   box-shadow: var(--shadow-md);
   text-align: center;
 }

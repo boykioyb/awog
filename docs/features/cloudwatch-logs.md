@@ -1,6 +1,6 @@
 # Feature — CloudWatch Logs: đọc, lọc nâng cao, truy vết một request
 
-- **Trạng thái:** **Đã ship phần lớn 2026-09-13** (L1–L3 + L6, cây làm việc `feature/aws-infra`, chưa commit) — L4 live tail và L5 lần theo request còn nợ; xem "Trạng thái triển khai" ở cuối
+- **Trạng thái:** L1–L3 + L6 ship 2026-09-13; **L5 lần theo request ship 2026-09-16** (cùng G4 của [infra-topology-graph.md](infra-topology-graph.md)) — **L4 live tail vẫn còn nợ**; xem "Trạng thái triển khai" ở cuối
 - **ADR:** [0088 — ngữ cảnh hạ tầng ghim theo phiên](../decisions/0088-session-infra-context.md)
 - **Route:** `/infra` → **Logs**; và tab **Logs** trong Session Workspace Panel
 - **Anh em:** [infra-explorer.md](infra-explorer.md) (khung màn hình), [infra-topology-graph.md](infra-topology-graph.md) (bấm một hop trên graph → mở đúng query ở đây)
@@ -109,7 +109,7 @@ Chiều ngược lại cũng có: agent **soạn query** cho người dùng (*"v
 | **L2** | Editor Monaco + Monarch + gợi ý trường · thư viện query (mẫu/đã lưu/lịch sử) · histogram kéo-zoom | L |
 | **L3** | Lọc nhanh tại chỗ · chip mức độ · facet theo trường · hiển thị bytesScanned + ước lượng trước khi chạy | M |
 | **L4** | Live tail (`logs tail --follow`) + duyệt thô một stream | M |
-| **L5** | **Lần theo request**: timeline xuyên group + nhánh X-Ray khi có | L |
+| **L5** | **Lần theo request**: timeline xuyên group + nhánh X-Ray khi có | L — **xong 2026-09-16** |
 | **L6** | Tool cho agent (`logs_query`, `logs_tail_window`) + agent soạn query đẩy vào editor | M |
 
 Phụ thuộc: P0 của [session-infra-context.md](session-infra-context.md) (`infra.run` + gate + ngữ cảnh ghim).
@@ -203,3 +203,35 @@ Máy này **không có phiên SSO sống**, nên toàn bộ đường log (`list
 `startInsightsQuery`, `getInsightsResults`, `tailWindow`) chưa từng chạy trên
 CloudWatch thật: mọi test đều mock `runInfra`. Cần một lượt đo thật trước khi coi L1–L3
 là "đã nghiệm thu".
+
+
+## L5 — trạng thái thực tế (2026-09-16)
+
+Cửa vào: chế độ thứ ba của màn Logs (**Dòng mới nhất · Truy vấn nâng cao · Lần theo
+request**), cộng nút *"Lần theo request này"* trên khung JSON của một dòng log.
+
+| Việc | Ở đâu |
+|---|---|
+| Nhận diện id · dựng câu · gộp chặng · đọc segment X-Ray | `sidecar/src/infra/logs/trace.ts` (50 test bảng) |
+| Hai RPC `infra.trace-start` / `infra.trace-status` | `sidecar/src/methods/infra.trace-*.ts`; huỷ dùng lại `infra.logs-query-cancel` |
+| Vòng đời một lượt lần theo (chạy · poll · huỷ · mở chặng) | `ui-next/composables/useInfraTrace.ts` |
+| Dòng thời gian dọc | `ui-next/components/infra/logs/InfraLogsTrace.vue` |
+| Rút id từ một dòng log | `ui-next/utils/infra-trace-id.ts` |
+| `xray batch-get-traces` + `get-service-graph` vào allowlist `read` | `sidecar/src/infra/classify.ts` |
+
+### Bốn điểm lệch có chủ đích
+
+| Điểm | Spec | Thực tế | Vì sao |
+|---|---|---|---|
+| **Nhánh X-Ray chỉ nhận TRACE ID** | "`requestId` / `X-Amzn-Trace-Id` / correlation id → một cú bấm" | X-Ray chỉ chạy khi id đúng dạng `1-<8 hex>-<24 hex>`; `requestId` và id tự đặt đi nhánh log | đi từ `requestId` sang trace id đòi `get-trace-summaries --filter-expression`, tức **quét cả cửa sổ thời gian và trả tiền** cho một phép tìm có thể không ra gì. Thà nói thẳng "id này không có timing từng chặng" |
+| **Gộp theo LOG GROUP, không theo lần ghé** | "mỗi hop là một dòng" | một request quay lại cùng một hàm hai lần ⇒ MỘT chặng, `count: 2` | tách theo lần ghé biến một vòng retry 30 lần thành 30 hàng không đọc nổi, đúng lúc người ta đang chữa cháy |
+| **Hai con số, hai nhãn** | "độ trễ tới hop sau" | X-Ray ⇒ *"chạy 250 ms"* (thời gian xử lý thật); nhánh log ⇒ *"cách chặng sau 400 ms"* | nhánh log **không biết** chặng chạy bao lâu — nó chỉ thấy dòng log. Dùng chung một nhãn là mời người đọc kết luận sai chỗ hệ thống chậm |
+| **`filter @message like "<chuỗi>"`, không phải regex** | — | dạng chuỗi con trong nháy kép | id là dữ liệu L1; một dấu `.` trong đó mà rơi vào ngữ cảnh regex sẽ khớp RỘNG hơn người dùng tưởng mà **không báo lỗi**. Bộ ký tự hợp lệ của id cũng cấm `/` nên `file://` không bao giờ thành argv |
+
+### Còn nợ của L5
+
+- **QA trong Electron thật** — cổng đã xanh là `vitest` (1109 test của `src/infra`) · `pnpm typecheck` cả hai package · `pnpm lint` + guard design-token. Chưa màn nào được bấm trong app đóng gói.
+- **Chưa chạy bằng credential AWS thật** — cả hai nhánh mới kiểm bằng JSON mẫu. Câu hỏi Q4 của [infra.tasks.md](infra.tasks.md) (*"hệ thống đã bật X-Ray chưa?"*) vẫn chưa ai trả lời, nên nhánh X-Ray chưa lần nào chạm dữ liệu sống.
+- **Agent chưa chạm L5** — `runtime/tools/infra-tools.ts` không có tool lần theo request; agent chỉ tới được qua `logs_query`.
+- **`infosec` cho bề mặt mới** — allowlist `read` vừa nhận thêm hai op `xray`. `batch-get-traces` đã vào `AWS_SENSITIVE_READ_OPS` (segment document mang URL + annotation của ứng dụng ⇒ cùng hạng nội dung với dòng log, production phải hỏi), nhưng chính quyết định đó là thứ cần người thứ hai soi.
+- **L4 live tail vẫn chưa làm.** `infra.logs-tail` là cửa sổ `filter-log-events`, KHÔNG phải `--follow`.

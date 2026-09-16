@@ -39,12 +39,12 @@
 
     <template v-if="summary">
       <div class="icst-tiles">
-        <div class="icst-tile">
+        <div class="icard icst-tile">
           <span class="icst-tile-lbl">{{ t('infra.cost.tile.spent') }}</span>
           <span class="icst-tile-val">{{ usd(summary.totalUsd) }}</span>
           <span class="icst-tile-foot">{{ summary.periodStart }} → {{ summary.periodEnd }}</span>
         </div>
-        <div class="icst-tile">
+        <div class="icard icst-tile">
           <span class="icst-tile-lbl">{{ t('infra.cost.tile.forecast') }}</span>
           <!-- Dự báo do AWS tính. Không có thì nói VÌ SAO, không hiện ô trống. -->
           <span v-if="summary.forecastUsd !== null" class="icst-tile-val">
@@ -55,14 +55,14 @@
             {{ summary.forecastError ?? t('infra.cost.tile.forecastWhy') }}
           </span>
         </div>
-        <div class="icst-tile">
+        <div class="icard icst-tile">
           <span class="icst-tile-lbl">{{ t('infra.cost.tile.previous') }}</span>
           <span class="icst-tile-val">{{ usd(summary.previousTotalUsd) }}</span>
           <span class="icst-tile-foot" :class="deltaUsd > 0 ? 'icst-up' : 'icst-down'">
             {{ deltaUsd >= 0 ? '+' : '' }}{{ usd(deltaUsd) }}
           </span>
         </div>
-        <div class="icst-tile">
+        <div class="icard icst-tile">
           <span class="icst-tile-lbl">{{ t('infra.cost.tile.calls') }}</span>
           <span class="icst-tile-val">{{ usd(summary.estimatedUsd) }}</span>
           <span class="icst-tile-foot">
@@ -124,36 +124,6 @@ function usd(v: number): string {
 /* Vỏ khối (`.icst-sec*`, `.icst-hint`, `.icst-ic`, `.icst-spin`) lặp ở cả ba tab con.
    Cố ý: ba bản sao của bảy luật ngắn rẻ hơn một stylesheet dùng chung hoặc một
    chuỗi `:deep()` từ component cha — và giữ mỗi tab con đọc được một mình. */
-.icst-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.icst-sec-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.icst-sec-ttl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.icst-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.icst-gap {
-  flex: 1;
-}
 
 .icst-tiles {
   display: grid;
@@ -166,9 +136,6 @@ function usd(v: number): string {
   flex-direction: column;
   gap: 3px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
 }
 
 .icst-tile-lbl {

@@ -2,36 +2,12 @@
   <div class="lgp">
     <div class="lgp-head">
       <span class="lgp-title">{{ t('infra.logs.groups.title') }}</span>
-      <span class="lgp-count">
+      <span v-if="mode === 'multi'" class="lgp-count">
         {{ t('infra.logs.groups.picked', { n: picked.length, max: maxGroups }) }}
       </span>
-    </div>
-
-    <div v-if="picked.length > 0" class="lgp-chips">
-      <button
-        v-for="name in picked"
-        :key="name"
-        class="lgp-chip on"
-        type="button"
-        :title="t('infra.logs.groups.remove')"
-        @click="emit('toggle', name)"
-      >
-        <span class="lgp-chip-name">{{ name }}</span>
-        <Icon name="x" class="lgp-chip-x" />
-      </button>
-    </div>
-
-    <div v-if="recent.length > 0 && picked.length === 0" class="lgp-recent">
-      <span class="lgp-recent-lbl">{{ t('infra.logs.groups.recent') }}</span>
-      <button
-        v-for="name in recent"
-        :key="name"
-        class="lgp-chip"
-        type="button"
-        @click="emit('toggle', name)"
-      >
-        {{ name }}
-      </button>
+      <span v-else class="lgp-count">
+        {{ t('infra.logs.groups.available', { n: shown.length }) }}
+      </span>
     </div>
 
     <div class="lgp-field">
@@ -51,58 +27,82 @@
       </button>
     </div>
 
+    <!-- Nhóm dùng gần đây lên trước khi CHƯA bấm nhóm nào — lối tắt vào việc hay làm. -->
+    <div v-if="recent.length > 0 && !activeMarked" class="lgp-recent">
+      <span class="lgp-recent-lbl">{{ t('infra.logs.groups.recent') }}</span>
+      <button
+        v-for="name in recent"
+        :key="name"
+        class="lgp-chip"
+        type="button"
+        :title="name"
+        @click="pick(name)"
+      >
+        <span class="lgp-chip-name">{{ shortName(name) }}</span>
+      </button>
+    </div>
+
     <div v-if="error" class="lgp-error">{{ error }}</div>
 
-    <div v-else class="lgp-list" role="listbox" aria-multiselectable="true">
-      <p v-if="groups.length === 0 && !loading" class="lgp-empty">
-        {{ t('infra.logs.groups.empty') }}
-      </p>
+    <p v-else-if="shown.length === 0 && !loading" class="lgp-empty">
+      {{ t('infra.logs.groups.empty') }}
+    </p>
+
+    <!-- Danh sách nhóm là CHIP, không phải hàng hai dòng có byte/hạn lưu: bấm một
+         chip là tail nhóm đó ngay (mode tail), hoặc tick chọn (mode multi). Số đo
+         dung lượng chuyển vào tooltip để chip mỏng, giảm mật độ. -->
+    <div v-else class="lgp-cloud" role="listbox" :aria-multiselectable="mode === 'multi'">
       <button
-        v-for="g in groups"
+        v-for="g in shown"
         :key="g.name"
-        class="lgp-row"
-        :class="{ on: picked.includes(g.name) }"
+        class="lgp-chip"
+        :class="{ on: isOn(g.name) }"
         type="button"
         role="option"
-        :aria-selected="picked.includes(g.name)"
-        :disabled="!picked.includes(g.name) && picked.length >= maxGroups"
-        @click="emit('toggle', g.name)"
+        :aria-selected="isOn(g.name)"
+        :title="chipTitle(g)"
+        :disabled="mode === 'multi' && !picked.includes(g.name) && picked.length >= maxGroups"
+        @click="pick(g.name)"
       >
-        <Icon :name="picked.includes(g.name) ? 'check' : 'layers'" class="lgp-row-ic" />
-        <span class="lgp-row-name">{{ g.name }}</span>
-        <span class="lgp-row-meta">{{ formatBytes(g.storedBytes) }}</span>
-        <span v-if="g.retentionDays !== null" class="lgp-row-meta">
-          {{ t('infra.logs.groups.retention', { d: g.retentionDays }) }}
-        </span>
-        <span v-else class="lgp-row-meta warn">{{ t('infra.logs.groups.noRetention') }}</span>
+        <Icon :name="chipIcon(g.name)" class="lgp-chip-ic" />
+        <span class="lgp-chip-name">{{ shortName(g.name) }}</span>
+        <Icon v-if="mode === 'multi' && picked.includes(g.name)" name="x" class="lgp-chip-x" />
       </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Chọn NHIỀU log group (Mốc 2 việc 2.1). Chỉ đọc metadata — mở màn này không tốn
-// một xu CloudWatch Insights nào.
+// Chọn nhóm log dưới dạng CHIP (Mốc 2 việc 2.1). Chỉ đọc metadata — mở không tốn
+// một xu CloudWatch nào.
 //
-// Trần `maxGroups` khớp `MAX_LOG_GROUPS` của sidecar. Ở đây chặn để người dùng
-// thấy ngay vì sao không tick thêm được, thay vì để họ bấm rồi nhận lỗi từ CLI.
+// Hai chế độ trên CÙNG một hình dáng chip:
+//   · `tail`  (mặc định của màn) — bấm một chip = xem dòng mới nhất của nhóm đó ngay
+//     (`filter-log-events`, rẻ). Chỉ một nhóm "đang xem" tại một thời điểm.
+//   · `multi` (chế độ Insights nâng cao) — bấm để tick/bỏ, chọn nhiều nhóm cho một
+//     truy vấn Insights. Trần `maxGroups` khớp `MAX_LOG_GROUPS` của sidecar.
 import type { AwsLogGroup } from '~/composables/useAwsLogsApi'
 
 const props = withDefaults(
   defineProps<{
     groups: AwsLogGroup[]
-    picked: string[]
+    mode?: 'tail' | 'multi'
+    /** Nhóm đang tick (mode multi). */
+    picked?: string[]
+    /** Nhóm đang xem (mode tail). */
+    active?: string
     recent: string[]
     pattern: string
     loading: boolean
     error: string
     maxGroups?: number
   }>(),
-  { maxGroups: 25 },
+  { mode: 'tail', picked: () => [], active: '', maxGroups: 25 },
 )
 
 const emit = defineEmits<{
   toggle: [name: string]
+  tail: [name: string]
   reload: []
   'update:pattern': [value: string]
 }>()
@@ -110,12 +110,56 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const maxGroups = computed(() => props.maxGroups)
 
+// Lọc client-side theo ô tìm để thu hẹp TỨC THÌ, không phải chờ `reload` gọi mạng.
+// `reload` vẫn còn cho lần nạp danh sách khác (tiền tố khác hẳn / danh sách cũ).
+const shown = computed<AwsLogGroup[]>(() => {
+  const q = props.pattern.trim().toLowerCase()
+  if (!q) return props.groups
+  return props.groups.filter((g) => g.name.toLowerCase().includes(q))
+})
+
+const activeMarked = computed(() =>
+  props.mode === 'multi' ? props.picked.length > 0 : props.active.length > 0,
+)
+
+function isOn(name: string): boolean {
+  return props.mode === 'multi' ? props.picked.includes(name) : props.active === name
+}
+
+function chipIcon(name: string): string {
+  if (props.mode === 'multi') return props.picked.includes(name) ? 'check' : 'layers'
+  return props.active === name ? 'eye' : 'layers'
+}
+
+function pick(name: string): void {
+  if (props.mode === 'multi') emit('toggle', name)
+  else emit('tail', name)
+}
+
 function onSearch(e: Event): void {
   emit('update:pattern', (e.target as HTMLInputElement).value)
 }
 
-/** Byte ⇒ đơn vị đọc được. Giữ ở đây (không dùng formatter chung) vì đây là
- *  con số chi phối quyết định bấm Chạy của người dùng. */
+/**
+ * Rút gọn tên hiển thị: bỏ tiền tố `/aws/<service>/` quen thuộc để lộ phần phân
+ * biệt. Giữ nguyên tên gốc trong `title` (tooltip) — không đánh lừa người đọc.
+ */
+function shortName(name: string): string {
+  const m = /^\/aws\/[^/]+\/(.+)$/.exec(name)
+  return m && m[1] ? m[1] : name
+}
+
+function chipTitle(g: AwsLogGroup): string {
+  const parts = [g.name, formatBytes(g.storedBytes)]
+  parts.push(
+    g.retentionDays !== null
+      ? t('infra.logs.groups.retention', { d: g.retentionDays })
+      : t('infra.logs.groups.noRetention'),
+  )
+  return parts.join('\n')
+}
+
+/** Byte ⇒ đơn vị đọc được (giữ tại chỗ: đây là con số chi phối quyết định chi phí). */
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${String(bytes)} B`
   if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KiB`
@@ -129,6 +173,9 @@ function formatBytes(bytes: number): string {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Lấp đầy phần còn lại của cột trái: danh sách nhóm cao hết cỡ rồi mới cuộn,
+     không để trống khoảng dưới. */
+  flex: 1 1 auto;
   min-height: 0;
 }
 
@@ -150,54 +197,6 @@ function formatBytes(bytes: number): string {
   line-height: var(--lh-xs);
   color: var(--textDim);
   font-variant-numeric: tabular-nums;
-}
-
-.lgp-chips,
-.lgp-recent {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  align-items: center;
-}
-
-.lgp-recent-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.lgp-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
-}
-
-.lgp-chip.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--bgHover);
-}
-
-.lgp-chip-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 260px;
-}
-
-.lgp-chip-x {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-  flex: 0 0 auto;
 }
 
 .lgp-field {
@@ -229,6 +228,19 @@ function formatBytes(bytes: number): string {
   font-family: var(--sans);
 }
 
+.lgp-recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.lgp-recent-lbl {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--textDim);
+}
+
 .lgp-error {
   padding: 6px 8px;
   border: 1px solid var(--danger);
@@ -236,16 +248,6 @@ function formatBytes(bytes: number): string {
   color: var(--danger);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-}
-
-.lgp-list {
-  flex: 1 1 auto;
-  min-height: 96px;
-  max-height: 208px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
 }
 
 .lgp-empty {
@@ -256,61 +258,73 @@ function formatBytes(bytes: number): string {
   line-height: var(--lh-sm);
 }
 
-.lgp-row {
+.lgp-cloud {
   display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-content: flex-start;
+  /* Cao hết phần còn lại của cột trái rồi mới cuộn (thay chốt cứng 168px). */
+  flex: 1 1 auto;
+  min-height: 96px;
+  overflow-y: auto;
+  padding: 1px;
+}
+
+.lgp-chip {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 9px;
-  border: none;
-  border-bottom: 1px solid var(--border);
+  gap: 5px;
+  max-width: 100%;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
   background: transparent;
   color: var(--textMuted);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   cursor: pointer;
-  text-align: left;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    color 0.12s;
 }
 
-.lgp-row:last-child {
-  border-bottom: none;
-}
-
-.lgp-row.on {
-  background: var(--bgHover);
+.lgp-chip:hover:not(:disabled) {
+  border-color: var(--borderStrong);
   color: var(--text);
 }
 
-.lgp-row:disabled {
-  opacity: 0.45;
+/* Trạng thái chọn = accent-tint (KHÔNG nền xám): --accentDim + --accentBorder. */
+.lgp-chip.on {
+  border-color: var(--accentBorder);
+  background: var(--accentDim);
+  color: var(--accent);
+}
+
+.lgp-chip:disabled {
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
-.lgp-row-ic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
+.lgp-chip-ic {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   flex: 0 0 auto;
 }
 
-.lgp-row-name {
-  flex: 1 1 auto;
-  min-width: 0;
+.lgp-chip-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  max-width: 240px;
   /* mono-ok: tên log group là định danh tài nguyên, không phải câu văn */
   font-family: var(--code);
 }
 
-.lgp-row-meta {
+.lgp-chip-x {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-  font-variant-numeric: tabular-nums;
-}
-
-.lgp-row-meta.warn {
-  color: var(--amber);
+  opacity: 0.7;
 }
 </style>

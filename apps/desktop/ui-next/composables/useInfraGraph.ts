@@ -115,6 +115,14 @@ export function graphServiceIcon(service: string): string {
   return SERVICE_ICONS[service] ?? 'layers'
 }
 
+/**
+ * Trần số vòng duyệt cho MỘT lượt gọi. Người dùng bấm từng vòng nên không có
+ * chuyện chạy lén, nhưng trần vẫn cần: nó là chốt cuối nếu sidecar chặn mãi mà
+ * mỗi vòng lại đổi lệnh (ma trận siết `read` trên production + graph nhiều node).
+ * Chạm trần thì nói ra, đừng hỏi tiếp tới khi người dùng bỏ cuộc.
+ */
+const MAX_APPROVAL_ROUNDS = 24
+
 /** Kết cục của một lượt gọi cổng: chạy được, hoặc lý do để màn hiện ra. */
 type GatedResult<T> = { ok: true; value: T } | { ok: false; error: string }
 
@@ -268,7 +276,14 @@ export function useInfraGraph(options: InfraGraphOptions = {}) {
   }
 
   /**
-   * Chạy một lượt gọi qua cổng quyền, xử lý ĐÚNG một vòng duyệt.
+   * Chạy một lượt gọi qua cổng quyền, LẶP cho tới khi không còn lệnh nào phải hỏi.
+   *
+   * ⚠ Vì sao LẶP chứ không đúng một vòng: một RPC của graph là NHIỀU lệnh CLI (mỗi
+   * node một lượt đọc, xem `graph/build.ts`), và cổng chặn ở lệnh ĐẦU TIÊN chưa có
+   * vé — vé thì gắn vân tay của đúng lệnh đó. Bản một-vòng vì thế duyệt xong lệnh
+   * thứ nhất rồi biến lệnh thứ HAI thành chuỗi lỗi nằm trong ô lỗi của màn: người
+   * dùng vừa bấm "Xác nhận" xong đọc lại đúng câu "cần bạn duyệt trước khi chạy",
+   * lần này không có nút duyệt nào. Đó là lỗi thật, đã gặp khi dựng sơ đồ.
    *
    * `requiresApproval: false` (ma trận chặn hẳn) hoặc vé vắng ⇒ hộp duyệt chỉ có
    * nút chép lệnh và ta KHÔNG gọi lại — mời người dùng duyệt một việc không có vé
@@ -283,39 +298,42 @@ export function useInfraGraph(options: InfraGraphOptions = {}) {
     invoke: (ticket?: string) => Promise<GateReply<T>>,
     meta: { action: string; target: string; consequence: string },
   ): Promise<GatedResult<T>> {
-    let first: Awaited<ReturnType<typeof invoke>> | null = null
-    try {
-      first = await invoke()
-    } catch (err) {
-      return { ok: false, error: messageOf(err) }
-    }
-    if (!first) return { ok: false, error: t('infra.graph.error.engine') }
-    if (first.ok) return { ok: true, value: first.value }
-    if (!first.blocked) return { ok: false, error: first.error }
+    let ticket: string | undefined
+    let askedFor = ''
+    for (let round = 0; round < MAX_APPROVAL_ROUNDS; round += 1) {
+      let reply: Awaited<ReturnType<typeof invoke>> | null = null
+      try {
+        // Vé gắn vân tay của đúng lời gọi vừa bị chặn và chỉ dùng được một lần ⇒
+        // gọi lại y nguyên payload cũ, không sửa gì giữa hai lượt.
+        reply = await invoke(ticket)
+      } catch (err) {
+        return { ok: false, error: messageOf(err) }
+      }
+      if (!reply) return { ok: false, error: t('infra.graph.error.engine') }
+      if (reply.ok) return { ok: true, value: reply.value }
+      if (!reply.blocked) return { ok: false, error: reply.error }
 
-    const hardBlocked = first.requiresApproval !== true || !first.approvalTicket
-    const approved = await confirm({
-      kind: 'infra',
-      action: meta.action,
-      target: meta.target,
-      consequence: first.reason || meta.consequence,
-      command: first.command,
-      context: confirmContext(),
-      accountKind: first.accountKind === 'production' ? 'production' : 'normal',
-      class: classOf(first.class),
-      blocked: hardBlocked,
-    })
-    if (hardBlocked || !approved || !first.approvalTicket) return { ok: false, error: '' }
+      // Vừa đưa vé mà vẫn chặn ĐÚNG lệnh vừa duyệt ⇒ vé không ăn (hết hạn, hoặc
+      // lệch vân tay). Hỏi tiếp là mời người dùng bấm mãi một nút không tác dụng.
+      if (reply.command === askedFor) return { ok: false, error: reply.reason }
 
-    // Vé gắn vân tay của đúng lời gọi này và chỉ dùng được một lần ⇒ gọi lại y
-    // nguyên payload cũ, không sửa gì giữa hai lượt.
-    try {
-      const retry = await invoke(first.approvalTicket)
-      if (retry.ok) return { ok: true, value: retry.value }
-      return { ok: false, error: retry.blocked ? retry.reason : retry.error }
-    } catch (err) {
-      return { ok: false, error: messageOf(err) }
+      const hardBlocked = reply.requiresApproval !== true || !reply.approvalTicket
+      const approved = await confirm({
+        kind: 'infra',
+        action: meta.action,
+        target: meta.target,
+        consequence: reply.reason || meta.consequence,
+        command: reply.command,
+        context: confirmContext(),
+        accountKind: reply.accountKind === 'production' ? 'production' : 'normal',
+        class: classOf(reply.class),
+        blocked: hardBlocked,
+      })
+      if (hardBlocked || !approved || !reply.approvalTicket) return { ok: false, error: '' }
+      ticket = reply.approvalTicket
+      askedFor = reply.command
     }
+    return { ok: false, error: t('infra.graph.error.tooManyApprovals') }
   }
 
   // ── Điểm vào ───────────────────────────────────────────────────────────────

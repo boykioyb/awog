@@ -31,7 +31,6 @@
        đều derive từ `settings.infra` — đúng ADR 0088 §7 và đúng lý do "hai bảng
        cạnh nhau nói về hai tài khoản khác nhau mà không ai nhận ra". -->
   <div class="ictx">
-    <span class="ictx-lbl">{{ t('infra.pop.title') }}</span>
     <span class="iwrap">
       <button
         type="button"
@@ -402,20 +401,14 @@ function pickRegion(value: string): void {
 </script>
 
 <style scoped>
-/* Một hàng, cao bằng hàng tab. Nhãn đứng trước để trigger không phải tự nói nó
-   là gì — giá trị bên trong ("dev-sandbox · Theo profile") đọc được ngay. */
+/* Một hàng, cao bằng hàng tab. Không nhãn đứng trước: giá trị bên trong
+   ("dev-sandbox · Theo profile") đã tự nói đây là ngữ cảnh nào. */
 .ictx {
   display: flex;
   align-items: center;
   gap: 6px;
   /* Đẩy cả cụm sang phải hàng tab, không để nó chen vào giữa các tab. */
   margin-left: auto;
-}
-
-.ictx-lbl {
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
 }
 
 /* Cùng vocabulary với `.aseltrigger` mà hai ô chọn cũ dùng: cao bằng nhau, cùng

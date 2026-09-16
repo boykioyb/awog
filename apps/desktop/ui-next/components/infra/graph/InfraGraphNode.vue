@@ -3,7 +3,19 @@
        VueFlow (id/data/selected); `data` mang node + cờ điểm vào + callback mở rộng
        (node VueFlow không emit được lên canvas nên handler đi qua `data`, cùng khuôn
        với WorkflowNode). -->
-  <div class="ign" :class="{ sel: selected, ext: data.node.kind === 'external' }">
+  <!-- G4: `dim` nghĩa là NGOÀI đường đi của request đang lần theo, không phải
+       "không quan trọng" — và nó chỉ bật khi thật sự có một đường đi đang tô
+       (`matchOf` trả `null` khi không có, xem `useInfraTraceHighlight`). -->
+  <div
+    class="ign"
+    :class="{
+      sel: selected,
+      ext: data.node.kind === 'external',
+      dim: data.offPath,
+      path: data.onPath,
+      bad: data.failed,
+    }"
+  >
     <Handle type="target" :position="Position.Left" />
 
     <div class="ign-hd">
@@ -59,6 +71,12 @@ type NodeData = {
   node: GraphNode
   /** Node này là điểm vào của lượt dựng đang xem. */
   isRoot: boolean
+  /** Nằm TRÊN đường đi của request đang lần theo (G4). */
+  onPath: boolean
+  /** Có đường đi đang tô, và node này KHÔNG nằm trên đó. */
+  offPath: boolean
+  /** Là chặng mà request HỎNG ở đó. */
+  failed: boolean
   /** Lượt `graph-expand` của CHÍNH node này đang bay. */
   isExpanding: boolean
   /** Mở rộng đúng node này một bước (chạy ở page-controller). */
@@ -92,6 +110,27 @@ function onExpand(): void {
   border-color: var(--accent);
   box-shadow:
     0 0 0 1px var(--accent),
+    var(--shadow-md);
+}
+
+/* ── Tô đường đi của một request (G4) ────────────────────────────────────────
+   Node ngoài đường MỜ ĐI chứ không bị ẩn: ẩn sẽ làm sơ đồ đứt quãng và người đọc
+   mất luôn ngữ cảnh "request này KHÔNG đi qua chỗ kia", vốn là nửa câu trả lời. */
+.ign.dim {
+  opacity: 0.35;
+}
+
+.ign.path {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 1px var(--accent),
+    var(--shadow-md);
+}
+
+.ign.bad {
+  border-color: var(--danger);
+  box-shadow:
+    0 0 0 1px var(--danger),
     var(--shadow-md);
 }
 

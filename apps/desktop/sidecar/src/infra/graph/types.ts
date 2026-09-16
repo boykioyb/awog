@@ -30,6 +30,15 @@ export type InfraGraphNode = {
   expandable: boolean
   /** Ít khoá, hiện được trong panel node. */
   detail: Record<string, string>
+  /**
+   * Nhóm log của node, suy ở `graph/log-groups.ts` (G4). VẮNG MẶT khi không suy
+   * được — và vắng mặt là một câu trả lời, không phải thiếu sót: UI phải ẩn nút
+   * "xem log" thay vì mở màn Logs với một tên nhóm bịa ra.
+   *
+   * Trường THÊM sau khi hợp đồng §3 đóng băng. Nó tuỳ chọn nên bản đọc cũ vẫn
+   * chạy nguyên vẹn; không trường nào bị đổi tên hay đổi nghĩa.
+   */
+  logGroup?: { kind: 'exact' | 'prefix'; value: string }
 }
 
 export type InfraGraphEdgeSource = 'describe' | 'traffic' | 'config'

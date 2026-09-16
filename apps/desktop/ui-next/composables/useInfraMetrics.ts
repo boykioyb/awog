@@ -27,9 +27,16 @@ import { useI18n } from '~/composables/useI18n'
 import { useConfirm } from '~/composables/useConfirm'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import { useInfraContext } from '~/composables/useInfraContext'
-import { LOGS_WINDOW_PRESETS, type LogsWindowPreset } from '~/composables/useInfraLogs'
 import { useInfraWindowSync } from '~/composables/useInfraWindowSync'
 import { useSidecar } from '~/composables/useSidecar'
+import {
+  absoluteWindow,
+  isWindowValid,
+  relativeWindow,
+  windowSecondsOf,
+  windowToMs,
+  type InfraWindow,
+} from '~/utils/infra-window'
 import { useToast } from '~/composables/useToast'
 import type { InfraActionClass } from '~/composables/useConfirm'
 // `InfraBlocked` đã có ở `useInfraResourcesApi` — import chứ không khai lại. Nuxt
@@ -219,22 +226,6 @@ export function periodForWindow(windowSeconds: number): number {
   if (windowSeconds <= 2 * 86_400) return 3600
   return 21_600
 }
-
-/** Bảng giây của preset. Trùng giá trị với `useInfraLogs` là CỐ Ý: "1 giờ" ở hai màn
- *  phải là cùng một khoảng, nếu không cầu nối thời gian gieo sang một cửa sổ khác
- *  với thứ người dùng vừa chọn. Danh sách preset thì lấy thẳng từ bên đó (một nguồn). */
-export const MONITOR_PRESET_SECONDS: Record<Exclude<LogsWindowPreset, 'custom'>, number> = {
-  '15m': 900,
-  '1h': 3600,
-  '3h': 3 * 3600,
-  '12h': 12 * 3600,
-  '1d': 86_400,
-  '7d': 7 * 86_400,
-}
-
-/** Preset CÓ CHỌN ĐƯỢC — `custom` không phải một nút, nó là hệ quả của việc gõ tay. */
-export const MONITOR_WINDOW_PRESETS: readonly Exclude<LogsWindowPreset, 'custom'>[] =
-  LOGS_WINDOW_PRESETS.filter((p): p is Exclude<LogsWindowPreset, 'custom'> => p !== 'custom')
 
 // ─── Bốn biểu đồ ────────────────────────────────────────────────────────────
 
@@ -542,27 +533,13 @@ export function useInfraMetrics() {
   const targets = ref<Record<MonitorTargetKey, string>>({ lb: '', instance: '' })
 
   // ── Cửa sổ thời gian (đang chọn) ─────────────────────────────────────────
-  const windowPreset = ref<LogsWindowPreset>('3h')
-  const customStart = ref('')
-  const customEnd = ref('')
+  // Model dùng chung (`InfraTimeRange` v-model vào `win`). Mặc định 3 giờ gần đây.
+  const win = ref<InfraWindow>(relativeWindow(3 * 3600))
 
-  const windowSeconds = computed(() => {
-    if (windowPreset.value !== 'custom') return MONITOR_PRESET_SECONDS[windowPreset.value]
-    const start = Date.parse(customStart.value)
-    const end = Date.parse(customEnd.value)
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return 0
-    return Math.round((end - start) / 1000)
-  })
+  const windowSeconds = computed(() => windowSecondsOf(win.value))
 
   function resolveWindow(): { startMs: number; endMs: number } | null {
-    if (windowPreset.value === 'custom') {
-      const startMs = Date.parse(customStart.value)
-      const endMs = Date.parse(customEnd.value)
-      if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null
-      return { startMs, endMs }
-    }
-    const endMs = Date.now()
-    return { startMs: endMs - MONITOR_PRESET_SECONDS[windowPreset.value] * 1000, endMs }
+    return windowToMs(win.value)
   }
 
   // ── Trạng thái nạp ──────────────────────────────────────────────────────
@@ -593,7 +570,7 @@ export function useInfraMetrics() {
     return Math.abs(w.endMs - w.startMs - (loaded.endMs - loaded.startMs)) > 1000
   })
 
-  const windowValid = computed(() => resolveWindow() !== null && windowSeconds.value > 0)
+  const windowValid = computed(() => isWindowValid(win.value))
 
   const windowLabel = computed(() => formatSpanSeconds(windowSeconds.value))
 
@@ -1114,22 +1091,9 @@ export function useInfraMetrics() {
 
   // ── Cầu nối thời gian với Logs ───────────────────────────────────────────
 
-  /** Áp một khoảng được gieo: dài đúng bằng một preset thì chọn preset đó, không thì
-   *  `custom`. Một preset sáng lên đọc dễ hơn hai mốc thời gian gõ tay. */
+  /** Áp một khoảng TUYỆT ĐỐI được gieo từ màn Logs (một cú kéo ở kia = một cửa sổ ở đây). */
   function applyWindow(startMs: number, endMs: number): void {
-    const seconds = Math.round((endMs - startMs) / 1000)
-    const hit = (Object.entries(MONITOR_PRESET_SECONDS) as [LogsWindowPreset, number][]).find(
-      ([, s]) => s === seconds,
-    )
-    if (hit) {
-      windowPreset.value = hit[0]
-      customStart.value = ''
-      customEnd.value = ''
-      return
-    }
-    windowPreset.value = 'custom'
-    customStart.value = toLocalInput(startMs)
-    customEnd.value = toLocalInput(endMs)
+    win.value = absoluteWindow(startMs, endMs)
   }
 
   // Khoảng gieo TỪ màn Logs sang. Một cú kéo ở màn kia = một lượt nạp ở màn này —
@@ -1210,10 +1174,7 @@ export function useInfraMetrics() {
     targets,
     targetDimensions: TARGET_DIMENSIONS,
     // cửa sổ
-    windowPreset,
-    windowPresets: MONITOR_WINDOW_PRESETS,
-    customStart,
-    customEnd,
+    win,
     windowSeconds,
     windowLabel,
     windowValid,

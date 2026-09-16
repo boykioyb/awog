@@ -23,7 +23,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useConfirm } from '~/composables/useConfirm'
 import { useInfraContext } from '~/composables/useInfraContext'
 import { useInfraGraphApi } from '~/composables/useInfraGraphApi'
-import { useInfraMode, type InfraMode } from '~/composables/useInfraMode'
+import { useInfraMode, type InfraDetailMode } from '~/composables/useInfraMode'
 import { useI18n } from '~/composables/useI18n'
 import {
   buildImpact,
@@ -65,7 +65,7 @@ const MAX_PROJECT_IDS = 50
  * Đơn giản/Chuyên sâu chung của cả `/infra` (`useInfraMode`), đặt trên thanh đầu
  * trang nên nhìn thấy được ở mọi tab. Alias giữ nguyên tên để bên gọi không đổi.
  */
-export type PlaybookMode = InfraMode
+export type PlaybookMode = InfraDetailMode
 
 /**
  * Trạng thái của lời gọi graph. `unavailable` KHÁC `error`: `unavailable` là "chưa

@@ -1,0 +1,21 @@
+{
+  "infra.time.label": "Khoảng thời gian",
+  "infra.time.clear": "Xoá",
+  "infra.time.custom": "Tuỳ chọn",
+  "infra.time.customRange": "Khoảng tuỳ chọn",
+  "infra.time.absolute": "Tuyệt đối",
+  "infra.time.relative": "Tương đối",
+  "infra.time.duration": "Độ dài",
+  "infra.time.unitOfTime": "Đơn vị",
+  "infra.time.upTo4": "Tối đa 4 chữ số.",
+  "infra.time.from": "Từ",
+  "infra.time.to": "Đến",
+  "infra.time.cancel": "Huỷ",
+  "infra.time.apply": "Áp dụng",
+  "infra.time.absIncomplete": "Chọn cả mốc đầu và mốc cuối.",
+  "infra.time.absOrder": "Mốc cuối phải sau mốc đầu.",
+  "infra.time.unit.minutes": "Phút",
+  "infra.time.unit.hours": "Giờ",
+  "infra.time.unit.days": "Ngày",
+  "infra.time.unit.weeks": "Tuần"
+}

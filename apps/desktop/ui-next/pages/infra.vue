@@ -155,7 +155,7 @@
              tự chạy (không `onMounted`/`watch` nào gọi resolver sau lưng người dùng),
              nên mount sẵn không tốn một lệnh CLI nào cho tới cú bấm đầu tiên. -->
         <div v-show="tab === 'graph'" class="infra-pane">
-          <InfraGraph />
+          <InfraGraph @open-logs="onOpenNodeLogs" />
         </div>
 
         <div v-if="auditMounted" v-show="tab === 'audit'" class="infra-pane">
@@ -658,6 +658,25 @@ function onRowsChanged(
 function onOpenLogs(query: string): void {
   logsMounted.value = true
   logsSeed.value = { query, windowSeconds: OVERVIEW_ERRORS_WINDOW_SECONDS, nonce: ++seedNonce }
+  tab.value = 'logs'
+}
+
+/**
+ * Sơ đồ → "xem log của node này" (G4). Mở chế độ TAIL chứ không phải Insights: đọc
+ * dòng mới nhất bằng `filter-log-events` không tính tiền theo GB quét, nên nó mở
+ * được ngay sau một cú bấm mà không cần bắt người dùng đọc một con số ước lượng.
+ *
+ * `prefix` (API Gateway — node không mang stage) chỉ LỌC danh sách nhóm: người dùng
+ * chọn nốt stage. Đoán hộ stage là mở một nhóm có thể không tồn tại.
+ */
+function onOpenNodeLogs(group: { kind: 'exact' | 'prefix'; value: string }): void {
+  logsMounted.value = true
+  logsSeed.value = {
+    windowSeconds: 3600,
+    nonce: ++seedNonce,
+    mode: 'tail',
+    ...(group.kind === 'exact' ? { group: group.value } : { pattern: group.value }),
+  }
   tab.value = 'logs'
 }
 

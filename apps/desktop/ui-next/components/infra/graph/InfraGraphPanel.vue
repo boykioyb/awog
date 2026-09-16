@@ -44,6 +44,20 @@
     </div>
 
     <footer class="igp-ft">
+      <!-- G4, nửa đầu: node → nhóm log. Nút CHỈ hiện khi sidecar suy được nhóm
+           (`logGroup` vắng mặt = không suy được); mời người dùng sang màn Logs với
+           một tên nhóm đoán bừa sẽ mở ra một màn trống, và cái trống đó đọc như
+           "chặng này không ghi gì". -->
+      <button
+        v-if="node.logGroup"
+        class="btn sm"
+        type="button"
+        :title="node.logGroup.value"
+        @click="emit('open-logs', node.logGroup)"
+      >
+        <Icon name="table" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        {{ t('infra.graph.panel.openLogs') }}
+      </button>
       <button
         v-if="node.expandable"
         class="btn sm"
@@ -76,7 +90,11 @@ const props = defineProps<{
   expanding: boolean
 }>()
 
-const emit = defineEmits<{ expand: [id: string]; close: [] }>()
+const emit = defineEmits<{
+  expand: [id: string]
+  close: []
+  'open-logs': [group: { kind: 'exact' | 'prefix'; value: string }]
+}>()
 
 const { t } = useI18n()
 

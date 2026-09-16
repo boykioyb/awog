@@ -2,12 +2,21 @@ import { computed, ref, shallowRef } from 'vue'
 import { useAwsLogsApi } from '~/composables/useAwsLogsApi'
 import { useInfraContext } from '~/composables/useInfraContext'
 import { useSidecar } from '~/composables/useSidecar'
+import {
+  absoluteWindow,
+  isWindowValid,
+  relativeWindow,
+  windowSecondsOf,
+  windowToMs,
+  type InfraWindow,
+} from '~/utils/infra-window'
 import type {
   AwsInsightsRow,
   AwsInsightsStatus,
   AwsLogGroup,
   AwsLogsHistoryEntry,
   AwsLogsTemplate,
+  AwsLogStream,
   AwsSavedQuery,
 } from '~/composables/useAwsLogsApi'
 
@@ -20,25 +29,8 @@ import type {
 // Việc duy nhất chạy lúc mở màn là nạp danh sách log group (metadata) và đọc thư
 // viện trên đĩa — cả hai đều không gọi mạng ra CloudWatch Insights.
 
-export type LogsWindowPreset = '15m' | '1h' | '3h' | '12h' | '1d' | '7d' | 'custom'
-
-export const LOGS_WINDOW_PRESETS: readonly LogsWindowPreset[] = [
-  '15m',
-  '1h',
-  '3h',
-  '12h',
-  '1d',
-  '7d',
-]
-
-const PRESET_SECONDS: Record<Exclude<LogsWindowPreset, 'custom'>, number> = {
-  '15m': 900,
-  '1h': 3600,
-  '3h': 3 * 3600,
-  '12h': 12 * 3600,
-  '1d': 86_400,
-  '7d': 7 * 86_400,
-}
+/** Ba chế độ của màn Logs — xem `mode` trong `useInfraLogs()`. */
+export type LogsMode = 'tail' | 'advanced' | 'trace'
 
 const POLL_MS = 1500
 /** Trần chờ phía UI. Sidecar cũng có trần riêng cho đường tool của agent. */
@@ -84,10 +76,23 @@ export type LogsFacet = { field: string; values: { value: string; count: number 
  * CodeBuild nằm ở `/aws/codebuild/<project>` mà người dùng không phải tự đi tìm.
  */
 export type LogsSeed = {
-  query: string
+  /** Câu Insights điền sẵn. Bỏ trống ⇒ KHÔNG đụng vào câu người dùng đang soạn. */
+  query?: string
   windowSeconds: number
   nonce: number
   group?: string
+  /**
+   * Lọc danh sách nhóm log. Dùng khi bên gieo chỉ suy được TIỀN TỐ chứ không ra
+   * tên đầy đủ — sơ đồ biết `API-Gateway-Execution-Logs_<id>/` nhưng không biết
+   * stage, và đoán nốt stage là đoán một nhóm có thể không tồn tại.
+   */
+  pattern?: string
+  /**
+   * Chế độ mở màn. Mặc định `advanced` vì đường gieo đầu tiên (Tổng quan → "Mở
+   * trong Logs") mang theo một câu Insights. Sơ đồ thì gieo `tail`: xem dòng mới
+   * nhất KHÔNG tốn GB quét, nên nó mở được ngay mà không cần một cú bấm trả tiền.
+   */
+  mode?: LogsMode
 }
 
 export function useInfraLogs() {
@@ -148,31 +153,13 @@ export function useInfraLogs() {
 
   // ── câu lệnh + cửa sổ thời gian ──────────────────────────────────────────
   const query = ref('')
-  const windowPreset = ref<LogsWindowPreset>('1h')
-  /** Chỉ dùng khi `windowPreset === 'custom'`. */
-  const customStart = ref('')
-  const customEnd = ref('')
+  // Cửa sổ thời gian: mô hình dùng chung (tương đối "N giây gần đây" hoặc tuyệt đối
+  // hai mốc). Control `InfraTimeRange` v-model thẳng vào `win`. Mặc định 1 giờ.
+  const win = ref<InfraWindow>(relativeWindow(3600))
 
-  const windowSeconds = computed(() => {
-    if (windowPreset.value !== 'custom') return PRESET_SECONDS[windowPreset.value]
-    const start = Date.parse(customStart.value)
-    const end = Date.parse(customEnd.value)
-    if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return 0
-    return Math.round((end - start) / 1000)
-  })
-
-  const windowMs = computed<{ startMs: number; endMs: number } | null>(() => {
-    if (windowPreset.value === 'custom') {
-      const startMs = Date.parse(customStart.value)
-      const endMs = Date.parse(customEnd.value)
-      if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) return null
-      return { startMs, endMs }
-    }
-    const endMs = Date.now()
-    return { startMs: endMs - PRESET_SECONDS[windowPreset.value] * 1000, endMs }
-  })
-
-  const windowValid = computed(() => windowMs.value !== null && windowSeconds.value > 0)
+  const windowSeconds = computed(() => windowSecondsOf(win.value))
+  const windowMs = computed<{ startMs: number; endMs: number } | null>(() => windowToMs(win.value))
+  const windowValid = computed(() => isWindowValid(win.value))
 
   // ── ước lượng TRƯỚC khi chạy (2.6) ───────────────────────────────────────
   const estimate = ref<{ bytes: number; usd: number; basis: 'history' | 'stored' } | null>(null)
@@ -376,6 +363,139 @@ export function useInfraLogs() {
     await api.cancel(id, profile.value || undefined, region.value || undefined).catch(() => {})
   }
 
+  // ── tail: xem dòng mới nhất của MỘT nhóm (2.9) ─────────────────────────────
+  // Đường RẺ, tách hẳn khỏi Insights: `filter-log-events` không tính tiền theo GB
+  // quét, nên đây là đường được phép TỰ CHẠY khi người dùng bấm vào một nhóm log.
+  /**
+   * Ba chế độ của màn Logs. MỘT ref chứ không phải hai cờ boolean: hai cờ cho phép
+   * biểu diễn những trạng thái không tồn tại ("vừa tail vừa lần theo") và người sau
+   * sẽ phải viết luật để khử chúng.
+   *
+   *   · `tail`     — dòng mới nhất của một nhóm (rẻ, mặc định)
+   *   · `advanced` — soạn câu Insights (tốn tiền, phải bấm Chạy)
+   *   · `trace`    — lần theo một request (L5; cũng tốn tiền ở nhánh log)
+   */
+  const mode = ref<LogsMode>('tail')
+  /** Hai chế độ dùng danh sách nhóm (multi) thay vì một nhóm đang xem. */
+  const advancedOpen = computed(() => mode.value !== 'tail')
+  /** Nhóm đang tail (một nhóm). '' = chưa bấm nhóm nào. */
+  const tailGroup = ref('')
+  /** Dòng log đã map về shape của bảng kết quả để DÙNG LẠI InfraLogsResults. */
+  const tailRows = shallowRef<AwsInsightsRow[]>([])
+  const tailLoading = ref(false)
+  const tailError = ref('')
+  const tailTruncated = ref(false)
+  const tailRanAt = ref(0)
+
+  // ── Tầng giữa: log stream của group đang chọn (group → stream → event) ──────
+  /** Stream của `tailGroup`. Nạp khi bấm vào một group (describe-log-streams, rẻ). */
+  const streams = shallowRef<AwsLogStream[]>([])
+  const streamsLoading = ref(false)
+  const streamsError = ref('')
+  /** Stream đang xem. '' = xem TẤT CẢ stream của group (gộp qua filter-log-events). */
+  const activeStream = ref('')
+
+  /** Nạp danh sách stream của một group. Metadata rẻ — không tính GB quét. */
+  async function loadStreams(group: string): Promise<void> {
+    streamsLoading.value = true
+    streamsError.value = ''
+    try {
+      const res = await api.streams({
+        logGroup: group,
+        ...(profile.value ? { profile: profile.value } : {}),
+        ...(region.value ? { region: region.value } : {}),
+      })
+      if (!res.ok) {
+        streamsError.value = res.error
+        streams.value = []
+        return
+      }
+      streams.value = res.streams
+    } catch (err) {
+      streamsError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      streamsLoading.value = false
+    }
+  }
+
+  /** `2026-09-16 10:00:00.000` (giờ địa phương) — đọc được, cột thẳng hàng. */
+  function toStamp(ms: number): string {
+    const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60_000)
+    return d.toISOString().replace('T', ' ').slice(0, 23)
+  }
+
+  /**
+   * Chạy tail cho `tailGroup` theo cửa sổ đang chọn. KHÔNG phải Insights: không
+   * ước lượng, không histogram, không ghi lịch sử thư viện. Cú bấm nhóm là sự cho
+   * phép; lệnh rẻ nên chạy thẳng.
+   */
+  async function refreshTail(): Promise<void> {
+    const group = tailGroup.value
+    if (!group) return
+    const win = windowMs.value
+    if (!win) {
+      tailError.value = 'INVALID_WINDOW'
+      return
+    }
+    tailLoading.value = true
+    tailError.value = ''
+    try {
+      const res = await api.tail({
+        logGroups: [group],
+        startMs: win.startMs,
+        endMs: win.endMs,
+        limit: 200,
+        // '' = mọi stream (không truyền cờ ⇒ filter-log-events gộp cả group).
+        ...(activeStream.value ? { logStreamName: activeStream.value } : {}),
+        ...(profile.value ? { profile: profile.value } : {}),
+        ...(region.value ? { region: region.value } : {}),
+      })
+      if (!res.ok) {
+        tailError.value = res.error
+        tailRows.value = []
+        tailTruncated.value = false
+        return
+      }
+      // Mới nhất lên đầu — người đọc log thường tìm dòng vừa xảy ra.
+      const sorted = [...res.events].sort((a, b) => b.timestamp - a.timestamp)
+      tailRows.value = sorted.map((e) => ({
+        '@timestamp': toStamp(e.timestamp),
+        '@message': e.message,
+        '@logStream': e.logStreamName,
+      }))
+      tailTruncated.value = res.truncated
+      tailRanAt.value = Date.now()
+    } catch (err) {
+      tailError.value = err instanceof Error ? err.message : String(err)
+    } finally {
+      tailLoading.value = false
+    }
+  }
+
+  /**
+   * Bấm vào một nhóm log ⇒ nạp danh sách stream của nó VÀ tail cả group ngay (mặc
+   * định "Tất cả stream"). Người dùng thu hẹp về một stream qua `selectStream`.
+   * Bấm lại chính nhóm ⇒ làm mới (giữ nguyên stream đang chọn).
+   */
+  async function openTail(name: string): Promise<void> {
+    const sameGroup = tailGroup.value === name
+    tailGroup.value = name
+    // Đổi sang group khác ⇒ về "Tất cả stream" (stream của group cũ vô nghĩa ở đây).
+    if (!sameGroup) {
+      activeStream.value = ''
+      streams.value = []
+      void loadStreams(name)
+    }
+    await refreshTail()
+  }
+
+  /** Chọn một stream ('' = tất cả) rồi tail lại. Cú bấm là sự cho phép; lệnh rẻ. */
+  async function selectStream(name: string): Promise<void> {
+    if (activeStream.value === name) return
+    activeStream.value = name
+    await refreshTail()
+  }
+
   // ── lọc tại chỗ (2.7) ────────────────────────────────────────────────────
   const quickFilter = ref('')
   const levelFilter = ref<'' | 'ERROR' | 'WARN' | 'INFO' | 'DEBUG'>('')
@@ -389,19 +509,27 @@ export function useInfraLogs() {
     DEBUG: /(\bDEBUG\b|\bTRACE\b)/,
   }
 
-  const filteredRows = computed<AwsInsightsRow[]>(() => {
-    let out = rows.value
+  /**
+   * Lọc mức log + lọc nhanh trong kết quả đang xem. Dùng CHUNG cho bảng Insights
+   * (`filteredRows`) và bảng tail (`tailFilteredRows`) — hai bảng có cùng thanh
+   * lọc, nên cùng một phép lọc. `facet` chỉ áp cho Insights (tail không có facet).
+   */
+  function filterRows(source: readonly AwsInsightsRow[], withFacet: boolean): AwsInsightsRow[] {
+    let out = [...source]
     const level = levelFilter.value
     if (level) {
       const re = LEVEL_RE[level]
       if (re) out = out.filter((r) => re.test(Object.values(r).join(' ')))
     }
     const facet = facetFilter.value
-    if (facet) out = out.filter((r) => r[facet.field] === facet.value)
+    if (withFacet && facet) out = out.filter((r) => r[facet.field] === facet.value)
     const q = quickFilter.value.trim().toLowerCase()
     if (q) out = out.filter((r) => Object.values(r).join(' ').toLowerCase().includes(q))
     return out
-  })
+  }
+
+  const filteredRows = computed<AwsInsightsRow[]>(() => filterRows(rows.value, true))
+  const tailFilteredRows = computed<AwsInsightsRow[]>(() => filterRows(tailRows.value, false))
 
   /**
    * Facet = tần suất giá trị của những trường ít cardinality. Lấy từ CHÍNH kết
@@ -459,22 +587,10 @@ export function useInfraLogs() {
     }
   }
 
-  function presetForSeconds(seconds: number): LogsWindowPreset {
-    const hit = (Object.entries(PRESET_SECONDS) as [LogsWindowPreset, number][]).find(
-      ([, s]) => s === seconds,
-    )
-    return hit ? hit[0] : 'custom'
-  }
-
   function applyTemplate(t: AwsLogsTemplate): void {
     query.value = t.query
-    const preset = presetForSeconds(t.windowSeconds)
-    windowPreset.value = preset
-    if (preset === 'custom') {
-      const end = Date.now()
-      customStart.value = toLocalInput(end - t.windowSeconds * 1000)
-      customEnd.value = toLocalInput(end)
-    }
+    // Cửa sổ của một mẫu là khoảng nhìn-lại TƯƠNG ĐỐI.
+    win.value = relativeWindow(t.windowSeconds > 0 ? t.windowSeconds : 3600)
   }
 
   /**
@@ -483,9 +599,7 @@ export function useInfraLogs() {
    * dùng không kịp nhìn thấy con số ước lượng mới.
    */
   function zoomToWindow(startMs: number, endMs: number): void {
-    windowPreset.value = 'custom'
-    customStart.value = toLocalInput(startMs)
-    customEnd.value = toLocalInput(endMs)
+    win.value = absoluteWindow(startMs, endMs)
   }
 
   return {
@@ -502,14 +616,11 @@ export function useInfraLogs() {
     loadGroups,
     toggleGroup,
     query,
-    windowPreset,
-    customStart,
-    customEnd,
+    // Cửa sổ thời gian: một model dùng chung (`InfraTimeRange` v-model vào `win`).
+    win,
     windowSeconds,
     // `windowMs` được export vì cầu nối khoảng-thời-gian (Mốc 6, 6.3) cần HAI MỐC
-    // TUYỆT ĐỐI để gieo sang màn Giám sát, không phải độ dài. Tính lại từ
-    // `windowPreset`/`customStart` ở màn kia là bản sao thứ hai của cùng một phép
-    // suy — và bản thứ hai thì sớm muộn lệch bản thứ nhất.
+    // TUYỆT ĐỐI để gieo sang màn Giám sát, không phải độ dài.
     windowMs,
     windowValid,
     estimate,
@@ -522,6 +633,24 @@ export function useInfraLogs() {
     status,
     rows,
     filteredRows,
+    // tail (2.9) — đường rẻ, mặc định của màn
+    mode,
+    advancedOpen,
+    tailGroup,
+    tailRows,
+    tailFilteredRows,
+    tailLoading,
+    tailError,
+    tailTruncated,
+    tailRanAt,
+    openTail,
+    refreshTail,
+    // tầng giữa: log stream
+    streams,
+    streamsLoading,
+    streamsError,
+    activeStream,
+    selectStream,
     bytesScanned,
     recordsMatched,
     actualUsd,
@@ -600,10 +729,4 @@ export function parseAwsTime(value: string): number | null {
     Number(m[6]),
     ms,
   )
-}
-
-/** ISO ⇒ giá trị cho `<input type="datetime-local">` (giờ ĐỊA PHƯƠNG). */
-function toLocalInput(ms: number): string {
-  const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60_000)
-  return d.toISOString().slice(0, 16)
 }

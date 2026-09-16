@@ -1,7 +1,7 @@
 <template>
   <!-- Chi tiết một dòng (task 3.1). Mở bằng cú bấm, KHÔNG tự nạp: mỗi dòng là một
        lời gọi API thật, nên nạp sẵn 50 dòng là 50 lời gọi mà 49 cái không ai đọc. -->
-  <section v-if="row" class="ixd">
+  <section v-if="row" class="icard ixd">
     <header class="ixd-hd">
       <Icon name="info" />
       <span class="ixd-title">{{ row['name'] || row['id'] }}</span>
@@ -47,9 +47,6 @@ const { t } = useI18n()
   display: flex;
   flex-direction: column;
   margin-top: 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
   overflow: hidden;
 }
 

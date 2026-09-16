@@ -33,13 +33,18 @@ import { computed, ref } from 'vue'
  * control bấm mà không đổi gì là lời hứa suông (người dùng nói thẳng 2026-09-16:
  * "không thấy sự khác biệt ở đâu trong khi nó lại nằm ở global page").
  */
-export type InfraMode = 'simple' | 'expert'
+// Tên là `InfraDetailMode` chứ không phải `InfraMode`: `InfraMode` đã là chế độ
+// của ma trận quyền ('auto' | 'ask' | 'block', mirror sidecar, ở `~/types`). Hai
+// kiểu khác nghĩa mà cùng tên thì auto-import của Nuxt chỉ giữ một — nơi gọi viết
+// `InfraMode` tưởng đang nói độ chi tiết lại nhận đúng kiểu kia, và TypeScript
+// không kêu vì cả hai đều là union chuỗi.
+export type InfraDetailMode = 'simple' | 'expert'
 
 const KEY = 'awog.infra.mode'
 /** Khoá của công tắc riêng màn Kế hoạch, chỉ còn dùng để đọc một lần rồi xoá. */
 const LEGACY_PLAYBOOK_KEY = 'awog.playbooks.mode'
 
-const mode = ref<InfraMode>('simple')
+const mode = ref<InfraDetailMode>('simple')
 let loaded = false
 
 function load(): void {
@@ -64,7 +69,7 @@ function load(): void {
 export function useInfraMode() {
   load()
 
-  function setMode(next: InfraMode): void {
+  function setMode(next: InfraDetailMode): void {
     mode.value = next
     if (typeof localStorage !== 'undefined') localStorage.setItem(KEY, next)
   }

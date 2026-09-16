@@ -69,5 +69,10 @@
   "infra.graph.act.expandWhy": "Read-only: reads this node's configuration to walk one hop further — nothing is changed.",
   "infra.graph.error.engine": "Cannot reach the engine — check that it is running, then retry.",
   "infra.graph.error.badRoot": "This entry point could not be read as an AWS resource — pick a different entry point.",
-  "infra.graph.error.callFailed": "Every configuration read failed without a specific message — check the profile's read access, then retry."
+  "infra.graph.error.callFailed": "Every configuration read failed without a specific message — check the profile's read access, then retry.",
+  "infra.graph.error.tooManyApprovals": "Too many commands still need approval — narrow the entry point, or loosen read commands in Settings → Infrastructure.",
+  "infra.graph.panel.openLogs": "Open this node's logs",
+  "infra.graph.trace.banner": "Highlighting the path of request {id} — {n} nodes on it.",
+  "infra.graph.trace.noMatch": "No node on this graph matches the hops we found.",
+  "infra.graph.trace.clear": "Clear"
 }

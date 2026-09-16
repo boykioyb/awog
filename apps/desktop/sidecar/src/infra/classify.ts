@@ -123,12 +123,26 @@ const AWS_READ_ALLOWLIST: Record<string, ReadonlySet<string>> = {
     'describe-task-definition',
   ]),
   eks: new Set(['list-clusters', 'describe-cluster', 'list-nodegroups', 'describe-nodegroup']),
-  lambda: new Set(['list-functions', 'get-function-configuration']),
+  // `list-event-source-mappings` = danh sách nguồn sự kiện (SQS/Kinesis/DynamoDB
+  // stream) đang gắn vào một hàm — thuần metadata, không phát credential, không
+  // positional nào là đường dẫn. `graph/resolvers.ts` gọi nó để vẽ cạnh "ai gọi
+  // hàm này"; thiếu nó thì mỗi lượt dựng sơ đồ đòi một hộp duyệt cho một lệnh ĐỌC.
+  lambda: new Set(['list-functions', 'get-function-configuration', 'list-event-source-mappings']),
   rds: new Set(['describe-db-instances', 'describe-db-snapshots', 'describe-db-clusters']),
   cloudfront: new Set(['list-distributions', 'get-distribution', 'list-invalidations']),
   apigatewayv2: new Set(['get-apis', 'get-routes', 'get-integrations', 'get-stages']),
-  apigateway: new Set(['get-rest-apis', 'get-resources', 'get-stages']),
-  route53: new Set(['list-hosted-zones', 'list-hosted-zones-by-name', 'list-resource-record-sets']),
+  // `get-rest-api` (SỐ ÍT) là metadata của MỘT API — anh em của `get-rest-apis`,
+  // cùng hạng. CỐ Ý không có `get-export`/`get-sdk`: chúng nhận positional
+  // `outfile` và ghi file ra đường dẫn tuỳ ý (đúng ca `s3api get-object` của audit #1).
+  apigateway: new Set(['get-rest-apis', 'get-rest-api', 'get-resources', 'get-stages']),
+  // `get-hosted-zone` = cấu hình của MỘT zone (tên, comment, VPC gắn kèm) — cùng
+  // hạng với `list-hosted-zones` ngay cạnh, và cũng do `graph/resolvers.ts` gọi.
+  route53: new Set([
+    'list-hosted-zones',
+    'list-hosted-zones-by-name',
+    'list-resource-record-sets',
+    'get-hosted-zone',
+  ]),
   acm: new Set(['list-certificates', 'describe-certificate']),
   cloudformation: new Set([
     'describe-stacks',
@@ -200,6 +214,19 @@ const AWS_READ_ALLOWLIST: Record<string, ReadonlySet<string>> = {
   // `create-budget`/`update-budget`/`delete-budget` CỐ Ý không có mặt ⇒ rơi vào
   // `write`/`destructive` ⇒ phải qua cổng duyệt như mọi lệnh ghi khác.
   budgets: new Set(['describe-budgets']),
+  // L5 (lần theo một request) + G3 (lớp lưu lượng của graph). Cả hai op đều thuần
+  // đọc: không positional nào là đường dẫn, không op nào phát credential.
+  //
+  // ⚠ `batch-get-traces` trả về SEGMENT DOCUMENT — URL, annotation, thông điệp lỗi
+  // của chính ứng dụng, tức cùng hạng nội dung với dòng log. Vì vậy nó có mặt trong
+  // `AWS_SENSITIVE_READ_OPS` bên dưới: trên tài khoản production, đường của agent
+  // phải có người duyệt. `get-service-graph` thì chỉ trả SỐ LIỆU TỔNG HỢP theo dịch
+  // vụ (p50/p95, tỉ lệ lỗi) nên không cần siết.
+  //
+  // `get-trace-summaries` CỐ Ý vắng mặt: đi từ một `requestId` sang trace id bằng
+  // `--filter-expression` là một phép quét toàn cửa sổ có tính tiền, và bản này
+  // không dùng nó (xem đầu `logs/trace.ts`). Thêm nó vào đây khi nào thật sự gọi.
+  xray: new Set(['batch-get-traces', 'get-service-graph']),
   // Mốc 7 (7.6). `lookup-events` là đọc thuần lịch sử API của tài khoản: không
   // positional nào là đường dẫn, không phát credential.
   //
@@ -232,6 +259,9 @@ const AWS_SENSITIVE_READ_OPS: Record<string, ReadonlySet<string>> = {
   // `batch-get-builds` trả cả VALUE của biến môi trường loại PLAINTEXT (xem ghi
   // chú ở `AWS_READ_ALLOWLIST`). Trên production nó phải qua người duyệt.
   codebuild: new Set(['batch-get-builds']),
+  // Segment document của X-Ray mang URL đầy đủ, annotation do ứng dụng tự đặt và
+  // thông điệp lỗi — cùng hạng nội dung với dòng log, nên cùng luật với chúng.
+  xray: new Set(['batch-get-traces']),
 }
 
 /**

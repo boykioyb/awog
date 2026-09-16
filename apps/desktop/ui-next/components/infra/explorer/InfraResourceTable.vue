@@ -240,31 +240,11 @@ const padBottom = computed(() => (props.virtual ? (props.rows.length - end.value
   color: var(--red);
 }
 
-.kt {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
+/* Da bảng ở app-shell.css. Dưới đây CHỈ là override riêng của bảng tài nguyên. */
 
-.kt th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--bgSubtle);
-}
-
+/* Một ARN hay một chuỗi tag dài phải cắt bằng ellipsis chứ không được đẩy bảng
+   cuộn ngang; `.kt-wide` là lối thoát cho cột cố ý cho phép dài. */
 .kt td {
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
   max-width: 320px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -277,20 +257,6 @@ const padBottom = computed(() => (props.virtual ? (props.rows.length - end.value
 
 .kt-num {
   text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-.kt-click {
-  cursor: pointer;
-}
-
-.kt-click:hover td,
-.kt-click.on td {
-  background: var(--bgHover);
-}
-
-.kt-act {
-  width: 1%;
 }
 
 .ixt-acts {

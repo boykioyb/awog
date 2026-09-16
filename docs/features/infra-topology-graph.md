@@ -1,6 +1,6 @@
 # Feature — Graph kiến trúc & luồng request của một application / domain
 
-- **Trạng thái:** Planned — chưa code
+- **Trạng thái:** G1–G3 ship 2026-09-15 (mốc 5); **G4 ship 2026-09-16** cùng L5 của [cloudwatch-logs.md](cloudwatch-logs.md) — xem "G4 — trạng thái thực tế" ở cuối. G5/G6 chưa làm
 - **ADR:** [0088 — ngữ cảnh hạ tầng ghim theo phiên](../decisions/0088-session-infra-context.md)
 - **Route:** `/infra` → **Topology**; mở được từ một domain, một CloudFront distribution, một API, hay một stack
 - **Anh em:** [cloudwatch-logs.md](cloudwatch-logs.md) (bấm hop → mở log của hop đó), [infra-explorer.md](infra-explorer.md) (bấm node → mở resource)
@@ -88,7 +88,7 @@ Nút *"lưu vào Wiki"* ghi graph dạng Mermaid + bảng resource thành một 
 | **G1** | Khung graph (VueFlow + layout có sẵn) · node type theo service · điểm vào = CloudFront hoặc API Gateway · resolver CloudFront/APIGW/Lambda | L |
 | **G2** | Điểm vào = **domain** (Route53 + ACM) · resolver ALB/ECS/S3 · cạnh suy luận từ env (nét đứt) | M |
 | **G3** | Lớp lưu lượng: X-Ray service graph, fallback CloudWatch · tô sức khoẻ node/edge | L |
-| **G4** | Nối hai chiều với Logs: node → log group; **lần theo request** tô sáng đường đi | M |
+| **G4** | Nối hai chiều với Logs: node → log group; **lần theo request** tô sáng đường đi | M — **xong 2026-09-16** |
 | **G5** | Xuất Mermaid/PNG · lưu vào Wiki · gửi vào chat | M |
 | **G6** | Lớp VPC (subnet/SG/route) như một chế độ xem thứ hai của cùng graph | M |
 
@@ -105,3 +105,27 @@ Phụ thuộc: P0 của [session-infra-context.md](session-infra-context.md); c�
 1. **X-Ray có bật trên hệ thống của bạn không?** Có thì G3 ra "luồng request" đúng nghĩa (độ trễ từng hop); không thì G3 chỉ là sức khoẻ từng node — nên biết trước để xếp G3 sớm hay muộn.
 2. **Điểm vào chính nên là gì** — domain, hay CloudFormation stack? Nếu hạ tầng dựng bằng stack/Terraform thì đi từ stack nhanh và chính xác hơn nhiều.
 3. Có cần **so sánh hai môi trường** (dev vs prod) cạnh nhau để tìm khác biệt cấu hình không? Hữu ích nhưng là màn khác — hoãn.
+
+
+## G4 — trạng thái thực tế (2026-09-16)
+
+Hai nửa, cả hai đã nối:
+
+| Nửa | Cách đi | Ở đâu |
+|---|---|---|
+| **node → log group** | Chọn một node → panel bên phải có nút *"Xem log của node này"* → mở tab Logs ở chế độ **Dòng mới nhất** (rẻ, không tính GB quét) | `sidecar/src/infra/graph/log-groups.ts` (suy) + `InfraGraphPanel.vue` (nút) + `pages/infra.vue` (`onOpenNodeLogs`) |
+| **lần theo request → tô sáng** | Ở tab Logs, chế độ *Lần theo request* → nút *"Tô lên sơ đồ"* → chuyển tab, node ngoài đường mờ đi, chặng hỏng viền đỏ | `ui-next/composables/useInfraTraceHighlight.ts` (module-scoped, cùng khuôn `useInfraWindowSync`) |
+
+### Ba điểm lệch có chủ đích
+
+| Điểm | Mặc định người ta chờ | Thực tế | Vì sao |
+|---|---|---|---|
+| **Suy log group chỉ 3 mức** | mỗi node một nhóm log | `detail.logGroup` (ECS đọc thật từ task definition) → khuôn ép buộc của AWS (Lambda) → **tiền tố** (API Gateway, vì node không mang stage). Ngoài ra: **không có nút** | tên nhóm log đoán sai KHÔNG báo lỗi — nó mở màn Logs ra trống, và người đang chữa cháy đọc cái trống đó thành *"chặng này không ghi gì"*. AWS không ép ECS ghi vào `/ecs/<gì đó>`, nên nhánh ECS chỉ chạy được khi task definition khai `awslogs-group` |
+| **Node ngoài đường MỜ chứ không ẩn** | lọc bỏ | `opacity: 0.35` | ẩn làm sơ đồ đứt quãng và mất luôn nửa câu trả lời: *"request này KHÔNG đi qua chỗ kia"* |
+| **Khớp node ↔ chặng chỉ theo nhóm log hoặc nhãn** | khớp theo dịch vụ | ba phép: nhóm log trùng → nhóm log của node là tiền tố của nhóm chặng → nhãn trùng. **Không** có phép "cùng dịch vụ thì chắc là nó" | một tài khoản thật có hàng chục hàm Lambda; khớp theo dịch vụ sẽ tô sáng gần hết sơ đồ và làm cả tính năng vô nghĩa. Khi không khớp được node nào, dải trên đầu **nói ra** thay vì để sơ đồ mờ hết trông như hỏng |
+
+### Còn nợ của G4
+
+- **QA trong Electron thật** và **credential AWS thật** — như mọi phần khác của họ Infra.
+- **ECS mới đọc nhóm log của container ĐẦU TIÊN** khai `awslogs`. Task nhiều container ghi vào nhiều nhóm thì chỉ mở được nhóm đầu.
+- **Đường tô sáng không tự dựng sơ đồ** — nếu chưa dựng graph cho điểm vào tương ứng thì dải báo `0 node trên đường`; người dùng phải chọn điểm vào rồi dựng.

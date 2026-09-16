@@ -122,44 +122,17 @@ const view = computed(() => props.view)
   color: var(--textDim);
 }
 
-.icst-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
+/* `.icst-sec`/`-hd`/`-ttl`/`.icst-hint`/`.icst-gap` nay ở app-shell.css — chúng
+   từng là bốn bản sao y hệt nhau, một bản trong mỗi file của nhóm Chi phí. */
 
-.icst-sec-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.icst-sec-ttl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.icst-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.icst-gap {
-  flex: 1;
-}
-
+/* Không còn `border-top`: ba khối bên trên nay là card, nên đã có ranh giới nhìn
+   thấy được; thêm một vạch nữa chỉ là vạch chồng lên mép card. */
 .icst-ask {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
+  padding-top: 4px;
 }
 
 .icst-chip {

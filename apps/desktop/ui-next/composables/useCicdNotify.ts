@@ -17,7 +17,6 @@ import { computed, ref, watch } from 'vue'
 import { useInfraContext } from '~/composables/useInfraContext'
 import { useInfraCicdApi } from '~/composables/useInfraCicdApi'
 import { CICD_SOURCES, githubProjectsFor } from '~/composables/useInfraCicd'
-import { ensureNotificationPermission } from '~/composables/useGhNotifications'
 import { useSidecar } from '~/composables/useSidecar'
 import { useToast } from '~/composables/useToast'
 import { useProjectsStore } from '~/stores/projects'
@@ -243,9 +242,6 @@ export function startCicdNotifications(): void {
     { immediate: true },
   )
 }
-
-// Lượt xin quyền OS đang bay — Settings gọi khi người dùng chọn kênh gửi.
-export { ensureNotificationPermission }
 
 // Read-only view cho hộp bell.
 export function useCicdNotifyStatus() {

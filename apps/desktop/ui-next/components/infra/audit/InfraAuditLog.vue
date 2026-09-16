@@ -2,8 +2,13 @@
   <!-- Màn Nhật ký hoạt động (task 3.9). Đây là màn DUY NHẤT của `/infra` được nạp
        khi mở: nó đọc một file cục bộ, không tốn lời gọi AWS nào. -->
   <div class="ixa">
-    <header class="ixa-hd">
-      <div class="ixa-filters">
+    <!-- Thanh công cụ là MỘT CARD chứa NĂM CỤM, không phải mười một control rời
+         của một hàng `flex-wrap` phẳng. Hàng phẳng được phép gãy ở giữa hai nút
+         bất kỳ, nên khi hết chỗ nó bỏ rơi đúng "Nạp lại" xuống hàng dưới, đứng một
+         mình dưới mười control khác (ảnh người dùng 2026-09-16). Cụm là đơn vị
+         gãy: hàng vẫn xuống dòng ở cửa sổ hẹp, nhưng xuống theo ranh giới nghĩa. -->
+    <header class="itoolbar ixa-hd">
+      <div class="itoolgrp">
         <div class="seg">
           <span
             v-for="r in RANGES"
@@ -17,6 +22,12 @@
             {{ t(`infra.audit.range.${r}`) }}
           </span>
         </div>
+      </div>
+
+      <!-- Bốn ô lọc là MỘT cụm: chúng trả lời cùng một câu hỏi ("thu hẹp sổ lại"),
+           và `grow` cho cụm này nuốt chỗ thừa nên ô tìm kiếm là thứ giãn ra, không
+           phải khoảng trắng giữa các nút. -->
+      <div class="itoolgrp igrow">
         <label class="srch ixa-srch">
           <Icon name="search" />
           <input
@@ -40,13 +51,23 @@
         <label class="srch ixa-srch small">
           <input v-model="actor" :placeholder="t('infra.audit.filter.actor')" @change="load" />
         </label>
+      </div>
+
+      <!-- MỌI HÀNH ĐỘNG TRONG MỘT CỤM, đẩy về mép phải. Cụm này đủ rộng để ở cửa sổ
+           thường nó xuống hàng dưới — và đó là ý muốn: hai hàng có NGHĨA (lọc ở trên,
+           hành động ở dưới) đọc được, còn bốn cụm rơi rớt mỗi cụm một hàng thì không.
+           "Nạp lại" nằm ở đây chứ không nằm cùng bộ lọc: mọi ô lọc đã tự nạp lại khi
+           đổi (`onRange`, `watch([klass, decision])`, `@change`), nên nút này là một
+           hành động độc lập — và nó chính là nút bị bỏ rơi một mình ở hàng hai trong
+           ảnh người dùng 2026-09-16. -->
+      <div class="itoolgrp iend">
         <button class="btn sm" type="button" :disabled="loading" @click="load">
           <Icon name="refresh" />
           {{ t('infra.audit.reload') }}
         </button>
-      </div>
 
-      <div class="ixa-acts">
+        <span class="ixa-sep" />
+
         <button class="btn sm" type="button" @click="exportAs('csv')">
           <Icon name="download" />
           CSV
@@ -55,23 +76,36 @@
           <Icon name="download" />
           JSONL
         </button>
+
+        <!-- Vạch ngăn trước hai nút XOÁ: một cú bấm nhầm ở đây xoá sổ trên đĩa, nên
+             chúng không được đứng liền kề nút tải về như anh em cùng loại. -->
+        <span class="ixa-sep" />
+
+        <!-- Nhãn NGẮN trên nút, câu đầy đủ trong `title`. Hai nhãn cũ ("Dọn những
+             dòng đang hiện" · "Dọn CẢ nhật ký") chiếm ~350px của thanh cho hai
+             hành động hiếm khi dùng, và chính chúng là thứ đẩy "Nạp lại" xuống
+             hàng dưới. Icon-trần thì KHÔNG dùng được ở đây: bộ icon chỉ có một
+             glyph `trash`, nên hai nút sẽ trông y hệt nhau trong khi một cái xoá
+             theo bộ lọc còn cái kia xoá sạch sổ. -->
         <button
           class="btn sm danger"
           type="button"
+          :title="t('infra.audit.clean.title')"
           :disabled="cleaning || !entries.length"
           @click="clean('filtered')"
         >
           <Icon name="trash" />
-          {{ t('infra.audit.clean.title') }}
+          {{ t('infra.audit.clean.short') }}
         </button>
         <button
           class="btn sm danger"
           type="button"
+          :title="t('infra.audit.clean.allTitle')"
           :disabled="cleaning || !summary?.total"
           @click="clean('all')"
         >
           <Icon name="trash" />
-          {{ t('infra.audit.clean.allTitle') }}
+          {{ t('infra.audit.clean.allShort') }}
         </button>
       </div>
     </header>
@@ -94,9 +128,9 @@
 
     <div class="ixa-body" :class="{ 'has-detail': !!selected }">
       <div class="ixa-table-wrap tblcard">
-        <p v-if="loading && !entries.length" class="ixa-state">{{ t('infra.audit.loading') }}</p>
-        <p v-else-if="error" class="ixa-state err">{{ error }}</p>
-        <p v-else-if="!entries.length" class="ixa-state">{{ t('infra.audit.empty') }}</p>
+        <p v-if="loading && !entries.length" class="kt-state">{{ t('infra.audit.loading') }}</p>
+        <p v-else-if="error" class="kt-state err">{{ error }}</p>
+        <p v-else-if="!entries.length" class="kt-state">{{ t('infra.audit.empty') }}</p>
         <table v-else class="kt">
           <thead>
             <tr>
@@ -170,7 +204,7 @@
         </table>
       </div>
 
-      <aside v-if="selected" class="ixa-detail">
+      <aside v-if="selected" class="icard ixa-detail">
         <header class="ixa-detail-hd">
           <Icon name="info" />
           <span class="ixa-detail-ttl">{{ t('infra.audit.detail.title') }}</span>
@@ -345,21 +379,8 @@ function resultLine(e: InfraAuditEntry): string {
   gap: 8px;
 }
 
-.ixa-hd {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.ixa-filters {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex: 1;
-}
-
+/* Bố cục + da của thanh nằm ở `.itoolbar`/`.itoolgrp` (app-shell.css). Ở đây chỉ
+   còn những gì RIÊNG của màn này. */
 .ixa-srch {
   max-width: 220px;
 }
@@ -368,12 +389,16 @@ function resultLine(e: InfraAuditEntry): string {
   max-width: 140px;
 }
 
-.ixa-acts {
-  display: flex;
-  gap: 6px;
+/* Vạch ngăn giữa ba loại hành động của cùng một cụm (nạp lại · tải về · xoá). Là
+   một phần tử chứ không phải `border-left` của nhóm sau: nhóm đã bị gộp làm một để
+   chúng luôn xuống dòng CÙNG NHAU, nên ranh giới phải tự đứng được. */
+.ixa-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--border);
 }
 
-.ixa-acts .btn.danger,
 .ixa .btn.danger {
   color: var(--red);
 }
@@ -425,40 +450,8 @@ function resultLine(e: InfraAuditEntry): string {
   overflow: auto;
 }
 
-.kt {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
-
-.kt th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--bgSubtle);
-}
-
-.kt td {
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-}
-
-.kt-click {
-  cursor: pointer;
-}
-
-.kt-click:hover td,
-.kt-click.on td {
-  background: var(--bgHover);
-}
+/* `.kt` (da bảng dữ liệu) nay ở app-shell.css — xem ghi chú ở đó về ba bản sao đã
+   trôi khỏi nhau. Màn này không có override cột nào ngoài mấy class `.ixa-*` dưới. */
 
 .ixa-at {
   font-variant-numeric: tabular-nums;
@@ -494,26 +487,10 @@ function resultLine(e: InfraAuditEntry): string {
   gap: 4px;
 }
 
-.ixa-state {
-  margin: 0;
-  padding: 22px 14px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  text-align: center;
-}
-
-.ixa-state.err {
-  color: var(--red);
-}
-
 .ixa-detail {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
   overflow: hidden;
 }
 

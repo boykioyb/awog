@@ -54,41 +54,16 @@ const emit = defineEmits<{ (e: 'row', name: string): void }>()
 </script>
 
 <style scoped>
-.kt {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-sm);
-}
+/* Da bảng ở app-shell.css. Dưới đây CHỈ là override riêng của bảng Kubernetes. */
 
-.kt th {
-  text-align: left;
-  font-weight: 500;
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  padding: 6px 10px;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-  /* Bảng pod có thể dài hơn một màn: giữ tên cột lại khi cuộn bên trong khung. */
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--bgSubtle);
-}
-
+/* Một ô pod có thể mang nhiều dòng (trạng thái + lý do), nên ô căn theo ĐỈNH để
+   các cột một dòng không bị đẩy xuống giữa. */
 .kt td {
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
   vertical-align: top;
 }
 
 .kt-name {
   font-weight: 500;
-}
-
-.kt-num {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 
 .kt-actions-col {

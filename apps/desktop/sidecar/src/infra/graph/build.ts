@@ -30,6 +30,7 @@ import {
   type InfraResolveTarget,
   type InfraResolverSelf,
 } from './resolvers.js'
+import { logGroupForNode } from './log-groups.js'
 import {
   INFRA_GRAPH_MAX_DEPTH,
   type InfraGraph,
@@ -287,12 +288,25 @@ function startNode(target: InfraResolveTarget): InfraGraphNode {
 }
 
 function applySelf(node: InfraGraphNode, self: InfraResolverSelf | undefined): InfraGraphNode {
-  if (!self) return node
-  return {
-    ...node,
-    ...(self.label !== undefined && self.label !== '' ? { label: self.label } : {}),
-    detail: { ...node.detail, ...(self.detail ?? {}) },
-  }
+  const merged: InfraGraphNode = self
+    ? {
+        ...node,
+        ...(self.label !== undefined && self.label !== '' ? { label: self.label } : {}),
+        detail: { ...node.detail, ...(self.detail ?? {}) },
+      }
+    : node
+  return withLogGroup(merged)
+}
+
+/**
+ * Gắn nhóm log suy được (G4) — ĐẶT Ở ĐÂY vì đây là chỗ DUY NHẤT một node được hoàn
+ * thiện trước khi rời sidecar, và cả `resolve` lẫn `expand` đều đi qua nó. Suy ở
+ * tầng UI thì hai màn sẽ có hai phép suy, và phép ở đây cần `detail.logGroup` mà
+ * chỉ resolver mới đọc được.
+ */
+function withLogGroup(node: InfraGraphNode): InfraGraphNode {
+  const got = logGroupForNode(node)
+  return got ? { ...node, logGroup: got } : node
 }
 
 // ─── Lớp lưu lượng ────────────────────────────────────────────────────────────

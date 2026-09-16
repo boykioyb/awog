@@ -15,12 +15,17 @@
 // SNAPSHOT LÀ SỰ THẬT. Mọi hàm ghi đều lấy snapshot RPC trả về làm state mới chứ
 // không tự sửa state tại chỗ: ghi hỏng thì màn hình phải quay lại đúng thứ đang
 // nằm trên đĩa, không được hiển thị một quyền mà máy không thật sự có.
+//
+// BA KIỂU CỦA MA TRẬN KHÔNG KHAI Ở ĐÂY. `InfraMode`/`InfraCommandClass` là bản
+// mirror của sidecar, nhà của chúng là `~/types`; `InfraAccountKind` là của
+// `useConfirm` (hộp duyệt đã dùng để tô chip đỏ). Khai lại trong một composable
+// là dựng thêm một cái tên trùng trong vùng auto-import của Nuxt — nó chỉ giữ
+// được một, nên nơi gọi bốc phải định nghĩa nào là do thứ tự quét quyết định.
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import type { InfraAccountKind } from '~/composables/useConfirm'
+import type { InfraCommandClass, InfraMode } from '~/types'
 
-export type InfraMode = 'auto' | 'ask' | 'block'
-export type InfraCommandClass = 'read' | 'write' | 'destructive' | 'context-switch'
-export type InfraAccountKind = 'normal' | 'production'
 export type InfraMatrix = Record<InfraCommandClass, Record<InfraAccountKind, InfraMode>>
 
 export interface InfraPolicySnapshot {

@@ -14,7 +14,9 @@
        SFC này chỉ ghép khối + giữ controller. Mọi state/lời gọi RPC nằm ở
        `useInfraKube()` (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
   <div class="ik">
-    <div class="iktool">
+    <!-- Thanh ngữ cảnh là một CARD (`.itoolbar`, app-shell.css), và ba nút bên phải
+         là MỘT cụm nên chúng không bị tách rời nhau khi hàng xuống dòng. -->
+    <div class="itoolbar ifields iktool">
       <div class="ifield">
         <div class="ilbl">{{ t('infra.kube.col.cluster') }}</div>
         <!-- Khoá trong lúc bảng đang nạp: đổi cluster giữa chừng là cảnh race thật
@@ -42,45 +44,47 @@
         />
       </div>
 
-      <!-- Bảng context + đường thêm cluster: việc thỉnh thoảng mới làm, nên nằm
-           trong modal. Số bên cạnh là số context máy này đọc được. -->
-      <button type="button" class="btn" :title="pathsLabel" @click="kube.openClusters()">
-        <Icon name="k8s" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ t('infra.kube.manage.open') }}
-        <span v-if="contexts.length" class="ikcount">{{ contexts.length }}</span>
-      </button>
+      <div class="itoolgrp iend">
+        <!-- Bảng context + đường thêm cluster: việc thỉnh thoảng mới làm, nên nằm
+             trong modal. Số bên cạnh là số context máy này đọc được. -->
+        <button type="button" class="btn" :title="pathsLabel" @click="kube.openClusters()">
+          <Icon name="k8s" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{ t('infra.kube.manage.open') }}
+          <span v-if="contexts.length" class="ikcount">{{ contexts.length }}</span>
+        </button>
 
-      <!-- Icon quay theo `busy`: nút vô hiệu mà đứng im thì người dùng không phân
-           biệt được "đang nạp" với "nút hỏng". -->
-      <button
-        type="button"
-        class="btn"
-        :disabled="!pinnedCluster || busy"
-        :aria-busy="busy"
-        :title="t('infra.kube.refresh')"
-        @click="kube.refreshWorkload()"
-      >
-        <Icon
-          name="refresh"
-          :class="{ ikspin: busy }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-      </button>
-
-      <!-- Chú thích dài (danh tính kubectl dùng, nhật ký hoạt động) không chiếm chỗ
-           trên màn: một cú bấm là thấy, bấm ra ngoài là gập. -->
-      <div ref="noteWrapRef" class="iknotewrap">
+        <!-- Icon quay theo `busy`: nút vô hiệu mà đứng im thì người dùng không phân
+             biệt được "đang nạp" với "nút hỏng". -->
         <button
           type="button"
           class="btn"
-          :title="t('infra.kube.footnote.title')"
-          :aria-expanded="noteOpen"
-          @click="noteOpen = !noteOpen"
+          :disabled="!pinnedCluster || busy"
+          :aria-busy="busy"
+          :title="t('infra.kube.refresh')"
+          @click="kube.refreshWorkload()"
         >
-          <Icon name="info" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon
+            name="refresh"
+            :class="{ ikspin: busy }"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
         </button>
-        <div v-if="noteOpen" class="smenu iknote" role="note">
-          <p class="iknotetxt">{{ t('infra.kube.footnote') }}</p>
+
+        <!-- Chú thích dài (danh tính kubectl dùng, nhật ký hoạt động) không chiếm
+             chỗ trên màn: một cú bấm là thấy, bấm ra ngoài là gập. -->
+        <div ref="noteWrapRef" class="iknotewrap">
+          <button
+            type="button"
+            class="btn"
+            :title="t('infra.kube.footnote.title')"
+            :aria-expanded="noteOpen"
+            @click="noteOpen = !noteOpen"
+          >
+            <Icon name="info" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </button>
+          <div v-if="noteOpen" class="smenu iknote" role="note">
+            <p class="iknotetxt">{{ t('infra.kube.footnote') }}</p>
+          </div>
         </div>
       </div>
     </div>

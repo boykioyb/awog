@@ -139,36 +139,6 @@ function usd(v: number): string {
 /* Vỏ khối (`.icst-sec*`, `.icst-hint`, `.icst-ic`, `.icst-spin`) lặp ở cả ba tab con.
    Cố ý: ba bản sao của bảy luật ngắn rẻ hơn một stylesheet dùng chung hoặc một
    chuỗi `:deep()` từ component cha — và giữ mỗi tab con đọc được một mình. */
-.icst-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.icst-sec-hd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.icst-sec-ttl {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
-}
-
-.icst-hint {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.icst-gap {
-  flex: 1;
-}
 
 .icst-muted {
   color: var(--textFaint);

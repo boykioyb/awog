@@ -10,58 +10,66 @@
        SFC này chỉ ghép khối + bind. Mọi state/lời gọi RPC nằm ở `useInfraCicd()`
        (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
   <div class="icd">
-    <div class="ictool">
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.cicd.filter.source') }}</div>
-        <AppSelect
-          :model-value="sourceFilter"
-          :options="sourceOptions"
-          width="100%"
+    <!-- Thanh lọc là một CARD (`.itoolbar`), và ba ô lọc + nút ↻ là hai CỤM, không
+         phải bốn mục rời của một hàng `flex-wrap`: hàng phẳng bỏ rơi nút ↻ xuống
+         dòng riêng khi hết chỗ. Xem ghi chú `.itoolbar` ở app-shell.css. -->
+    <div class="itoolbar ifields ictool">
+      <div class="itoolgrp ifields">
+        <div class="ifield">
+          <div class="ilbl">{{ t('infra.cicd.filter.source') }}</div>
+          <AppSelect
+            :model-value="sourceFilter"
+            :options="sourceOptions"
+            width="100%"
+            :disabled="loading"
+            @update:model-value="setSource"
+          />
+        </div>
+
+        <div class="ifield">
+          <div class="ilbl">{{ t('infra.cicd.filter.branch') }}</div>
+          <input
+            v-model="branchFilter"
+            class="icinput"
+            type="text"
+            :placeholder="t('infra.cicd.filter.branchAny')"
+            :disabled="loading"
+            @keydown.enter="refresh()"
+          />
+        </div>
+
+        <div class="ifield narrow">
+          <div class="ilbl">{{ t('infra.cicd.filter.window') }}</div>
+          <AppSelect
+            :model-value="windowKey"
+            :options="windowOptions"
+            width="100%"
+            :disabled="loading"
+            @update:model-value="(v: string) => (windowKey = v)"
+          />
+        </div>
+
+        <button
+          type="button"
+          class="btn"
           :disabled="loading"
-          @update:model-value="setSource"
-        />
+          :aria-busy="loading"
+          :title="t('infra.cicd.refresh')"
+          @click="refresh()"
+        >
+          <Icon
+            name="refresh"
+            :class="{ spin: loading }"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
+          {{ t('infra.cicd.refresh') }}
+        </button>
       </div>
 
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.cicd.filter.branch') }}</div>
-        <input
-          v-model="branchFilter"
-          class="icinput"
-          type="text"
-          :placeholder="t('infra.cicd.filter.branchAny')"
-          :disabled="loading"
-          @keydown.enter="refresh()"
-        />
-      </div>
-
-      <div class="ifield narrow">
-        <div class="ilbl">{{ t('infra.cicd.filter.window') }}</div>
-        <AppSelect
-          :model-value="windowKey"
-          :options="windowOptions"
-          width="100%"
-          :disabled="loading"
-          @update:model-value="(v: string) => (windowKey = v)"
-        />
-      </div>
-
-      <button
-        type="button"
-        class="btn"
-        :disabled="loading"
-        :aria-busy="loading"
-        :title="t('infra.cicd.refresh')"
-        @click="refresh()"
-      >
-        <Icon
-          name="refresh"
-          :class="{ spin: loading }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-        {{ t('infra.cicd.refresh') }}
-      </button>
-
-      <div class="icstats">
+      <!-- `v-if`: cụm RỖNG vẫn là một mục flex, và với `margin-left: auto` nó vẫn
+           chiếm một hàng của thanh — đo được 20px chiều cao chết khi chưa nạp gì
+           (2026-09-16). Không có số nào để khoe thì cụm không tồn tại. -->
+      <div v-if="hasStats" class="itoolgrp iend icstats">
         <span v-if="counts.running" class="icstat run">
           {{ t('infra.cicd.statusCount.running', { n: counts.running }) }}
         </span>
@@ -118,7 +126,7 @@
     <div v-if="error" class="icerr">{{ msg(error) }}</div>
 
     <div class="icbody">
-      <div class="iclist" :class="{ narrow: !!openId }">
+      <div class="tblcard iclist" :class="{ narrow: !!openId }">
         <div v-if="!rows.length && !loading" class="icempty">
           {{ results.length ? t('infra.cicd.empty.filtered') : t('infra.cicd.empty') }}
         </div>
@@ -176,7 +184,7 @@
       </div>
 
       <!-- Cột chi tiết: bước · log từng bước · artifact · PR · tên biến môi trường. -->
-      <aside v-if="openId" class="icdetail">
+      <aside v-if="openId" class="tblcard icdetail">
         <div class="icdhead">
           <div class="icdtitle">
             <span class="icdot" :class="`st-${detail?.run.status ?? 'unknown'}`" />
@@ -432,6 +440,15 @@ import type { CicdRun, CicdSource, CicdStep } from '~/composables/useInfraCicdAp
 import { useLinkOpen } from '~/composables/useLinkOpen'
 
 const { t } = useI18n()
+
+/** Thanh có gì để khoe không — xem `v-if` trên `.icstats` ở template. */
+const hasStats = computed(
+  () =>
+    Boolean(loadedAt.value) ||
+    counts.value.running > 0 ||
+    counts.value.waiting > 0 ||
+    counts.value.failed > 0,
+)
 const { openExternally } = useLinkOpen()
 
 // Gieo log group của CodeBuild sang tab Logs (log của nó nằm ở CloudWatch và chỗ
@@ -619,26 +636,8 @@ function openPr(pr: { url: string }): void {
      14px 16px là lề chung của Logs · Giám sát · Bảng · Chi phí · Báo cáo. */
   padding: 14px 16px;
 }
-.ictool {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.ifield {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 140px;
-}
-.ifield.narrow {
-  min-width: 110px;
-}
-.ilbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
-}
+/* Bố cục + da của thanh, và khuôn `.ifield`/`.ilbl` bên trong thanh, nay ở
+   app-shell.css — đây từng là một trong BA bản khai `.ifield` khác nhau của khu. */
 .icinput {
   height: 30px;
   padding: 0 10px;
@@ -654,10 +653,7 @@ function openPr(pr: { url: string }): void {
   border-color: var(--accentBorder);
 }
 .icstats {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  margin-left: auto;
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
   color: var(--textMuted);
@@ -727,13 +723,11 @@ function openPr(pr: { url: string }): void {
   min-height: 0;
   flex: 1;
 }
+/* Da card (viền · bo · nền · bóng) ở `.tblcard`; đây chỉ còn bố cục. */
 .iclist {
   flex: 1;
   min-width: 0;
   overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
 }
 .icempty,
 .icdnote {
@@ -758,8 +752,12 @@ function openPr(pr: { url: string }): void {
 .icrow:hover {
   background: var(--bgHover);
 }
+/* Dòng đang chọn = accent-tint + thanh accent 2px, KHÔNG nền xám `--bgActive` —
+   luật chọn của cả app (.claude/rules/nuxt-vue.md §UI patterns; nền xám đã thử và
+   bị bác). `box-shadow: inset` vẽ thanh mà không ăn vào đệm trái của dòng. */
 .icrow.on {
-  background: var(--bgActive);
+  background: var(--accentDim);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 .icdot {
   flex: 0 0 auto;
@@ -882,9 +880,6 @@ function openPr(pr: { url: string }): void {
   flex: 0 0 380px;
   min-width: 0;
   overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
   padding: 10px;
   display: flex;
   flex-direction: column;
@@ -978,7 +973,7 @@ function openPr(pr: { url: string }): void {
 }
 .icstep.on {
   border-color: var(--accentBorder);
-  background: var(--bgActive);
+  background: var(--accentDim);
 }
 .icstepname {
   flex: 1;

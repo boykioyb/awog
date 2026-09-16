@@ -20,7 +20,7 @@
     </div>
 
     <ul v-else class="rpt-list">
-      <li v-for="info in kinds" :key="info.kind" class="rpt-card">
+      <li v-for="info in kinds" :key="info.kind" class="icard rpt-card">
         <div class="rpt-card-hd">
           <h3 class="rpt-kind">{{ t(info.labelKey) }}</h3>
         </div>
@@ -164,9 +164,6 @@ onMounted(reload)
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
 }
 
 .rpt-card-hd {

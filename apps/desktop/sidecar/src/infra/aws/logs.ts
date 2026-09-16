@@ -58,6 +58,9 @@ const MAX_GROUP_LIMIT = 500
 const MAX_GROUP_PAGES = MAX_GROUP_LIMIT / GROUP_PAGE_LIMIT
 const DEFAULT_TAIL_LIMIT = 100
 const MAX_TAIL_LIMIT = 1000
+/** Trần MỘT LƯỢT `describe-log-streams`. AWS chặn cứng ở 50, giống describe-log-groups.
+ *  Một trang (50 stream mới nhất) đủ cho một picker; không nối trang. */
+const STREAM_LIMIT = 50
 const MAX_QUERY_CHARS = 4096
 const MAX_PATTERN_CHARS = 1024
 
@@ -89,6 +92,14 @@ export type LogGroupPage = {
   groups: LogGroup[]
   /** Còn trang sau ⇒ UI phải nói "còn nữa" chứ không cắt im lặng. */
   nextToken: string | null
+}
+
+/** Một log STREAM của một group (tầng giữa của CloudWatch: group → stream → event). */
+export type LogStream = {
+  name: string
+  /** Thời điểm event gần nhất — cột sắp xếp (mới nhất trước). */
+  lastEventAt: number | null
+  storedBytes: number
 }
 
 /** Một dòng kết quả Insights: mỗi trường là một cặp `field`/`value` đã đổi sang
@@ -175,6 +186,19 @@ const FilterEventsSchema = z.object({
   searchedLogStreams: z.array(z.unknown()).optional(),
 })
 
+const DescribeStreamsSchema = z.object({
+  logStreams: z
+    .array(
+      z.object({
+        logStreamName: z.string().max(512),
+        lastEventTimestamp: z.number().optional(),
+        storedBytes: z.number().nonnegative().optional(),
+      }),
+    )
+    .default([]),
+  nextToken: z.string().max(8192).optional(),
+})
+
 // ─── Kiểm tra đầu vào (thuần, test được bằng bảng) ──────────────────────────
 
 export function isValidLogGroup(name: string): boolean {
@@ -183,6 +207,21 @@ export function isValidLogGroup(name: string): boolean {
 
 export function isValidQueryId(id: string): boolean {
   return QUERY_ID_RE.test(id)
+}
+
+/**
+ * Tên log STREAM: không gian ký tự rộng hơn log group (chứa `[$LATEST]`, `/`, dấu
+ * cách…). CloudWatch chỉ cấm `:` và `*`; ta cấm thêm ký tự điều khiển để không lọt
+ * newline vào argv. Kiểm bằng vòng lặp thay vì regex control-char (tránh lint
+ * `no-control-regex`).
+ */
+export function isValidLogStream(name: string): boolean {
+  if (name.length < 1 || name.length > 512) return false
+  for (const ch of name) {
+    const code = ch.codePointAt(0) ?? 0
+    if (code < 0x20 || ch === ':' || ch === '*') return false
+  }
+  return true
 }
 
 /**
@@ -353,6 +392,68 @@ function toLogGroup(raw: {
     storedBytes: raw.storedBytes ?? 0,
     retentionDays: raw.retentionInDays ?? null,
     createdAt: raw.creationTime ?? null,
+  }
+}
+
+// ─── Đọc: log stream (tầng giữa group → stream → event) ──────────────────────
+
+export type ListLogStreamsInput = {
+  logGroup: string
+  profile?: string | undefined
+  region?: string | undefined
+  surface: InfraSurface
+  actor?: string | undefined
+  limit?: number | undefined
+}
+
+/**
+ * Liệt kê các log STREAM của một group, MỚI NHẤT trước (`--order-by LastEventTime
+ * --descending`). Đọc metadata rẻ như `describe-log-groups`, KHÔNG tính GB quét —
+ * nên được phép chạy khi người dùng bấm vào một group. Một trang (≤50) là đủ cho
+ * picker; stream cũ hơn hiếm khi cần và người dùng vẫn xem được qua "Tất cả stream".
+ */
+export async function listLogStreams(
+  input: ListLogStreamsInput,
+): Promise<LogsOutcome<{ streams: LogStream[]; truncated: boolean }>> {
+  if (!isValidLogGroup(input.logGroup)) return { ok: false, error: 'INVALID_LOG_GROUP' }
+  const limit = Math.min(Math.max(input.limit ?? STREAM_LIMIT, 1), STREAM_LIMIT)
+
+  const run = await runInfra({
+    tool: 'aws',
+    args: [
+      'logs',
+      'describe-log-streams',
+      '--output',
+      'json',
+      flagValue('--log-group-name', input.logGroup),
+      // Mới nhất trước. `--order-by LastEventTime` không kết hợp được với
+      // `--log-stream-name-prefix`, và ta không lọc tiền tố nên không xung đột.
+      '--order-by',
+      'LastEventTime',
+      '--descending',
+      flagValue('--limit', String(limit)),
+    ],
+    context: { ...(input.profile ? { profile: input.profile } : {}), ...(input.region ? { region: input.region } : {}) },
+    actor: input.actor ?? 'human',
+    surface: input.surface,
+    toolName: 'logs_streams',
+    decision: 'approved',
+    timeoutMs: QUERY_TIMEOUT_MS,
+  })
+  if (!run.ok) return { ok: false, error: cliError(run) }
+
+  const parsed = DescribeStreamsSchema.safeParse(parseJson(run.stdout))
+  if (!parsed.success) return { ok: false, error: 'BAD_OUTPUT' }
+  return {
+    ok: true,
+    value: {
+      streams: parsed.data.logStreams.map((s) => ({
+        name: s.logStreamName,
+        lastEventAt: s.lastEventTimestamp ?? null,
+        storedBytes: s.storedBytes ?? 0,
+      })),
+      truncated: parsed.data.nextToken !== undefined,
+    },
   }
 }
 
@@ -584,6 +685,8 @@ export type TailInput = {
   endMs: number
   /** Pattern của `--filter-pattern` (cú pháp CloudWatch metric filter). Rỗng = mọi dòng. */
   filterPattern?: string | undefined
+  /** Thu hẹp về MỘT stream (`--log-stream-names`). Bỏ trống = mọi stream của group. */
+  logStreamName?: string | undefined
   limit?: number | undefined
   profile?: string | undefined
   region?: string | undefined
@@ -606,8 +709,18 @@ export async function tailWindow(input: TailInput): Promise<LogsOutcome<{ events
   if (pattern.length > MAX_PATTERN_CHARS) return { ok: false, error: 'PATTERN_TOO_LONG' }
   const limit = Math.min(Math.max(input.limit ?? DEFAULT_TAIL_LIMIT, 1), MAX_TAIL_LIMIT)
 
+  // `filter-log-events` chỉ nhận MỘT `--log-group-name` (SỐ ÍT) — khác hẳn
+  // `start-query` của Insights vốn dùng `--log-group-names` (số nhiều). Màn tail
+  // luôn bấm đúng một nhóm, nên lấy nhóm đầu; nhóm dư (nếu có) bị bỏ qua có chủ ý.
+  const group = input.logGroups[0]
+  if (!group) return { ok: false, error: 'NO_LOG_GROUP' }
+  const stream = input.logStreamName?.trim() ?? ''
+  if (stream && !isValidLogStream(stream)) return { ok: false, error: 'INVALID_LOG_STREAM' }
   const args = ['logs', 'filter-log-events', '--output', 'json']
-  for (const g of input.logGroups) args.push(flagValue('--log-group-names', g))
+  args.push(flagValue('--log-group-name', group))
+  // Thu hẹp về một stream nếu có (tầng group → stream → event). Bỏ trống thì
+  // `filter-log-events` gộp mọi stream — chính là lối "Tất cả stream".
+  if (stream) args.push(flagValue('--log-stream-names', stream))
   args.push(flagValue('--start-time', String(window.start)))
   args.push(flagValue('--end-time', String(window.end)))
   args.push(flagValue('--limit', String(limit)))

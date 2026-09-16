@@ -28,6 +28,15 @@ export type InfraGraphNode = {
   /** Resolver còn bước nữa cho node này. */
   expandable: boolean
   detail: Record<string, string>
+  /**
+   * Nhóm log của node, do sidecar suy ở `graph/log-groups.ts` (G4). VẮNG MẶT khi
+   * không suy được — và vắng mặt là một câu trả lời: UI ẩn nút "xem log" thay vì
+   * mở màn Logs với một tên nhóm bịa ra.
+   *
+   * `prefix` dùng để LỌC danh sách nhóm (API Gateway: node không mang stage nên
+   * tên đầy đủ chỉ có sau khi người dùng chọn), `exact` mở thẳng được.
+   */
+  logGroup?: { kind: 'exact' | 'prefix'; value: string }
 }
 
 export type InfraGraphEdgeSource = 'describe' | 'traffic' | 'config'

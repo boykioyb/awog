@@ -1332,21 +1332,11 @@ textarea.gcpta {
   overflow: hidden;
   padding: 10px 16px 14px;
 }
-.iktool {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  flex: 0 0 auto;
-  min-width: 0;
-}
-/* Ô chọn trên thanh: đủ rộng để đọc tên cluster, không giãn hết màn. */
+/* Bố cục + da ở `.itoolbar` (xa hơn trong file). Ở đây chỉ còn bề rộng riêng của
+   hai ô chọn: đủ rộng để đọc tên cluster, không giãn hết màn. */
 .iktool > .ifield {
-  margin: 0;
   flex: 0 1 260px;
   min-width: 0;
-}
-.iktool > .btn {
-  flex: 0 0 auto;
 }
 /* Số đếm cạnh nhãn (số cluster đọc được, số pod trong bảng…). */
 .ikcount {
@@ -1557,6 +1547,33 @@ textarea.gcpta {
 .ikm-body > .ikpre {
   max-height: none;
   flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Tab Terminal của pod: shell nhúng (`WorkspaceTerminal`) lấp hết phần thân còn
+   lại — cùng cơ chế fill với `.ikpre` ở trên. `.wsterm` con dùng height:100% nên
+   cần một chiều cao XÁC ĐỊNH ở đây; `min-height` để cửa sổ thấp vẫn gõ được (thân
+   modal `overflow-y:auto` sẽ cho cuộn khi thiếu chỗ). Rule đặt Ở ĐÂY (không phải
+   `<style scoped>` của InfraKubeExecTab) vì nó phải chắc chắn nạp cùng app-shell,
+   và `.ikm-term` là con trực tiếp của `.ikm-body` như `.ikpre`. */
+.ikm-body > .ikm-term {
+  display: flex;
+  /* PHẢI là column: mặc định `display:flex` là ROW, khi đó `.wsterm` con co theo
+     NỘI DUNG (chỉ rộng bằng thanh tab). Column ⇒ con giãn hết chiều ngang. */
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 360px;
+}
+/* `.wsterm` (root của WorkspaceTerminal) mặc định lấp cha bằng `height:100%` — NHƯNG
+   chiều cao của `.ikm-term` do FLEX quyết (không phải `height` tường minh), nên
+   `height:100%` KHÔNG resolve và `.wsterm` co về đúng thanh tab (~33px), `.wsterm-stage`
+   + ô xterm cao 0 ⇒ `WorkspaceTerminal` không đo được → không gọi create() → không có
+   hộp duyệt lẫn shell (đo tại chỗ: ikm-term h=360 mà wsterm h=33). Cho nó GROW trong
+   cột flex thay vì dựa vào %-height. Session panel/global dock KHÔNG dính vì ở đó cha
+   có chiều cao tường minh. */
+.ikm-body > .ikm-term > .wsterm {
+  flex: 1 1 0;
   min-height: 0;
 }
 
@@ -1861,11 +1878,239 @@ textarea.gcpta {
 
    Chỉ chứa SKIN. Bố cục (flex · overflow · max-height · sticky header) thuộc về màn
    sở hữu nó — đó là lý do class này không khai gì ngoài bốn dòng dưới. */
-.tblcard {
+/* MỘT định nghĩa da-card cho cả khu hạ tầng. `.tblcard` là bảng, `.icard` là một
+   khối bất kỳ, `.itoolbar` là thanh công cụ — ba VAI TRÒ, một bề mặt. Khai riêng
+   từng chỗ là ba nơi để lệch nhau khi đổi bo góc hay đổ bóng. */
+.tblcard,
+.icard,
+.icst-sec,
+.itoolbar {
   border: 1px solid var(--border);
   border-radius: var(--r-card);
   background: var(--bgPanel);
   box-shadow: var(--shadow-sm);
+}
+
+/* ── Khối nội dung của nhóm Chi phí ──────────────────────────────────────────
+   BỐN BẢN SAO Y HỆT NHAU: `.icst-sec` + `.icst-sec-hd` + `.icst-sec-ttl` +
+   `.icst-hint` + `.icst-gap` được chép nguyên vào cả bốn file của nhóm Chi phí, vì
+   `<style scoped>` không cho file này mượn class của file kia. Chép đi chép lại là
+   cách duy nhất để nó "chạy", và cũng là cách chắc chắn để bốn bản trôi khỏi nhau
+   ở lần sửa câu chữ đầu tiên. Khai một lần ở đây, bốn bản kia gỡ đi.
+
+   VÀ NÓ THÀNH CARD. Trước 2026-09-16 khối chỉ có một `border-top` mảnh trên nền
+   trang — ở theme sáng nền trang và nền panel gần như trùng nhau, nên ba khối của
+   màn Chi phí đọc ra thành một dải chữ liền, không ra ba khối (ảnh người dùng). */
+.icst-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+}
+
+.icst-sec-hd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.icst-sec-ttl {
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  color: var(--text);
+}
+
+.icst-hint {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--textFaint);
+}
+
+.icst-gap {
+  flex: 1;
+}
+
+/* ── Thanh công cụ của khu `/infra` ──────────────────────────────────────────
+   VÌ SAO LÀ CARD. Ở theme sáng `--bg` (#fafbfc) và `--bgPanel` (#ffffff) gần như
+   không phân biệt được, nên một hàng nút trôi thẳng trên nền trang không có gì
+   giữ nó lại với nhau: mắt đọc ra một đám nút rời rạc chứ không phải một thanh
+   (ảnh người dùng 2026-09-16, màn Nhật ký). Cùng lý do đã đưa `.tblcard` vào đây
+   ngày 2026-09-15, chỉ khác chỗ áp.
+
+   VÌ SAO CÓ `.itoolgrp`. Một `flex-wrap` phẳng được phép gãy ở GIỮA HAI NÚT BẤT KỲ,
+   nên khi hết chỗ nó bỏ rơi đúng một nút xuống hàng dưới — "Nạp lại" đứng một mình
+   dưới mười control khác. Bọc mỗi cụm nghĩa vào một `.itoolgrp` thì cụm là đơn vị
+   gãy: hàng vẫn xuống dòng khi hẹp, nhưng xuống theo cụm và chỗ gãy luôn là chỗ
+   người đọc đã hiểu là một ranh giới. */
+.itoolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  flex: 0 0 auto;
+}
+
+/* ── Bảng dữ liệu của khu `/infra` ───────────────────────────────────────────
+   `.kt` ĐÃ ĐƯỢC KHAI BA LẦN trong ba `<style scoped>` khác nhau (bảng tài nguyên ·
+   nhật ký · Kubernetes) và ba bản đã trôi khỏi nhau — đệm ô 6px ở chỗ này, 7px ở
+   chỗ kia, `line-height` có ở hai chỗ và thiếu ở chỗ thứ ba. Người dùng thứ TƯ
+   (`InfraTrailPanel`) thì không khai gì cả và mượn bản của `InfraAuditLog` qua biên
+   component — nghĩa là bảng CloudTrail render bằng mặc định trần của trình duyệt:
+   không đệm, không viền, không header dính (đo 2026-09-16).
+
+   Ba bản sao là quá Rule of Three, nên da bảng về đây. Cái gì thuộc về CỘT của một
+   màn cụ thể (cắt ellipsis ở bảng tài nguyên, `vertical-align: top` ở Kubernetes,
+   canh phải cho cột số) thì vẫn ở lại màn đó dưới dạng override. */
+.kt {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* `sticky` + nền đục: bảng nào cũng có thể dài hơn khung cuộn của nó, và một hàng
+   tiêu đề trôi mất khi cuộn là bảng mất nhãn cột. */
+.kt th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bgSubtle);
+  text-align: left;
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--textMuted);
+}
+
+.kt td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.kt-click {
+  cursor: pointer;
+}
+
+.kt-click:hover td,
+.kt-click.on td {
+  background: var(--bgHover);
+}
+
+.kt-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Cột chỉ vừa đúng nội dung của nó (nút hàng, badge) — `1%` là mẹo cũ của bảng:
+   nhỏ hơn mọi nội dung nên trình duyệt co cột về đúng bề rộng nội dung. */
+.kt-act {
+  width: 1%;
+}
+
+/* Câu "đang tải" / "rỗng" / "lỗi" đứng THAY CHỖ bảng, nên nó phải chiếm chiều cao
+   của một bảng chứ không phải của một dòng chữ. Cũng là một class từng bị mượn qua
+   biên component: `InfraTrailPanel` dùng `.ixa-state` của `InfraAuditLog`, tức là
+   ba câu trạng thái của CloudTrail render trần, sát mép trái, không đệm. */
+.kt-state {
+  margin: 0;
+  padding: 22px 14px;
+  text-align: center;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textDim);
+}
+
+.kt-state.err {
+  color: var(--red);
+}
+
+/* Thanh có ô NHÃN-TRÊN-CONTROL (Giám sát · Bảng điều khiển) căn theo ĐÁY, không
+   theo giữa: nhãn cao thấp khác nhau thì căn giữa đẩy các ô lệch nhau theo trục
+   dọc. */
+.itoolbar.ifields {
+  align-items: flex-end;
+}
+
+/* `flex-wrap` bên trong cụm là LỐI THOÁT CUỐI, không phải hành vi thường: vì cụm
+   là `flex: 0 0 auto`, bề rộng cơ sở của nó là max-content, nên thanh luôn ưu tiên
+   gãy GIỮA các cụm trước. Chỉ khi chính một cụm rộng hơn cả hàng thì nó mới tự
+   xuống dòng bên trong — vẫn hơn là tràn ra khỏi card. */
+.itoolgrp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+/* Cụm được phép nuốt chỗ thừa (thường là cụm bộ lọc có ô tìm kiếm).
+
+   BASIS 260px, KHÔNG PHẢI `auto`, và đó là con số quyết định hàng gãy ở đâu. Flex
+   xếp item lên hàng theo KÍCH THƯỚC GIẢ ĐỊNH của nó (flex-basis), rồi mới co/giãn
+   những gì đã nằm trên cùng một hàng. Với `auto` thì basis = max-content: cụm bộ
+   lọc của màn Nhật ký khai 837px, nên nó không bao giờ đứng vừa cạnh cụm khoảng
+   thời gian và luôn tự xuống dòng — đo được 4 hàng, thanh cao 155px. 260px là bề
+   rộng mà cụm vẫn đọc được, nên nó xin đúng chừng đó để lên hàng rồi giãn ra nuốt
+   chỗ thừa. `min-width: 0` bắt buộc: thiếu nó thì nội dung nội tại làm sàn và cụm
+   không co xuống basis được. */
+/* TIỀN TỐ `i`, KHÔNG PHẢI `grow`/`end`/`fields` trần. `.grow` ĐÃ TỒN TẠI trong
+   prototype.css — nó là một hàng repo git (`display:flex; padding: 8px 0; border-top:
+   1px solid var(--border)`). Selector của tôi là `.itoolgrp.grow`, nhưng rule cũ là
+   `.grow` trần nên nó vẫn khớp cùng phần tử: cụm bộ lọc màn Nhật ký mọc thêm một
+   đường kẻ ngang phía trên và 16px đệm dọc không ai đặt (đo được 2026-09-16 — cụm
+   cao 51px thay vì 34px). Ba modifier đều đổi cùng lúc: `end` và `fields` hôm nay
+   chưa đụng ai, nhưng một tên trần thì chỉ là chưa đụng CHỨ KHÔNG PHẢI an toàn. */
+.itoolgrp.igrow {
+  flex: 1 1 380px;
+  min-width: 0;
+}
+
+/* Đẩy cụm về mép phải mà KHÔNG cần một <div> trống làm spacer — một phần tử chỉ
+   để chiếm chỗ là chrome không mang tin, và nó còn là một điểm gãy nữa. */
+.itoolgrp.iend {
+  margin-left: auto;
+}
+
+/* Cụm nhãn-trên-control bên trong `.itoolbar.ifields`. */
+.itoolgrp.ifields {
+  align-items: flex-end;
+}
+
+/* ── `.ifield` trong một thanh công cụ ───────────────────────────────────────
+   MỘT TÊN, HAI NGỮ CẢNH. Bản toàn cục (`margin-top: 12px`, ngay trên) là một DÒNG
+   CỦA FORM DỌC — đúng cho các popover hạ tầng ở Sessions, nơi các ô xếp chồng. Trong
+   một thanh công cụ thì ô nằm NGANG HÀNG với ô khác và cần nhãn-trên-control.
+
+   Trước 2026-09-16 mỗi màn tự xoay xở với chuyện đó và kết quả là BA bản khai khác
+   nhau (`InfraMonitoring`, `InfraCicd`, và bản tôi vừa thêm vào `InfraDashboards`),
+   cộng một màn mượn bản của màn khác qua biên `<style scoped>` và không nhận được
+   gì. Ngữ cảnh quyết định, khai một lần, ba bản sao kia gỡ đi. */
+.itoolbar .ifield {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+  margin-top: 0;
+}
+
+.itoolbar .ifield.narrow {
+  min-width: 110px;
+}
+
+/* `.ilbl` toàn cục mang `margin-bottom: 6px` cho form dọc. Trong thanh công cụ nó
+   nằm trong một flex column đã có `gap: 4px`, nên margin ấy là khoảng cách THỨ HAI
+   chồng lên khoảng cách thứ nhất — đó là 2px lệch giữa ô có nhãn và ô không nhãn. */
+.itoolbar .ilbl {
+  margin-bottom: 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--textMuted);
 }
 
 /* Smoother state changes on the common interactive surfaces (was a mix of .12s

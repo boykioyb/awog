@@ -153,10 +153,9 @@ import {
   INFRA_KINDS,
   INFRA_MODES,
   useInfraPolicySettings,
-  type InfraAccountKind,
-  type InfraCommandClass,
-  type InfraMode,
 } from '~/composables/useInfraPolicySettings'
+import type { InfraAccountKind } from '~/composables/useConfirm'
+import type { InfraCommandClass, InfraMode } from '~/types'
 
 const { t } = useI18n()
 

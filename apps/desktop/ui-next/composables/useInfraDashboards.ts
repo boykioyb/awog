@@ -30,12 +30,8 @@ import { useInfraContext } from '~/composables/useInfraContext'
 import { useSidecar } from '~/composables/useSidecar'
 import { useSessionsStore } from '~/stores/sessions'
 import { useToast } from '~/composables/useToast'
-import {
-  MONITOR_PRESET_SECONDS,
-  MONITOR_WINDOW_PRESETS,
-  TARGET_DIMENSIONS,
-  periodForWindow,
-} from '~/composables/useInfraMetrics'
+import { TARGET_DIMENSIONS, periodForWindow } from '~/composables/useInfraMetrics'
+import { relativeWindow, windowSecondsOf, windowToMs, type InfraWindow } from '~/utils/infra-window'
 import type {
   ChartSeriesView,
   InfraContextWire,
@@ -44,7 +40,6 @@ import type {
   WireQuery,
   WireSeries,
 } from '~/composables/useInfraMetrics'
-import type { LogsWindowPreset } from '~/composables/useInfraLogs'
 
 // ─── Hợp đồng dây (khớp `sidecar/infra/dashboard/schema.ts` + `methods/infra.dashboard.ts`) ──
 
@@ -232,7 +227,7 @@ const working = ref<DashboardChart[]>([])
 const baseline = ref('')
 
 const targets = ref<Record<MonitorTargetKey, string>>({ lb: '', instance: '' })
-const windowPreset = ref<LogsWindowPreset>('3h')
+const win = ref<InfraWindow>(relativeWindow(3 * 3600))
 
 const seriesByKey = ref<Map<string, WireSeries>>(new Map())
 const windowRef = ref<{ startMs: number; endMs: number } | null>(null)
@@ -420,9 +415,7 @@ export function useInfraDashboards() {
 
   // ── Cửa sổ ────────────────────────────────────────────────────────────────
 
-  const windowSeconds = computed(() =>
-    windowPreset.value === 'custom' ? 0 : MONITOR_PRESET_SECONDS[windowPreset.value],
-  )
+  const windowSeconds = computed(() => windowSecondsOf(win.value))
 
   const windowLabel = computed(() => {
     const s = windowSeconds.value
@@ -439,8 +432,9 @@ export function useInfraDashboards() {
    */
   const windowDirty = computed(() => {
     const w = windowRef.value
-    if (!w) return false
-    return Math.abs(w.endMs - w.startMs - windowSeconds.value * 1000) > 1000
+    const cur = windowToMs(win.value)
+    if (!w || !cur) return false
+    return Math.abs(w.endMs - w.startMs - (cur.endMs - cur.startMs)) > 1000
   })
 
   // ── Dựng query ────────────────────────────────────────────────────────────
@@ -516,8 +510,12 @@ export function useInfraDashboards() {
       return
     }
 
-    const endMs = Date.now()
-    const startMs = endMs - windowSeconds.value * 1000
+    const w = windowToMs(win.value)
+    if (!w) {
+      error.value = t('infra.monitoring.badWindow')
+      return
+    }
+    const { startMs, endMs } = w
     const groups = buildGroups(working.value)
     loading.value = true
     error.value = ''
@@ -805,8 +803,7 @@ export function useInfraDashboards() {
     targets,
     targetDimensions: TARGET_DIMENSIONS,
     // cửa sổ
-    windowPreset,
-    windowPresets: MONITOR_WINDOW_PRESETS,
+    win,
     windowSeconds,
     windowLabel,
     windowDirty,

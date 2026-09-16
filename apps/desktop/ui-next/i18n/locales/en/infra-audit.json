@@ -42,6 +42,8 @@
   "infra.audit.export.done": "Exported {n} rows",
   "infra.audit.clean.title": "Clean the rows on screen",
   "infra.audit.clean.allTitle": "Clean the WHOLE log",
+  "infra.audit.clean.short": "Clean shown",
+  "infra.audit.clean.allShort": "Clean all",
   "infra.audit.clean.ask": "DELETE {n} audit rows matching these filters? Unrecoverable.",
   "infra.audit.clean.allAsk": "DELETE ALL {n} audit rows across every account? This destroys the trace of every past action.",
   "infra.audit.clean.typeAsk": "Type exactly “{word}” to confirm deleting the whole log",

@@ -26,7 +26,11 @@ Một ADR + các tài liệu dưới đây. Đọc theo thứ tự này khi onbo
 | 2 | Logs & Tổng quan (2.1–2.9) | đã land (2026-09-14) — 2/6 thẻ Tổng quan có nguồn, 4 thẻ chờ mốc 4/7 |
 | 3 | Explorer: khung + bốn màn đầu (3.1–3.10) | đã land (2026-09-14) — trừ **SSM terminal** |
 | 4 | Delivery/CI-CD: CloudFront-APIGW-Route53-ACM (4.1) + bảng CI/CD bốn nguồn (4.2–4.6) | đã land (2026-09-14) — thông báo **mặc định tắt**; chưa QA thật |
-| 5 → 8 | Graph/Playbook · Giám sát/Báo cáo · Chi phí/An toàn/CloudTrail · Container/K8s | chưa |
+| 5 | Graph & Playbook | đã land (2026-09-15) — xem `infra.tasks.md` §"Mốc 5 — trạng thái thực tế" |
+| 6 | Giám sát · Báo cáo · bộ xuất (+ bảng điều khiển) | đã land (2026-09-15) |
+| 7 | Chi phí · An toàn · CloudTrail | **một phần** (2026-09-16) — 7.1→7.4 + 7.6 đã land; **7.5 rà soát an toàn chưa có**, **7.7 infosec audit #3 chưa chạy** |
+| 8 | Container/K8s · Terraform · phần còn lại | **đang làm** — màn Kubernetes + [terminal cho pod](infra-pod-terminal.md) đã có; port-forward · Terraform plan viewer · view VPC/Amplify chưa |
+| ngoài mốc | **L5 lần theo một request** ([cloudwatch-logs.md](cloudwatch-logs.md)) + **G4 tô đường đi trên sơ đồ** ([infra-topology-graph.md](infra-topology-graph.md)) | đã land (2026-09-16) — **L4 live tail vẫn nợ** |
 
 Chi tiết + điểm lệch từng mốc: **[infra.tasks.md](infra.tasks.md)** §"trạng thái thực tế". **Toàn bộ mốc 1–4 chưa QA trong Electron thật** — các cổng đã xanh là `vitest` (sidecar) · `typecheck` · `lint`. Mốc 4 còn chưa chạy bằng **credential AWS thật** (CLI trên máy dev trả `ExpiredToken`) và chưa chạy bằng một `gh` đã đăng nhập.
 

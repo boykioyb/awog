@@ -89,7 +89,26 @@ export type InfraGatedRan = {
 
 export type InfraGatedResult = InfraGatedBlocked | InfraGatedRan
 
-export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
+/** Đã qua cổng, ĐƯỢC PHÉP chạy — nhưng CHƯA chạy. Đường PTY dùng bản này. */
+export type InfraGateApproved = {
+  blocked: false
+  command: string
+  class: InfraCommandClass
+  accountKind: InfraAccountKind
+  decision: InfraDecision
+}
+
+export type InfraGateDecision = InfraGatedBlocked | InfraGateApproved
+
+/**
+ * Bốn bước cổng quyền (classify → decide → block/ask → nhãn quyết định) TÁCH
+ * KHỎI việc spawn. `runGated` chạy tiếp bằng `runInfra` (một-shot, bắt stdout);
+ * đường PTY tương tác (`infra.kube.exec`) chạy tiếp bằng `terminalManager` — cả
+ * hai phải đi qua ĐÚNG một cổng này để `ask`/`block`/vé duyệt không lệch nhau
+ * giữa hai đường. Bản `approved` CHƯA ghi nhật ký: `runInfra` ghi ở đường một-shot,
+ * còn đường PTY tự ghi sau khi spawn (một shell mở = một dòng).
+ */
+export async function gateInfraDecision(p: InfraGateInput): Promise<InfraGateDecision> {
   const actor = p.actor ?? 'human'
   const cls = classify(p.tool, p.args)
   const policy = await loadInfraPolicy()
@@ -102,8 +121,8 @@ export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
   const command = describeInfraCommand(p.tool, p.args, p.context)
   const fingerprint = callFingerprint(p.tool, p.args, p.context)
 
-  // Nhật ký cho hai nhánh KHÔNG chạy. Nhánh chạy để `runInfra` tự ghi — task 0.6
-  // đòi đúng một dòng, ghi tại chỗ chạy chứ không phải tại call site.
+  // Nhật ký cho hai nhánh KHÔNG chạy. Nhánh chạy để chỗ gọi (runInfra / đường PTY)
+  // tự ghi — task 0.6 đòi đúng một dòng, ghi tại chỗ chạy chứ không phải tại call site.
   const refuse = async (requiresApproval: boolean, reason: string): Promise<InfraGatedBlocked> => {
     await recordInfraAction({
       actor,
@@ -145,11 +164,19 @@ export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
   const decision: InfraDecision =
     verdict.mode === 'auto' ? (verdict.reason === 'bypass' ? 'bypass-temp' : 'auto') : 'approved'
 
+  return { blocked: false, command, class: cls, accountKind: verdict.accountKind, decision }
+}
+
+export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
+  const gate = await gateInfraDecision(p)
+  if (gate.blocked) return gate
+  const { command, class: cls, accountKind, decision } = gate
+
   const result = await runInfra({
     tool: p.tool,
     args: p.args,
     context: p.context,
-    actor,
+    actor: p.actor ?? 'human',
     surface: p.surface,
     toolName: p.toolName,
     decision,
@@ -158,5 +185,5 @@ export async function runGated(p: InfraGateInput): Promise<InfraGatedResult> {
     ...(p.timeoutMs !== undefined ? { timeoutMs: p.timeoutMs } : {}),
   })
 
-  return { blocked: false, command, class: cls, accountKind: verdict.accountKind, decision, result }
+  return { blocked: false, command, class: cls, accountKind, decision, result }
 }

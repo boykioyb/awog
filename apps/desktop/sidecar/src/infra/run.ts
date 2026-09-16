@@ -179,6 +179,9 @@ function findExtraForbidden(tool: InfraTool, args: readonly string[]): string | 
 
 // Chèn cờ ngữ cảnh. terraform khác hai cái kia: `-chdir=` phải đứng TRƯỚC
 // subcommand (`terraform -chdir=infra/prod plan`), đặt sau là lỗi cú pháp.
+//
+// CHỈ dùng cho lệnh MỘT-SHOT (không có `--`): nó APPEND cờ vào cuối argv. Lệnh có
+// `--` (vd `kubectl exec … -- sh`) phải tự chèn cờ TRƯỚC `--` — xem `infra.kube-exec.ts`.
 function withContext(tool: InfraTool, args: readonly string[], ctx: InfraContext): string[] {
   if (tool === 'terraform') {
     return ctx.workspace ? [`-chdir=${ctx.workspace}`, ...args] : [...args]
@@ -240,7 +243,7 @@ const CONFIG_PASSTHROUGH = [
  * tiến trình AWOG không được lặng lẽ quyết định lệnh chạy trên account nào. Nó chỉ
  * vào đây khi NGƯỜI DÙNG đã ghim một profile cho phiên.
  */
-function infraEnv(tool: InfraTool, context: InfraContext): NodeJS.ProcessEnv {
+export function infraEnv(tool: InfraTool, context: InfraContext): NodeJS.ProcessEnv {
   const pinsAwsIdentity = tool !== 'aws' && (context.profile || context.region)
   const env = filteredShellEnv(
     pinsAwsIdentity ? { awsProfile: context.profile, awsRegion: context.region } : undefined,

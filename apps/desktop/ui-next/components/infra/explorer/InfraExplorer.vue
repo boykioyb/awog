@@ -150,7 +150,7 @@
             <h2 class="ixe-ttl">{{ t(activeView.label) }}</h2>
             <p class="ixe-about">{{ t(activeView.about) }}</p>
           </div>
-          <div class="ixe-hd-acts">
+          <div class="itoolgrp ixe-hd-acts">
             <!-- Form nhỏ của view (task 3.6): tạo bucket/thư mục, tải lên, presign.
                  Nút cũng bị ẩn khi dò quyền từ chối (task 3.3) — lý do giống nút
                  ghi trên dòng. -->
@@ -190,7 +190,11 @@
 
         <!-- View cần tham số (vd s3.objects cần bucket) thì hỏi TRƯỚC khi gọi —
              không đoán một cái tên bucket rồi để AWS trả lỗi. -->
-        <form v-if="activeView.required.length" class="ixe-params" @submit.prevent="reload()">
+        <form
+          v-if="activeView.required.length"
+          class="itoolbar ifields ixe-params"
+          @submit.prevent="reload()"
+        >
           <label v-for="f in activeView.required" :key="f.key" class="ixe-param">
             <span class="ixe-param-lbl">{{ t(f.label) }}</span>
             <input
@@ -778,19 +782,9 @@ defineExpose({ openView })
   line-height: var(--lh-sm);
 }
 
-.ixe-hd-acts {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
+/* Bố cục + da ở `.itoolbar` (app-shell.css); `margin-bottom` là lề riêng của màn. */
 .ixe-params {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 0 0 8px;
+  margin-bottom: 8px;
 }
 
 .ixe-param {

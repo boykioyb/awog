@@ -599,9 +599,19 @@ const ecsResolver: InfraGraphResolver = {
     const parentId = graphNodeId(t)
 
     if (t.name.includes(':task-definition/')) {
+      // G4: nhóm log của ECS KHÔNG suy được từ tên — nó do `awslogs-group` trong
+      // task definition quyết định và người ta đặt tuỳ ý. Đọc ở đây là cách DUY
+      // NHẤT có nó mà không thêm một lượt gọi CLI nào (lệnh này vốn đã chạy).
+      // Nhiều container ⇒ lấy nhóm của container ĐẦU TIÊN khai `awslogs`; các
+      // container cùng task thường ghi chung một nhóm, và một node chỉ mở được
+      // một màn Logs.
+      let logGroup = ''
       for (const raw of asArray(at(jsons[0], 'taskDefinition.containerDefinitions'))) {
         const container = asObj(raw)
         const containerName = str(container['name'])
+        if (logGroup === '' && str(at(container, 'logConfiguration.logDriver')) === 'awslogs') {
+          logGroup = str(at(container, 'logConfiguration.options.awslogs-group'))
+        }
         for (const rawEnv of asArray(container['environment'])) {
           const env = asObj(rawEnv)
           const key = str(env['name'])
@@ -620,7 +630,7 @@ const ecsResolver: InfraGraphResolver = {
         // được phép lộ ra, và việc đọc giá trị không thuộc graph.
         if (asArray(container['secrets']).length > 0) note(acc, GRAPH_NOTES.secretRefOnly)
       }
-      return done(acc)
+      return done(acc, logGroup === '' ? undefined : { detail: { logGroup } })
     }
 
     const service = asObj(asArray(at(jsons[0], 'services'))[0])

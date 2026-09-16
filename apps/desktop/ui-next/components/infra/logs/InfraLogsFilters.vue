@@ -146,9 +146,9 @@ function onQuick(e: Event): void {
 }
 
 .lfl-level.on {
-  border-color: var(--accent);
+  border-color: var(--accentBorder);
   color: var(--accent);
-  background: var(--bgHover);
+  background: var(--accentDim);
 }
 
 .lfl-level.lv-error.on {
@@ -210,9 +210,9 @@ function onQuick(e: Event): void {
 }
 
 .lfl-chip.on {
-  border-color: var(--accent);
+  border-color: var(--accentBorder);
   color: var(--accent);
-  background: var(--bgHover);
+  background: var(--accentDim);
 }
 
 .lfl-chip-n {

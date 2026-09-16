@@ -43,6 +43,16 @@
               >
                 {{ t('infra.kube.act.describe') }}
               </span>
+              <span
+                role="button"
+                tabindex="0"
+                :class="{ on: out.mode === 'terminal' }"
+                @click="kube.setOutMode('terminal')"
+                @keydown.enter.prevent="kube.setOutMode('terminal')"
+                @keydown.space.prevent="kube.setOutMode('terminal')"
+              >
+                {{ t('infra.kube.out.tabTerminal') }}
+              </span>
             </div>
 
             <AppSelect
@@ -62,6 +72,7 @@
               @update:model-value="onTail"
             />
             <button
+              v-if="out.mode !== 'terminal'"
               type="button"
               class="btn"
               :disabled="out.loading"
@@ -77,89 +88,105 @@
         </div>
 
         <div class="ikm-body">
-          <!-- Dòng lệnh đã chạy: có ích khi cần chép sang terminal để tự làm tiếp. -->
-          <div v-if="out.command" class="ikcmd">
-            <code>{{ out.command }}</code>
-            <button type="button" class="btn" @click="kube.copyCommand(out.command)">
-              {{ t('infra.kube.blocked.copy') }}
-            </button>
-          </div>
+          <!-- Ảnh chụp log/mô tả: TOÀN BỘ khối này ẩn ở tab Terminal — terminal là
+               một component sống (xterm + PTY), không dùng `out.text`. -->
+          <template v-if="out.mode !== 'terminal'">
+            <!-- Dòng lệnh đã chạy: có ích khi cần chép sang terminal để tự làm tiếp. -->
+            <div v-if="out.command" class="ikcmd">
+              <code>{{ out.command }}</code>
+              <button type="button" class="btn" @click="kube.copyCommand(out.command)">
+                {{ t('infra.kube.blocked.copy') }}
+              </button>
+            </div>
 
-          <p v-if="out.error" class="ierr">{{ out.error }}</p>
+            <p v-if="out.error" class="ierr">{{ out.error }}</p>
 
-          <!-- Thanh LỌC DÒNG của khung này. Lọc chạy trên chữ ĐÃ tải về (một lần
+            <!-- Thanh LỌC DÒNG của khung này. Lọc chạy trên chữ ĐÃ tải về (một lần
                `kubectl logs`), không gọi lại cluster và không tốn thêm gì: gõ vào
                đây là lọc tại chỗ, còn muốn lấy nhiều dòng hơn thì đổi ô "số dòng".
                Mặc định GIẤU dòng không khớp (đúng nghĩa "lọc"); nút bên cạnh đổi
                sang chế độ chỉ tô sáng để vẫn giữ được mạch log xung quanh. -->
-          <div v-if="out.text || out.loading" class="iklogbar">
-            <div class="srch iklogfind">
-              <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              <input
-                :value="logQuery"
-                type="text"
-                spellcheck="false"
-                :placeholder="t('infra.kube.log.filter.ph')"
-                :aria-label="t('infra.kube.log.filter.ph')"
-                @input="onQuery"
-              />
+            <div v-if="out.text || out.loading" class="iklogbar">
+              <div class="srch iklogfind">
+                <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                <input
+                  :value="logQuery"
+                  type="text"
+                  spellcheck="false"
+                  :placeholder="t('infra.kube.log.filter.ph')"
+                  :aria-label="t('infra.kube.log.filter.ph')"
+                  @input="onQuery"
+                />
+                <button
+                  v-if="logQuery"
+                  class="ikfindx"
+                  type="button"
+                  :title="t('infra.kube.search.clear')"
+                  :aria-label="t('infra.kube.search.clear')"
+                  @click="logQuery = ''"
+                >
+                  <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                </button>
+              </div>
+              <span v-if="logQuery" class="ihint" role="status">
+                {{ t('infra.kube.log.hits', { shown: matchedCount, total: lineCount }) }}
+              </span>
               <button
                 v-if="logQuery"
-                class="ikfindx"
                 type="button"
-                :title="t('infra.kube.search.clear')"
-                :aria-label="t('infra.kube.search.clear')"
-                @click="logQuery = ''"
+                class="btn"
+                :aria-pressed="onlyMatches"
+                @click="onlyMatches = !onlyMatches"
               >
-                <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                {{ onlyMatches ? t('infra.kube.log.allLines') : t('infra.kube.log.onlyMatches') }}
               </button>
             </div>
-            <span v-if="logQuery" class="ihint" role="status">
-              {{ t('infra.kube.log.hits', { shown: matchedCount, total: lineCount }) }}
-            </span>
-            <button
-              v-if="logQuery"
-              type="button"
-              class="btn"
-              :aria-pressed="onlyMatches"
-              @click="onlyMatches = !onlyMatches"
-            >
-              <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ onlyMatches ? t('infra.kube.log.allLines') : t('infra.kube.log.onlyMatches') }}
-            </button>
-          </div>
 
-          <!-- Đang nạp: chưa có chữ thì hiện dòng "đang nạp", có chữ cũ (bấm ↻, đổi
+            <!-- Đang nạp: chưa có chữ thì hiện dòng "đang nạp", có chữ cũ (bấm ↻, đổi
                số dòng) thì làm mờ chữ cũ. Thân modal trống trơn trước đây trông y
                hệt "không có gì để hiện". -->
-          <p v-if="out.loading && !out.text" class="ikload" role="status" aria-busy="true">
-            <Icon
-              name="refresh"
-              class="ikspin"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            {{ t('infra.kube.loading') }}
-          </p>
-          <p v-else-if="noMatch" class="ihint">
-            {{ t('infra.kube.log.noMatch', { q: logQuery }) }}
-          </p>
-          <!-- Một khối chữ: chưa lọc, hoặc đang ở chế độ chỉ-hiện-dòng-khớp (mọi
+            <p v-if="out.loading && !out.text" class="ikload" role="status" aria-busy="true">
+              <Icon
+                name="refresh"
+                class="ikspin"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
+              {{ t('infra.kube.loading') }}
+            </p>
+            <p v-else-if="noMatch" class="ihint">
+              {{ t('infra.kube.log.noMatch', { q: logQuery }) }}
+            </p>
+            <!-- Một khối chữ: chưa lọc, hoặc đang ở chế độ chỉ-hiện-dòng-khớp (mọi
                dòng đều khớp nên tô sáng là vô nghĩa). -->
-          <pre v-else-if="displayText !== null" class="ikpre" :class="{ ikdim: out.loading }">{{
-            displayText
-          }}</pre>
-          <!-- Chế độ "tất cả dòng": từng dòng một để tô sáng dòng khớp. -->
-          <pre v-else-if="lineViews.length" class="ikpre iklines" :class="{ ikdim: out.loading }">
+            <pre v-else-if="displayText !== null" class="ikpre" :class="{ ikdim: out.loading }">{{
+              displayText
+            }}</pre>
+            <!-- Chế độ "tất cả dòng": từng dòng một để tô sáng dòng khớp. -->
+            <pre v-else-if="lineViews.length" class="ikpre iklines" :class="{ ikdim: out.loading }">
 <span
   v-for="line in lineViews"
   :key="line.i"
   class="ikln"
   :class="{ ikhit: line.hit }"
 >{{ line.text }}</span></pre>
-          <p v-else-if="!out.error" class="ihint">{{ t('infra.kube.out.empty') }}</p>
-          <p v-if="cappedInfo" class="ihint">
-            {{ t('infra.kube.log.capped', cappedInfo) }}
-          </p>
+            <p v-else-if="!out.error" class="ihint">{{ t('infra.kube.out.empty') }}</p>
+            <p v-if="cappedInfo" class="ihint">
+              {{ t('infra.kube.log.capped', cappedInfo) }}
+            </p>
+          </template>
+
+          <!-- Terminal: MOUNT khi mở lần đầu rồi GIỮ (v-show) để đổi sang Logs và
+               quay lại không giết shell. `:key` theo pod ⇒ đổi pod thì remount
+               (PTY cũ bị tắt, mở shell mới). Đóng modal (`out.open`=false) tháo cả
+               cây con ⇒ WorkspaceTerminal tự kill PTY lúc unmount. -->
+          <InfraKubeExecTab
+            v-if="terminalOpened"
+            v-show="out.mode === 'terminal'"
+            :key="out.pod"
+            :kube="kube"
+            :visible="out.mode === 'terminal'"
+          />
         </div>
 
         <div class="ikm-foot">
@@ -191,12 +218,31 @@
 </template>
 
 <script setup lang="ts">
+import InfraKubeExecTab from '~/components/infra/kube/InfraKubeExecTab.vue'
 import { KUBE_TAILS } from '~/composables/useInfraKube'
 import type { InfraKubeController } from '~/composables/useInfraKube'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 
 const props = defineProps<{ kube: InfraKubeController }>()
 const { out, deleting } = props.kube
+
+// Terminal chỉ MOUNT khi người dùng mở tab đó lần đầu (đừng spawn shell + hộp duyệt
+// cho pod họ chỉ muốn xem log). Một khi đã mount thì giữ nguyên qua v-show.
+const terminalOpened = ref(false)
+watch(
+  () => out.value.mode,
+  (mode) => {
+    if (mode === 'terminal') terminalOpened.value = true
+  },
+)
+// Đổi pod (mở modal cho pod khác mà không đóng) ⇒ reset cờ; `:key="out.pod"` đã
+// remount component, nhưng cờ phải theo để tab Terminal của pod mới lại mount lười.
+watch(
+  () => out.value.pod,
+  () => {
+    terminalOpened.value = out.value.mode === 'terminal'
+  },
+)
 
 const { t } = useI18n()
 const kube = props.kube

@@ -9,9 +9,13 @@
        BỐ CỤC: thanh điểm vào/độ sâu → các dải nói thật (nguồn lưu lượng · chạm trần
        độ sâu · ghi chú · lỗi) → canvas + panel chi tiết. -->
   <div class="ig">
-    <header class="ig-top">
-      <div class="ig-field">
-        <div class="ig-lbl">{{ t('infra.graph.root.label') }}</div>
+    <!-- Thanh công cụ là một CARD nổi trên canvas full-bleed, không phải một dải
+         hairline nữa: đây là màn thứ tư tự dựng khuôn nhãn-trên-control của riêng
+         nó (`.ig-field`/`.ig-lbl`) trong khi Giám sát · Bảng · Triển khai dùng
+         `.ifield`/`.ilbl`. Một khuôn cho cả khu — xem `.itoolbar` ở app-shell.css. -->
+    <header class="itoolbar ifields ig-top">
+      <div class="ifield">
+        <div class="ilbl">{{ t('infra.graph.root.label') }}</div>
         <AppSelect
           :model-value="activeRootId"
           :options="rootOptions"
@@ -22,8 +26,8 @@
         />
       </div>
 
-      <div class="ig-field">
-        <div class="ig-lbl">{{ t('infra.graph.depth.label') }}</div>
+      <div class="ifield narrow">
+        <div class="ilbl">{{ t('infra.graph.depth.label') }}</div>
         <AppSelect
           :model-value="String(depth)"
           :options="depthOptions"
@@ -33,35 +37,55 @@
         />
       </div>
 
-      <span class="ig-gap" />
+      <div class="itoolgrp iend">
+        <span
+          v-if="hasGraph"
+          class="chip"
+          :class="`s-${trafficSource}`"
+          :title="t('infra.graph.traffic.label')"
+        >
+          <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{ trafficLabel }}
+        </span>
+        <span v-if="loadedAt" class="ig-when">
+          {{ t('infra.graph.loadedAt', { time: hhmm }) }}
+        </span>
 
-      <span
-        v-if="hasGraph"
-        class="chip"
-        :class="`s-${trafficSource}`"
-        :title="t('infra.graph.traffic.label')"
-      >
-        <Icon name="activity" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        {{ trafficLabel }}
-      </span>
-      <span v-if="loadedAt" class="ig-when">{{ t('infra.graph.loadedAt', { time: hhmm }) }}</span>
-
-      <button
-        class="btn sm"
-        type="button"
-        :disabled="busy || !activeRootId"
-        :aria-busy="resolving"
-        @click="onReload"
-      >
-        <Icon
-          name="refresh"
-          :class="{ spin: resolving }"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-        {{ t('infra.graph.reload') }}
-      </button>
+        <button
+          class="btn sm"
+          type="button"
+          :disabled="busy || !activeRootId"
+          :aria-busy="resolving"
+          @click="onReload"
+        >
+          <Icon
+            name="refresh"
+            :class="{ spin: resolving }"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
+          {{ t('infra.graph.reload') }}
+        </button>
+      </div>
     </header>
 
+    <!-- G4: dải nói rõ sơ đồ đang bị lọc theo một request, kèm đường thoát. Không
+         có dải này thì một sơ đồ mờ quá nửa trông như sơ đồ hỏng. -->
+    <p v-if="traceHighlight.on.value" class="ig-info ig-trace">
+      <span>
+        {{
+          t('infra.graph.trace.banner', {
+            id: traceHighlight.traceId.value,
+            n: tracePathCount,
+          })
+        }}
+      </span>
+      <span v-if="tracePathCount === 0" class="ig-trace-warn">
+        {{ t('infra.graph.trace.noMatch') }}
+      </span>
+      <button class="btn sm" type="button" @click="traceHighlight.clear()">
+        {{ t('infra.graph.trace.clear') }}
+      </button>
+    </p>
     <p v-if="hasGraph" class="ig-info">{{ trafficNote }}</p>
     <p v-if="truncated" class="ig-warn">
       {{ t('infra.graph.depth.truncated', { max: GRAPH_MAX_DEPTH }) }}
@@ -90,6 +114,18 @@
           @pane-click="onPaneClick"
         >
           <Background pattern-color="var(--border)" :gap="20" :size="1" />
+          <!-- ⚠ `position` GIỮ NGUYÊN `bottom-right`, còn chỗ đứng thật thì do CSS
+               kéo lên trên — xem `.ig-canvas .vue-flow__panel.vue-flow__controls`.
+
+               VÌ SAO KHÔNG DÙNG `top-right`: prop đó khiến VueFlow gắn class `top`
+               lên chính phần tử, mà `.top` LÀ THANH TIÊU ĐỀ CỦA APP trong
+               prototype.css — `height: 44px; gap: 12px; padding: 0 18px; box-shadow:
+               inset 0 -1px 0 var(--border)`, cộng `-webkit-app-region: drag` ở
+               app-shell.css. Chồng zoom vì thế phình thành một hộp cao 44px, ba nút
+               giãn ra 12px, có một vạch kẻ bên trong, và vùng đệm quanh nó thành tay
+               kéo cửa sổ (đo 2026-09-16, sau khi người dùng nói "css đang không được
+               đẹp với các button"). `bottom`/`left`/`right` không đụng class toàn cục
+               nào — chỉ `top`. Cùng họ lỗi với `.grow` sáng nay. -->
           <Controls position="bottom-right" :show-interactive="false" />
           <MiniMap position="bottom-left" pannable zoomable />
         </VueFlow>
@@ -132,6 +168,7 @@
         :expanding="expandingNodeId === selectedNode.id"
         @expand="onExpand"
         @close="selectNode('')"
+        @open-logs="emit('open-logs', $event)"
       />
     </div>
   </div>
@@ -159,10 +196,16 @@ import InfraGraphNodeComponent from '~/components/infra/graph/InfraGraphNode.vue
 import InfraGraphPanel from '~/components/infra/graph/InfraGraphPanel.vue'
 import InfraGraphRoots from '~/components/infra/graph/InfraGraphRoots.vue'
 import { useInfraGraph, GRAPH_DEPTHS, GRAPH_MAX_DEPTH } from '~/composables/useInfraGraph'
+import { useInfraTraceHighlight } from '~/composables/useInfraTraceHighlight'
 import type { InfraGraphNode as GraphNodeEntity } from '~/composables/useInfraGraphApi'
 
 // Minh chứng phiên để ghi nhật ký hạ tầng — bỏ trống ở bề mặt `/infra`.
 const props = defineProps<{ sessionId?: string; messageId?: string }>()
+
+/** Node → màn Logs (G4). Sơ đồ KHÔNG tự mở tab: trang sở hữu việc chuyển tab. */
+const emit = defineEmits<{
+  'open-logs': [group: { kind: 'exact' | 'prefix'; value: string }]
+}>()
 
 const { t } = useI18n()
 
@@ -209,11 +252,17 @@ const edgeTypes: EdgeTypesObject = {
   infra: markRaw(InfraGraphEdgeComponent) as unknown as EdgeComponent,
 }
 
+// Bản sao hình dạng `data` mà `InfraGraphNode.vue` đọc. Hai bản phải khớp từng
+// trường — VueFlow không kiểm kiểu qua `data`, nên lệch một trường là một cờ luôn
+// `undefined` mà không ai báo.
 type NodeData = {
   node: GraphNodeEntity
   isRoot: boolean
   isExpanding: boolean
   onExpand: (id: string) => void
+  onPath: boolean
+  offPath: boolean
+  failed: boolean
 }
 
 const defaultEdgeOptions = {
@@ -234,6 +283,11 @@ const vfElements = computed<(Node | Edge)[]>(() => {
       isRoot: rootSet.has(n.id),
       isExpanding: expandingNodeId.value === n.id,
       onExpand: expand,
+      // `onPath === null` nghĩa là KHÔNG có đường đi nào đang tô ⇒ không node nào
+      // bị làm mờ. Khác hẳn "đường đi rỗng", thứ sẽ làm mờ cả sơ đồ.
+      onPath: tracePath.value?.has(n.id) ?? false,
+      offPath: tracePath.value !== null && !tracePath.value.has(n.id),
+      failed: traceFailed.value.has(n.id),
     } satisfies NodeData,
     selected: selectedNode.value?.id === n.id,
   }))
@@ -246,6 +300,14 @@ const vfElements = computed<(Node | Edge)[]>(() => {
   }))
   return [...flowNodes, ...flowEdges]
 })
+
+// ── Tô đường đi của một request (G4) ────────────────────────────────────────
+const traceHighlight = useInfraTraceHighlight()
+
+/** Node nằm trên đường đi, hoặc `null` khi không có đường nào đang tô. */
+const tracePath = computed(() => traceHighlight.matchOf(nodes.value))
+const traceFailed = computed(() => traceHighlight.failedOf(nodes.value))
+const tracePathCount = computed(() => tracePath.value?.size ?? 0)
 
 const depthOptions = computed(() =>
   GRAPH_DEPTHS.map((n) => ({ value: String(n), label: t('infra.graph.depth.value', { n }) })),
@@ -323,31 +385,11 @@ onMounted(() => {
   min-height: 0;
 }
 
+/* Card nổi: `margin` thay cho `padding` cũ, giữ nguyên khoảng cách ngoài mà thanh
+   vẫn là một khối tách khỏi canvas bên dưới. Canvas ở lại full-bleed — nó là mặt
+   vẽ, không phải nội dung đọc. */
 .ig-top {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  flex-wrap: wrap;
-  row-gap: 8px;
-  padding: 10px 14px 8px;
-  flex: 0 0 auto;
-  box-shadow: inset 0 -1px 0 var(--border);
-}
-
-.ig-field {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.ig-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-
-.ig-gap {
-  flex: 1;
+  margin: 10px 14px 8px;
 }
 
 .ig-when {
@@ -379,6 +421,17 @@ onMounted(() => {
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
   flex: 0 0 auto;
+}
+
+.ig-trace {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ig-trace-warn {
+  color: var(--warn);
 }
 
 .ig-info {
@@ -490,21 +543,64 @@ onMounted(() => {
   background: var(--borderStrong);
   border: 2px solid var(--bgCanvas);
 }
+/* Chồng zoom: KÉO LÊN GÓC TRÊN-PHẢI bằng CSS, vì góc dưới-phải của khung nhìn thuộc
+   về bong bóng phiên (`InfraBubble` — `position: fixed; right: 16px`, z-index 96) và
+   chồng dock thu nhỏ ngay dưới nó, nên ba nút zoom nằm đúng dưới viên chat (ảnh người
+   dùng 2026-09-16). Đẩy sang trái không cứu được: mở bong bóng ra là một khung 360×520
+   ở đúng góc đó, nên mọi con số `right` đều sai ở một trong hai trạng thái. Trên-phải
+   trống ở CẢ HAI, và vẫn trống khi cột chi tiết node mở ra (cột đó là anh em flex của
+   canvas — nó làm canvas hẹp lại chứ không phủ lên).
+
+   BA CLASS trong selector chứ không phải hai: `.vue-flow__panel.bottom` của thư viện
+   là 0-2-0, ngang với `.ig-canvas .vue-flow__controls`, và hoà thì thứ tự nạp quyết
+   định — một thứ không nên phụ thuộc. Thêm `.vue-flow__panel` cho ra 0-3-0 là thắng
+   dứt điểm, không cần `!important`. */
+.ig-canvas .vue-flow__panel.vue-flow__controls {
+  top: 0;
+  bottom: auto;
+}
+
+/* Cụm nút TỰ KHAI TỪ ĐẦU. Bản của thư viện để nút `content-box` 16×16 + đệm 5px và
+   một `border-bottom: 1px solid #eee` ghim cứng — màu đó không theo theme, và với
+   hàng NGANG thì nó vẽ gạch chân dưới từng nút chứ không ngăn được gì. Nền đặt ở
+   CỤM, nút để trong suốt: nút có nền riêng thì mỗi nút thành một viên nổi bên trong
+   một cái khung, đúng thứ trông lộn xộn ở ảnh người dùng. */
 .ig-canvas .vue-flow__controls {
-  box-shadow: none;
+  display: flex;
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
+  background: var(--bgEl);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
+
 .ig-canvas .vue-flow__controls button {
-  background: var(--bgEl);
-  border-bottom: 1px solid var(--border);
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
   color: var(--textDim);
+}
+
+.ig-canvas .vue-flow__controls button:last-child {
+  border-right: none;
 }
 .ig-canvas .vue-flow__controls button:hover {
   background: var(--bgHover);
   color: var(--text);
 }
 .ig-canvas .vue-flow__controls button svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  max-width: none;
+  max-height: none;
   fill: currentColor;
 }
 .ig-canvas .vue-flow__minimap {

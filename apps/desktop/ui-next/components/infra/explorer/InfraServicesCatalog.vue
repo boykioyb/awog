@@ -114,7 +114,7 @@
           <div
             v-for="s in grouped()[g]"
             :key="s.id"
-            class="ixc-card"
+            class="icard ixc-card"
             :class="{ inuse: inUse.has(s.id) }"
           >
             <div class="ixc-card-hd">
@@ -509,9 +509,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex-direction: column;
   gap: 5px;
   padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
 }
 
 .ixc-card.inuse {

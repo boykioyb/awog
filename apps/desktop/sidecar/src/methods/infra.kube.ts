@@ -31,8 +31,8 @@ import type { InfraContext } from '../infra/run.js'
 // không được là `-` (không thể bắt đầu một cờ) và không có xuống dòng. Đây là
 // hàng rào độc lập với dò cờ của `run.ts` — hai lớp, vì một lớp thì một ngày nào
 // đó sẽ có người nới nó ra vì "validate chặt quá".
-const NAME_RE = /^[a-z0-9][a-z0-9.-]{0,252}$/ // pod/namespace/deployment (DNS-1123)
-const CONTAINER_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/
+export const NAME_RE = /^[a-z0-9][a-z0-9.-]{0,252}$/ // pod/namespace/deployment (DNS-1123)
+export const CONTAINER_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/
 const CLUSTER_RE = /^[0-9A-Za-z][A-Za-z0-9-_]{0,99}$/
 const REGION_RE = /^[a-z]{2}(-[a-z]+)+-[0-9]+$/
 const PROFILE_RE = /^[^\s-][^\r\n]{0,199}$/
@@ -40,7 +40,7 @@ const PROFILE_RE = /^[^\s-][^\r\n]{0,199}$/
 const MAX_TAIL = 5000
 const DEFAULT_TAIL = 200
 
-const k8sContext = z
+export const k8sContext = z
   .object({
     cluster: z.string().max(200).optional(),
     namespace: z.string().max(200).optional(),
@@ -104,7 +104,7 @@ const Params = z.discriminatedUnion('op', [
   }),
 ])
 
-function requireMatch(value: string, re: RegExp, label: string): string {
+export function requireMatch(value: string, re: RegExp, label: string): string {
   if (!re.test(value)) {
     // Không nói ra giá trị: nó đến từ output của cluster hoặc từ IPC, và câu này
     // đi thẳng lên UI.
@@ -227,7 +227,7 @@ export function buildKubeCommand(raw: z.infer<typeof Params>): Built {
   }
 }
 
-function k8s(ctx: { cluster?: string | undefined; namespace?: string | undefined }): InfraContext {
+export function k8s(ctx: { cluster?: string | undefined; namespace?: string | undefined }): InfraContext {
   const out: InfraContext = {}
   if (ctx.cluster !== undefined) out.cluster = requireMatch(ctx.cluster, NAME_RE, 'Tên context')
   if (ctx.namespace !== undefined) {

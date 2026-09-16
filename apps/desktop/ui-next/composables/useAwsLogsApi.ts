@@ -105,6 +105,91 @@ export type AwsLogsSaveParams = {
   id?: string
 }
 
+// ── infra.logs-tail (2.9) ────────────────────────────────────────────────────
+// `filter-log-events`: đọc các dòng log mới nhất, KHÔNG tính tiền theo GB quét như
+// Insights — nên được phép tự chạy khi người dùng bấm vào một nhóm log.
+export type AwsLogsTailEvent = {
+  timestamp: number
+  message: string
+  logStreamName: string
+  eventId: string
+}
+
+export type AwsLogsTailResult =
+  | { ok: true; events: AwsLogsTailEvent[]; truncated: boolean }
+  | { ok: false; error: string }
+
+// ── infra.logs-streams (2.9) ─────────────────────────────────────────────────
+// `describe-log-streams`: tầng giữa group → stream → event. Đọc metadata thuần,
+// KHÔNG tính GB quét — chạy được ngay khi bấm vào một group.
+export type AwsLogStream = {
+  name: string
+  lastEventAt: number | null
+  storedBytes: number
+}
+
+export type AwsLogsStreamsResult =
+  | { ok: true; streams: AwsLogStream[]; truncated: boolean }
+  | { ok: false; error: string }
+
+// ── infra.trace-start / -status (L5 — lần theo một request) ──────────────────
+// Hai kết cục của `trace-start` là hai NHÁNH, không phải hai trạng thái: `xray` đã
+// xong ngay trong lượt gọi (và KHÔNG tốn GB quét), `logs` mới là truy vấn Insights
+// cần poll. UI phải nói ra nhánh nào đang dùng — nhánh log không có độ trễ từng
+// chặng, và giấu chuyện đó đi là để người đọc tự suy ra một con số không tồn tại.
+export type AwsTraceIdKind = 'xray' | 'request' | 'free'
+
+export type AwsTraceHop = {
+  key: string
+  service: string
+  label: string
+  logGroup: string | null
+  firstAt: number
+  lastAt: number
+  /** Độ trễ THẬT của chặng — chỉ có ở nhánh X-Ray. */
+  durationMs: number | null
+  /** Khoảng cách tới chặng sau. */
+  gapToNextMs: number | null
+  status: 'ok' | 'error'
+  count: number
+  rows: AwsInsightsRow[]
+  rowsTruncated: boolean
+  note: string | null
+}
+
+export type AwsTrace = {
+  id: string
+  kind: AwsTraceIdKind
+  source: 'xray' | 'logs'
+  hops: AwsTraceHop[]
+  totalMs: number | null
+  truncated: boolean
+  notes: string[]
+}
+
+export type AwsTraceStartResult =
+  | { ok: true; mode: 'xray'; trace: AwsTrace }
+  | {
+      ok: true
+      mode: 'logs'
+      queryId: string
+      kind: AwsTraceIdKind
+      query: string
+      notes: string[]
+    }
+  | { ok: false; error: string }
+
+export type AwsTraceStatusResult =
+  | {
+      ok: true
+      status: AwsInsightsStatus
+      bytesScanned: number
+      recordsMatched: number
+      /** Chỉ có khi truy vấn ĐÃ XONG — nửa chừng thì dòng thời gian sẽ thiếu chặng. */
+      trace: AwsTrace | null
+    }
+  | { ok: false; error: string }
+
 export function useAwsLogsApi() {
   const sidecar = useSidecar()
   return {
@@ -152,6 +237,40 @@ export function useAwsLogsApi() {
         ...(profile !== undefined ? { profile } : {}),
         ...(region !== undefined ? { region } : {}),
       }),
+
+    // Đọc dòng mới nhất của nhóm log. RẺ (filter-log-events, không tính GB quét) —
+    // gọi được ngay khi người dùng bấm vào một nhóm, không cần ước lượng trước.
+    tail: (params: {
+      logGroups: string[]
+      startMs: number
+      endMs: number
+      filterPattern?: string
+      logStreamName?: string
+      limit?: number
+      profile?: string
+      region?: string
+    }) => sidecar.request<AwsLogsTailResult>('infra.logs-tail', params),
+
+    // Liệt kê stream của một group (tầng giữa). RẺ (describe-log-streams, metadata) —
+    // chạy khi người dùng bấm vào một group.
+    streams: (params: { logGroup: string; limit?: number; profile?: string; region?: string }) =>
+      sidecar.request<AwsLogsStreamsResult>('infra.logs-streams', params),
+
+    // Lần theo một request (L5). NHÁNH LOG TỐN TIỀN — gọi sau khi đã hiện ước
+    // lượng như mọi truy vấn Insights khác; nhánh X-Ray thì không tính GB quét.
+    traceStart: (params: {
+      id: string
+      logGroups: string[]
+      startMs: number
+      endMs: number
+      limit?: number
+      estimatedUsd?: number
+      profile?: string
+      region?: string
+    }) => sidecar.request<AwsTraceStartResult>('infra.trace-start', params),
+
+    traceStatus: (params: { queryId: string; id: string; profile?: string; region?: string }) =>
+      sidecar.request<AwsTraceStatusResult>('infra.trace-status', params),
 
     library: () => sidecar.request<AwsLogsLibraryResult>('infra.logs-library', { action: 'list' }),
     saveQuery: (params: AwsLogsSaveParams) =>

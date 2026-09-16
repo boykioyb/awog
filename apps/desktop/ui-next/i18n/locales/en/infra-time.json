@@ -1,0 +1,21 @@
+{
+  "infra.time.label": "Time range",
+  "infra.time.clear": "Clear",
+  "infra.time.custom": "Custom",
+  "infra.time.customRange": "Custom range",
+  "infra.time.absolute": "Absolute",
+  "infra.time.relative": "Relative",
+  "infra.time.duration": "Duration",
+  "infra.time.unitOfTime": "Unit of time",
+  "infra.time.upTo4": "Up to 4 digits.",
+  "infra.time.from": "From",
+  "infra.time.to": "To",
+  "infra.time.cancel": "Cancel",
+  "infra.time.apply": "Apply",
+  "infra.time.absIncomplete": "Pick both a start and an end.",
+  "infra.time.absOrder": "The end must be after the start.",
+  "infra.time.unit.minutes": "Minutes",
+  "infra.time.unit.hours": "Hours",
+  "infra.time.unit.days": "Days",
+  "infra.time.unit.weeks": "Weeks"
+}

@@ -1,34 +1,66 @@
 <template>
   <div class="lgs">
-    <!-- ── Cột trái: chọn nguồn + thư viện ─────────────────────────────────── -->
-    <aside class="lgs-side">
-      <InfraEmpty
-        v-if="!profile"
-        :title="t('infra.empty.noProfile.title')"
-        :hint="t('infra.empty.noProfile.hint.logs')"
-        action="accounts"
-        :action-label="t('infra.empty.noProfile.action')"
-      />
+    <InfraEmpty
+      v-if="!profile"
+      :title="t('infra.empty.noProfile.title')"
+      :hint="t('infra.empty.noProfile.hint.logs')"
+      action="accounts"
+      :action-label="t('infra.empty.noProfile.action')"
+    />
 
-      <template v-else>
-        <div class="lgs-ctx">
-          <span class="lgs-ctx-chip">{{ profile }}</span>
-          <span v-if="region" class="lgs-ctx-chip dim">{{ region }}</span>
+    <template v-else>
+      <!-- ── Cột trái (3/12): ngữ cảnh · chế độ · khoảng · nhóm log · thư viện ── -->
+      <aside class="lgs-side icard">
+        <!-- Hai chế độ: xem dòng mới nhất (rẻ, tail) hay soạn truy vấn Insights. -->
+        <div class="seg lgs-mode">
+          <span
+            v-for="m in MODES"
+            :key="m"
+            :class="{ on: mode === m }"
+            role="button"
+            :aria-pressed="mode === m"
+            @click="mode = m"
+          >
+            {{ t(`infra.logs.mode.${m}`) }}
+          </span>
         </div>
 
+        <!-- Khoảng thời gian: control kiểu AWS CloudWatch (thanh gọn + popover
+             Absolute/Relative). Dùng chung với Giám sát/Dashboard. -->
+        <div class="lgs-block">
+          <span class="lgs-block-lbl">{{ t('infra.logs.window.label') }}</span>
+          <InfraTimeRange v-model="win" />
+        </div>
+
+        <!-- Nhóm log dưới dạng CHIP — bấm là xem (tail) / chọn (multi). -->
         <InfraLogsGroupPicker
           :groups="groups"
+          :mode="mode === 'tail' ? 'tail' : 'multi'"
           :picked="picked"
+          :active="tailGroup"
           :recent="recentGroups"
           :pattern="pattern"
           :loading="groupsLoading"
           :error="groupsError"
+          @tail="onTail"
           @toggle="toggleGroup"
           @reload="loadGroups"
           @update:pattern="pattern = $event"
         />
 
+        <!-- Tầng giữa: stream của group đang xem (group → stream → event). Chỉ ở chế
+             độ tail và khi đã bấm một group. -->
+        <InfraLogsStreamPicker
+          v-if="mode === 'tail' && tailGroup"
+          :streams="streams"
+          :active="activeStream"
+          :loading="streamsLoading"
+          :error="streamsError"
+          @select="selectStream"
+        />
+
         <InfraLogsLibrary
+          v-if="mode === 'advanced'"
           :templates="templates"
           :saved="saved"
           :history="history"
@@ -36,190 +68,243 @@
           @delete="onDeleteSaved"
           @clear-history="onClearHistory"
         />
-      </template>
-    </aside>
+      </aside>
 
-    <!-- ── Cột phải: câu lệnh → chạy → kết quả ─────────────────────────────── -->
-    <main class="lgs-main">
-      <div class="lgs-window">
-        <span class="lgs-window-lbl">{{ t('infra.logs.window.label') }}</span>
-        <button
-          v-for="p in presets"
-          :key="p"
-          class="lgs-preset"
-          :class="{ on: windowPreset === p }"
-          type="button"
-          @click="windowPreset = p"
-        >
-          {{ t(`infra.logs.window.p.${p}`) }}
-        </button>
-        <button
-          class="lgs-preset"
-          :class="{ on: windowPreset === 'custom' }"
-          type="button"
-          @click="windowPreset = 'custom'"
-        >
-          {{ t('infra.logs.window.p.custom') }}
-        </button>
-        <template v-if="windowPreset === 'custom'">
-          <input v-model="customStart" class="lgs-dt" type="datetime-local" />
-          <span class="lgs-window-lbl">→</span>
-          <input v-model="customEnd" class="lgs-dt" type="datetime-local" />
+      <!-- ── Cột phải (9/12): log chính ─────────────────────────────────────── -->
+      <main class="lgs-main icard">
+        <!-- ══════════ TAIL (mặc định) ══════════ -->
+        <template v-if="mode === 'tail'">
+          <div class="lgs-mainbar">
+            <button
+              class="btn"
+              type="button"
+              :disabled="!tailGroup || tailLoading"
+              @click="refreshTail"
+            >
+              <Icon :name="tailLoading ? 'clock' : 'refresh'" class="lgs-ic" />
+              {{ tailLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
+            </button>
+            <span v-if="tailGroup" class="lgs-mainbar-group" :title="tailGroup">
+              {{ tailGroup }}
+            </span>
+            <span class="lgs-spacer" />
+            <span v-if="tailGroup && !tailLoading && tailRanAt" class="lgs-meta">
+              {{ t('infra.logs.tail.status', { n: tailRows.length }) }}
+              <span class="lgs-meta-dim">· {{ tailWhenLabel }}</span>
+            </span>
+            <span v-if="tailTruncated" class="lgs-trunc">{{ t('infra.logs.tail.truncated') }}</span>
+          </div>
+
+          <div v-if="tailError" class="lgs-error">{{ tailError }}</div>
+
+          <InfraLogsFilters
+            v-model:quick="quickFilter"
+            v-model:level="levelFilter"
+            :facets="[]"
+            :active="null"
+            :shown="tailFilteredRows.length"
+            :total="tailRows.length"
+            @insert="() => {}"
+          />
+
+          <InfraLogsResults
+            :rows="tailFilteredRows"
+            :copied="justCopied"
+            fill
+            :empty-text="
+              tailGroup ? t('infra.logs.tail.emptyGroup') : t('infra.logs.tail.pickGroup')
+            "
+            @copy="onCopyText"
+            @send-to-chat="onSendToChat"
+            @trace="onTraceFromRow"
+          />
+
+          <p class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
         </template>
-      </div>
 
-      <!-- Phím tắt ⌘Enter/⌘. do chính editor phát ra (2.3): nó bắt ở pha
-           capture vì Monaco chặn sự kiện ở node con. -->
-      <InfraLogsQueryEditor v-model="query" :fields="knownFields" @run="onRun" @cancel="onCancel" />
+        <!-- ══════════ LẦN THEO MỘT REQUEST (L5) ══════════ -->
+        <InfraLogsTrace
+          v-else-if="mode === 'trace'"
+          v-model:trace-id="traceId"
+          :trace="trace"
+          :running="tracing"
+          :can-run="canTrace"
+          :error="traceError"
+          :notes="traceNotes"
+          :open-hop-key="openHopKey"
+          :has-groups="picked.length > 0"
+          @run="onTraceRun"
+          @cancel="cancelTrace"
+          @toggle-hop="toggleHop"
+          @open-logs="onOpenHopLogs"
+          @show-on-graph="onShowOnGraph"
+        />
 
-      <!-- Ước lượng TRƯỚC khi chạy (2.6). Con số này là thứ người dùng phải đọc
-           trước khi bấm, nên nó nằm NGAY CẠNH nút Chạy, không phải trong tooltip. -->
-      <div class="lgs-runbar">
-        <button
-          class="btn pri"
-          type="button"
-          :disabled="!canRun"
-          aria-keyshortcuts="Meta+Enter Control+Enter"
-          @click="onRun"
-        >
-          <Icon :name="running ? 'clock' : 'play'" class="lgs-ic" />
-          {{ running ? t('infra.logs.run.running') : t('infra.logs.run.go') }}
-        </button>
-        <button
-          v-if="running"
-          class="btn"
-          type="button"
-          aria-keyshortcuts="Meta+. Control+."
-          @click="onCancel"
-        >
-          <Icon name="stop" class="lgs-ic" />
-          {{ t('infra.logs.run.cancel') }}
-        </button>
-        <button class="btn" type="button" :disabled="saving" @click="onSave">
-          <Icon name="save" class="lgs-ic" />
-          {{ t('infra.logs.run.save') }}
-        </button>
-        <button class="btn" type="button" @click="onCopyQuery">
-          <Icon name="copy" class="lgs-ic" />
-          {{ t('infra.logs.run.copyQuery') }}
-        </button>
+        <!-- ══════════ INSIGHTS (nâng cao) ══════════ -->
+        <template v-else>
+          <InfraLogsQueryEditor v-model="query" @run="onRun" @cancel="onCancel" />
 
-        <!-- Chiều Logs → Giám sát của cầu nối khoảng thời gian (6.3). Đối xứng với
-             nút "Mở trong Logs" ở màn kia: cùng một khoảng, hỏi câu khác ("bao nhiêu"
-             thay vì "chuyện gì đã xảy ra"). Không cần chạy truy vấn trước — khoảng
-             đang chọn trên thanh cửa sổ là thứ được mang sang. -->
-        <button
-          class="btn"
-          type="button"
-          :title="t('infra.logs.window.sendToMonitoringHint')"
-          @click="onSendToMonitoring"
-        >
-          <Icon name="forward" class="lgs-ic" />
-          {{ t('infra.logs.window.sendToMonitoring') }}
-        </button>
+          <div class="itoolbar lgs-runbar">
+            <div class="itoolgrp">
+              <button
+                class="btn pri"
+                type="button"
+                :disabled="!canRun"
+                aria-keyshortcuts="Meta+Enter Control+Enter"
+                @click="onRun"
+              >
+                <Icon :name="running ? 'clock' : 'play'" class="lgs-ic" />
+                {{ running ? t('infra.logs.run.running') : t('infra.logs.run.go') }}
+              </button>
+              <button
+                v-if="running"
+                class="btn"
+                type="button"
+                aria-keyshortcuts="Meta+. Control+."
+                @click="onCancel"
+              >
+                <Icon name="stop" class="lgs-ic" />
+                {{ t('infra.logs.run.cancel') }}
+              </button>
+            </div>
 
-        <label class="lgs-check">
-          <input v-model="histogramOn" type="checkbox" />
-          {{ t('infra.logs.run.histogram') }}
-        </label>
+            <div class="itoolgrp">
+              <button class="btn" type="button" :disabled="saving" @click="onSave">
+                <Icon name="save" class="lgs-ic" />
+                {{ t('infra.logs.run.save') }}
+              </button>
+              <button class="btn" type="button" @click="onCopyQuery">
+                <Icon name="copy" class="lgs-ic" />
+                {{ t('infra.logs.run.copyQuery') }}
+              </button>
+              <button
+                class="btn"
+                type="button"
+                :title="t('infra.logs.window.sendToMonitoringHint')"
+                @click="onSendToMonitoring"
+              >
+                <Icon name="forward" class="lgs-ic" />
+                {{ t('infra.logs.window.sendToMonitoring') }}
+              </button>
+            </div>
 
-        <span class="lgs-est">
-          <template v-if="estimating">{{ t('infra.logs.run.estimating') }}</template>
-          <template v-else-if="estimate">
-            {{
-              t('infra.logs.run.estimate', {
-                size: formatBytes(estimate.bytes * plannedQueries),
-                usd: plannedUsd.toFixed(4),
-              })
-            }}
-            <span class="lgs-est-basis">
+            <div class="itoolgrp iend lgs-meta-grp">
+              <label class="lgs-check">
+                <input v-model="histogramOn" type="checkbox" />
+                {{ t('infra.logs.run.histogram') }}
+              </label>
+
+              <span class="lgs-meta">
+                <template v-if="estimating">{{ t('infra.logs.run.estimating') }}</template>
+                <template v-else-if="estimate">
+                  {{
+                    t('infra.logs.run.estimate', {
+                      size: formatBytes(estimate.bytes * plannedQueries),
+                      usd: plannedUsd.toFixed(4),
+                    })
+                  }}
+                  <span class="lgs-meta-dim">
+                    {{
+                      estimate.basis === 'history'
+                        ? t('infra.logs.run.basisHistory')
+                        : t('infra.logs.run.basisStored')
+                    }}
+                  </span>
+                </template>
+                <template v-else>{{ t('infra.logs.run.noEstimate') }}</template>
+              </span>
+
+              <button
+                class="btn sm"
+                type="button"
+                :disabled="picked.length === 0"
+                @click="refreshEstimate"
+              >
+                <Icon name="refresh" class="lgs-ic" />
+                {{ t('infra.logs.run.reestimate') }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="runError" class="lgs-error">{{ runError }}</div>
+
+          <div v-if="status" class="lgs-status">
+            <span class="lgs-status-chip" :class="{ ok: status === 'Complete' }">{{ status }}</span>
+            <span class="lgs-meta">
               {{
-                estimate.basis === 'history'
-                  ? t('infra.logs.run.basisHistory')
-                  : t('infra.logs.run.basisStored')
+                t('infra.logs.run.scanned', {
+                  size: formatBytes(bytesScanned),
+                  usd: actualUsd.toFixed(4),
+                  matched: recordsMatched,
+                })
               }}
             </span>
-          </template>
-          <template v-else>{{ t('infra.logs.run.noEstimate') }}</template>
-        </span>
+            <span v-if="ranAt" class="lgs-meta-dim">{{ whenLabel }}</span>
+          </div>
 
-        <button
-          class="btn sm"
-          type="button"
-          :disabled="picked.length === 0"
-          @click="refreshEstimate"
-        >
-          <Icon name="refresh" class="lgs-ic" />
-          {{ t('infra.logs.run.reestimate') }}
-        </button>
-      </div>
+          <InfraLogsHistogram :buckets="histogram" :from-rows="histogramFromRows" @zoom="onZoom" />
 
-      <p class="lgs-ratenote">{{ t('infra.logs.run.rateNote') }}</p>
+          <InfraLogsFilters
+            v-model:quick="quickFilter"
+            v-model:level="levelFilter"
+            :facets="facets"
+            :active="facetFilter"
+            :shown="filteredRows.length"
+            :total="rows.length"
+            @insert="insertFacetFilter"
+          />
 
-      <div v-if="runError" class="lgs-error">{{ runError }}</div>
+          <InfraLogsResults
+            :rows="filteredRows"
+            :copied="justCopied"
+            fill
+            @copy="onCopyText"
+            @send-to-chat="onSendToChat"
+            @trace="onTraceFromRow"
+          />
 
-      <div v-if="status" class="lgs-status">
-        <span class="lgs-status-chip" :class="{ ok: status === 'Complete' }">{{ status }}</span>
-        <span class="lgs-status-txt">
-          {{
-            t('infra.logs.run.scanned', {
-              size: formatBytes(bytesScanned),
-              usd: actualUsd.toFixed(4),
-              matched: recordsMatched,
-            })
-          }}
-        </span>
-        <span v-if="ranAt" class="lgs-status-txt dim">{{ whenLabel }}</span>
-      </div>
-
-      <InfraLogsHistogram :buckets="histogram" :from-rows="histogramFromRows" @zoom="onZoom" />
-
-      <InfraLogsFilters
-        v-model:quick="quickFilter"
-        v-model:level="levelFilter"
-        :facets="facets"
-        :active="facetFilter"
-        :shown="filteredRows.length"
-        :total="rows.length"
-        @insert="insertFacetFilter"
-      />
-
-      <InfraLogsResults
-        :rows="filteredRows"
-        :copied="justCopied"
-        @copy="onCopyText"
-        @send-to-chat="onSendToChat"
-      />
-    </main>
+          <p class="lgs-hint">{{ t('infra.logs.run.rateNote') }}</p>
+        </template>
+      </main>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-// Màn CloudWatch Logs (Mốc 2, 2.1 → 2.7). Trang chỉ điều phối; state/luồng nằm ở
-// useInfraLogs(); bảng/thư viện/histogram là component riêng.
+// Màn CloudWatch Logs. Trang chỉ điều phối; state/luồng nằm ở useInfraLogs().
 //
-// LUẬT CỦA MÀN NÀY
-//   · Không tự chạy. `onMounted` chỉ nạp DANH SÁCH log group (metadata, miễn phí)
-//     và đọc thư viện trên đĩa. Không truy vấn Insights nào chạy mà không có cú bấm.
-//   · Mọi truy vấn đi qua sidecar, nơi `runInfra` đã redact stdout TRƯỚC khi nó
-//     rời tiến trình — nên dòng log hiện trên màn, nằm trên clipboard, và đi vào
-//     chat đều đã qua cùng một lớp lọc (invariant #1). Màn này KHÔNG tự redact
-//     lại: hai lớp lọc khác nhau là hai định nghĩa khác nhau về "bí mật".
+// LAYOUT KIBANA 3/9 (2026-09-16): cột trái 3 phần = điều khiển (ngữ cảnh · chế độ ·
+// khoảng thời gian dạng chip · nhóm log dạng chip · thư viện); cột phải 9 phần = log
+// chính (bảng lấp đầy chiều cao).
+//
+// HAI CHẾ ĐỘ:
+//   · Tail (mặc định) — bấm một nhóm log = xem dòng MỚI NHẤT ngay qua
+//     `filter-log-events`. RẺ (không tính GB quét như Insights) ⇒ được phép tự chạy.
+//   · Nâng cao — soạn câu Insights (textarea, KHÔNG Monaco nữa) + histogram + thư
+//     viện + facet. Luật "không tự chạy Insights" giữ nguyên: truy vấn tốn tiền vẫn
+//     đứng sau một cú bấm + một con số ước lượng.
+//
+// Mọi truy vấn đi qua sidecar, nơi `runInfra` đã redact stdout TRƯỚC khi rời tiến
+// trình (invariant #1). Màn này KHÔNG tự redact lại.
 import InfraLogsFilters from '~/components/infra/logs/InfraLogsFilters.vue'
 import InfraLogsGroupPicker from '~/components/infra/logs/InfraLogsGroupPicker.vue'
 import InfraLogsHistogram from '~/components/infra/logs/InfraLogsHistogram.vue'
 import InfraLogsLibrary from '~/components/infra/logs/InfraLogsLibrary.vue'
 import InfraLogsQueryEditor from '~/components/infra/logs/InfraLogsQueryEditor.vue'
 import InfraLogsResults from '~/components/infra/logs/InfraLogsResults.vue'
-import { useAwsLogsApi } from '~/composables/useAwsLogsApi'
+import InfraLogsStreamPicker from '~/components/infra/logs/InfraLogsStreamPicker.vue'
+import InfraLogsTrace from '~/components/infra/logs/InfraLogsTrace.vue'
+import InfraTimeRange from '~/components/infra/InfraTimeRange.vue'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
-import { LOGS_WINDOW_PRESETS, useInfraLogs } from '~/composables/useInfraLogs'
+import { useInfraLogs } from '~/composables/useInfraLogs'
+import { useInfraTabOpen } from '~/composables/useInfraTabOpen'
+import { useInfraTrace } from '~/composables/useInfraTrace'
+import { useInfraTraceHighlight } from '~/composables/useInfraTraceHighlight'
 import { useInfraWindowSync } from '~/composables/useInfraWindowSync'
 import type { LogsSeed } from '~/composables/useInfraLogs'
 
 // `seed` cho phép màn khác (Tổng quan) mở tab này với một câu lệnh đã điền sẵn —
-// điền câu lệnh KHÔNG phải chạy. `nonce` đổi mỗi lần gieo để cùng một câu gieo hai
-// lần vẫn vào editor.
+// điền câu lệnh KHÔNG phải chạy. Câu Insights ⇒ mở luôn chế độ nâng cao.
 const props = defineProps<{ seed?: LogsSeed | null }>()
 
 const { t } = useI18n()
@@ -229,7 +314,6 @@ const api = useAwsLogsApi()
 
 const {
   profile,
-  region,
   groups,
   groupsLoading,
   groupsError,
@@ -239,10 +323,9 @@ const {
   loadGroups,
   toggleGroup,
   query,
-  windowPreset,
-  customStart,
-  customEnd,
+  win,
   windowSeconds,
+  windowValid,
   estimate,
   estimating,
   histogramOn,
@@ -275,20 +358,87 @@ const {
   applyTemplate,
   zoomToWindow,
   windowMs,
+  // ba chế độ của màn (tail · nâng cao · lần theo request)
+  mode,
+  tailGroup,
+  tailRows,
+  tailFilteredRows,
+  tailLoading,
+  tailError,
+  tailTruncated,
+  tailRanAt,
+  openTail,
+  refreshTail,
+  // tầng giữa: log stream
+  streams,
+  streamsLoading,
+  streamsError,
+  activeStream,
+  selectStream,
 } = useInfraLogs()
 
 /** Cầu nối khoảng thời gian hai chiều với màn Giám sát (6.3). */
 const bridge = useInfraWindowSync()
 
-const presets = LOGS_WINDOW_PRESETS
+/** Ba chế độ, khai một chỗ để thanh chuyển chế độ không phải liệt kê tay. */
+const MODES = ['tail', 'advanced', 'trace'] as const
 
-const knownFields = computed<string[]>(() => {
-  const out = new Set<string>()
-  for (const row of rows.value) for (const k of Object.keys(row)) out.add(k)
-  return [...out]
-})
+// ── Lần theo một request (L5) ───────────────────────────────────────────────
+// Nhóm log + khoảng thời gian do CỘT TRÁI sở hữu, nên chúng được đưa vào qua hàm
+// chứ không nhân bản sang `useInfraTrace` — một bản sao là một bản có thể lệch.
+const {
+  traceId,
+  running: tracing,
+  error: traceError,
+  notes: traceNotes,
+  trace,
+  openHopKey,
+  canRun: canTrace,
+  run: runTrace,
+  cancel: cancelTrace,
+  toggleHop,
+  traceFrom,
+} = useInfraTrace(() => ({
+  logGroups: picked.value,
+  startMs: windowMs.value?.startMs ?? 0,
+  endMs: windowMs.value?.endMs ?? 0,
+  ...(estimate.value ? { estimatedUsd: estimate.value.usd } : {}),
+}))
+
+const traceHighlight = useInfraTraceHighlight()
+const tabOpen = useInfraTabOpen()
+
+/**
+ * Chạy lần theo. Ước lượng được làm mới TRƯỚC khi chạy (nhánh log là một truy vấn
+ * Insights thật), để dòng nhật ký mang đúng con số và để người dùng thấy nó ở lần
+ * sau — cùng luật với nút Chạy của chế độ nâng cao.
+ */
+async function onTraceRun(): Promise<void> {
+  if (!windowValid.value) {
+    toast.add({ title: t('infra.logs.window.invalid'), color: 'warning' })
+    return
+  }
+  if (picked.value.length > 0) await refreshEstimate()
+  await runTrace()
+}
+
+/** Bấm "xem log của chặng này" ⇒ về chế độ tail đúng nhóm đó. */
+async function onOpenHopLogs(logGroup: string): Promise<void> {
+  mode.value = 'tail'
+  await openTail(logGroup)
+}
+
+/** Mang đường đi của request sang tab Sơ đồ (G4). */
+function onShowOnGraph(): void {
+  if (!trace.value) return
+  traceHighlight.push(trace.value)
+  tabOpen.request('graph')
+}
 
 const whenLabel = computed(() => (ranAt.value ? new Date(ranAt.value).toLocaleTimeString() : ''))
+const tailWhenLabel = computed(() =>
+  tailRanAt.value ? new Date(tailRanAt.value).toLocaleTimeString() : '',
+)
 
 const justCopied = ref(false)
 let copiedTimer: ReturnType<typeof setTimeout> | null = null
@@ -300,9 +450,16 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** 3).toFixed(2)} GiB`
 }
 
+// Bấm một chip nhóm ở chế độ tail ⇒ xem dòng mới nhất của nhóm đó ngay.
+async function onTail(name: string): Promise<void> {
+  await openTail(name)
+}
+
 function onApplyLibrary(q: string, windowSeconds: number, _templateId: string): void {
   applyTemplate({ id: _templateId, query: q, windowSeconds })
 }
+
+const saving = ref(false)
 
 async function onSave(): Promise<void> {
   const body = query.value.trim()
@@ -330,8 +487,6 @@ async function onSave(): Promise<void> {
   }
 }
 
-const saving = ref(false)
-
 async function onDeleteSaved(id: string): Promise<void> {
   await api.deleteQuery(id).catch(() => {})
   await reloadLibrary()
@@ -342,8 +497,7 @@ async function onClearHistory(): Promise<void> {
   await reloadLibrary()
 }
 
-// Nút bấm và phím tắt dùng CHUNG hai hàm này, nên guard phải nằm ở đây: phím tắt
-// không được làm được việc mà cú bấm đang vô hiệu không làm được.
+// Nút bấm và phím tắt dùng CHUNG hai hàm này, nên guard phải nằm ở đây.
 async function onRun(): Promise<void> {
   if (!canRun.value) return
   await run()
@@ -359,14 +513,7 @@ function onZoom(startMs: number, endMs: number): void {
   toast.add({ title: t('infra.logs.hist.zoomed'), color: 'info' })
 }
 
-/**
- * Gieo cửa sổ đang chọn sang màn Giám sát (6.3, chiều Logs → Giám sát). Trang
- * `/infra` nghe cùng cầu nối này để CHUYỂN tab — màn kia không thể tự hiện ra.
- *
- * `windowMs` là `null` khi khoảng nhập tay không hợp lệ (end ≤ start). Khi đó không
- * gieo gì: `pushWindow` cũng từ chối, nhưng chặn ở đây thì người dùng nhận được lý
- * do thay vì một cú bấm im lặng.
- */
+/** Gieo cửa sổ đang chọn sang màn Giám sát (6.3, chiều Logs → Giám sát). */
 function onSendToMonitoring(): void {
   const win = windowMs.value
   if (!win) {
@@ -385,8 +532,6 @@ async function onCopyText(text: string): Promise<void> {
 }
 
 async function writeClipboard(text: string): Promise<void> {
-  // `copyText` là bản dùng chung với màn Tổng quan (nó tự báo toast khi hỏng); ở đây
-  // chỉ thêm nhãn "Đã chép" của riêng bảng kết quả.
   if (!(await copyText(text))) return
   justCopied.value = true
   if (copiedTimer) clearTimeout(copiedTimer)
@@ -396,27 +541,36 @@ async function writeClipboard(text: string): Promise<void> {
 }
 
 /**
- * Gửi một dòng log vào chat của PHIÊN ĐANG MỞ.
+ * "Lần theo request này" từ một dòng log: chuyển chế độ rồi chạy luôn.
  *
- * Phần "nối vào draft / không có phiên thì rơi về clipboard" nằm ở
- * `useInfraAskAgent` (dùng chung với màn Tổng quan); ở đây chỉ dựng phần TIÊU ĐỀ
- * riêng của log — nhóm nào, câu lệnh nào — để model biết khối JSON đến từ đâu.
+ * Chạy NGAY chứ không chỉ điền id, vì người dùng vừa bấm một nút nói rõ nó sẽ làm
+ * gì — bắt họ bấm thêm một nút nữa ở màn vừa mở ra là thừa. Chi phí vẫn hiện ở
+ * thanh trạng thái sau khi chạy như mọi truy vấn khác.
  */
+async function onTraceFromRow(id: string): Promise<void> {
+  if (picked.value.length === 0 && tailGroup.value) picked.value = [tailGroup.value]
+  mode.value = 'trace'
+  if (picked.value.length > 0) await refreshEstimate()
+  await traceFrom(id)
+}
+
+/** Gửi một dòng log vào chat của PHIÊN ĐANG MỞ. */
 async function onSendToChat(text: string): Promise<void> {
+  const groups = mode.value === 'tail' ? tailGroup.value : picked.value.join(', ')
   const header = t('infra.logs.chat.header', {
-    groups: picked.value.join(', ') || '-',
-    query: query.value.trim(),
+    groups: groups || '-',
+    query: mode.value === 'advanced' ? query.value.trim() : t(`infra.logs.${mode.value}.mode`),
   })
   await askAgent(`${header}\n\n\`\`\`json\n${text}\n\`\`\``)
 }
 
-// Khoảng thời gian do màn Giám sát gieo sang (6.3). Chỉ ĐẶT khoảng, KHÔNG chạy: thu
-// hẹp cửa sổ là một cách giảm chi phí, tự chạy lại ngay sau đó thì người dùng không
-// kịp đọc con số ước lượng mới — cùng luật với cú bấm histogram.
-//
-// `immediate: true` để bắt ca gieo TRƯỚC khi tab này được mount (tab Logs mount lười,
-// cú gieo tới trong cùng tick với cú chuyển tab). `consumeWindow` xoá ngay: để lại thì
-// lần vào tab sau sẽ áp lại một khoảng cũ mà người dùng không hề yêu cầu.
+// Đổi cửa sổ thời gian ở chế độ tail ⇒ tail lại nhóm đang xem (cú bấm của người
+// dùng, lệnh rẻ). Chế độ nâng cao KHÔNG tự chạy — Insights vẫn phải bấm Chạy.
+watch(win, () => {
+  if (mode.value === 'tail' && tailGroup.value) void refreshTail()
+})
+
+// Khoảng thời gian do màn Giám sát gieo sang (6.3). Chỉ ĐẶT khoảng, KHÔNG chạy.
 watch(
   bridge.pendingLogs,
   (seed) => {
@@ -424,23 +578,33 @@ watch(
     const got = bridge.consumeWindow('logs')
     if (!got) return
     zoomToWindow(got.startMs, got.endMs)
-    // Cửa sổ vừa đổi mà không có gì chạy — nói ra, nếu không cú bấm bên kia trông
-    // như không có tác dụng. Câu mô tả do bên gieo đặt (nó biết mình gieo vì việc gì).
     if (got.note) toast.add({ title: got.note, color: 'info' })
   },
   { immediate: true },
 )
 
-// Câu lệnh do màn khác gieo vào (Tổng quan → "Mở trong Logs"). Điền vào editor, KHÔNG
-// chạy: người dùng vẫn phải bấm Chạy và vẫn phải nhìn thấy ước lượng GB trước.
+// Câu lệnh do màn khác gieo vào (Tổng quan → "Mở trong Logs"). Câu Insights ⇒ mở
+// chế độ nâng cao và điền vào editor, KHÔNG chạy.
 watch(
   () => props.seed,
   (seed) => {
     if (!seed) return
-    // Chọn group TRƯỚC khi điền câu lệnh: một câu lệnh đúng nhưng không chọn group
-    // nào thì lần chạy tiếp theo sẽ hỏi lại từ đầu — gieo mà không chọn là gieo dở.
-    if (seed.group) picked.value = [seed.group]
-    applyTemplate({ id: '', query: seed.query, windowSeconds: seed.windowSeconds })
+    mode.value = seed.mode ?? 'advanced'
+    if (seed.pattern !== undefined) {
+      pattern.value = seed.pattern
+      void loadGroups()
+    }
+    if (seed.group) {
+      picked.value = [seed.group]
+      // Chế độ tail xem MỘT nhóm: mở luôn nhóm được gieo, nếu không màn hiện ra
+      // trống và người dùng phải tự bấm lại đúng thứ họ vừa xin.
+      if (mode.value === 'tail') void openTail(seed.group)
+    }
+    // Câu lệnh là TUỲ CHỌN: bên gieo chỉ xin mở đúng nhóm log thì không có lý do
+    // gì ghi đè câu người dùng đang soạn dở ở chế độ nâng cao.
+    if (seed.query) {
+      applyTemplate({ id: '', query: seed.query, windowSeconds: seed.windowSeconds })
+    }
   },
   { immediate: true },
 )
@@ -458,7 +622,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .lgs {
   display: grid;
-  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   gap: 14px;
   padding: 14px 16px;
   height: 100%;
@@ -466,12 +630,15 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+/* Hai cột là CARD (skin dùng chung `.icard`: viền + --r-card + --bgPanel + shadow).
+   Đây chỉ thêm bố cục + padding trong khung. */
 .lgs-side {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   min-height: 0;
   overflow-y: auto;
+  padding: 12px;
 }
 
 .lgs-main {
@@ -480,74 +647,58 @@ onBeforeUnmount(() => {
   gap: 8px;
   min-height: 0;
   overflow-y: auto;
+  padding: 12px;
 }
 
-.lgs-ctx {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-}
-
-.lgs-ctx-chip {
-  padding: 2px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-
-.lgs-ctx-chip.dim {
-  color: var(--textDim);
-}
-
-.lgs-window {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.lgs-window-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-
-.lgs-preset {
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
+/* Bảng kết quả bên trong cột phải đã là `.tblcard` — bỏ khung/shadow/nền của nó
+   để không thành "card trong card"; header dính (--bgEl) vẫn đủ tách khỏi thân. */
+.lgs-main :deep(.tblcard) {
+  border: none;
+  box-shadow: none;
   background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
+  border-radius: 0;
 }
 
-.lgs-preset.on {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--bgHover);
+.lgs-mode {
+  align-self: stretch;
 }
 
-.lgs-dt {
-  padding: 3px 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
+.lgs-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lgs-block-lbl {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 600;
   color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-family: var(--sans);
 }
 
-.lgs-runbar {
+/* Thanh công cụ của cột chính (tail). Da/nền dùng lại `.itoolbar` khi cần. */
+.lgs-mainbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-wrap: wrap;
+}
+
+.lgs-mainbar-group {
+  /* Hiện ĐẦY ĐỦ tên nhóm: giữ nguyên khi vừa một dòng, tự ngắt khi hẹp (định danh
+     dài nên ngắt ở bất kỳ đâu). `min-width: 0` cho phép co trong hàng flex. */
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--textDim);
+  /* mono-ok: tên log group là định danh tài nguyên */
+  font-family: var(--code);
+}
+
+.lgs-spacer {
+  flex: 1 1 auto;
 }
 
 .lgs-check {
@@ -559,19 +710,29 @@ onBeforeUnmount(() => {
   color: var(--textDim);
 }
 
-.lgs-est {
+.lgs-meta-grp {
+  gap: 10px;
+}
+
+.lgs-meta {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   color: var(--textMuted);
   font-variant-numeric: tabular-nums;
 }
 
-.lgs-est-basis {
+.lgs-meta-dim {
   color: var(--textFaint);
   margin-left: 5px;
 }
 
-.lgs-ratenote {
+.lgs-trunc {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--amber);
+}
+
+.lgs-hint {
   margin: 0;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
@@ -606,17 +767,6 @@ onBeforeUnmount(() => {
 .lgs-status-chip.ok {
   border-color: var(--green);
   color: var(--green);
-}
-
-.lgs-status-txt {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textMuted);
-  font-variant-numeric: tabular-nums;
-}
-
-.lgs-status-txt.dim {
-  color: var(--textFaint);
 }
 
 .lgs-ic {
