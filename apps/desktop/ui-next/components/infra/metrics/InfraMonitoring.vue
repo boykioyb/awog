@@ -43,33 +43,31 @@
         </div>
       </template>
 
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.monitoring.target.lb') }}</div>
-        <input
-          v-model="targets.lb"
-          class="im-inp"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          :placeholder="t('infra.monitoring.target.lbPh')"
-          :title="t('infra.monitoring.target.lbWhy')"
-          @keydown.enter="load(false)"
-        />
-      </div>
+      <InfraTargetPicker
+        v-model="targets.lb"
+        :label="t('infra.monitoring.target.lb')"
+        :placeholder="t('infra.monitoring.target.lbPh')"
+        :why="t('infra.monitoring.target.lbWhy')"
+        :select-placeholder="t('infra.monitoring.target.any')"
+        :group="pickerLbs"
+        :loading="pickerLoading"
+        :has-account="hasAccount"
+        @reload="loadTargets(true)"
+        @submit="load(false)"
+      />
 
-      <div class="ifield">
-        <div class="ilbl">{{ t('infra.monitoring.target.instance') }}</div>
-        <input
-          v-model="targets.instance"
-          class="im-inp"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          :placeholder="t('infra.monitoring.target.instancePh')"
-          :title="t('infra.monitoring.target.instanceWhy')"
-          @keydown.enter="load(false)"
-        />
-      </div>
+      <InfraTargetPicker
+        v-model="targets.instance"
+        :label="t('infra.monitoring.target.instance')"
+        :placeholder="t('infra.monitoring.target.instancePh')"
+        :why="t('infra.monitoring.target.instanceWhy')"
+        :select-placeholder="t('infra.monitoring.target.any')"
+        :group="pickerInstances"
+        :loading="pickerLoading"
+        :has-account="hasAccount"
+        @reload="loadTargets(true)"
+        @submit="load(false)"
+      />
 
       <button
         type="button"
@@ -209,9 +207,13 @@
 // từ tab Nhật ký, là hai đường vào duy nhất.
 import { formatAxisTime, MONITOR_CHARTS, useInfraMetrics } from '~/composables/useInfraMetrics'
 import { useInfraDashboardPin } from '~/composables/useInfraDashboardPin'
+import { useInfraMonitorTargets } from '~/composables/useInfraMonitorTargets'
+import InfraTargetPicker from '~/components/infra/metrics/InfraTargetPicker.vue'
 import type { DashboardChart } from '~/composables/useInfraDashboards'
 
 const {
+  context,
+  hasAccount,
   sidecarAvailable,
   targets,
   windowPreset,
@@ -257,6 +259,22 @@ const {
 } = useInfraMetrics()
 
 const { t } = useI18n()
+
+// Danh sách cho HAI picker tài nguyên. Một lượt gọi RPC nuôi cả hai — chúng là hai
+// nhóm trong cùng một câu trả lời, không phải hai lời gọi.
+//
+// Truyền hàm đọc chứ không truyền giá trị: khoá cache là (profile, region), và hai
+// thứ đó đổi khi người dùng chỉnh thanh ngữ cảnh ở đầu trang.
+const {
+  loading: pickerLoading,
+  loadBalancers: pickerLbs,
+  instances: pickerInstances,
+  load: loadTargets,
+} = useInfraMonitorTargets(
+  () => context.value.profile ?? '',
+  () => context.value.region ?? '',
+  'explorer',
+)
 
 /** Mốc "nạp lúc" — cùng định dạng trục thời gian của biểu đồ, không phải ISO. */
 const atLabel = computed(() =>

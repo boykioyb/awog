@@ -119,32 +119,31 @@
         <!-- Hai ô tài nguyên: cùng vai trò với màn Giám sát, và được GIEO từ
              `targetValue` của chính bảng lúc mở. Bảng nào không dùng tài nguyên nào
              thì ô đó đứng yên — `dimensionsFor` bỏ qua giá trị rỗng. -->
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.monitoring.target.lb') }}</div>
-          <input
-            v-model="targets.lb"
-            class="idb-inp"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            :placeholder="t('infra.monitoring.target.lbPh')"
-            :title="t('infra.monitoring.target.lbWhy')"
-            @keydown.enter="load(false)"
-          />
-        </div>
-        <div class="ifield">
-          <div class="ilbl">{{ t('infra.monitoring.target.instance') }}</div>
-          <input
-            v-model="targets.instance"
-            class="idb-inp"
-            type="text"
-            autocomplete="off"
-            spellcheck="false"
-            :placeholder="t('infra.monitoring.target.instancePh')"
-            :title="t('infra.monitoring.target.instanceWhy')"
-            @keydown.enter="load(false)"
-          />
-        </div>
+        <InfraTargetPicker
+          v-model="targets.lb"
+          :label="t('infra.monitoring.target.lb')"
+          :placeholder="t('infra.monitoring.target.lbPh')"
+          :why="t('infra.monitoring.target.lbWhy')"
+          :select-placeholder="t('infra.monitoring.target.any')"
+          :group="pickerLbs"
+          :loading="pickerLoading"
+          :has-account="hasAccount"
+          @reload="loadTargets(true)"
+          @submit="load(false)"
+        />
+
+        <InfraTargetPicker
+          v-model="targets.instance"
+          :label="t('infra.monitoring.target.instance')"
+          :placeholder="t('infra.monitoring.target.instancePh')"
+          :why="t('infra.monitoring.target.instanceWhy')"
+          :select-placeholder="t('infra.monitoring.target.any')"
+          :group="pickerInstances"
+          :loading="pickerLoading"
+          :has-account="hasAccount"
+          @reload="loadTargets(true)"
+          @submit="load(false)"
+        />
 
         <button
           type="button"
@@ -260,6 +259,8 @@ import { computed, onMounted } from 'vue'
 import { useConfirm } from '~/composables/useConfirm'
 import { useInfraDashboards } from '~/composables/useInfraDashboards'
 import { formatAxisTime } from '~/composables/useInfraMetrics'
+import { useInfraMonitorTargets } from '~/composables/useInfraMonitorTargets'
+import InfraTargetPicker from '~/components/infra/metrics/InfraTargetPicker.vue'
 import type {
   DashboardIssue,
   DashboardRef,
@@ -270,6 +271,7 @@ const { t } = useI18n()
 const { confirm } = useConfirm()
 
 const {
+  context,
   hasAccount,
   sidecarAvailable,
   summaries,
@@ -308,6 +310,19 @@ const {
   hasSnapshot,
   ask,
 } = useInfraDashboards()
+
+// Cùng picker với màn Giám sát; cache cấp module theo (profile, region) nên mở màn
+// này sau màn kia thì danh sách đã sẵn, không dò lại.
+const {
+  loading: pickerLoading,
+  loadBalancers: pickerLbs,
+  instances: pickerInstances,
+  load: loadTargets,
+} = useInfraMonitorTargets(
+  () => context.value.profile ?? '',
+  () => context.value.region ?? '',
+  'dashboards',
+)
 
 // Đọc thư mục, không chạm CLI và không tốn tiền — nên nạp được ngay khi tab mount.
 // Đây KHÔNG phải ngoại lệ của luật không-tự-chạy: luật đó nói về `metrics-query`.
