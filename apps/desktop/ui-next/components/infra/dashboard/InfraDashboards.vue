@@ -197,6 +197,13 @@
         <span v-if="dirty" class="iwarn">{{ t('infra.dashboard.dirty') }}</span>
       </div>
 
+      <!-- Lỗi dò danh sách đứng NGOÀI thanh công cụ (flex-wrap): một đoạn văn nằm
+           trong đó quyết định hàng gãy ở đâu và làm vỡ bố cục — lỗi thật ở màn
+           Giám sát 2026-09-16. Một dòng, toàn văn trong `title`. -->
+      <p v-if="pickerError" class="idb-targeterr" :title="pickerError">
+        {{ t('infra.monitoring.target.listFailed', { err: pickerError }) }}
+      </p>
+
       <InfraEmpty
         v-if="!hasAccount"
         :title="t('infra.empty.noProfile.title')"
@@ -323,6 +330,12 @@ const {
   () => context.value.region ?? '',
   'dashboards',
 )
+
+/** Lỗi dò danh sách, gộp hai nhóm — cùng luật với màn Giám sát. */
+const pickerError = computed<string>(() => {
+  const errs = [pickerLbs.value.error, pickerInstances.value.error].filter((e) => e !== '')
+  return [...new Set(errs)].join(' · ')
+})
 
 // Đọc thư mục, không chạm CLI và không tốn tiền — nên nạp được ngay khi tab mount.
 // Đây KHÔNG phải ngoại lệ của luật không-tự-chạy: luật đó nói về `metrics-query`.
@@ -552,6 +565,16 @@ async function remove(s: DashboardSummary): Promise<void> {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 10px;
+}
+
+.idb-targeterr {
+  margin: 2px 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-prose);
+  color: var(--amber);
 }
 
 .idb-ask {

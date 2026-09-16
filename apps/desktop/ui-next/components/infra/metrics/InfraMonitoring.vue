@@ -103,6 +103,13 @@
     <!-- Dòng này TỪNG TỒN TẠI trong i18n mà không màn nào render (`target.hint`),
          nên hai ô tài nguyên đứng trần: không nhãn phụ, không placeholder, không
          ai nói phải điền gì vào (người dùng hỏi thẳng 2026-09-16). -->
+    <!-- Câu lỗi của lượt dò danh sách đứng ở ĐÂY, không trong `.im-tool`: thanh đó
+         là flex-wrap, nên một đoạn văn nằm trong nó sẽ quyết định hàng gãy ở đâu và
+         làm vỡ cả bố cục (lỗi thật 2026-09-16). Một dòng, cắt bằng ellipsis, toàn
+         văn trong `title`. -->
+    <p v-if="pickerError" class="im-targeterr" :title="pickerError">
+      {{ t('infra.monitoring.target.listFailed', { err: pickerError }) }}
+    </p>
     <p class="im-targethint">{{ t('infra.monitoring.target.hint') }}</p>
 
     <div class="im-status">
@@ -276,6 +283,17 @@ const {
   'explorer',
 )
 
+/**
+ * Lỗi của lượt dò danh sách, gộp hai nhóm. Hai nguồn hỏng cùng một lý do (token
+ * hết hạn) là ca THƯỜNG GẶP nhất, và in hai lần cùng một câu chỉ tổ dài — nhưng
+ * hỏng khác lý do thì phải thấy cả hai, nên gộp theo nội dung chứ không lấy cái
+ * đầu tiên.
+ */
+const pickerError = computed<string>(() => {
+  const errs = [pickerLbs.value.error, pickerInstances.value.error].filter((e) => e !== '')
+  return [...new Set(errs)].join(' · ')
+})
+
 /** Mốc "nạp lúc" — cùng định dạng trục thời gian của biểu đồ, không phải ISO. */
 const atLabel = computed(() =>
   loadedAt.value === null ? '' : formatAxisTime(loadedAt.value, 86_400),
@@ -342,6 +360,18 @@ function onPin(chartKey: string): void {
 <style scoped>
 /* Dòng giải thích hai ô tài nguyên. Nằm DƯỚI hàng công cụ chứ không cạnh từng ô:
    nó nói về cả hai, và nhét vào giữa hàng thì hàng đó xuống dòng ở cửa sổ hẹp. */
+/* Một dòng, cắt bằng ellipsis: stderr của AWS dài và thanh công cụ ngay trên nó
+   là flex-wrap. Toàn văn nằm trong `title`. */
+.im-targeterr {
+  margin: 2px 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-prose);
+  color: var(--amber);
+}
+
 .im-targethint {
   margin: 2px 0 10px;
   max-width: 84ch;

@@ -114,6 +114,26 @@ function lowerFirstKeys(value: unknown): unknown {
   return value
 }
 
+/**
+ * Rút lỗi của AWS CLI về một câu đọc được.
+ *
+ * stderr của nó có hình dạng cố định:
+ *   `An error occurred (ExpiredToken) when calling the DescribeLoadBalancers
+ *    operation: The security token included in the request is expired`
+ * Đoạn đầu là khuôn, không mang tin: cái người dùng cần là MÃ và CÂU CUỐI. Giữ
+ * nguyên cả dòng thì UI phải hiện một câu dài gấp ba chỗ nó có (lỗi thật
+ * 2026-09-16: dòng đó làm vỡ cả thanh công cụ của màn Giám sát).
+ *
+ * Không khớp khuôn ⇒ trả dòng đầu như cũ: khuôn này là của AWS CLI, không phải
+ * hợp đồng, nên nó đổi được và ta không được nuốt lỗi vì thế.
+ */
+export function shortAwsError(stderr: string): string {
+  const line = stderr.split('\n').find((l) => l.trim().length > 0)?.trim() ?? ''
+  const m = line.match(/An error occurred \(([^)]+)\)[^:]*:\s*(.+)$/)
+  if (m) return `${m[1]}: ${m[2]}`.slice(0, 300)
+  return line.slice(0, 300)
+}
+
 async function readJson(
   args: readonly string[],
   input: MonitorTargetsInput,
@@ -132,8 +152,7 @@ async function readJson(
     timeoutMs: RUN_TIMEOUT_MS,
   })
   if (!run.ok) {
-    const first = run.stderr.split('\n').find((l) => l.trim().length > 0) ?? ''
-    return { ok: false, error: first.trim().slice(0, 300) || 'aws exited without saying why' }
+    return { ok: false, error: shortAwsError(run.stderr) || 'aws exited without saying why' }
   }
   try {
     return { ok: true, value: lowerFirstKeys(JSON.parse(run.stdout)) }

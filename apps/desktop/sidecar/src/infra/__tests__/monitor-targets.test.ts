@@ -7,7 +7,7 @@
 //
 // Run: `npx vitest run src/infra/__tests__/monitor-targets.test.ts`
 import { describe, expect, it } from 'vitest'
-import { albDimensionValue } from '../monitor-targets.js'
+import { albDimensionValue, shortAwsError } from '../monitor-targets.js'
 
 describe('albDimensionValue', () => {
   it('cắt đúng phần đuôi của ARN một ALB', () => {
@@ -39,5 +39,38 @@ describe('albDimensionValue', () => {
 
   it('KHÔNG nhận mỗi cái tên — đó chính là cái bẫy picker sinh ra để gỡ', () => {
     expect(albDimensionValue('my-alb')).not.toBe('my-alb')
+  })
+})
+
+describe('shortAwsError', () => {
+  it('bỏ phần khuôn, giữ MÃ và câu cuối', () => {
+    // Nguyên văn stderr người dùng gặp 2026-09-16 — cả dòng dài gấp ba chỗ UI có,
+    // và chính nó làm vỡ thanh công cụ của màn Giám sát.
+    const raw =
+      'aws: [ERROR]: An error occurred (ExpiredToken) when calling the DescribeLoadBalancers operation: The security token included in the request is expired'
+    expect(shortAwsError(raw)).toBe(
+      'ExpiredToken: The security token included in the request is expired',
+    )
+  })
+
+  it('ca thứ hai của cùng lượt đó', () => {
+    const raw =
+      'An error occurred (RequestExpired) when calling the DescribeInstances operation: Request has expired.'
+    expect(shortAwsError(raw)).toBe('RequestExpired: Request has expired.')
+  })
+
+  it('không khớp khuôn ⇒ giữ dòng đầu, KHÔNG nuốt lỗi', () => {
+    // Khuôn kia là của AWS CLI, không phải hợp đồng — nó đổi được.
+    expect(shortAwsError('Unable to locate credentials')).toBe('Unable to locate credentials')
+  })
+
+  it('bỏ dòng trống đầu, lấy dòng có chữ đầu tiên', () => {
+    expect(shortAwsError('\n\n  Could not connect to the endpoint URL  \n')).toBe(
+      'Could not connect to the endpoint URL',
+    )
+  })
+
+  it('stderr rỗng ⇒ chuỗi rỗng, để chỗ gọi tự quyết câu thay thế', () => {
+    expect(shortAwsError('')).toBe('')
   })
 })

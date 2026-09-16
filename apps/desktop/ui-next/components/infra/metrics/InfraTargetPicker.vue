@@ -14,47 +14,52 @@
     <div class="ilbl">{{ label }}</div>
 
     <div class="itg-row">
-      <template v-if="manual">
-        <input
-          :value="model"
-          class="itg-inp"
-          type="text"
-          autocomplete="off"
-          spellcheck="false"
-          :placeholder="placeholder"
-          :title="why"
-          @input="onType"
-          @keydown.enter="emit('submit')"
-        />
-        <button v-if="!group.error" class="itg-link" type="button" @click="manual = false">
-          {{ t('infra.monitoring.target.pick') }}
-        </button>
-      </template>
+      <input
+        v-if="manual"
+        :value="model"
+        class="itg-inp"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        :placeholder="placeholder"
+        :title="why"
+        @input="onType"
+        @keydown.enter="emit('submit')"
+      />
+      <AppSelect
+        v-else
+        :model-value="model"
+        :options="options"
+        :placeholder="selectPlaceholder"
+        width="200px"
+        @update:model-value="onPick"
+      />
 
-      <template v-else>
-        <AppSelect
-          :model-value="model"
-          :options="options"
-          :placeholder="selectPlaceholder"
-          width="240px"
-          @update:model-value="onPick"
-        />
-        <button
-          class="itg-icbtn"
-          type="button"
-          :disabled="loading || !hasAccount"
-          :title="t('infra.monitoring.target.reloadWhy')"
-          :aria-busy="loading"
-          @click="emit('reload')"
-        >
-          <Icon name="refresh" class="itg-ic" :class="loading ? 'itg-spin' : ''" />
-        </button>
-      </template>
+      <!-- Nút làm mới ở CẢ HAI chế độ. Bản đầu giấu nó trong chế độ gõ tay, nên
+           một lỗi hết hạn token (`ExpiredToken` — lỗi thật 2026-09-16) biến ô này
+           thành đường cụt: đăng nhập lại xong vẫn không có cách nào thử lại ngoài
+           việc tải lại cả app. Lỗi của `describe-*` phần lớn là tạm thời. -->
+      <button
+        class="itg-icbtn"
+        type="button"
+        :disabled="loading || !hasAccount"
+        :title="t('infra.monitoring.target.reloadWhy')"
+        :aria-busy="loading"
+        @click="emit('reload')"
+      >
+        <Icon name="refresh" class="itg-ic" :class="loading ? 'itg-spin' : ''" />
+      </button>
+
+      <!-- Chỉ mời quay lại picker khi THẬT SỰ có gì để chọn. -->
+      <button
+        v-if="manual && group.items.length > 0"
+        class="itg-link"
+        type="button"
+        @click="manual = false"
+      >
+        {{ t('infra.monitoring.target.pick') }}
+      </button>
     </div>
-
-    <p v-if="group.error" class="itg-err">
-      {{ t('infra.monitoring.target.listFailed', { err: group.error }) }}
-    </p>
   </div>
 </template>
 
@@ -90,8 +95,10 @@ const MANUAL = ' manual'
 const manual = ref(false)
 
 /**
- * Danh sách hỏng ⇒ ép về gõ tay, và KHÔNG cho quay lại: một picker rỗng mà bấm
- * mãi không ra gì thì tệ hơn một ô chữ.
+ * Danh sách hỏng ⇒ rơi về gõ tay, vì một picker rỗng mà bấm mãi không ra gì thì
+ * tệ hơn một ô chữ. Nhưng KHÔNG khoá ở đó: nút làm mới vẫn còn, và khi lượt nạp
+ * sau có kết quả thì liên kết "Chọn từ danh sách" hiện lại. Phần lớn lỗi của
+ * `describe-*` là tạm thời (token hết hạn, mạng), không phải vĩnh viễn.
  */
 watch(
   () => props.group.error,
@@ -130,16 +137,28 @@ function onType(e: Event): void {
 </script>
 
 <style scoped>
+/* BỀ RỘNG CỐ ĐỊNH, và đó là điểm mấu chốt chứ không phải trang trí.
+   `.im-tool` của màn cha là `display:flex; flex-wrap: wrap; align-items:flex-end`,
+   nên bề rộng NỘI TẠI của mục này quyết định cả hàng gãy ở đâu. Bản đầu để câu
+   lỗi (`max-width: 46ch`) nằm trong đây ⇒ mục phình ra gần nửa màn ⇒ thanh công
+   cụ vỡ tan khi có lỗi (lỗi thật 2026-09-16, người dùng chụp màn hình). Câu lỗi
+   nay do CHA render, bên dưới cả thanh, cạnh dòng gợi ý. */
 .itg-wrap {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 0 0 auto;
+  /* 200 (ô chọn) + 6 (gap) + 26 (nút làm mới) + dư. */
+  width: 240px;
 }
 
+/* `wrap` vì ở chế độ gõ tay còn thêm liên kết "Chọn từ danh sách"; cho nó xuống
+   dòng trong 240px thay vì đẩy mục phình ra và làm gãy hàng của cha lần nữa. */
 .itg-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 /* Tự khai, KHÔNG mượn `.im-inp` của màn Giám sát: class đó `<style scoped>` nên
@@ -147,7 +166,8 @@ function onType(e: Event): void {
    trơ theo mặc định trình duyệt. Hình dáng chép theo `.im-inp` để hai ô cạnh nhau
    (khoảng thời gian tự chọn và ô này) trông là một họ. */
 .itg-inp {
-  min-width: 200px;
+  min-width: 0;
+  flex: 1;
   padding: 7px 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
@@ -194,14 +214,6 @@ function onType(e: Event): void {
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
   white-space: nowrap;
-}
-
-.itg-err {
-  margin: 0;
-  max-width: 46ch;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--amber);
 }
 
 .itg-ic {
