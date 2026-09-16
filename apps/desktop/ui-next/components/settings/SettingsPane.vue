@@ -15,6 +15,7 @@
     <SettingsSessions v-else-if="active === 'sessions'" />
     <SettingsStorage v-else-if="active === 'storage'" />
     <SettingsPermissions v-else-if="active === 'permissions'" />
+    <SettingsInfra v-else-if="active === 'infra'" />
     <SettingsKeymap v-else-if="active === 'keymap'" />
     <SettingsAbout v-else />
   </div>

@@ -18,6 +18,7 @@ export const SETTINGS_SECTIONS = [
   { id: 'sessions', labelKey: 'settings.nav.sessions', icon: 'sessions' },
   { id: 'storage', labelKey: 'settings.nav.storage', icon: 'folder' },
   { id: 'permissions', labelKey: 'settingsPermissions.nav', icon: 'shield' },
+  { id: 'infra', labelKey: 'settingsInfra.nav', icon: 'globe' },
   { id: 'keymap', labelKey: 'settings.nav.keymap', icon: 'commands' },
   { id: 'about', labelKey: 'settings.nav.about', icon: 'alert' },
 ] as const
