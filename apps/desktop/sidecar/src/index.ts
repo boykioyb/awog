@@ -166,6 +166,8 @@ import './methods/infra.dashboard.js'
 import './methods/infra.cost.js'
 import './methods/infra.budget.js'
 import './methods/infra.trail.js'
+// Diễn giải lệnh cho hộp duyệt (ADR 0088 §5) — one-shot, không state.
+import './methods/infra.explain.js'
 import './methods/ssh.list.js'
 import './methods/ssh.upsert.js'
 import './methods/ssh.delete.js'

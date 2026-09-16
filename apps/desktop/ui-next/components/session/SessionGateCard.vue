@@ -62,9 +62,33 @@
       <dl class="pbrief">
         <template v-for="row in infraBrief" :key="row.label">
           <dt class="pbrief-lbl">{{ row.label }}</dt>
-          <dd class="pbrief-txt" :class="row.tone">{{ row.text }}</dd>
+          <dd class="pbrief-txt" :class="row.tone">
+            {{ row.text }}
+            <span v-if="row.ai" class="pbrief-ai" :title="t('infraGate.brief.aiWhy')">
+              {{ t('infraGate.brief.ai') }}
+            </span>
+            <!-- Dòng RỦI RO giữ phần AWOG tự suy ở trên; lời mô hình chỉ nối thêm
+                 vào đây, có nhãn. Xem `infraBrief` cho lý do ranh giới đó. -->
+            <span v-if="row.note" class="pbrief-note">
+              {{ row.note }}
+              <span class="pbrief-ai" :title="t('infraGate.brief.aiWhy')">
+                {{ t('infraGate.brief.ai') }}
+              </span>
+            </span>
+          </dd>
         </template>
       </dl>
+      <!-- Chỉ hiện khi đang hỏi hoặc đã hỏng: lúc bình thường ba dòng trên tự nói
+           hết, thêm một dòng trạng thái nữa chỉ là nhiễu ngay trên nút Cho phép. -->
+      <p v-if="explainState?.loading" class="pbrief-state">
+        {{ t('infraGate.brief.loading') }}
+      </p>
+      <p v-else-if="explainState?.failed" class="pbrief-state">
+        {{ t('infraGate.brief.failed') }}
+        <button class="pbrief-retry" type="button" @click="onRetryExplain">
+          {{ t('infraGate.brief.retry') }}
+        </button>
+      </p>
     </template>
     <div v-else>
       {{ t('sessions.gate.allowQuestion') }}
@@ -181,6 +205,7 @@ import type {
   StepDetailKind,
 } from '~/composables/useSessionsData'
 import { useSessionPermissionRule } from '~/composables/useSessionPermissionRule'
+import { useInfraExplain, type ExplainState } from '~/composables/useInfraExplain'
 
 const props = defineProps<{ block: AssistantBlock }>()
 const { t } = useI18n()
@@ -316,6 +341,89 @@ const infraChips = computed<InfraChip[]>(() => {
   return chips
 })
 
+/** Từ khoá shell — chúng đứng ở vị trí đầu đoạn nhưng không phải chương trình nào. */
+const SHELL_KEYWORDS = new Set(['do', 'done', 'then', 'else', 'elif', 'fi', 'esac', 'in'])
+
+/**
+ * Cắt một chuỗi shell ở các toán tử NẰM NGOÀI dấu nháy, trả về tên những chương
+ * trình thật sẽ chạy (đã khử trùng lặp ở chỗ gọi).
+ *
+ * Cần vì `command.split(' ')[0]` nói dối ngay khi chuỗi không phải một lệnh trần:
+ * với `POD=api-8d64…; echo "…"; kubectl -n apps exec …` nó trả về phép GÁN BIẾN và
+ * thẻ đi khoe `POD=api-8d64…` như thể đó là chương trình sắp chạy (lỗi thật
+ * 2026-09-16).
+ *
+ * ⚠ PHẢI ĐẾM DẤU NHÁY, không được `split(/[;|]/)` cho gọn: chuỗi trong ảnh chụp có
+ * `grep -E "^(128|129|130|131|132)"`, nên cắt mù theo `|` sẽ đẻ ra bốn "đoạn" mang
+ * tên `129`, `130`, `131` và một đoạn tên `do`. Một danh sách như thế còn tệ hơn
+ * cái tên sai nó vừa thay thế.
+ *
+ * Đây CHỈ là đường lùi khi mô hình không trả lời được: nó đếm và gọi tên, không
+ * diễn giải. Nó cũng không phải một parser shell — `$(…)` lồng nhiều tầng hay
+ * here-doc thì nó đếm sai, và điều đó chấp nhận được vì hậu quả xấu nhất là một
+ * dòng mô tả thô, không phải một quyết định quyền sai.
+ */
+function shellStages(command: string): string[] {
+  const segments: string[] = []
+  let buf = ''
+  let quote: "'" | '"' | null = null
+  for (let k = 0; k < command.length; k += 1) {
+    const ch = command[k] as string
+    if (quote) {
+      if (ch === quote) quote = null
+      buf += ch
+      continue
+    }
+    if (ch === "'" || ch === '"') {
+      quote = ch
+      buf += ch
+      continue
+    }
+    if (ch === ';' || ch === '|' || ch === '&' || ch === '\n') {
+      // `&&` / `||` là một toán tử, không phải hai.
+      if ((ch === '|' || ch === '&') && command[k + 1] === ch) k += 1
+      segments.push(buf)
+      buf = ''
+      continue
+    }
+    buf += ch
+  }
+  segments.push(buf)
+
+  return segments
+    .map((seg) => {
+      // Bỏ phép gán env đứng trước lệnh (`FOO=bar cmd`) rồi lấy token đầu còn lại.
+      const tok = seg.trim().split(/\s+/)
+      let k = 0
+      while (k < tok.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(tok[k] as string)) k += 1
+      const head = tok[k] ?? ''
+      // Tên chương trình bắt đầu bằng chữ cái hoặc `/`; số, `$(…)`, `"` thì không.
+      if (!/^[A-Za-z/][A-Za-z0-9_./-]*$/.test(head)) return ''
+      const name = head.split('/').pop() as string
+      return SHELL_KEYWORDS.has(name) ? '' : name
+    })
+    .filter((x) => x !== '')
+}
+
+// ── Diễn giải bằng mô hình ────────────────────────────────────────────────────
+// Thẻ hỏi mô hình "lệnh này làm gì" vì AWOG không có bảng ngữ nghĩa cho vài nghìn
+// op của ba CLI (xem `useInfraExplain`). CHỈ hỏi cho thẻ ĐANG CHỜ: diễn giải một
+// quyết định đã xong thì không ai được lợi, mà vẫn tốn một lượt gọi.
+const { explain, retry: retryExplain } = useInfraExplain()
+const explainState = ref<ExplainState | null>(null)
+
+watchEffect(() => {
+  const i = infra.value
+  if (!i || permStatus.value !== 'pending' || cancelled.value) return
+  explainState.value = explain(i, store.active?.project)
+})
+
+function onRetryExplain(): void {
+  const i = infra.value
+  if (!i) return
+  explainState.value = retryExplain(i, store.active?.project)
+}
+
 /**
  * Ba câu trước khi bấm: SẼ LÀM GÌ · KẾT QUẢ MONG ĐỢI · RỦI RO.
  *
@@ -323,25 +431,37 @@ const infraChips = computed<InfraChip[]>(() => {
  * khoản nào…", một câu đúng nhưng đọc như cước chú). Người sắp bấm Cho phép cần trả
  * lời được ba câu đó, và mấy dòng cũ chỉ trả lời câu thứ ba, một phần.
  *
- * ⚠ MỌI DÒNG PHẢI SUY RA ĐƯỢC TỪ PAYLOAD. AWOG không có bảng mô tả ngữ nghĩa cho mọi
- * lệnh của ba CLI, nên nó KHÔNG viết văn về việc lệnh này làm gì — nó nói thứ nó biết
- * chắc: binary + thao tác, ngữ cảnh lệnh sẽ rơi vào, hệ quả theo LỚP lệnh, và vì sao
- * mức rủi ro là mức đang hiện. Bịa một câu "lệnh này sẽ xoá cluster của bạn" cho một
- * op mà AWOG không biết còn tệ hơn im lặng.
+ * HAI NGUỒN, VÀ RANH GIỚI GIỮA CHÚNG LÀ HÀNG RÀO chứ không phải lựa chọn hiển thị:
+ *
+ *   · AWOG tự suy — từ payload. Biết chắc, không bao giờ sai, nhưng chỉ nói được
+ *     những gì payload chứa: lớp lệnh, tài khoản, vùng, chuỗi shell hay không.
+ *   · Mô hình diễn giải — đọc chính dòng lệnh và nói nó làm gì. Dễ hiểu hơn hẳn,
+ *     nhưng ĐẦU VÀO LÀ THỨ MODEL VIẾT RA, nên một chuỗi được dẫn dắt có thể tìm
+ *     cách nói chuyện với người đang cầm nút Cho phép.
+ *
+ * Nên: hai dòng đầu để mô hình thay thế (nói sai về một op thì tệ, nhưng không
+ * gỡ được hàng rào nào), còn dòng RỦI RO thì KHÔNG — phần AWOG tự suy luôn đứng
+ * đó, và lời mô hình chỉ được nối THÊM vào sau, có nhãn. Mô hình được quyền làm
+ * cho dễ hiểu hơn, không được quyền làm cho có vẻ an toàn hơn.
  */
-const infraBrief = computed<{ label: string; text: string; tone: '' | 'warn' | 'danger' }[]>(() => {
+type BriefRow = {
+  label: string
+  text: string
+  tone: '' | 'warn' | 'danger'
+  /** `text` đến từ mô hình ⇒ gắn nhãn, để người đọc biết cân nhắc nó khác nhau. */
+  ai?: boolean
+  /** Dòng phụ do mô hình viết, đứng SAU `text` (chỉ dùng ở hàng Rủi ro). */
+  note?: string
+}
+
+const infraBrief = computed<BriefRow[]>(() => {
   const i = infra.value
   if (!i) return []
+  const ai = explainState.value?.result ?? null
 
-  // ── 1. Sẽ làm gì: binary + thao tác, rút từ chính dòng lệnh sẽ chạy ──
-  const parts = i.command.trim().split(/\s+/)
-  const binary = parts[0] ?? i.tool
-  // `aws s3api head-bucket` ⇒ "s3api head-bucket"; `kubectl get ns` ⇒ "get ns".
-  const op = parts
-    .slice(1)
-    .filter((x) => !x.startsWith('-'))
-    .slice(0, 2)
-    .join(' ')
+  // ── 1. Sẽ làm gì ──
+  // Mô hình đọc được cả chuỗi shell nhiều tầng; đường lùi chỉ gọi tên chương trình.
+  const stages = shellStages(i.command)
   const where = [
     i.profile ? t('infraGate.chip.profile', { value: i.profile }) : '',
     i.region ? t('infraGate.chip.region', { value: i.region }) : '',
@@ -349,20 +469,39 @@ const infraBrief = computed<{ label: string; text: string; tone: '' | 'warn' | '
     i.namespace ? t('infraGate.chip.namespace', { value: i.namespace }) : '',
   ].filter((x) => x !== '')
 
-  const what = op
-    ? t('infraGate.brief.what', { binary, op })
-    : t('infraGate.brief.whatBare', { binary })
+  let derivedWhat: string
+  if (stages.length > 1) {
+    derivedWhat = t('infraGate.brief.whatShell', {
+      n: stages.length,
+      names: [...new Set(stages)].join(', '),
+    })
+  } else {
+    const parts = i.command.trim().split(/\s+/)
+    const binary = stages[0] ?? parts[0] ?? i.tool
+    // `aws s3api head-bucket` ⇒ "s3api head-bucket"; `kubectl get ns` ⇒ "get ns".
+    const op = parts
+      .slice(1)
+      .filter((x) => !x.startsWith('-'))
+      .slice(0, 2)
+      .join(' ')
+    derivedWhat = op
+      ? t('infraGate.brief.what', { binary, op })
+      : t('infraGate.brief.whatBare', { binary })
+    if (where.length) derivedWhat = `${derivedWhat} — ${where.join(' · ')}`
+  }
 
-  const rows: { label: string; text: string; tone: '' | 'warn' | 'danger' }[] = [
+  const rows: BriefRow[] = [
     {
       label: t('infraGate.brief.label.what'),
-      text: where.length ? `${what} — ${where.join(' · ')}` : what,
+      text: ai?.what ?? derivedWhat,
       tone: '',
+      ...(ai ? { ai: true } : {}),
     },
     {
       label: t('infraGate.brief.label.expect'),
-      text: t(`infraGate.brief.expect.${i.commandClass}`),
+      text: ai?.expect ?? t(`infraGate.brief.expect.${i.commandClass}`),
       tone: '',
+      ...(ai ? { ai: true } : {}),
     },
   ]
 
@@ -382,6 +521,7 @@ const infraBrief = computed<{ label: string; text: string; tone: '' | 'warn' | '
     label: t('infraGate.brief.label.risk'),
     text: risks.join(' '),
     tone: i.commandClass === 'destructive' ? 'danger' : isProdInfra.value ? 'warn' : '',
+    ...(ai ? { note: ai.risk } : {}),
   })
   return rows
 })
@@ -464,6 +604,48 @@ const onRetry = (): void => {
 
 .pbrief-txt.danger {
   color: var(--danger);
+}
+
+/* Nhãn "do model" — nhỏ, không tô màu cảnh báo: nó nói NGUỒN của câu chữ, không
+   nói mức nguy hiểm. Trộn hai thứ đó vào một màu là dạy sai người đọc. */
+.pbrief-ai {
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--textFaint);
+  white-space: nowrap;
+}
+
+/* Câu của mô hình ở hàng Rủi ro: xuống dòng riêng để không bị đọc lẫn vào phần
+   AWOG tự suy đứng trước nó. */
+.pbrief-note {
+  display: block;
+  margin-top: 3px;
+  color: var(--textDim);
+}
+
+.pbrief-state {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 2px 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  color: var(--textFaint);
+}
+
+.pbrief-retry {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-sm);
+  text-decoration: underline;
 }
 
 @media (max-width: 560px) {
