@@ -2,27 +2,33 @@
 //
 // KHÁC `infra-tools.ts` Ở ĐIỂM NÀO. Bên kia cho agent chạy lệnh trên TÀI KHOẢN AWS
 // (`aws_cli`, `infra_view`, `infra_action`, `logs_query`). File này cho agent chạm vào
-// thứ AWOG tự giữ cho các màn đó: bảng điều khiển, kế hoạch dọn dẹp, và hai phép đọc
-// tổng hợp (chi phí · lãng phí) mà màn hình đang hiện. Nói cách khác: bên kia là "làm gì
-// với AWS", bên này là "dùng app đúng cách người dùng đang dùng nó".
+// thứ AWOG tự giữ cho các màn đó: bảng điều khiển, kế hoạch (playbook), thư viện truy
+// vấn log, sổ nhật ký, và các phép đọc tổng hợp mà màn hình đang hiện (chi phí · lãng
+// phí · CloudTrail). Nói cách khác: bên kia là "làm gì với AWS", bên này là "dùng app
+// đúng cách người dùng đang dùng nó".
 //
 // BA HẠNG, BA LUẬT KHÁC NHAU — đừng trộn:
 //
-//   1. ĐỌC FILE CỤC BỘ (`infra_dashboard_list`) — rẻ, không chạm mạng, không cổng quyền.
+//   1. ĐỌC FILE CỤC BỘ (`infra_dashboard_list`, `infra_playbook_list`,
+//      `infra_playbook_read`, `infra_logs_saved`, `infra_audit_query`) — rẻ, không chạm
+//      mạng, không cổng quyền.
 //
-//   2. ĐỌC TỐN TIỀN (`infra_cost_summary`, `infra_waste_scan`) — đi ra AWS thật.
+//   2. ĐỌC TỐN TIỀN (`infra_cost_summary`, `infra_waste_scan`, `infra_trail_lookup`) —
+//      đi ra AWS thật.
 //      `ce` tính $0.01 mỗi request và một lượt tóm tắt là BA; hai phép dò `ec2-idle` /
 //      `nat-idle` cần `get-metric-data`, thứ tính theo metric × điểm. Vì vậy mô tả tool
 //      NÓI RÕ giá ngay trong câu đầu, và hai phép dò tốn tiền mặc định TẮT — model phải
 //      xin tường minh. Một tool im lặng về giá là một tool sẽ bị gọi trong vòng lặp.
 //
-//   3. GHI FILE CỤC BỘ (`infra_dashboard_create`, `infra_cleanup_plan`) — tạo ra một
+//   3. GHI FILE CỤC BỘ (`infra_dashboard_create`, `infra_cleanup_plan`,
+//      `infra_logs_save_query`) — tạo ra một
 //      thực thể trong app của người dùng, nên đi qua cổng quyền như `wiki_write`
 //      (`INFRA_APP_MUTATING_TOOL_NAMES` → `permission.ts`). Chúng KHÔNG đổi gì trên AWS.
 //
-// KẾ HOẠCH DỌN DẸP KHÔNG TỰ CHẠY. `infra_cleanup_plan` chỉ LƯU một playbook; chạy nó vẫn
-// phải qua vòng đời duyệt của runner (preflight → gửi duyệt → người bấm). Không có đường
-// nào ở đây xoá một tài nguyên AWS.
+// KHÔNG CÓ TOOL NÀO CHẠY MỘT KẾ HOẠCH. `infra_cleanup_plan` chỉ LƯU một playbook và
+// `infra_playbook_read` chỉ ĐỌC nó; chạy đi qua vòng đời `submit → approve → run` của
+// runner, mỗi chặng là một cú bấm của NGƯỜI. Cho agent một nút chạy là bỏ qua đúng cái
+// vòng mà mốc 5 dựng ra. Không có đường nào ở đây xoá một tài nguyên AWS.
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import type { InfraContext } from '../../infra/run.js'
@@ -31,7 +37,11 @@ import { getCostSummary } from '../../infra/cost/cost.js'
 import { PRICING_AS_OF, PRICING_REGION } from '../../infra/cost/pricing.js'
 import { WASTE_CHECKS, runWasteScan, type WasteCheck } from '../../infra/cost/waste.js'
 import { buildCleanupDraft } from '../../infra/cost/cleanup.js'
-import { savePlaybook } from '../../infra/playbook/store.js'
+import { listPlaybooks, readPlaybook, savePlaybook } from '../../infra/playbook/store.js'
+import { missingRollbackSteps } from '../../infra/playbook/schema.js'
+import { readLibrary, saveQuery } from '../../infra/logs/library.js'
+import { queryInfraAudit } from '../../infra/audit/store.js'
+import { TRAIL_MAX_DAYS, lookupTrail } from '../../infra/audit/trail.js'
 import { clampForLlm } from './output-budget.js'
 
 export const INFRA_DASHBOARD_LIST_TOOL = 'infra_dashboard_list'
@@ -39,6 +49,12 @@ export const INFRA_DASHBOARD_CREATE_TOOL = 'infra_dashboard_create'
 export const INFRA_COST_SUMMARY_TOOL = 'infra_cost_summary'
 export const INFRA_WASTE_SCAN_TOOL = 'infra_waste_scan'
 export const INFRA_CLEANUP_PLAN_TOOL = 'infra_cleanup_plan'
+export const INFRA_PLAYBOOK_LIST_TOOL = 'infra_playbook_list'
+export const INFRA_PLAYBOOK_READ_TOOL = 'infra_playbook_read'
+export const INFRA_LOGS_SAVED_TOOL = 'infra_logs_saved'
+export const INFRA_LOGS_SAVE_QUERY_TOOL = 'infra_logs_save_query'
+export const INFRA_AUDIT_QUERY_TOOL = 'infra_audit_query'
+export const INFRA_TRAIL_LOOKUP_TOOL = 'infra_trail_lookup'
 
 export const INFRA_APP_TOOL_NAMES = [
   INFRA_DASHBOARD_LIST_TOOL,
@@ -46,6 +62,12 @@ export const INFRA_APP_TOOL_NAMES = [
   INFRA_COST_SUMMARY_TOOL,
   INFRA_WASTE_SCAN_TOOL,
   INFRA_CLEANUP_PLAN_TOOL,
+  INFRA_PLAYBOOK_LIST_TOOL,
+  INFRA_PLAYBOOK_READ_TOOL,
+  INFRA_LOGS_SAVED_TOOL,
+  INFRA_LOGS_SAVE_QUERY_TOOL,
+  INFRA_AUDIT_QUERY_TOOL,
+  INFRA_TRAIL_LOOKUP_TOOL,
 ] as const
 
 /**
@@ -55,6 +77,7 @@ export const INFRA_APP_TOOL_NAMES = [
 export const INFRA_APP_MUTATING_TOOL_NAMES = [
   INFRA_DASHBOARD_CREATE_TOOL,
   INFRA_CLEANUP_PLAN_TOOL,
+  INFRA_LOGS_SAVE_QUERY_TOOL,
 ] as const
 
 /** Trần ký tự cho mọi output của nhóm này — cùng ngân sách context với nhóm infra. */
@@ -148,6 +171,41 @@ const CleanupPlanParams = Type.Object({
     description: 'Findings from infra_waste_scan that the user agreed to act on.',
   }),
   tier: Type.Optional(Type.String({ description: '"global" (default) or "project".' })),
+})
+
+const PlaybookReadParams = Type.Object({
+  id: Type.String({ description: 'Plan id exactly as infra_playbook_list reported it.' }),
+  source: Type.Optional(
+    Type.String({ description: '"builtin", "global" or "project". Defaults to "global".' }),
+  ),
+})
+
+const LogsSaveQueryParams = Type.Object({
+  name: Type.String({ description: 'Name shown in the saved list.' }),
+  query: Type.String({ description: 'The CloudWatch Logs Insights query string.' }),
+  logGroups: Type.Array(Type.String(), {
+    description: 'Log group names the query runs against. At most 25.',
+  }),
+  windowSeconds: Type.Number({ description: 'Default time window in seconds, e.g. 3600.' }),
+})
+
+const AuditQueryParams = Type.Object({
+  sinceHours: Type.Optional(
+    Type.Number({ description: 'How far back to look, in hours. Defaults to 24.' }),
+  ),
+  contains: Type.Optional(
+    Type.String({ description: 'Keep only entries whose command contains this text.' }),
+  ),
+  limit: Type.Optional(Type.Number({ description: 'Maximum entries to return. Defaults to 50.' })),
+})
+
+const TrailLookupParams = Type.Object({
+  sinceHours: Type.Optional(
+    Type.Number({ description: `How far back, in hours. Defaults to 24, at most ${String(TRAIL_MAX_DAYS * 24)}.` }),
+  ),
+  resourceName: Type.Optional(
+    Type.String({ description: 'Only events touching this resource id or name.' }),
+  ),
 })
 
 // ─── Nhà máy ─────────────────────────────────────────────────────────────────
@@ -357,5 +415,180 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
     },
   }
 
-  return [dashboardList, dashboardCreate, costSummary, wasteScan, cleanupPlan] as AgentTool[]
+  // ── Kế hoạch (playbook) ───────────────────────────────────────────────────
+  //
+  // CHỈ ĐỌC. Không có tool nào CHẠY một kế hoạch: chạy đi qua vòng đời `submit →
+  // approve → run` của runner, và mỗi chặng là một cú bấm của NGƯỜI. Cho agent một nút
+  // chạy là bỏ qua đúng cái vòng mà mốc 5 dựng ra để không ai chạy nhầm lệnh ghi.
+
+  const playbookList: AgentTool<typeof NoParams> = {
+    name: INFRA_PLAYBOOK_LIST_TOOL,
+    label: 'Infra plans',
+    description:
+      "List the deployment plans (playbooks) in the user's AWOG — built-in ones plus their own. Reads local files: free, no AWS call. Use it to find an existing plan before writing a new one, or to tell the user which plan covers what they are asking for.",
+    parameters: NoParams,
+    async execute(): Promise<AgentToolResult<Record<string, never>>> {
+      const plans = await listPlaybooks(projectId ? [projectId] : [])
+      if (plans.length === 0) return textResult(['No plans yet.'])
+      return textResult(
+        plans.map(
+          (p) =>
+            `${p.id} · ${p.name} · ${p.source}${p.projectId ? `/${p.projectId}` : ''} · ${p.kind} · ${String(p.stepCount)} steps${p.issues.length ? ` · BROKEN: ${p.issues.map((i) => i.code).join(', ')}` : ''}`,
+        ),
+      )
+    },
+  }
+
+  const playbookRead: AgentTool<typeof PlaybookReadParams> = {
+    name: INFRA_PLAYBOOK_READ_TOOL,
+    label: 'Read infra plan',
+    description:
+      'Read one plan step by step so you can explain what it does before the user runs it. Reads a local file. Running the plan is NOT something you can do — it goes through preflight, approval and a per-step permission gate, all driven by the user from the Changes → Plans tab.',
+    parameters: PlaybookReadParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      const source =
+        params.source === 'builtin' || params.source === 'project' ? params.source : 'global'
+      const parsed = await readPlaybook(
+        source,
+        source === 'project' ? projectId : undefined,
+        params.id,
+      )
+      if (!parsed) return errorResult(`No plan "${params.id}" in ${source}.`)
+      if (!parsed.ok) {
+        return errorResult(
+          `Plan "${params.id}" failed validation: ${parsed.issues.map((i) => `${i.code} (${i.message})`).join('; ')}`,
+        )
+      }
+      const pb = parsed.playbook
+      const missing = missingRollbackSteps(pb)
+      const lines = [
+        `${pb.name} — ${pb.kind}, ${pb.tier}`,
+        pb.description,
+        missing.length
+          ? `⚠ ${String(missing.length)} write steps have no rollback, so this cannot be submitted for approval yet.`
+          : 'Every write step has a paired rollback.',
+        '',
+        ...pb.steps.map(
+          (st, i) => `${String(i + 1)}. [${st.verb}] ${st.title}
+   ${st.tool} ${st.args.join(' ')}${st.note ? `
+   ${st.note}` : ''}`,
+        ),
+      ]
+      return textResult(lines)
+    },
+  }
+
+  // ── Thư viện truy vấn log ─────────────────────────────────────────────────
+  //
+  // CHẠY một truy vấn đã có đường riêng (`logs_query` ở `infra-tools.ts`, và nó tính
+  // tiền theo GB quét). Ở đây chỉ là thư viện: xem câu đã lưu, và lưu thêm một câu.
+
+  const logsSaved: AgentTool<typeof NoParams> = {
+    name: INFRA_LOGS_SAVED_TOOL,
+    label: 'Saved log queries',
+    description:
+      "List the CloudWatch Logs Insights queries the user has saved, with the log groups and window each one uses. Reads a local file: free, and it runs nothing. Prefer reusing a saved query over inventing one — logs_query bills per GB scanned, and a saved query already has a measured scan size.",
+    parameters: NoParams,
+    async execute(): Promise<AgentToolResult<Record<string, never>>> {
+      const lib = await readLibrary()
+      if (lib.saved.length === 0) return textResult(['No saved queries yet.'])
+      return textResult(
+        lib.saved.map(
+          (q) =>
+            `${q.id} · ${q.name} · ${String(q.windowSeconds)}s · groups: ${q.logGroups.join(', ') || '(none)'}${q.lastBytesScanned !== undefined ? ` · last scan ${(q.lastBytesScanned / 1024 ** 3).toFixed(2)} GB` : ''}\n    ${q.query.replace(/\s+/g, ' ').slice(0, 300)}`,
+        ),
+      )
+    },
+  }
+
+  const logsSaveQuery: AgentTool<typeof LogsSaveQueryParams> = {
+    name: INFRA_LOGS_SAVE_QUERY_TOOL,
+    label: 'Save log query',
+    description:
+      "Save a Logs Insights query into the user's library so they can rerun it from the Health → Logs tab. Writes a local file and runs nothing — saving does not scan any logs. Save a query you have already shown the user and they liked, not every query you try.",
+    parameters: LogsSaveQueryParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      if (params.logGroups.length === 0) return errorResult('A saved query needs at least one log group.')
+      try {
+        const saved = await saveQuery({
+          name: params.name,
+          query: params.query,
+          logGroups: params.logGroups,
+          windowSeconds: params.windowSeconds,
+        })
+        return textResult([`Saved query "${saved.name}" (${saved.id}).`])
+      } catch (err) {
+        return errorResult(`Query was rejected: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    },
+  }
+
+  // ── Hai sổ: AWOG làm gì, và tài khoản bị đổi gì ───────────────────────────
+
+  const auditQuery: AgentTool<typeof AuditQueryParams> = {
+    name: INFRA_AUDIT_QUERY_TOOL,
+    label: 'AWOG infra log',
+    description:
+      "Read AWOG's own record of the infrastructure commands it ran — who asked, which account, which class, whether it was approved or blocked, and what it cost. Reads a local file: free, no AWS call. This is what AWOG did; use infra_trail_lookup for what the account was changed by.",
+    parameters: AuditQueryParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      const hours = params.sinceHours && params.sinceHours > 0 ? params.sinceHours : 24
+      const entries = await queryInfraAudit({
+        since: new Date(Date.now() - hours * 3_600_000).toISOString(),
+        ...(params.contains ? { contains: params.contains } : {}),
+        limit: params.limit && params.limit > 0 ? Math.min(params.limit, 200) : 50,
+      })
+      if (entries.length === 0) return textResult([`No infrastructure commands in the last ${String(hours)}h.`])
+      return textResult(
+        entries.map(
+          (e) =>
+            `${e.at} · ${e.actor} · ${e.surface} · ${e.class}/${e.decision} · ${e.tool} ${e.argv.join(' ')}${e.cost?.estimatedUsd ? ` · ~$${e.cost.estimatedUsd.toFixed(4)}` : ''}`,
+        ),
+      )
+    },
+  }
+
+  const trailLookup: AgentTool<typeof TrailLookupParams> = {
+    name: INFRA_TRAIL_LOOKUP_TOOL,
+    label: 'CloudTrail lookup',
+    description:
+      `Read what actually changed on the AWS account, from CloudTrail — including changes nobody made through AWOG (the console, a pipeline, another person). Each event is labelled as coming from AWOG or elsewhere, but that label is INFERRED from the operation name and timing, not from a shared id, so treat it as a strong hint. Makes one AWS call and CloudTrail keeps only ${String(TRAIL_MAX_DAYS)} days.`,
+    parameters: TrailLookupParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      if (!context.profile) return errorResult('No AWS profile is pinned for this session.')
+      const hours = params.sinceHours && params.sinceHours > 0 ? params.sinceHours : 24
+      const res = await lookupTrail({
+        profile: context.profile,
+        ...(context.region ? { region: context.region } : {}),
+        since: new Date(Date.now() - hours * 3_600_000).toISOString(),
+        ...(params.resourceName ? { resourceName: params.resourceName } : {}),
+        surface: 'session',
+        actor: 'agent',
+      })
+      if (!res.ok) return errorResult(`CloudTrail lookup failed: ${res.error}`)
+      const r = res.value
+      const lines = [
+        `${String(r.events.length)} events · ${String(r.awogCount)} attributed to AWOG · ${String(r.externalCount)} from elsewhere${r.hasMore ? ' · more exist, narrow the window' : ''}`,
+        ...r.events.map(
+          (e) =>
+            `${e.at} · ${e.origin === 'awog' ? 'AWOG' : 'ELSEWHERE'} · ${e.name} · ${e.username || 'unknown'}${e.resources.length ? ` · ${e.resources.join(', ')}` : ''}${e.errorCode ? ` · FAILED ${e.errorCode}` : ''}`,
+        ),
+      ]
+      return textResult(lines)
+    },
+  }
+
+  return [
+    dashboardList,
+    dashboardCreate,
+    costSummary,
+    wasteScan,
+    cleanupPlan,
+    playbookList,
+    playbookRead,
+    logsSaved,
+    logsSaveQuery,
+    auditQuery,
+    trailLookup,
+  ] as AgentTool[]
 }
