@@ -10,7 +10,7 @@
   "infraGate.brief.risk.destructive": "Cao: mất dữ liệu hoặc mất tài nguyên, không lấy lại được.",
   "infraGate.brief.risk.production": "Tài khoản này bạn đã đánh dấu là production.",
   "infraGate.brief.risk.read": "Thấp: lệnh chỉ đọc, không đổi gì.",
-  "infraGate.brief.risk.shell": "Lệnh đi qua một chuỗi shell: ngữ cảnh ở trên chỉ là MẶC ĐỊNH, chuỗi vẫn tự đổi được bằng cờ riêng mà cổng quyền không đọc ra — nên nó bị chấm ở mức chặt nhất.",
+  "infraGate.brief.risk.shell": "Lệnh đi qua một chuỗi shell: cổng quyền không tách được lệnh thật ra khỏi chuỗi, nên nó không chấm theo thao tác mà ép về mức \"ghi\" — tức luôn hỏi, kể cả khi lệnh chỉ đọc. Ngữ cảnh ở trên cũng chỉ là MẶC ĐỊNH: chuỗi vẫn tự đổi được bằng cờ riêng.",
   "infraGate.brief.risk.unknownAccount": "AWOG chưa biết đây là tài khoản nào — profile chưa kiểm tra danh tính, nên nó bị chấm như PRODUCTION (không biết mình ở đâu thì coi như đang ở chỗ nguy hiểm nhất). Lệnh sẽ chạy trên thứ chính CLI tự giải ra, thường là profile `default`.",
   "infraGate.brief.risk.write": "Vừa: có thứ bị đổi, nhưng lùi lại được.",
   "infraGate.brief.what": "Chạy {binary} {op}",

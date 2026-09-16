@@ -10,7 +10,7 @@
   "infraGate.brief.risk.destructive": "High: data or a resource is lost and cannot be recovered.",
   "infraGate.brief.risk.production": "You have marked this account as production.",
   "infraGate.brief.risk.read": "Low: it only reads, and changes nothing.",
-  "infraGate.brief.risk.shell": "The command goes through a shell string: the context above is only the DEFAULT, and the string can still switch it with its own flags, which the gate cannot read — so it is scored at the strictest level.",
+  "infraGate.brief.risk.shell": "The command runs inside a shell string. The gate cannot pull the real command out of it, so it does not score the operation at all — it forces the \"write\" class, which always asks, even for a read. The context above is only a default too: the string can still override it with its own flags.",
   "infraGate.brief.risk.unknownAccount": "AWOG does not know which account this is — the profile has not had an identity check, so it is scored as PRODUCTION (not knowing where you are means assuming the worst place). The command runs against whatever the CLI resolves for itself, usually the `default` profile.",
   "infraGate.brief.risk.write": "Medium: something changes, but it can be reversed.",
   "infraGate.brief.what": "Runs {binary} {op}",
