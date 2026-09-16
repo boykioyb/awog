@@ -1,5 +1,14 @@
 <template>
-  <div ref="hostRef" class="mehost" />
+  <div ref="hostRef" class="mehost">
+    <!-- Bundle failed to fetch (a Vite dev re-optimize race is the usual cause).
+         Surface it with a retry instead of an unhandled mount error + a host that
+         stays blank forever. Only ever rendered when Monaco was NOT created, so it
+         never sits next to the editor's own DOM. -->
+    <div v-if="loadError" class="meerror">
+      <p>{{ t('common.preview.monacoLoadFailed') }}</p>
+      <button type="button" class="meretry" @click="retry">{{ t('common.retry') }}</button>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -39,12 +48,15 @@ const emit = defineEmits<{
   'cursor-change': [pos: { line: number; column: number }]
 }>()
 
+const { t } = useI18n()
 const { isDark } = useTheme()
 const { current, hydrate, loadThemeData } = useMonacoTheme()
 
 const hostRef = useTemplateRef<HTMLElement>('hostRef')
 const editor = shallowRef<Monaco.editor.IStandaloneCodeEditor | null>(null)
 const monacoRef = shallowRef<typeof Monaco | null>(null)
+// Bật khi bundle Monaco fetch hỏng — hiện nút thử lại thay vì một khung trắng câm.
+const loadError = ref(false)
 // Model cache keyed by path so each tab keeps its own undo stack + content.
 const models = new Map<string, Monaco.editor.ITextModel>()
 const viewStates = new Map<string, Monaco.editor.ICodeEditorViewState | null>()
@@ -230,10 +242,21 @@ defineExpose({
   focus: () => editor.value?.focus(),
 })
 
-onMounted(async () => {
-  if (!hostRef.value) return
-  setupWorkers()
-  const monaco = await loadMonaco()
+async function initEditor(): Promise<void> {
+  if (!hostRef.value || editor.value) return
+  let monaco: typeof Monaco
+  try {
+    setupWorkers()
+    monaco = await loadMonaco()
+  } catch {
+    // `loadMonaco` already cleared its memo, so `retry` can re-import once Vite
+    // settles. Without this catch the rejection escapes the mount hook as
+    // "Uncaught (in promise) Failed to fetch dynamically imported module" and the
+    // surface — the Insights query editor included — stays dead with no way back.
+    loadError.value = true
+    return
+  }
+  loadError.value = false
   monacoRef.value = monaco
   defineFollowAppThemes(monaco)
   const ed = monaco.editor.create(hostRef.value, {
@@ -265,7 +288,23 @@ onMounted(async () => {
   await hydrate()
   void applyTheme()
   emit('ready')
+}
+
+onMounted(() => {
+  void initEditor()
 })
+
+/**
+ * Thử tải lại bundle sau một lần fetch hỏng tạm thời (Vite re-optimize).
+ *
+ * `nextTick` trước khi dựng lại: khung báo lỗi nằm TRONG `hostRef`, nên phải để
+ * Vue gỡ nó ra trước khi Monaco gắn DOM của mình vào cùng chỗ.
+ */
+async function retry(): Promise<void> {
+  loadError.value = false
+  await nextTick()
+  await initEditor()
+}
 
 watch(
   () => props.path,
@@ -299,8 +338,36 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .mehost {
+  position: relative;
   width: 100%;
   height: 100%;
   background: var(--bgEl);
+}
+
+.meerror {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  background: var(--bgEl);
+  color: var(--textDim);
+}
+
+.meretry {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.meretry:hover {
+  background: var(--bgHover);
 }
 </style>

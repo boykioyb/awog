@@ -206,9 +206,14 @@ const tabTitle = (i: number): string => t('sessions.workspace.terminal.tabTitle'
 const tabLabel = (tab: TerminalTab, i: number): string => tab.label ?? tabTitle(i)
 
 // Read CSS theme tokens off the live document so xterm matches the active theme.
+// Read from <body>, NOT <html>: the light-mode overrides live on `body.light`
+// (useTheme.ts toggles the class there), while `:root`/<html> only carries the dark
+// defaults. Reading <html> returned the dark tokens even in light mode, so the
+// 'system' preset was always dark — reading <body> yields the EFFECTIVE value
+// (light tokens when body.light is set, dark otherwise).
 const cssVar = (name: string, fallback: string): string => {
-  if (typeof window === 'undefined') return fallback
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+  if (typeof window === 'undefined' || !document.body) return fallback
+  const v = getComputedStyle(document.body).getPropertyValue(name).trim()
   return v || fallback
 }
 
@@ -221,6 +226,9 @@ const cssVar = (name: string, fallback: string): string => {
 // undefined (getComputedStyle returns '' for an unset var, and cssVar()'s fallback
 // param covers that).
 const { family: themeFamily } = useThemeFamily()
+// Light/dark toggle → repaint open terminals on the 'system' preset (its palette is
+// read live from the app tokens, which flip with this).
+const { isDark } = useTheme()
 const appearance = useTerminalAppearanceStore()
 
 // Background for the pane BOX so its padding reads as INTERNAL terminal padding (the
@@ -968,7 +976,13 @@ onBeforeUnmount(() => {
 // flips whether --termBg/--termText resolve, so the 'system' preset must re-read
 // resolveTheme() and repaint every already-open xterm instance live.
 watch(
-  [() => appearance.theme, () => appearance.fontSize, () => appearance.fontFamily, themeFamily],
+  [
+    () => appearance.theme,
+    () => appearance.fontSize,
+    () => appearance.fontFamily,
+    themeFamily,
+    isDark,
+  ],
   () => {
     const nextTheme = resolveTheme()
     for (const pane of panes.values()) {
