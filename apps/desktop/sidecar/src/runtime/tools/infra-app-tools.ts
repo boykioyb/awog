@@ -20,24 +20,43 @@
 //      NÓI RÕ giá ngay trong câu đầu, và hai phép dò tốn tiền mặc định TẮT — model phải
 //      xin tường minh. Một tool im lặng về giá là một tool sẽ bị gọi trong vòng lặp.
 //
-//   3. GHI FILE CỤC BỘ (`infra_dashboard_create`, `infra_cleanup_plan`,
-//      `infra_logs_save_query`) — tạo ra một
-//      thực thể trong app của người dùng, nên đi qua cổng quyền như `wiki_write`
-//      (`INFRA_APP_MUTATING_TOOL_NAMES` → `permission.ts`). Chúng KHÔNG đổi gì trên AWS.
+//   3. GHI / XOÁ FILE CỤC BỘ (`infra_dashboard_save`, `infra_dashboard_delete`,
+//      `infra_playbook_save`, `infra_playbook_delete`, `infra_cleanup_plan`,
+//      `infra_logs_save_query`) — chạm vào thực thể trong app của người dùng, nên đi qua
+//      cổng quyền như `wiki_write` (`INFRA_APP_MUTATING_TOOL_NAMES` → `permission.ts`).
+//      Chúng KHÔNG đổi gì trên AWS.
 //
-// KHÔNG CÓ TOOL NÀO CHẠY MỘT KẾ HOẠCH. `infra_cleanup_plan` chỉ LƯU một playbook và
-// `infra_playbook_read` chỉ ĐỌC nó; chạy đi qua vòng đời `submit → approve → run` của
-// runner, mỗi chặng là một cú bấm của NGƯỜI. Cho agent một nút chạy là bỏ qua đúng cái
-// vòng mà mốc 5 dựng ra. Không có đường nào ở đây xoá một tài nguyên AWS.
+//      HAI `*_save` LÀ UPSERT, KHÔNG PHẢI CREATE. Trùng `id` là GHI ĐÈ — đó là lý do tên
+//      chúng là `save` chứ không phải `create` (bản đầu đặt `infra_dashboard_create`, một
+//      cái tên hứa thứ mà hàm không làm). Mô tả tool bảo model `*_list` trước.
+//
+// KHÔNG CÓ TOOL NÀO CHẠY MỘT KẾ HOẠCH — và đó là ranh giới DUY NHẤT có nguyên tắc trong
+// file này. Agent SOẠN được kế hoạch (`infra_playbook_save`), sửa, xoá; nhưng chạy đi qua
+// vòng đời `submit → approve → run` của runner, mỗi chặng là một cú bấm của NGƯỜI. Cho
+// agent một nút chạy là bỏ qua đúng cái vòng mà mốc 5 dựng ra.
+//
+// Soạn một kế hoạch KHÔNG nguy hiểm hơn soạn một bảng: cả hai chỉ là file, và mọi lệnh
+// ghi trong kế hoạch còn phải qua preflight + cổng quyền từng bước lúc chạy. Không có
+// đường nào ở đây xoá một tài nguyên AWS.
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import type { InfraContext } from '../../infra/run.js'
-import { listDashboards, saveDashboard } from '../../infra/dashboard/store.js'
+import {
+  deleteDashboard,
+  listDashboards,
+  readDashboard,
+  saveDashboard,
+} from '../../infra/dashboard/store.js'
 import { getCostSummary } from '../../infra/cost/cost.js'
 import { PRICING_AS_OF, PRICING_REGION } from '../../infra/cost/pricing.js'
 import { WASTE_CHECKS, runWasteScan, type WasteCheck } from '../../infra/cost/waste.js'
 import { buildCleanupDraft } from '../../infra/cost/cleanup.js'
-import { listPlaybooks, readPlaybook, savePlaybook } from '../../infra/playbook/store.js'
+import {
+  deletePlaybook,
+  listPlaybooks,
+  readPlaybook,
+  savePlaybook,
+} from '../../infra/playbook/store.js'
 import { missingRollbackSteps } from '../../infra/playbook/schema.js'
 import { readLibrary, saveQuery } from '../../infra/logs/library.js'
 import { queryInfraAudit } from '../../infra/audit/store.js'
@@ -45,7 +64,7 @@ import { TRAIL_MAX_DAYS, lookupTrail } from '../../infra/audit/trail.js'
 import { clampForLlm } from './output-budget.js'
 
 export const INFRA_DASHBOARD_LIST_TOOL = 'infra_dashboard_list'
-export const INFRA_DASHBOARD_CREATE_TOOL = 'infra_dashboard_create'
+export const INFRA_DASHBOARD_SAVE_TOOL = 'infra_dashboard_save'
 export const INFRA_COST_SUMMARY_TOOL = 'infra_cost_summary'
 export const INFRA_WASTE_SCAN_TOOL = 'infra_waste_scan'
 export const INFRA_CLEANUP_PLAN_TOOL = 'infra_cleanup_plan'
@@ -55,10 +74,14 @@ export const INFRA_LOGS_SAVED_TOOL = 'infra_logs_saved'
 export const INFRA_LOGS_SAVE_QUERY_TOOL = 'infra_logs_save_query'
 export const INFRA_AUDIT_QUERY_TOOL = 'infra_audit_query'
 export const INFRA_TRAIL_LOOKUP_TOOL = 'infra_trail_lookup'
+export const INFRA_DASHBOARD_READ_TOOL = 'infra_dashboard_read'
+export const INFRA_DASHBOARD_DELETE_TOOL = 'infra_dashboard_delete'
+export const INFRA_PLAYBOOK_SAVE_TOOL = 'infra_playbook_save'
+export const INFRA_PLAYBOOK_DELETE_TOOL = 'infra_playbook_delete'
 
 export const INFRA_APP_TOOL_NAMES = [
   INFRA_DASHBOARD_LIST_TOOL,
-  INFRA_DASHBOARD_CREATE_TOOL,
+  INFRA_DASHBOARD_SAVE_TOOL,
   INFRA_COST_SUMMARY_TOOL,
   INFRA_WASTE_SCAN_TOOL,
   INFRA_CLEANUP_PLAN_TOOL,
@@ -68,6 +91,10 @@ export const INFRA_APP_TOOL_NAMES = [
   INFRA_LOGS_SAVE_QUERY_TOOL,
   INFRA_AUDIT_QUERY_TOOL,
   INFRA_TRAIL_LOOKUP_TOOL,
+  INFRA_DASHBOARD_READ_TOOL,
+  INFRA_DASHBOARD_DELETE_TOOL,
+  INFRA_PLAYBOOK_SAVE_TOOL,
+  INFRA_PLAYBOOK_DELETE_TOOL,
 ] as const
 
 /**
@@ -75,9 +102,12 @@ export const INFRA_APP_TOOL_NAMES = [
  * `permission.ts` khớp cả tên trần (nhánh Pi) lẫn tên bắc cầu `mcp__awoginfra__…`.
  */
 export const INFRA_APP_MUTATING_TOOL_NAMES = [
-  INFRA_DASHBOARD_CREATE_TOOL,
+  INFRA_DASHBOARD_SAVE_TOOL,
   INFRA_CLEANUP_PLAN_TOOL,
   INFRA_LOGS_SAVE_QUERY_TOOL,
+  INFRA_DASHBOARD_DELETE_TOOL,
+  INFRA_PLAYBOOK_SAVE_TOOL,
+  INFRA_PLAYBOOK_DELETE_TOOL,
 ] as const
 
 /** Trần ký tự cho mọi output của nhóm này — cùng ngân sách context với nhóm infra. */
@@ -127,7 +157,7 @@ const DashboardChartParam = Type.Object({
   series: Type.Array(DashboardSeriesParam, { description: 'One entry per line on the chart.' }),
 })
 
-const DashboardCreateParams = Type.Object({
+const DashboardSaveParams = Type.Object({
   name: Type.String({ description: 'Board name shown in the list.' }),
   charts: Type.Array(DashboardChartParam, {
     description: 'The charts to put on the board. At least one.',
@@ -208,6 +238,43 @@ const TrailLookupParams = Type.Object({
   ),
 })
 
+const DeleteParams = Type.Object({
+  id: Type.String({ description: 'Id exactly as the list tool reported it.' }),
+  source: Type.Optional(
+    Type.String({ description: '"global" (default) or "project". Built-ins cannot be deleted.' }),
+  ),
+})
+
+const PlaybookStepParam = Type.Object({
+  id: Type.String({ description: 'Step id: letters, digits, dot, dash, underscore.' }),
+  title: Type.String({ description: 'What this step does, in the user\'s language.' }),
+  verb: Type.String({ description: '"check", "do", "verify" or "rollback".' }),
+  tool: Type.String({ description: '"aws", "terraform" or "kubectl".' }),
+  args: Type.Array(Type.String(), {
+    description: 'Argument LIST, never a shell string. Use {{name}} for a declared variable.',
+  }),
+  note: Type.Optional(
+    Type.String({ description: 'Why this step exists — the approver reads this.' }),
+  ),
+})
+
+const PlaybookVariableParam = Type.Object({
+  name: Type.String({ description: 'Variable name used as {{name}} in args.' }),
+  label: Type.String({ description: 'Label shown when the user fills it in.' }),
+  required: Type.Optional(Type.Boolean()),
+  default: Type.Optional(Type.String()),
+})
+
+const PlaybookSaveParams = Type.Object({
+  id: Type.String({ description: 'Plan id / file name. An existing id is OVERWRITTEN.' }),
+  name: Type.String({ description: 'Plan name shown in the list.' }),
+  steps: Type.Array(PlaybookStepParam, { description: 'Steps in order. Order is the contract.' }),
+  description: Type.Optional(Type.String()),
+  kind: Type.Optional(Type.String({ description: '"instruction" (default) or "deployment".' })),
+  variables: Type.Optional(Type.Array(PlaybookVariableParam)),
+  tier: Type.Optional(Type.String({ description: '"global" (default) or "project".' })),
+})
+
 // ─── Nhà máy ─────────────────────────────────────────────────────────────────
 
 export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool[] {
@@ -253,12 +320,12 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
     },
   }
 
-  const dashboardCreate: AgentTool<typeof DashboardCreateParams> = {
-    name: INFRA_DASHBOARD_CREATE_TOOL,
+  const dashboardSave: AgentTool<typeof DashboardSaveParams> = {
+    name: INFRA_DASHBOARD_SAVE_TOOL,
     label: 'Create infra dashboard',
     description:
-      "Create a CloudWatch dashboard in the user's AWOG so they can load it from the Health → Dashboards tab. Writes a local file; it does NOT create anything in AWS and does not fetch any metric. Series keys must be unique across the whole board. Call infra_dashboard_list first to avoid duplicating a board that already exists.",
-    parameters: DashboardCreateParams,
+      "Write a CloudWatch dashboard into the app so the user can load it from the Health → Dashboards tab. UPSERT: the id comes from the name, and a board with that id is OVERWRITTEN, so call infra_dashboard_list first — both to avoid a near-duplicate and to avoid silently replacing a board the user built. Writes a local file; it creates nothing in AWS and fetches no metric. Series keys must be unique across the whole board.",
+    parameters: DashboardSaveParams,
     async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
       const tier = resolveTier(params.tier)
       if (tier.error) return errorResult(tier.error)
@@ -578,9 +645,149 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
     },
   }
 
+  const dashboardRead: AgentTool<typeof DeleteParams> = {
+    name: INFRA_DASHBOARD_READ_TOOL,
+    label: 'Read infra dashboard',
+    description:
+      'Read one board chart by chart, with the series each chart draws. Reads a local file: free, and it fetches no metric. Call this before infra_dashboard_save when revising an existing board — save is an upsert and would otherwise replace charts you never saw.',
+    parameters: DeleteParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      const source =
+        params.source === 'builtin' || params.source === 'project' ? params.source : 'global'
+      const parsed = await readDashboard(
+        source,
+        source === 'project' ? projectId : undefined,
+        params.id,
+      )
+      if (!parsed) return errorResult(`No dashboard "${params.id}" in ${source}.`)
+      if (!parsed.ok) {
+        return errorResult(
+          `Dashboard "${params.id}" failed validation: ${parsed.issues.map((i) => `${i.code} (${i.message})`).join('; ')}`,
+        )
+      }
+      const b = parsed.dashboard
+      const lines = [`${b.name} — ${b.tier}`, b.description, '']
+      for (const c of b.charts) {
+        lines.push(`${c.key} · ${c.title} · ${c.kind} · ${c.unit}`)
+        lines.push(
+          ...c.series.map(
+            (se) => `    ${se.key}: ${se.namespace}/${se.metricName} ${se.stat} · ${se.color}/${String(se.shade)}`,
+          ),
+        )
+      }
+      return textResult(lines)
+    },
+  }
+
+  const dashboardDelete: AgentTool<typeof DeleteParams> = {
+    name: INFRA_DASHBOARD_DELETE_TOOL,
+    label: 'Delete infra dashboard',
+    description:
+      "Delete one of the user's dashboards. Removes a local file and touches nothing in AWS. Built-in boards cannot be deleted. Only do this when the user asked for that board to go — call infra_dashboard_list first and name the board back to them, because a deleted board is not recoverable from here.",
+    parameters: DeleteParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      const tier = resolveTier(params.source)
+      if (tier.error) return errorResult(tier.error)
+      try {
+        await deleteDashboard(
+          tier.source,
+          tier.source === 'project' ? projectId : undefined,
+          params.id,
+        )
+        return textResult([`Deleted dashboard "${params.id}" from ${tier.source}.`])
+      } catch (err) {
+        return errorResult(`Could not delete: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    },
+  }
+
+  const playbookSave: AgentTool<typeof PlaybookSaveParams> = {
+    name: INFRA_PLAYBOOK_SAVE_TOOL,
+    label: 'Save infra plan',
+    description:
+      'Write a deployment plan into the app so the user can review and run it from Changes → Plans. UPSERT: an existing id is overwritten, so read it first when revising. Writes a local file and changes nothing in AWS. Args are a LIST, never a shell string. Declaration order is the contract: the Nth "do" step pairs with the Nth "rollback" step, and a plan whose write steps are not all paired cannot be submitted for approval — the result says how many are missing.',
+    parameters: PlaybookSaveParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      const tier = resolveTier(params.tier)
+      if (tier.error) return errorResult(tier.error)
+      if (params.steps.length === 0) return errorResult('A plan needs at least one step.')
+
+      const verbs = new Set(['check', 'do', 'verify', 'rollback'])
+      const tools = new Set(['aws', 'terraform', 'kubectl'])
+      for (const st of params.steps) {
+        if (!verbs.has(st.verb)) {
+          return errorResult(`Step "${st.id}" has verb "${st.verb}"; use check, do, verify or rollback.`)
+        }
+        if (!tools.has(st.tool)) {
+          return errorResult(`Step "${st.id}" has tool "${st.tool}"; use aws, terraform or kubectl.`)
+        }
+        if (st.args.length === 0) return errorResult(`Step "${st.id}" has no arguments.`)
+      }
+
+      try {
+        const saved = await savePlaybook({
+          source: tier.source,
+          ...(tier.source === 'project' && projectId ? { projectId } : {}),
+          id: params.id,
+          draft: {
+            name: params.name,
+            description: params.description ?? '',
+            kind: params.kind === 'deployment' ? 'deployment' : 'instruction',
+            variables: (params.variables ?? []).map((v) => ({
+              name: v.name,
+              label: v.label,
+              required: v.required === true,
+              ...(v.default !== undefined ? { default: v.default } : {}),
+            })),
+            steps: params.steps.map((st) => ({
+              id: st.id,
+              title: st.title,
+              verb: st.verb as 'check' | 'do' | 'verify' | 'rollback',
+              tool: st.tool as 'aws' | 'terraform' | 'kubectl',
+              args: [...st.args],
+              note: st.note ?? '',
+            })),
+          },
+        })
+        const missing = missingRollbackSteps(saved)
+        return textResult([
+          `Saved plan "${saved.name}" (${saved.id}, ${tier.source}) with ${String(saved.steps.length)} steps.`,
+          missing.length
+            ? `⚠ ${String(missing.length)} write steps have no paired rollback, so the user cannot submit this for approval yet.`
+            : 'Every write step has a paired rollback, so it can be submitted for approval.',
+          'Nothing has run: the user reviews it under Changes → Plans, and running goes through preflight, approval and a per-step gate.',
+        ])
+      } catch (err) {
+        return errorResult(`Plan was rejected: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    },
+  }
+
+  const playbookDelete: AgentTool<typeof DeleteParams> = {
+    name: INFRA_PLAYBOOK_DELETE_TOOL,
+    label: 'Delete infra plan',
+    description:
+      "Delete one of the user's plans. Removes a local file and touches nothing in AWS; past run records are kept, since each carries its own snapshot of the plan that was approved. Built-in plans cannot be deleted. Name the plan back to the user before doing this — it is not recoverable from here.",
+    parameters: DeleteParams,
+    async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
+      const tier = resolveTier(params.source)
+      if (tier.error) return errorResult(tier.error)
+      try {
+        await deletePlaybook(
+          tier.source,
+          tier.source === 'project' ? projectId : undefined,
+          params.id,
+        )
+        return textResult([`Deleted plan "${params.id}" from ${tier.source}.`])
+      } catch (err) {
+        return errorResult(`Could not delete: ${err instanceof Error ? err.message : String(err)}`)
+      }
+    },
+  }
+
   return [
     dashboardList,
-    dashboardCreate,
+    dashboardSave,
     costSummary,
     wasteScan,
     cleanupPlan,
@@ -590,5 +797,9 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
     logsSaveQuery,
     auditQuery,
     trailLookup,
+    dashboardRead,
+    dashboardDelete,
+    playbookSave,
+    playbookDelete,
   ] as AgentTool[]
 }

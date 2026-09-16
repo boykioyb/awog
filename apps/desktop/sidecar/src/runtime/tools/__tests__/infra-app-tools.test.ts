@@ -48,7 +48,12 @@ describe('bộ tool', () => {
   it('danh sách GHI đúng bằng các tool ghi — không thiếu, không thừa', () => {
     // Thiếu ⇒ một lượt ghi lọt cổng quyền. Thừa ⇒ bắt duyệt một phép đọc.
     expect([...INFRA_APP_MUTATING_TOOL_NAMES].sort()).toEqual(
-      ['infra_cleanup_plan', 'infra_dashboard_create', 'infra_logs_save_query'].sort(),
+      ['infra_cleanup_plan',
+        'infra_dashboard_save',
+        'infra_dashboard_delete',
+        'infra_logs_save_query',
+        'infra_playbook_save',
+        'infra_playbook_delete',].sort(),
     )
     for (const n of INFRA_APP_MUTATING_TOOL_NAMES) {
       expect(INFRA_APP_TOOL_NAMES).toContain(n)
@@ -71,6 +76,18 @@ describe('ranh giới an toàn', () => {
     expect(names.filter((n) => /run|execute|approve|submit/.test(n))).toEqual([])
   })
 
+  it('bảng và kế hoạch đều có đủ list · read/save · delete — không họ nào cụt', () => {
+    // Bản đầu chỉ có `create` cho bảng và không có gì để sửa/xoá kế hoạch: một giới hạn
+    // do phạm vi, không do nguyên tắc. Ca này giữ cho hai họ đối xứng.
+    for (const family of ['dashboard', 'playbook']) {
+      const names = [...INFRA_APP_TOOL_NAMES].filter((n) => n.startsWith(`infra_${family}_`))
+      expect(names).toContain(`infra_${family}_list`)
+      expect(names).toContain(`infra_${family}_read`)
+      expect(names).toContain(`infra_${family}_save`)
+      expect(names).toContain(`infra_${family}_delete`)
+    }
+  })
+
   it('tool đọc sổ và tool đọc CloudTrail là hai thứ khác nhau', () => {
     // Sổ AWOG = thứ AWOG chạy; CloudTrail = thứ tài khoản bị đổi. Gộp làm một là mất
     // đúng câu hỏi màn Nhật ký sinh ra để trả lời.
@@ -84,7 +101,7 @@ describe('tier project', () => {
 
   it('xin tier project khi phiên không có project ⇒ lỗi có tên, KHÔNG rơi về global', async () => {
     const res = await runTool(
-      'infra_dashboard_create',
+      'infra_dashboard_save',
       { name: 'Thử', tier: 'project', charts: [{ key: 'c1', title: 'A', kind: 'line', unit: 'Count', series: [] }] },
       noProject,
     )
@@ -119,7 +136,7 @@ describe('chưa ghim profile', () => {
 
 describe('kiểm tham số trước khi chạm đĩa', () => {
   it('bảng không có biểu đồ nào bị từ chối', async () => {
-    const res = await runTool('infra_dashboard_create', { name: 'Trống', charts: [] }, { context: {} })
+    const res = await runTool('infra_dashboard_save', { name: 'Trống', charts: [] }, { context: {} })
     expect(res.isError).toBe(true)
     expect(res.text).toMatch(/at least one chart/)
   })
@@ -132,6 +149,48 @@ describe('kiểm tham số trước khi chạm đĩa', () => {
     )
     expect(res.isError).toBe(true)
     expect(res.text).toMatch(/at least one log group/)
+  })
+
+  it('kế hoạch không có bước nào bị từ chối', async () => {
+    const res = await runTool('infra_playbook_save', { id: 'p1', name: 'P', steps: [] }, { context: {} })
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/at least one step/)
+  })
+
+  it('verb lạ bị từ chối kèm bộ hợp lệ — model không được bịa một verb', async () => {
+    const res = await runTool(
+      'infra_playbook_save',
+      { id: 'p1', name: 'P', steps: [{ id: 's1', title: 'A', verb: 'nuke', tool: 'aws', args: ['x'] }] },
+      { context: {} },
+    )
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/check, do, verify or rollback/)
+  })
+
+  it('tool lạ bị từ chối — allowlist binary là hàng rào, không phải gợi ý', async () => {
+    const res = await runTool(
+      'infra_playbook_save',
+      { id: 'p1', name: 'P', steps: [{ id: 's1', title: 'A', verb: 'do', tool: 'bash', args: ['x'] }] },
+      { context: {} },
+    )
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/aws, terraform or kubectl/)
+  })
+
+  it('bước không có đối số nào bị từ chối', async () => {
+    const res = await runTool(
+      'infra_playbook_save',
+      { id: 'p1', name: 'P', steps: [{ id: 's1', title: 'A', verb: 'check', tool: 'aws', args: [] }] },
+      { context: {} },
+    )
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/no arguments/)
+  })
+
+  it('đọc một bảng không tồn tại ⇒ lỗi có tên', async () => {
+    const res = await runTool('infra_dashboard_read', { id: 'khong-co-that' }, { context: {} })
+    expect(res.isError).toBe(true)
+    expect(res.text).toMatch(/No dashboard/)
   })
 
   it('đọc một kế hoạch không tồn tại ⇒ lỗi có tên', async () => {

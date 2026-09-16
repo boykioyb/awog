@@ -5,12 +5,14 @@ argument-hint: "mô tả bảng, ví dụ: độ trễ và lỗi 5XX của ALB w
 
 # /aws-board — dựng một bảng điều khiển
 
-Từ mô tả trong `$ARGUMENTS`, dựng một bảng bằng `infra_dashboard_create`.
+Từ mô tả trong `$ARGUMENTS`, dựng một bảng bằng `infra_dashboard_save`.
 
 Trước khi tạo:
 
 1. Gọi `infra_dashboard_list` — có bảng gần giống rồi thì **nói ra** và hỏi người dùng muốn sửa bảng
    đó hay thêm bảng mới. Đừng đẻ thêm một bản gần trùng.
+   Sửa một bảng đã có ⇒ `infra_dashboard_read` **trước**: `infra_dashboard_save` là UPSERT, trùng id
+   là ghi đè, nên không đọc trước là xoá mất biểu đồ bạn chưa từng nhìn thấy.
 2. Mô tả quá mơ hồ để chọn metric ⇒ **hỏi lại**, đừng đoán namespace.
 
 Khi dựng:
