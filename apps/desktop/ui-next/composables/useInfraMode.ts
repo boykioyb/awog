@@ -18,6 +18,21 @@
 // người dùng bị nuốt mất.
 import { computed, ref } from 'vue'
 
+/**
+ * LUẬT CỦA CÔNG TẮC, khai ở đây để màn sau còn theo:
+ *
+ *   Đơn giản  = dạng ĐỌC ĐƯỢC   — đủ để hiểu và quyết định.
+ *   Chuyên sâu = dạng CHÍNH XÁC — copy dán thẳng vào terminal được.
+ *
+ * Nó KHÔNG phải "ẩn bớt cho đỡ rối": mỗi chỗ nó chạm đều hiện CÙNG MỘT sự thật ở
+ * hai độ phân giải. Vì thế Đơn giản không bao giờ giấu thông tin an toàn (giá
+ * tiền, cảnh báo, lớp lệnh) — thứ nó rút gọn là định danh máy: argv đầy đủ, ARN,
+ * cột id, khối kỹ thuật của từng bước.
+ *
+ * Màn nào KHÔNG có thứ như thế thì công tắc không hiện trên thanh đầu — một
+ * control bấm mà không đổi gì là lời hứa suông (người dùng nói thẳng 2026-09-16:
+ * "không thấy sự khác biệt ở đâu trong khi nó lại nằm ở global page").
+ */
 export type InfraMode = 'simple' | 'expert'
 
 const KEY = 'awog.infra.mode'

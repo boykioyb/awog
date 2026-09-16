@@ -123,7 +123,11 @@
               <td>
                 <span class="chip">{{ sourceOf(e) }}</span>
               </td>
-              <td class="ixa-tool" :title="commandOf(e)">{{ commandOf(e) }}</td>
+              <!-- Đơn giản: `aws ec2 describe-instances`. Chuyên sâu: nguyên argv,
+                   copy dán được. `title` luôn giữ bản đầy đủ ở cả hai chế độ. -->
+              <td class="ixa-tool" :title="commandOf(e)">
+                {{ isExpert ? commandOf(e) : shortCommandOf(e) }}
+              </td>
               <td>
                 <span class="chip" :class="`c-${e.class}`">
                   {{ t(`infra.audit.class.${e.class}`) }}
@@ -209,10 +213,12 @@ import AppSelect from '~/components/common/AppSelect.vue'
 import InfraTrailPanel from '~/components/infra/audit/InfraTrailPanel.vue'
 import { useInfraAuditLog } from '~/composables/useInfraAuditLog'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
+import { useInfraMode } from '~/composables/useInfraMode'
 import type { InfraAuditEntry } from '~/composables/useInfraResourcesApi'
 import { infraAuditSource } from '~/utils/infra-audit-source'
 
 const { t } = useI18n()
+const { isExpert } = useInfraMode()
 const {
   entries,
   summary,
@@ -294,6 +300,21 @@ function sourceOf(e: InfraAuditEntry): string {
 }
 
 /** Lệnh đã chạy, KHÔNG kèm tên binary — đúng những gì nhật ký ghi xuống đĩa. */
+/**
+ * Bản rút gọn cho chế độ Đơn giản: binary + hai token đầu KHÔNG phải cờ.
+ * `aws ec2 describe-instances --filters … --output json` ⇒ `aws ec2 describe-instances`.
+ * Đủ để đọc lướt cả cột và biết chuyện gì đã chạy; bản đầy đủ nằm ở `title` và ở
+ * chế độ Chuyên sâu.
+ */
+function shortCommandOf(e: InfraAuditEntry): string {
+  const bin = e.tool.replace(/_cli$/, '')
+  const op = e.argv
+    .filter((a) => !a.startsWith('-'))
+    .slice(0, 2)
+    .join(' ')
+  return op ? `${bin} ${op}` : bin
+}
+
 function commandOf(e: InfraAuditEntry): string {
   return e.argv.join(' ')
 }

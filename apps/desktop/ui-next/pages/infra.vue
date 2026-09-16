@@ -46,11 +46,21 @@
           </button>
         </div>
 
-        <!-- Đơn giản / Chuyên sâu — MỘT công tắc cho cả khu (`useInfraMode`).
-             Trước 2026-09-16 có hai công tắc rời, trên hai màn (Kế hoạch và
-             Explorer), cho cùng một câu hỏi; mười một màn còn lại không có gì.
-             Đặt ở đây vì đây là chỗ duy nhất luôn hiển thị, ở mọi tab. -->
-        <div class="seg infra-mode" role="tablist" :aria-label="t('infra.mode.label')">
+        <!-- Đơn giản / Chuyên sâu — MỘT công tắc, một lựa chọn nhớ chung cho cả khu
+             (`useInfraMode`, kèm luật Đọc-được / Chính-xác).
+
+             CHỈ HIỆN Ở TAB NÓ THẬT SỰ ĐỔI THỨ GÌ ĐÓ. Bản 2026-09-16 cho nó lên
+             thanh đầu ở MỌI tab, và người dùng bác ngay: "không thấy sự khác biệt
+             ở đâu trong khi nó lại nằm ở global page". Đúng — chín trên mười hai
+             màn không có định danh máy nào để rút gọn, nên ở đó nó là một cái nút
+             bấm không làm gì. Lựa chọn vẫn dùng chung và vẫn được nhớ; chỉ cái
+             CONTROL là đi theo nơi nó có tác dụng. -->
+        <div
+          v-if="MODE_TABS.includes(tab)"
+          class="seg infra-mode"
+          role="tablist"
+          :aria-label="t('infra.mode.label')"
+        >
           <span
             v-for="m in ['simple', 'expert'] as const"
             :key="m"
@@ -380,6 +390,17 @@ const GROUP_ICONS: Record<InfraGroupId, string> = {
  * rời nhau là ba chỗ để quên khi thêm tab thứ tư.
  */
 const COST_TABS: readonly InfraTab[] = ['cost', 'budgets', 'waste']
+
+/**
+ * Các tab mà công tắc Đơn giản/Chuyên sâu thật sự đổi thứ gì đó:
+ *   services  — bộ cột của bảng Explorer
+ *   waste     — cột chi tiết thô của bảng lãng phí
+ *   playbooks — khối kỹ thuật của từng bước
+ *   audit     — lệnh rút gọn / argv đầy đủ, và ARN rút gọn / đầy đủ (CloudTrail)
+ * Thêm màn mới có định danh máy để rút gọn thì thêm tên vào ĐÂY, nếu không công
+ * tắc sẽ không hiện ở đó và không ai biết nó tồn tại.
+ */
+const MODE_TABS: readonly InfraTab[] = ['services', 'waste', 'playbooks', 'audit']
 
 const tab = ref<InfraTab>('overview')
 /** Tab Logs chỉ được mount sau cú bấm đầu tiên (xem comment ở template). */

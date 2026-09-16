@@ -112,7 +112,11 @@
                 <span v-if="e.errorCode" class="itp-err">{{ e.errorCode }}</span>
               </td>
               <td class="itp-muted">{{ e.username || '—' }}</td>
-              <td class="itp-res">{{ e.resources.join(' · ') || '—' }}</td>
+              <!-- Đơn giản: đoạn cuối của ARN (tên tài nguyên). Chuyên sâu: nguyên
+                   ARN, copy dán được. `title` giữ bản đầy đủ ở cả hai. -->
+              <td class="itp-res" :title="e.resources.join(' · ')">
+                {{ (isExpert ? e.resources : e.resources.map(shortRes)).join(' · ') || '—' }}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -126,9 +130,11 @@
 // Lớp bind của khối CloudTrail. Mọi state + RPC ở `useInfraTrail()`.
 import { computed, ref } from 'vue'
 import InfraEmpty from '~/components/infra/InfraEmpty.vue'
+import { useInfraMode } from '~/composables/useInfraMode'
 import { useInfraTrail } from '~/composables/useInfraTrail'
 
 const { t } = useI18n()
+const { isExpert } = useInfraMode()
 
 const {
   hasAccount,
@@ -160,6 +166,26 @@ const errorText = computed(() => {
   }
   return raw
 })
+
+/**
+ * Phần của một ARN mà người đọc NHẬN RA. `arn:aws:s3:::my-bucket` ⇒ `my-bucket`;
+ * `…:instance/i-0abc` ⇒ `i-0abc`. Không phải ARN thì giữ nguyên.
+ *
+ * ⚠ Load balancer là ngoại lệ, và lấy đoạn cuối ở đó là SAI: ARN của nó kết thúc
+ * bằng `loadbalancer/app/<tên>/<mã băm>`, nên luật "đoạn cuối" trả về cái mã băm
+ * (`50dc6c49`) — đúng cú pháp, vô nghĩa với người đọc. Tên nằm ở đoạn áp chót.
+ */
+const LB_TYPES = new Set(['app', 'net', 'gwy'])
+
+function shortRes(v: string): string {
+  if (!v.startsWith('arn:')) return v
+  const tail = v.split(':').pop() ?? v
+  const parts = tail.split('/').filter((x) => x !== '')
+  if (parts.length === 0) return tail
+  const lbAt = parts.findIndex((x) => LB_TYPES.has(x))
+  if (lbAt >= 0 && parts[lbAt + 1]) return parts[lbAt + 1] as string
+  return parts[parts.length - 1] as string
+}
 
 function hhmm(iso: string): string {
   const d = new Date(iso)
