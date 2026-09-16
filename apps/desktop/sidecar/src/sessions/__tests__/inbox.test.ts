@@ -24,6 +24,9 @@ interface Summary {
   createdAt: string
   updatedAt: string
   archived?: boolean
+  groupParentId?: string
+  groupRole?: string
+  messageCount?: number
 }
 
 let summaries: Summary[] = []
@@ -39,7 +42,9 @@ vi.mock('../../transport/stdio.js', () => ({
   emit: () => {},
 }))
 
-const { InboxError, listSessionContacts, postSessionMessage } = await import('../inbox.js')
+const { InboxError, listGroupChildren, listSessionContacts, postSessionMessage } = await import(
+  '../inbox.js'
+)
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const SENDER = 'ses-sender'
@@ -147,5 +152,240 @@ describe('listSessionContacts — cùng một vị từ với postSessionMessage
     const id = freshId()
     summaries.push(session(id, { archived: true }))
     await expect(send(id)).rejects.toMatchObject({ code: 'archived-target' })
+  })
+})
+
+// Miễn trần hop cho GIAO VIỆC dọc một cạnh của cây nhóm (cha ↔ con).
+//
+// Trần hop đo độ dài của MỌI chuỗi (mốc inbound + 1), không riêng ping-pong A↔B. Một
+// phiên điều phối giao việc lần lượt cho BA → TL → Dev vì thế tiêu hết ngân sách sau
+// hai vòng giao–báo rồi cả nhóm đứng im 30 phút. Anh em nhắn nhau ("hỏi ngang") thì
+// KHÔNG được miễn — đó đúng là thứ trần hop sinh ra để chặn.
+describe('postSessionMessage — giao việc cha ↔ con miễn trần hop', () => {
+  // Đẩy mốc hop của `id` lên quá MAX_HOPS bằng một chuỗi qua lại với một phiên lạ.
+  async function exhaustHops(id: string) {
+    const other = freshId()
+    summaries.push(session(other))
+    // ses→other (1), other→id (2), id→other (3), other→id (4) ⇒ mốc của id là 4,
+    // nên lời gửi TIẾP THEO của id tính ra hops 5 và chạm trần MAX_HOPS = 4.
+    await postSessionMessage({ from: SENDER, to: other, text: 'x' })
+    await postSessionMessage({ from: other, to: id, text: 'x' })
+    await postSessionMessage({ from: id, to: other, text: 'x' })
+    await postSessionMessage({ from: other, to: id, text: 'x' })
+  }
+
+  it('anh em nhắn nhau VẪN bị trần hop cắt', async () => {
+    const parent = freshId()
+    const a = freshId()
+    const b = freshId()
+    summaries.push(
+      session(parent),
+      session(a, { groupParentId: parent }),
+      session(b, { groupParentId: parent }),
+    )
+    await exhaustHops(a)
+    await expect(postSessionMessage({ from: a, to: b, text: 'hỏi ngang' })).rejects.toMatchObject({
+      code: 'loop-detected',
+    })
+  })
+
+  it('con báo lên CHA thì đi được dù chuỗi đã dài', async () => {
+    const parent = freshId()
+    const child = freshId()
+    summaries.push(session(parent), session(child, { groupParentId: parent }))
+    await exhaustHops(child)
+    await expect(
+      postSessionMessage({ from: child, to: parent, text: 'xong việc' }),
+    ).resolves.toMatchObject({ to: parent })
+  })
+
+  it('cha giao xuống CON thì đi được dù chuỗi đã dài', async () => {
+    const parent = freshId()
+    const child = freshId()
+    summaries.push(session(parent), session(child, { groupParentId: parent }))
+    await exhaustHops(parent)
+    await expect(
+      postSessionMessage({ from: parent, to: child, text: 'làm tiếp việc này' }),
+    ).resolves.toMatchObject({ to: child })
+  })
+
+  it('con NGUỘI quá 24h vẫn nhận được việc từ cha', async () => {
+    // Tư cách thành viên nhóm thay thế phép thử "hoạt động trong 24h": một phiên con
+    // nguội vài ngày vẫn là thành viên nhóm người dùng dựng ra.
+    const parent = freshId()
+    const child = freshId()
+    summaries.push(
+      session(parent),
+      session(child, { groupParentId: parent, updatedAt: at(5 * DAY_MS) }),
+    )
+    await expect(
+      postSessionMessage({ from: parent, to: child, text: 'việc mới' }),
+    ).resolves.toMatchObject({ to: child })
+  })
+
+  it('nhưng một phiên NGUỘI ngoài nhóm thì vẫn bị từ chối', async () => {
+    const cold = freshId()
+    summaries.push(session(cold, { updatedAt: at(5 * DAY_MS) }))
+    await expect(send(cold)).rejects.toMatchObject({ code: 'unreachable-target' })
+  })
+
+  it('giao việc KHÔNG nâng mốc hop của phiên nhận', async () => {
+    // Nếu nâng, một dây chuyền giao việc sẽ đẩy mốc lên rồi lần sau phiên đó hỏi ngang
+    // một phiên khác là chạm trần ngay, dù chưa trao đổi vòng nào.
+    const parent = freshId()
+    const child = freshId()
+    const stranger = freshId()
+    summaries.push(session(parent), session(child, { groupParentId: parent }), session(stranger))
+    await exhaustHops(parent)
+    await postSessionMessage({ from: parent, to: child, text: 'việc' })
+    await expect(
+      postSessionMessage({ from: child, to: stranger, text: 'hỏi nhờ' }),
+    ).resolves.toMatchObject({ to: stranger })
+  })
+})
+
+// Nhóm phiên (cây kiểu trang Notion) hiện ra trong danh bạ: một danh bạ chỉ có tiêu
+// đề buộc model phải ĐOÁN xem trong mấy phiên tên na ná nhau thì phiên nào là người
+// review. Tên nhóm = tiêu đề phiên CHA, nên nó phải giải được từ `groupParentId`.
+describe('listSessionContacts — nhóm và vai', () => {
+  it('phiên con mang tên nhóm của cha và vai của chính nó', async () => {
+    const parent = freshId()
+    const child = freshId()
+    summaries.push(
+      session(parent, { title: 'Ship feature X' }),
+      session(child, { groupParentId: parent, groupRole: 'Reviewer' }),
+    )
+    const contacts = await listSessionContacts(SENDER)
+    expect(contacts.find((c) => c.id === child)).toMatchObject({
+      group: 'Ship feature X',
+      role: 'Reviewer',
+    })
+  })
+
+  it('phiên CHA cũng mang tên nhóm — chính là tiêu đề của nó', async () => {
+    const parent = freshId()
+    const child = freshId()
+    summaries.push(
+      session(parent, { title: 'Ship feature X' }),
+      session(child, { groupParentId: parent }),
+    )
+    const contacts = await listSessionContacts(SENDER)
+    expect(contacts.find((c) => c.id === parent)?.group).toBe('Ship feature X')
+    // Cha không có vai: vai là thứ người dùng đặt cho THÀNH VIÊN trong nhóm.
+    expect(contacts.find((c) => c.id === parent)?.role).toBeUndefined()
+  })
+
+  it('phiên không thuộc nhóm nào thì không mang field nào', async () => {
+    const lone = freshId()
+    summaries.push(session(lone))
+    const contact = (await listSessionContacts(SENDER)).find((c) => c.id === lone)
+    expect(contact?.group).toBeUndefined()
+    expect(contact?.role).toBeUndefined()
+  })
+
+  it('tên nhóm đọc được kể cả khi phiên CHA đã nguội khỏi danh bạ', async () => {
+    // Cha nguội 2 ngày ⇒ rơi khỏi danh bạ, nhưng con vẫn phải nói được nó thuộc nhóm
+    // nào. Đây là lý do bản đồ tiêu đề dựng trên TOÀN BỘ summaries, không phải trên
+    // danh bạ đã lọc.
+    const parent = freshId()
+    const child = freshId()
+    summaries.push(
+      session(parent, { title: 'Nhóm nguội', updatedAt: at(2 * DAY_MS) }),
+      session(child, { groupParentId: parent }),
+    )
+    const contacts = await listSessionContacts(SENDER)
+    expect(contacts.map((c) => c.id)).not.toContain(parent)
+    expect(contacts.find((c) => c.id === child)?.group).toBe('Nhóm nguội')
+  })
+})
+
+// Bảng trạng thái nhóm cho phiên CHA. Luật quan trọng nhất ở đây là thứ nó KHÔNG trả:
+// không preview, không transcript — cùng một luật với danh bạ.
+describe('listGroupChildren — trạng thái phiên con', () => {
+  it('chỉ trả con TRỰC TIẾP, không trả cháu', async () => {
+    const parent = freshId()
+    const child = freshId()
+    const grandchild = freshId()
+    summaries.push(
+      session(parent),
+      session(child, { groupParentId: parent }),
+      session(grandchild, { groupParentId: child }),
+    )
+    const rows = await listGroupChildren(parent)
+    expect(rows.map((r) => r.id)).toEqual([child])
+    // Nhưng vẫn nói được nhánh đó còn sâu bao nhiêu.
+    expect(rows[0]?.descendants).toBe(1)
+  })
+
+  it('đánh dấu phiên con đang chạy một lượt', async () => {
+    const parent = freshId()
+    const busy = freshId()
+    const calm = freshId()
+    summaries.push(
+      session(parent),
+      session(busy, { groupParentId: parent }),
+      session(calm, { groupParentId: parent }),
+    )
+    running = [busy]
+    const rows = await listGroupChildren(parent)
+    expect(rows.find((r) => r.id === busy)?.busy).toBe(true)
+    expect(rows.find((r) => r.id === calm)?.busy).toBe(false)
+  })
+
+  it('bỏ qua phiên con đã lưu trữ', async () => {
+    const parent = freshId()
+    const gone = freshId()
+    summaries.push(session(parent), session(gone, { groupParentId: parent, archived: true }))
+    await expect(listGroupChildren(parent)).resolves.toEqual([])
+  })
+
+  it('KHÔNG trả nội dung phiên con — chỉ metadata', async () => {
+    const parent = freshId()
+    const child = freshId()
+    summaries.push(session(parent), session(child, { groupParentId: parent, groupRole: 'Dev' }))
+    const row = (await listGroupChildren(parent))[0]
+    // Khoá danh sách field: thêm một field mang nội dung (preview, lastMessage…) sẽ
+    // làm test này đỏ, và đó CHÍNH LÀ điều cần xảy ra — nội dung một phiên không được
+    // rò sang context của phiên khác.
+    expect(Object.keys(row ?? {}).sort()).toEqual([
+      'busy',
+      'descendants',
+      'id',
+      'messageCount',
+      'role',
+      'title',
+      'updatedAt',
+    ])
+  })
+
+  it('phiên không có con thì trả mảng rỗng', async () => {
+    const lone = freshId()
+    summaries.push(session(lone))
+    await expect(listGroupChildren(lone)).resolves.toEqual([])
+  })
+})
+
+// Nhóm chỉ có HAI CẤP — kiểm ở tầng vị từ miễn trần: con-của-con không tồn tại, nên
+// "cháu" luôn là anh em của ai đó và chịu trần hop như mọi trao đổi tự phát.
+describe('isGroupHandoff — chỉ đi dọc cạnh cha–con', () => {
+  it('anh em (cùng một cha) KHÔNG được miễn trần', async () => {
+    const parent = freshId()
+    const a = freshId()
+    const b = freshId()
+    const other = freshId()
+    summaries.push(
+      session(parent),
+      session(a, { groupParentId: parent }),
+      session(b, { groupParentId: parent }),
+      session(other),
+    )
+    // Đẩy mốc hop của `a` lên 4 (xem exhaustHops ở describe trên).
+    await postSessionMessage({ from: SENDER, to: other, text: 'x' })
+    await postSessionMessage({ from: other, to: a, text: 'x' })
+    await postSessionMessage({ from: a, to: other, text: 'x' })
+    await postSessionMessage({ from: other, to: a, text: 'x' })
+    await expect(postSessionMessage({ from: a, to: b, text: 'ngang' })).rejects.toMatchObject({
+      code: 'loop-detected',
+    })
   })
 })

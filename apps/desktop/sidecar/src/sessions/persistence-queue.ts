@@ -60,6 +60,11 @@ type HeaderMetadataSignature = {
   // thân bài kế tiếp lặng lẽ ghi đè — đúng kiểu "âm thầm đổi account" mà cả tính
   // năng này sinh ra để chặn.
   infra: SessionHeader['infra']
+  // Gom nhóm phiên: cũng là metadata do RPC `sessions.setGroup` sửa, nên thiếu ở đây
+  // thì một lần xếp/tách nhóm ở cửa sổ khác bị lần ghi thân bài kế tiếp ghi đè.
+  groupParentId: string | undefined
+  groupRole: string | undefined
+  groupAutoDeliver: boolean | undefined
 }
 
 function headerMetadataSignature(header: SessionHeader): string {
@@ -77,6 +82,9 @@ function headerMetadataSignature(header: SessionHeader): string {
     todos: header.todos,
     bookmarks: header.bookmarks,
     infra: header.infra,
+    groupParentId: header.groupParentId,
+    groupRole: header.groupRole,
+    groupAutoDeliver: header.groupAutoDeliver,
   }
   return JSON.stringify(sig)
 }
@@ -107,8 +115,19 @@ function mergeHeaderWithExternalMetadata(
   // bản ghim cũ của local và hoàn tác đúng thao tác vừa làm bên ngoài.
   const { infra: _localInfra, ...restNoInfra } = rest
   const diskInfra: Pick<SessionHeader, 'infra'> = disk.infra ? { infra: disk.infra } : {}
+  // Cặp nhóm lấy TRỌN theo đĩa, cùng lý do với archived/infra: tách khỏi nhóm là
+  // XOÁ HẲN key (session-manager setGroup), nên "chỉ copy khi đĩa có" sẽ giữ lại
+  // cha cũ của bản local và hoàn tác đúng thao tác vừa làm bên ngoài.
+  const { groupParentId: _localGroup, groupRole: _localRole, ...restNoGroup } = restNoInfra
+  const diskGroup: Pick<SessionHeader, 'groupParentId' | 'groupRole'> = disk.groupParentId
+    ? {
+        groupParentId: disk.groupParentId,
+        ...(disk.groupRole !== undefined ? { groupRole: disk.groupRole } : {}),
+      }
+    : {}
   return {
-    ...restNoInfra,
+    ...restNoGroup,
+    ...diskGroup,
     title: disk.title,
     projectId: disk.projectId,
     ...diskArchived,
@@ -119,6 +138,7 @@ function mergeHeaderWithExternalMetadata(
     ...(disk.aboutTaskId !== undefined ? { aboutTaskId: disk.aboutTaskId } : {}),
     ...(disk.aboutSshHostId !== undefined ? { aboutSshHostId: disk.aboutSshHostId } : {}),
     ...(disk.aboutGhUrl !== undefined ? { aboutGhUrl: disk.aboutGhUrl } : {}),
+    ...(disk.groupAutoDeliver !== undefined ? { groupAutoDeliver: disk.groupAutoDeliver } : {}),
     // todos/bookmarks luôn được ghi thành MẢNG (rỗng khi xoá hết) chứ không bị xoá
     // key, nên "copy khi đĩa có" đã diễn tả đủ cả hướng dựng lẫn hướng xoá.
     ...(disk.todos !== undefined ? { todos: disk.todos } : {}),

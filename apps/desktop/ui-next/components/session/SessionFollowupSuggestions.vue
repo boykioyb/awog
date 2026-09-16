@@ -26,13 +26,16 @@ import type { FollowupsBlock } from '~/composables/useSessionsData'
 const props = defineProps<{ block: FollowupsBlock; isLast: boolean }>()
 const { t } = useI18n()
 const store = useSessionsStore()
+const scope = useSessionScope()
 
 const visible = computed(
   () => props.isLast && props.block.options.length > 0 && !(store.active?.draft ?? '').trim(),
 )
 
 function use(text: string): void {
-  store.seedComposer(text)
+  // Gửi kèm phiên của transcript chứa component này: ở chế độ LƯỚI, bấm ở ô nào thì
+  // chỉ composer của ô ĐÓ nhận (useSessionScope).
+  store.seedComposer(text, scope.sessionId.value)
 }
 </script>
 

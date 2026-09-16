@@ -52,6 +52,7 @@ type SessionMetadataPatch = Partial<
     | 'budget'
     | 'parentSessionId'
     | 'forkFromMessageId'
+    | 'groupAutoDeliver'
     | 'sdkSessionId'
     | 'codexThreadId'
     | 'codexToolSignature'
@@ -124,6 +125,9 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.aboutGhUrl !== undefined) summary.aboutGhUrl = h.aboutGhUrl
   if (h.infra !== undefined) summary.infra = h.infra
   if (h.parentSessionId !== undefined) summary.parentSessionId = h.parentSessionId
+  if (h.groupParentId !== undefined) summary.groupParentId = h.groupParentId
+  if (h.groupRole !== undefined) summary.groupRole = h.groupRole
+  if (h.groupAutoDeliver !== undefined) summary.groupAutoDeliver = h.groupAutoDeliver
   if (h.compaction) summary.hasCompaction = true
   if (h.lastPreview) summary.lastPreview = h.lastPreview
   return summary
@@ -356,6 +360,65 @@ class SessionManager {
     // nó nghĩa là lượt sau chạy trên tài khoản cũ.
     await sessionPersistenceQueue.flush(id)
     return true
+  }
+
+  // Xếp một phiên vào nhóm (dưới phiên cha `parentId`) kèm vai của nó, hoặc tách
+  // khỏi nhóm khi `parentId === null`. Tách khỏi updateMetadata vì tách nhóm phải
+  // XOÁ HẲN key — cùng lý do đã viết ở setArchived/setInfra.
+  //
+  // `updatedAt` KHÔNG bump: xếp nhóm là thao tác tổ chức của con người, không phải
+  // hoạt động của phiên. Bump sẽ ném mọi phiên vừa xếp lên đầu danh sách (sắp theo
+  // updatedAt) dù chúng đã im lặng cả tháng — đúng thứ làm hỏng một lần dọn nhóm.
+  //
+  // CHU TRÌNH bị chặn ở đây chứ không ở RPC: manager là chỗ DUY NHẤT có đủ header
+  // của mọi phiên để đi ngược chuỗi cha. Một chu trình (A→B→A) làm cây không có gốc
+  // ⇒ renderer lặp vô hạn khi dựng danh sách.
+  //
+  // Trả về mã lỗi thay vì ném, để RPC nói đúng chuyện gì đã xảy ra:
+  //   'ok' | 'unknown-session' | 'unknown-parent' | 'self-parent' | 'cycle'
+  async setGroup(
+    id: string,
+    parentId: string | null,
+    role: string | null,
+  ): Promise<'ok' | 'unknown-session' | 'unknown-parent' | 'self-parent' | 'cycle' | 'nested-parent'> {
+    const m = this.sessions.get(id)
+    if (!m) return 'unknown-session'
+    if (parentId !== null) {
+      if (parentId === id) return 'self-parent'
+      const parent = this.sessions.get(parentId)
+      if (!parent) return 'unknown-parent'
+      // Nhóm chỉ có HAI CẤP: cha–con, hết. Một phiên ĐÃ là con thì không làm cha được.
+      //
+      // Vì sao chặn ở đây chứ không chỉ ở UI: cây sâu nhiều tầng làm mọi thứ đọc nó phải
+      // trả lời "gốc là ai" theo đường vòng — miễn trần hop tính theo CẠNH cha–con, bảng
+      // trạng thái chỉ hiện con trực tiếp, lưới chỉ xếp một hàng con. Giới hạn hai cấp
+      // giữ cả ba thứ đó nói cùng một câu chuyện.
+      if (parent.header.groupParentId) return 'nested-parent'
+      // Đi ngược từ cha đề xuất lên gốc: gặp lại `id` nghĩa là `id` đang là tổ tiên
+      // của cha, nên nối vào sẽ đóng vòng. `seen` chặn cả trường hợp dữ liệu trên
+      // đĩa ĐÃ có sẵn chu trình (file sửa tay) — không thì vòng while này treo máy.
+      const seen = new Set<string>([id])
+      let cursor: string | undefined = parentId
+      while (cursor) {
+        if (seen.has(cursor)) return 'cycle'
+        seen.add(cursor)
+        cursor = this.sessions.get(cursor)?.header.groupParentId
+      }
+    }
+
+    const { groupParentId: _oldParent, groupRole: _oldRole, ...rest } = m.header
+    m.header = {
+      ...rest,
+      ...(parentId !== null ? { groupParentId: parentId } : {}),
+      // Vai chỉ có nghĩa BÊN TRONG một nhóm: tách khỏi nhóm thì bỏ luôn, kẻo lần
+      // xếp vào nhóm khác sau này thừa hưởng một cái nhãn của nhóm cũ.
+      ...(parentId !== null && role ? { groupRole: role } : {}),
+    }
+    this.persistSession(m)
+    // Flush ngay, cùng lý do với setArchived: một thao tác rời rạc của người dùng
+    // không được rơi mất vì thoát app trong cửa sổ debounce 500ms.
+    await sessionPersistenceQueue.flush(id)
+    return 'ok'
   }
 
   // Append (or upsert-by-id) a message and persist. Upsert-by-id matches the

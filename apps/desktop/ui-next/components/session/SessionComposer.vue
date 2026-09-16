@@ -443,7 +443,7 @@
           <button
             class="btn pri sm stop"
             :title="t('sessions.composer.stopTooltip')"
-            @click="store.activeId != null && store.cancel(store.activeId)"
+            @click="sid != null && store.cancel(sid)"
           >
             <Icon name="stop" />
             {{ t('sessions.composer.stop') }}
@@ -465,7 +465,7 @@
             </button>
             <div v-if="sendMenuOpen" class="smenu sendmenu" @click.stop>
               <div
-                v-if="store.activeCanSteer"
+                v-if="store.canSteerId(sid)"
                 class="mi sty"
                 :class="{ mdisabled: !canSteer }"
                 @click="pickSteer"
@@ -504,7 +504,7 @@
 // and slash `/` + `@`-mention autocomplete (real engine sources via useComposerData:
 // commands/skills/agents/files). When the active session
 // is busy the Send action queues (gửi sau) instead of sending. Chip selections drive
-// the STORE (read `store.active`, write via store actions) so they persist + take
+// the STORE (read the target session, write via store actions) so they persist + take
 // effect on the next turn. The model chip popover also folds the Thinking selector;
 // the style chip carries the response-style catalog + the no-markdown toggle.
 import type {
@@ -533,8 +533,13 @@ import {
 const props = withDefaults(
   defineProps<{
     attachments?: SessionAttachment[]
+    // Phiên mà composer này điều khiển. Bỏ trống = phiên đang mở (hành vi cũ, và là
+    // đường mà SessionDetail dùng). Chế độ LƯỚI truyền id tường minh vì trên màn hình
+    // có nhiều composer cùng lúc, mỗi cái cho một phiên khác nhau — nếu chúng đều đọc
+    // `store.active` thì gõ vào ô nào cũng gửi cho đúng một phiên.
+    sessionId?: number
   }>(),
-  { attachments: () => [] },
+  { attachments: () => [], sessionId: undefined },
 )
 const emit = defineEmits<{
   // `text` is the expanded body sent to the model; `command` (when set) is the
@@ -567,27 +572,36 @@ const MODES_UI = [
 ] as const
 
 const store = useSessionsStore()
+
+// Phiên đích của composer NÀY. Mọi chỗ bên dưới đọc/ghi qua hai cái này thay vì
+// `store.active` / `store.activeId` trực tiếp.
+const sid = computed<number | null>(() => props.sessionId ?? store.activeId)
+const target = computed(() =>
+  props.sessionId != null
+    ? (store.sessions.find((s) => s.id === props.sessionId) ?? null)
+    : store.active,
+)
 const ta = useTemplateRef<HTMLTextAreaElement>('ta')
 
 // Draft text is held PER SESSION in the store (not a local ref): SessionDetail is
 // keyed by session id, so without this a half-typed message would die when the
 // user switches sessions. Reads/writes go through the active session's `draft`.
 const draft = computed<string>({
-  get: () => store.active?.draft ?? '',
+  get: () => target.value?.draft ?? '',
   set: (v) => {
-    if (store.activeId != null) store.setDraft(store.activeId, v)
+    if (sid.value != null) store.setDraft(sid.value, v)
   },
 })
 
 // Real autocomplete sources — agents/files/user-commands/skills for the active
 // session's project (lazy-loaded + cached, see useComposerData). Built-in slash
 // commands (mode/compact/style) come from the static BUILTIN_COMMANDS catalog.
-const projectIdRef = computed(() => store.active?.project ?? null)
+const projectIdRef = computed(() => target.value?.project ?? null)
 // The Claude CLI's own commands (/goal, /context, /usage…) exist only on the Claude
 // SDK branch, so the catalogue is fetched only there — and from the cwd the turn will
 // run in (dragged folder wins over the project path, as in sessions.sendMessage).
-const cliCommandsEnabled = computed(() => store.activeProvider === 'anthropic')
-const cliWorkspacePath = computed(() => store.active?.workspaceFolder ?? null)
+const cliCommandsEnabled = computed(() => store.providerOfId(sid.value) === 'anthropic')
+const cliWorkspacePath = computed(() => target.value?.workspaceFolder ?? null)
 const data = useComposerData(projectIdRef, {
   enabled: cliCommandsEnabled,
   workspacePath: cliWorkspacePath,
@@ -627,14 +641,14 @@ function onCommand(builtinId: string, arg = '') {
     void openBrowserTab(arg)
     return
   }
-  if (!cmd || store.activeId == null) return
+  if (!cmd || sid.value == null) return
   if (cmd.action.type === 'mode') {
-    store.setMode(store.activeId, cmd.action.mode)
+    store.setMode(sid.value, cmd.action.mode)
     showNotice(t('sessions.command.notice.mode', { mode: t(`sessions.mode.${cmd.action.mode}`) }))
   } else if (cmd.action.type === 'compact') {
     // No transient notice here — store.compacting drives a persistent "compacting…"
     // line + a locked Send button for the whole RPC (result surfaces as a toast).
-    void store.compactSession(store.activeId).then((r) => {
+    void store.compactSession(sid.value).then((r) => {
       if (r === 'compacted') {
         useToast().add({ title: t('sessions.command.notice.compacted'), color: 'success' })
       } else if (r === 'nothing') {
@@ -727,6 +741,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', onWindowResize))
 watch(
   () => store.draftSeed,
   (seed) => {
+    // Chỉ NHẬN hạt giống dành cho phiên của composer này. `sid` null = "phiên đang mở",
+    // nên ở chế độ lưới chỉ ô chính lấy. Không có chốt này thì một gợi ý bấm ở ô con đổ
+    // chữ vào tất cả các ô.
+    const target = seed.sid ?? store.activeId
+    if (target !== sid.value) return
     draft.value = seed.text
     // Seeded draft returns to auto-grow so the whole seed (welcome starter / quote /
     // edit) is shown without being capped by a stale manual height (OQ 4.b).
@@ -745,18 +764,17 @@ watch(
 )
 
 // Follow-up quote cards for the active session (rendered above the input).
-const followups = computed(() => store.active?.followups ?? [])
+const followups = computed(() => target.value?.followups ?? [])
 function removeQuote(i: number) {
-  if (store.activeId != null) store.removeQuote(store.activeId, i)
+  if (sid.value != null) store.removeQuote(sid.value, i)
 }
 function onNote(i: number, e: Event) {
-  if (store.activeId != null)
-    store.setQuoteNote(store.activeId, i, (e.target as HTMLTextAreaElement).value)
+  if (sid.value != null) store.setQuoteNote(sid.value, i, (e.target as HTMLTextAreaElement).value)
 }
 
 // The per-turn Mode chip reads straight off the active session (store-driven);
 // model / account / effort / style moved to the status-bar chips (StatusConfig).
-const selectedMode = computed(() => store.active?.mode || 'Ask')
+const selectedMode = computed(() => target.value?.mode || 'Ask')
 
 // Composer popovers: Mode chip, overflow `⋯`, và popover ghim context mở TỪ trong
 // overflow (cùng điểm neo, nên nó thay chỗ menu thay vì lồng vào trong).
@@ -770,30 +788,30 @@ function toggle(kind: MenuKind) {
 // Files + notes re-fed into every turn by the sidecar. Reads the active session;
 // writes go through store actions (persist via upsert). The notes are edited via a
 // local draft persisted on blur so we don't fire an upsert on every keystroke.
-const pinnedFiles = computed<string[]>(() => store.active?.pinnedContext?.files ?? [])
+const pinnedFiles = computed<string[]>(() => target.value?.pinnedContext?.files ?? [])
 // Reusable notes (preset / recent) applied to this session as toggled units — like
 // attaching files. `appliedNotes` is the applied set; isNoteApplied flags which library
 // items are on so they render active with a ✓. Multiple can be applied at once.
-const appliedNotes = computed<string[]>(() => store.active?.pinnedContext?.notePresets ?? [])
+const appliedNotes = computed<string[]>(() => target.value?.pinnedContext?.notePresets ?? [])
 const isNoteApplied = (text: string) => appliedNotes.value.includes(text.trim())
 const hasPinned = computed(
   () =>
     pinnedFiles.value.length > 0 ||
     appliedNotes.value.length > 0 ||
-    !!store.active?.pinnedContext?.notes?.trim(),
+    !!target.value?.pinnedContext?.notes?.trim(),
 )
 // Badge count on the pin button = files + applied notes + (1 if free-text notes set).
 const pinnedCount = computed(
   () =>
     pinnedFiles.value.length +
     appliedNotes.value.length +
-    (store.active?.pinnedContext?.notes?.trim() ? 1 : 0),
+    (target.value?.pinnedContext?.notes?.trim() ? 1 : 0),
 )
 const notesDraft = ref('')
 watch(
-  () => [store.activeId, store.active?.pinnedContext?.notes] as const,
+  () => [sid.value, target.value?.pinnedContext?.notes] as const,
   () => {
-    notesDraft.value = store.active?.pinnedContext?.notes ?? ''
+    notesDraft.value = target.value?.pinnedContext?.notes ?? ''
   },
   { immediate: true },
 )
@@ -809,7 +827,7 @@ const {
   deriveName: noteLabel,
 } = useSessionNotePresets()
 function saveNotes() {
-  if (store.activeId != null) store.setPinnedNotes(store.activeId, notesDraft.value)
+  if (sid.value != null) store.setPinnedNotes(sid.value, notesDraft.value)
   // Capture the committed note so it's reusable in other sessions (no-op when empty).
   recordHistory(notesDraft.value)
 }
@@ -849,10 +867,10 @@ watch(
 // attaching a file: click to apply, click again to remove (mirrored by the ✓ marker).
 // Distinct from the free-text notes box; multiple can be applied at once.
 function toggleNote(text: string) {
-  if (store.activeId != null) store.togglePinnedNotePreset(store.activeId, text)
+  if (sid.value != null) store.togglePinnedNotePreset(sid.value, text)
 }
 function removePin(path: string) {
-  if (store.activeId != null) store.removePinnedFile(store.activeId, path)
+  if (sid.value != null) store.removePinnedFile(sid.value, path)
 }
 // Wiki pages the model may actually read. `context: false` pages are excluded:
 // offering one would insert a reference the agent is not allowed to resolve.
@@ -869,7 +887,7 @@ const pinFileMatches = computed(() => {
     .slice(0, 12)
 })
 function addPin(path: string) {
-  if (store.activeId != null) store.addPinnedFile(store.activeId, path)
+  if (sid.value != null) store.addPinnedFile(sid.value, path)
   pinQuery.value = ''
 }
 function onPinOpen() {
@@ -881,16 +899,16 @@ function onPinOpen() {
 // The cost/budget readout lives in the workspace panel's Cost tab; the composer
 // only keeps the soft-limit OVER warning banner (a conditional safety alert).
 const { fmtUsd, overSoft } = useSessionCost()
-const budgetOver = computed(() => overSoft(store.active))
+const budgetOver = computed(() => overSoft(target.value))
 const budgetLabel = computed(() => {
-  const cost = store.active?.usage?.cost
-  const limit = store.active?.budget?.limitUsd
+  const cost = target.value?.usage?.cost
+  const limit = target.value?.budget?.limitUsd
   return limit ? `${fmtUsd(cost ?? 0)} / ${fmtUsd(limit)}` : fmtUsd(cost)
 })
 
 // Mode chip selection → store action (persists + drives engineSettings next turn).
 function selectMode(m: string) {
-  if (store.activeId != null) store.setMode(store.activeId, m)
+  if (sid.value != null) store.setMode(sid.value, m)
   open.value = null
 }
 const modeIcon = computed(
@@ -902,18 +920,18 @@ const modeIcon = computed(
 // messages render as chips above the input (the store auto-drains them FIFO when
 // the turn settles — we only enqueue / display / remove).
 const busy = computed(
-  () => store.active?.status === 'streaming' || store.active?.status === 'awaiting',
+  () => target.value?.status === 'streaming' || target.value?.status === 'awaiting',
 )
 // True while a `/compact` RPC is in flight — the composer shows a persistent
 // "compacting…" notice + a disabled processing button and refuses to send/queue.
-const compacting = computed(() => store.active?.compacting === true)
-const queued = computed(() => store.active?.queue ?? [])
+const compacting = computed(() => target.value?.compacting === true)
+const queued = computed(() => target.value?.queue ?? [])
 function dequeue(i: number) {
-  if (store.activeId != null) store.dequeue(store.activeId, i)
+  if (sid.value != null) store.dequeue(sid.value, i)
 }
 // Jump the queue: stop the current turn and run this queued message right now.
 function sendQueuedNow(i: number) {
-  if (store.activeId != null) void store.sendQueuedNow(store.activeId, i)
+  if (sid.value != null) void store.sendQueuedNow(sid.value, i)
 }
 
 // Inline-edit a queued text message before it drains. Only one chip edits at a time.
@@ -946,8 +964,8 @@ function saveQueuedEdit() {
   editingQueued.value = null
   const q = queued.value[i]
   const text = queuedDraft.value.trim()
-  if (store.activeId == null || !q || !text || text === q.text) return
-  store.editQueued(store.activeId, i, text)
+  if (sid.value == null || !q || !text || text === q.text) return
+  store.editQueued(sid.value, i, text)
 }
 function cancelQueuedEdit() {
   editingQueued.value = null
@@ -979,8 +997,8 @@ const canSteerText = computed(
 )
 // Steering also requires a runtime that consumes it: the Claude SDK path (anthropic)
 // has no steering hook, so those sessions QUEUE instead (never silently drop the
-// message). See store.activeCanSteer.
-const canSteer = computed(() => canSteerText.value && store.activeCanSteer)
+// message). See store.canSteerId(sid.value).
+const canSteer = computed(() => canSteerText.value && store.canSteerId(sid.value))
 const streamPrimaryAction = computed<'steer' | 'queue'>(() => (canSteer.value ? 'steer' : 'queue'))
 const streamPrimaryTitle = computed(() =>
   streamPrimaryAction.value === 'steer'
@@ -1003,10 +1021,10 @@ async function sendNow() {
   // Usage-quota gate: await a fresh read, then refuse the turn while KEEPING the draft
   // so the user doesn't lose what they typed. The store enforces the same gate too.
   if (sendChecking) return
-  if (store.activeId != null) {
+  if (sid.value != null) {
     sendChecking = true
     try {
-      if (await store.checkSendBlocked(store.activeId)) {
+      if (await store.checkSendBlocked(sid.value)) {
         showNotice(t('sessions.quota.blockedSendNotice'))
         return
       }
@@ -1031,13 +1049,13 @@ async function onQueue() {
   const hasAtt = props.attachments.length > 0
   const hasQuotes = followups.value.length > 0
   if (!outgoing.trim() && !hasAtt && !hasQuotes) return
-  if (store.activeId == null) return
+  if (sid.value == null) return
   // Usage-quota gate: queueing only defers a turn that would be blocked on drain —
   // await a fresh read, refuse up front and keep the draft.
   if (sendChecking) return
   sendChecking = true
   try {
-    if (await store.checkSendBlocked(store.activeId)) {
+    if (await store.checkSendBlocked(sid.value)) {
       showNotice(t('sessions.quota.blockedSendNotice'))
       return
     }
@@ -1045,7 +1063,7 @@ async function onQueue() {
     sendChecking = false
   }
   closeAutocomplete()
-  store.enqueue(store.activeId, outgoing, props.attachments, command)
+  store.enqueue(sid.value, outgoing, props.attachments, command)
   for (let i = props.attachments.length - 1; i >= 0; i--) emit('remove-att', i)
   draft.value = ''
   userSizedManually.value = false
@@ -1056,11 +1074,11 @@ async function onQueue() {
 // old UI, which does not expand commands when steering). Clears just the draft.
 async function onSteer() {
   const text = draft.value
-  if (!text.trim() || store.activeId == null) return
+  if (!text.trim() || sid.value == null) return
   draft.value = ''
   userSizedManually.value = false
   closeAutocomplete()
-  await store.steer(store.activeId, text)
+  await store.steer(sid.value, text)
   showNotice(t('sessions.composer.steerDone'))
   nextTick(grow)
 }

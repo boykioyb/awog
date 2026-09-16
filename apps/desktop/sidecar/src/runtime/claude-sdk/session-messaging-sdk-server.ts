@@ -1,4 +1,5 @@
-// `list_sessions` + `send_session_message` trên nhánh Claude SDK (gói #17).
+// `list_sessions` + `send_session_message` + `create_session` + `group_status` trên
+// nhánh Claude SDK.
 //
 // Một in-process SDK MCP server tên `awogsessions` → `mcp__awogsessions__list_sessions`
 // và `mcp__awogsessions__send_session_message`. Handler là ĐÚNG hàm nhánh Pi gọi
@@ -21,6 +22,7 @@
 
 import { z } from 'zod'
 import { MAX_TEXT_LEN } from '../../sessions/inbox.js'
+import { MAX_ROLE_LEN, MAX_TITLE_LEN } from '../../sessions/spawn.js'
 import {
   createSdkMcpServer,
   tool,
@@ -63,6 +65,29 @@ export function buildSessionMessagingSdkServer(sessionId: string): McpSdkServerC
           // `isError` qua cầu tường minh: một lần gửi bị từ chối (đích lạ, đã lưu
           // trữ, chạm trần, phát hiện vòng lặp) là một bước LỖI, không phải một cú
           // gửi coi như thành công. Lõi báo hỏng bằng cờ trong kết quả, không throw.
+          return {
+            content: [{ type: 'text' as const, text: r.text }],
+            ...(r.isError ? { isError: true } : {}),
+          }
+        },
+      ),
+      tool('group_status', SESSION_MESSAGING_TEXT.statusDescription, {}, async () => {
+        const r = await run.groupStatus()
+        return { content: [{ type: 'text' as const, text: r.text }] }
+      }),
+      tool(
+        'create_session',
+        SESSION_MESSAGING_TEXT.createDescription,
+        {
+          // Trần thật nằm ở sessions/spawn.ts (nó cắt ngắn chứ không từ chối); khai
+          // lại ở đây để lớp phòng thủ đầu tiên giống nhau ở hai runtime — cùng lý do
+          // với `message` bên trên.
+          title: z.string().max(MAX_TITLE_LEN).describe(SESSION_MESSAGING_TEXT.createTitle),
+          role: z.string().max(MAX_ROLE_LEN).describe(SESSION_MESSAGING_TEXT.createRole),
+          prompt: z.string().max(MAX_TEXT_LEN).describe(SESSION_MESSAGING_TEXT.createPrompt),
+        },
+        async (args) => {
+          const r = await run.createSession(args.title, args.role, args.prompt)
           return {
             content: [{ type: 'text' as const, text: r.text }],
             ...(r.isError ? { isError: true } : {}),

@@ -193,6 +193,10 @@ const props = defineProps<{ message: SessionMessage; fallbackWhen: string; msgIn
 const { t } = useI18n()
 const settings = useSettingsStore()
 const store = useSessionsStore()
+// Phiên mà message này thuộc về. Ở chế độ đơn = phiên đang mở; ở chế độ LƯỚI = phiên của
+// ô chứa nó. Trích dẫn / badge ① / highlight đều phải đọc theo phiên NÀY, không phải
+// `store.active` — xem useSessionScope.
+const scope = useSessionScope()
 // Xuất bản trả lời này thành báo cáo hạ tầng (mốc 6.6). Transcript là ĐIỂM NỐI duy
 // nhất giữa "agent viết xong" và hộp xuất — màn Báo cáo không thể là nó, vì lúc bấm
 // "Hỏi agent" thì chưa có gì để xuất. Xem đầu `useInfraReportPublish.ts`.
@@ -433,7 +437,7 @@ function fmt(at?: string): string {
 // label). State-derived: removing one (store.removeQuote) automatically drops + renumbers.
 type IndexedFollowup = { fu: Followup; idx: number; label: string }
 const ownFollowups = computed<IndexedFollowup[]>(() =>
-  (store.active?.followups ?? [])
+  (scope.session.value?.followups ?? [])
     .map((fu, idx) => ({ fu, idx, label: CIRCLED[idx] ?? String(idx + 1) }))
     .filter((x) => x.fu.src === msgIndex.value),
 )
@@ -627,7 +631,7 @@ const openFullscreen = () => {
   const text = plainText.value
   if (!text.trim()) return
   const name = store.active?.title?.trim() || t('sessions.message.fullscreenName')
-  const sid = store.activeId
+  const sid = scope.sessionId.value
   void filePreview.root().then((root) => {
     const item: PreviewRef = { name, kind: 'markdown', text }
     if (root) item.workspaceRoot = root
@@ -638,7 +642,7 @@ const openFullscreen = () => {
       item.quote = {
         add: (sel: string) => store.addQuote(sid, msgIndex.value, sel),
         list: () =>
-          (store.active?.followups ?? []).map((q, i) => ({
+          (scope.session.value?.followups ?? []).map((q, i) => ({
             excerpt: q.excerpt,
             note: q.note,
             remove: () => store.removeQuote(sid, i),

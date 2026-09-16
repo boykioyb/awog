@@ -78,6 +78,9 @@
       <!-- Tasks -->
       <WorkspaceTasks v-else-if="active === 'Tasks'" :session="session" />
 
+      <!-- Group — bảng trạng thái các phiên con của phiên này. -->
+      <WorkspaceGroup v-else-if="active === 'Group'" :session="session" />
+
       <!-- Preview — renders the markdown artifacts this session produced. -->
       <WorkspacePreview v-else-if="active === 'Preview'" :session="session" />
 
@@ -201,6 +204,7 @@ const HANDLED_TABS = new Set([
   'Browser',
   'Plan',
   'Tasks',
+  'Group',
   'Info',
   'Preview',
   'Cost',

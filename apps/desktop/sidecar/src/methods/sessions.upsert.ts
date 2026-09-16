@@ -86,6 +86,16 @@ const SessionSchema = z.object({
   workspaceFolder: z.string().optional(),
   // Soft + hard spend caps.
   budget: BudgetSchema.optional(),
+  // Công tắc tự giao tin trong nhóm (chỉ có nghĩa trên phiên GỐC của nhóm). Là
+  // boolean nên đi được đường patch spread — khác `groupParentId`/`groupRole` ngay bên
+  // dưới.
+  groupAutoDeliver: z.boolean().optional(),
+  // Nhóm của phiên. Chỉ đọc ở nhánh 'create' (phiên sinh ra ĐÃ nằm trong một nhóm —
+  // "Phiên mới trong nhóm này"), CỐ Ý không có trong patch của 'update-metadata':
+  // tách khỏi nhóm phải XOÁ HẲN key, mà patch spread không xoá được key. Đường đổi
+  // nhóm sau lúc tạo là RPC riêng `sessions.setGroup`. Cùng khuôn với `infra`.
+  groupParentId: z.string().optional(),
+  groupRole: z.string().max(60).optional(),
   // Fork lineage.
   parentSessionId: z.string().optional(),
   forkFromMessageId: z.string().optional(),
@@ -152,6 +162,9 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.aboutTaskId !== undefined) base.aboutTaskId = parsed.aboutTaskId
   if (parsed.aboutSshHostId !== undefined) base.aboutSshHostId = parsed.aboutSshHostId
   if (parsed.aboutGhUrl !== undefined) base.aboutGhUrl = parsed.aboutGhUrl
+  if (parsed.groupAutoDeliver !== undefined) base.groupAutoDeliver = parsed.groupAutoDeliver
+  if (parsed.groupParentId !== undefined) base.groupParentId = parsed.groupParentId
+  if (parsed.groupRole !== undefined) base.groupRole = parsed.groupRole
   const budget = toBudget(parsed.budget)
   if (budget) base.budget = budget
   const pinned = toPinnedContext(parsed.pinnedContext)
@@ -211,6 +224,7 @@ register('sessions.upsert', async (raw) => {
   if (session.aboutTaskId !== undefined) patch.aboutTaskId = session.aboutTaskId
   if (session.aboutSshHostId !== undefined) patch.aboutSshHostId = session.aboutSshHostId
   if (session.aboutGhUrl !== undefined) patch.aboutGhUrl = session.aboutGhUrl
+  if (session.groupAutoDeliver !== undefined) patch.groupAutoDeliver = session.groupAutoDeliver
   if (session.pinnedContext !== undefined) patch.pinnedContext = session.pinnedContext
   if (session.workspaceFolder !== undefined) patch.workspaceFolder = session.workspaceFolder
   if (session.budget !== undefined) patch.budget = session.budget

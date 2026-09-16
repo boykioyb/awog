@@ -6,7 +6,19 @@
     @click="onRowClick"
     @contextmenu.prevent="onCtx"
   >
-    <div class="lrow">
+    <div class="lrow" :style="indentStyle">
+      <!-- Nút xoè/thu của chế độ xem "Nhóm". Chỉ hàng CÓ con mới vẽ; hàng không có
+           con cũng không chừa chỗ trống cho nó — cột danh sách hẹp, và cái thụt lề
+           đã nói đủ về tầng. -->
+      <span
+        v-if="hasChildren"
+        class="twisty"
+        :class="{ col: collapsed }"
+        :title="collapsed ? t('sessions.group.expand') : t('sessions.group.collapse')"
+        @click.stop="emit('toggleChildren')"
+      >
+        <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      </span>
       <!-- Checkbox shows ONLY in select mode (or when already selected) — NOT on
            hover (Select now lives in the right-click context menu). Hidden during
            inline rename so the rename input gets the full row. -->
@@ -54,9 +66,25 @@
       <span v-if="session.unread && !editing" class="undot" :title="t('sessions.item.unread')" />
       <span v-if="!editing" class="tm">{{ timeLabel }}</span>
     </div>
-    <div class="sub">
+    <div class="sub" :style="indentStyle">
       <span v-if="!hideProject" class="tag projtag" style="padding: 1px 6px">{{ projName }}</span>
+      <!-- Vai trong nhóm đứng TRƯỚC tên model: khi đã xếp nhóm thì "phiên này làm gì"
+           là thứ phân biệt được các hàng, còn model thì thường giống nhau cả nhóm. -->
+      <span v-if="session.groupRole" class="rolechip">{{ session.groupRole }}</span>
+      <!-- Nhóm này tự giao tin giữa các phiên con. Chỉ hiện trên hàng GỐC (nơi giữ cờ)
+           và chỉ khi nó thật sự có con — một phiên lẻ bật cờ thì không có ai để giao. -->
+      <span
+        v-if="session.groupAutoDeliver && hasChildren"
+        class="autochip"
+        :title="t('sessions.group.autoDeliverBadgeHint')"
+      >
+        <Icon name="zap" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        {{ t('sessions.group.autoDeliverBadge') }}
+      </span>
       <span class="smeta">{{ session.model }}</span>
+      <span v-if="collapsed && descendants" class="smeta">
+        {{ t('sessions.group.hiddenCount', { n: descendants }) }}
+      </span>
       <!-- Indicators + status badge, grouped on the far right (status rightmost). -->
       <span class="subright">
         <!-- Archived rows are hidden until the list filter asks for them, so this chip
@@ -154,11 +182,28 @@ const props = defineProps<{
   // Rename signal from the parent context menu: when `.id` matches this row, the
   // inline rename starts. `n` (nonce) lets the same row be re-triggered.
   renameReq?: { id: number; n: number }
+  // ── Chế độ xem "Nhóm" (cây) — mặc định 0/false nên mọi chế độ khác không đổi gì ──
+  // Tầng trong cây, chỉ dùng để thụt lề.
+  depth?: number
+  // Có phiên con ⇒ vẽ nút xoè/thu ở đầu hàng.
+  hasChildren?: boolean
+  collapsed?: boolean
+  // Số con cháu đang bị giấu khi hàng này thu gọn.
+  descendants?: number
 }>()
 const emit = defineEmits<{
   // Right-click → ask the parent to open the session context menu at the cursor.
   ctxmenu: [payload: { id: number; x: number; y: number }]
+  // Bấm nút xoè/thu của một hàng cha trong chế độ xem "Nhóm".
+  toggleChildren: []
 }>()
+
+// Thụt lề theo tầng. Kẹp ở tầng 6: sâu hơn nữa thì cột danh sách (hẹp tới 240px) chỉ
+// còn lại vài chục pixel cho tiêu đề — cây vẫn đúng, chỉ là không thụt thêm nữa.
+const INDENT_PER_LEVEL = 14
+const indentStyle = computed(() => ({
+  paddingLeft: `${Math.min(props.depth ?? 0, 6) * INDENT_PER_LEVEL}px`,
+}))
 
 const { t } = useI18n()
 const { STATUS_COLOR } = useSessionsData()
@@ -323,6 +368,51 @@ input.ttl {
 }
 .li.unread:not(.on):not(.sel):hover {
   background: var(--bgHover);
+}
+
+/* Nút xoè/thu của chế độ xem "Nhóm". Mũi tên chỉ XUỐNG khi đang xoè và sang PHẢI khi
+   thu — cùng quy ước với header nhóm (.grph .gchv) ở SessionList. */
+.twisty {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--textFaint);
+  transition: transform 0.12s ease;
+}
+.twisty:hover {
+  color: var(--text);
+}
+.twisty.col {
+  transform: rotate(-90deg);
+}
+/* Vai trong nhóm: chip viền, không nền đặc (cùng quy ước với các chip trạng thái yên
+   tĩnh trong hàng — nền đặc dành cho trạng thái cần giành lấy mắt người đọc). */
+.rolechip {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--accentBorder);
+  border-radius: var(--r-pill);
+  color: var(--accent);
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Chip "nhóm này tự giao tin". Dùng tông amber như các trạng thái "đang chờ/chú ý"
+   khác trong hàng: nó nói một việc SẼ tự xảy ra mà không hỏi, nên nó phải đọc được
+   ngay chứ không chìm như chip trung tính. */
+.autochip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border: 1px solid var(--amberBorder);
+  border-radius: var(--r-pill);
+  color: var(--amber);
 }
 
 /* Right-aligned group in the sub-row: indicator chips + status badge, badge rightmost. */

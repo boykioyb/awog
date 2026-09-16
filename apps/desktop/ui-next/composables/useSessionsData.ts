@@ -7,7 +7,7 @@
 // (a sample project, a sample account, a sample diff), so they are gone.
 
 import type { ProviderName } from '~/stores/settings'
-import type { InfraContext, TodoStatus } from '~/types'
+import type { InfraCommandClass, InfraContext, TodoStatus } from '~/types'
 import {
   providerModelsShown,
   providerModelDisplayName,
@@ -216,7 +216,11 @@ export function parsePermSuggestion(raw: unknown): PermRuleSuggestion | undefine
 // và sửa được; cái này là ảnh chụp bất biến của MỘT lời gọi, cộng phán quyết của
 // ma trận (lớp lệnh, kiểu tài khoản, lý do). Giống shape, khác ý nghĩa — gộp lại
 // là trùng lặp ngẫu nhiên.
-export type InfraCommandClass = 'read' | 'write' | 'destructive' | 'context-switch'
+// Lớp lệnh KHÔNG khai lại ở đây: `~/types` đã có, và hai composable cùng xuất một
+// cái tên thì auto-import của Nuxt bỏ bớt một cái — nơi gọi bốc phải định nghĩa
+// nào là do thứ tự quét quyết định. Xuất lại để `SessionGateCard` giữ nguyên đường
+// import, nhưng chỉ còn MỘT chỗ khai.
+export type { InfraCommandClass }
 // KHÔNG export: `useConfirm.ts` đã có `InfraAccountKind` cùng nghĩa, và auto-import
 // của Nuxt chỉ giữ được một cái tên — xuất bản thêm một cái nữa là để nơi gọi bốc
 // nhầm định nghĩa. Người ngoài dùng `InfraPrompt['accountKind']`. Gộp hai chỗ về
@@ -689,6 +693,15 @@ export type Session = {
   // at. Drives the fork-tree graph. Persisted via sessions.upsert (metadata).
   parentSessionId?: string
   forkFromMessageId?: string
+  // ── Nhóm phiên (cây kiểu trang Notion) ────────────────────────────────────
+  // engineId của phiên CHA trong cây nhóm, và vai của phiên này trong nhóm đó.
+  // KHÁC `parentSessionId` (fork lineage) — xem ghi chú ở types/shared.ts. Ghi qua
+  // `sessions.setGroup`, KHÔNG qua sessions.upsert (tách nhóm phải xoá hẳn key).
+  groupParentId?: string
+  groupRole?: string
+  // Tự giao tin trong nhóm. Chỉ có nghĩa trên phiên GỐC của nhóm — nó là công tắc của
+  // cả nhóm. Mặc định TẮT; xem ghi chú ở types/shared.ts.
+  groupAutoDeliver?: boolean
   // ── Engine-bridge fields (IPC path only; unset without a bridge) ──────────
   // Sidecar session id (string). The numeric `id` stays the stable client key
   // for Vue lists; `engineId` is what the RPCs use. Set when hydrated from
@@ -778,6 +791,10 @@ export const modelsForProvider = (provider: Provider): string[] =>
 // longer a group-by option — the active tab IS the project filter. The remaining
 // options sub-group WITHIN a tab.
 const GROUPBY: [string, string][] = [
+  // 'tree' KHÔNG gom theo một thuộc tính như ba cái dưới — nó xếp phiên thành CÂY
+  // theo `groupParentId` (xem useSessionTree). Đặt chung vào đây vì với người dùng
+  // nó là một lựa chọn của cùng cái menu "Gom theo".
+  ['tree', 'Nhóm'],
   ['provider', 'Connection'],
   ['model', 'Model'],
   ['unread', 'Unread'],
@@ -798,6 +815,12 @@ const WPVIEWS: [string, string, string][] = [
   ['Terminal', 'commands', '^`'],
   ['Files', 'folder', '⇧⌘F'],
   ['Tasks', 'tasks', ''],
+  // Bảng trạng thái các phiên CON (docs/features/session-groups.md). Chỉ có nghĩa với
+  // phiên làm cha của một nhóm; với phiên lẻ nó hiện empty state.
+  //
+  // ⚠ Bảng này CHỈ cấp icon + phím tắt. View chỉ MỞ ĐƯỢC khi có tên trong `ALL_VIEWS`
+  // của SessionDetail.vue — hai danh sách tách rời, và quên cái kia thì view tàng hình.
+  ['Group', 'sessions', ''],
   ['Plan', 'rules', ''],
   ['Cost', 'zap', ''],
   ['Info', 'alert', ''],

@@ -115,6 +115,20 @@
               <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('sessions.detail.config') }}
             </div>
+            <!-- Lưới: phiên này + các phiên con, mỗi phiên một ô. Nằm TRONG `⋯` chứ
+                 không phải một nút thường trực — header cố ý chỉ có tiêu đề + đúng hai
+                 điều khiển (xem chú thích đầu file); nút thứ ba làm hàng nút xuống dòng
+                 và tràn khỏi thanh cao cố định. -->
+            <div class="mi" @click="runOverflow(() => (gridMode = !gridMode))">
+              <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ gridMode ? t('sessions.grid.off') : t('sessions.grid.on') }}
+              <Icon
+                v-if="gridMode"
+                name="check"
+                class="ck"
+                style="width: var(--icon-sm); height: var(--icon-sm)"
+              />
+            </div>
             <!-- Ẩn khi chưa resolve được workspace root (browser-dev / phiên không project). -->
             <div v-if="codeRoot" class="mi" @click="runOverflow(openInCode)">
               <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -215,19 +229,25 @@
                 @close="closeFind"
               />
             </div>
+            <!-- Chế độ LƯỚI: phiên này + các phiên con, mỗi phiên một ô có transcript
+                 và composer riêng. Thay CHỖ của transcript + composer đơn, không nằm
+                 cạnh — hai composer cho cùng một phiên trên một màn hình là mơ hồ. -->
+            <SessionGrid v-if="gridMode" :session="session" />
             <SessionTranscript
+              v-else
               :messages="session.msgs"
               :fallback-when="session.when"
               :loading="!!session.loading"
               :suppress-auto-scroll="findOpen"
             />
-            <SessionBackgroundWakeCard :session="session" />
-            <SessionInboxChips :session="session" />
-            <SessionBackgroundChips :session="session" />
+            <SessionBackgroundWakeCard v-if="!gridMode" :session="session" />
+            <SessionInboxChips v-if="!gridMode" :session="session" />
+            <SessionBackgroundChips v-if="!gridMode" :session="session" />
             <!-- Câu hỏi của agent (AskUserQuestion) trượt lên từ composer, ngay trên nó,
                  nên người dùng không phải đi tìm thẻ trong transcript đang cuộn. -->
-            <SessionQuestionDrawer :session="session" />
+            <SessionQuestionDrawer v-if="!gridMode" :session="session" />
             <SessionComposer
+              v-if="!gridMode"
               :attachments="pendingAtt"
               @send="onSend"
               @pick="openPicker"
@@ -369,8 +389,7 @@
 // usage + config popovers reuse the `.dproj` dropdown pattern (one menu open at a
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are presentational.
-import type { Session, SessionAttachment, SlashCommandRef } from '~/composables/useSessionsData'
-import { ATTACHMENT_TEXT_MAX } from '~/composables/useChatAttach'
+import type { Session, SlashCommandRef } from '~/composables/useSessionsData'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import {
   imageSiblingsFromAttachments,
@@ -412,6 +431,8 @@ provideFilePreview(
 // resolves from the PARENT's provides, so a provider can never inject its own entry —
 // it hands the ref to useSessionFind instead.
 const transcriptSurface = provideTranscriptSurface()
+// Phiên của bề mặt này (xem useSessionScope). Ở chế độ LƯỚI mỗi ô tự khai đè lên nó.
+provideSessionScope(() => props.session.id)
 
 // ── Jump to a message asked for from OUTSIDE this surface ────────────────────
 // Cross-session search lives in the list column, a SIBLING of this one, so it cannot
@@ -558,64 +579,17 @@ function onSend(text: string, command?: SlashCommandRef) {
   pendingAtt.value = []
 }
 
-// Pending attachments for the next message. Drag-drop anywhere on the detail and
-// the composer's clip button both push here; the composer renders them as chips.
-const pendingAtt = ref<SessionAttachment[]>([])
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 
-// Images get an object URL; text-like files get their content read — both feed the
-// shared preview modal. Anything else previews as a metadata card.
-const TEXT_EXT =
-  /\.(txt|md|markdown|json|jsonc|ya?ml|toml|csv|tsv|log|ts|tsx|js|jsx|mjs|cjs|vue|css|scss|less|html?|xml|svg|sh|bash|zsh|py|rb|go|rs|java|kt|c|h|cpp|hpp|cs|php|sql|env|ini|conf|gitignore)$/i
-const isTextLike = (f: File) => (f.type || '').startsWith('text/') || TEXT_EXT.test(f.name)
-
-function addFiles(files: FileList | File[]) {
-  for (const f of Array.from(files)) {
-    const mime = f.type || ''
-    const img = mime.startsWith('image/')
-    const isPdf = mime === 'application/pdf' || /\.pdf$/i.test(f.name)
-    // Absolute on-disk path (Electron webUtils) so binary / document files can ride
-    // to the model as a Read-able reference. '' outside the shell / for synthetic
-    // (clipboard) blobs — then a non-text file simply has no way to reach the model.
-    const path = window.awog?.getPathForFile?.(f) || ''
-    const att: SessionAttachment = { name: f.name, img, size: f.size }
-    if (mime) att.mime = mime
-    if (path) att.path = path
-    const idx = pendingAtt.value.push(att) - 1
-    if (img || isPdf) {
-      // Images AND PDFs are read as a base64 `data:` URL: the engine forwards images
-      // as image blocks and PDFs as document blocks (Anthropic path — Pi degrades to
-      // the `path` reference). A `blob:` object URL is dropped before send, so the
-      // model would never receive them. Mirrors the composer's paste path.
-      const reader = new FileReader()
-      reader.onload = () => {
-        const dataUrl = typeof reader.result === 'string' ? reader.result : ''
-        const a = pendingAtt.value[idx]
-        if (a && dataUrl) {
-          a.dataUrl = dataUrl
-          a.src = dataUrl
-        }
-      }
-      reader.readAsDataURL(f)
-    } else if (isTextLike(f)) {
-      void f.text().then((tx) => {
-        const a = pendingAtt.value[idx]
-        if (a) a.text = tx.slice(0, ATTACHMENT_TEXT_MAX)
-      })
-    }
-    // else: binary file with no inline content → rides as a `path` reference (above).
-  }
-}
-function removeAtt(i: number) {
-  const a = pendingAtt.value[i]
-  if (a?.src) URL.revokeObjectURL(a.src)
-  pendingAtt.value.splice(i, 1)
-}
-// Pasted-from-clipboard image (composer @paste → add-att). The composer already
-// built the attachment (name/img/dataUrl/mime/size); just append it here.
-function onAddAtt(a: SessionAttachment) {
-  pendingAtt.value.push(a)
-}
+// Đính kèm đang chờ của composer này. Logic dựng attachment (ảnh/PDF → data URL, file
+// chữ → nội dung, còn lại → tham chiếu path) nằm ở `useComposerAttachments` vì chế độ
+// LƯỚI có composer thứ hai cần đúng nó — hai bản chép tay sẽ trôi khỏi nhau, mà cái
+// trôi đi là "file có tới được model không".
+const att = useComposerAttachments()
+const pendingAtt = att.pending
+const addFiles = att.addFiles
+const removeAtt = att.removeAtt
+const onAddAtt = att.addAtt
 
 // "Add file to chat" from the global PreviewModal arrives via the decoupled
 // useChatAttach channel (the modal must not know about sessions — SoC). Register
@@ -662,7 +636,11 @@ const moreOpen = ref(false)
 // popover; on Save the selection is marked (coloured + numbered) in place.
 // `src` null = selection nằm ngoài một message (AskQuestion, step log…): Translate +
 // Copy MD vẫn dùng được, chỉ Quote (cần neo message) là ẩn.
-type SelQuote = { text: string; src: number | null; x: number; y: number }
+// `sid` = phiên SỞ HỮU đoạn vừa bôi đen. Ở chế độ đơn luôn là phiên này; ở chế độ LƯỚI
+// nó là phiên của Ô người dùng bôi đen, đọc từ `[data-session-id]` mà SessionGridPane
+// gắn. Thiếu nó thì quote đi vào composer phiên cha còn `src` lại là chỉ số message của
+// ô con — hai toạ độ khác hệ quy chiếu.
+type SelQuote = { text: string; src: number | null; sid: number; x: number; y: number }
 const quoteSel = ref<SelQuote | null>(null)
 const notePop = ref<SelQuote | null>(null)
 const noteText = ref('')
@@ -721,7 +699,12 @@ function focusNoteInput() {
 // selection nằm ngoài message thì `src = null` và nút Quote tự ẩn (Translate + Copy
 // MD vẫn hiện). Vẫn phải nằm trong `.chat` để không bật thanh này cho selection ở
 // composer / popover / modal khác.
-function resolveSelectionQuote(): { text: string; src: number | null; rect: DOMRect } | null {
+function resolveSelectionQuote(): {
+  text: string
+  src: number | null
+  sid: number
+  rect: DOMRect
+} | null {
   const sel = window.getSelection()
   const text = sel?.toString().trim() ?? ''
   if (!sel || sel.rangeCount === 0 || !text) return null
@@ -731,7 +714,11 @@ function resolveSelectionQuote(): { text: string; src: number | null; rect: DOMR
   if (!startEl?.closest('.chat')) return null
   const msgEl = startEl.closest('[data-mi]')
   const src = msgEl instanceof HTMLElement ? Number(msgEl.dataset.mi) : null
-  return { text, src, rect: range.getBoundingClientRect() }
+  // Ô lưới gần nhất; không có ⇒ chế độ đơn ⇒ phiên của chính view này.
+  const paneEl = startEl.closest('[data-session-id]')
+  const paneSid = paneEl instanceof HTMLElement ? Number(paneEl.dataset.sessionId) : NaN
+  const sid = Number.isFinite(paneSid) ? paneSid : props.session.id
+  return { text, src, sid, rect: range.getBoundingClientRect() }
 }
 
 // mouseup: anchor the floating Quote button to the top-centre of the selection.
@@ -749,6 +736,7 @@ function onSelectQuote(e: MouseEvent) {
   quoteSel.value = {
     text: q.text,
     src: q.src,
+    sid: q.sid,
     x: q.rect.left + q.rect.width / 2,
     y: q.rect.top - 8,
   }
@@ -763,7 +751,7 @@ function onQuoteContextMenu(e: MouseEvent) {
   if (!q) return
   e.preventDefault()
   mdCopied.value = false
-  quoteSel.value = { text: q.text, src: q.src, x: e.clientX, y: e.clientY }
+  quoteSel.value = { text: q.text, src: q.src, sid: q.sid, x: e.clientX, y: e.clientY }
 }
 
 // Left-click clears the floating Quote button; right-click must NOT clear it, or it
@@ -794,7 +782,10 @@ function onTranslate() {
     sel && sel.rangeCount > 0
       ? sel.getRangeAt(0).getBoundingClientRect()
       : { left: q.x, top: q.y, bottom: q.y, width: 0 }
-  translate.open(q.text, rect, props.session.project)
+  // Ngôn ngữ/LLM mặc định resolve theo project của phiên SỞ HỮU đoạn đó.
+  const owner =
+    q.sid === props.session.id ? props.session : store.sessions.find((s) => s.id === q.sid)
+  translate.open(q.text, rect, owner?.project ?? props.session.project)
   quoteSel.value = null
 }
 
@@ -810,8 +801,11 @@ let mdCopiedTimer: ReturnType<typeof setTimeout> | null = null
 // keeps its text runs as separate blocks (intermediate commentary + the final response),
 // and only ONE of them contains the selection — rawMarkdownForSelection takes the first
 // that matches. A user/system message is a single raw string.
-function selectionSources(mi: number): string[] {
-  const m = props.session.msgs[mi]
+function selectionSources(mi: number, sid: number): string[] {
+  // Markdown gốc phải lấy từ transcript của ĐÚNG phiên đã bôi đen: `mi` là chỉ số
+  // trong transcript ĐÓ, nên đọc nhầm phiên là copy ra markdown của một message khác.
+  const owner = sid === props.session.id ? props.session : store.sessions.find((s) => s.id === sid)
+  const m = owner?.msgs[mi]
   if (!m) return []
   return m.role === 'assistant'
     ? m.blocks.flatMap((b) => (b.kind === 'text' ? [b.text] : []))
@@ -824,7 +818,9 @@ async function onCopyMarkdown() {
   // Ngoài message (src null) không có nguồn markdown để ánh xạ ngược → copy thẳng
   // text đã bôi đen. Trong message thì map về markdown gốc như cũ.
   const md =
-    q.src != null ? (rawMarkdownForSelection(selectionSources(q.src), q.text) ?? q.text) : q.text
+    q.src != null
+      ? (rawMarkdownForSelection(selectionSources(q.src, q.sid), q.text) ?? q.text)
+      : q.text
   try {
     await navigator.clipboard.writeText(md)
   } catch {
@@ -961,7 +957,9 @@ function saveQuote() {
   // src null không tới được đây (nút Quote ẩn ngoài message), nhưng addQuote cần một
   // chỉ số message — chặn tường minh thay vì ép kiểu.
   if (!np || np.src == null) return
-  store.addQuote(props.session.id, np.src, np.text, noteText.value.trim())
+  // Quote đi vào phiên SỞ HỮU đoạn được bôi đen, không phải phiên của view này — ở
+  // chế độ lưới hai thứ đó khác nhau.
+  store.addQuote(np.sid, np.src, np.text, noteText.value.trim())
   window.getSelection()?.removeAllRanges()
   notePop.value = null
   noteText.value = ''
@@ -1071,6 +1069,15 @@ function onDrop(e: DragEvent) {
 const settings = useSettingsStore()
 const wpOpen = ref(false)
 
+// ⚠ Danh sách này là thứ QUYẾT ĐỊNH view nào mở được, không phải `WPVIEWS` trong
+// useSessionsData (cái đó chỉ cấp icon + phím tắt). Thêm view mà quên thêm vào đây
+// thì component có tồn tại cũng không có đường nào bấm tới.
+// ── Chế độ lưới (docs/features/session-groups.md) ────────────────────────────
+// Không persist: lưới là cách NHÌN của lúc này, và mở lại một phiên vào thẳng lưới
+// khi người dùng chỉ muốn đọc transcript thì hại hơn lợi. Ô nào hiện TRONG lưới thì
+// có nhớ (SessionGrid tự lo).
+const gridMode = ref(false)
+
 const ALL_VIEWS = [
   'Diff',
   'Files',
@@ -1078,6 +1085,7 @@ const ALL_VIEWS = [
   'Browser',
   'Plan',
   'Tasks',
+  'Group',
   'Preview',
   'Cost',
   'Info',

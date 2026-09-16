@@ -10,14 +10,68 @@
         <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <input v-model="filter" :placeholder="t('sessions.search.placeholder')" />
       </div>
-      <button
-        class="iconbtn"
-        :title="t('sessions.new')"
-        style="width: 28px; height: 28px"
-        @click="store.create(store.activeTab || undefined)"
-      >
-        <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      <!-- Tạo phiên. KHÔNG thêm nút thứ hai cạnh nó — header này chỉ vừa đúng ba điều
+           khiển (ô tìm · + · ⋯). Thay vào đó `+` mở một menu: phiên đơn · phiên con của
+           phiên đang mở (tạo nhóm mới) · hoặc thả vào một nhóm đã có. Chỉ khi KHÔNG có
+           lựa chọn nào (chưa mở phiên nào, chưa có nhóm nào) nó mới tạo thẳng. Anchor là
+           span RIÊNG của nút này — dùng chung span với nút khác thì hai nút xuống dòng. -->
+      <span style="position: relative">
+        <button
+          class="iconbtn"
+          :title="hasChoice ? t('sessions.newIn.tooltip') : t('sessions.new')"
+          style="width: 28px; height: 28px"
+          :style="newMenu ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}"
+          @click.stop="onNewClick"
+        >
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </button>
+        <div
+          v-if="newMenu"
+          style="position: fixed; inset: 0; z-index: 40"
+          @click="newMenu = false"
+        />
+        <!-- `.list` có `overflow:hidden`, nên một menu absolute rộng hơn cột (280px) bị
+             CẮT chứ không tràn ra ngoài. Vì vậy: menu kẹp bề rộng, và mọi nhãn mang tên
+             phiên đều truncate — tên đầy đủ nằm ở `title`. -->
+        <div
+          v-if="newMenu"
+          class="smenu newmenu"
+          style="position: absolute; top: 116%; right: 0; z-index: 50"
+          @click.stop
+        >
+          <div class="mi" @click="createNew(null)">
+            <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t('sessions.newIn.standalone') }}
+          </div>
+          <!-- Phiên đang mở CHƯA là nhóm: cho tạo con ngay dưới nó. Đây là đường DUY
+               NHẤT tạo một nhóm mới từ chỗ này — không có nó thì "thêm vào nhóm" chỉ
+               dùng được sau khi đã đi xếp nhóm bằng chuột phải ở chỗ khác. -->
+          <div
+            v-if="activeAsParent"
+            class="mi"
+            :title="activeAsParent.title"
+            @click="createNew(activeAsParent)"
+          >
+            <Icon name="fork" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <span class="nmt">{{ t('sessions.newIn.underActive') }}</span>
+          </div>
+          <template v-if="groupTargets.length">
+            <div class="msep" />
+            <div class="nmlbl">{{ t('sessions.newIn.groupLabel') }}</div>
+          </template>
+          <div
+            v-for="g in groupTargets"
+            :key="g.engineId"
+            class="mi"
+            :title="g.title"
+            @click="createNew(g)"
+          >
+            <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <span class="nmt">{{ g.title }}</span>
+            <span v-if="g.current" class="kb">{{ t('sessions.newIn.currentGroup') }}</span>
+          </div>
+        </div>
+      </span>
       <!-- Overflow (session-ui-refactor §3.8): chế độ chọn · bộ lọc · gấp tất cả.
            Ba thao tác dùng vài lần một tuần nhưng đang chiếm chỗ thường trực ngang
            hàng với nút tạo phiên — thứ được bấm mỗi ngày. -->
@@ -220,6 +274,55 @@
         </template>
         <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
       </template>
+      <!-- Chế độ "Nhóm": cây kiểu trang Notion, phiên con nằm dưới phiên cha. Cây đã
+           được làm phẳng thành mảng có `depth` (useSessionTree) nên đây vẫn là MỘT
+           v-for phẳng — hàng phiên giữ nguyên rename inline / select / context menu. -->
+      <template v-else-if="groupBy === 'tree'">
+        <template v-if="treeRows.length">
+          <div class="grpitems" style="padding-top: 4px">
+            <SessionListItem
+              v-for="r in treeRows"
+              :key="r.session.id"
+              :session="r.session"
+              :active="r.session.id === activeId"
+              :selecting="store.selecting"
+              hide-project
+              :rename-req="renameReq"
+              :depth="r.depth"
+              :has-children="r.hasChildren"
+              :collapsed="r.collapsed"
+              :descendants="r.descendants"
+              @click="$emit('select', r.session.id)"
+              @ctxmenu="(p) => openCtx(p, r.session)"
+              @toggle-children="toggleTree(r.session.engineId)"
+            />
+          </div>
+          <div v-if="treeTotalPages > 1" class="pager">
+            <button
+              class="pgbtn"
+              type="button"
+              :disabled="treePage <= 1"
+              :title="t('sessions.list.pagePrev')"
+              @click="setTreePage(treePage - 1)"
+            >
+              <Icon name="chev" class="pg-prev" />
+            </button>
+            <span class="pglbl">
+              {{ t('sessions.list.pageOf', { page: treePage, total: treeTotalPages }) }}
+            </span>
+            <button
+              class="pgbtn"
+              type="button"
+              :disabled="treePage >= treeTotalPages"
+              :title="t('sessions.list.pageNext')"
+              @click="setTreePage(treePage + 1)"
+            >
+              <Icon name="chev" class="pg-next" />
+            </button>
+          </div>
+        </template>
+        <div v-else class="listempty">{{ t('sessions.list.noMatch') }}</div>
+      </template>
       <template v-else>
         <template v-if="groups.length">
           <div
@@ -327,6 +430,14 @@
       @click="closeMenus"
     />
 
+    <SessionGroupPicker
+      v-if="groupPickerFor"
+      :session="groupPickerFor"
+      :sessions="props.sessions"
+      @pick="applyGroupPick"
+      @close="groupPickerFor = null"
+    />
+
     <!-- Right-click context menu (one shared menu, positioned at the cursor). -->
     <template v-if="ctx">
       <div
@@ -376,6 +487,32 @@
           <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.export') }}
         </div>
+        <!-- Nhóm phiên: xếp phiên này xuống dưới một phiên cha (hoặc đổi vai của nó).
+             Hiện ở MỌI chế độ xem, không chỉ chế độ "Nhóm" — xếp nhóm là thao tác trên
+             dữ liệu, không phải trên cách đang nhìn. -->
+        <div class="mi" @click="ctxGroup">
+          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{
+            ctx.session.groupParentId
+              ? t('sessions.ctx.changeGroup')
+              : t('sessions.ctx.moveToGroup')
+          }}
+        </div>
+        <!-- Tự giao tin trong nhóm. CHỈ hiện trên phiên GỐC của nhóm (phiên có con và
+             không có cha): cờ nằm ở gốc và là công tắc của cả nhóm, nên hiện nó ở một
+             phiên con sẽ hứa một thứ mà bấm vào không có tác dụng. -->
+        <div v-if="ctxIsGroupRoot" class="mi" @click="ctxToggleAutoDeliver">
+          <Icon name="zap" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{
+            ctx.session.groupAutoDeliver
+              ? t('sessions.group.autoDeliverOff')
+              : t('sessions.group.autoDeliverOn')
+          }}
+        </div>
+        <div v-if="ctx.session.groupParentId" class="mi" @click="ctxUngroup">
+          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{ t('sessions.group.detach') }}
+        </div>
         <!-- Move the session to its own OS window / bring it back (popout hand-off). -->
         <div v-if="ctxCanWindow" class="mi" @click="ctxWindow">
           <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -410,7 +547,7 @@
 
 <script setup lang="ts">
 // Session list column for the active project tab: search, a group-by drawer
-// (provider/model/unread/none — project grouping now lives in the SessionTabBar),
+// (tree/provider/model/unread/none — project grouping now lives in the SessionTabBar),
 // select mode + bulk bar, and a per-row context menu. The page passes
 // `store.tabSessions` (the active tab's sessions), so this list is always scoped to
 // one project; rows hide their project label since the tab already names it.
@@ -719,6 +856,94 @@ function closeMenus() {
   sortMenu.value = false
 }
 
+// ── Tạo phiên: đơn, hay nằm trong một nhóm ───────────────────────────────────
+// Menu liệt kê MỌI nhóm đang có, không chỉ nhóm của phiên đang mở. Bản đầu gate theo
+// "phiên đang mở có thuộc nhóm không" — nên đứng ở một phiên lẻ là `+` tạo thẳng và
+// người dùng không bao giờ thấy dropdown. Gate đúng là "có nhóm nào tồn tại không":
+// không có nhóm nào thì menu chỉ còn một mục thật, mở ra cũng để làm gì.
+//
+// Quét TOÀN BỘ store chứ không phải `props.sessions` (đã lọc theo tab project): một
+// nhóm không nhất thiết nằm trong project đang mở.
+const newMenu = ref(false)
+
+type GroupTarget = { engineId: string; title: string; project: string; current: boolean }
+const groupTargets = computed<GroupTarget[]>(() => {
+  const all = store.sessions
+  const active = all.find((s) => s.id === props.activeId)
+  const activeRoot = active ? store.groupRootEid(active) : undefined
+  // Gốc nhóm = phiên không có cha VÀ có ít nhất một con.
+  const parents = new Set(all.map((s) => s.groupParentId).filter(Boolean) as string[])
+  return (
+    all
+      .filter((s) => s.engineId && !s.groupParentId && parents.has(s.engineId))
+      .map((s) => ({
+        engineId: s.engineId as string,
+        title: s.title,
+        project: s.project,
+        current: s.engineId === activeRoot,
+      }))
+      // Nhóm của phiên đang mở lên đầu — đó là thứ người dùng hay chọn nhất.
+      .sort((a, b) => Number(b.current) - Number(a.current))
+  )
+})
+
+// Phiên đang mở, khi nó CHƯA phải gốc của một nhóm nào (những gốc đó đã nằm trong
+// `groupTargets`). Chọn mục này biến nó thành gốc — tức tạo nhóm ngay tại đây.
+const activeAsParent = computed<GroupTarget | null>(() => {
+  const active = store.sessions.find((s) => s.id === props.activeId)
+  if (!active?.engineId) return null
+  // Nhóm chỉ có HAI CẤP: một phiên đã là con thì không làm cha được. Nhóm của nó đã
+  // nằm trong `groupTargets` rồi, nên người dùng vẫn thêm được vào đúng nhóm đó.
+  if (active.groupParentId) return null
+  if (groupTargets.value.some((g) => g.engineId === active.engineId)) return null
+  return {
+    engineId: active.engineId,
+    title: active.title,
+    project: active.project,
+    current: false,
+  }
+})
+
+// Có gì để CHỌN không. Không có thì `+` tạo thẳng — mở một menu chỉ có đúng một mục
+// thật là bắt người dùng bấm thêm một nhát để không được lựa chọn gì.
+const hasChoice = computed(() => groupTargets.value.length > 0 || activeAsParent.value !== null)
+
+function onNewClick() {
+  if (hasChoice.value) newMenu.value = !newMenu.value
+  else createNew(null)
+}
+// Phiên con sinh ra trong project của CHÍNH NHÓM, không phải tab đang mở: xếp một phiên
+// vào nhóm ở project khác rồi để nó mang project khác là tự tạo một hàng mồ côi.
+function createNew(target: GroupTarget | null) {
+  newMenu.value = false
+  if (target) store.create(target.project || undefined, undefined, target.engineId)
+  else store.create(store.activeTab || undefined)
+}
+
+// ── Chế độ xem "Nhóm" (cây kiểu trang Notion) ─────────────────────────────────
+// Dựng trên `filtered` nên tìm kiếm + "Sort by" + bộ lọc lưu trữ vẫn có tác dụng
+// BÊN TRONG cây; phân trang của cây đếm theo GỐC (một nhóm không bị cắt đôi giữa
+// hai trang) nên nó không dùng chung `pageIndex` với các chế độ gom nhóm kia.
+const {
+  rows: treeRows,
+  page: treePage,
+  totalPages: treeTotalPages,
+  setPage: setTreePage,
+  toggle: toggleTree,
+} = useSessionTree(() => filtered.value)
+
+// Phiên đang mở hộp chọn nhóm (null = hộp đóng).
+const groupPickerFor = ref<Session | null>(null)
+
+// Đóng hộp NGAY khi chọn, không đợi RPC: thao tác sai (chu trình, phiên chưa lưu) đã
+// được lọc khỏi danh sách ứng viên và vẫn bị sidecar chặn, còn giữ hộp mở trong lúc
+// chờ thì người dùng bấm được lần thứ hai vào một dòng khác.
+function applyGroupPick(parentClientId: number | null, role: string | null) {
+  const s = groupPickerFor.value
+  groupPickerFor.value = null
+  if (s) void store.setGroupParent(s.id, parentClientId, role)
+}
+
 // ── Right-click context menu ───────────────────────────────────────────────────
 // One shared menu positioned at the cursor. `renameReq` signals a row to start its
 // inline rename (the edit state is local to SessionListItem).
@@ -734,6 +959,27 @@ function openCtx(p: { id: number; x: number; y: number }, s: Session) {
   nextTick(() => {
     ctxStyle.value = placeMenu(ctxMenuEl.value, p.x, p.y)
   })
+}
+function ctxGroup() {
+  groupPickerFor.value = ctx.value?.session ?? null
+  ctx.value = null
+}
+// Phiên được bấm có phải GỐC của một nhóm không: không có cha, và có ít nhất một
+// phiên nhận nó làm cha. Một phiên lẻ (không cha không con) KHÔNG phải gốc nhóm —
+// bật tự giao ở đó chẳng có ai để giao.
+const ctxIsGroupRoot = computed(() => {
+  const s = ctx.value?.session
+  if (!s?.engineId || s.groupParentId) return false
+  return props.sessions.some((x) => x.groupParentId === s.engineId)
+})
+function ctxToggleAutoDeliver() {
+  if (ctx.value) store.toggleGroupAutoDeliver(ctx.value.session.id)
+  ctx.value = null
+}
+function ctxUngroup() {
+  const s = ctx.value?.session
+  ctx.value = null
+  if (s) void store.setGroupParent(s.id, null)
 }
 function ctxOpen() {
   if (ctx.value) emit('select', ctx.value.session.id)
@@ -864,6 +1110,31 @@ function toggleFoldAll() {
 </script>
 
 <style scoped>
+/* Menu tạo phiên sống TRONG `.list` (overflow:hidden), nên nó không được rộng hơn cột.
+   240px vừa khít cột hẹp nhất mà danh sách có thể bị kéo xuống. */
+.newmenu {
+  max-width: 240px;
+}
+.newmenu .mi {
+  min-width: 0;
+}
+/* Nhãn nhóm mục. KHÔNG dùng `.cslbl` — class đó là cột nhãn của drawer bộ lọc và có
+   `width: 62px`, nên "Trong nhóm" bị bẻ làm hai dòng. */
+.nmlbl {
+  padding: 4px 10px;
+  color: var(--textDim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+}
+/* Nhãn mang tên phiên: một dòng, cắt bằng ellipsis. Tên đầy đủ ở `title`. */
+.nmt {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 /* In select mode every row's checkbox stays visible (the shared prototype.css
    only reveals .lcbox on hover / when selected). :deep reaches the child rows. */
 .list.selecting :deep(.lcbox) {

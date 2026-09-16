@@ -458,6 +458,34 @@ export interface Session {
   // (id) it forked at. Set by sessions.fork / upsert; drives the fork-tree graph.
   parentSessionId?: string
   forkFromMessageId?: string
+  // Gom nhóm phiên (kiểu cây trang Notion): id của phiên CHA trong cây nhóm, và
+  // vai của phiên này bên trong nhóm đó ("Reviewer", "Điều phối"…).
+  //
+  // CỐ Ý tách khỏi `parentSessionId` dù cả hai đều là "cha": fork lineage ghi lại
+  // một phiên được SAO ra từ đâu (SessionForkGraph vẽ đúng cái đó), còn nhóm là
+  // việc người dùng tự xếp các phiên ĐỘC LẬP vào với nhau. Dùng chung một field thì
+  // mỗi lần fork một phiên sẽ tự ý thêm một thành viên vào nhóm, và tách một phiên
+  // khỏi nhóm sẽ xoá mất lịch sử fork của nó.
+  //
+  // Nhóm KHÔNG có tên riêng: tên nhóm CHÍNH LÀ tiêu đề của phiên cha, nên không có
+  // entity thứ hai nào phải đặt tên, đổi tên hay dọn rác khi phiên cha bị xoá.
+  // Đường ghi duy nhất là RPC `sessions.setGroup` (tách nhóm phải XOÁ HẲN key, mà
+  // patch kiểu spread của updateMetadata không xoá được key — cùng lý do với
+  // setArchived/setInfra).
+  groupParentId?: string
+  groupRole?: string
+  // Tự giao tin TRONG nhóm (hướng A — phiên điều phối phiên). Chỉ có nghĩa trên phiên
+  // GỐC của nhóm: nó là công tắc của cả nhóm, và phiên con đọc cờ của gốc.
+  //
+  // Mặc định TẮT. Bật lên là mở đúng cánh cửa mà session-messaging P1 cố ý đóng
+  // ("không lượt LLM nào chạy sau lưng người dùng") — nên nó chỉ mở được BÊN TRONG một
+  // nhóm do chính người dùng tự tay lập, tức một ranh giới đồng thuận tường minh, và
+  // vẫn bị trần số lượt của nhóm chặn ở renderer.
+  //
+  // Là boolean nên KHÔNG cần RPC riêng như `groupParentId`: `false` là một giá trị
+  // thật chứ không phải "xoá key", nên nó đi được đường patch spread của
+  // updateSessionMetadata y như `pinned`.
+  groupAutoDeliver?: boolean
   // Task this session was opened to discuss (ADR 0055). When set, buildContext
   // injects a <linked_task> block (the task's latest output + a trace summary)
   // each turn so the agent can reason about the task's results. Absent for a
@@ -563,6 +591,15 @@ export interface SessionSummary {
   // can be built from sessions.list without loading every transcript. Mirrors
   // Session.parentSessionId.
   parentSessionId?: string
+  // Cha trong cây nhóm + vai trong nhóm — mirrors Session.groupParentId/groupRole.
+  // Có mặt trên hàng danh sách vì chế độ xem "Nhóm" của danh sách phiên dựng cả cây
+  // từ `sessions.list`, KHÔNG được nạp transcript của từng phiên để biết ai là con ai.
+  groupParentId?: string
+  groupRole?: string
+  // Công tắc tự giao tin trong nhóm — mirrors Session.groupAutoDeliver. Có trên hàng
+  // danh sách vì renderer phải quyết định tự giao hay không NGAY khi tin tới, kể cả khi
+  // phiên gốc của nhóm chưa được mở lần nào trong phiên làm việc này.
+  groupAutoDeliver?: boolean
   // True when a compaction checkpoint exists — lets the UI badge it without
   // loading the transcript.
   hasCompaction?: boolean

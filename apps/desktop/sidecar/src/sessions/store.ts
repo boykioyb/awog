@@ -123,6 +123,18 @@ export async function setSessionInfra(id: string, infra: InfraContext): Promise<
   return sessionManager.setInfra(id, infra)
 }
 
+// Xếp một phiên vào nhóm dưới phiên cha (kèm vai), hoặc tách khỏi nhóm khi
+// `parentId === null`. Trả về mã lỗi của manager (chu trình / cha lạ / tự làm cha
+// của chính mình) để RPC dịch thành thông báo đúng thay vì một câu "không tìm thấy".
+export async function setSessionGroup(
+  id: string,
+  parentId: string | null,
+  role: string | null,
+): Promise<Awaited<ReturnType<typeof sessionManager.setGroup>>> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setGroup(id, parentId, role)
+}
+
 // Đọc thô các dòng JSONL của một phiên (nền cho `sessions.listEvents`). `null` khi
 // file chưa tồn tại. ensureLoaded() chạy trước để migration legacy→format mới đã xong,
 // nếu không ta sẽ đọc đúng file mà app sắp thay thế.

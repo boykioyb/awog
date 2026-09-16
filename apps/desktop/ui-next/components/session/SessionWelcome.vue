@@ -69,6 +69,7 @@
 // conversation…" text. Seeds via store.seedComposer (the composer watches it).
 const { t } = useI18n()
 const store = useSessionsStore()
+const scope = useSessionScope()
 const { projectName } = useProjects()
 const { isCute } = useThemeFamily()
 
@@ -89,7 +90,9 @@ const suggestions = computed<Suggestion[]>(() =>
 )
 
 function useSuggestion(prompt: string) {
-  store.seedComposer(prompt)
+  // Gửi kèm phiên của transcript chứa component này: ở chế độ LƯỚI, bấm ở ô nào thì
+  // chỉ composer của ô ĐÓ nhận (useSessionScope).
+  store.seedComposer(prompt, scope.sessionId.value)
 }
 </script>
 
