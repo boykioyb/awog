@@ -61,7 +61,13 @@
       </div>
 
       <p v-if="!sidecarAvailable" class="ixa-state">{{ t('infra.trail.noSidecar') }}</p>
-      <p v-else-if="!hasAccount" class="ixa-state">{{ t('infra.trail.noProfile') }}</p>
+      <InfraEmpty
+        v-else-if="!hasAccount"
+        :title="t('infra.empty.noProfile.title')"
+        :hint="t('infra.empty.noProfile.hint.trail')"
+        action="accounts"
+        :action-label="t('infra.empty.noProfile.action')"
+      />
       <p v-else-if="error" class="ixa-state err">{{ errorText }}</p>
 
       <template v-else-if="report">
@@ -119,6 +125,7 @@
 <script setup lang="ts">
 // Lớp bind của khối CloudTrail. Mọi state + RPC ở `useInfraTrail()`.
 import { computed, ref } from 'vue'
+import InfraEmpty from '~/components/infra/InfraEmpty.vue'
 import { useInfraTrail } from '~/composables/useInfraTrail'
 
 const { t } = useI18n()

@@ -248,5 +248,11 @@
   "infra.kube.report.readyPct": "{n}% sẵn sàng",
   "infra.kube.report.finished": "{n} pod đã chạy xong",
   "infra.kube.footnote": "Danh tính kubectl dùng nằm trong chính kubeconfig: token/chứng chỉ tĩnh, hoặc exec plugin aws eks get-token (khi đó AWOG luồn profile đã ghim của phiên vào env của kubectl). Màn chỉ đọc trừ khi bạn bấm một hành động — và mọi lệnh đều vào nhật ký hoạt động.",
-  "infra.kube.footnote.title": "Danh tính kubectl dùng"
+  "infra.kube.footnote.title": "Danh tính kubectl dùng",
+  "infra.empty.noProfile.title": "Chưa chọn tài khoản AWS",
+  "infra.empty.noProfile.action": "Mở tab Tài khoản",
+  "infra.empty.noProfile.hint.cost": "Màn này hỏi Cost Explorer bằng đúng profile bạn chọn, nên chưa chọn thì chưa có gì để hỏi.",
+  "infra.empty.noProfile.hint.trail": "CloudTrail được tra trên tài khoản của profile đang chọn.",
+  "infra.empty.noProfile.hint.charts": "Biểu đồ đọc metric bằng profile đang chọn.",
+  "infra.empty.noProfile.hint.logs": "Màn này đọc log bằng đúng profile bạn chọn."
 }

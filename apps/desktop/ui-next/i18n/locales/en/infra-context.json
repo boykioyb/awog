@@ -248,5 +248,11 @@
   "infra.kube.report.readyPct": "{n}% ready",
   "infra.kube.report.finished": "{n} pod(s) finished",
   "infra.kube.footnote": "The identity kubectl uses lives in the kubeconfig itself: a static token/certificate, or the exec plugin aws eks get-token (in that case AWOG passes the session its pinned profile into kubectl its environment). This screen is read-only until you press an action — and every command lands in the activity log.",
-  "infra.kube.footnote.title": "The identity kubectl uses"
+  "infra.kube.footnote.title": "The identity kubectl uses",
+  "infra.empty.noProfile.title": "No AWS account picked yet",
+  "infra.empty.noProfile.action": "Open the Accounts tab",
+  "infra.empty.noProfile.hint.cost": "This screen asks Cost Explorer using the profile you pick, so until you pick one there is nothing to ask.",
+  "infra.empty.noProfile.hint.trail": "CloudTrail is queried on the account behind the selected profile.",
+  "infra.empty.noProfile.hint.charts": "Charts read metrics using the selected profile.",
+  "infra.empty.noProfile.hint.logs": "This screen reads logs using the profile you pick."
 }

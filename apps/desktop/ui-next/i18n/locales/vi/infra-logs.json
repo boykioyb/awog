@@ -1,5 +1,4 @@
 {
-  "infra.logs.noProfile": "Chưa chọn tài khoản AWS. Mở tab Tài khoản để chọn profile rồi quay lại — màn này đọc log bằng đúng profile đó.",
   "infra.logs.editor.label": "Câu truy vấn",
   "infra.logs.editor.hint": "Chọn nhóm log, gõ câu lệnh, rồi bấm Chạy (⌘/Ctrl+Enter). Đang chạy thì bấm ⌘/Ctrl+. để hủy. AWOG không tự chạy.",
   "infra.logs.editor.loading": "Đang nạp editor…",

@@ -15,7 +15,6 @@
   "infra.trail.lookup": "Look up",
   "infra.trail.matchedWhy": "Matched to an AWOG log line at {at}. The match is inferred from the operation name and timing — there is no shared id — so treat it as a strong hint, not proof.",
   "infra.trail.more": "more events exist — narrow the window",
-  "infra.trail.noProfile": "No AWS profile selected.",
   "infra.trail.noSidecar": "The engine is not running, so CloudTrail cannot be queried.",
   "infra.trail.origin.awog": "AWOG",
   "infra.trail.origin.external": "elsewhere",

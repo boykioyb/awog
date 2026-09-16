@@ -69,7 +69,7 @@
   "infra.tab.cost": "Tháng này",
   "infra.tab.dashboards": "Bảng điều khiển",
   "infra.tab.delivery": "Triển khai",
-  "infra.tab.graph": "Topology",
+  "infra.tab.graph": "Sơ đồ",
   "infra.tab.kubernetes": "Kubernetes",
   "infra.tab.label": "Các mục AWS",
   "infra.tab.logs": "Logs",

@@ -2,10 +2,13 @@
   <div class="lgs">
     <!-- ── Cột trái: chọn nguồn + thư viện ─────────────────────────────────── -->
     <aside class="lgs-side">
-      <div v-if="!profile" class="lgs-nocontext">
-        <Icon name="alert" class="lgs-nocontext-ic" />
-        <p class="lgs-nocontext-txt">{{ t('infra.logs.noProfile') }}</p>
-      </div>
+      <InfraEmpty
+        v-if="!profile"
+        :title="t('infra.empty.noProfile.title')"
+        :hint="t('infra.empty.noProfile.hint.logs')"
+        action="accounts"
+        :action-label="t('infra.empty.noProfile.action')"
+      />
 
       <template v-else>
         <div class="lgs-ctx">
@@ -477,30 +480,6 @@ onBeforeUnmount(() => {
   gap: 8px;
   min-height: 0;
   overflow-y: auto;
-}
-
-.lgs-nocontext {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 24px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  color: var(--textDim);
-  text-align: center;
-}
-
-.lgs-nocontext-ic {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-  color: var(--amber);
-}
-
-.lgs-nocontext-txt {
-  margin: 0;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-md);
 }
 
 .lgs-ctx {

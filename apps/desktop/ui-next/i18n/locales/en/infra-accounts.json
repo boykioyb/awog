@@ -69,7 +69,7 @@
   "infra.tab.cost": "This month",
   "infra.tab.dashboards": "Dashboards",
   "infra.tab.delivery": "Deploys",
-  "infra.tab.graph": "Topology",
+  "infra.tab.graph": "Map",
   "infra.tab.kubernetes": "Kubernetes",
   "infra.tab.label": "AWS sections",
   "infra.tab.logs": "Logs",

@@ -194,7 +194,13 @@
         <span v-if="dirty" class="iwarn">{{ t('infra.dashboard.dirty') }}</span>
       </div>
 
-      <p v-if="!hasAccount" class="ierr">{{ t('infra.monitoring.noProfile') }}</p>
+      <InfraEmpty
+        v-if="!hasAccount"
+        :title="t('infra.empty.noProfile.title')"
+        :hint="t('infra.empty.noProfile.hint.charts')"
+        action="accounts"
+        :action-label="t('infra.empty.noProfile.action')"
+      />
       <p v-else-if="error" class="ierr">{{ error }}</p>
 
       <!-- Luật 4 của infra-README: chip câu hỏi. Tắt khi bảng chưa nạp số liệu —

@@ -22,7 +22,13 @@
     </header>
 
     <p v-if="!sidecarAvailable" class="icst-state">{{ t('infra.cost.noSidecar') }}</p>
-    <p v-else-if="!hasAccount" class="icst-state">{{ t('infra.cost.noProfile') }}</p>
+    <InfraEmpty
+      v-else-if="!hasAccount"
+      :title="t('infra.empty.noProfile.title')"
+      :hint="t('infra.empty.noProfile.hint.cost')"
+      action="accounts"
+      :action-label="t('infra.empty.noProfile.action')"
+    />
 
     <template v-else>
       <InfraCostMonth v-if="view === 'cost'" />
@@ -52,6 +58,7 @@
 // Vỏ của nhóm Chi phí: cổng kiểm + chọn tab con + chip câu hỏi. Không giữ state
 // riêng — `useInfraCost()` là singleton cấp module nên ba tab con dùng chung một
 // kho, và đổi tab không làm mất số đã tải hay lựa chọn đang tick.
+import InfraEmpty from '~/components/infra/InfraEmpty.vue'
 import InfraCostBudgets from '~/components/infra/cost/InfraCostBudgets.vue'
 import InfraCostMonth from '~/components/infra/cost/InfraCostMonth.vue'
 import InfraCostWaste from '~/components/infra/cost/InfraCostWaste.vue'

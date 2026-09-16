@@ -1,5 +1,4 @@
 {
-  "infra.logs.noProfile": "No AWS account selected. Open the Accounts tab, pick a profile, then come back — this screen reads logs with that profile.",
   "infra.logs.editor.label": "Query",
   "infra.logs.editor.hint": "Pick log groups, write a query, then press Run (⌘/Ctrl+Enter). While it runs, ⌘/Ctrl+. cancels. AWOG never runs on its own.",
   "infra.logs.editor.loading": "Loading editor…",

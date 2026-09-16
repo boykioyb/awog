@@ -15,7 +15,6 @@
   "infra.trail.lookup": "Tra",
   "infra.trail.matchedWhy": "Khớp với một dòng sổ AWOG lúc {at}. Phép khớp SUY RA từ tên thao tác và thời gian — hai sổ không có id chung — nên hãy đọc nó như một dấu hiệu mạnh, không phải bằng chứng.",
   "infra.trail.more": "còn sự kiện nữa — thu hẹp khoảng thời gian",
-  "infra.trail.noProfile": "Chưa chọn profile AWS.",
   "infra.trail.noSidecar": "Engine chưa chạy nên không tra CloudTrail được.",
   "infra.trail.origin.awog": "AWOG",
   "infra.trail.origin.external": "nơi khác",
