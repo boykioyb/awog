@@ -151,27 +151,6 @@
             <p class="ixe-about">{{ t(activeView.about) }}</p>
           </div>
           <div class="ixe-hd-acts">
-            <!-- Hai bộ cột (task 3.2), nhớ theo người dùng. -->
-            <div class="seg">
-              <span
-                :class="{ on: columnMode === 'simple' }"
-                role="button"
-                tabindex="0"
-                @click="setColumnMode('simple')"
-                @keydown.enter="setColumnMode('simple')"
-              >
-                {{ t('infra.explorer.columns.simple') }}
-              </span>
-              <span
-                :class="{ on: columnMode === 'full' }"
-                role="button"
-                tabindex="0"
-                @click="setColumnMode('full')"
-                @keydown.enter="setColumnMode('full')"
-              >
-                {{ t('infra.explorer.columns.full') }}
-              </span>
-            </div>
             <!-- Form nhỏ của view (task 3.6): tạo bucket/thư mục, tải lên, presign.
                  Nút cũng bị ẩn khi dò quyền từ chối (task 3.3) — lý do giống nút
                  ghi trên dòng. -->
@@ -329,8 +308,6 @@ const {
   isFolded,
   activeView,
   openView,
-  columnMode,
-  setColumnMode,
   columns,
   sidebarCollapsed,
   sidebarWidth,

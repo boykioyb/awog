@@ -23,6 +23,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useConfirm } from '~/composables/useConfirm'
 import { useInfraContext } from '~/composables/useInfraContext'
 import { useInfraGraphApi } from '~/composables/useInfraGraphApi'
+import { useInfraMode, type InfraMode } from '~/composables/useInfraMode'
 import { useI18n } from '~/composables/useI18n'
 import {
   buildImpact,
@@ -59,10 +60,12 @@ const GRAPH_DEPTH = 3
 const RUNS_LIMIT = 20
 /** Trần `projectIds` của `-list`. Vượt trần là cả lời gọi bị schema từ chối. */
 const MAX_PROJECT_IDS = 50
-/** Chế độ đọc của trang, nhớ theo người dùng (luật 1). */
-const MODE_KEY = 'awog.playbooks.mode'
-
-export type PlaybookMode = 'simple' | 'expert'
+/**
+ * Chế độ đọc. Từ 2026-09-16 KHÔNG còn riêng của màn Kế hoạch: nó là công tắc
+ * Đơn giản/Chuyên sâu chung của cả `/infra` (`useInfraMode`), đặt trên thanh đầu
+ * trang nên nhìn thấy được ở mọi tab. Alias giữ nguyên tên để bên gọi không đổi.
+ */
+export type PlaybookMode = InfraMode
 
 /**
  * Trạng thái của lời gọi graph. `unavailable` KHÁC `error`: `unavailable` là "chưa
@@ -127,17 +130,6 @@ export type PlaybookDetailView = {
   runs: readonly PlaybookRun[]
 }
 
-const mode = ref<PlaybookMode>('simple')
-let modeLoaded = false
-
-/** Đọc lựa chọn đã nhớ đúng một lần cho cả app (luật 1). */
-function loadMode(): void {
-  if (modeLoaded) return
-  modeLoaded = true
-  const saved = localStorage.getItem(MODE_KEY)
-  if (saved === 'expert' || saved === 'simple') mode.value = saved
-}
-
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
@@ -186,8 +178,9 @@ export function usePlaybooksManager() {
   const projects = useProjectsStore()
   // Trang đứng NGOÀI mọi phiên (như `/infra`), nên tầng phiên bị bỏ qua.
   const infraContext = useInfraContext({ sessionId: null })
-
-  loadMode()
+  // Công tắc Đơn giản/Chuyên sâu dùng chung cả khu `/infra` — control nằm trên
+  // thanh đầu trang, không còn trên thanh công cụ của riêng màn này.
+  const { mode, setMode } = useInfraMode()
 
   // ── Danh sách ─────────────────────────────────────────────────────────────
   const summaries = ref<PlaybookSummary[]>([])
@@ -770,11 +763,6 @@ export function usePlaybooksManager() {
 
   function setVariable(name: string, value: string): void {
     variables.value = { ...variables.value, [name]: value }
-  }
-
-  function setMode(next: PlaybookMode): void {
-    mode.value = next
-    localStorage.setItem(MODE_KEY, next)
   }
 
   // ── Xoá ───────────────────────────────────────────────────────────────────

@@ -34,6 +34,7 @@ import { useConfirm } from '~/composables/useConfirm'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import { useInfraContext } from '~/composables/useInfraContext'
 import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
+import { useInfraMode } from '~/composables/useInfraMode'
 import { useInfraResourcesApi } from '~/composables/useInfraResourcesApi'
 import { useLinkOpen } from '~/composables/useLinkOpen'
 import { previewKindFromPath, usePreview } from '~/composables/usePreview'
@@ -51,17 +52,16 @@ import type {
   InfraViewDescriptor,
 } from '~/composables/useInfraResourcesApi'
 
-/** Bộ cột đang chọn — nhớ theo NGƯỜI DÙNG (task 3.2). */
+/**
+ * Bộ cột đang chọn. Từ 2026-09-16 nó KHÔNG còn là một lựa chọn riêng của Explorer:
+ * "gọn hay đầy đủ" chính là câu hỏi mà công tắc Đơn giản/Chuyên sâu của cả `/infra`
+ * đã hỏi (`useInfraMode`), nên giữ hai control cho một câu hỏi là mời người dùng
+ * trả lời mâu thuẫn với chính mình. Kiểu giữ nguyên vì `InfraViewDescriptor.columns`
+ * đặt tên hai bộ là `simple`/`full`.
+ */
 export type InfraColumnMode = 'simple' | 'full'
-
-const COLUMN_KEY = 'awog-infra-columns'
 /** Trần số dòng giữ trong DOM; quá ngưỡng này bảng chuyển sang cửa sổ ảo hoá. */
 export const VIRTUAL_THRESHOLD = 200
-
-function readColumnMode(): InfraColumnMode {
-  if (typeof localStorage === 'undefined') return 'simple'
-  return localStorage.getItem(COLUMN_KEY) === 'full' ? 'full' : 'simple'
-}
 
 // ── Cột trái "Dịch vụ đã ghim": thu gọn + bề rộng kéo được ───────────────────
 // Cũng nhớ theo NGƯỜI DÙNG như bộ cột (task 3.2), và cùng lý do: đây là hai thứ
@@ -155,11 +155,8 @@ export function useInfraExplorer() {
     () => views.value.find((v) => v.id === activeViewId.value) ?? null,
   )
 
-  const columnMode = ref<InfraColumnMode>(readColumnMode())
-  function setColumnMode(next: InfraColumnMode): void {
-    columnMode.value = next
-    if (typeof localStorage !== 'undefined') localStorage.setItem(COLUMN_KEY, next)
-  }
+  const { isExpert } = useInfraMode()
+  const columnMode = computed<InfraColumnMode>(() => (isExpert.value ? 'full' : 'simple'))
   const columns = computed(() => {
     const view = activeView.value
     if (!view) return []
@@ -856,7 +853,6 @@ export function useInfraExplorer() {
     openView,
     // cột
     columnMode,
-    setColumnMode,
     columns,
     sidebarCollapsed,
     sidebarWidth,

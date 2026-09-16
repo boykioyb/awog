@@ -41,31 +41,6 @@
 
       <span class="pb-top-gap" />
 
-      <!-- Mức chi tiết (luật 1): Đơn giản giấu cột kỹ thuật sau mục gập, Kỹ thuật
-           mở sẵn. Lựa chọn được NHỚ (localStorage, xử ở manager) nên lần sau mở
-           lại vẫn đúng ý người dùng. -->
-      <span class="pb-top-lbl" :title="t('playbooks.toolbar.modeWhy')">
-        {{ t('playbooks.toolbar.modeLabel') }}
-      </span>
-      <div class="seg" role="tablist">
-        <span
-          :class="{ on: mode === 'simple' }"
-          role="tab"
-          :aria-selected="mode === 'simple'"
-          @click="setMode('simple')"
-        >
-          {{ t('playbooks.toolbar.simple') }}
-        </span>
-        <span
-          :class="{ on: mode === 'expert' }"
-          role="tab"
-          :aria-selected="mode === 'expert'"
-          @click="setMode('expert')"
-        >
-          {{ t('playbooks.toolbar.expert') }}
-        </span>
-      </div>
-
       <button
         class="btn sm"
         type="button"
@@ -150,8 +125,6 @@ const { request: requestTab } = useInfraTabOpen()
 const { openShare } = useShareExport()
 
 const {
-  mode,
-  setMode,
   groups,
   total,
   loading,

@@ -46,6 +46,24 @@
           </button>
         </div>
 
+        <!-- Đơn giản / Chuyên sâu — MỘT công tắc cho cả khu (`useInfraMode`).
+             Trước 2026-09-16 có hai công tắc rời, trên hai màn (Kế hoạch và
+             Explorer), cho cùng một câu hỏi; mười một màn còn lại không có gì.
+             Đặt ở đây vì đây là chỗ duy nhất luôn hiển thị, ở mọi tab. -->
+        <div class="seg infra-mode" role="tablist" :aria-label="t('infra.mode.label')">
+          <span
+            v-for="m in ['simple', 'expert'] as const"
+            :key="m"
+            :class="{ on: mode === m }"
+            role="tab"
+            :aria-selected="mode === m"
+            :title="t(`infra.mode.${m}Why`)"
+            @click="setMode(m)"
+          >
+            {{ t(`infra.mode.${m}`) }}
+          </span>
+        </div>
+
         <!-- Tài khoản + region dùng cho MỌI thứ bên dưới (bảng tài nguyên, danh
              mục, Logs, Kubernetes). Đặt ở hàng tab vì đây là chỗ duy nhất trên
              trang luôn hiển thị, ở mọi tab. -->
@@ -306,6 +324,7 @@ import type { InfraCatalogService } from '~/composables/useInfraResourcesApi'
 import type { LogsSeed } from '~/composables/useInfraLogs'
 
 const { t } = useI18n()
+const { mode, setMode } = useInfraMode()
 
 // Ba mục của thanh section. `overview` đứng đầu và là mặc định: `/infra` trả lời
 // "mọi thứ có ổn không" trước khi trả lời "có những tài khoản nào"

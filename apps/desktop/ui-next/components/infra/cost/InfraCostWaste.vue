@@ -78,7 +78,8 @@
             </th>
             <th>{{ t('infra.cost.waste.col.check') }}</th>
             <th>{{ t('infra.cost.waste.col.resource') }}</th>
-            <th>{{ t('infra.cost.waste.col.detail') }}</th>
+            <!-- Cột thô (`volumeId gp3 · 120 GiB`…) — chỉ ở Chuyên sâu. -->
+            <th v-if="isExpert">{{ t('infra.cost.waste.col.detail') }}</th>
             <th class="icst-right">{{ t('infra.cost.waste.col.monthly') }}</th>
           </tr>
         </thead>
@@ -89,7 +90,7 @@
             </td>
             <td>{{ t(`infra.cost.check.${f.check}.label`) }}</td>
             <td class="icst-res">{{ f.label }}</td>
-            <td class="icst-muted">{{ detailText(f) }}</td>
+            <td v-if="isExpert" class="icst-muted">{{ detailText(f) }}</td>
             <td class="icst-right tnum">
               <!-- `null` hiện "—", KHÔNG hiện 0: "không biết giá" khác "miễn phí". -->
               <template v-if="f.monthlyUsd === null">—</template>
@@ -125,12 +126,14 @@
 // renderer không dựng argv.
 import { ref } from 'vue'
 import { findingKey, useInfraCost } from '~/composables/useInfraCost'
+import { useInfraMode } from '~/composables/useInfraMode'
 import { useInfraTabOpen } from '~/composables/useInfraTabOpen'
 import { usePlaybookEditor } from '~/composables/usePlaybookEditor'
 import type { WasteFinding } from '~/composables/useInfraCost'
 
 const { t } = useI18n()
 const { openGenerated } = usePlaybookEditor()
+const { isExpert } = useInfraMode()
 const { request: requestTab } = useInfraTabOpen()
 
 const {

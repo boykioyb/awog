@@ -17,8 +17,6 @@
   "infra.explorer.preview": "Xem tệp",
   "infra.explorer.dock": "Thu nhỏ",
   "infra.explorer.dock.done": "Đã ghim phiên hạ tầng xuống góc phải",
-  "infra.explorer.columns.simple": "Đơn giản",
-  "infra.explorer.columns.full": "Chuyên sâu",
   "infra.explorer.search.placeholder": "Tìm trong trang đã nạp…",
   "infra.explorer.search.localOnly": "Ô tìm chỉ lọc những dòng ĐÃ NẠP ở trên, không quét cả tài khoản — bấm “Nạp thêm” để mở rộng phạm vi.",
   "infra.explorer.pinned.title": "Dịch vụ đã ghim",

@@ -1,10 +1,6 @@
 {
   "playbooks.title": "Playbooks",
   "playbooks.toolbar.refresh": "Reload",
-  "playbooks.toolbar.modeLabel": "Detail level",
-  "playbooks.toolbar.simple": "Simple",
-  "playbooks.toolbar.expert": "Technical",
-  "playbooks.toolbar.modeWhy": "Simple hides command lines and ARNs behind a collapsed section; Technical shows them inline. Your choice is remembered.",
   "playbooks.toolbar.new": "New plan",
   "playbooks.toolbar.newWhy": "Write a new plan, or duplicate the one you have open. Built-in plans can only be duplicated — they live in code.",
   "playbooks.count.total": "{n} playbooks",

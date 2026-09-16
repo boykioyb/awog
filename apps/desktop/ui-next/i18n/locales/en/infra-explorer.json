@@ -17,8 +17,6 @@
   "infra.explorer.preview": "Open file",
   "infra.explorer.dock": "Minimize",
   "infra.explorer.dock.done": "Infra session pinned to the bottom-right corner",
-  "infra.explorer.columns.simple": "Simple",
-  "infra.explorer.columns.full": "Expert",
   "infra.explorer.search.placeholder": "Search the loaded page…",
   "infra.explorer.search.localOnly": "The search box only filters the rows already LOADED above, it does not scan the whole account — press “Load more” to widen the range.",
   "infra.explorer.pinned.title": "Pinned services",

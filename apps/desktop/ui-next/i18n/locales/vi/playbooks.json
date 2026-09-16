@@ -1,10 +1,6 @@
 {
   "playbooks.title": "Playbooks",
   "playbooks.toolbar.refresh": "Nạp lại",
-  "playbooks.toolbar.modeLabel": "Mức chi tiết",
-  "playbooks.toolbar.simple": "Đơn giản",
-  "playbooks.toolbar.expert": "Kỹ thuật",
-  "playbooks.toolbar.modeWhy": "Chế độ Đơn giản giấu dòng lệnh và ARN sau mục gập; chế độ Kỹ thuật hiện thẳng ra. Lựa chọn được nhớ cho lần sau.",
   "playbooks.toolbar.new": "Kế hoạch mới",
   "playbooks.toolbar.newWhy": "Soạn một kế hoạch mới, hoặc nhân bản bản đang mở. Bản dựng sẵn chỉ nhân bản được — chúng nằm trong mã.",
   "playbooks.count.total": "{n} playbook",
