@@ -38,6 +38,7 @@ import {
   type InfraWindow,
 } from '~/utils/infra-window'
 import { useToast } from '~/composables/useToast'
+import { formatBytes } from '~/utils/format-bytes'
 import type { InfraActionClass } from '~/composables/useConfirm'
 // `InfraBlocked` đã có ở `useInfraResourcesApi` — import chứ không khai lại. Nuxt
 // auto-import type từ `composables/`, nên hai bản cùng tên là một cảnh báo trùng
@@ -227,15 +228,45 @@ export function periodForWindow(windowSeconds: number): number {
   return 21_600
 }
 
-// ─── Bốn biểu đồ ────────────────────────────────────────────────────────────
+// ─── Danh mục biểu đồ, theo LOẠI tài nguyên ─────────────────────────────────
+//
+// VÌ SAO KHÔNG CÒN "BỐN BIỂU ĐỒ" (2026-09-17). Bản trước ghim cứng đúng bốn khung
+// đọc `AWS/ApplicationELB` + `AWS/EC2` + `CWAgent`, tức là giả định mọi người đều
+// chạy một website sau ALB trên máy EC2 có cài CloudWatch agent. Một hạ tầng ECS
+// Fargate + RDS + SQS — không một máy EC2 nào — vì thế mở màn ra là bốn khung
+// "thiếu dữ liệu" vĩnh viễn trong khi AWS hoàn toàn khoẻ (lỗi thật, ảnh người
+// dùng 2026-09-17). Nay người dùng chọn MỘT tài nguyên, và bộ biểu đồ bám theo
+// LOẠI của nó.
+//
+// DIMENSION KHÔNG CÒN Ở ĐÂY. Mỗi `MonitorTarget` do sidecar trả về đã mang sẵn
+// mảng `dimensions` đúng như CloudWatch muốn — kể cả ca hai dimension của ECS
+// (`ClusterName` + `ServiceName`), thứ mà bảng `TARGET_DIMENSIONS` một-khoá-một-tên
+// cũ không diễn tả nổi. Tri thức "CloudWatch gọi tên tài nguyên này là gì" thuộc
+// về `sidecar/infra/monitor-targets.ts`, không thuộc renderer.
+//
+// BA LUẬT VẼ giữ nguyên và áp cho MỌI bộ dưới đây:
+//   1. KHÔNG hai trục y — hai thang đo khác nhau thì hai khung, chung trục thời gian.
+//   2. Dữ liệu CÓ THỨ TỰ (p50<p95<p99, trung bình<đỉnh) dùng MỘT hue nhiều bậc đậm
+//      nhạt; hai HẠNG MỤC rời (đọc/ghi, gửi/xoá) mới được hai màu.
+//   3. Màu trạng thái (`--danger`/`--amber`/`--green`) là của riêng trạng thái,
+//      không bộ nào mượn làm chuỗi dữ liệu.
+//
+// MỖI KHUNG MỘT NGUỒN. Chuỗi nào cần một namespace khác (RAM của EC2 đến từ
+// `CWAgent`, số task của ECS đến từ `ECS/ContainerInsights`) thì đứng RIÊNG một
+// khung, không ghép chung với chuỗi luôn có. Ghép vào thì một nửa rỗng làm cả
+// khung đọc ra thành hỏng — chính là điều bản trước làm với "Sức tải máy (CPU/RAM)".
 
-/** Tài nguyên để gắn dimension. Một cửa sổ chỉ có hai thứ này vì bốn biểu đồ của
- *  màn nói về đúng hai loại tài nguyên: cân bằng tải và máy chủ. */
-export type MonitorTargetKey = 'lb' | 'instance'
+/** Loại tài nguyên giám sát được — khớp `MONITOR_KINDS` của sidecar. */
+export const MONITOR_KINDS = ['ecs-service', 'alb', 'rds', 'sqs', 'ec2', 'log-group'] as const
+export type MonitorTargetKind = (typeof MONITOR_KINDS)[number]
 
-export const TARGET_DIMENSIONS: Record<MonitorTargetKey, string> = {
-  lb: 'LoadBalancer',
-  instance: 'InstanceId',
+/** Một tài nguyên chọn được, đúng hình dạng sidecar trả về. */
+export type MonitorTarget = {
+  id: string
+  kind: MonitorTargetKind
+  label: string
+  hint: string
+  dimensions: WireDimension[]
 }
 
 export type MonitorSeriesSpec = {
@@ -244,10 +275,9 @@ export type MonitorSeriesSpec = {
   metricName: string
   stat: string
   label: string
-  target: MonitorTargetKey
   /** Màu `var(--…)` — SVG không nhận `var()` trong thuộc tính, chỉ trong CSS/`:style`. */
   color: string
-  /** Bậc đậm nhạt cho dữ liệu CÓ THỨ TỰ (p50 < p95 < p99): một hue, ba bậc. */
+  /** Bậc đậm nhạt cho dữ liệu CÓ THỨ TỰ (p50 < p95 < p99): một hue, nhiều bậc. */
   shade: number
 }
 
@@ -258,115 +288,291 @@ export type MonitorChartSpec = {
   series: MonitorSeriesSpec[]
 }
 
+/** Một chuỗi, viết gọn — năm bộ dưới đây khai gần trăm chuỗi và cú pháp object đầy
+ *  đủ cho mỗi cái làm chìm mất thứ đáng đọc (metric nào, thống kê nào). */
+function sr(
+  key: string,
+  namespace: string,
+  metricName: string,
+  stat: string,
+  label: string,
+  color: string,
+  shade = 1,
+): MonitorSeriesSpec {
+  return { key, namespace, metricName, stat, label, color, shade }
+}
+
+const ECS = 'AWS/ECS'
+const ECS_INSIGHTS = 'ECS/ContainerInsights'
+const ALB = 'AWS/ApplicationELB'
+const RDS = 'AWS/RDS'
+const SQS = 'AWS/SQS'
+const EC2 = 'AWS/EC2'
+const LOGS = 'AWS/Logs'
+const CW_AGENT = 'CWAgent'
+
 /**
- * Bốn biểu đồ của spec, và luật vẽ đã áp sẵn:
- *   · Lượt gọi và tỉ lệ lỗi KHÔNG ghép chung khung (hai thang đo khác nhau ⇒ hai
- *     khung, chung một trục thời gian).
- *   · p50/p95/p99 là THANG BẬC ⇒ MỘT hue (`--blue`) ba bậc đậm nhạt, không phải ba
- *     màu. Danh tính vẫn đọc được nhờ nhãn ghi thẳng ở cuối đường.
- *   · CPU/RAM là hai HẠNG MỤC rời ⇒ hai màu tách bạch, và KHÔNG mượn màu trạng thái
- *     (`--danger`/`--amber`/`--green`) làm chuỗi thứ tư.
+ * Bộ biểu đồ của từng loại tài nguyên.
+ *
+ * `key` DUY NHẤT XUYÊN MỌI BỘ (tiền tố là loại), vì nó vừa là khoá i18n
+ * `infra.monitoring.chart.<key>` vừa là danh tính của ngưỡng và của bản nháp cảnh
+ * báo. Hai loại cùng có "cpu" mà trùng khoá thì tiêu đề của loại này rơi vào biểu
+ * đồ của loại kia.
  */
-export const MONITOR_CHARTS: readonly MonitorChartSpec[] = [
-  {
-    key: 'calls',
-    kind: 'area',
-    unit: 'Count',
-    series: [
-      {
-        key: 'calls',
-        namespace: 'AWS/ApplicationELB',
-        metricName: 'RequestCount',
-        stat: 'Sum',
-        label: 'RequestCount',
-        target: 'lb',
-        color: 'var(--accent)',
-        shade: 1,
-      },
-    ],
-  },
-  {
-    key: 'errors',
-    kind: 'bar',
-    unit: 'Count',
-    series: [
-      {
-        key: 'errors',
-        namespace: 'AWS/ApplicationELB',
-        metricName: 'HTTPCode_Target_5XX_Count',
-        stat: 'Sum',
-        label: '5XX',
-        target: 'lb',
-        color: 'var(--accent)',
-        shade: 1,
-      },
-    ],
-  },
-  {
-    key: 'latency',
-    kind: 'line',
-    unit: 'Seconds',
-    series: [
-      {
-        key: 'p50',
-        namespace: 'AWS/ApplicationELB',
-        metricName: 'TargetResponseTime',
-        stat: 'p50',
-        label: 'p50',
-        target: 'lb',
-        color: 'var(--blue)',
-        shade: 0.4,
-      },
-      {
-        key: 'p95',
-        namespace: 'AWS/ApplicationELB',
-        metricName: 'TargetResponseTime',
-        stat: 'p95',
-        label: 'p95',
-        target: 'lb',
-        color: 'var(--blue)',
-        shade: 0.7,
-      },
-      {
-        key: 'p99',
-        namespace: 'AWS/ApplicationELB',
-        metricName: 'TargetResponseTime',
-        stat: 'p99',
-        label: 'p99',
-        target: 'lb',
-        color: 'var(--blue)',
-        shade: 1,
-      },
-    ],
-  },
-  {
-    key: 'compute',
-    kind: 'line',
-    unit: 'Percent',
-    series: [
-      {
-        key: 'cpu',
-        namespace: 'AWS/EC2',
-        metricName: 'CPUUtilization',
-        stat: 'Average',
-        label: 'CPU',
-        target: 'instance',
-        color: 'var(--accent)',
-        shade: 1,
-      },
-      {
-        key: 'ram',
-        namespace: 'CWAgent',
-        metricName: 'mem_used_percent',
-        stat: 'Average',
-        label: 'RAM',
-        target: 'instance',
-        color: 'var(--violet)',
-        shade: 1,
-      },
-    ],
-  },
-]
+export const MONITOR_CATALOG: Record<MonitorTargetKind, readonly MonitorChartSpec[]> = {
+  // ECS service — ba câu hỏi của một service đang chạy: nó có bận không (CPU), nó
+  // có sắp hết bộ nhớ không (RAM), và có đủ bản chạy không (số task).
+  'ecs-service': [
+    {
+      key: 'ecs-cpu',
+      kind: 'line',
+      unit: 'Percent',
+      series: [
+        sr('ecs-cpu-avg', ECS, 'CPUUtilization', 'Average', 'trung bình', 'var(--accent)', 0.45),
+        sr('ecs-cpu-max', ECS, 'CPUUtilization', 'Maximum', 'đỉnh', 'var(--accent)', 1),
+      ],
+    },
+    {
+      key: 'ecs-memory',
+      kind: 'line',
+      unit: 'Percent',
+      series: [
+        sr('ecs-mem-avg', ECS, 'MemoryUtilization', 'Average', 'trung bình', 'var(--blue)', 0.45),
+        sr('ecs-mem-max', ECS, 'MemoryUtilization', 'Maximum', 'đỉnh', 'var(--blue)', 1),
+      ],
+    },
+    {
+      // ⚠ `ECS/ContainerInsights` CHỈ tồn tại khi cluster đã bật Container Insights.
+      // Chưa bật thì khung này ghi "thiếu dữ liệu" — đúng sự thật, và là lý do nó
+      // đứng riêng thay vì ghép vào khung CPU ngay trên.
+      key: 'ecs-tasks',
+      kind: 'line',
+      unit: 'Count',
+      series: [
+        sr(
+          'ecs-task-run',
+          ECS_INSIGHTS,
+          'RunningTaskCount',
+          'Average',
+          'đang chạy',
+          'var(--accent)',
+        ),
+        sr(
+          'ecs-task-want',
+          ECS_INSIGHTS,
+          'DesiredTaskCount',
+          'Average',
+          'mong muốn',
+          'var(--violet)',
+        ),
+      ],
+    },
+  ],
+
+  // ALB — cửa vào: có ai gọi không, gọi có lỗi không, gọi có chậm không.
+  alb: [
+    {
+      key: 'alb-calls',
+      kind: 'area',
+      unit: 'Count',
+      series: [sr('alb-req', ALB, 'RequestCount', 'Sum', 'RequestCount', 'var(--accent)')],
+    },
+    {
+      // Hai nguồn lỗi KHÁC NHAU nên hai màu: `Target_5XX` là ứng dụng trả lỗi,
+      // `ELB_5XX` là chính load balancer không với tới ứng dụng. Gộp làm một con số
+      // là xoá mất phân biệt đắt giá nhất của khung này.
+      key: 'alb-errors',
+      kind: 'bar',
+      unit: 'Count',
+      series: [
+        sr('alb-5xx-target', ALB, 'HTTPCode_Target_5XX_Count', 'Sum', 'ứng dụng', 'var(--accent)'),
+        sr('alb-5xx-elb', ALB, 'HTTPCode_ELB_5XX_Count', 'Sum', 'load balancer', 'var(--violet)'),
+      ],
+    },
+    {
+      key: 'alb-latency',
+      kind: 'line',
+      unit: 'Seconds',
+      series: [
+        sr('alb-p50', ALB, 'TargetResponseTime', 'p50', 'p50', 'var(--blue)', 0.4),
+        sr('alb-p95', ALB, 'TargetResponseTime', 'p95', 'p95', 'var(--blue)', 0.7),
+        sr('alb-p99', ALB, 'TargetResponseTime', 'p99', 'p99', 'var(--blue)', 1),
+      ],
+    },
+    {
+      key: 'alb-4xx',
+      kind: 'bar',
+      unit: 'Count',
+      series: [
+        sr('alb-4xx-target', ALB, 'HTTPCode_Target_4XX_Count', 'Sum', '4XX', 'var(--accent)'),
+      ],
+    },
+  ],
+
+  // RDS — bốn câu hỏi của một cơ sở dữ liệu: bận không, bao nhiêu kết nối, còn chỗ
+  // không, đọc/ghi có chậm không.
+  rds: [
+    {
+      key: 'rds-cpu',
+      kind: 'line',
+      unit: 'Percent',
+      series: [sr('rds-cpu-avg', RDS, 'CPUUtilization', 'Average', 'CPU', 'var(--accent)')],
+    },
+    {
+      key: 'rds-connections',
+      kind: 'line',
+      unit: 'Count',
+      series: [
+        sr(
+          'rds-conn-avg',
+          RDS,
+          'DatabaseConnections',
+          'Average',
+          'trung bình',
+          'var(--blue)',
+          0.45,
+        ),
+        sr('rds-conn-max', RDS, 'DatabaseConnections', 'Maximum', 'đỉnh', 'var(--blue)', 1),
+      ],
+    },
+    {
+      key: 'rds-storage',
+      kind: 'area',
+      unit: 'Bytes',
+      series: [sr('rds-free', RDS, 'FreeStorageSpace', 'Average', 'còn trống', 'var(--accent)')],
+    },
+    {
+      // Đọc và ghi là hai HẠNG MỤC rời (khác đường đi trong máy), không phải hai bậc
+      // của một thang ⇒ hai màu tách bạch.
+      key: 'rds-latency',
+      kind: 'line',
+      unit: 'Seconds',
+      series: [
+        sr('rds-read', RDS, 'ReadLatency', 'Average', 'đọc', 'var(--accent)'),
+        sr('rds-write', RDS, 'WriteLatency', 'Average', 'ghi', 'var(--violet)'),
+      ],
+    },
+  ],
+
+  // SQS — hàng đợi chỉ có ba câu hỏi, và câu thứ hai (tuổi tin cũ nhất) là câu duy
+  // nhất phân biệt được "đang bận" với "đang tắc".
+  sqs: [
+    {
+      key: 'sqs-depth',
+      kind: 'area',
+      unit: 'Count',
+      series: [
+        sr(
+          'sqs-visible',
+          SQS,
+          'ApproximateNumberOfMessagesVisible',
+          'Average',
+          'đang chờ',
+          'var(--accent)',
+        ),
+        sr(
+          'sqs-inflight',
+          SQS,
+          'ApproximateNumberOfMessagesNotVisible',
+          'Average',
+          'đang xử lý',
+          'var(--violet)',
+        ),
+      ],
+    },
+    {
+      key: 'sqs-age',
+      kind: 'line',
+      unit: 'Seconds',
+      series: [
+        sr(
+          'sqs-age-max',
+          SQS,
+          'ApproximateAgeOfOldestMessage',
+          'Maximum',
+          'tin cũ nhất',
+          'var(--blue)',
+        ),
+      ],
+    },
+    {
+      key: 'sqs-flow',
+      kind: 'bar',
+      unit: 'Count',
+      series: [
+        sr('sqs-sent', SQS, 'NumberOfMessagesSent', 'Sum', 'gửi vào', 'var(--accent)'),
+        sr('sqs-deleted', SQS, 'NumberOfMessagesDeleted', 'Sum', 'xử lý xong', 'var(--violet)'),
+      ],
+    },
+  ],
+
+  // Nhóm log — loại tài nguyên DUY NHẤT chọn được khi tài khoản chỉ có quyền đọc
+  // log (role `Offshore-Developer` của người dùng bị chặn mọi `describe-*` của
+  // ECS/ELB/SQS/EC2, đo 2026-09-17). Hai biểu đồ này đo LƯU LƯỢNG GHI, không đo
+  // nội dung — câu "có lỗi gì" do khối đọc log bên dưới trả lời, và với loại này
+  // nó trỏ thẳng vào chính nhóm đang chọn, không phải đoán.
+  'log-group': [
+    {
+      key: 'log-events',
+      kind: 'area',
+      unit: 'Count',
+      series: [sr('log-events', LOGS, 'IncomingLogEvents', 'Sum', 'dòng ghi vào', 'var(--accent)')],
+    },
+    {
+      key: 'log-bytes',
+      kind: 'area',
+      unit: 'Bytes',
+      series: [
+        sr('log-bytes', LOGS, 'IncomingBytes', 'Sum', 'dung lượng ghi vào', 'var(--violet)'),
+      ],
+    },
+  ],
+
+  // EC2 — máy trần. CPU luôn có; RAM thì KHÔNG: nó đến từ CloudWatch agent chạy
+  // TRÊN máy đó, nên nó đứng riêng một khung (xem ghi chú "mỗi khung một nguồn").
+  ec2: [
+    {
+      key: 'ec2-cpu',
+      kind: 'line',
+      unit: 'Percent',
+      series: [sr('ec2-cpu-avg', EC2, 'CPUUtilization', 'Average', 'CPU', 'var(--accent)')],
+    },
+    {
+      key: 'ec2-memory',
+      kind: 'line',
+      unit: 'Percent',
+      series: [sr('ec2-mem', CW_AGENT, 'mem_used_percent', 'Average', 'RAM', 'var(--violet)')],
+    },
+    {
+      key: 'ec2-network',
+      kind: 'area',
+      unit: 'Bytes',
+      series: [
+        sr('ec2-net-in', EC2, 'NetworkIn', 'Sum', 'vào', 'var(--accent)'),
+        sr('ec2-net-out', EC2, 'NetworkOut', 'Sum', 'ra', 'var(--violet)'),
+      ],
+    },
+  ],
+}
+
+/** Mọi chuỗi của mọi bộ — dùng để tra ngược từ `key` về quy cách vẽ. */
+const SPEC_BY_SERIES_KEY: ReadonlyMap<
+  string,
+  { chart: MonitorChartSpec; series: MonitorSeriesSpec }
+> = new Map(
+  Object.values(MONITOR_CATALOG).flatMap((charts) =>
+    charts.flatMap((chart) =>
+      chart.series.map((series) => [series.key, { chart, series }] as const),
+    ),
+  ),
+)
+
+/** Quy cách vẽ của một chuỗi bất kỳ, tra bằng `key`. `null` = key không thuộc bộ nào. */
+export function seriesSpecByKey(
+  key: string,
+): { chart: MonitorChartSpec; series: MonitorSeriesSpec } | null {
+  return SPEC_BY_SERIES_KEY.get(key) ?? null
+}
 
 /** Bản nháp `put-metric-alarm`: mọi trường AWS cần, đều sửa được trước khi ghi. */
 export type AlarmDraft = {
@@ -377,7 +583,6 @@ export type AlarmDraft = {
   stat: string
   periodSeconds: number
   unit: string
-  target: MonitorTargetKey
   comparisonOperator: ComparisonOperator
   threshold: number
   evaluationPeriods: number
@@ -402,6 +607,9 @@ export function formatMetricValue(v: number | null, unit: string): string {
   if (unit === 'Count') return Math.round(v).toLocaleString()
   if (unit === 'Seconds') return v < 1 ? `${(v * 1000).toFixed(0)} ms` : `${v.toFixed(2)} s`
   if (unit === 'Percent') return `${v.toFixed(1)} %`
+  // Dung lượng đọc bằng bậc 1024, không bằng số chữ số: `128849018880` không nói
+  // lên điều gì, `120 GB` thì có. Thang dùng chung ở `utils/format-bytes.ts`.
+  if (unit === 'Bytes') return formatBytes(v)
   return v.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
@@ -518,11 +726,48 @@ export function useInfraMetrics() {
   const hasAccount = computed(() => Boolean(context.value.profile))
 
   // ── Tài nguyên đang xem ──────────────────────────────────────────────────
-  // Hai ô nhập, không có picker tự động: màn này KHÔNG tự đi dò tài nguyên (mỗi lượt
-  // dò là một loạt lời gọi AWS nữa). Người dùng dán tên tài nguyên từ màn Explorer.
-  // Bỏ trống ⇒ truy vấn không kèm dimension (hợp lệ, và trả về rỗng ⇒ hiện "thiếu
-  // dữ liệu", đúng sự thật hơn là đòi người dùng gõ trước mới cho xem gì).
-  const targets = ref<Record<MonitorTargetKey, string>>({ lb: '', instance: '' })
+  //
+  // MỘT tài nguyên, và nó quyết định CẢ bộ biểu đồ. Bản trước có hai ô ("ALB nào"
+  // + "EC2 nào") đều mặc định RỖNG, mà truy vấn không kèm dimension thì ALB/EC2
+  // không phát chuỗi nào ⇒ trạng thái mặc định của màn được BẢO ĐẢM là bốn khung
+  // trắng. Nay chưa chọn thì màn nói thẳng là phải chọn, chứ không vẽ bốn cái
+  // khung rỗng rồi để người dùng đoán mình làm sai ở đâu.
+  const target = ref<MonitorTarget | null>(null)
+
+  /** Bộ biểu đồ của loại tài nguyên đang chọn. Chưa chọn ⇒ rỗng, và màn nói ra. */
+  const activeCharts = computed<readonly MonitorChartSpec[]>(() =>
+    target.value ? MONITOR_CATALOG[target.value.kind] : [],
+  )
+
+  /**
+   * Đổi tài nguyên ⇒ VỨT số liệu cũ.
+   *
+   * Không vứt thì hai chuyện xảy ra, cả hai đều là nói dối im lặng: đổi sang loại
+   * KHÁC thì khoá chuỗi không khớp nên mọi khung ghi "thiếu dữ liệu" (sự thật là
+   * "chưa nạp"), còn đổi sang tài nguyên CÙNG LOẠI thì khoá khớp y nguyên và màn
+   * vẽ số liệu của service A dưới cái tên service B. `watch` chứ không phải một
+   * cú gọi trong handler: tài nguyên đổi được từ chỗ khác (khôi phục lựa chọn,
+   * đổi profile), và mọi đường đổi đều phải vứt.
+   */
+  watch(
+    () => target.value?.id ?? '',
+    () => {
+      loadedSeries.value = []
+      windowRef.value = null
+      loadedAt.value = null
+      calls.value = 0
+      partialKeys.value = []
+      error.value = ''
+      draft.value = null
+      historyName.value = null
+    },
+  )
+
+  /**
+   * Dimension của tài nguyên đang chọn — sidecar đã dựng sẵn đúng như CloudWatch
+   * muốn (kể cả ca hai dimension của ECS), nên ở đây không còn phép cắt chuỗi nào.
+   */
+  const activeDimensions = computed<WireDimension[]>(() => target.value?.dimensions ?? [])
 
   // ── Cửa sổ thời gian (đang chọn) ─────────────────────────────────────────
   // Model dùng chung (`InfraTimeRange` v-model vào `win`). Mặc định 3 giờ gần đây.
@@ -569,17 +814,12 @@ export function useInfraMetrics() {
   // ── Biểu đồ ──────────────────────────────────────────────────────────────
   const periodSeconds = computed(() => periodForWindow(windowSeconds.value || 3600))
 
-  function dimensionsFor(target: MonitorTargetKey): WireDimension[] {
-    const value = targets.value[target].trim()
-    return value ? [{ name: TARGET_DIMENSIONS[target], value }] : []
-  }
-
   /** Một chuỗi ⇒ một `MetricDataQuery`; `key` là danh tính duy nhất toàn màn.
    *  `unit` thuộc về BIỂU ĐỒ chứ không thuộc từng chuỗi (mọi chuỗi của một biểu đồ
    *  chung một đơn vị — trộn giây với phần trăm vào một trục là biểu đồ vô nghĩa),
    *  nên nó vào qua tham số thay vì lặp lại trên từng spec. */
   function specToQuery(s: MonitorSeriesSpec, unit: string): WireQuery {
-    const dims = dimensionsFor(s.target)
+    const dims = activeDimensions.value
     return {
       key: s.key,
       namespace: s.namespace,
@@ -594,7 +834,7 @@ export function useInfraMetrics() {
 
   const charts = computed<ChartView[]>(() => {
     const byKey = seriesByKey.value
-    return MONITOR_CHARTS.map((spec) => {
+    return activeCharts.value.map((spec) => {
       const series: ChartSeriesView[] = spec.series.map((s) => {
         const got = byKey.get(s.key)
         return {
@@ -621,7 +861,7 @@ export function useInfraMetrics() {
 
   /** Quy cách vẽ của từng chuỗi — panel cảnh báo cần namespace/metric/stat/period. */
   const seriesViews = computed<MonitorSeriesView[]>(() =>
-    MONITOR_CHARTS.flatMap((c) =>
+    activeCharts.value.flatMap((c) =>
       c.series.map((s) => ({
         key: s.key,
         namespace: s.namespace,
@@ -635,14 +875,76 @@ export function useInfraMetrics() {
   )
 
   // ── Cảnh báo ─────────────────────────────────────────────────────────────
+  //
+  // BA VIỆC PHẢI TÁCH, VÌ TRỘN CHÚNG LẠI LÀ CÁCH MÀN NÀY TỪNG BÁO ĐỘNG SAI.
+  // Bản trước đổ nguyên 100 cảnh báo của cả region lên một dải phẳng. Trong ảnh
+  // người dùng 2026-09-17, bốn dòng ĐỎ "ĐANG BÁO" đều là `TargetTracking-…-AlarmLow`
+  // — cảnh báo scale-in do Application Auto Scaling tự sinh, ở trạng thái ALARM
+  // nghĩa là "tải đang thấp hơn ngưỡng thu nhỏ", tức là BÌNH THƯỜNG. Bên dưới là
+  // ~26 chip xanh đẩy biểu đồ ra khỏi màn hình.
+  //
+  //   1. Cảnh báo của TÀI NGUYÊN ĐANG XEM lên trước — đó là thứ người ta mở màn ra
+  //      để xem, và nó so bằng `dimensions`, không bằng tên.
+  //   2. Cảnh báo HẠ TẦNG TỰ QUẢN (`TargetTracking-…`) tách thành nhóm riêng, KHÔNG
+  //      tính vào "đang báo": chúng là cần gạt của autoscaling, không phải sự cố.
+  //   3. Phần còn lại của tài khoản gộp thành một con số, mở ra khi người dùng muốn.
   const alarms = ref<WireAlarm[]>([])
   const alarmsLoaded = ref(false)
   const alarmsTruncated = ref(false)
 
+  /**
+   * Cảnh báo do Application Auto Scaling tự tạo.
+   *
+   * AWS đặt tên theo khuôn `TargetTracking-<resourceId>-Alarm{High,Low}-<uuid>`;
+   * khuôn đó là hợp đồng đặt tên của dịch vụ, không phải do người dùng gõ. `AlarmLow`
+   * ở trạng thái ALARM là trạng thái NGHỈ của một cụm đang chạy dưới ngưỡng — gọi nó
+   * là sự cố thì mọi hệ thống rảnh rỗi đều đang cháy.
+   *
+   * ⚠ Đây là phép đoán theo TÊN, và nó là phép đoán duy nhất có được:
+   * `describe-alarms` không trả trường nào nói "cái này do autoscaling tạo". Vì vậy
+   * chúng bị TÁCH RA chứ không bị GIẤU ĐI — người dùng vẫn mở được nhóm này.
+   */
+  function isAutoScalingAlarm(a: WireAlarm): boolean {
+    return /^TargetTracking-/.test(a.name)
+  }
+
+  /** Cảnh báo này nói về ĐÚNG tài nguyên đang chọn không? So bằng dimension.
+   *
+   *  So theo TẬP CON chứ không theo bằng nhau: một alarm trên ECS service có đủ
+   *  `ClusterName` + `ServiceName`, nhưng alarm trên ALB lại thường mang thêm
+   *  `TargetGroup` mà `MonitorTarget` không có. Đòi hai tập trùng khít sẽ loại đúng
+   *  những cảnh báo sát sườn nhất. */
+  function matchesTarget(a: WireAlarm): boolean {
+    const want = activeDimensions.value
+    if (want.length === 0) return false
+    return want.every((w) => a.dimensions.some((d) => d.name === w.name && d.value === w.value))
+  }
+
+  /** Ba rổ, loại trừ nhau, phủ hết danh sách. */
+  const alarmGroups = computed(() => {
+    const mine: WireAlarm[] = []
+    const scaling: WireAlarm[] = []
+    const others: WireAlarm[] = []
+    for (const a of alarms.value) {
+      if (isAutoScalingAlarm(a)) scaling.push(a)
+      else if (matchesTarget(a)) mine.push(a)
+      else others.push(a)
+    }
+    return { mine, scaling, others }
+  })
+
+  /** Cảnh báo của tài nguyên đang xem — dải trên đầu màn chỉ hiện nhóm này. */
+  const targetAlarms = computed<WireAlarm[]>(() => alarmGroups.value.mine)
+
+  /** Số cảnh báo còn lại của tài khoản, gộp thành một con số. */
+  const otherAlarmCount = computed(() => alarmGroups.value.others.length)
+  /** Số cần gạt autoscaling đang bật — hiện ra được, nhưng KHÔNG tô đỏ. */
+  const scalingAlarmCount = computed(() => alarmGroups.value.scaling.length)
+
   const alarmsByState = computed(() => ({
-    alarm: alarms.value.filter((a) => a.state === 'alarm'),
-    ok: alarms.value.filter((a) => a.state === 'ok'),
-    insufficient: alarms.value.filter((a) => a.state === 'insufficient'),
+    alarm: targetAlarms.value.filter((a) => a.state === 'alarm'),
+    ok: targetAlarms.value.filter((a) => a.state === 'ok'),
+    insufficient: targetAlarms.value.filter((a) => a.state === 'insufficient'),
   }))
 
   const worstState = computed<AlarmState>(() => {
@@ -654,7 +956,11 @@ export function useInfraMetrics() {
   })
 
   /**
-   * Dải sự cố vẽ trên CẢ BỐN khung.
+   * Dải sự cố vẽ trên MỘT khung — khung nào có metric khớp cảnh báo đó.
+   *
+   * Bản trước trả về một mảng duy nhất và SFC bind nó cho cả bốn khung, nên một
+   * cảnh báo ECS được tô thành vệt "sự cố" phủ lên biểu đồ độ trễ ALB. Ba thứ
+   * không liên quan gì đến nhau.
    *
    * Nguồn: những cảnh báo ĐANG ở trạng thái `alarm`. `stateUpdatedAt` là mốc duy nhất
    * có cấu trúc mà `describe-alarms` trả cho ta — câu `StateReason` là văn xuôi tiếng
@@ -663,24 +969,35 @@ export function useInfraMetrics() {
    * Kéo dài tới `endMs` của cửa sổ: sự cố chưa kết thúc thì dải chưa được phép kết
    * thúc, nếu không mắt đọc thành "đã xong lúc này".
    */
-  const incidents = computed<IncidentBand[]>(() => {
+  const incidentsByChart = computed<Record<string, IncidentBand[]>>(() => {
     const win = windowRef.value
-    if (!win || alarms.value.length === 0) return []
-    const out: IncidentBand[] = []
-    for (const a of alarms.value) {
+    const out: Record<string, IncidentBand[]> = {}
+    for (const spec of activeCharts.value) out[spec.key] = []
+    if (!win) return out
+
+    for (const a of targetAlarms.value) {
       if (a.state !== 'alarm') continue
       const start = Math.max(a.stateUpdatedAt ?? win.startMs, win.startMs)
       const end = Math.min(win.endMs, Math.max(start + 60_000, win.endMs))
       if (end <= start) continue
-      out.push({ startMs: start, endMs: end, label: a.name })
+      for (const spec of activeCharts.value) {
+        const hit = spec.series.some(
+          (sp) => sp.namespace === a.namespace && sp.metricName === a.metricName,
+        )
+        if (hit) out[spec.key]?.push({ startMs: start, endMs: end, label: a.name })
+      }
     }
     return out
   })
 
-  /** Cảnh báo đầu tiên khớp một chuỗi metric — để vẽ ngưỡng đã có lên biểu đồ. */
+  /** Cảnh báo khớp một chuỗi metric — để vẽ ngưỡng đã có lên biểu đồ.
+   *
+   *  So CẢ dimension, không chỉ namespace + metricName. Tài khoản có ba ALB thì bản
+   *  cũ vẽ lên biểu đồ ngưỡng của một ALB BẤT KỲ trong ba cái, và `openDraft` mở ra
+   *  form sửa đúng cái cảnh báo sai đó. */
   function alarmForSeries(s: MonitorSeriesSpec): WireAlarm | null {
     return (
-      alarms.value.find(
+      targetAlarms.value.find(
         (a) =>
           a.namespace === s.namespace &&
           a.metricName === s.metricName &&
@@ -691,61 +1008,36 @@ export function useInfraMetrics() {
   }
 
   // ── Ô số ─────────────────────────────────────────────────────────────────
+  //
+  // MỘT Ô CHO MỖI BIỂU ĐỒ: giá trị MỚI NHẤT của chuỗi chính, kèm trung bình của
+  // chính cửa sổ đang xem làm mốc. Không có bảng cứng nào ở đây, nên hàng ô số
+  // theo được mọi loại tài nguyên mà không cần một nhánh `if kind ===` nào.
+  //
+  // HAI Ô CŨ ĐÃ BỊ GỠ. `availability30d` và `costMonth` ghim cứng `'—'` từ ngày
+  // viết, tức một NỬA hàng chỉ để trang trí; riêng ô chi phí còn ghi "Cost Explorer
+  // chưa được nối" trong khi `sidecar/infra/cost/cost.ts` đang gọi thật
+  // `ce get-cost-and-usage` và tab Chi phí chạy được — một câu sai để lại trên màn.
+  // Chi phí có màn riêng và trả lời được nhiều hơn một con số, nên nó ở lại bên đó.
   const tiles = computed<MonitorTile[]>(() => {
-    const win = windowRef.value
-    const p95 = seriesByKey.value.get('p95')
-    const errs = seriesByKey.value.get('errors')
-
-    const mean = p95 ? seriesMean(p95.points) : null
-    const now = p95 ? seriesLast(p95.points) : null
-    const lastHour = win ? seriesSumSince(errs?.points ?? [], win.endMs - 3600_000) : null
-    const hourCount = Math.max(1, Math.round((windowSeconds.value || 3600) / 3600))
-    const errTotal = errs ? errs.points.reduce((sum, p) => sum + p.v, 0) : null
-
-    return [
-      {
-        key: 'p95',
-        label: t('infra.monitoring.tile.p95'),
-        value: formatMetricValue(now, 'Seconds'),
+    const byKey = seriesByKey.value
+    return activeCharts.value.map((spec) => {
+      const primary = primarySeries(spec)
+      const got = byKey.get(primary.key)
+      const points = got?.points ?? []
+      const now = seriesLast(points)
+      const mean = seriesMean(points)
+      return {
+        key: spec.key,
+        label: t(`infra.monitoring.chart.${spec.key}`),
+        value: formatMetricValue(now, spec.unit),
         baseline:
           mean === null
             ? null
-            : t('infra.monitoring.tile.baselineP95', { v: formatMetricValue(mean, 'Seconds') }),
-        state: 'ok',
-        note: null,
-      },
-      {
-        key: 'errors1h',
-        label: t('infra.monitoring.tile.errors1h'),
-        value: formatMetricValue(lastHour, 'Count'),
-        baseline:
-          errTotal === null
-            ? null
-            : t('infra.monitoring.tile.baselineErrors', {
-                v: formatMetricValue(errTotal / hourCount, 'Count'),
-              }),
-        state: 'ok',
-        note: null,
-      },
-      // Hai ô dưới đây CHƯA có nguồn trong Mốc 6, và hiện đúng như vậy: một chỗ
-      // trống nói rõ lý do tốt hơn một số 0 trông như đã đo.
-      {
-        key: 'availability30d',
-        label: t('infra.monitoring.tile.availability'),
-        value: '—',
-        baseline: null,
-        state: 'unavailable',
-        note: t('infra.monitoring.tile.availabilityNote'),
-      },
-      {
-        key: 'costMonth',
-        label: t('infra.monitoring.tile.cost'),
-        value: '—',
-        baseline: null,
-        state: 'unavailable',
-        note: t('infra.monitoring.tile.costNote'),
-      },
-    ]
+            : t('infra.monitoring.tile.baseline', { v: formatMetricValue(mean, spec.unit) }),
+        state: points.length === 0 ? 'unavailable' : 'ok',
+        note: points.length === 0 ? t('infra.monitoring.missing') : null,
+      }
+    })
   })
 
   // ── Nạp ─────────────────────────────────────────────────────────────────
@@ -776,12 +1068,19 @@ export function useInfraMetrics() {
       error.value = t('infra.monitoring.noProfile')
       return
     }
+    // CHƯA CHỌN TÀI NGUYÊN THÌ KHÔNG NẠP. Bản trước vẫn gửi truy vấn không kèm
+    // dimension, và CloudWatch trả về rỗng mà KHÔNG báo lỗi — nên người dùng trả
+    // tiền cho một lời gọi rồi nhận về bốn khung trắng không ai giải thích.
+    if (!target.value) {
+      error.value = t('infra.monitoring.target.required')
+      return
+    }
     const win = resolveWindow()
     if (!win) {
       error.value = t('infra.monitoring.badWindow')
       return
     }
-    const queries = MONITOR_CHARTS.flatMap((c) => c.series.map((s) => specToQuery(s, c.unit)))
+    const queries = activeCharts.value.flatMap((c) => c.series.map((sp) => specToQuery(sp, c.unit)))
     if (queries.length > MAX_MONITOR_SERIES) {
       error.value = t('infra.monitoring.tooManySeries')
       return
@@ -790,7 +1089,7 @@ export function useInfraMetrics() {
     loading.value = true
     error.value = ''
     try {
-      // MỘT lời gọi cho tám chuỗi (luật 2). Lô + cache nằm ở sidecar.
+      // MỘT lời gọi cho MỌI chuỗi của bộ (luật 2). Lô + cache nằm ở sidecar.
       const res = await rpc.metrics({
         context: context.value,
         startMs: win.startMs,
@@ -859,7 +1158,7 @@ export function useInfraMetrics() {
    * vô lý; một mức 0 ở đáy biểu đồ thì không).
    */
   function openDraft(chartKey: string, seriesKey?: string): void {
-    const spec = MONITOR_CHARTS.find((c) => c.key === chartKey)
+    const spec = activeCharts.value.find((c) => c.key === chartKey)
     if (!spec) return
     const primary = seriesKey
       ? (spec.series.find((s) => s.key === seriesKey) ?? primarySeries(spec))
@@ -874,7 +1173,6 @@ export function useInfraMetrics() {
         stat: existing.stat ?? primary.stat,
         periodSeconds: existing.periodSeconds ?? periodSeconds.value,
         unit: spec.unit,
-        target: primary.target,
         comparisonOperator:
           (existing.comparisonOperator as ComparisonOperator) ?? 'GreaterThanThreshold',
         threshold: existing.threshold ?? 0,
@@ -896,7 +1194,6 @@ export function useInfraMetrics() {
       stat: primary.stat,
       periodSeconds: periodSeconds.value,
       unit: spec.unit,
-      target: primary.target,
       comparisonOperator: 'GreaterThanThreshold',
       threshold: base ?? 0,
       evaluationPeriods: 1,
@@ -918,7 +1215,7 @@ export function useInfraMetrics() {
     if (!d) return
     d.threshold = value
     if (d.editing === null) {
-      const spec = MONITOR_CHARTS.find((c) => c.key === d.chartKey)
+      const spec = activeCharts.value.find((c) => c.key === d.chartKey)
       const primary = spec
         ? spec.series.find((s) => s.key === d.chartKey || s.metricName === d.metricName)
         : null
@@ -930,7 +1227,7 @@ export function useInfraMetrics() {
   /** Ngưỡng vẽ trên khung: bản nháp (kéo được) hoặc cảnh báo đã có (đứng yên). */
   const thresholds = computed<Record<string, ChartThreshold | null>>(() => {
     const out: Record<string, ChartThreshold | null> = {}
-    for (const c of MONITOR_CHARTS) {
+    for (const c of activeCharts.value) {
       const d = draft.value
       if (d && d.chartKey === c.key) {
         out[c.key] = { value: d.threshold, label: d.name, editable: true }
@@ -957,7 +1254,7 @@ export function useInfraMetrics() {
       toast.add({ title: t('infra.monitoring.noProfile'), color: 'error' })
       return false
     }
-    const dims = dimensionsFor(d.target)
+    const dims = activeDimensions.value
     const payload: AlarmPutParams = {
       context: context.value,
       name: d.name.trim(),
@@ -1064,7 +1361,7 @@ export function useInfraMetrics() {
       const res = await rpc.history({ context: context.value, alarmName: name, limit: 50 })
       if (!res.ok) {
         toast.add({
-          title: t('infra.monitoring.history.loadFailed'),
+          title: t('infra.monitoring.alarm.historyLoadFailed'),
           description: res.error,
           color: 'error',
         })
@@ -1120,7 +1417,7 @@ export function useInfraMetrics() {
     const lines = [
       `Cửa sổ: ${new Date(win.startMs).toISOString()} → ${new Date(win.endMs).toISOString()}`,
       `Ngữ cảnh: profile=${context.value.profile ?? '—'} region=${context.value.region ?? '—'}`,
-      `RequestCount sau khi lọc: ${targets.value.lb || '(không dimension)'}`,
+      `Tài nguyên: ${target.value ? `${target.value.kind} ${target.value.label}` : '(chưa chọn)'}`,
     ]
     for (const c of charts.value) {
       lines.push('', `## ${c.title} (${c.unit})`)
@@ -1163,8 +1460,8 @@ export function useInfraMetrics() {
     hasAccount,
     sidecarAvailable: computed(() => sc.available),
     // tài nguyên
-    targets,
-    targetDimensions: TARGET_DIMENSIONS,
+    target,
+    activeCharts,
     // cửa sổ
     win,
     windowSeconds,
@@ -1187,13 +1484,16 @@ export function useInfraMetrics() {
     // biểu đồ
     charts,
     seriesViews,
-    incidents,
+    incidentsByChart,
     thresholds,
     // cảnh báo
     alarms,
     alarmsLoaded,
     alarmsTruncated,
     alarmsByState,
+    targetAlarms,
+    otherAlarmCount,
+    scalingAlarmCount,
     worstState,
     // ô số
     tiles,

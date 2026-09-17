@@ -183,3 +183,66 @@ describe('env ngữ cảnh: chỉ kubectl/terraform nhận AWS_PROFILE', () => {
     }
   })
 })
+
+// Hàng rào cờ ngữ cảnh, sau khi `--namespace` chuyển từ danh sách TOÀN CỤC sang
+// danh sách riêng của kubectl (2026-09-17).
+//
+// Hai mặt phải đúng cùng lúc, và bài test này tồn tại vì sửa một mặt rất dễ làm
+// hỏng mặt kia: `aws` phải chạy được `--namespace` (nó là tham số truy vấn của
+// CloudWatch), còn `kubectl` phải VẪN bị chặn (ở đó nó thật sự đổi ngữ cảnh).
+describe('cờ --namespace: chặn cho kubectl, cho qua với aws', () => {
+  it('aws + --namespace ⇒ CHẠY. Đây là tham số của cloudwatch, không phải ngữ cảnh', async () => {
+    // Lỗi thật: để nó trong danh sách toàn cục đã chặn toàn bộ lượt dò tài nguyên
+    // của màn Giám sát, kèm câu "ngữ cảnh do phiên chỉ định, không ghi đè được".
+    fakeExec('{"Metrics":[]}')
+    const res = await runInfra({
+      ...base,
+      surface: 'explorer',
+      toolName: 'monitor_targets',
+      decision: 'auto',
+      args: ['cloudwatch', 'list-metrics', '--namespace', 'AWS/ECS'],
+    })
+    expect(res.rejected).toBeUndefined()
+    expect(res.ok).toBe(true)
+  })
+
+  it('kubectl + --namespace ⇒ VẪN bị từ chối', async () => {
+    fakeExec('{}')
+    const res = await runInfra({
+      ...base,
+      tool: 'kubectl',
+      context: { cluster: 'readonly-context' },
+      surface: 'terminal',
+      toolName: 'kubectl_cli',
+      args: ['get', 'pods', '--namespace', 'kube-system'],
+    })
+    expect(res.rejected).toBe('forbidden-flag')
+    expect(execFile).not.toHaveBeenCalled()
+  })
+
+  it('kubectl + --namespace=… (dạng dính dấu bằng) ⇒ VẪN bị từ chối', async () => {
+    fakeExec('{}')
+    const res = await runInfra({
+      ...base,
+      tool: 'kubectl',
+      context: { cluster: 'readonly-context' },
+      surface: 'terminal',
+      toolName: 'kubectl_cli',
+      args: ['get', 'pods', '--namespace=kube-system'],
+    })
+    expect(res.rejected).toBe('forbidden-flag')
+    expect(execFile).not.toHaveBeenCalled()
+  })
+
+  it('aws + --profile ⇒ vẫn bị từ chối, viết tắt cũng vậy', async () => {
+    // Hàng rào thật sự quan trọng với aws không hề lỏng đi.
+    fakeExec('{}')
+    expect((await runInfra({ ...base, args: ['s3', 'ls', '--profile', 'prod'] })).rejected).toBe(
+      'forbidden-flag',
+    )
+    expect((await runInfra({ ...base, args: ['s3', 'ls', '--prof', 'prod'] })).rejected).toBe(
+      'forbidden-flag',
+    )
+    expect(execFile).not.toHaveBeenCalled()
+  })
+})

@@ -35,13 +35,27 @@ export const CONTEXT_SWITCH_CLASS: InfraCommandClass = 'context-switch'
  * (namespace) vẫn lọt. Task 0.3 (`infra/run.ts`) phải xử nốt khi ghép cờ ngữ
  * cảnh, ở đó mới biết cờ nào thuộc công cụ nào.
  */
+/**
+ * Cờ ghi đè ngữ cảnh, áp cho MỌI tool.
+ *
+ * So khớp hai chiều theo tiền tố (xem `findForbiddenFlag`) vì AWS CLI chấp nhận
+ * tên cờ viết tắt: `--prof prod` đi tới đúng chỗ `--profile prod` đi.
+ *
+ * ⚠ `--namespace` TỪNG nằm ở đây và đó là một lỗi thật (2026-09-17). Nó là khái
+ * niệm của kubectl, nhưng danh sách này áp cho cả `aws` — mà `--namespace` của AWS
+ * CLI là THAM SỐ TRUY VẤN của CloudWatch (`cloudwatch list-metrics --namespace
+ * AWS/ECS`), không đụng gì tới tài khoản hay vùng. Hệ quả: mọi lượt dò tài nguyên
+ * của màn Giám sát bị chặn với câu "ngữ cảnh do phiên chỉ định, không ghi đè được"
+ * — một câu vô nghĩa với lệnh đó. Nay nó nằm ở `EXTRA_FORBIDDEN.kubectl` (bên
+ * `run.ts`), nơi nó thật sự là cờ ngữ cảnh, và kubectl KHÔNG lỏng đi: pflag của Go
+ * không nhận tên cờ viết tắt, nên so khớp đúng tên là đủ chặt cho nó.
+ */
 export const FORBIDDEN_FLAGS: readonly string[] = [
   '--profile',
   '--region',
   '--endpoint-url',
   '--kubeconfig',
   '--context',
-  '--namespace',
   '--no-verify-ssl',
   '--ca-bundle',
 ]

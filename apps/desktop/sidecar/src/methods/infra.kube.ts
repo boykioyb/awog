@@ -33,6 +33,15 @@ import type { InfraContext } from '../infra/run.js'
 // đó sẽ có người nới nó ra vì "validate chặt quá".
 export const NAME_RE = /^[a-z0-9][a-z0-9.-]{0,252}$/ // pod/namespace/deployment (DNS-1123)
 export const CONTAINER_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,62}$/
+/**
+ * `--since` của kubectl: một khoảng thời gian tương đối (`15m`, `2h`, `30s`).
+ *
+ * Danh sách ĐÓNG chứ không nhận chuỗi tự do: giá trị này đi thẳng vào argv, và
+ * `--since` còn có người anh em `--since-time` nhận RFC3339 — mở cửa cho chuỗi tự
+ * do là mở cửa cho cả một họ cờ mà lớp `findForbiddenFlag` phải đuổi theo. Bốn chữ
+ * số là trần: `9999h` ≈ 416 ngày, quá đủ, và không ai gõ nhầm thành một số khổng lồ.
+ */
+export const SINCE_RE = /^[1-9][0-9]{0,3}[smh]$/
 const CLUSTER_RE = /^[0-9A-Za-z][A-Za-z0-9-_]{0,99}$/
 const REGION_RE = /^[a-z]{2}(-[a-z]+)+-[0-9]+$/
 const PROFILE_RE = /^[^\s-][^\r\n]{0,199}$/
@@ -63,6 +72,29 @@ const Params = z.discriminatedUnion('op', [
   z.object({ ...ticketField, op: z.literal('namespaces'), context: k8sContext }),
   z.object({ ...ticketField, op: z.literal('pods'), context: k8sContext }),
   z.object({ ...ticketField, op: z.literal('deployments'), context: k8sContext }),
+  // ── Số liệu của màn Báo cáo ───────────────────────────────────────────────
+  // Bốn thao tác dưới đây CHỈ ĐỌC và không nhận tham số nào từ UI ngoài ngữ cảnh
+  // đã ghim: không có tên nào do cluster trả về đi vào argv, nên không có gì để
+  // validate ngoài chính `context`. Chúng nằm trong `K8S_READ` (`get`/`top`) nên
+  // chạy thẳng, không hỏi duyệt — cùng hạng với bảng Pods/Deployments.
+  z.object({ ...ticketField, op: z.literal('nodes'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('top-pods'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('top-nodes'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('events'), context: k8sContext }),
+  // Mười hai bảng đọc thêm của màn Báo cáo (2026-09-17). Tất cả là `get`/`describe`
+  // không cờ `-o`, tức `read` chạy thẳng — xem `sensitiveReadOf()`.
+  z.object({ ...ticketField, op: z.literal('describe-nodes'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('hpa'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('statefulsets'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('daemonsets'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('jobs'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('pvc'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('services'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('ingresses'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('endpoints'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('resourcequota'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('pdb'), context: k8sContext }),
+  z.object({ ...ticketField, op: z.literal('replicasets'), context: k8sContext }),
   z.object({
     ...ticketField,
     op: z.literal('containers'),
@@ -76,6 +108,7 @@ const Params = z.discriminatedUnion('op', [
     pod: z.string().max(253),
     container: z.string().max(63).optional(),
     tail: z.number().int().positive().max(MAX_TAIL).optional(),
+    since: z.string().max(8).optional(),
   }),
   z.object({
     ...ticketField,
@@ -137,21 +170,207 @@ export function buildKubeCommand(raw: z.infer<typeof Params>): Built {
         toolName: 'kube_namespaces',
         op: 'namespaces',
       }
+    // `-o wide` thêm hai cột IP và NODE. Nó KHÔNG làm bảng này thành "đọc nội
+    // dung object": `sensitiveReadOf()` chỉ chặn `-o yaml|json|jsonpath|
+    // go-template|custom-columns` (xem `infra/classify.ts`), còn `-o wide` vẫn là
+    // bảng metadata ⇒ vẫn chạy thẳng, không sinh hộp thoại duyệt mỗi lần nạp.
+    //
+    // Vì sao cần: cột NODE là thứ DUY NHẤT nối pod với máy chạy nó. Thiếu nó thì
+    // báo cáo chỉ ra được "node này RAM 100%" và dừng ở đúng chỗ người đọc phải
+    // mở terminal để hỏi "pod nào đang ngồi trên đó". `kubectl top pods` không có
+    // cột này, `kubectl top nodes` cũng không.
     case 'pods':
       return {
         tool: 'kubectl',
-        args: ['get', 'pods', '--no-headers'],
+        args: ['get', 'pods', '-o', 'wide', '--no-headers'],
         context: k8s(raw.context),
         toolName: 'kube_pods',
         op: 'pods',
       }
+    // `-o wide` thêm hai cột CONTAINERS + IMAGES, tức là chỗ DUY NHẤT trong bảng
+    // này trả lời "phiên bản nào đang chạy" — thiếu nó thì báo cáo chỉ nói được
+    // "3/3 sẵn sàng" mà không nói nổi 3 pod đó đang chạy image tag nào.
+    //
+    // Nó KHÔNG làm bảng này thành "đọc nội dung object": `sensitiveReadOf()` trong
+    // `src/infra/classify.ts` chỉ chặn `-o yaml|json|jsonpath|go-template|
+    // custom-columns`, còn `-o wide` vẫn là bảng metadata ⇒ vẫn là `read` chạy
+    // thẳng, không sinh hộp thoại duyệt.
+    //
+    // `-o wide` chỉ THÊM cột vào cuối, nên các cột cũ (READY/UP-TO-DATE/AVAILABLE/
+    // AGE) giữ nguyên vị trí — parser phía UI đọc theo chỉ số cột không phải sửa.
     case 'deployments':
       return {
         tool: 'kubectl',
-        args: ['get', 'deployments', '--no-headers'],
+        args: ['get', 'deployments', '-o', 'wide', '--no-headers'],
         context: k8s(raw.context),
         toolName: 'kube_deployments',
         op: 'deployments',
+      }
+    case 'nodes':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'nodes', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_nodes',
+        op: 'nodes',
+      }
+    // `kubectl top` đọc metrics-server. Cụm CHƯA cài metrics-server sẽ trả exit
+    // code khác 0 kèm `error: Metrics API not available` — đó là một câu trả lời
+    // hợp lệ, không phải sự cố của AWOG, nên nó đi lên UI nguyên văn qua
+    // `result.stderr` và màn Báo cáo hiện ô "chưa có nguồn CPU/RAM" thay vì số 0.
+    case 'top-pods':
+      return {
+        tool: 'kubectl',
+        args: ['top', 'pods', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_top_pods',
+        op: 'top-pods',
+      }
+    case 'top-nodes':
+      return {
+        tool: 'kubectl',
+        args: ['top', 'nodes', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_top_nodes',
+        op: 'top-nodes',
+      }
+    // Chỉ `type=Warning`: bảng event đầy đủ gồm cả `Normal` (Scheduled/Pulled/
+    // Started của mọi pod) — hàng nghìn dòng vô thưởng vô phạt che đúng cái dòng
+    // OOMKilled mà người đọc báo cáo đang tìm. `--sort-by` dùng
+    // `.metadata.creationTimestamp` (luôn có) chứ không `.lastTimestamp` (rỗng với
+    // event ghi qua API events.k8s.io ⇒ kubectl báo lỗi không tìm thấy field).
+    case 'events':
+      return {
+        tool: 'kubectl',
+        args: [
+          'get',
+          'events',
+          '--field-selector',
+          'type=Warning',
+          '--sort-by=.metadata.creationTimestamp',
+          '--no-headers',
+        ],
+        context: k8s(raw.context),
+        toolName: 'kube_events',
+        op: 'events',
+      }
+    // `describe nodes` (KHÔNG kèm tên node) trả về MỌI node trong một lần gọi.
+    // Đây là nguồn DUY NHẤT của "sức chứa thật": `Allocatable`, `Allocated
+    // resources` (requests/limits + %) và số pod trên node. `kubectl top` chỉ nói
+    // mức ĐANG dùng — mà pod `Pending` gần như luôn vì hết chỗ ĐẶT TRƯỚC
+    // (requests), không phải vì CPU thật đang cao. Thiếu bảng này thì báo cáo
+    // không bao giờ giải thích được vì sao pod mới không lên được.
+    case 'describe-nodes':
+      return {
+        tool: 'kubectl',
+        args: ['describe', 'nodes'],
+        context: k8s(raw.context),
+        toolName: 'kube_describe_nodes',
+        op: 'describe-nodes',
+      }
+    case 'hpa':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'hpa', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_hpa',
+        op: 'hpa',
+      }
+    // Ba loại workload KHÔNG phải Deployment. Tách ba lệnh chứ không gộp
+    // `get sts,ds,job`: gộp lại thì kubectl in ba khối có SỐ CỘT KHÁC NHAU dính
+    // liền nhau, và `parseKubeTable` (cắt theo ≥2 dấu cách) không có cách nào biết
+    // hàng đang đọc thuộc khối nào.
+    case 'statefulsets':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'statefulsets', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_statefulsets',
+        op: 'statefulsets',
+      }
+    case 'daemonsets':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'daemonsets', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_daemonsets',
+        op: 'daemonsets',
+      }
+    case 'jobs':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'jobs', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_jobs',
+        op: 'jobs',
+      }
+    case 'pvc':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'pvc', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_pvc',
+        op: 'pvc',
+      }
+    case 'services':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'services', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_services',
+        op: 'services',
+      }
+    case 'ingresses':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'ingresses', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_ingresses',
+        op: 'ingresses',
+      }
+    // `get endpoints` là câu trả lời cho "Service này có ai đứng sau không": cột
+    // ENDPOINTS rỗng (`<none>`) nghĩa là selector không khớp pod nào — bảng
+    // Services một mình không nói được điều đó, nó vẫn hiện CLUSTER-IP như thường.
+    case 'endpoints':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'endpoints', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_endpoints',
+        op: 'endpoints',
+      }
+    // Hạn mức của namespace: `describe nodes` nói sức chứa của MÁY, còn
+    // ResourceQuota là trần do cụm đặt cho namespace — pod `Pending` vì chạm trần
+    // quota trông y hệt pod Pending vì hết node, nhưng cách sửa thì khác hẳn.
+    case 'resourcequota':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'resourcequota', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_resourcequota',
+        op: 'resourcequota',
+      }
+    // PodDisruptionBudget: lý do phổ biến nhất khiến `drain`/nâng cấp node treo
+    // giữa chừng. Dùng tên tài nguyên ĐẦY ĐỦ `poddisruptionbudgets` thay vì `pdb`
+    // trong argv (viết tắt chỉ là bí danh của kubectl, tên đầy đủ thì mọi phiên
+    // bản đều hiểu); `pdb` chỉ còn là tên thao tác phía UI.
+    case 'pdb':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'poddisruptionbudgets', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_pdb',
+        op: 'pdb',
+      }
+    // ReplicaSet: nơi nhìn ra một lần rollout đang DỞ DANG — deployment báo
+    // AVAILABLE đủ trong khi vẫn còn hai RS cùng có pod, tức bản cũ chưa rút hết.
+    case 'replicasets':
+      return {
+        tool: 'kubectl',
+        args: ['get', 'rs', '--no-headers'],
+        context: k8s(raw.context),
+        toolName: 'kube_replicasets',
+        op: 'replicasets',
       }
     case 'containers':
       return {
@@ -166,6 +385,12 @@ export function buildKubeCommand(raw: z.infer<typeof Params>): Built {
       args.push(String(raw.tail ?? DEFAULT_TAIL))
       if (raw.container !== undefined) {
         args.push('--container', requireMatch(raw.container, CONTAINER_RE, 'Tên container'))
+      }
+      // `--since` ĐI CÙNG `--tail`, không thay nó: kubectl lấy giao của hai điều
+      // kiện. Thiếu `--tail` thì "1 giờ qua" của một service ồn là vài trăm nghìn
+      // dòng đổ thẳng vào modal.
+      if (raw.since !== undefined) {
+        args.push('--since', requireMatch(raw.since, SINCE_RE, 'Khoảng thời gian'))
       }
       return { tool: 'kubectl', args, context: k8s(raw.context), toolName: 'kube_logs', op: 'logs' }
     }
@@ -249,7 +474,7 @@ export type InfraKubeOk = {
   command: string
   class: string
   decision: string
-  /** Hàng/cột đã bóc, chỉ có ở ba thao tác bảng. */
+  /** Hàng/cột đã bóc, chỉ có ở các thao tác trả bảng (xem `TABLE_OPS`). */
   rows?: string[][]
   /** Tên container, chỉ có ở `containers`. */
   names?: string[]
@@ -267,6 +492,31 @@ export type InfraKubeOk = {
 
 export type InfraKubeBlocked = Extract<InfraGatedResult, { blocked: true }> & { op: string }
 export type InfraKubeResult = InfraKubeOk | InfraKubeBlocked
+
+/** Thao tác trả về BẢNG CHỮ ⇒ bóc thành `rows`. */
+const TABLE_OPS: ReadonlySet<string> = new Set([
+  'namespaces',
+  'pods',
+  'deployments',
+  'nodes',
+  'top-pods',
+  'top-nodes',
+  'events',
+  'hpa',
+  'statefulsets',
+  'daemonsets',
+  'jobs',
+  'pvc',
+  'services',
+  'ingresses',
+  'endpoints',
+  'resourcequota',
+  'pdb',
+  'replicasets',
+])
+// `describe-nodes` CỐ Ý không ở đây: output của nó là văn bản nhiều khối lồng
+// nhau, không phải bảng cột. UI đọc nó từ `result.stdout` bằng parser riêng
+// (`nodeCapacity()`), vì bóc nó theo luật "≥2 dấu cách" sẽ ra rác.
 
 async function execute(built: Built, ticket?: string): Promise<InfraKubeResult> {
   const gated = await runGated({
@@ -299,7 +549,7 @@ async function execute(built: Built, ticket?: string): Promise<InfraKubeResult> 
   // Chỉ bóc khi lệnh THÀNH CÔNG: stdout của một lệnh hỏng là thông báo lỗi, bóc
   // nó thành "bảng" sẽ cho ra một bảng một ô vô nghĩa.
   if (!result.ok) return out
-  if (built.op === 'namespaces' || built.op === 'pods' || built.op === 'deployments') {
+  if (TABLE_OPS.has(built.op)) {
     out.rows = parseKubeTable(result.stdout)
   } else if (built.op === 'containers') {
     out.names = parseDescribeContainerNames(result.stdout)

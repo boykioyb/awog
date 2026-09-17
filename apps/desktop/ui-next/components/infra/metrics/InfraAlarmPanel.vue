@@ -1,5 +1,5 @@
 <template>
-  <aside class="iap">
+  <aside class="iap icard">
     <div class="iap-head">
       <span class="iap-title">
         {{ draft.editing ? t('infra.monitoring.alarm.edit') : t('infra.monitoring.alarm.create') }}
@@ -203,9 +203,9 @@ function setNumber(key: 'threshold' | 'evaluationPeriods', e: Event): void {
   min-height: 0;
   overflow-y: auto;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgEl);
+  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — xem app-shell.css. Bốn khối
+     của màn này TỪNG tự khai lại cùng một bộ, với ba nền khác nhau (`--bgSubtle`,
+     `--bgEl`), nên chúng đọc ra thành ba loại bề mặt trong cùng một màn. */
 }
 
 .iap-head {

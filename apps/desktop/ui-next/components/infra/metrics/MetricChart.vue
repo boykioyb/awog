@@ -1,5 +1,10 @@
 <template>
-  <div class="mc">
+  <!-- MỘT BIỂU ĐỒ = MỘT CARD. Trước 2026-09-17 tiêu đề và chú giải trôi thẳng trên
+       nền trang còn riêng vùng vẽ có khung, nên mỗi ô đọc ra thành HAI thứ rời:
+       một dòng chữ, rồi một cái hộp (ảnh người dùng). Da card dùng chung `.icard`
+       của khu hạ tầng (app-shell.css) — cùng bề mặt với thanh công cụ và các khối
+       của màn Chi phí, không tự khai riêng một kiểu nữa. -->
+  <div class="mc icard">
     <div class="mc-head">
       <span class="mc-title">{{ title }}</span>
       <span class="mc-head-right">
@@ -45,27 +50,6 @@
             {{ t('infra.monitoring.alarm.create') }}
           </button>
         </template>
-        <!-- Hai chip icon-trần: tiêu đề biểu đồ đã chiếm chỗ, và cả hai hành động đều
-             có `title` + ngữ cảnh (đang ở màn Giám sát hay đang ở trong một bảng) nên
-             không cần nhãn chữ. -->
-        <button
-          v-if="pinnable"
-          class="mc-chip"
-          type="button"
-          :title="t('infra.monitoring.pin')"
-          @click="emit('pin')"
-        >
-          <Icon name="pin" class="mc-ic" />
-        </button>
-        <button
-          v-if="removable"
-          class="mc-chip"
-          type="button"
-          :title="t('infra.dashboard.removeChart')"
-          @click="emit('remove')"
-        >
-          <Icon name="minus" class="mc-ic" />
-        </button>
       </span>
     </div>
 
@@ -159,12 +143,17 @@
             :style="{ fill: s.color }"
           />
           <!-- Nhãn ghi thẳng ở cuối đường: p50/p95/p99 là một hue ba bậc, đọc màu
-               không phân biệt được, nên danh tính phải nằm ở chữ. -->
+               không phân biệt được, nên danh tính phải nằm ở chữ.
+
+               `y` lấy từ `endLabels` chứ KHÔNG từ `yOf(giá trị cuối)`: hai chuỗi kết
+               thúc ở cùng một mức (CPU trung bình ≈ đỉnh ≈ 0%) sẽ vẽ hai nhãn đè lên
+               nhau thành một mớ chữ không đọc được — lỗi thật, ảnh người dùng
+               2026-09-17. Xem `spreadLabels`. -->
           <text
-            v-if="s.points.length > 0"
+            v-if="endLabels[s.key] !== undefined"
             class="mc-end"
             :x="Math.min(vw - PAD_R + 6, xOf(lastOf(s.points).t) + 6)"
-            :y="yOf(lastOf(s.points).v)"
+            :y="endLabels[s.key]"
             dominant-baseline="middle"
           >
             {{ s.label }}
@@ -268,25 +257,19 @@ const props = withDefaults(
     threshold: ChartThreshold | null
     loading?: boolean
     /**
-     * Mặc định TẮT, và bật ở đúng một chỗ (`InfraMonitoring`) — cả chuỗi nút cảnh báo
-     * là chuyện của màn Giám sát. Bảng điều khiển dùng lại component này nhưng không
-     * có ngưỡng lẫn bản nháp, nên ba nút kia ở đó là ba nút chết.
+     * Mặc định TẮT. Cả chuỗi nút cảnh báo là chuyện của màn Giám sát; component này
+     * vẫn giữ cờ vì nó là biểu đồ dùng chung, và bề mặt nào chỉ muốn VẼ thì không
+     * phải mang theo ba nút bấm vào không dẫn tới đâu.
      */
     showAlarm?: boolean
-    /** Hiện chip "ghim vào bảng điều khiển". Chỉ màn Giám sát bật. */
-    pinnable?: boolean
-    /** Hiện chip "bỏ khỏi bảng". Chỉ tab Bảng điều khiển bật, và chỉ khi còn biểu đồ khác. */
-    removable?: boolean
   }>(),
-  { loading: false, showAlarm: false, pinnable: false, removable: false },
+  { loading: false, showAlarm: false },
 )
 
 const emit = defineEmits<{
   'threshold-change': [value: number]
   'alarm-create': []
   'alarm-edit': []
-  pin: []
-  remove: []
 }>()
 
 const { t } = useI18n()
@@ -390,6 +373,64 @@ function yOf(v: number): number {
   const { max } = yScale.value
   return PAD_T + PLOT_H - (max > 0 ? (v / max) * PLOT_H : 0)
 }
+
+/** Khoảng cách tối thiểu giữa hai nhãn cuối đường, tính bằng đơn vị của viewBox.
+ *  Bằng một hộp dòng `--fs-xs`: sát hơn thì hai chữ dính vào nhau. */
+const LABEL_GAP = 12
+
+/**
+ * Đẩy các nhãn cuối đường ra xa nhau khi chúng trùng chỗ.
+ *
+ * ⚠ VÌ SAO CẦN — LỖI THẬT, ảnh người dùng 2026-09-17. Nhãn được đặt ở đúng `y` của
+ * điểm cuối mỗi chuỗi, mà hai chuỗi của cùng một biểu đồ RẤT HAY kết thúc ở cùng
+ * một mức: CPU trung bình ≈ đỉnh ≈ 0% trên một service rảnh, "đang chạy" = "mong
+ * muốn" = 1 trên một service khoẻ. Khi đó hai nhãn vẽ chồng lên nhau và ra một mớ
+ * chữ (`đình`/`trung bình` đè nhau) — đúng những lúc hệ thống BÌNH THƯỜNG, tức là
+ * hầu hết thời gian.
+ *
+ * Thuật toán: sắp theo `y` mong muốn, quét một lượt đẩy xuống cho đủ khoảng cách,
+ * rồi nếu tràn đáy thì đẩy ngược cả cụm lên. Giữ THỨ TỰ theo giá trị — nhãn của
+ * đường trên vẫn ở trên — vì đảo thứ tự mới là thứ làm người đọc gán nhầm tên.
+ *
+ * Hàm THUẦN (không đọc `props`, không chạm DOM) nên đo được bằng cách gọi tay —
+ * `<script setup>` KHÔNG cho `export`, nên nó ở lại đây thay vì ra `utils/`: đây là
+ * hình học của riêng biểu đồ này, không phải thứ màn nào khác dùng lại.
+ */
+function spreadLabels(
+  wanted: readonly { key: string; y: number }[],
+  top: number,
+  bottom: number,
+  gap = LABEL_GAP,
+): Record<string, number> {
+  const sorted = [...wanted].sort((a, b) => a.y - b.y)
+  const out: Record<string, number> = {}
+  let prev = -Infinity
+  for (const item of sorted) {
+    const y = Math.max(item.y, prev + gap)
+    out[item.key] = y
+    prev = y
+  }
+  // Tràn đáy ⇒ dời NGUYÊN cụm lên, không nén khoảng cách: nén lại là quay về đúng
+  // cái chồng chữ vừa gỡ. Cụm cao hơn khung thì đành tràn — nhưng mỗi nhãn vẫn đọc
+  // được, và đó là điều duy nhất quan trọng ở đây.
+  const lowest = prev
+  if (lowest > bottom) {
+    const shift = Math.min(lowest - bottom, out[sorted[0]!.key]! - top)
+    if (shift > 0) for (const k of Object.keys(out)) out[k] = out[k]! - shift
+  }
+  return out
+}
+
+/** Vị trí `y` ĐÃ TÁCH của nhãn cuối mỗi chuỗi, tra theo `key` của chuỗi. */
+const endLabels = computed<Record<string, number>>(() =>
+  spreadLabels(
+    props.series
+      .filter((s) => s.points.length > 0)
+      .map((s) => ({ key: s.key, y: yOf(lastOf(s.points).v) })),
+    PAD_T,
+    PAD_T + PLOT_H,
+  ),
+)
 
 // ─── Đường · vùng · cột ─────────────────────────────────────────────────────
 
@@ -565,8 +606,10 @@ function onGripUp(e: PointerEvent): void {
 .mc {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — ở đây chỉ có lề trong. */
+  padding: 10px 12px;
 }
 
 .mc-head {
@@ -653,9 +696,12 @@ function onGripUp(e: PointerEvent): void {
   color: var(--textFaint);
 }
 
+/* CARD LỒNG CARD THÌ KHỬ KHUNG CON. Cả khối nay là `.icard`, nên một viền thứ hai
+   quanh vùng vẽ chỉ vẽ lại đúng hình dạng đã có, cách vào trong vài pixel — đọc ra
+   thành hai hộp lồng nhau. Nền `--bgEl` GIỮ LẠI: nó tách vùng vẽ khỏi phần chữ của
+   card, và đó là việc nền làm được mà viền không làm được. */
 .mc-plot {
   position: relative;
-  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: var(--bgEl);
   overflow: hidden;

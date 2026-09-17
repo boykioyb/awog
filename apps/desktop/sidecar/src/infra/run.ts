@@ -131,7 +131,20 @@ const DEFAULT_MAX_OUTPUT = 256 * 1024
 // là lỗ invariant 7 nếu bỏ sót: cả hai đổi được đích mà lệnh thật sự chạm tới.
 const EXTRA_FORBIDDEN: Record<InfraTool, readonly string[]> = {
   aws: ['--endpoint', '--cli-connect-timeout'],
-  kubectl: ['--server', '-n', '-s', '--cluster', '--user', '--as', '--as-group', '--token'],
+  // `--namespace` ở ĐÂY chứ không ở `FORBIDDEN_FLAGS` toàn cục: với kubectl nó là
+  // cờ ngữ cảnh thật, với `aws` nó là tham số truy vấn của CloudWatch. Xem ghi chú
+  // ở `FORBIDDEN_FLAGS` (classify.ts) — để chung đã chặn nhầm cả màn Giám sát.
+  kubectl: [
+    '--server',
+    '--namespace',
+    '-n',
+    '-s',
+    '--cluster',
+    '--user',
+    '--as',
+    '--as-group',
+    '--token',
+  ],
   terraform: ['-chdir'],
 }
 

@@ -177,6 +177,7 @@ import './methods/infra.trail.js'
 import './methods/infra.explain.js'
 // Danh sách ALB + EC2 cho hai ô lọc của màn Giám sát (chỉ chạy khi người dùng bấm).
 import './methods/infra.monitor-targets.js'
+import './methods/infra.monitor-log-groups.js'
 import './methods/ssh.list.js'
 import './methods/ssh.upsert.js'
 import './methods/ssh.delete.js'

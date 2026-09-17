@@ -1,8 +1,16 @@
 <template>
-  <!-- Tab Giám sát của `/infra` (Mốc 6, 6.3 · 6.4).
-       BỐ CỤC: một thanh chọn khoảng thời gian + tài nguyên, rồi tới dải cảnh báo, bốn
-       ô số, và lưới 2×2 biểu đồ. Panel cảnh báo / lịch sử trượt vào bên phải KHI cần
-       — mở nó không được đẩy biểu đồ ra khỏi mắt người vừa kéo ngưỡng trên đó.
+  <!-- Tab Giám sát của `/infra`.
+
+       BỐ CỤC: chọn TÀI NGUYÊN + khoảng thời gian, rồi tới dải cảnh báo của chính
+       tài nguyên đó, hàng ô số, và lưới biểu đồ. Panel cảnh báo / lịch sử trượt vào
+       bên phải KHI cần — mở nó không được đẩy biểu đồ ra khỏi mắt người vừa kéo
+       ngưỡng trên đó.
+
+       TÀI NGUYÊN ĐỨNG TRƯỚC MỌI THỨ (2026-09-17). Bản trước bày bốn biểu đồ ghim
+       cứng ALB + EC2 và hai ô lọc mặc định RỖNG, nên màn mở ra là bốn khung trắng —
+       trên hạ tầng ECS thì trắng vĩnh viễn, vì không một biểu đồ nào đọc `AWS/ECS`.
+       Nay loại tài nguyên quyết định bộ biểu đồ, và chưa chọn thì màn nói thẳng
+       phải chọn gì thay vì vẽ khung rỗng.
 
        SFC này chỉ ghép khối + bind. Mọi state/lời gọi RPC nằm ở `useInfraMetrics()`
        (khuôn page-controller của .claude/rules/nuxt-vue.md). -->
@@ -11,36 +19,21 @@
          trang và nền panel gần như không phân biệt được, nên một hàng control trôi
          thẳng trên trang đọc ra thành các nút rời chứ không phải một thanh. -->
     <div class="itoolbar ifields im-tool">
+      <InfraResourcePicker
+        :model-value="target"
+        :groups="pickerGroups"
+        :loading="pickerLoading"
+        :loaded="pickerLoaded"
+        :problem="pickerError"
+        :has-account="hasAccount"
+        @update:model-value="onPickTarget"
+        @reload="loadTargets(true)"
+      />
+
       <div class="ifield">
         <div class="ilbl">{{ t('infra.monitoring.window.label') }}</div>
         <InfraTimeRange v-model="win" :default-seconds="3 * 3600" />
       </div>
-
-      <InfraTargetPicker
-        v-model="targets.lb"
-        :label="t('infra.monitoring.target.lb')"
-        :placeholder="t('infra.monitoring.target.lbPh')"
-        :why="t('infra.monitoring.target.lbWhy')"
-        :select-placeholder="t('infra.monitoring.target.any')"
-        :group="pickerLbs"
-        :loading="pickerLoading"
-        :has-account="hasAccount"
-        @reload="loadTargets(true)"
-        @submit="load(false)"
-      />
-
-      <InfraTargetPicker
-        v-model="targets.instance"
-        :label="t('infra.monitoring.target.instance')"
-        :placeholder="t('infra.monitoring.target.instancePh')"
-        :why="t('infra.monitoring.target.instanceWhy')"
-        :select-placeholder="t('infra.monitoring.target.any')"
-        :group="pickerInstances"
-        :loading="pickerLoading"
-        :has-account="hasAccount"
-        @reload="loadTargets(true)"
-        @submit="load(false)"
-      />
 
       <!-- Ba nút là MỘT nhóm, không phải ba mục rời của thanh flex. Rời nhau thì
            thanh gãy ở giữa chúng: ở cỡ cửa sổ thường "Nạp" ở lại hàng trên còn
@@ -50,8 +43,9 @@
         <button
           type="button"
           class="btn pri"
-          :disabled="loading || !windowValid"
+          :disabled="loading || !windowValid || !target"
           :aria-busy="loading"
+          :title="target ? '' : t('infra.monitoring.target.required')"
           @click="load(false)"
         >
           <Icon name="play" class="im-ic" />
@@ -79,25 +73,18 @@
         </button>
       </div>
     </div>
-    <!-- Dòng này TỪNG TỒN TẠI trong i18n mà không màn nào render (`target.hint`),
-         nên hai ô tài nguyên đứng trần: không nhãn phụ, không placeholder, không
-         ai nói phải điền gì vào (người dùng hỏi thẳng 2026-09-16). -->
+
     <!-- Câu lỗi của lượt dò danh sách đứng ở ĐÂY, không trong `.im-tool`: thanh đó
          là flex-wrap, nên một đoạn văn nằm trong nó sẽ quyết định hàng gãy ở đâu và
          làm vỡ cả bố cục (lỗi thật 2026-09-16). Một dòng, cắt bằng ellipsis, toàn
          văn trong `title`. -->
-    <p v-if="pickerError" class="im-targeterr" :title="pickerError">
-      {{ t('infra.monitoring.target.listFailed', { err: pickerError }) }}
-    </p>
-    <!-- MỘT dòng. Bản trước dài ba dòng và chiếm nhiều chỗ hơn cả thanh công cụ
-         ngay trên nó; phần giải thích đầy đủ chuyển vào `title`, và nửa sau của nó
-         (“giá trị do bạn dán vào”) nay đã sai vì hai ô đã thành picker. -->
-    <p class="im-targethint" :title="t('infra.monitoring.target.hintWhy')">
-      {{ t('infra.monitoring.target.hint') }}
-    </p>
+    <p v-if="pickerError" class="im-targeterr" :title="pickerError">{{ pickerError }}</p>
 
     <div class="im-status">
       <span class="ihint">
+        <template v-if="target">
+          {{ t(`infra.monitoring.kind.${target.kind}`) }} · {{ target.label }} ·
+        </template>
         {{ t('infra.monitoring.window.showing', { span: windowLabel }) }}
         <template v-if="loadedAt">
           · {{ t('infra.monitoring.loadedAt', { t: atLabel }) }}
@@ -114,12 +101,23 @@
     <p v-if="!sidecarAvailable" class="ierr">{{ t('infra.monitoring.sidecarUnavailable') }}</p>
     <p v-else-if="error" class="ierr">{{ error }}</p>
 
-    <div class="im-body">
+    <!-- CHƯA CHỌN TÀI NGUYÊN ⇒ MỘT câu, không phải một lưới khung rỗng. Bốn khung
+         "thiếu dữ liệu" là lời nói dối: chúng khiến người dùng đi tìm lỗi ở AWS
+         trong khi màn chỉ đang chờ một cú chọn. -->
+    <InfraEmpty
+      v-if="!target"
+      :title="t('infra.monitoring.empty.title')"
+      :hint="hasAccount ? t('infra.monitoring.empty.hint') : t('infra.monitoring.noProfile')"
+    />
+
+    <div v-else class="im-body">
       <InfraAlarmStrip
-        :alarms="alarms"
+        :alarms="targetAlarms"
         :state="worstState"
         :loaded="alarmsLoaded"
         :truncated="alarmsTruncated"
+        :other-count="otherAlarmCount"
+        :scaling-count="scalingAlarmCount"
         @open-history="openHistory"
       />
 
@@ -137,15 +135,13 @@
             :window="windowRef"
             :window-seconds="windowSeconds"
             :period-seconds="periodSeconds"
-            :incidents="incidents"
+            :incidents="incidentsByChart[c.key] ?? []"
             :threshold="thresholds[c.key] ?? null"
             :loading="loading"
             :show-alarm="true"
-            :pinnable="true"
             @alarm-create="openDraft(c.key)"
             @alarm-edit="openDraft(c.key)"
             @threshold-change="setThreshold"
-            @pin="onPin(c.key)"
           />
         </div>
 
@@ -168,6 +164,33 @@
         </div>
       </div>
 
+      <InfraLogErrors
+        :target="target"
+        :groups="logGroups"
+        :basis="logBasis"
+        :resolving="logResolving"
+        :ready="logReady"
+        :reading="logReading"
+        :recent="logRecent"
+        :recent-total="logRecentTotal"
+        :read="logRead"
+        :read-span="logReadSpan"
+        :read-truncated="logReadTruncated"
+        :read-dropped="logReadDropped"
+        :read-error="logReadError"
+        :running="logRunning"
+        :points="logPoints"
+        :ran="logRan"
+        :bytes-scanned="logBytes"
+        :error="logError"
+        :window="windowRef"
+        :window-seconds="windowSeconds"
+        :period-seconds="periodSeconds"
+        @resolve="resolveLogGroups()"
+        @read="readLogErrors"
+        @run="runLogErrors()"
+      />
+
       <div class="im-ask">
         <span class="im-asklbl">{{ t('infra.monitoring.title') }}</span>
         <button
@@ -186,28 +209,30 @@
 </template>
 
 <script setup lang="ts">
-// Màn Giám sát — lớp bind duy nhất của tab (Mốc 6, 6.3 · 6.4).
+// Màn Giám sát — lớp bind duy nhất của tab.
 //
-// Ba khối con, ba lý do tách:
-//   · `InfraAlarmStrip`  — ba trạng thái cảnh báo là một LUẬT, không phải một danh sách.
-//   · `InfraMonitoringTiles` — bốn ô số kèm mốc so sánh, thuần trình bày.
-//   · `InfraAlarmPanel`  — form đặt cảnh báo, có state cục bộ của ô nhập.
+// Bốn khối con, bốn lý do tách:
+//   · `InfraResourcePicker`  — chọn tài nguyên; loại của nó quyết định bộ biểu đồ.
+//   · `InfraAlarmStrip`      — ba trạng thái cảnh báo là một LUẬT, không phải một danh sách.
+//   · `InfraMonitoringTiles` — hàng ô số, thuần trình bày.
+//   · `InfraAlarmPanel`      — form đặt cảnh báo, có state cục bộ của ô nhập.
 //
 // LUẬT KHÔNG TỰ CHẠY nằm ở `useInfraMetrics`: màn này KHÔNG có `onMounted` nào nạp
 // số liệu, và không có hẹn giờ. Cú bấm "Nạp", hoặc một khoảng thời gian được gieo
 // từ tab Nhật ký, là hai đường vào duy nhất.
-import { formatAxisTime, MONITOR_CHARTS, useInfraMetrics } from '~/composables/useInfraMetrics'
-import { useInfraDashboardPin } from '~/composables/useInfraDashboardPin'
+import { formatAxisTime, useInfraMetrics, type MonitorTarget } from '~/composables/useInfraMetrics'
 import { useInfraMonitorTargets } from '~/composables/useInfraMonitorTargets'
-import InfraTargetPicker from '~/components/infra/metrics/InfraTargetPicker.vue'
+import { useInfraLogErrors, type RecentSpan } from '~/composables/useInfraLogErrors'
+import InfraResourcePicker from '~/components/infra/metrics/InfraResourcePicker.vue'
+import InfraLogErrors from '~/components/infra/metrics/InfraLogErrors.vue'
 import InfraTimeRange from '~/components/infra/InfraTimeRange.vue'
-import type { DashboardChart } from '~/composables/useInfraDashboards'
+import InfraEmpty from '~/components/infra/InfraEmpty.vue'
 
 const {
   context,
   hasAccount,
   sidecarAvailable,
-  targets,
+  target,
   win,
   windowValid,
   windowLabel,
@@ -223,9 +248,11 @@ const {
   partialKeys,
   periodSeconds,
   charts,
-  incidents,
+  incidentsByChart,
   thresholds,
-  alarms,
+  targetAlarms,
+  otherAlarmCount,
+  scalingAlarmCount,
   alarmsLoaded,
   alarmsTruncated,
   worstState,
@@ -249,32 +276,99 @@ const {
 
 const { t } = useI18n()
 
-// Danh sách cho HAI picker tài nguyên. Một lượt gọi RPC nuôi cả hai — chúng là hai
-// nhóm trong cùng một câu trả lời, không phải hai lời gọi.
-//
-// Truyền hàm đọc chứ không truyền giá trị: khoá cache là (profile, region), và hai
-// thứ đó đổi khi người dùng chỉnh thanh ngữ cảnh ở đầu trang.
+// Danh mục tài nguyên. Truyền HÀM ĐỌC chứ không truyền giá trị: khoá cache là
+// (profile, region), và hai thứ đó đổi khi người dùng chỉnh thanh ngữ cảnh đầu trang.
 const {
   loading: pickerLoading,
-  loadBalancers: pickerLbs,
-  instances: pickerInstances,
+  loaded: pickerLoaded,
+  groups: pickerGroups,
+  groupError,
+  deniedActions,
+  error: pickerFatal,
   load: loadTargets,
 } = useInfraMonitorTargets(
   () => context.value.profile ?? '',
   () => context.value.region ?? '',
-  'explorer',
 )
 
 /**
- * Lỗi của lượt dò danh sách, gộp hai nhóm. Hai nguồn hỏng cùng một lý do (token
- * hết hạn) là ca THƯỜNG GẶP nhất, và in hai lần cùng một câu chỉ tổ dài — nhưng
- * hỏng khác lý do thì phải thấy cả hai, nên gộp theo nội dung chứ không lấy cái
- * đầu tiên.
+ * Lỗi cả lượt gọi đứng trước lỗi từng nhóm — nó giải thích được cả năm nhóm rỗng.
+ *
+ * `ENGINE_CONTRACT_MISMATCH` là mã nội bộ, không phải câu của AWS: nó có nghĩa là
+ * engine đang chạy CŨ hơn renderer (sidecar không hot-reload theo UI, phải build
+ * lại `dist` rồi khởi động lại app). In nguyên mã đó ra thì người dùng đi tra
+ * CloudWatch, nên nó đổi thành câu nói rõ việc phải làm.
  */
 const pickerError = computed<string>(() => {
-  const errs = [pickerLbs.value.error, pickerInstances.value.error].filter((e) => e !== '')
-  return [...new Set(errs)].join(' · ')
+  const raw = pickerFatal.value || groupError.value
+  if (raw === 'ENGINE_CONTRACT_MISMATCH') return t('infra.monitoring.target.engineMismatch')
+  // Thiếu quyền là ca có LỜI KHUYÊN CỤ THỂ, nên nó không được để nguyên dạng lỗi
+  // thô: bốn câu AccessDenied nối nhau ra gần một nghìn ký tự và chỉ khác nhau ở
+  // tên action, trong khi thứ người dùng cần mang đi xin quyền chính là danh sách
+  // action đó (ảnh người dùng 2026-09-17).
+  if (deniedActions.value.length > 0) {
+    return t('infra.monitoring.target.denied', { actions: deniedActions.value.join(', ') })
+  }
+  return raw
 })
+
+/**
+ * Đổi tài nguyên = đổi bộ biểu đồ, nên số liệu của tài nguyên CŨ phải biến mất.
+ * Giữ lại là để người dùng đọc biểu đồ của service A dưới cái tên service B —
+ * kiểu nói dối im lặng tệ nhất một màn giám sát làm được.
+ */
+function onPickTarget(next: MonitorTarget | null): void {
+  target.value = next
+}
+
+// ── Lỗi trong log ────────────────────────────────────────────────────────────
+// Đứng RIÊNG khỏi `useInfraMetrics` vì nó chạy trên một đồng hồ tính tiền khác:
+// Insights tính theo SỐ GB QUÉT, nên nó có nút riêng và hộp duyệt riêng (xem đầu
+// `useInfraLogErrors.ts`). Gộp vào `load()` là dựng một hoá đơn quét chạy sau lưng.
+const {
+  groups: logGroups,
+  basis: logBasis,
+  resolving: logResolving,
+  ready: logReady,
+  reading: logReading,
+  recent: logRecent,
+  recentTotal: logRecentTotal,
+  read: logRead,
+  readSpan: logReadSpan,
+  readTruncated: logReadTruncated,
+  readDropped: logReadDropped,
+  readError: logReadError,
+  readRecent,
+  running: logRunning,
+  points: logPoints,
+  ran: logRan,
+  bytesScanned: logBytes,
+  error: logError,
+  reset: resetLogErrors,
+  resolveGroups,
+  run: runLogs,
+} = useInfraLogErrors()
+
+// Đổi tài nguyên ⇒ vứt cả nhóm log lẫn kết quả: chúng thuộc về tài nguyên CŨ, và
+// để lại là vẽ số lỗi của service A dưới cái tên service B.
+watch(() => target.value?.id ?? '', resetLogErrors)
+
+function resolveLogGroups(): void {
+  if (target.value) void resolveGroups(target.value, context.value)
+}
+
+/**
+ * Đọc lỗi gần đây. Cửa sổ của nó ĐỘC LẬP với `windowRef` của biểu đồ — "5 phút qua"
+ * là câu hỏi lúc vừa có chuyện, không cùng nhịp với trục 3 giờ của số liệu, và bắt
+ * chúng dùng chung một khoảng là ép người dùng đổi cả màn chỉ để liếc 5 phút.
+ */
+function readLogErrors(span: RecentSpan): void {
+  void readRecent(span, context.value)
+}
+
+function runLogErrors(): void {
+  if (windowRef.value) void runLogs(windowRef.value, periodSeconds.value, context.value)
+}
 
 /** Mốc "nạp lúc" — cùng định dạng trục thời gian của biểu đồ, không phải ISO. */
 const atLabel = computed(() =>
@@ -292,56 +386,9 @@ const dirtyLabel = computed(() =>
     shown: formatAxisTime(windowRef.value?.startMs ?? 0, 86_400),
   }),
 )
-
-const { requestPin } = useInfraDashboardPin()
-
-/**
- * Dựng biểu đồ để ghim từ spec của chính màn này.
- *
- * PHẢI TRA LẠI `MONITOR_CHARTS`, không dùng được `c` (một `ChartView`): bản vẽ chỉ mang
- * `key`/`label`/`color`/`shade` — đủ để VẼ, không đủ để DỰNG QUERY. Namespace, metric,
- * stat và tài nguyên nằm ở spec, và bảng điều khiển cần cả bốn thứ đó vì nó nạp số liệu
- * ở một màn khác, không có `MONITOR_CHARTS` bên cạnh.
- *
- * CHỌN TỪNG TRƯỜNG, KHÔNG SPREAD. `DashboardChart` là payload đi lên sidecar, và một cú
- * spread là cách để `points`/`missing` của bản vẽ lọt vào file trên đĩa — chúng không có
- * trong lược đồ zod nên lượt lưu hỏng, nhưng chỉ hỏng ở đúng người bấm nút.
- *
- * `targetValue` chỉ có mặt khi ô tài nguyên KHÔNG rỗng: `z.string().min(1)` của lược đồ
- * từ chối chuỗi rỗng, mà `dimensionsFor` cũng bỏ qua giá trị rỗng — nên gửi đi một chuỗi
- * rỗng vừa là lỗi lược đồ vừa là một gợi ý không có nghĩa.
- */
-function onPin(chartKey: string): void {
-  const spec = MONITOR_CHARTS.find((s) => s.key === chartKey)
-  if (!spec) return
-  const chart: DashboardChart = {
-    key: spec.key,
-    title: t(`infra.monitoring.chart.${spec.key}`),
-    kind: spec.kind,
-    unit: spec.unit,
-    series: spec.series.map((s) => {
-      const targetValue = targets.value[s.target].trim()
-      return {
-        key: s.key,
-        namespace: s.namespace,
-        metricName: s.metricName,
-        stat: s.stat,
-        label: s.label,
-        color: s.color,
-        shade: s.shade,
-        dimensions: [],
-        target: s.target,
-        ...(targetValue ? { targetValue } : {}),
-      }
-    }),
-  }
-  requestPin(chart)
-}
 </script>
 
 <style scoped>
-/* Dòng giải thích hai ô tài nguyên. Nằm DƯỚI hàng công cụ chứ không cạnh từng ô:
-   nó nói về cả hai, và nhét vào giữa hàng thì hàng đó xuống dòng ở cửa sổ hẹp. */
 /* Một dòng, cắt bằng ellipsis: stderr của AWS dài và thanh công cụ ngay trên nó
    là flex-wrap. Toàn văn nằm trong `title`. */
 .im-targeterr {
@@ -354,48 +401,17 @@ function onPin(chartKey: string): void {
   color: var(--amber);
 }
 
-.im-targethint {
-  margin: 2px 0 10px;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textFaint);
-}
-
 .im {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   gap: 8px;
-  /* Cùng lề với Logs · Bảng điều khiển · Chi phí · Báo cáo (14px 16px). Trước
-     2026-09-15 màn này là màn DUY NHẤT của nhóm có padding 0, nên nội dung dính sát
-     mép khung trong khi mọi tab anh em đều thụt vào 16px. */
+  /* Cùng lề với Logs · Bảng điều khiển · Chi phí · Báo cáo (14px 16px). */
   padding: 14px 16px;
 }
 
-/* Bố cục + da của thanh, và khuôn `.ifield` bên trong thanh, nay ở app-shell.css.
-   Bản khai `.ifield` ở đây từng là một trong BA bản khác nhau của khu hạ tầng. */
-
-.im-inp {
-  width: 100%;
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  color: var(--text);
-  font-family: inherit;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-
-.im-inp:focus {
-  outline: none;
-  border-color: var(--accentBorder);
-}
+/* Bố cục + da của thanh, và khuôn `.ifield` bên trong thanh, nay ở app-shell.css. */
 
 .im-ic {
   width: var(--icon-sm);

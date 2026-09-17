@@ -281,19 +281,31 @@ const activeError = computed(() =>
   tab.value === 'pods' ? podsError.value : deploymentsError.value,
 )
 
+// Cột map THEO VỊ TRÍ vào `row.cells`, nên thứ tự ở đây phải khớp đúng thứ tự của
+// `kubectl get pods -o wide`: NAME READY STATUS RESTARTS AGE IP NODE (hai cột cuối
+// `NOMINATED NODE`/`READINESS GATES` luôn `<none>` trong đời thật nên bỏ — bảng chỉ
+// đọc tới cột nào được khai ở đây).
 const podColumns = computed(() => [
   t('infra.kube.col.name'),
   t('infra.kube.col.ready'),
   t('infra.kube.col.status'),
   t('infra.kube.col.restarts'),
   t('infra.kube.col.age'),
+  t('infra.kube.col.ip'),
+  t('infra.kube.col.node'),
 ])
+// `kubectl get deployments -o wide`: NAME READY UP-TO-DATE AVAILABLE AGE CONTAINERS
+// IMAGES SELECTOR. Cột map theo VỊ TRÍ nên muốn hiện IMAGES thì phải khai cả
+// CONTAINERS đứng trước nó; SELECTOR thì bỏ (một chuỗi label dài, không ai đọc
+// trong bảng).
 const deployColumns = computed(() => [
   t('infra.kube.col.name'),
   t('infra.kube.col.ready'),
   t('infra.kube.col.upToDate'),
   t('infra.kube.col.available'),
   t('infra.kube.col.age'),
+  t('infra.kube.col.containers'),
+  t('infra.kube.col.images'),
 ])
 </script>
 

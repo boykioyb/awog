@@ -1,5 +1,5 @@
 <template>
-  <div class="ias" :class="`st-${state}`">
+  <div class="ias icard" :class="`st-${state}`">
     <div class="ias-sum" :class="`st-${state}`">
       <Icon :name="ICON[state]" class="ias-sum-ic" />
       <span class="ias-sum-t">{{ t(`infra.monitoring.state.${state}`) }}</span>
@@ -26,12 +26,29 @@
         </button>
       </li>
     </ul>
-    <p v-else-if="loaded" class="ihint">{{ t('infra.monitoring.alarm.empty') }}</p>
+    <p v-else-if="loaded" class="ihint">{{ t('infra.monitoring.alarm.noneForTarget') }}</p>
+
+    <!-- Hai con số ở CUỐI, mờ, không bấm được nhầm thành sự cố. Chúng trả lời câu
+         "thế còn những cảnh báo khác thì sao" mà không đổ chúng lên màn. -->
+    <span v-if="loaded && scalingCount > 0" class="ias-aside">
+      {{ t('infra.monitoring.alarm.scalingCount', { n: scalingCount }) }}
+    </span>
+    <span v-if="loaded && otherCount > 0" class="ias-aside">
+      {{ t('infra.monitoring.alarm.otherCount', { n: otherCount }) }}
+    </span>
   </div>
 </template>
 
 <script setup lang="ts">
-// Dải cảnh báo của màn Giám sát (Mốc 6, 6.3).
+// Dải cảnh báo của màn Giám sát.
+//
+// CHỈ CẢNH BÁO CỦA TÀI NGUYÊN ĐANG XEM (2026-09-17). Bản trước nhận nguyên danh
+// sách 100 cảnh báo của cả region. Trong ảnh người dùng 2026-09-17, bốn dòng ĐỎ
+// "ĐANG BÁO" đều là `TargetTracking-…-AlarmLow` — cần gạt scale-in của Application
+// Auto Scaling, ở trạng thái ALARM nghĩa là tải đang thấp, tức BÌNH THƯỜNG — và
+// dưới chúng là ~26 chip xanh đẩy toàn bộ biểu đồ ra khỏi màn hình. Việc lọc và
+// chia nhóm nằm ở `useInfraMetrics`; ở đây chỉ còn hai CON SỐ cho phần đã tách ra,
+// vì giấu hẳn chúng là nói dối theo chiều ngược lại.
 //
 // BA TRẠNG THÁI, VÀ TRẠNG THÁI THỨ BA LÀ MỘT TRẠNG THÁI THẬT. `INSUFFICIENT_DATA`
 // không phải "chưa kịp nạp": alarm không có đủ điểm để kết luận. Gộp nó vào "bình
@@ -52,6 +69,10 @@ const props = defineProps<{
   state: AlarmState
   loaded: boolean
   truncated: boolean
+  /** Cảnh báo của tài khoản KHÔNG thuộc tài nguyên đang xem — chỉ một con số. */
+  otherCount: number
+  /** Cần gạt autoscaling đang bật. Một con số, và KHÔNG tô đỏ. */
+  scalingCount: number
 }>()
 
 const emit = defineEmits<{ 'open-history': [name: string] }>()
@@ -83,9 +104,9 @@ function sinceOf(a: WireAlarm): string {
   gap: 10px;
   flex-wrap: wrap;
   padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgSubtle);
+  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — xem app-shell.css. Bốn khối
+     của màn này TỪNG tự khai lại cùng một bộ, với ba nền khác nhau (`--bgSubtle`,
+     `--bgEl`), nên chúng đọc ra thành ba loại bề mặt trong cùng một màn. */
 }
 
 .ias-sum {
@@ -155,6 +176,18 @@ function sinceOf(a: WireAlarm): string {
 .ias-since {
   color: var(--textFaint);
   font-variant-numeric: tabular-nums;
+}
+
+/* Phần đã tách ra: mờ, cuối dòng, không mang màu trạng thái nào. */
+.ias-aside {
+  margin-left: auto;
+  color: var(--textFaint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+
+.ias-aside + .ias-aside {
+  margin-left: 0;
 }
 
 /* Ba màu cho ba trạng thái — chữ và icon đi kèm nên màu chỉ là lớp thứ hai. */

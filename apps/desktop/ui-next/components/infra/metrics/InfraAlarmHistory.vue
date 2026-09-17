@@ -1,5 +1,5 @@
 <template>
-  <aside class="iah">
+  <aside class="iah icard">
     <div class="iah-head">
       <span class="iah-title">{{ t('infra.monitoring.alarm.history') }}</span>
       <button
@@ -62,9 +62,9 @@ function atOf(at: number | null): string {
   min-height: 0;
   overflow-y: auto;
   padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgEl);
+  /* Da (viền, bo góc, nền, đổ bóng) do `.icard` cấp — xem app-shell.css. Bốn khối
+     của màn này TỪNG tự khai lại cùng một bộ, với ba nền khác nhau (`--bgSubtle`,
+     `--bgEl`), nên chúng đọc ra thành ba loại bề mặt trong cùng một màn. */
 }
 
 .iah-head {

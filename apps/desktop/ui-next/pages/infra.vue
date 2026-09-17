@@ -176,17 +176,9 @@
           <InfraMonitoring />
         </div>
 
-        <!-- Tab "Bảng điều khiển" (Mốc 6, M4): bảng tự lắp + ba mẫu dựng sẵn. Đứng
-             NGAY SAU Giám sát vì nó là chỗ những biểu đồ ghim từ đó đi tới. Mount
-             lười cùng luật với các tab dữ liệu khác; `useInfraDashboards` cấm tự nạp
-             số liệu, nên mở tab chỉ đọc file chứ không gọi `get-metric-data`. -->
-        <div v-if="dashboardsMounted" v-show="tab === 'dashboards'" class="infra-pane">
-          <InfraDashboards />
-        </div>
-
         <!-- Tab "Chi phí" (Mốc 7, 7.1–7.3): tháng này · dự báo · dò lãng phí · sinh
-             playbook dọn dẹp. Đứng SAU Bảng điều khiển vì nó trả lời câu hỏi tiếp theo
-             của cùng một người: "cái gì đang tốn, và bỏ được cái nào". -->
+             playbook dọn dẹp. Đứng SAU Giám sát vì nó trả lời câu hỏi tiếp theo của
+             cùng một người: "cái gì đang tốn, và bỏ được cái nào". -->
         <!-- Ba tab con dùng CHUNG một instance: `useInfraCost()` là singleton cấp
              module nên tách thành ba instance cũng vẫn một kho, nhưng một instance
              thì cổng kiểm tài khoản và chip câu hỏi chỉ tồn tại một bản. -->
@@ -290,12 +282,6 @@
       :selected="selected"
       @close="closeExport"
     />
-
-    <!-- Hộp "ghim biểu đồ vào một bảng" (Mốc 6, M4). Host Ở ĐÂY chứ không ở
-         `AppGlobalHosts`: cú bấm mở nó nằm trong tab Giám sát của chính trang này,
-         nên nó không cần sống ở cửa sổ nào khác. Nó tự đọc trạng thái từ
-         `useInfraDashboardPin()` — không props, không emit. -->
-    <InfraDashboardPinDialog />
   </section>
 </template>
 
@@ -349,7 +335,6 @@ const TAB_ICONS: Record<InfraTab, string> = {
   audit: 'book',
   logs: 'table',
   monitoring: 'act',
-  dashboards: 'panel',
   cost: 'tag',
   budgets: 'flag',
   waste: 'trash',
@@ -369,7 +354,7 @@ type InfraGroupId = 'overview' | 'resources' | 'health' | 'cost' | 'changes' | '
 const GROUPS: readonly { id: InfraGroupId; tabs: readonly InfraTab[] }[] = [
   { id: 'overview', tabs: ['overview'] },
   { id: 'resources', tabs: ['services', 'graph', 'kubernetes'] },
-  { id: 'health', tabs: ['monitoring', 'dashboards', 'logs'] },
+  { id: 'health', tabs: ['monitoring', 'logs'] },
   { id: 'cost', tabs: ['cost', 'budgets', 'waste'] },
   { id: 'changes', tabs: ['delivery', 'playbooks', 'audit', 'reports'] },
   { id: 'accounts', tabs: ['accounts'] },
@@ -442,12 +427,6 @@ const auditMounted = ref(false)
  */
 const monitoringMounted = ref(false)
 /**
- * Tab Bảng điều khiển (Mốc 6, M4) mount lười: nó đọc danh sách bảng của cả hai tier
- * ngay khi mount. Đọc thư mục thì rẻ, nhưng vẫn là một lượt I/O không ai hỏi — và
- * mọi tab dữ liệu của trang này đã theo cùng một luật.
- */
-const dashboardsMounted = ref(false)
-/**
  * Tab Chi phí (mốc 7) mount lười — và ở đây nó quan trọng hơn mọi tab khác: một lượt
  * nạp là ba request `ce` TÍNH TIỀN. `useInfraCost` cấm tự chạy, nên mount cũng không tốn
  * gì; mount lười chỉ để mọi tab dữ liệu của trang này giữ cùng một luật.
@@ -467,7 +446,6 @@ let seedNonce = 0
 function selectTab(next: InfraTab): void {
   if (next === 'logs') logsMounted.value = true
   if (next === 'monitoring') monitoringMounted.value = true
-  if (next === 'dashboards') dashboardsMounted.value = true
   if (COST_TABS.includes(next)) costMounted.value = true
   if (next === 'playbooks') playbooksMounted.value = true
   if (next === 'reports') reportsMounted.value = true

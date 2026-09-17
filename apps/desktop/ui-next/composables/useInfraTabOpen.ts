@@ -28,7 +28,6 @@ export type InfraTab =
   | 'audit'
   | 'logs'
   | 'monitoring'
-  | 'dashboards'
   | 'cost'
   | 'budgets'
   | 'waste'

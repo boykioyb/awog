@@ -113,11 +113,20 @@ describe('findForbiddenFlag', () => {
     [['s3', 'ls', '--endpoint-url', 'http://169.254.169.254'], '--endpoint-url'],
     [['get', 'pods', '--kubeconfig=/tmp/evil.yaml'], '--kubeconfig'],
     [['get', 'pods', '--context', 'prod'], '--context'],
-    [['get', 'pods', '--namespace=kube-system'], '--namespace'],
     [['s3', 'ls', '--no-verify-ssl'], '--no-verify-ssl'],
     [['s3', 'ls', '--ca-bundle', '/tmp/ca.pem'], '--ca-bundle'],
   ])('%j → %s', (args, expected) => {
     expect(findForbiddenFlag(args as string[])).toBe(expected)
+  })
+
+  it('`--namespace` KHÔNG còn bị chặn toàn cục — nó là tham số truy vấn của aws', () => {
+    // Lỗi thật 2026-09-17: để `--namespace` trong danh sách TOÀN CỤC đã chặn
+    // `cloudwatch list-metrics --namespace AWS/ECS`, tức là chặn toàn bộ lượt dò
+    // tài nguyên của màn Giám sát, kèm câu "không ghi đè được ngữ cảnh" vô nghĩa.
+    // Với kubectl nó vẫn bị chặn, nhưng ở `EXTRA_FORBIDDEN.kubectl` (run.ts).
+    expect(
+      findForbiddenFlag(['cloudwatch', 'list-metrics', '--namespace', 'AWS/ECS']),
+    ).toBeNull()
   })
 
   it('leaves a clean command alone', () => {

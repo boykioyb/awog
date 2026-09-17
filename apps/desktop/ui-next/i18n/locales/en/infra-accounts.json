@@ -67,7 +67,6 @@
   "infra.tab.audit": "Activity log",
   "infra.tab.budgets": "Budgets",
   "infra.tab.cost": "This month",
-  "infra.tab.dashboards": "Dashboards",
   "infra.tab.delivery": "Deploys",
   "infra.tab.graph": "Map",
   "infra.tab.kubernetes": "Kubernetes",

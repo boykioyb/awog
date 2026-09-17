@@ -53,6 +53,10 @@ export type KubeOut = {
   containers: string[]
   container: string
   tail: number
+  /** `--since` của kubectl (`15m`, `1h`). Rỗng = không giới hạn thời gian.
+   *  Đây là bộ lọc phía CLUSTER (đổi nó là chạy lại lệnh); lọc theo mức và theo
+   *  khoảng giờ thì làm trên chữ đã tải (xem `utils/kube-logs.ts`). */
+  since: string
   text: string
   loading: boolean
   error: string
@@ -85,6 +89,9 @@ export const KUBE_REGIONS: readonly string[] = [
 
 const DEFAULT_TAIL = 200
 export const KUBE_TAILS: readonly number[] = [100, 200, 500, 1000]
+/** Các khoảng cho `--since`. Chuỗi rỗng = bỏ cờ. Phải khớp `SINCE_RE` của sidecar
+ *  (`^[1-9][0-9]{0,3}[smh]$`) — bên đó là nơi CƯỠNG CHẾ, đây chỉ là danh sách bấm. */
+export const KUBE_SINCES: readonly string[] = ['', '5m', '15m', '1h', '6h', '24h']
 
 type Blocked = { command: string; reason: string }
 
@@ -147,6 +154,57 @@ export function useInfraKube() {
   const deployments = ref<KubeRow[]>([])
   const deploymentsLoading = ref(false)
   const deploymentsError = ref('')
+  // ── Số liệu của màn Báo cáo (node / CPU-RAM / event) ──────────────────────
+  // Bốn bảng này KHÔNG nạp cùng Pods/Deployments: hai bảng kia là thứ mọi tab cần,
+  // còn bốn bảng này chỉ màn Báo cáo đọc. Gộp chúng vào `refreshWorkload()` là bắt
+  // mỗi cú bấm ↻ ở tab Pods trả tiền cho bốn lệnh kubectl mà tab đó không hiện.
+  const nodes = ref<KubeRow[]>([])
+  const topNodes = ref<KubeRow[]>([])
+  const topPods = ref<KubeRow[]>([])
+  /** Event giữ nguyên hàng thô: bảng event là bảng duy nhất mà cột đầu KHÔNG phải
+   *  tên (`LAST SEEN TYPE REASON …`), nên `rowOf()` sẽ gán sai `name`. */
+  const events = ref<string[][]>([])
+  /** `kubectl describe nodes` — VĂN BẢN thô, không phải bảng cột. Parser riêng
+   *  (`nodeCapacity()`) đọc nó; xem ghi chú ở `TABLE_OPS` phía sidecar. */
+  const describeNodes = ref('')
+  const hpa = ref<KubeRow[]>([])
+  // Mười bảng "cấu trúc": chúng đổi theo phút/giờ chứ không theo giây, nên vòng
+  // Theo dõi 30s KHÔNG đọc lại chúng — 10 lệnh kubectl mỗi 30 giây cho những con số
+  // đứng yên là tiền mua một dòng không đổi.
+  const statefulSets = ref<KubeRow[]>([])
+  const daemonSets = ref<KubeRow[]>([])
+  const jobs = ref<KubeRow[]>([])
+  const pvc = ref<KubeRow[]>([])
+  const services = ref<KubeRow[]>([])
+  const ingresses = ref<KubeRow[]>([])
+  /** `get endpoints` — ai đang đứng sau mỗi Service. Đây là chỗ DUY NHẤT trong các
+   *  lệnh `get` nói ra "Service này không có pod nào", lỗi im lặng kinh điển. */
+  const endpoints = ref<KubeRow[]>([])
+  /** `get resourcequota` — namespace chạm trần thì pod mới bị từ chối ngay ở API
+   *  server, nên `get pods` KHÔNG có gì để xem và chỉ bảng này trả lời được. */
+  const resourceQuota = ref<KubeRow[]>([])
+  /** `get poddisruptionbudgets` — `ALLOWED DISRUPTIONS = 0` là lý do `kubectl drain`
+   *  treo vô hạn mà không có event nào nói. */
+  const pdb = ref<KubeRow[]>([])
+  /** `get rs` — tuổi của ReplicaSet trẻ nhất là "bản mới ra cách đây bao lâu", con
+   *  số đầu tiên người ta hỏi khi một dịch vụ vừa hỏng. */
+  const replicaSets = ref<KubeRow[]>([])
+  const nodesError = ref('')
+  /** MỘT lỗi cho cả `top nodes` + `top pods`: hai lệnh, một nguyên nhân duy nhất
+   *  (cụm chưa cài metrics-server). Hai dòng lỗi giống nhau chỉ làm người đọc
+   *  tưởng có hai sự cố. */
+  const topError = ref('')
+  const eventsError = ref('')
+  const capacityError = ref('')
+  const hpaError = ref('')
+  /** Lỗi của mười bảng cấu trúc, THEO TỪNG LOẠI. Gộp chung một ô thì "không có
+   *  quyền đọc ingress" (chuyện rất thường) sẽ hiện ra như thể cả mười bảng hỏng. */
+  const inventoryErrors = ref<Record<string, string>>({})
+  const metricsLoading = ref(false)
+  const metricsLoadedAt = ref(0)
+  const inventoryLoading = ref(false)
+  const inventoryLoadedAt = ref(0)
+
   /** Lệnh bị ma trận quyền chặn: hiện lệnh, không có nút chạy. */
   const blocked = ref<Blocked | null>(null)
 
@@ -188,6 +246,37 @@ export function useInfraKube() {
     namespacesLoading.value = false
     podsLoading.value = false
     deploymentsLoading.value = false
+    metricsLoading.value = false
+    inventoryLoading.value = false
+  }
+
+  /** Số liệu của cluster/namespace CŨ không được nằm lại trên màn của cái mới —
+   *  một dải CPU 90% của cluster khác là thông tin sai, không phải thông tin cũ. */
+  function clearMetrics(): void {
+    nodes.value = []
+    topNodes.value = []
+    topPods.value = []
+    events.value = []
+    describeNodes.value = ''
+    hpa.value = []
+    statefulSets.value = []
+    daemonSets.value = []
+    jobs.value = []
+    pvc.value = []
+    services.value = []
+    ingresses.value = []
+    endpoints.value = []
+    resourceQuota.value = []
+    pdb.value = []
+    replicaSets.value = []
+    nodesError.value = ''
+    topError.value = ''
+    eventsError.value = ''
+    capacityError.value = ''
+    hpaError.value = ''
+    inventoryErrors.value = {}
+    metricsLoadedAt.value = 0
+    inventoryLoadedAt.value = 0
   }
 
   const out = ref<KubeOut>({
@@ -198,6 +287,7 @@ export function useInfraKube() {
     containers: [],
     container: '',
     tail: DEFAULT_TAIL,
+    since: '',
     text: '',
     loading: false,
     error: '',
@@ -261,12 +351,9 @@ export function useInfraKube() {
     if (name === pinnedCluster.value) return
     // Namespace ghim của context CŨ vô nghĩa ở context mới.
     const known = contexts.value.find((c) => c.name === name)
+    // CHỈ ghim. Dọn bảng cũ và nạp bảng mới là việc của watcher ngữ cảnh bên dưới —
+    // xem ghi chú ở đó về việc vì sao hai việc đó không được nằm ở đây nữa.
     await pin({ cluster: name, namespace: known?.namespace ?? '' })
-    pods.value = []
-    deployments.value = []
-    namespaces.value = []
-    restartWorkloadLoad()
-    await refreshWorkload()
   }
 
   async function setNamespace(ns: string): Promise<void> {
@@ -275,10 +362,6 @@ export function useInfraKube() {
     // muộn sẽ nằm lại trên màn namespace mới. Cùng một cơ chế thế hệ với cluster.
     if (workloadBusy.value) return
     await pin({ namespace: ns })
-    pods.value = []
-    deployments.value = []
-    restartWorkloadLoad()
-    await loadWorkload(false)
   }
 
   // ── Gọi RPC có cổng ───────────────────────────────────────────────────────
@@ -380,6 +463,11 @@ export function useInfraKube() {
     return text(result.stderr) || fallback
   }
 
+  /** Văn bản thô của lệnh — dùng cho `describe nodes`, thứ KHÔNG bóc thành bảng. */
+  function stdoutOf(raw: Record<string, unknown>): string {
+    return isRecord(raw.result) ? text(raw.result.stdout) : ''
+  }
+
   /** Ghi kết quả CHỈ khi ngữ cảnh chưa đổi (xem `loadEpoch`). */
   async function loadNamespaces(): Promise<void> {
     if (!pinnedCluster.value || namespacesLoading.value) return
@@ -445,6 +533,178 @@ export function useInfraKube() {
     if (!raw) return
     deploymentsError.value = runError(raw, t('infra.kube.error.deployments'))
     deployments.value = rowOf(raw)
+  }
+
+  /** Hàng THÔ của một bảng (không coi cột đầu là tên) — dùng cho bảng event. */
+  function rawRowsOf(raw: Record<string, unknown>): string[][] {
+    const rows = Array.isArray(raw.rows) ? raw.rows : []
+    const out: string[][] = []
+    for (const row of rows) {
+      if (!Array.isArray(row)) continue
+      const cells = row.map((c) => (typeof c === 'string' ? c.trim() : ''))
+      if (cells.some((c) => c !== '')) out.push(cells)
+    }
+    return out
+  }
+
+  /**
+   * Nạp số liệu cho màn Báo cáo: node, CPU/RAM (`kubectl top`), event `Warning`.
+   *
+   * Bốn lệnh, MỘT cờ nạp và MỘT mốc thời gian: chúng luôn được đọc cùng nhau nên
+   * tách cờ ra chỉ cho người dùng bốn spinner nói cùng một chuyện. Lỗi thì NGƯỢC
+   * lại — mỗi nguồn giữ lỗi riêng, vì cụm chưa cài metrics-server là chuyện rất
+   * bình thường và nó KHÔNG được làm mất phần node/event vẫn đọc được.
+   *
+   * Không có toast ở đây (khác `loadWorkload`): màn Báo cáo hiện lý do ngay trong
+   * ô trống của từng khối, mà vòng "Theo dõi mỗi 30s" thì gọi hàm này 30 lần một
+   * phiên — mỗi lần một toast là một cơn mưa toast cho một sự thật không đổi.
+   */
+  async function loadMetrics(): Promise<void> {
+    if (!pinnedCluster.value || metricsLoading.value) return
+    const epoch = loadEpoch
+    metricsLoading.value = true
+    const context: Record<string, string> = { cluster: pinnedCluster.value }
+    if (pinnedNamespace.value) context.namespace = pinnedNamespace.value
+    const target = pinnedNamespace.value || pinnedCluster.value
+    const [rawNodes, rawTopNodes, rawTopPods, rawEvents, rawCapacity, rawHpa] = await Promise.all([
+      call(
+        { op: 'nodes', context },
+        {
+          action: t('infra.kube.act.listNodes'),
+          target: pinnedCluster.value,
+          consequence: t('infra.kube.act.listNodesWhy'),
+        },
+      ),
+      call(
+        { op: 'top-nodes', context },
+        {
+          action: t('infra.kube.act.topNodes'),
+          target: pinnedCluster.value,
+          consequence: t('infra.kube.act.topWhy'),
+        },
+      ),
+      call(
+        { op: 'top-pods', context },
+        {
+          action: t('infra.kube.act.topPods'),
+          target,
+          consequence: t('infra.kube.act.topWhy'),
+        },
+      ),
+      call(
+        { op: 'events', context },
+        {
+          action: t('infra.kube.act.events'),
+          target,
+          consequence: t('infra.kube.act.eventsWhy'),
+        },
+      ),
+      // Sức chứa đi cùng tầng "sống": nó đổi mỗi lần một pod lên/xuống, và nó là
+      // thứ duy nhất trả lời "còn chỗ đặt pod mới không".
+      call(
+        { op: 'describe-nodes', context },
+        {
+          action: t('infra.kube.act.capacity'),
+          target: pinnedCluster.value,
+          consequence: t('infra.kube.act.capacityWhy'),
+        },
+      ),
+      call(
+        { op: 'hpa', context },
+        {
+          action: t('infra.kube.act.hpa'),
+          target,
+          consequence: t('infra.kube.act.hpaWhy'),
+        },
+      ),
+    ])
+    if (epoch !== loadEpoch) return
+    metricsLoading.value = false
+    if (rawNodes) {
+      nodesError.value = runError(rawNodes, t('infra.kube.error.nodes'))
+      nodes.value = rowOf(rawNodes)
+    }
+    // Hai lệnh `top` chia nhau một ô lỗi: lệnh nào hỏng trước thì câu của nó ở lại.
+    topError.value = ''
+    if (rawTopNodes) {
+      topError.value = runError(rawTopNodes, t('infra.kube.error.top'))
+      topNodes.value = rowOf(rawTopNodes)
+    }
+    if (rawTopPods) {
+      topError.value = topError.value || runError(rawTopPods, t('infra.kube.error.top'))
+      topPods.value = rowOf(rawTopPods)
+    }
+    if (rawEvents) {
+      eventsError.value = runError(rawEvents, t('infra.kube.error.events'))
+      events.value = rawRowsOf(rawEvents)
+    }
+    if (rawCapacity) {
+      capacityError.value = runError(rawCapacity, t('infra.kube.error.capacity'))
+      // `describe` KHÔNG qua `parseKubeTable` ⇒ lấy thẳng stdout (xem `TABLE_OPS`).
+      describeNodes.value = capacityError.value ? '' : stdoutOf(rawCapacity)
+    }
+    if (rawHpa) {
+      hpaError.value = runError(rawHpa, t('infra.kube.error.hpa'))
+      hpa.value = rowOf(rawHpa)
+    }
+    metricsLoadedAt.value = Date.now()
+  }
+
+  /**
+   * Mười bảng "cấu trúc": StatefulSet · DaemonSet · Job · PVC · Service · Ingress ·
+   * Endpoints · ResourceQuota · PodDisruptionBudget · ReplicaSet.
+   *
+   * Tách khỏi `loadMetrics()` vì chúng KHÔNG đổi theo giây. Vòng Theo dõi 30s đọc
+   * lại số CPU và event là đúng; đọc lại danh sách Service 30 lần một phiên thì chỉ
+   * để nghe lại đúng một câu trả lời. Ở đây vì thế là đường "người dùng bấm": mở
+   * mục Báo cáo và bấm ↻.
+   *
+   * Lỗi giữ THEO TỪNG LOẠI: không có quyền `list ingress` là chuyện rất thường
+   * trong cụm có RBAC chặt, và nó không được làm mất chín bảng còn lại.
+   */
+  async function loadInventory(): Promise<void> {
+    if (!pinnedCluster.value || inventoryLoading.value) return
+    const epoch = loadEpoch
+    inventoryLoading.value = true
+    const context: Record<string, string> = { cluster: pinnedCluster.value }
+    if (pinnedNamespace.value) context.namespace = pinnedNamespace.value
+    const target = pinnedNamespace.value || pinnedCluster.value
+    const kinds = [
+      { op: 'statefulsets', box: statefulSets, key: 'statefulsets' },
+      { op: 'daemonsets', box: daemonSets, key: 'daemonsets' },
+      { op: 'jobs', box: jobs, key: 'jobs' },
+      { op: 'pvc', box: pvc, key: 'pvc' },
+      { op: 'services', box: services, key: 'services' },
+      { op: 'ingresses', box: ingresses, key: 'ingresses' },
+      { op: 'endpoints', box: endpoints, key: 'endpoints' },
+      { op: 'resourcequota', box: resourceQuota, key: 'resourcequota' },
+      { op: 'pdb', box: pdb, key: 'pdb' },
+      { op: 'replicasets', box: replicaSets, key: 'replicasets' },
+    ] as const
+    const results = await Promise.all(
+      kinds.map((kind) =>
+        call(
+          { op: kind.op, context },
+          {
+            action: t(`infra.kube.act.${kind.key}`),
+            target,
+            consequence: t('infra.kube.act.inventoryWhy'),
+          },
+        ),
+      ),
+    )
+    if (epoch !== loadEpoch) return
+    inventoryLoading.value = false
+    const errors: Record<string, string> = {}
+    kinds.forEach((kind, i) => {
+      const raw = results[i]
+      if (!raw) return
+      const why = runError(raw, t(`infra.kube.error.${kind.key}`))
+      if (why) errors[kind.key] = why
+      kind.box.value = why ? [] : rowOf(raw)
+    })
+    inventoryErrors.value = errors
+    inventoryLoadedAt.value = Date.now()
   }
 
   /**
@@ -558,6 +818,7 @@ export function useInfraKube() {
       tail: out.value.tail,
     }
     if (out.value.container) payload.container = out.value.container
+    if (out.value.since) payload.since = out.value.since
     const raw = await call(payload, {
       action: t('infra.kube.act.logs'),
       target: pod,
@@ -586,6 +847,7 @@ export function useInfraKube() {
       containers: [],
       container: '',
       tail: DEFAULT_TAIL,
+      since: '',
       text: '',
       loading: false,
       error: '',
@@ -629,6 +891,7 @@ export function useInfraKube() {
       containers: [],
       container: '',
       tail: DEFAULT_TAIL,
+      since: '',
       text: '',
       loading: true,
       error: '',
@@ -688,6 +951,13 @@ export function useInfraKube() {
 
   async function setTail(value: number): Promise<void> {
     out.value = { ...out.value, tail: value, text: '' }
+    await loadLogs(false)
+  }
+
+  /** Đổi khoảng `--since` ⇒ chạy lại lệnh: đây là bộ lọc của CLUSTER, không phải
+   *  của khung. Xoá chữ cũ trước khi gọi để không ai đọc log cũ tưởng là log mới. */
+  async function setSince(value: string): Promise<void> {
+    out.value = { ...out.value, since: value, text: '' }
     await loadLogs(false)
   }
 
@@ -906,15 +1176,52 @@ export function useInfraKube() {
     toast.add({ title: t('infra.kube.blocked.copied'), description: command, color: 'success' })
   }
 
+  /**
+   * NGỮ CẢNH ĐỔI ⇒ DỌN BẢNG CŨ RỒI NẠP BẢNG MỚI. Một watcher, không phải ba chỗ
+   * gọi tay.
+   *
+   * ⚠ LỖI ĐÃ SỬA Ở ĐÂY (2026-09-17, người dùng báo "cụm cứ chập chờn, đổi app
+   * khác quay lại là mất"). Bản cũ nạp bằng một cú kiểm tra MỘT LẦN trong
+   * `onMounted`: `if (pinnedCluster.value) refreshWorkload()`. Nhưng
+   * `pinnedCluster` đến từ `settingsStore.infra` — một store nạp BẤT ĐỒNG BỘ qua
+   * IPC. Mở tab trước khi store kịp về thì ô đó còn rỗng, cú kiểm tra rơi vào
+   * nhánh `false`, và KHÔNG có gì chạy lại: bảng trống vĩnh viễn, không lỗi,
+   * không nút nào tự sáng. Thắng hay thua cuộc đua đó phụ thuộc vào việc lần
+   * trước store đã ấm chưa — đúng cái "lúc được lúc không".
+   *
+   * Cú thứ hai của cùng một lỗi: `setNamespace` xoá số liệu cụm (`clearMetrics`)
+   * rồi chỉ nạp lại pod/deployment. Card "Cụm" vì thế trống trơn — không phải
+   * "cụm không có node", mà là "chưa ai đi đọc lại" — cho tới khi người dùng bấm ↻.
+   *
+   * `immediate: true` phủ luôn lần mount, nên đây là đường DUY NHẤT nạp bảng theo
+   * ngữ cảnh: không còn hai nguồn để lệch nhau, và không có cú nạp đôi.
+   */
+  watch(
+    // Theo dõi một CHUỖI, không phải một mảng: `() => [a, b]` trả về một mảng MỚI
+    // mỗi lần chạy, nên Vue so bằng `Object.is` sẽ thấy "khác" ở mọi lần store bị
+    // thay đối tượng — kể cả khi cluster/namespace không đổi một chữ. Với màn này
+    // cái giá của một lần bắn thừa là xoá sạch bảng rồi gọi lại bốn lệnh kubectl.
+    () => `${pinnedCluster.value}\u0000${pinnedNamespace.value}`,
+    (_key, previousKey) => {
+      const cluster = pinnedCluster.value
+      const clusterChanged = cluster !== ((previousKey ?? '').split('\u0000')[0] ?? '')
+      // Số của ngữ cảnh CŨ không được nằm lại trên màn của cái mới — một bảng pod
+      // đúng nhưng của sai cluster là thứ nguy hiểm nhất trong màn hạ tầng.
+      pods.value = []
+      deployments.value = []
+      if (clusterChanged) namespaces.value = []
+      clearMetrics()
+      restartWorkloadLoad()
+      if (!cluster) return
+      // Đổi cluster ⇒ nạp lại cả danh sách namespace; đổi mỗi namespace thì không.
+      void loadWorkload(clusterChanged)
+    },
+    { immediate: true },
+  )
+
   onMounted(() => {
     void loadContexts()
     void loadAwsProfiles()
-    // Tab này được MOUNT LƯỜI (pages/infra.vue đặt `k8sMounted` sau cú bấm đầu
-    // tiên), nên `onMounted` ở đây chính là "người dùng vừa mở tab" — không phải
-    // "mở /infra là gọi cluster". Có cluster ghim sẵn từ lần trước thì nạp luôn
-    // bảng của nó: nếu không, mở tab sẽ ra khung trống mà không rõ vì sao, và
-    // người không quen terminal sẽ ngồi đợi một màn hình không bao giờ tự đầy.
-    if (pinnedCluster.value) void refreshWorkload()
   })
 
   return {
@@ -970,6 +1277,35 @@ export function useInfraKube() {
     loadPods,
     loadDeployments,
     refreshWorkload,
+    // số liệu của màn Báo cáo
+    nodes,
+    topNodes,
+    topPods,
+    events,
+    describeNodes,
+    hpa,
+    statefulSets,
+    daemonSets,
+    jobs,
+    pvc,
+    services,
+    ingresses,
+    endpoints,
+    resourceQuota,
+    pdb,
+    replicaSets,
+    nodesError,
+    topError,
+    eventsError,
+    capacityError,
+    hpaError,
+    inventoryErrors,
+    metricsLoading,
+    metricsLoadedAt,
+    inventoryLoading,
+    inventoryLoadedAt,
+    loadMetrics,
+    loadInventory,
     restarting,
     restartDeployment,
     deleting,
@@ -984,6 +1320,7 @@ export function useInfraKube() {
     closeOut,
     setContainer,
     setTail,
+    setSince,
     refreshOut,
     startPodExec,
   }
