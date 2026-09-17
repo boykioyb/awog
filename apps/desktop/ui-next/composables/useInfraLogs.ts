@@ -401,6 +401,14 @@ export function useInfraLogs() {
   const tailRanAt = ref(0)
   /** `null` = hết trang. Khác `null` = còn đọc tiếp được từ đúng chỗ vừa dừng. */
   const tailNextToken = ref<string | null>(null)
+  /**
+   * Cửa sổ của lượt đọc ĐẦU, ghim lại để các trang sau dùng đúng nó.
+   *
+   * `windowMs` là computed gọi `windowToMs(win, Date.now())`, nên với một cửa sổ
+   * TƯƠNG ĐỐI ("1 giờ gần đây") nó trôi theo đồng hồ: người dùng đọc vài phút rồi bấm
+   * Đọc thêm sẽ gửi một token của cửa sổ này kèm `--start-time` của cửa sổ khác.
+   */
+  const tailPinnedWindow = ref<{ startMs: number; endMs: number } | null>(null)
 
   // Mới nhất lên đầu — người đọc log tìm dòng vừa xảy ra. Sắp xếp trên TOÀN BỘ tập
   // đã gom, không phải từng trang: cửa sổ bắt đầu trước 2024-01-01 không dùng được
@@ -505,7 +513,8 @@ export function useInfraLogs() {
    */
   async function fetchTail(token: string | null): Promise<void> {
     const group = tailGroup.value
-    const win = windowMs.value
+    // Đọc tiếp thì bám cửa sổ đã ghim; đọc lại thì lấy cửa sổ hiện tại và ghim nó.
+    const win = token ? tailPinnedWindow.value : windowMs.value
     if (!group || !win) return
     if (token) tailLoadingMore.value = true
     else tailLoading.value = true
@@ -529,10 +538,12 @@ export function useInfraLogs() {
         if (!token) {
           tailEvents.value = []
           tailNextToken.value = null
+          tailPinnedWindow.value = null
         }
         return
       }
       tailEvents.value = token ? [...tailEvents.value, ...res.events] : res.events
+      if (!token) tailPinnedWindow.value = win
       tailNextToken.value = res.nextToken
       tailRanAt.value = Date.now()
     } catch (err) {
@@ -563,6 +574,7 @@ export function useInfraLogs() {
       tailEvents.value = []
       tailRanAt.value = 0
       tailNextToken.value = null
+      tailPinnedWindow.value = null
       streams.value = []
     }
     await loadStreams(name)
@@ -586,6 +598,7 @@ export function useInfraLogs() {
     tailEvents.value = []
     tailRanAt.value = 0
     tailNextToken.value = null
+    tailPinnedWindow.value = null
     tailError.value = ''
   }
 

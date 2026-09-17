@@ -257,6 +257,27 @@ mấy chục lệnh người dùng không yêu cầu.
 Lỗi khi *đọc tiếp* **giữ nguyên** những dòng đã đọc được — vứt chúng đi là phạt người
 dùng vì một lượt gọi hỏng mà họ không gây ra. Chỉ lượt đọc lại từ đầu mới thay sạch.
 
+**Token là giá trị MỜ — không phán đoán định dạng của nó.** Mô hình API khai
+`NextToken` là `{"type": "string", "min": 1}`: không pattern, không độ dài tối đa.
+Bản đầu ép token qua `/^[A-Za-z0-9+/=_-]+$/` vì "trông giống base64url", và cú bấm
+*Đọc thêm* đầu tiên trên máy thật trả về `INVALID_NEXT_TOKEN`. Nay chỉ còn hai thứ bị
+chặn, và cả hai đều không phải phán đoán định dạng: **ký tự điều khiển** (vô hại với
+`execFile` nhưng làm bẩn nhật ký audit mà con người sẽ đọc) và **độ dài > 64KB** (chặn
+chuỗi vô hạn đi vào argv; `ARG_MAX` trên macOS là 1MB). Bộ ký tự vốn không mua được gì:
+`runInfra` chạy `execFile` với args là **mảng**, không qua shell, và `flagValue` ghép
+thành **một** phần tử argv `--next-token=<token>` nên token không thể tự tách thành cờ
+khác.
+
+**Cửa sổ được GHIM ở lượt đầu.** `windowMs` là computed gọi `windowToMs(win,
+Date.now())`, nên một cửa sổ *tương đối* ("1 giờ gần đây") trôi theo đồng hồ: đọc vài
+phút rồi bấm *Đọc thêm* sẽ gửi token của cửa sổ này kèm `--start-time` của cửa sổ
+khác. Lượt đầu ghim lại cặp mốc nó đã dùng, các trang sau bám đúng cặp đó.
+
+⚠ Token **hết hạn sau 24 giờ** (tài liệu API). Để màn mở qua đêm rồi bấm *Đọc thêm*
+thì AWS từ chối, và câu của AWS hiện nguyên văn — AWOG không đoán hộ, vì không phân
+biệt được "token hết hạn" với một lỗi mạng tạm thời, mà lỗi tạm thời thì phải thử lại
+được.
+
 ⚠ **Chưa kiểm trên dữ liệu thật.** Cờ và tổ hợp tham số đã đo bằng chính CLI trên
 máy (qua được bước phân tích tham số, chỉ dừng ở xác thực), và hành vi phân trang đọc
 từ source của `awscli` đang cài. Nhưng thứ tự trả về *thực tế* của CloudWatch thì cần

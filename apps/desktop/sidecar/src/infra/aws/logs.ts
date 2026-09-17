@@ -226,12 +226,34 @@ export function isValidQueryId(id: string): boolean {
 export const NEWEST_FIRST_MIN_START_MS = Date.UTC(2024, 0, 1)
 
 /**
- * Token phân trang do chính AWS cấp, nhưng nó đi vòng qua UI trước khi quay lại đây
- * nên vẫn là đầu vào KHÔNG TIN (L1). Token thật là chuỗi base64url; chặn ở bộ ký tự
- * đó thì không có gì lọt vào argv ngoài thứ AWS có thể đã phát ra.
+ * Trần độ dài của token phân trang.
+ *
+ * Mô hình API của CloudWatch Logs khai `NextToken` là `{"type": "string", "min": 1}`
+ * — **không có max, không có pattern**. Nên con số này KHÔNG phải để kiểm tra tính
+ * hợp lệ; nó chỉ để chặn một chuỗi vô hạn đi vào argv. 64KB nằm dưới `ARG_MAX` (1MB
+ * trên macOS) một quãng rất xa, và trên mọi token thật cũng một quãng rất xa.
+ */
+const MAX_NEXT_TOKEN_CHARS = 64 * 1024
+
+/**
+ * Token phân trang do chính AWS cấp, đi vòng qua UI rồi quay lại đây nên vẫn là đầu
+ * vào KHÔNG TIN (L1).
+ *
+ * KHÔNG khai bộ ký tự. Bản trước ép token qua `/^[A-Za-z0-9+/=_-]+$/` vì "token
+ * trông giống base64url" — đó là suy đoán về một giá trị MỜ mà AWS không hứa hẹn gì,
+ * và nó chặn thẳng token thật: người dùng bấm "Đọc thêm" chỉ nhận lại
+ * `INVALID_NEXT_TOKEN`. Suy đoán về định dạng của bên thứ ba không phải là bảo mật.
+ *
+ * Và nó cũng không mua được gì: `runInfra` chạy `execFile` với args là MẢNG, không
+ * qua shell, còn `flagValue` ghép thành MỘT phần tử argv `--next-token=<token>` nên
+ * token không thể tự tách thành một cờ khác. Thứ còn đáng chặn chỉ có hai: chuỗi dài
+ * vô hạn, và ký tự điều khiển (chúng vô hại với `execFile` nhưng làm bẩn nhật ký
+ * audit — nơi con người sẽ đọc lại lệnh này).
  */
 export function isValidNextToken(token: string): boolean {
-  return /^[A-Za-z0-9+/=_-]{1,8192}$/.test(token)
+  if (token.length < 1 || token.length > MAX_NEXT_TOKEN_CHARS) return false
+  // eslint-disable-next-line no-control-regex -- ký tự điều khiển là ĐÚNG thứ cần bắt
+  return !/[\u0000-\u001F\u007F]/.test(token)
 }
 
 export function isValidLogStream(name: string): boolean {

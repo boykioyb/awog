@@ -25,8 +25,19 @@ const Params = z.object({
   filterPattern: z.string().max(1024).optional(),
   logStreamName: z.string().min(1).max(512).optional(),
   limit: z.number().int().positive().max(1000).optional(),
-  /** Token trang kế của lượt trước. Có ⇒ đọc TIẾP thay vì đọc lại từ đầu. */
-  nextToken: z.string().min(1).max(8192).optional(),
+  /**
+   * Token trang kế của lượt trước. Có ⇒ đọc TIẾP thay vì đọc lại từ đầu.
+   *
+   * Trần 64KB khớp với `MAX_NEXT_TOKEN_CHARS` bên `logs.ts` và chỉ để chặn chuỗi vô
+   * hạn: mô hình API của CloudWatch khai `NextToken` không có độ dài tối đa. Trần
+   * 8192 của bản trước là một suy đoán, và một suy đoán ở ĐÂY thì lỗi hiện ra dưới
+   * dạng "Internal error" của Zod chứ không phải câu tiếng Anh nào đọc được.
+   */
+  nextToken: z
+    .string()
+    .min(1)
+    .max(64 * 1024)
+    .optional(),
   profile: z.string().min(1).max(128).optional(),
   region: z.string().min(1).max(64).optional(),
   surface: z.enum(INFRA_SURFACES).default('logs'),

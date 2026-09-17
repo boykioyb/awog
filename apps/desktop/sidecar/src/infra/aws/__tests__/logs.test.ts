@@ -433,20 +433,44 @@ describe('tailWindow (2.9)', () => {
     expect(call.args).not.toContain('--no-start-from-head')
   })
 
-  it('từ chối nextToken có ký tự ngoài bộ base64url (đầu vào L1 đi vòng qua UI)', async () => {
+  // Mô hình API của CloudWatch khai `NextToken` là `{type: string, min: 1}` — KHÔNG
+  // có pattern, KHÔNG có max. Bản đầu ép token qua `/^[A-Za-z0-9+/=_-]+$/` vì "trông
+  // giống base64url", và cú bấm "Đọc thêm" đầu tiên trên máy người dùng trả về
+  // INVALID_NEXT_TOKEN. Test này ghim: token MỜ thì đi thẳng, không phán đoán.
+  it('không phán đoán định dạng token — ký tự lạ vẫn đi qua', async () => {
     runInfra.mockClear()
+    runInfra.mockResolvedValue(ok({ events: [] }))
     const now = Date.now()
+    const weird = 'Bx{}|~!@#$%^&*()[]<>,.?:;"\'`+/=-_ áé漢字\\'
     const result = await tailWindow({
       logGroups: ['/aws/lambda/a'],
       startMs: now - 60_000,
       endMs: now,
-      nextToken: 'abc; rm -rf /',
+      nextToken: weird,
       surface: 'logs',
     })
-    expect(result.ok).toBe(false)
-    if (result.ok) return
-    expect(result.error).toBe('INVALID_NEXT_TOKEN')
-    // Chặn TRƯỚC khi spawn, không phải để AWS từ chối hộ.
-    expect(runInfra).not.toHaveBeenCalled()
+    expect(result.ok).toBe(true)
+    const call = runInfra.mock.calls[0]?.[0] as { args: string[] }
+    // MỘT phần tử argv, nên token không thể tự tách thành một cờ khác — đó là lý do
+    // bộ ký tự không mua được gì (`execFile`, args là mảng, không qua shell).
+    expect(call.args).toContain(`--next-token=${weird}`)
+  })
+
+  it('chặn ký tự điều khiển và chuỗi vô hạn, TRƯỚC khi spawn', async () => {
+    const now = Date.now()
+    for (const bad of ['abc\u0000def', 'abc\ndef', 'x'.repeat(64 * 1024 + 1)]) {
+      runInfra.mockClear()
+      const result = await tailWindow({
+        logGroups: ['/aws/lambda/a'],
+        startMs: now - 60_000,
+        endMs: now,
+        nextToken: bad,
+        surface: 'logs',
+      })
+      expect(result.ok).toBe(false)
+      if (result.ok) return
+      expect(result.error).toBe('INVALID_NEXT_TOKEN')
+      expect(runInfra).not.toHaveBeenCalled()
+    }
   })
 })
