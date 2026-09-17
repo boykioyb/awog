@@ -1,15 +1,23 @@
 <template>
   <div class="lsp">
-    <div class="lsp-head">
-      <span class="lsp-title">{{ t('infra.logs.streams.title') }}</span>
-      <span class="lsp-count">{{ t('infra.logs.streams.count', { n: streams.length }) }}</span>
-    </div>
+    <span class="lsp-title">{{ t('infra.logs.streams.title') }}</span>
+    <span class="lsp-count">{{ t('infra.logs.streams.count', { n: streams.length }) }}</span>
 
-    <div v-if="error" class="lsp-error">{{ error }}</div>
+    <span v-if="error" class="lsp-error">{{ error }}</span>
+    <span v-else-if="loading && streams.length === 0" class="lsp-empty">
+      {{ t('infra.logs.streams.loading') }}
+    </span>
+    <span v-else-if="streams.length === 0" class="lsp-empty">
+      {{ t('infra.logs.streams.empty') }}
+    </span>
 
-    <div v-else class="lsp-cloud" role="listbox" aria-label="log streams">
-      <!-- "Tất cả stream" = gộp mọi stream (filter-log-events không kèm --log-stream-names).
-           Luôn đứng đầu và là mặc định khi mới bấm vào group. -->
+    <!-- Một HÀNG cuộn ngang, không xuống dòng: dải này nằm giữa thanh công cụ và
+         bảng kết quả, nên mỗi hàng nó chiếm là một hàng log bị đẩy khuất. Danh sách
+         có thể tới 50 stream (trần của `describe-log-streams`) — cuộn ngang giữ
+         chiều cao cố định bất kể số lượng. -->
+    <div v-else class="lsp-row" role="listbox" aria-label="log streams">
+      <!-- "Tất cả stream" luôn đứng đầu và là mặc định: bấm một nhóm log phải thấy
+           dòng log NGAY, không phải chọn thêm một stream nữa. -->
       <button
         class="lsp-chip"
         :class="{ on: active === '' }"
@@ -36,11 +44,6 @@
         <Icon :name="active === s.name ? 'eye' : 'file'" class="lsp-chip-ic" />
         <span class="lsp-chip-name">{{ s.name }}</span>
       </button>
-
-      <p v-if="!loading && streams.length === 0" class="lsp-empty">
-        {{ t('infra.logs.streams.empty') }}
-      </p>
-      <p v-else-if="loading" class="lsp-empty">{{ t('infra.logs.streams.loading') }}</p>
     </div>
   </div>
 </template>
@@ -82,24 +85,20 @@ function chipTitle(s: AwsLogStream): string {
 </script>
 
 <style scoped>
+/* Dải một hàng trong panel chính (trước 2026-09-17 là một khối dọc ở cột trái). */
 .lsp {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  min-height: 0;
-}
-
-.lsp-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  min-width: 0;
+  flex: 0 0 auto;
 }
 
 .lsp-title {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .lsp-count {
@@ -107,41 +106,43 @@ function chipTitle(s: AwsLogStream): string {
   line-height: var(--lh-xs);
   color: var(--textDim);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .lsp-error {
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--danger);
   border-radius: var(--r-sm);
   color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 
-/* Cao tối đa rồi cuộn — danh sách stream có thể tới 50 mục. */
-.lsp-cloud {
+/* Cuộn NGANG, không xuống dòng — xem chú thích ở template. */
+.lsp-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
-  align-content: flex-start;
-  max-height: 160px;
-  overflow-y: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 1px;
 }
 
 .lsp-empty {
   margin: 0;
-  padding: 8px;
   color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 
 .lsp-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  max-width: 100%;
+  flex: 0 0 auto;
+  max-width: 320px;
   padding: 4px 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
@@ -178,7 +179,6 @@ function chipTitle(s: AwsLogStream): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 240px;
   /* mono-ok: tên log stream là định danh tài nguyên */
   font-family: var(--code);
 }

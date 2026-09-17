@@ -49,17 +49,6 @@
           @update:pattern="pattern = $event"
         />
 
-        <!-- Tầng giữa: stream của group đang xem (group → stream → event). Chỉ ở chế
-             độ tail và khi đã bấm một group. -->
-        <InfraLogsStreamPicker
-          v-if="mode === 'tail' && tailGroup"
-          :streams="streams"
-          :active="activeStream"
-          :loading="streamsLoading"
-          :error="streamsError"
-          @select="selectStream"
-        />
-
         <InfraLogsLibrary
           v-if="mode === 'advanced'"
           :templates="templates"
@@ -97,6 +86,22 @@
           </div>
 
           <div v-if="tailError" class="lgs-error">{{ tailError }}</div>
+
+          <!-- Tầng giữa của CloudWatch: nhóm → stream → dòng.
+               ⚠ Trước 2026-09-17 khối này là block THỨ TƯ của cột trái, ngay SAU
+               danh sách nhóm log — mà danh sách đó dài bằng số nhóm của tài khoản
+               (34 nhóm trên máy người báo lỗi), nên bộ chọn stream bị đẩy xuống tận
+               đáy: muốn thấy nó phải cuộn qua cả danh mục, và tới lúc thấy thì
+               không còn nhìn được dòng log mà nó lọc. Nó thuộc về đây, ngay trên
+               bảng kết quả nó thu hẹp. -->
+          <InfraLogsStreamPicker
+            v-if="tailGroup"
+            :streams="streams"
+            :active="activeStream"
+            :loading="streamsLoading"
+            :error="streamsError"
+            @select="selectStream"
+          />
 
           <InfraLogsFilters
             v-model:quick="quickFilter"
