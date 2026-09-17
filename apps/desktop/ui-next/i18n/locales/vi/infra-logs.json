@@ -96,5 +96,15 @@
   "infra.logs.results.traceTitle": "Dựng dòng thời gian cho mã {id}",
   "infra.logs.mode.tailFull": "Dòng log mới nhất của một nhóm",
   "infra.logs.mode.advancedFull": "Truy vấn nâng cao (CloudWatch Insights)",
-  "infra.logs.mode.traceFull": "Lần theo một request qua các chặng"
+  "infra.logs.mode.traceFull": "Lần theo một request qua các chặng",
+  "infra.logs.streams.pickHint": "Chọn một stream để đọc dòng log của nó.",
+  "infra.logs.streams.allHint": "Gộp mọi stream của nhóm này",
+  "infra.logs.streams.back": "Danh sách stream",
+  "infra.logs.streams.noEvent": "chưa có event · {size}",
+  "infra.logs.streams.lastEventAgo": "event gần nhất {ago} · {size}",
+  "infra.logs.streams.agoSec": "{n} giây trước",
+  "infra.logs.streams.agoMin": "{n} phút trước",
+  "infra.logs.streams.agoHour": "{n} giờ trước",
+  "infra.logs.streams.agoDay": "{n} ngày trước",
+  "infra.logs.tail.emptyStream": "Stream này chưa có dòng nào trong khoảng thời gian đang chọn."
 }

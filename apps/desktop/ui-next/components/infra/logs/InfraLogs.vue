@@ -64,68 +64,90 @@
       <main class="lgs-main icard">
         <!-- ══════════ TAIL (mặc định) ══════════ -->
         <template v-if="mode === 'tail'">
-          <div class="lgs-mainbar">
-            <button
-              class="btn"
-              type="button"
-              :disabled="!tailGroup || tailLoading"
-              @click="refreshTail"
-            >
-              <Icon :name="tailLoading ? 'clock' : 'refresh'" class="lgs-ic" />
-              {{ tailLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
-            </button>
-            <span v-if="tailGroup" class="lgs-mainbar-group" :title="tailGroup">
-              {{ tailGroup }}
-            </span>
-            <span class="lgs-spacer" />
-            <span v-if="tailGroup && !tailLoading && tailRanAt" class="lgs-meta">
-              {{ t('infra.logs.tail.status', { n: tailRows.length }) }}
-              <span class="lgs-meta-dim">· {{ tailWhenLabel }}</span>
-            </span>
-            <span v-if="tailTruncated" class="lgs-trunc">{{ t('infra.logs.tail.truncated') }}</span>
+          <!-- Chưa bấm nhóm log nào — cột trái là nơi bắt đầu. -->
+          <div v-if="!tailGroup" class="lgs-pick">
+            <Icon name="table" class="lgs-pick-ic" />
+            <p class="lgs-pick-txt">{{ t('infra.logs.tail.pickGroup') }}</p>
           </div>
 
-          <div v-if="tailError" class="lgs-error">{{ tailError }}</div>
+          <!-- ── CHỦ: danh sách stream của nhóm vừa bấm ──────────────────────
+               Mô hình chủ–chi tiết (chốt 2026-09-17): nhóm → stream → dòng log.
+               Chưa chọn stream thì KHÔNG gọi dòng log nào — `activeStream === null`
+               là trạng thái riêng, khác hẳn `''` (gộp mọi stream). -->
+          <template v-else-if="activeStream === null">
+            <div class="lgs-mainbar">
+              <button
+                class="btn"
+                type="button"
+                :disabled="streamsLoading"
+                @click="onTail(tailGroup)"
+              >
+                <Icon :name="streamsLoading ? 'clock' : 'refresh'" class="lgs-ic" />
+                {{ streamsLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
+              </button>
+              <span class="lgs-mainbar-group" :title="tailGroup">{{ tailGroup }}</span>
+            </div>
 
-          <!-- Tầng giữa của CloudWatch: nhóm → stream → dòng.
-               ⚠ Trước 2026-09-17 khối này là block THỨ TƯ của cột trái, ngay SAU
-               danh sách nhóm log — mà danh sách đó dài bằng số nhóm của tài khoản
-               (34 nhóm trên máy người báo lỗi), nên bộ chọn stream bị đẩy xuống tận
-               đáy: muốn thấy nó phải cuộn qua cả danh mục, và tới lúc thấy thì
-               không còn nhìn được dòng log mà nó lọc. Nó thuộc về đây, ngay trên
-               bảng kết quả nó thu hẹp. -->
-          <InfraLogsStreamPicker
-            v-if="tailGroup"
-            :streams="streams"
-            :active="activeStream"
-            :loading="streamsLoading"
-            :error="streamsError"
-            @select="selectStream"
-          />
+            <InfraLogsStreamPicker
+              :streams="streams"
+              :loading="streamsLoading"
+              :error="streamsError"
+              @select="selectStream"
+            />
+          </template>
 
-          <InfraLogsFilters
-            v-model:quick="quickFilter"
-            v-model:level="levelFilter"
-            :facets="[]"
-            :active="null"
-            :shown="tailFilteredRows.length"
-            :total="tailRows.length"
-            @insert="() => {}"
-          />
+          <!-- ── CHI TIẾT: dòng log của stream đã chọn ─────────────────────── -->
+          <template v-else>
+            <div class="lgs-mainbar">
+              <button class="btn" type="button" @click="backToStreams">
+                <Icon name="chev-left" class="lgs-ic" />
+                {{ t('infra.logs.streams.back') }}
+              </button>
+              <button class="btn" type="button" :disabled="tailLoading" @click="refreshTail">
+                <Icon :name="tailLoading ? 'clock' : 'refresh'" class="lgs-ic" />
+                {{ tailLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
+              </button>
+              <!-- Đang đọc CÁI GÌ: nhóm rồi tới stream. Thiếu vế sau thì hai bảng
+                   của hai stream khác nhau trông y hệt nhau. -->
+              <span class="lgs-mainbar-group" :title="tailGroup">{{ tailGroup }}</span>
+              <Icon name="chev-right" class="lgs-crumb-ic" />
+              <span class="lgs-mainbar-group" :title="activeStream || undefined">
+                {{ activeStream === '' ? t('infra.logs.streams.all') : activeStream }}
+              </span>
+              <span class="lgs-spacer" />
+              <span v-if="!tailLoading && tailRanAt" class="lgs-meta">
+                {{ t('infra.logs.tail.status', { n: tailRows.length }) }}
+                <span class="lgs-meta-dim">· {{ tailWhenLabel }}</span>
+              </span>
+              <span v-if="tailTruncated" class="lgs-trunc">
+                {{ t('infra.logs.tail.truncated') }}
+              </span>
+            </div>
 
-          <InfraLogsResults
-            :rows="tailFilteredRows"
-            :copied="justCopied"
-            fill
-            :empty-text="
-              tailGroup ? t('infra.logs.tail.emptyGroup') : t('infra.logs.tail.pickGroup')
-            "
-            @copy="onCopyText"
-            @send-to-chat="onSendToChat"
-            @trace="onTraceFromRow"
-          />
+            <div v-if="tailError" class="lgs-error">{{ tailError }}</div>
 
-          <p class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
+            <InfraLogsFilters
+              v-model:quick="quickFilter"
+              v-model:level="levelFilter"
+              :facets="[]"
+              :active="null"
+              :shown="tailFilteredRows.length"
+              :total="tailRows.length"
+              @insert="() => {}"
+            />
+
+            <InfraLogsResults
+              :rows="tailFilteredRows"
+              :copied="justCopied"
+              fill
+              :empty-text="t('infra.logs.tail.emptyStream')"
+              @copy="onCopyText"
+              @send-to-chat="onSendToChat"
+              @trace="onTraceFromRow"
+            />
+
+            <p class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
+          </template>
         </template>
 
         <!-- ══════════ LẦN THEO MỘT REQUEST (L5) ══════════ -->
@@ -286,8 +308,13 @@
 // chính (bảng lấp đầy chiều cao).
 //
 // HAI CHẾ ĐỘ:
-//   · Tail (mặc định) — bấm một nhóm log = xem dòng MỚI NHẤT ngay qua
-//     `filter-log-events`. RẺ (không tính GB quét như Insights) ⇒ được phép tự chạy.
+//   · Dòng mới nhất (mặc định) — CHỦ–CHI TIẾT ba tầng, đúng ba tầng của CloudWatch:
+//     bấm một nhóm log ⇒ panel chính hiện DANH SÁCH STREAM của nhóm đó; bấm một
+//     stream (hoặc "Tất cả stream") ⇒ mới đọc dòng qua `filter-log-events`. Lệnh RẺ
+//     (không tính GB quét như Insights) nên mỗi cú bấm chạy thẳng, không ước lượng.
+//     ⚠ Trước 2026-09-17 bấm nhóm là tail luôn, và bộ chọn stream nằm ở cột trái —
+//     người dùng chốt đổi sang mô hình này: thêm một cú bấm trước dòng log đầu tiên,
+//     đổi lại thấy nhóm có những stream nào và stream nào vừa có event.
 //   · Nâng cao — soạn câu Insights (textarea, KHÔNG Monaco nữa) + histogram + thư
 //     viện + facet. Luật "không tự chạy Insights" giữ nguyên: truy vấn tốn tiền vẫn
 //     đứng sau một cú bấm + một con số ước lượng.
@@ -383,6 +410,7 @@ const {
   streamsError,
   activeStream,
   selectStream,
+  backToStreams,
 } = useInfraLogs()
 
 /** Cầu nối khoảng thời gian hai chiều với màn Giám sát (6.3). */
@@ -684,6 +712,38 @@ onBeforeUnmount(() => {
 
 .lgs-mode {
   align-self: stretch;
+}
+
+/* Chưa bấm nhóm log nào — panel chính nói ra bước tiếp theo thay vì để trống. */
+.lgs-pick {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--textDim);
+}
+
+.lgs-pick-ic {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+}
+
+.lgs-pick-txt {
+  margin: 0;
+  max-width: 420px;
+  text-align: center;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+
+/* Dấu phân cách nhóm → stream trên thanh công cụ. */
+.lgs-crumb-ic {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--textFaint);
+  flex: 0 0 auto;
 }
 
 /* Ba chế độ trong một cột rộng 240–320px.

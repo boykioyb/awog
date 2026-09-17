@@ -96,5 +96,15 @@
   "infra.logs.results.traceTitle": "Build a timeline for id {id}",
   "infra.logs.mode.tailFull": "Latest log lines of one group",
   "infra.logs.mode.advancedFull": "Advanced query (CloudWatch Insights)",
-  "infra.logs.mode.traceFull": "Trace one request across its hops"
+  "infra.logs.mode.traceFull": "Trace one request across its hops",
+  "infra.logs.streams.pickHint": "Pick a stream to read its log lines.",
+  "infra.logs.streams.allHint": "Every stream in this group, merged",
+  "infra.logs.streams.back": "Stream list",
+  "infra.logs.streams.noEvent": "no events yet · {size}",
+  "infra.logs.streams.lastEventAgo": "last event {ago} · {size}",
+  "infra.logs.streams.agoSec": "{n}s ago",
+  "infra.logs.streams.agoMin": "{n}m ago",
+  "infra.logs.streams.agoHour": "{n}h ago",
+  "infra.logs.streams.agoDay": "{n}d ago",
+  "infra.logs.tail.emptyStream": "This stream has no lines in the selected time range."
 }

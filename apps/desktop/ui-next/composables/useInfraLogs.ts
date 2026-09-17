@@ -392,8 +392,20 @@ export function useInfraLogs() {
   const streams = shallowRef<AwsLogStream[]>([])
   const streamsLoading = ref(false)
   const streamsError = ref('')
-  /** Stream đang xem. '' = xem TẤT CẢ stream của group (gộp qua filter-log-events). */
-  const activeStream = ref('')
+  /**
+   * Stream đang xem — BA trạng thái, và phân biệt chúng là cả mô hình của màn này:
+   *
+   *   · `null` — CHƯA chọn. Đã bấm một nhóm log và danh sách stream đã nạp, nhưng
+   *     chưa gọi một dòng log nào. Panel chính hiện danh sách để chọn.
+   *   · `''`   — TẤT CẢ stream của nhóm, gộp qua `filter-log-events`.
+   *   · tên    — đúng một stream.
+   *
+   * `null` và `''` KHÔNG được gộp làm một: cả hai đều "không có tên stream" khi
+   * dựng lời gọi CLI, nhưng một cái nghĩa là "đừng gọi gì cả" còn cái kia là "gọi
+   * và gộp mọi stream". Dùng chung một giá trị thì màn hình không thể biết nên hiện
+   * danh sách hay hiện log.
+   */
+  const activeStream = ref<string | null>(null)
 
   /** Nạp danh sách stream của một group. Metadata rẻ — không tính GB quét. */
   async function loadStreams(group: string): Promise<void> {
@@ -432,6 +444,11 @@ export function useInfraLogs() {
   async function refreshTail(): Promise<void> {
     const group = tailGroup.value
     if (!group) return
+    // Chưa chọn stream ⇒ không có gì để đọc. Guard ở ĐÂY chứ không chỉ ở call site:
+    // watcher "đổi khoảng thời gian thì tail lại" cũng đi qua hàm này, và nó không
+    // được phép biến một lần đổi khoảng thành một lời gọi CLI khi người dùng mới chỉ
+    // đang nhìn danh sách stream.
+    if (activeStream.value === null) return
     const win = windowMs.value
     if (!win) {
       tailError.value = 'INVALID_WINDOW'
@@ -473,27 +490,47 @@ export function useInfraLogs() {
   }
 
   /**
-   * Bấm vào một nhóm log ⇒ nạp danh sách stream của nó VÀ tail cả group ngay (mặc
-   * định "Tất cả stream"). Người dùng thu hẹp về một stream qua `selectStream`.
-   * Bấm lại chính nhóm ⇒ làm mới (giữ nguyên stream đang chọn).
+   * Bấm vào một nhóm log ⇒ nạp DANH SÁCH STREAM của nó, và dừng ở đó.
+   *
+   * KHÔNG tail ngay. Đây là mô hình chủ–chi tiết người dùng chốt ngày 2026-09-17:
+   * nhóm log → chọn stream → mới đọc dòng. Đổi lại một cú bấm nữa trước dòng log
+   * đầu tiên, nhưng người đọc thấy nhóm này có những stream nào và stream nào vừa
+   * có event — thứ mà một bảng log gộp không nói ra.
+   *
+   * Bấm lại chính nhóm đang mở ⇒ nạp lại danh sách stream (giữ nguyên lựa chọn nếu
+   * đang xem một stream).
    */
   async function openTail(name: string): Promise<void> {
     const sameGroup = tailGroup.value === name
     tailGroup.value = name
-    // Đổi sang group khác ⇒ về "Tất cả stream" (stream của group cũ vô nghĩa ở đây).
     if (!sameGroup) {
-      activeStream.value = ''
+      // Đổi sang nhóm khác ⇒ về danh sách (stream của nhóm cũ vô nghĩa ở đây).
+      activeStream.value = null
+      tailRows.value = []
+      tailRanAt.value = 0
       streams.value = []
-      void loadStreams(name)
     }
+    await loadStreams(name)
+  }
+
+  /** Chọn một stream ('' = gộp tất cả) rồi đọc dòng log. Cú bấm là sự cho phép. */
+  async function selectStream(name: string): Promise<void> {
+    activeStream.value = name
     await refreshTail()
   }
 
-  /** Chọn một stream ('' = tất cả) rồi tail lại. Cú bấm là sự cho phép; lệnh rẻ. */
-  async function selectStream(name: string): Promise<void> {
-    if (activeStream.value === name) return
-    activeStream.value = name
-    await refreshTail()
+  /**
+   * Quay lại danh sách stream.
+   *
+   * Xoá luôn kết quả đang giữ: để lại thì lần chọn stream sau sẽ chớp qua dòng log
+   * của stream TRƯỚC trong khi lời gọi mới còn đang bay — một bảng log hiện đúng
+   * nửa giây thứ dữ liệu sai là thứ người đọc không kịp nghi ngờ.
+   */
+  function backToStreams(): void {
+    activeStream.value = null
+    tailRows.value = []
+    tailRanAt.value = 0
+    tailError.value = ''
   }
 
   // ── lọc tại chỗ (2.7) ────────────────────────────────────────────────────
@@ -651,6 +688,7 @@ export function useInfraLogs() {
     streamsError,
     activeStream,
     selectStream,
+    backToStreams,
     bytesScanned,
     recordsMatched,
     actualUsd,

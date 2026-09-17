@@ -205,6 +205,24 @@ CloudWatch thật: mọi test đều mock `runInfra`. Cần một lượt đo th
 là "đã nghiệm thu".
 
 
+## Chế độ "Dòng mới nhất" — chủ–chi tiết ba tầng (đổi 2026-09-17)
+
+Bấm một nhóm log **không** đọc dòng log ngay nữa. Panel chính hiện **danh sách stream**
+của nhóm (tên · event gần nhất · dung lượng), và chỉ khi bấm một stream — hoặc dòng
+**"Tất cả stream"** đứng đầu danh sách — thì `filter-log-events` mới chạy. Nút *Danh
+sách stream* ở thanh công cụ đưa ngược lại.
+
+Vì sao đổi: bản trước tail thẳng cả nhóm và đẩy bộ chọn stream xuống cột trái, **sau**
+danh sách nhóm log — với 34 nhóm thì nó nằm dưới đáy, phải cuộn qua cả danh mục mới
+thấy, và lúc thấy thì không còn nhìn được bảng log mà nó lọc. Giá phải trả là một cú
+bấm nữa trước dòng log đầu tiên; đổi lại người đọc biết nhóm này có bao nhiêu stream và
+cái nào còn sống — thứ một bảng log gộp không nói ra.
+
+Ba trạng thái của `activeStream` là mô hình của màn này, và **`null` khác `''`**:
+`null` = chưa chọn (chỉ nạp danh sách, không gọi dòng nào), `''` = gộp mọi stream, tên
+= đúng một stream. Gộp hai cái đầu làm một thì màn hình không biết nên hiện danh sách
+hay hiện log.
+
 ## L5 — trạng thái thực tế (2026-09-16)
 
 Cửa vào: chế độ thứ ba của màn Logs (**Dòng mới nhất · Truy vấn nâng cao · Lần theo
