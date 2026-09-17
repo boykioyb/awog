@@ -281,6 +281,15 @@ thêm* dưới bảng nối tiếp từ đúng chỗ vừa dừng. Ba điều đ
 `filter-log-events` thật và có tính tiền. Một cú lăn chuột không được phép biến thành
 mấy chục lệnh người dùng không yêu cầu.
 
+Nút đó **nổi** trên đáy bảng (`position: absolute`, tròn 32px, mờ 45% khi rảnh, rõ khi
+trỏ tới) chứ không đứng thành một hàng riêng. Một hàng riêng — kèm dòng chú thích bên
+cạnh và đoạn ghi chú về giá bên dưới — ăn **89px** đo được của đúng cái bảng đang đọc,
+để đổi lấy một hành động thỉnh thoảng mới dùng. Chú thích *"mỗi lượt là một lệnh gọi
+AWS"* chuyển vào `title`: chỗ nào người dùng hỏi thì chỗ đó trả lời. Ghi chú về giá của
+cả chế độ tail dời sang màn **danh sách stream** — đó mới là lúc người ta quyết định có
+mở hay không. Cái giá của việc nổi: nút che đúng **một** hàng cuối; đo được là nó vẫn
+nhận cú bấm bình thường.
+
 Lỗi khi *đọc tiếp* **giữ nguyên** những dòng đã đọc được — vứt chúng đi là phạt người
 dùng vì một lượt gọi hỏng mà họ không gây ra. Chỉ lượt đọc lại từ đầu mới thay sạch.
 

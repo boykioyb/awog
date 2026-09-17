@@ -94,6 +94,11 @@
               :error="streamsError"
               @select="selectStream"
             />
+
+            <!-- Ghi chú về giá đứng ở ĐÂY, không ở màn đọc dòng: đây là lúc người ta
+                 quyết định có mở hay không, còn ở bên kia nó chỉ ăn chiều cao của
+                 chính cái bảng vừa mở ra để đọc. -->
+            <p class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
           </template>
 
           <!-- ── CHI TIẾT: dòng log của stream đã chọn ─────────────────────── -->
@@ -166,21 +171,23 @@
                 @trace="onTraceFromRow"
               />
 
-              <!-- Đọc thêm là một NÚT, không phải tự nạp khi cuộn: mỗi lượt là một
-                   request `filter-log-events` thật, tính tiền theo số request. -->
-              <div v-if="tailNextToken && !tailLoading" class="lgs-more">
-                <button class="btn" type="button" :disabled="tailLoadingMore" @click="loadMoreTail">
-                  <Icon :name="tailLoadingMore ? 'clock' : 'chev'" class="lgs-ic" />
-                  {{
-                    tailLoadingMore ? t('infra.logs.tail.loading') : t('infra.logs.tail.loadMore')
-                  }}
-                </button>
-                <span class="lgs-more-hint">{{ t('infra.logs.tail.loadMoreHint') }}</span>
-              </div>
-
-              <!-- Ở toàn màn hình thì hai dòng ghi chú này chỉ ăn chiều cao của đúng
-                   cái bảng vừa được nới rộng ra để đọc. -->
-              <p v-if="!tailFull" class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
+              <!-- Đọc thêm NỔI trên bảng thay vì đứng thành một hàng dưới nó: một
+                   hàng riêng ăn chiều cao của đúng cái bảng đang đọc, mà nó chỉ là
+                   một hành động thỉnh thoảng mới dùng. Mờ khi rảnh, rõ khi trỏ tới.
+                   Vẫn là một NÚT chứ không tự nạp khi cuộn: mỗi lượt là một request
+                   `filter-log-events` thật, tính tiền theo số request — nên nhãn đó
+                   nằm trong `title`, chỗ người dùng hỏi thì mới trả lời. -->
+              <button
+                v-if="tailNextToken && !tailLoading"
+                class="lgs-more"
+                type="button"
+                :disabled="tailLoadingMore"
+                :title="`${t('infra.logs.tail.loadMore')} — ${t('infra.logs.tail.loadMoreHint')}`"
+                :aria-label="t('infra.logs.tail.loadMore')"
+                @click="loadMoreTail"
+              >
+                <Icon :name="tailLoadingMore ? 'clock' : 'chev'" class="lgs-more-ic" />
+              </button>
             </div>
           </Teleport>
         </template>
@@ -776,6 +783,49 @@ onBeforeUnmount(() => {
   gap: 8px;
   min-height: 0;
   flex: 1 1 auto;
+  /* Khối neo cho nút "đọc thêm" nổi bên dưới. */
+  position: relative;
+}
+
+/* Nút đọc thêm NỔI trên đáy bảng, không chiếm một hàng nào của bố cục.
+   `position: absolute` nên nó không đẩy bảng lên, và mờ khi rảnh để không tranh
+   chỗ với chính những dòng log nó sắp mang về. */
+.lgs-more {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bgEl);
+  color: var(--textDim);
+  box-shadow: var(--shadow-md);
+  opacity: 0.45;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+
+.lgs-more:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
+.lgs-more:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.lgs-more-ic {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 /* Toàn màn hình: phủ kín cửa sổ. `z-index` 300 bằng lớp cao nhất đang dùng
