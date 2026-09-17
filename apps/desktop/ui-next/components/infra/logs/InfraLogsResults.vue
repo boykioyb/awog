@@ -134,7 +134,9 @@ watch(
   flex: 1 1 auto;
 }
 
-.lrs.fill .lrs-bar {
+/* Thanh công cụ KHÔNG phụ thuộc `fill` — số dòng và nút chọn cột phải nằm hai đầu
+   ở mọi chỗ dùng bảng. `flex: 0 0 auto` để nó không bị bảng ép bẹp. */
+.lrs-bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -150,11 +152,6 @@ watch(
 
 .lrs-gap {
   flex: 1 1 auto;
-}
-
-.lrs-tablewrap {
-  flex: 1 1 auto;
-  max-height: none;
 }
 
 .lrs.fill .lrs-empty {
@@ -186,8 +183,17 @@ watch(
    Trước đây khai tại chỗ với `--r-sm` + `--bgEl` — lệch khuôn so với ba bảng card
    còn lại của app (--r-card + --bgPanel) mà không có lý do nào. */
 .lrs-tablewrap {
+  flex: 1 1 auto;
   overflow: auto;
   max-height: 340px;
+}
+
+/* MỘT luật duy nhất cho `max-height`, và bản nới ra phải THẮNG về độ đặc hiệu.
+   Trước đây bản nới viết là `.lrs-tablewrap` trơn, ngang cơ với luật 340px ở trên
+   nên luật đứng sau thắng: bảng ở chế độ `fill` bị ghim 340px và bỏ phí phần còn
+   lại của cột chính (đo được 318px trống dưới bảng ở cửa sổ cao 695px). */
+.lrs.fill .lrs-tablewrap {
+  max-height: none;
 }
 
 .lrs-table {
@@ -249,9 +255,13 @@ watch(
   font-family: var(--code);
 }
 
+/* Ô nội dung KHÔNG xuống dòng.
+   Trước đây ô này `pre-wrap`: một dòng log JSON 2.4KB đo được cao 883px — cao hơn
+   cả khung bảng (646px) — và một mình nó đẩy 32 hàng khác ra khỏi tầm nhìn. `<td>`
+   thì `max-height` vô tác dụng (ô bảng coi height là chiều cao TỐI THIỂU), nên cách
+   duy nhất giữ hàng đều là không cho chữ xuống dòng. Toàn văn nay nằm một cú bấm
+   bên trong modal chi tiết, nên bảng không còn phải gánh việc hiển thị đủ. */
 .lrs-td.msg {
-  white-space: pre-wrap;
-  word-break: break-word;
   max-width: 560px;
 }
 

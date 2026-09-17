@@ -233,6 +233,11 @@ thứ theo mẫu của AWS Console:
   lựa chọn nhớ theo **TÊN** cột trong `localStorage`, không theo chỉ số — một chỉ số ở
   lượt sau sẽ trỏ vào một trường khác. Tên đã ẩn mà lượt này không có thì im lặng bỏ
   qua. Cột cuối cùng bị khoá: một bảng không còn cột nào thì không nói được gì.
+- **Mỗi hàng đúng một dòng** — ô `@message` không xuống dòng nữa. Trước đó nó
+  `pre-wrap`, và một dòng log JSON 2.4KB đo được cao **883px**, cao hơn cả khung
+  bảng (646px): một mình nó đẩy 32 hàng khác ra khỏi tầm nhìn. `<td>` thì
+  `max-height` vô tác dụng — ô bảng coi `height` là chiều cao TỐI THIỂU — nên cách
+  duy nhất giữ hàng đều là cắt bằng ellipsis. Toàn văn nằm trong modal dưới đây.
 - **Chi tiết một dòng** — bấm một hàng mở **modal** thay vì khối inline cũ. Khối cũ ăn
   chiều cao của chính bảng đang đọc, và một dòng log JSON dài đẩy bảng khuất gần hết.
   Modal in nội dung thô, in thêm bản JSON thụt lề **khi `@message` thực sự parse được**

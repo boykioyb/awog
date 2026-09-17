@@ -107,6 +107,10 @@ function toggle(column: string): void {
   position: fixed;
   z-index: 129;
   overflow-y: auto;
+  /* Trần dự phòng: `usePopoverAnchor` ghi `max-height` chính xác theo chỗ trống
+     thật, nhưng một kết quả 40 cột mà phép đo chưa kịp chạy thì danh sách sẽ dài
+     quá màn hình và không cuộn được. Giá trị này chỉ đỡ khung đó. */
+  max-height: 360px;
   padding: 8px;
   border: 1px solid var(--borderStrong);
   border-radius: var(--r-card);
