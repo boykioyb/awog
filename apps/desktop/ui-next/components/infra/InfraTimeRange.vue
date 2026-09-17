@@ -29,95 +29,103 @@
       </span>
     </div>
 
-    <template v-if="open">
-      <div class="itr-backdrop" @click="close" />
-      <div class="itr-pop" @click.stop>
-        <!-- Tab Absolute | Relative -->
-        <div class="seg itr-tabs">
-          <span
-            class="itr-tab"
-            :class="{ on: tab === 'absolute' }"
-            role="button"
-            :aria-pressed="tab === 'absolute'"
-            @click="tab = 'absolute'"
-          >
-            {{ t('infra.time.absolute') }}
-          </span>
-          <span
-            class="itr-tab"
-            :class="{ on: tab === 'relative' }"
-            role="button"
-            :aria-pressed="tab === 'relative'"
-            @click="tab = 'relative'"
-          >
-            {{ t('infra.time.relative') }}
-          </span>
-        </div>
+    <!-- Teleport ra <body> + định vị FIXED.
+         ⚠ Bản trước là `position: absolute` trong `.itr`, và nó bị CẮT ở màn Nhật
+         ký: cột trái có `overflow-y: auto`, mà theo CSS khi một trục khác `visible`
+         thì trục kia cũng thành `auto` — nên cột rộng 320px xén mất popover rộng
+         460px. Không phải "bị che": nó bị tổ tiên cắt, nên không z-index nào cứu
+         được. Cùng khuôn `AppSelect` đã dùng cho đúng vấn đề này. -->
+    <Teleport to="body">
+      <template v-if="open">
+        <div class="itr-backdrop" @click="close" />
+        <div ref="popRef" class="itr-pop" :style="popStyle" @click.stop>
+          <!-- Tab Absolute | Relative -->
+          <div class="seg itr-tabs">
+            <span
+              class="itr-tab"
+              :class="{ on: tab === 'absolute' }"
+              role="button"
+              :aria-pressed="tab === 'absolute'"
+              @click="tab = 'absolute'"
+            >
+              {{ t('infra.time.absolute') }}
+            </span>
+            <span
+              class="itr-tab"
+              :class="{ on: tab === 'relative' }"
+              role="button"
+              :aria-pressed="tab === 'relative'"
+              @click="tab = 'relative'"
+            >
+              {{ t('infra.time.relative') }}
+            </span>
+          </div>
 
-        <!-- ── Relative ── -->
-        <div v-if="tab === 'relative'" class="itr-rel">
-          <div v-for="u in UNITS" :key="u" class="itr-grid-row">
-            <span class="itr-grid-lbl">{{ t(`infra.time.unit.${u}`) }}</span>
-            <div class="itr-grid">
-              <button
-                v-for="n in RELATIVE_GRID[u]"
-                :key="n"
-                class="itr-o"
-                :class="{ on: amount === n && unit === u }"
-                type="button"
-                @click="pickGrid(n, u)"
-              >
-                {{ n }}
-              </button>
+          <!-- ── Relative ── -->
+          <div v-if="tab === 'relative'" class="itr-rel">
+            <div v-for="u in UNITS" :key="u" class="itr-grid-row">
+              <span class="itr-grid-lbl">{{ t(`infra.time.unit.${u}`) }}</span>
+              <div class="itr-grid">
+                <button
+                  v-for="n in RELATIVE_GRID[u]"
+                  :key="n"
+                  class="itr-o"
+                  :class="{ on: amount === n && unit === u }"
+                  type="button"
+                  @click="pickGrid(n, u)"
+                >
+                  {{ n }}
+                </button>
+              </div>
+            </div>
+
+            <div class="itr-dur">
+              <label class="itr-field">
+                <span class="itr-field-lbl">{{ t('infra.time.duration') }}</span>
+                <input
+                  v-model.number="amount"
+                  class="itr-input"
+                  type="number"
+                  min="1"
+                  max="9999"
+                  inputmode="numeric"
+                />
+                <span class="itr-hint">{{ t('infra.time.upTo4') }}</span>
+              </label>
+              <label class="itr-field">
+                <span class="itr-field-lbl">{{ t('infra.time.unitOfTime') }}</span>
+                <AppSelect v-model="unit" :options="unitOptions" width="150px" />
+              </label>
             </div>
           </div>
 
-          <div class="itr-dur">
+          <!-- ── Absolute ── -->
+          <div v-else class="itr-abs">
             <label class="itr-field">
-              <span class="itr-field-lbl">{{ t('infra.time.duration') }}</span>
-              <input
-                v-model.number="amount"
-                class="itr-input"
-                type="number"
-                min="1"
-                max="9999"
-                inputmode="numeric"
-              />
-              <span class="itr-hint">{{ t('infra.time.upTo4') }}</span>
+              <span class="itr-field-lbl">{{ t('infra.time.from') }}</span>
+              <input v-model="absStart" class="itr-input" type="datetime-local" />
             </label>
             <label class="itr-field">
-              <span class="itr-field-lbl">{{ t('infra.time.unitOfTime') }}</span>
-              <AppSelect v-model="unit" :options="unitOptions" width="150px" />
+              <span class="itr-field-lbl">{{ t('infra.time.to') }}</span>
+              <input v-model="absEnd" class="itr-input" type="datetime-local" />
             </label>
+            <p v-if="absError" class="itr-err">{{ absError }}</p>
+          </div>
+
+          <!-- Footer -->
+          <div class="itr-foot">
+            <button class="btn" type="button" @click="onClearDraft">
+              {{ t('infra.time.clear') }}
+            </button>
+            <span class="itr-foot-sp" />
+            <button class="btn" type="button" @click="close">{{ t('infra.time.cancel') }}</button>
+            <button class="btn pri" type="button" :disabled="!canApply" @click="apply">
+              {{ t('infra.time.apply') }}
+            </button>
           </div>
         </div>
-
-        <!-- ── Absolute ── -->
-        <div v-else class="itr-abs">
-          <label class="itr-field">
-            <span class="itr-field-lbl">{{ t('infra.time.from') }}</span>
-            <input v-model="absStart" class="itr-input" type="datetime-local" />
-          </label>
-          <label class="itr-field">
-            <span class="itr-field-lbl">{{ t('infra.time.to') }}</span>
-            <input v-model="absEnd" class="itr-input" type="datetime-local" />
-          </label>
-          <p v-if="absError" class="itr-err">{{ absError }}</p>
-        </div>
-
-        <!-- Footer -->
-        <div class="itr-foot">
-          <button class="btn" type="button" @click="onClearDraft">
-            {{ t('infra.time.clear') }}
-          </button>
-          <span class="itr-foot-sp" />
-          <button class="btn" type="button" @click="close">{{ t('infra.time.cancel') }}</button>
-          <button class="btn pri" type="button" :disabled="!canApply" @click="apply">
-            {{ t('infra.time.apply') }}
-          </button>
-        </div>
-      </div>
-    </template>
+      </template>
+    </Teleport>
   </div>
 </template>
 
@@ -129,7 +137,7 @@
 // Chỉ BIND: nhận `modelValue` (InfraWindow) và emit khi Apply/bấm preset — không tự
 // chạy truy vấn. Từng màn quyết định đổi cửa sổ thì làm gì (Logs tail lại; Giám sát
 // đánh dấu dirty chờ Nạp).
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 'vue'
 import AppSelect from '~/components/common/AppSelect.vue'
 import { useEscToClose } from '~/composables/useEscToClose'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
@@ -200,6 +208,75 @@ function close(): void {
   open.value = false
 }
 useEscToClose(open, close)
+
+// ── Định vị popover (teleported, fixed) ─────────────────────────────────────
+//
+// Cùng phép của `AppSelect`: neo dưới nút, lật LÊN khi dưới không đủ chỗ, và kẹp
+// trong viewport theo cả hai trục. Phải tính bằng JS vì phần tử đã rời khỏi cây
+// bố cục của nút — đó chính là cái giá của việc thoát khỏi tổ tiên bị cắt.
+// `ref="customBtn"` đã có sẵn trong template từ trước nhưng CHƯA từng được khai
+// báo — không ai đọc tới nó. Khai bằng `useTemplateRef` theo luật của repo (không
+// dùng `ref<HTMLElement>(null)`, thứ làm `vue-tsc` đỏ).
+const customBtn = useTemplateRef<HTMLElement>('customBtn')
+const popRef = useTemplateRef<HTMLElement>('popRef')
+const popStyle = ref<Record<string, string>>({})
+
+const POP_GAP = 6
+const POP_WIDTH = 460
+const POP_MARGIN = 12
+
+function updatePopPosition(): void {
+  const trigger = customBtn.value
+  if (!trigger) return
+  const r = trigger.getBoundingClientRect()
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+
+  const width = Math.min(POP_WIDTH, vw - POP_MARGIN * 2)
+  // Neo mép TRÁI theo nút, nhưng không cho tràn mép phải màn hình.
+  const left = Math.max(POP_MARGIN, Math.min(r.left, vw - width - POP_MARGIN))
+
+  const spaceBelow = vh - r.bottom - POP_GAP - POP_MARGIN
+  const spaceAbove = r.top - POP_GAP - POP_MARGIN
+  const wanted = popRef.value?.scrollHeight ?? 0
+  const flipUp = spaceBelow < Math.min(wanted || 520, 520) && spaceAbove > spaceBelow
+  const maxH = Math.max(200, Math.min(520, flipUp ? spaceAbove : spaceBelow))
+
+  popStyle.value = {
+    left: `${String(Math.round(left))}px`,
+    width: `${String(Math.round(width))}px`,
+    maxHeight: `${String(Math.round(maxH))}px`,
+    ...(flipUp
+      ? { bottom: `${String(Math.round(vh - r.top + POP_GAP))}px` }
+      : { top: `${String(Math.round(r.bottom + POP_GAP))}px` }),
+  }
+}
+
+function onReposition(): void {
+  if (open.value) updatePopPosition()
+}
+
+// `scroll` bắt ở pha CAPTURE: popover neo theo một nút nằm trong cột có thanh
+// cuộn riêng, mà sự kiện cuộn của phần tử KHÔNG nổi bọt lên window.
+watch(open, async (isOpen) => {
+  if (isOpen) {
+    updatePopPosition()
+    window.addEventListener('resize', onReposition)
+    window.addEventListener('scroll', onReposition, true)
+    // Lượt thứ hai sau khi popover đã mount: lúc này mới đo được chiều cao thật
+    // để quyết định lật lên hay xuống.
+    await nextTick()
+    updatePopPosition()
+  } else {
+    window.removeEventListener('resize', onReposition)
+    window.removeEventListener('scroll', onReposition, true)
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', onReposition)
+  window.removeEventListener('scroll', onReposition, true)
+})
 
 /** Biểu diễn một khoảng giây thành (amount, unit) bằng đơn vị LỚN NHẤT chia hết. */
 function toAmountUnit(seconds: number): { amount: number; unit: RelativeUnit } {
@@ -349,14 +426,11 @@ function onClearDraft(): void {
   inset: 0;
   z-index: 128;
 }
+/* `left`/`top`|`bottom`/`width`/`max-height` do `updatePopPosition()` đặt inline —
+   xem chú thích ở template. */
 .itr-pop {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+  position: fixed;
   z-index: 129;
-  width: 460px;
-  max-width: 92vw;
-  max-height: min(70vh, 520px);
   overflow-y: auto;
   padding: 14px;
   background: var(--bgEl);
