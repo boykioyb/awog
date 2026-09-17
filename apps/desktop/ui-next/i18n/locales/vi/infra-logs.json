@@ -130,5 +130,7 @@
   "infra.logs.results.loading": "Đang tải…",
   "infra.logs.tail.hasMore": "Còn nữa",
   "infra.logs.tail.loadMore": "Đọc thêm",
-  "infra.logs.tail.loadMoreHint": "Mỗi lượt là một lệnh gọi AWS"
+  "infra.logs.tail.loadMoreHint": "Mỗi lượt là một lệnh gọi AWS",
+  "infra.logs.tail.fullTitle": "Toàn màn hình (Esc để thoát)",
+  "infra.logs.tail.exitFullTitle": "Thoát toàn màn hình (Esc)"
 }

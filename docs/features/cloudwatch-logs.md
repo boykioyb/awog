@@ -223,6 +223,33 @@ Ba trạng thái của `activeStream` là mô hình của màn này, và **`null
 = đúng một stream. Gộp hai cái đầu làm một thì màn hình không biết nên hiện danh sách
 hay hiện log.
 
+## Toàn màn hình khi đọc dòng log (thêm 2026-09-17)
+
+Nút ⛶ ở cuối thanh breadcrumb cho bảng chiếm cả cửa sổ. Đo được: ô `@message` đi từ
+703px lên **1006px** (+43%) ở cửa sổ 1512×900, và từ 531px lên **843px** (+59%) ở
+1280×800 — cửa sổ càng hẹp thì cột trái càng ăn tỉ lệ lớn, nên càng lời. Cùng một dòng
+log JSON khi bật *Xuống dòng* co từ 142px xuống 104px chiều cao, tức thấy được nhiều
+dòng hơn chứ không chỉ rộng hơn.
+
+**Là TELEPORT, không phải dựng lại một bản thứ hai.** `<Teleport to="body" :disabled="
+!tailFull">` giữ nguyên instance component, nên bộ lọc đang gõ, tập dòng đã *Đọc thêm*,
+và dòng đang mở chi tiết đều còn nguyên khi bật/tắt — và không sinh thêm một lệnh gọi
+AWS nào. Khi tắt thì `disabled` trả nó về đúng chỗ cũ trong `.lgs-main`.
+
+Theo đúng khuôn `MermaidView`: `.full` là `position: fixed; inset: 0` trên khối đã
+teleport. Teleport là bắt buộc chứ không phải cho gọn — một tổ tiên có `transform` hay
+`filter` sẽ thành containing block của `position: fixed` và nhốt lớp phủ lại.
+
+Ba chi tiết nhỏ nhưng cố ý:
+
+- **Esc thoát**, bắt ở pha CAPTURE + `stopPropagation`. Modal chi tiết một dòng cũng
+  nghe Esc; bấm Esc khi cả hai đang mở phải đóng đúng cái trên cùng, không đóng cả hai.
+- **Nút "Danh sách stream" bị ẩn** ở toàn màn hình: quay lại danh sách trong khi lớp
+  phủ còn đó sẽ che một trang không còn liên quan. Đổi `mode` hoặc đổi stream cũng tự
+  tắt toàn màn hình.
+- **KHÔNG nhớ qua lần mở sau.** Toàn màn hình là thứ bật cho một lần đọc cụ thể; mở lại
+  app mà rơi thẳng vào một lớp phủ kín màn hình thì không ai hiểu vì sao.
+
 ## Dòng mới nhất — thứ tự và phân trang (sửa 2026-09-17)
 
 **Trước bản này, màn "Dòng mới nhất" trả về 200 dòng CŨ NHẤT.** `filter-log-events`

@@ -97,70 +97,92 @@
           </template>
 
           <!-- ── CHI TIẾT: dòng log của stream đã chọn ─────────────────────── -->
-          <template v-else>
-            <div class="lgs-mainbar">
-              <button class="btn" type="button" @click="backToStreams">
-                <Icon name="chev-left" class="lgs-ic" />
-                {{ t('infra.logs.streams.back') }}
-              </button>
-              <button class="btn" type="button" :disabled="tailLoading" @click="refreshTail">
-                <Icon :name="tailLoading ? 'clock' : 'refresh'" class="lgs-ic" />
-                {{ tailLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
-              </button>
-              <!-- Đang đọc CÁI GÌ: nhóm rồi tới stream. Thiếu vế sau thì hai bảng
-                   của hai stream khác nhau trông y hệt nhau. -->
-              <span class="lgs-mainbar-group" :title="tailGroup">{{ tailGroup }}</span>
-              <Icon name="chev-right" class="lgs-crumb-ic" />
-              <span class="lgs-mainbar-group" :title="activeStream || undefined">
-                {{ activeStream === '' ? t('infra.logs.streams.all') : activeStream }}
-              </span>
-              <span class="lgs-spacer" />
-              <span v-if="!tailLoading && tailRanAt" class="lgs-meta">
-                {{ t('infra.logs.tail.status', { n: tailRows.length }) }}
-                <span class="lgs-meta-dim">· {{ tailWhenLabel }}</span>
-              </span>
-              <!-- "Còn nữa" là SỰ THẬT chứ không phải cảnh báo nữa: đã có đường
-                   đọc tiếp ngay dưới bảng. -->
-              <span v-if="tailNextToken" class="lgs-trunc">
-                {{ t('infra.logs.tail.hasMore') }}
-              </span>
+          <!-- Toàn màn hình = TELEPORT, không phải dựng lại một bản thứ hai: instance
+               component được giữ nguyên nên bộ lọc, tập dòng đã đọc thêm, và dòng đang
+               mở chi tiết đều còn — bật/tắt không làm mất chỗ đang đọc, và cũng không
+               sinh thêm một lệnh gọi AWS nào.
+               `disabled` khi tắt ⇒ inline đúng chỗ cũ, không đổi gì. -->
+          <Teleport v-else to="body" :disabled="!tailFull">
+            <div class="lgs-tail" :class="{ full: tailFull }">
+              <div class="lgs-mainbar">
+                <button v-if="!tailFull" class="btn" type="button" @click="backToStreams">
+                  <Icon name="chev-left" class="lgs-ic" />
+                  {{ t('infra.logs.streams.back') }}
+                </button>
+                <button class="btn" type="button" :disabled="tailLoading" @click="refreshTail">
+                  <Icon :name="tailLoading ? 'clock' : 'refresh'" class="lgs-ic" />
+                  {{ tailLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
+                </button>
+                <!-- Đang đọc CÁI GÌ: nhóm rồi tới stream. Thiếu vế sau thì hai bảng
+                     của hai stream khác nhau trông y hệt nhau. Ở toàn màn hình thì
+                     càng cần: cột trái mang ngữ cảnh đã bị ẩn đi. -->
+                <span class="lgs-mainbar-group" :title="tailGroup">{{ tailGroup }}</span>
+                <Icon name="chev-right" class="lgs-crumb-ic" />
+                <span class="lgs-mainbar-group" :title="activeStream || undefined">
+                  {{ activeStream === '' ? t('infra.logs.streams.all') : activeStream }}
+                </span>
+                <span class="lgs-spacer" />
+                <span v-if="!tailLoading && tailRanAt" class="lgs-meta">
+                  {{ t('infra.logs.tail.status', { n: tailRows.length }) }}
+                  <span class="lgs-meta-dim">· {{ tailWhenLabel }}</span>
+                </span>
+                <!-- "Còn nữa" là SỰ THẬT chứ không phải cảnh báo nữa: đã có đường
+                     đọc tiếp ngay dưới bảng. -->
+                <span v-if="tailNextToken" class="lgs-trunc">
+                  {{ t('infra.logs.tail.hasMore') }}
+                </span>
+                <button
+                  class="btn sm"
+                  type="button"
+                  :title="
+                    tailFull ? t('infra.logs.tail.exitFullTitle') : t('infra.logs.tail.fullTitle')
+                  "
+                  @click="tailFull = !tailFull"
+                >
+                  <Icon :name="tailFull ? 'fullscreen-exit' : 'fullscreen'" class="lgs-ic" />
+                </button>
+              </div>
+
+              <div v-if="tailError" class="lgs-error">{{ tailError }}</div>
+
+              <InfraLogsFilters
+                v-model:quick="quickFilter"
+                v-model:level="levelFilter"
+                :facets="[]"
+                :active="null"
+                :shown="tailFilteredRows.length"
+                :total="tailRows.length"
+                @insert="() => {}"
+              />
+
+              <InfraLogsResults
+                :rows="tailFilteredRows"
+                :copied="justCopied"
+                :loading="tailLoading"
+                fill
+                :empty-text="t('infra.logs.tail.emptyStream')"
+                @copy="onCopyText"
+                @send-to-chat="onSendToChat"
+                @trace="onTraceFromRow"
+              />
+
+              <!-- Đọc thêm là một NÚT, không phải tự nạp khi cuộn: mỗi lượt là một
+                   request `filter-log-events` thật, tính tiền theo số request. -->
+              <div v-if="tailNextToken && !tailLoading" class="lgs-more">
+                <button class="btn" type="button" :disabled="tailLoadingMore" @click="loadMoreTail">
+                  <Icon :name="tailLoadingMore ? 'clock' : 'chev'" class="lgs-ic" />
+                  {{
+                    tailLoadingMore ? t('infra.logs.tail.loading') : t('infra.logs.tail.loadMore')
+                  }}
+                </button>
+                <span class="lgs-more-hint">{{ t('infra.logs.tail.loadMoreHint') }}</span>
+              </div>
+
+              <!-- Ở toàn màn hình thì hai dòng ghi chú này chỉ ăn chiều cao của đúng
+                   cái bảng vừa được nới rộng ra để đọc. -->
+              <p v-if="!tailFull" class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
             </div>
-
-            <div v-if="tailError" class="lgs-error">{{ tailError }}</div>
-
-            <InfraLogsFilters
-              v-model:quick="quickFilter"
-              v-model:level="levelFilter"
-              :facets="[]"
-              :active="null"
-              :shown="tailFilteredRows.length"
-              :total="tailRows.length"
-              @insert="() => {}"
-            />
-
-            <InfraLogsResults
-              :rows="tailFilteredRows"
-              :copied="justCopied"
-              :loading="tailLoading"
-              fill
-              :empty-text="t('infra.logs.tail.emptyStream')"
-              @copy="onCopyText"
-              @send-to-chat="onSendToChat"
-              @trace="onTraceFromRow"
-            />
-
-            <!-- Đọc thêm là một NÚT, không phải tự nạp khi cuộn: mỗi lượt là một
-                 request `filter-log-events` thật, tính tiền theo số request. -->
-            <div v-if="tailNextToken && !tailLoading" class="lgs-more">
-              <button class="btn" type="button" :disabled="tailLoadingMore" @click="loadMoreTail">
-                <Icon :name="tailLoadingMore ? 'clock' : 'chev'" class="lgs-ic" />
-                {{ tailLoadingMore ? t('infra.logs.tail.loading') : t('infra.logs.tail.loadMore') }}
-              </button>
-              <span class="lgs-more-hint">{{ t('infra.logs.tail.loadMoreHint') }}</span>
-            </div>
-
-            <p class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
-          </template>
+          </Teleport>
         </template>
 
         <!-- ══════════ LẦN THEO MỘT REQUEST (L5) ══════════ -->
@@ -428,6 +450,34 @@ const {
   selectStream,
   backToStreams,
 } = useInfraLogs()
+
+/**
+ * Bảng log chiếm cả cửa sổ.
+ *
+ * Trạng thái TRÌNH BÀY thuần nên nằm ở component, không vào `useInfraLogs` (composable
+ * đó lo state + IPC). Không nhớ qua lần mở sau: toàn màn hình là thứ người ta bật cho
+ * một lần đọc cụ thể, còn mở lại app mà rơi thẳng vào một lớp phủ kín màn hình thì
+ * không ai hiểu vì sao.
+ */
+const tailFull = ref(false)
+
+// Rời khỏi chế độ đọc dòng log thì cũng rời toàn màn hình: quay lại danh sách stream
+// mà lớp phủ còn đó sẽ che một trang không còn liên quan gì.
+watch([mode, activeStream], () => {
+  tailFull.value = false
+})
+
+// Esc thoát. Pha CAPTURE + `stopPropagation` theo đúng khuôn của `MermaidView`: modal
+// chi tiết một dòng cũng nghe Esc, và bấm Esc khi cả hai đang mở phải đóng đúng cái
+// trên cùng, không đóng cả hai.
+function onTailFullKey(e: KeyboardEvent): void {
+  if (tailFull.value && e.key === 'Escape') {
+    tailFull.value = false
+    e.stopPropagation()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onTailFullKey, true))
+onBeforeUnmount(() => window.removeEventListener('keydown', onTailFullKey, true))
 
 /** Cầu nối khoảng thời gian hai chiều với màn Giám sát (6.3). */
 const bridge = useInfraWindowSync()
@@ -715,6 +765,37 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   padding: 12px;
+}
+
+/* Bọc phần "đọc dòng log" để nó teleport được nguyên khối. Khi KHÔNG toàn màn hình,
+   khối này phải cư xử y như lúc các con còn là con trực tiếp của `.lgs-main`: cùng
+   trục, cùng khe, và cùng `min-height: 0` để bảng còn co được. */
+.lgs-tail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+/* Toàn màn hình: phủ kín cửa sổ. `z-index` 300 bằng lớp cao nhất đang dùng
+   (xem reference_ui_next_zindex_bands) — popover chọn cột nằm ở 129 nên khi khối này
+   đã teleport ra `<body>` thì thứ tự DOM đủ giữ popover ở trên. */
+.lgs-tail.full {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: var(--bg);
+  padding: 12px;
+  gap: 8px;
+}
+
+/* Bảng bên trong `.lgs-main` đã bị gỡ khung để không thành "card trong card"; ở toàn
+   màn hình nó không còn nằm trong `.lgs-main` nữa nên phải gỡ lại tại chỗ. */
+.lgs-tail.full :deep(.tblcard) {
+  border: none;
+  box-shadow: none;
+  background: transparent;
 }
 
 /* Bảng kết quả bên trong cột phải đã là `.tblcard` — bỏ khung/shadow/nền của nó
