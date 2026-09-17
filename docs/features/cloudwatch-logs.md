@@ -223,26 +223,45 @@ Ba trạng thái của `activeStream` là mô hình của màn này, và **`null
 = đúng một stream. Gộp hai cái đầu làm một thì màn hình không biết nên hiện danh sách
 hay hiện log.
 
-## Bảng kết quả — chọn cột, và chi tiết một dòng (thêm 2026-09-17)
+## Bảng kết quả — hộp **Tuỳ chọn hiển thị** (thêm 2026-09-17)
 
-Bảng kết quả (dùng chung cho cả *Dòng mới nhất* lẫn *Truy vấn nâng cao*) có thêm hai
-thứ theo mẫu của AWS Console:
+Bảng kết quả (dùng chung cho cả *Dòng mới nhất* lẫn *Truy vấn nâng cao*) có nút
+**Tuỳ chọn** mở một hộp thoại hai cột theo khuôn *Preferences* của CloudWatch Logs.
+Sửa trên **bản nháp**: Huỷ phải thực sự huỷ, nên chỉ khi bấm *Xác nhận* mới ghi, và
+ghi **cả cụm một lần** — bốn key rời sẽ cho phép ghi nửa vời nếu quota bục giữa chừng.
 
-- **Cột hiển thị** — nút `Cột n/N` mở danh sách ĐÚNG những cột đang có trong kết quả và
-  bật/tắt từng cột. Cột là **động** (Insights trả về đúng các trường câu lệnh hỏi), nên
-  lựa chọn nhớ theo **TÊN** cột trong `localStorage`, không theo chỉ số — một chỉ số ở
-  lượt sau sẽ trỏ vào một trường khác. Tên đã ẩn mà lượt này không có thì im lặng bỏ
-  qua. Cột cuối cùng bị khoá: một bảng không còn cột nào thì không nói được gì.
-- **Mỗi hàng đúng một dòng** — ô `@message` không xuống dòng nữa. Trước đó nó
-  `pre-wrap`, và một dòng log JSON 2.4KB đo được cao **883px**, cao hơn cả khung
-  bảng (646px): một mình nó đẩy 32 hàng khác ra khỏi tầm nhìn. `<td>` thì
-  `max-height` vô tác dụng — ô bảng coi `height` là chiều cao TỐI THIỂU — nên cách
-  duy nhất giữ hàng đều là cắt bằng ellipsis. Toàn văn nằm trong modal dưới đây.
-- **Chi tiết một dòng** — bấm một hàng mở **modal** thay vì khối inline cũ. Khối cũ ăn
-  chiều cao của chính bảng đang đọc, và một dòng log JSON dài đẩy bảng khuất gần hết.
-  Modal in nội dung thô, in thêm bản JSON thụt lề **khi `@message` thực sự parse được**
-  (đoán bừa sẽ dựng ra một cấu trúc không có thật), liệt kê các trường còn lại, và gom
-  đủ hành động: chép JSON · chép nội dung · gửi vào chat · lần theo request này.
+**Cột trái — cách một dòng mở ra**
+
+- **Cửa sổ riêng** (mặc định) — chi tiết ở một cửa sổ riêng, mỗi lần một dòng. Bảng
+  giữ nguyên chiều cao. ⚠ Khác bản gốc: AWS trượt một pane từ mép phải, AWOG mở modal
+  giữa màn. Cột chính ở đây đã là 9/12 của một panel hẹp; cắt thêm một dải bên phải
+  là ăn vào đúng cái bảng mà pane đó đang mô tả.
+- **Mở ngay trong bảng** — chi tiết nằm dưới hàng, `colspan` trải hết bề ngang, và
+  **nhiều dòng mở cùng lúc** được (đó là lý do tồn tại của chế độ này: so hai request
+  cạnh nhau).
+- **Mở sẵn mọi dòng** — chỉ có nghĩa với *Mở ngay trong bảng*, nên bị khoá ở chế độ
+  kia thay vì cho bật một thứ không làm gì.
+- **Xuống dòng** — mặc định **TẮT**, khác CloudWatch. Đo được: một dòng log JSON
+  2.4KB khi xuống dòng chiếm **883px**, cao hơn cả khung bảng (646px), và một mình nó
+  đẩy 32 hàng khác ra khỏi tầm nhìn. `<td>` thì `max-height` vô tác dụng — ô bảng coi
+  `height` là chiều cao TỐI THIỂU — nên không có cách nào vừa xuống dòng vừa giữ hàng
+  đều. Ai cần đọc nguyên dòng thì mở chi tiết; ai chấp nhận đánh đổi thì bật ở đây.
+
+**Cột phải — chọn cột hiển thị**
+
+Liệt kê ĐÚNG những cột đang có trong kết quả, theo thứ tự bảng đang vẽ. Cột là
+**động** (Insights trả về đúng các trường câu lệnh hỏi), nên lựa chọn nhớ theo **TÊN**
+cột trong `localStorage`, không theo chỉ số — một chỉ số ở lượt sau sẽ trỏ vào một
+trường khác. Tên đã ẩn mà lượt này không có thì im lặng bỏ qua. Cột cuối cùng bị khoá,
+và hộp thoại **nói ra lý do** thay vì chỉ làm mờ ô tích.
+
+**Thân chi tiết dùng chung.** Cả hai chế độ render cùng một `InfraLogRowDetail`: nội
+dung thô, thêm bản JSON thụt lề **khi `@message` thực sự parse ra object/array** (rất
+nhiều dòng chỉ tình cờ bắt đầu bằng `{`, ép qua `JSON.parse` sẽ dựng ra một cấu trúc
+không có thật), các trường còn lại, rồi hành động: chép JSON · chép nội dung · gửi vào
+chat · lần theo request này. Ở chung một chỗ vì phép đoán "có phải JSON không" mà lệch
+giữa hai chế độ thì cùng một dòng log sẽ hiện khác nhau tuỳ tuỳ chọn — khác biệt người
+dùng không có cách nào giải thích được.
 
 ## L5 — trạng thái thực tế (2026-09-16)
 

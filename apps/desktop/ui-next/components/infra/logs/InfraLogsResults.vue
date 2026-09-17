@@ -9,7 +9,15 @@
       <div class="lrs-bar">
         <span class="lrs-count">{{ t('infra.logs.results.rows', { n: rows.length }) }}</span>
         <span class="lrs-gap" />
-        <InfraLogsColumns :all="columns" />
+        <button
+          class="btn sm"
+          type="button"
+          :title="t('infra.logs.prefs.hint')"
+          @click="prefsOpen = true"
+        >
+          <Icon name="settings" class="lrs-bar-ic" />
+          {{ t('infra.logs.prefs.button') }}
+        </button>
       </div>
 
       <div class="lrs-tablewrap tblcard">
@@ -21,55 +29,73 @@
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="(row, i) in rows"
-              :key="i"
-              class="lrs-tr"
-              :class="{ on: selected === i }"
-              :title="t('infra.logs.results.openRow')"
-              @click="select(i)"
-            >
-              <td class="lrs-td-ix">{{ i + 1 }}</td>
-              <td
-                v-for="c in visibleColumns"
-                :key="c"
-                class="lrs-td"
-                :class="{ msg: c === '@message' || c === 'message' }"
+            <template v-for="(row, i) in rows" :key="i">
+              <tr
+                class="lrs-tr"
+                :class="{ on: isOpen(i) }"
+                :title="t('infra.logs.results.openRow')"
+                @click="select(i)"
               >
-                {{ row[c] ?? '' }}
-              </td>
-            </tr>
+                <td class="lrs-td-ix">{{ i + 1 }}</td>
+                <td
+                  v-for="c in visibleColumns"
+                  :key="c"
+                  class="lrs-td"
+                  :class="{ msg: c === '@message' || c === 'message', wrap: prefs.wrapLines }"
+                >
+                  {{ row[c] ?? '' }}
+                </td>
+              </tr>
+
+              <!-- Chi tiết NGAY TRONG bảng — tuỳ chọn `inline`, nhiều dòng mở cùng
+                   lúc được. Ô trải hết bề ngang để chi tiết không bị bó vào một cột. -->
+              <tr v-if="prefs.rowMode === 'inline' && isOpen(i)" class="lrs-xr">
+                <td class="lrs-xtd" :colspan="visibleColumns.length + 1">
+                  <InfraLogRowDetail
+                    :row="row"
+                    :copied="copied"
+                    @copy="emit('copy', $event)"
+                    @send-to-chat="emit('send-to-chat', $event)"
+                    @trace="emit('trace', $event)"
+                  />
+                </td>
+              </tr>
+            </template>
           </tbody>
         </table>
       </div>
     </template>
 
-    <!-- Chi tiết một dòng là MODAL, không phải khối inline dưới bảng: khối cũ ăn
-         chiều cao của chính bảng đang đọc, và một dòng log JSON dài đẩy bảng khuất
-         gần hết. -->
+    <!-- Tuỳ chọn `pane`: chi tiết ở cửa sổ riêng, mỗi lần một dòng. -->
     <InfraLogRowModal
-      :row="selectedRow"
+      :row="paneRow"
       :copied="copied"
-      @close="selected = null"
+      @close="closePane"
       @copy="emit('copy', $event)"
       @send-to-chat="emit('send-to-chat', $event)"
       @trace="emit('trace', $event)"
     />
+
+    <InfraLogsPrefsModal :open="prefsOpen" :all="columns" @close="prefsOpen = false" />
   </div>
 </template>
 
 <script setup lang="ts">
-// Bảng kết quả + JSON chi tiết + copy + gửi vào chat (Mốc 2 việc 2.2).
+// Bảng kết quả + chi tiết một dòng + copy + gửi vào chat (Mốc 2 việc 2.2).
 //
 // Bảng dựng cột ĐỘNG theo dòng đầu rồi bổ sung cột mới gặp ở dòng sau: Insights
 // không đảm bảo mọi dòng cùng tập trường (`parse` có thể sinh trường mới), và một
 // bảng cứng cột sẽ im lặng nuốt mất đúng những trường người dùng đang tìm.
 //
+// Cách chi tiết hiện ra (cửa sổ riêng hay ngay trong bảng), có xuống dòng không, và
+// cột nào hiện — cả ba do người dùng chọn ở `InfraLogsPrefsModal`.
+//
 // KHÔNG clipboard ở đây — component chỉ emit; chủ màn sở hữu `navigator.clipboard`
 // và toast, để thông báo nằm cùng chỗ với mọi thông báo khác của màn Logs.
+import InfraLogRowDetail from '~/components/infra/logs/InfraLogRowDetail.vue'
 import InfraLogRowModal from '~/components/infra/logs/InfraLogRowModal.vue'
-import InfraLogsColumns from '~/components/infra/logs/InfraLogsColumns.vue'
-import { useLogColumnPrefs } from '~/composables/useLogColumnPrefs'
+import InfraLogsPrefsModal from '~/components/infra/logs/InfraLogsPrefsModal.vue'
+import { useLogPrefs } from '~/composables/useLogPrefs'
 import type { AwsInsightsRow } from '~/composables/useAwsLogsApi'
 
 const props = defineProps<{
@@ -87,7 +113,11 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const selected = ref<number | null>(null)
+const { prefs, visible } = useLogPrefs()
+
+const prefsOpen = ref(false)
+/** Chỉ số các dòng đang mở. `pane` chỉ giữ một, `inline` giữ bao nhiêu cũng được. */
+const openRows = ref<Set<number>>(new Set())
 
 const columns = computed<string[]>(() => {
   const out: string[] = []
@@ -99,26 +129,44 @@ const columns = computed<string[]>(() => {
   return [...head, ...out.filter((c) => !head.includes(c))]
 })
 
-const selectedRow = computed<AwsInsightsRow | null>(() =>
-  selected.value === null ? null : (props.rows[selected.value] ?? null),
-)
-
-/** Cột người dùng chọn hiện — thứ tự giữ nguyên như bảng dựng ra. */
-const { visible } = useLogColumnPrefs()
 const visibleColumns = computed(() => visible(columns.value))
 
-function select(i: number): void {
-  selected.value = selected.value === i ? null : i
+/** Dòng đang hiện ở cửa sổ riêng — `null` ở chế độ inline hoặc khi chưa chọn. */
+const paneRow = computed<AwsInsightsRow | null>(() => {
+  if (prefs.value.rowMode !== 'pane') return null
+  const [first] = openRows.value
+  return first === undefined ? null : (props.rows[first] ?? null)
+})
+
+function closePane(): void {
+  openRows.value = new Set()
 }
 
-// Đổi kết quả (chạy lại / lọc) thì bỏ chọn: giữ chỉ số cũ sau khi mảng đổi nghĩa
-// là trỏ vào một dòng KHÁC với dòng người dùng đang đọc.
-watch(
-  () => props.rows,
-  () => {
-    selected.value = null
-  },
-)
+function isOpen(i: number): boolean {
+  return openRows.value.has(i)
+}
+
+function select(i: number): void {
+  const next = new Set(prefs.value.rowMode === 'inline' ? openRows.value : [])
+  if (next.has(i)) next.delete(i)
+  else next.add(i)
+  openRows.value = next
+}
+
+/** Mở sẵn mọi dòng — chỉ có nghĩa ở chế độ inline, xem ghi chú trong hộp Tuỳ chọn. */
+function reseed(): void {
+  openRows.value =
+    prefs.value.rowMode === 'inline' && prefs.value.expandByDefault
+      ? new Set(props.rows.map((_, i) => i))
+      : new Set()
+}
+
+// Đổi kết quả (chạy lại / lọc) thì dựng lại tập đang mở: giữ chỉ số cũ sau khi mảng
+// đổi nghĩa là trỏ vào một dòng KHÁC với dòng người dùng đang đọc. Đổi tuỳ chọn cũng
+// dựng lại, vì "mở sẵn" chỉ áp được tại thời điểm nó được bật.
+watch(() => props.rows, reseed)
+watch(() => [prefs.value.rowMode, prefs.value.expandByDefault], reseed)
+onMounted(reseed)
 </script>
 
 <style scoped>
@@ -134,13 +182,18 @@ watch(
   flex: 1 1 auto;
 }
 
-/* Thanh công cụ KHÔNG phụ thuộc `fill` — số dòng và nút chọn cột phải nằm hai đầu
+/* Thanh công cụ KHÔNG phụ thuộc `fill` — số dòng và nút tuỳ chọn phải nằm hai đầu
    ở mọi chỗ dùng bảng. `flex: 0 0 auto` để nó không bị bảng ép bẹp. */
 .lrs-bar {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+}
+
+.lrs-bar-ic {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 .lrs-count {
@@ -255,14 +308,19 @@ watch(
   font-family: var(--code);
 }
 
-/* Ô nội dung KHÔNG xuống dòng.
-   Trước đây ô này `pre-wrap`: một dòng log JSON 2.4KB đo được cao 883px — cao hơn
-   cả khung bảng (646px) — và một mình nó đẩy 32 hàng khác ra khỏi tầm nhìn. `<td>`
-   thì `max-height` vô tác dụng (ô bảng coi height là chiều cao TỐI THIỂU), nên cách
-   duy nhất giữ hàng đều là không cho chữ xuống dòng. Toàn văn nay nằm một cú bấm
-   bên trong modal chi tiết, nên bảng không còn phải gánh việc hiển thị đủ. */
+/* Ô nội dung mặc định KHÔNG xuống dòng.
+   Đo được: một dòng log JSON 2.4KB khi xuống dòng chiếm 883px — cao hơn cả khung
+   bảng (646px) — và một mình nó đẩy 32 hàng khác ra khỏi tầm nhìn. `<td>` thì
+   `max-height` vô tác dụng (ô bảng coi height là chiều cao TỐI THIỂU), nên cách duy
+   nhất giữ hàng đều là không cho chữ xuống dòng. Ai cần đọc nguyên dòng thì mở chi
+   tiết; ai chấp nhận đánh đổi thì bật "Xuống dòng" trong hộp Tuỳ chọn. */
 .lrs-td.msg {
   max-width: 560px;
+}
+
+.lrs-td.wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .lrs-td-ix {
@@ -273,5 +331,11 @@ watch(
   line-height: var(--lh-sm);
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.lrs-xtd {
+  padding: 10px 12px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bgInput);
 }
 </style>
