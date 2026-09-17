@@ -30,6 +30,116 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.36.0',
+    date: '2026-09-18',
+    highlight: {
+      en: 'AWOG can now see your cloud. A new Infrastructure area reads AWS and Kubernetes the way the rest of the app reads a repository — accounts, a live map of what talks to what, logs, metrics, alarms, cost, deployments and an activity log of everything AWOG did. Every command it runs is classified read, write or forbidden, and anything that changes something stops at a confirmation that says the consequence in plain words before it shows the command. OpenAI sessions now run on the Codex engine.',
+      vi: 'AWOG giờ nhìn thấy hạ tầng của bạn. Khu vực Hạ tầng mới đọc AWS và Kubernetes theo đúng cách phần còn lại của app đọc một repository — tài khoản, bản đồ sống về cái gì gọi cái gì, log, số liệu, cảnh báo, chi phí, lần triển khai và nhật ký mọi việc AWOG đã làm. Mọi câu lệnh nó chạy đều được xếp loại đọc, ghi hay cấm, và thứ gì làm thay đổi hệ thống thì dừng lại ở một hộp xác nhận nói hậu quả bằng tiếng người trước, rồi mới tới câu lệnh. Phiên dùng OpenAI giờ chạy trên engine Codex.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'A new Infrastructure area for your AWS account. It opens on an overview of green, amber and red lights with a sentence explaining each one, not a table of resources — then goes as deep as you need: S3, EC2, CloudFront, API Gateway, Route 53, certificates, ECS, EKS, Lambda, CloudFormation, VPC and Kubernetes.',
+        vi: 'Khu vực Hạ tầng mới cho tài khoản AWS của bạn. Nó mở ra ở màn tổng quan gồm đèn xanh, vàng, đỏ kèm một câu giải thích cho mỗi mục, không phải một bảng tài nguyên — rồi đi sâu tới đâu tuỳ bạn: S3, EC2, CloudFront, API Gateway, Route 53, chứng chỉ, ECS, EKS, Lambda, CloudFormation, VPC và Kubernetes.',
+      },
+      {
+        kind: 'added',
+        en: 'Nothing runs against your cloud without you knowing. Every command is classified as read, write or forbidden; anything that changes something stops at a card that states the consequence first — "this server will be permanently deleted, the website running on it will stop" — with the raw command folded away underneath, read back to you in your own language.',
+        vi: 'Không gì chạy lên hạ tầng của bạn mà bạn không biết. Mọi câu lệnh được xếp loại đọc, ghi hoặc cấm; thứ gì làm thay đổi hệ thống thì dừng ở một thẻ nói hậu quả trước — "máy chủ này sẽ bị xoá vĩnh viễn, website đang chạy trên nó sẽ ngừng" — câu lệnh thô gập lại bên dưới, và được đọc lại cho bạn bằng chính ngôn ngữ bạn hỏi.',
+      },
+      {
+        kind: 'added',
+        en: 'Pin an account to a session. Choose the AWS profile, Terraform workspace and kubectl context once, and every command in that session — yours or the agent’s — runs against exactly that target, with the pinned account shown on screen so a production account never gets mistaken for staging.',
+        vi: 'Ghim một tài khoản vào phiên. Chọn profile AWS, workspace Terraform và context kubectl một lần, rồi mọi câu lệnh trong phiên đó — của bạn hay của agent — đều chạy đúng vào đích ấy, kèm tài khoản đã ghim hiện rõ trên màn hình để không bao giờ nhầm tài khoản production với staging.',
+      },
+      {
+        kind: 'added',
+        en: 'Read CloudWatch logs without knowing CloudWatch. Pick a log group, then a stream, then read the lines — the cheap way first. Choose your own columns, open any line in full, widen the table to the whole window, and keep loading older pages. The heavier query language is still there when you want it, behind its own cost estimate.',
+        vi: 'Đọc log CloudWatch mà không cần biết CloudWatch. Chọn nhóm log, rồi chọn luồng, rồi đọc dòng — đi đường rẻ trước. Tự chọn cột, mở nguyên một dòng ra xem, kéo bảng rộng hết cửa sổ, và nạp tiếp các trang cũ hơn. Ngôn ngữ truy vấn nặng hơn vẫn còn đó khi bạn cần, nằm sau phần ước lượng chi phí của riêng nó.',
+      },
+      {
+        kind: 'added',
+        en: 'Follow one request across every hop. Domain, CDN, API gateway, function or container, database — drawn as a map, with the path of a single request traced through it and the logs of each hop underneath.',
+        vi: 'Lần theo một request qua từng chặng. Tên miền, CDN, API gateway, function hay container, cơ sở dữ liệu — vẽ thành bản đồ, có đường đi của đúng một request tô trên đó và log của từng chặng nằm ngay bên dưới.',
+      },
+      {
+        kind: 'added',
+        en: 'Monitoring now says which errors, not just how many. Metrics tell you there were 47 errors; that was never the question. AWOG finds the log groups belonging to the resource you are watching and shows the actual failures, and it tells you whether it read the log group name out of your configuration or guessed it from the name — because a wrong guess shows an empty screen, and an empty screen mid-incident reads as "this part logged nothing".',
+        vi: 'Màn Giám sát giờ nói lỗi GÌ, không chỉ bao nhiêu lỗi. Số liệu báo có 47 lỗi; đó chưa bao giờ là câu hỏi. AWOG tự tìm nhóm log của tài nguyên bạn đang theo dõi và hiện ra lỗi thật, đồng thời nói rõ nó đọc được tên nhóm log từ cấu hình hay chỉ đoán theo tên — vì đoán sai sẽ mở ra một màn trống, mà một màn trống giữa lúc sự cố rất dễ bị đọc thành "chỗ này không ghi log gì".',
+      },
+      {
+        kind: 'added',
+        en: 'See what your cloud costs, and what is being wasted. This month’s spend with a forecast, budgets you set yourself, a scan for resources nobody is using, and a cleanup plan you can read before anything is deleted.',
+        vi: 'Xem hạ tầng tốn bao nhiêu, và đang lãng phí ở đâu. Chi tiêu tháng này kèm dự báo, ngân sách bạn tự đặt, một lượt dò tài nguyên không ai dùng, và kế hoạch dọn dẹp bạn đọc được trước khi có thứ gì bị xoá.',
+      },
+      {
+        kind: 'added',
+        en: 'Kubernetes, including a terminal inside a pod. Workloads, nodes, quotas, autoscalers, events and a report that points at what is actually at risk — and a shell in a running pod when reading is not enough.',
+        vi: 'Kubernetes, kèm một terminal bên trong pod. Workload, node, hạn mức, autoscaler, sự kiện và một bản báo cáo chỉ thẳng vào thứ đang thực sự có rủi ro — cùng một shell trong pod đang chạy khi chỉ đọc thôi là chưa đủ.',
+      },
+      {
+        kind: 'added',
+        en: 'Deployments and an activity log. GitHub Actions, CodePipeline and Amplify in one table with build logs, re-runs and deploy approvals; and a record of every infrastructure action AWOG took, which you can filter, clear, and which the agent can read back.',
+        vi: 'Lần triển khai và nhật ký hoạt động. GitHub Actions, CodePipeline và Amplify trong cùng một bảng, kèm log build, chạy lại và duyệt deploy; cùng với bản ghi mọi thao tác hạ tầng AWOG đã làm — lọc được, dọn được, và agent đọc lại được.',
+      },
+      {
+        kind: 'added',
+        en: 'A Simple and an Expert mode for the whole area, remembered per person. Simple means fewer columns, human labels and no ARNs or raw JSON — and a stricter safety floor, because someone who cannot read the technical consequence should not be holding the red button. Same data, same screens, not a cut-down second product.',
+        vi: 'Chế độ Đơn giản và Chuyên sâu cho cả khu vực, nhớ theo từng người. Đơn giản nghĩa là ít cột hơn, nhãn tiếng người, không ARN hay JSON thô — và mức an toàn chặt hơn, vì người không đọc được hậu quả kỹ thuật thì không nên cầm nút đỏ. Cùng dữ liệu, cùng màn hình, không phải một sản phẩm thứ hai bị cắt bớt.',
+      },
+      {
+        kind: 'changed',
+        en: 'OpenAI sessions now run on the Codex engine. Reading, writing and running commands are handled by Codex’s own tooling, while everything AWOG adds — your connections, wiki, memory and the rest — is bridged across. Your existing permission rules still match.',
+        vi: 'Phiên dùng OpenAI giờ chạy trên engine Codex. Việc đọc, ghi và chạy lệnh do bộ công cụ của chính Codex lo, còn mọi thứ AWOG thêm vào — connection, wiki, bộ nhớ và phần còn lại — đều được bắc cầu sang. Luật quyền bạn đã đặt vẫn khớp như cũ.',
+      },
+      {
+        kind: 'added',
+        en: 'Group your sessions into a two-level tree. The list can also organise itself, so a few hundred sessions stop being one flat scroll.',
+        vi: 'Gom phiên thành cây hai cấp. Danh sách cũng tự sắp xếp được, để vài trăm phiên thôi là một dải cuộn phẳng dài dằng dặc.',
+      },
+      {
+        kind: 'added',
+        en: 'Get out of a stuck merge. The Git screen can now abort or continue a conflicted merge, rebase, cherry-pick or revert, instead of leaving you to the command line. The screen was also restyled for the native macOS pass.',
+        vi: 'Thoát khỏi một lần merge kẹt. Màn Git giờ huỷ hoặc tiếp tục được một lần merge, rebase, cherry-pick hay revert đang xung đột, thay vì bỏ bạn lại với dòng lệnh. Màn này cũng được vẽ lại theo đợt giao diện macOS bản địa.',
+      },
+      {
+        kind: 'added',
+        en: 'See where your disk went. Settings now breaks down what the session store is actually spending space on.',
+        vi: 'Xem dung lượng đĩa đi đâu. Settings giờ bóc tách xem kho phiên thực sự đang tốn chỗ vào những gì.',
+      },
+      {
+        kind: 'added',
+        en: 'Run a shell command straight from the transcript, and quote from inside the fullscreen preview. Copying a message now confirms on the button itself instead of throwing a toast.',
+        vi: 'Chạy thẳng một câu lệnh shell từ transcript, và trích dẫn ngay trong bản xem toàn màn hình. Sao chép một tin nhắn giờ báo xong ngay trên nút, thay vì bắn ra một toast.',
+      },
+      {
+        kind: 'added',
+        en: 'An Ultracode tier for Anthropic accounts, at the bottom of the effort picker. It asks the engine for its deepest reasoning and lets it orchestrate work across several agents.',
+        vi: 'Bậc Ultracode cho tài khoản Anthropic, nằm cuối danh sách chọn mức suy luận. Nó yêu cầu engine suy luận sâu nhất và cho phép điều phối công việc qua nhiều agent.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The Latest lines screen was showing the oldest 200 lines, and could not page past them. Loading more is fixed too — the page marker was being scrubbed by the same redaction that hides secrets, so AWS was refusing a token AWOG had damaged on the way out.',
+        vi: 'Màn Dòng mới nhất thực ra đang hiện 200 dòng CŨ NHẤT, và không đi tiếp được. Nút nạp thêm cũng đã sửa — dấu trang bị chính bộ che bí mật xoá mất, nên AWS từ chối một mã thông báo mà AWOG đã tự làm hỏng trước khi gửi đi.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The request timeline no longer blames the wrong hop when a call fails, and log queries ask CloudWatch for this year instead of January 1970.',
+        vi: 'Sơ đồ thời gian của một request không còn đổ lỗi nhầm chặng khi có lỗi, và truy vấn log hỏi CloudWatch về năm nay thay vì tháng 1 năm 1970.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Background work no longer gets killed while the agent is waiting on it, the embedded browser stops covering dialogs, the composer stays on screen when a question opens, and the message ⋯ menu is no longer clipped by the transcript.',
+        vi: 'Việc chạy nền không còn bị giết trong lúc agent đang chờ nó, trình duyệt nhúng thôi đè lên hộp thoại, ô soạn tin ở yên trên màn hình khi có câu hỏi mở ra, và menu ⋯ của tin nhắn không còn bị transcript cắt mất.',
+      },
+      {
+        kind: 'improved',
+        en: 'One toaster for the whole app, and shadows and corner radii moved onto the shared design tokens, so notifications and surfaces look the same wherever they appear.',
+        vi: 'Một bộ toast dùng chung cho cả app, cùng với đổ bóng và bo góc chuyển hết sang token thiết kế chung, để thông báo và các bề mặt trông như nhau ở mọi nơi chúng xuất hiện.',
+      },
+    ],
+  },
+  {
     version: '0.35.0',
     date: '2026-09-09',
     highlight: {
