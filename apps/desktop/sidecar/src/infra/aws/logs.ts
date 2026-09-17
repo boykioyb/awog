@@ -215,6 +215,25 @@ export function isValidQueryId(id: string): boolean {
  * newline vào argv. Kiểm bằng vòng lặp thay vì regex control-char (tránh lint
  * `no-control-regex`).
  */
+/**
+ * Mốc mà `--no-start-from-head` bắt đầu được chấp nhận.
+ *
+ * CloudWatch: "Setting startFromHead to false is supported only when startTime is
+ * on or after Jan 1, 2024 00:00:00 UTC" — sớm hơn thì nó ném
+ * `InvalidParameterException`. Khoảng tuỳ chọn cho người dùng chọn ngày bất kỳ, nên
+ * mốc này phải được kiểm chứ không được coi là luôn đúng.
+ */
+export const NEWEST_FIRST_MIN_START_MS = Date.UTC(2024, 0, 1)
+
+/**
+ * Token phân trang do chính AWS cấp, nhưng nó đi vòng qua UI trước khi quay lại đây
+ * nên vẫn là đầu vào KHÔNG TIN (L1). Token thật là chuỗi base64url; chặn ở bộ ký tự
+ * đó thì không có gì lọt vào argv ngoài thứ AWS có thể đã phát ra.
+ */
+export function isValidNextToken(token: string): boolean {
+  return /^[A-Za-z0-9+/=_-]{1,8192}$/.test(token)
+}
+
 export function isValidLogStream(name: string): boolean {
   if (name.length < 1 || name.length > 512) return false
   for (const ch of name) {
@@ -716,6 +735,8 @@ export type TailInput = {
   /** Thu hẹp về MỘT stream (`--log-stream-names`). Bỏ trống = mọi stream của group. */
   logStreamName?: string | undefined
   limit?: number | undefined
+  /** Token trang kế của lượt trước. Có token ⇒ đọc TIẾP, không phải đọc lại. */
+  nextToken?: string | undefined
   profile?: string | undefined
   region?: string | undefined
   surface: InfraSurface
@@ -728,7 +749,9 @@ export type TailEvent = {
   eventId: string
 }
 
-export async function tailWindow(input: TailInput): Promise<LogsOutcome<{ events: TailEvent[]; truncated: boolean }>> {
+export async function tailWindow(
+  input: TailInput,
+): Promise<LogsOutcome<{ events: TailEvent[]; truncated: boolean; nextToken: string | null }>> {
   const groups = checkLogGroups(input.logGroups)
   if (!groups.ok) return { ok: false, error: groups.error }
   const window = checkWindow(input.startMs, input.endMs)
@@ -744,6 +767,8 @@ export async function tailWindow(input: TailInput): Promise<LogsOutcome<{ events
   if (!group) return { ok: false, error: 'NO_LOG_GROUP' }
   const stream = input.logStreamName?.trim() ?? ''
   if (stream && !isValidLogStream(stream)) return { ok: false, error: 'INVALID_LOG_STREAM' }
+  const token = input.nextToken?.trim() ?? ''
+  if (token && !isValidNextToken(token)) return { ok: false, error: 'INVALID_NEXT_TOKEN' }
   const args = ['logs', 'filter-log-events', '--output', 'json']
   args.push(flagValue('--log-group-name', group))
   // Thu hẹp về một stream nếu có (tầng group → stream → event). Bỏ trống thì
@@ -754,6 +779,25 @@ export async function tailWindow(input: TailInput): Promise<LogsOutcome<{ events
   args.push(flagValue('--start-time', String(window.startMs)))
   args.push(flagValue('--end-time', String(window.endMs)))
   args.push(flagValue('--limit', String(limit)))
+  // ĐỌC TIẾP hay ĐỌC LẠI.
+  //
+  // `--next-token`, KHÔNG phải `--starting-token`: truyền `--limit` làm AWS CLI tự
+  // tắt phân trang của chính nó ("User has specified a manual pagination arg"), và
+  // sau đó `--starting-token` bị từ chối thẳng bằng `ParamValidation: Cannot specify
+  // --no-paginate along with pagination arguments`. Đo trên aws-cli 2.35.9.
+  //
+  // Hướng sắp xếp chỉ đặt được ở lượt ĐẦU: "On subsequent requests, the nextToken
+  // determines the sort direction" — gửi kèm cờ ở lượt sau là thừa, và tài liệu nói
+  // rõ hướng của token sẽ thắng.
+  if (token) {
+    args.push(flagValue('--next-token', token))
+  } else if (window.startMs >= NEWEST_FIRST_MIN_START_MS) {
+    // Màn này tên là "Dòng mới nhất", nhưng mặc định của CloudWatch là `startFromHead
+    // = true`, tức lấy từ ĐẦU cửa sổ: một cửa sổ 1 giờ có 5000 dòng thì 200 dòng nhận
+    // được là 200 dòng CŨ NHẤT, rồi UI sắp xếp giảm dần bên trong đúng 200 dòng sai
+    // đó. Cờ này lật lại thành mới-nhất-trước.
+    args.push('--no-start-from-head')
+  }
   // Pattern rỗng = mọi dòng, nên KHÔNG truyền cờ khi rỗng (CloudWatch từ chối
   // `--filter-pattern=` rỗng ở một số phiên bản, và "không lọc" là mặc định).
   if (pattern) args.push(flagValue('--filter-pattern', pattern))
@@ -781,7 +825,11 @@ export async function tailWindow(input: TailInput): Promise<LogsOutcome<{ events
         logStreamName: e.logStreamName ?? '',
         eventId: e.eventId ?? '',
       })),
+      // `truncated` giữ cho bên gọi chỉ cần biết "còn nữa không"; `nextToken` mới là
+      // thứ đọc tiếp được. CloudWatch nói rõ một trang vơi hoặc rỗng KHÔNG có nghĩa
+      // là đã hết — chỉ vắng `nextToken` mới là hết.
       truncated: parsed.data.nextToken !== undefined,
+      nextToken: parsed.data.nextToken ?? null,
     },
   }
 }

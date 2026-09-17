@@ -25,6 +25,8 @@ const Params = z.object({
   filterPattern: z.string().max(1024).optional(),
   logStreamName: z.string().min(1).max(512).optional(),
   limit: z.number().int().positive().max(1000).optional(),
+  /** Token trang kế của lượt trước. Có ⇒ đọc TIẾP thay vì đọc lại từ đầu. */
+  nextToken: z.string().min(1).max(8192).optional(),
   profile: z.string().min(1).max(128).optional(),
   region: z.string().min(1).max(64).optional(),
   surface: z.enum(INFRA_SURFACES).default('logs'),
@@ -41,11 +43,17 @@ register('infra.logs-tail', async (raw) => {
     ...(p.filterPattern !== undefined ? { filterPattern: p.filterPattern } : {}),
     ...(p.logStreamName !== undefined ? { logStreamName: p.logStreamName } : {}),
     ...(p.limit !== undefined ? { limit: p.limit } : {}),
+    ...(p.nextToken !== undefined ? { nextToken: p.nextToken } : {}),
     ...(p.profile !== undefined ? { profile: p.profile } : {}),
     ...(p.region !== undefined ? { region: p.region } : {}),
   })
   // Lỗi CLI (quyền thiếu, region sai, hết phiên SSO) là KẾT QUẢ hợp lệ, không phải
   // sự cố RPC: UI phải hiện được câu của AWS thay vì "Internal error".
   if (!result.ok) return { ok: false as const, error: result.error }
-  return { ok: true as const, events: result.value.events, truncated: result.value.truncated }
+  return {
+    ok: true as const,
+    events: result.value.events,
+    truncated: result.value.truncated,
+    nextToken: result.value.nextToken,
+  }
 })

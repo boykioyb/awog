@@ -33,7 +33,6 @@
   "infra.logs.tail.refresh": "Refresh",
   "infra.logs.tail.loading": "Loading…",
   "infra.logs.tail.status": "{n} latest lines",
-  "infra.logs.tail.truncated": "more lines exist — narrow the window or filter",
   "infra.logs.tail.rateNote": "Latest lines uses filter-log-events — billed per request, NOT per GB scanned like Insights.",
   "infra.logs.tail.pickGroup": "Click a log group above to see its latest lines.",
   "infra.logs.tail.emptyGroup": "This group has no lines in the selected time range.",
@@ -127,5 +126,9 @@
   "infra.logs.prefs.wrapLinesDesc": "Show the whole value instead of truncating it. In exchange, one long log line takes up a lot of the table.",
   "infra.logs.prefs.columnsSection": "Select visible columns",
   "infra.logs.prefs.noColumns": "No results yet, so there are no columns to choose.",
-  "infra.logs.prefs.lastColumn": "At least one column has to stay visible."
+  "infra.logs.prefs.lastColumn": "At least one column has to stay visible.",
+  "infra.logs.results.loading": "Loading…",
+  "infra.logs.tail.hasMore": "More available",
+  "infra.logs.tail.loadMore": "Load more",
+  "infra.logs.tail.loadMoreHint": "Each press is one AWS call"
 }

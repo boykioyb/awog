@@ -15,6 +15,7 @@ import type {
   AwsInsightsStatus,
   AwsLogGroup,
   AwsLogsHistoryEntry,
+  AwsLogsTailEvent,
   AwsLogsTemplate,
   AwsLogStream,
   AwsSavedQuery,
@@ -94,6 +95,14 @@ export type LogsSeed = {
    */
   mode?: LogsMode
 }
+
+/**
+ * Số dòng mỗi lượt `filter-log-events`.
+ *
+ * 200 là cỡ TRANG, không phải trần: hết trang thì `nextToken` cho đọc tiếp. Trước
+ * 2026-09-17 đây là trần cứng và không có đường nào đi xa hơn nó.
+ */
+const TAIL_PAGE_SIZE = 200
 
 export function useInfraLogs() {
   const api = useAwsLogsApi()
@@ -381,11 +390,31 @@ export function useInfraLogs() {
   /** Nhóm đang tail (một nhóm). '' = chưa bấm nhóm nào. */
   const tailGroup = ref('')
   /** Dòng log đã map về shape của bảng kết quả để DÙNG LẠI InfraLogsResults. */
-  const tailRows = shallowRef<AwsInsightsRow[]>([])
+  // Giữ SỰ KIỆN THÔ chứ không giữ hàng đã dựng: nối thêm một trang rồi sắp xếp lại
+  // cần mốc thời gian dạng SỐ. Sắp theo chuỗi `@timestamp` cũng ra đúng thứ tự với
+  // định dạng hiện tại, nhưng nó đúng do tình cờ — đổi định dạng là hỏng âm thầm.
+  const tailEvents = shallowRef<AwsLogsTailEvent[]>([])
   const tailLoading = ref(false)
+  /** Đang nối thêm trang, khác với đang tải lại từ đầu — nút và bảng phản ứng khác nhau. */
+  const tailLoadingMore = ref(false)
   const tailError = ref('')
-  const tailTruncated = ref(false)
   const tailRanAt = ref(0)
+  /** `null` = hết trang. Khác `null` = còn đọc tiếp được từ đúng chỗ vừa dừng. */
+  const tailNextToken = ref<string | null>(null)
+
+  // Mới nhất lên đầu — người đọc log tìm dòng vừa xảy ra. Sắp xếp trên TOÀN BỘ tập
+  // đã gom, không phải từng trang: cửa sổ bắt đầu trước 2024-01-01 không dùng được
+  // `--no-start-from-head` nên AWS trả CŨ TRƯỚC, và lúc đó nối từng trang đã sắp sẵn
+  // sẽ cho một danh sách răng cưa.
+  const tailRows = computed<AwsInsightsRow[]>(() =>
+    [...tailEvents.value]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .map((e) => ({
+        '@timestamp': toStamp(e.timestamp),
+        '@message': e.message,
+        '@logStream': e.logStreamName,
+      })),
+  )
 
   // ── Tầng giữa: log stream của group đang chọn (group → stream → event) ──────
   /** Stream của `tailGroup`. Nạp khi bấm vào một group (describe-log-streams, rẻ). */
@@ -454,14 +483,40 @@ export function useInfraLogs() {
       tailError.value = 'INVALID_WINDOW'
       return
     }
-    tailLoading.value = true
+    await fetchTail(null)
+  }
+
+  /**
+   * Đọc TIẾP từ đúng chỗ lượt trước dừng.
+   *
+   * Là một nút chứ không phải tự nạp khi cuộn: mỗi lượt là một request
+   * `filter-log-events` thật, tính tiền theo số request. Tự nạp khi cuộn sẽ biến một
+   * cú lăn chuột thành mấy chục lệnh mà người dùng không hề yêu cầu.
+   */
+  async function loadMoreTail(): Promise<void> {
+    const token = tailNextToken.value
+    if (!token || tailLoading.value || tailLoadingMore.value) return
+    await fetchTail(token)
+  }
+
+  /**
+   * Một lượt `filter-log-events`. `token = null` ⇒ đọc lại từ đầu cửa sổ (thay sạch
+   * kết quả); có token ⇒ nối thêm vào tập đang có.
+   */
+  async function fetchTail(token: string | null): Promise<void> {
+    const group = tailGroup.value
+    const win = windowMs.value
+    if (!group || !win) return
+    if (token) tailLoadingMore.value = true
+    else tailLoading.value = true
     tailError.value = ''
     try {
       const res = await api.tail({
         logGroups: [group],
         startMs: win.startMs,
         endMs: win.endMs,
-        limit: 200,
+        limit: TAIL_PAGE_SIZE,
+        ...(token ? { nextToken: token } : {}),
         // '' = mọi stream (không truyền cờ ⇒ filter-log-events gộp cả group).
         ...(activeStream.value ? { logStreamName: activeStream.value } : {}),
         ...(profile.value ? { profile: profile.value } : {}),
@@ -469,23 +524,22 @@ export function useInfraLogs() {
       })
       if (!res.ok) {
         tailError.value = res.error
-        tailRows.value = []
-        tailTruncated.value = false
+        // Lỗi khi ĐỌC TIẾP thì GIỮ những dòng đã đọc được: vứt chúng đi là phạt người
+        // dùng vì một lượt gọi hỏng mà họ không gây ra.
+        if (!token) {
+          tailEvents.value = []
+          tailNextToken.value = null
+        }
         return
       }
-      // Mới nhất lên đầu — người đọc log thường tìm dòng vừa xảy ra.
-      const sorted = [...res.events].sort((a, b) => b.timestamp - a.timestamp)
-      tailRows.value = sorted.map((e) => ({
-        '@timestamp': toStamp(e.timestamp),
-        '@message': e.message,
-        '@logStream': e.logStreamName,
-      }))
-      tailTruncated.value = res.truncated
+      tailEvents.value = token ? [...tailEvents.value, ...res.events] : res.events
+      tailNextToken.value = res.nextToken
       tailRanAt.value = Date.now()
     } catch (err) {
       tailError.value = err instanceof Error ? err.message : String(err)
     } finally {
       tailLoading.value = false
+      tailLoadingMore.value = false
     }
   }
 
@@ -506,8 +560,9 @@ export function useInfraLogs() {
     if (!sameGroup) {
       // Đổi sang nhóm khác ⇒ về danh sách (stream của nhóm cũ vô nghĩa ở đây).
       activeStream.value = null
-      tailRows.value = []
+      tailEvents.value = []
       tailRanAt.value = 0
+      tailNextToken.value = null
       streams.value = []
     }
     await loadStreams(name)
@@ -528,8 +583,9 @@ export function useInfraLogs() {
    */
   function backToStreams(): void {
     activeStream.value = null
-    tailRows.value = []
+    tailEvents.value = []
     tailRanAt.value = 0
+    tailNextToken.value = null
     tailError.value = ''
   }
 
@@ -677,9 +733,11 @@ export function useInfraLogs() {
     tailRows,
     tailFilteredRows,
     tailLoading,
+    tailLoadingMore,
     tailError,
-    tailTruncated,
     tailRanAt,
+    tailNextToken,
+    loadMoreTail,
     openTail,
     refreshTail,
     // tầng giữa: log stream

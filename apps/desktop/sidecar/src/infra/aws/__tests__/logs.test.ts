@@ -379,5 +379,74 @@ describe('tailWindow (2.9)', () => {
     expect(result.value.truncated).toBe(true)
     const call = runInfra.mock.calls[0]?.[0] as { args: string[] }
     expect(call.args.some((a: string) => a.startsWith('--filter-pattern'))).toBe(false)
+    // `nextToken` phải đi RA, không chỉ gập thành một cờ boolean: đó là thứ duy nhất
+    // đọc tiếp được.
+    expect(result.value.nextToken).toBe('more')
+  })
+
+  // Màn này tên là "Dòng mới nhất". Mặc định của CloudWatch là `startFromHead = true`
+  // (cũ trước), nên thiếu cờ này thì 200 dòng nhận được là 200 dòng CŨ NHẤT của cửa
+  // sổ — và UI sắp giảm dần bên trong đúng 200 dòng sai đó, nên trông vẫn "hợp lý".
+  it('xin dòng MỚI NHẤT trước, không phải đầu cửa sổ', async () => {
+    runInfra.mockResolvedValue(ok({ events: [] }))
+    const now = Date.now()
+    await tailWindow({
+      logGroups: ['/aws/lambda/a'],
+      startMs: now - 3_600_000,
+      endMs: now,
+      surface: 'logs',
+    })
+    const call = runInfra.mock.calls[0]?.[0] as { args: string[] }
+    expect(call.args).toContain('--no-start-from-head')
+  })
+
+  // CloudWatch: "Setting startFromHead to false is supported only when startTime is
+  // on or after Jan 1, 2024 00:00:00 UTC" — sớm hơn thì nó ném InvalidParameterException.
+  // Khoảng Tuỳ chọn cho người dùng chọn ngày bất kỳ, nên mốc này phải được KIỂM.
+  it('bỏ cờ mới-nhất-trước khi cửa sổ bắt đầu trước 2024', async () => {
+    runInfra.mockResolvedValue(ok({ events: [] }))
+    await tailWindow({
+      logGroups: ['/aws/lambda/a'],
+      startMs: Date.UTC(2023, 11, 31),
+      endMs: Date.UTC(2023, 11, 31) + 3_600_000,
+      surface: 'logs',
+    })
+    const call = runInfra.mock.calls[0]?.[0] as { args: string[] }
+    expect(call.args).not.toContain('--no-start-from-head')
+  })
+
+  it('đọc tiếp bằng --next-token, và KHÔNG gửi kèm cờ hướng', async () => {
+    runInfra.mockResolvedValue(ok({ events: [] }))
+    const now = Date.now()
+    await tailWindow({
+      logGroups: ['/aws/lambda/a'],
+      startMs: now - 60_000,
+      endMs: now,
+      nextToken: 'Bxxx-1_abc=',
+      surface: 'logs',
+    })
+    const call = runInfra.mock.calls[0]?.[0] as { args: string[] }
+    expect(call.args).toContain('--next-token=Bxxx-1_abc=')
+    // `--starting-token` sẽ bị CLI từ chối khi đã có `--limit` (nó tự bật
+    // `--no-paginate`), và hướng sắp xếp ở lượt sau do chính token quyết định.
+    expect(call.args.some((a: string) => a.startsWith('--starting-token'))).toBe(false)
+    expect(call.args).not.toContain('--no-start-from-head')
+  })
+
+  it('từ chối nextToken có ký tự ngoài bộ base64url (đầu vào L1 đi vòng qua UI)', async () => {
+    runInfra.mockClear()
+    const now = Date.now()
+    const result = await tailWindow({
+      logGroups: ['/aws/lambda/a'],
+      startMs: now - 60_000,
+      endMs: now,
+      nextToken: 'abc; rm -rf /',
+      surface: 'logs',
+    })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.error).toBe('INVALID_NEXT_TOKEN')
+    // Chặn TRƯỚC khi spawn, không phải để AWS từ chối hộ.
+    expect(runInfra).not.toHaveBeenCalled()
   })
 })

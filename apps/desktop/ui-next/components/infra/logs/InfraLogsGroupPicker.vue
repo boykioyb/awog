@@ -44,7 +44,14 @@
 
     <div v-if="error" class="lgp-error">{{ error }}</div>
 
-    <p v-else-if="shown.length === 0 && !loading" class="lgp-empty">
+    <!-- Đang tải thì NÓI ra. Trước đây nhánh này chỉ ẩn dòng "không có nhóm log"
+         khi `loading`, nên chỗ đó là một khoảng trắng không giải thích gì — và người
+         mới mở màn không phân biệt được "đang nạp" với "tài khoản này trống". -->
+    <p v-else-if="loading && shown.length === 0" class="lgp-empty">
+      {{ t('infra.logs.groups.loading') }}
+    </p>
+
+    <p v-else-if="shown.length === 0" class="lgp-empty">
       {{ t('infra.logs.groups.empty') }}
     </p>
 

@@ -119,8 +119,10 @@
                 {{ t('infra.logs.tail.status', { n: tailRows.length }) }}
                 <span class="lgs-meta-dim">· {{ tailWhenLabel }}</span>
               </span>
-              <span v-if="tailTruncated" class="lgs-trunc">
-                {{ t('infra.logs.tail.truncated') }}
+              <!-- "Còn nữa" là SỰ THẬT chứ không phải cảnh báo nữa: đã có đường
+                   đọc tiếp ngay dưới bảng. -->
+              <span v-if="tailNextToken" class="lgs-trunc">
+                {{ t('infra.logs.tail.hasMore') }}
               </span>
             </div>
 
@@ -139,12 +141,23 @@
             <InfraLogsResults
               :rows="tailFilteredRows"
               :copied="justCopied"
+              :loading="tailLoading"
               fill
               :empty-text="t('infra.logs.tail.emptyStream')"
               @copy="onCopyText"
               @send-to-chat="onSendToChat"
               @trace="onTraceFromRow"
             />
+
+            <!-- Đọc thêm là một NÚT, không phải tự nạp khi cuộn: mỗi lượt là một
+                 request `filter-log-events` thật, tính tiền theo số request. -->
+            <div v-if="tailNextToken && !tailLoading" class="lgs-more">
+              <button class="btn" type="button" :disabled="tailLoadingMore" @click="loadMoreTail">
+                <Icon :name="tailLoadingMore ? 'clock' : 'chev'" class="lgs-ic" />
+                {{ tailLoadingMore ? t('infra.logs.tail.loading') : t('infra.logs.tail.loadMore') }}
+              </button>
+              <span class="lgs-more-hint">{{ t('infra.logs.tail.loadMoreHint') }}</span>
+            </div>
 
             <p class="lgs-hint">{{ t('infra.logs.tail.rateNote') }}</p>
           </template>
@@ -287,6 +300,7 @@
           <InfraLogsResults
             :rows="filteredRows"
             :copied="justCopied"
+            :loading="running"
             fill
             @copy="onCopyText"
             @send-to-chat="onSendToChat"
@@ -399,9 +413,11 @@ const {
   tailRows,
   tailFilteredRows,
   tailLoading,
+  tailLoadingMore,
   tailError,
-  tailTruncated,
   tailRanAt,
+  tailNextToken,
+  loadMoreTail,
   openTail,
   refreshTail,
   // tầng giữa: log stream

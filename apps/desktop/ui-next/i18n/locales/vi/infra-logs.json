@@ -33,7 +33,6 @@
   "infra.logs.tail.refresh": "Làm mới",
   "infra.logs.tail.loading": "Đang tải…",
   "infra.logs.tail.status": "{n} dòng mới nhất",
-  "infra.logs.tail.truncated": "còn dòng nữa — thu hẹp khoảng hoặc lọc bớt",
   "infra.logs.tail.rateNote": "Xem dòng mới nhất dùng filter-log-events — đọc theo request, KHÔNG tính tiền theo GB quét như Insights.",
   "infra.logs.tail.pickGroup": "Bấm một nhóm log ở trên để xem dòng mới nhất của nhóm đó.",
   "infra.logs.tail.emptyGroup": "Nhóm này chưa có dòng nào trong khoảng thời gian đang chọn.",
@@ -127,5 +126,9 @@
   "infra.logs.prefs.wrapLinesDesc": "Hiện đủ nội dung thay vì cắt bớt. Đổi lại, một dòng log dài sẽ chiếm rất nhiều chiều cao bảng.",
   "infra.logs.prefs.columnsSection": "Chọn cột hiển thị",
   "infra.logs.prefs.noColumns": "Chưa có kết quả nào để chọn cột.",
-  "infra.logs.prefs.lastColumn": "Phải giữ lại ít nhất một cột."
+  "infra.logs.prefs.lastColumn": "Phải giữ lại ít nhất một cột.",
+  "infra.logs.results.loading": "Đang tải…",
+  "infra.logs.tail.hasMore": "Còn nữa",
+  "infra.logs.tail.loadMore": "Đọc thêm",
+  "infra.logs.tail.loadMoreHint": "Mỗi lượt là một lệnh gọi AWS"
 }

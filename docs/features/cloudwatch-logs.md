@@ -223,6 +223,54 @@ Ba trạng thái của `activeStream` là mô hình của màn này, và **`null
 = đúng một stream. Gộp hai cái đầu làm một thì màn hình không biết nên hiện danh sách
 hay hiện log.
 
+## Dòng mới nhất — thứ tự và phân trang (sửa 2026-09-17)
+
+**Trước bản này, màn "Dòng mới nhất" trả về 200 dòng CŨ NHẤT.** `filter-log-events`
+mặc định `startFromHead = true`, tức đọc từ **đầu** cửa sổ; một cửa sổ 1 giờ có 5000
+dòng thì 200 dòng lấy về là 200 dòng cũ nhất, rồi UI sắp giảm dần **bên trong đúng
+200 dòng sai đó** — nên nó trông vẫn hợp lý và không ai nhận ra. Nay tail truyền
+`--no-start-from-head`.
+
+Có một điều kiện phải kiểm chứ không được coi là luôn đúng: CloudWatch chỉ nhận
+`startFromHead = false` khi `startTime` **từ 2024-01-01 UTC trở đi**, sớm hơn thì ném
+`InvalidParameterException`. Khoảng *Tuỳ chọn* cho người dùng chọn ngày bất kỳ, nên
+cờ bị bỏ khi cửa sổ bắt đầu trước mốc đó (`NEWEST_FIRST_MIN_START_MS`).
+
+**200 giờ là cỡ TRANG, không phải trần.** `tailWindow` trả `nextToken`, và nút *Đọc
+thêm* dưới bảng nối tiếp từ đúng chỗ vừa dừng. Ba điều đo được trên `aws-cli 2.35.9`
+định hình chỗ này:
+
+- Truyền `--limit` khiến AWS CLI **tự tắt phân trang của chính nó** (`awscli/
+  customizations/paginate.py`: *"User has specified a manual pagination arg"*), nên
+  một lượt gọi = đúng một request API. Nhờ vậy `--limit 200` thật sự là 200, không
+  phải "200 mỗi trang rồi CLI tự lặp tới hết".
+- Hệ quả: `--starting-token` bị **từ chối thẳng** khi đã có `--limit`
+  (`ParamValidation: Cannot specify --no-paginate along with pagination arguments`).
+  Đọc tiếp phải dùng `--next-token`.
+- Hướng sắp xếp chỉ đặt được ở lượt **đầu** — *"On subsequent requests, the nextToken
+  determines the sort direction"* — nên lượt sau không gửi kèm cờ hướng.
+
+Đọc thêm là một **nút**, không phải tự nạp khi cuộn: mỗi lượt là một request
+`filter-log-events` thật và có tính tiền. Một cú lăn chuột không được phép biến thành
+mấy chục lệnh người dùng không yêu cầu.
+
+Lỗi khi *đọc tiếp* **giữ nguyên** những dòng đã đọc được — vứt chúng đi là phạt người
+dùng vì một lượt gọi hỏng mà họ không gây ra. Chỉ lượt đọc lại từ đầu mới thay sạch.
+
+⚠ **Chưa kiểm trên dữ liệu thật.** Cờ và tổ hợp tham số đã đo bằng chính CLI trên
+máy (qua được bước phân tích tham số, chỉ dừng ở xác thực), và hành vi phân trang đọc
+từ source của `awscli` đang cài. Nhưng thứ tự trả về *thực tế* của CloudWatch thì cần
+một tài khoản AWS để xác nhận.
+
+## Đang tải ≠ không có dữ liệu (sửa 2026-09-17)
+
+Ba chỗ trên màn Logs từng hiện trạng thái rỗng trong lúc còn đang đọc: bảng kết quả
+(cả tail lẫn Insights) hiện "không có dòng log nào", và danh sách nhóm log để một
+khoảng **trắng** không giải thích gì. Cùng là "không có hàng nào", nhưng một cái là
+*chờ chút* còn cái kia là *tìm rồi, không có gì* — hiện nhầm thì người dùng kết luận
+sai về chính dữ liệu của họ ngay trước khi dữ liệu kịp về. Nay nhánh "đang tải" đứng
+**trước** nhánh "rỗng" ở cả ba chỗ.
+
 ## Bảng kết quả — hộp **Tuỳ chọn hiển thị** (thêm 2026-09-17)
 
 Bảng kết quả (dùng chung cho cả *Dòng mới nhất* lẫn *Truy vấn nâng cao*) có nút

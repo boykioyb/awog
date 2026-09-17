@@ -1,6 +1,14 @@
 <template>
   <div class="lrs" :class="{ fill }">
-    <div v-if="rows.length === 0" class="lrs-empty">
+    <!-- ĐANG TẢI đứng TRƯỚC RỖNG. Cùng là "không có hàng nào", nhưng một cái là
+         "chờ chút" còn cái kia là "tìm rồi, không có gì" — hiện nhầm thì người dùng
+         kết luận sai về chính dữ liệu của họ ngay trước khi dữ liệu kịp về. -->
+    <div v-if="loading && rows.length === 0" class="lrs-empty">
+      <Icon name="clock" class="lrs-empty-ic" />
+      <p class="lrs-empty-txt">{{ t('infra.logs.results.loading') }}</p>
+    </div>
+
+    <div v-else-if="rows.length === 0" class="lrs-empty">
       <Icon name="search" class="lrs-empty-ic" />
       <p class="lrs-empty-txt">{{ emptyText || t('infra.logs.results.empty') }}</p>
     </div>
@@ -102,6 +110,8 @@ const props = defineProps<{
   rows: AwsInsightsRow[]
   copied?: boolean
   emptyText?: string
+  /** Đang chờ lượt đầu tiên — quyết định hiện "đang tải" hay "không có dữ liệu". */
+  loading?: boolean
   /** Kéo giãn bảng lấp đầy cột chính (layout Kibana 3/9) thay vì cao cố định. */
   fill?: boolean
 }>()

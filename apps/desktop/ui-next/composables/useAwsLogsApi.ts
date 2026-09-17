@@ -116,7 +116,8 @@ export type AwsLogsTailEvent = {
 }
 
 export type AwsLogsTailResult =
-  | { ok: true; events: AwsLogsTailEvent[]; truncated: boolean }
+  /** `nextToken` khác `null` ⇒ còn đọc tiếp được; đó là thứ nút "Đọc thêm" gửi lại. */
+  | { ok: true; events: AwsLogsTailEvent[]; truncated: boolean; nextToken: string | null }
   | { ok: false; error: string }
 
 // ── infra.logs-streams (2.9) ─────────────────────────────────────────────────
@@ -255,6 +256,8 @@ export function useAwsLogsApi() {
       filterPattern?: string
       logStreamName?: string
       limit?: number
+      /** Token của lượt trước ⇒ đọc TIẾP thay vì đọc lại từ đầu cửa sổ. */
+      nextToken?: string
       profile?: string
       region?: string
     }) => sidecar.request<AwsLogsTailResult>('infra.logs-tail', params),
