@@ -282,7 +282,13 @@ thêm* dưới bảng nối tiếp từ đúng chỗ vừa dừng. Ba điều đ
 mấy chục lệnh người dùng không yêu cầu.
 
 Nút đó **nổi** trên đáy bảng (`position: absolute`, tròn 32px, mờ 45% khi rảnh, rõ khi
-trỏ tới) chứ không đứng thành một hàng riêng. Một hàng riêng — kèm dòng chú thích bên
+trỏ tới) chứ không đứng thành một hàng riêng, và mang **dấu cộng** — mũi tên xuống
+trùng nghĩa với "cuộn xuống cuối", mà nay ngay cạnh nó có đúng một nút làm việc đó
+thật. Hai nút **lên đầu / xuống cuối** nổi ở góc phải dưới khung bảng, cùng khuôn
+mờ-khi-rảnh, chỉ hiện khi bảng thực sự cuộn được và chỉ hiện hướng còn đi được. Chúng
+tồn tại vì bảng có khung cuộn RIÊNG nên Home/End của trình duyệt không với tới. Đo ở
+bốn bề rộng 560–1512: cụm nút phải và nút đọc thêm ở giữa không bao giờ chồng nhau
+(khoảng hở hẹp nhất 210px). Một hàng riêng — kèm dòng chú thích bên
 cạnh và đoạn ghi chú về giá bên dưới — ăn **89px** đo được của đúng cái bảng đang đọc,
 để đổi lấy một hành động thỉnh thoảng mới dùng. Chú thích *"mỗi lượt là một lệnh gọi
 AWS"* chuyển vào `title`: chỗ nào người dùng hỏi thì chỗ đó trả lời. Ghi chú về giá của
@@ -292,6 +298,37 @@ nhận cú bấm bình thường.
 
 Lỗi khi *đọc tiếp* **giữ nguyên** những dòng đã đọc được — vứt chúng đi là phạt người
 dùng vì một lượt gọi hỏng mà họ không gây ra. Chỉ lượt đọc lại từ đầu mới thay sạch.
+
+### ⚠ Vì sao lượt đọc tiếp ĐẦU TIÊN hỏng (sửa 2026-09-17, lần thứ hai)
+
+`redactString` che giá trị theo **tên khoá**, và danh sách khoá nhạy cảm có phần
+`token`. `nextToken` khớp phần đó. Đo được: stdout của `aws logs filter-log-events`
+về tới `tailWindow` với `"nextToken": "[redacted]"`.
+
+Hệ quả xảy ra theo đúng thứ tự này:
+
+1. Bản đầu có bộ lọc bộ ký tự base64url ⇒ nó **bắt đúng** chuỗi hỏng, nhưng báo là
+   `INVALID_NEXT_TOKEN`, nghe như token của AWS sai.
+2. Tôi chẩn đoán nhầm là mình đoán sai định dạng, gỡ bộ lọc ⇒ chuỗi `[redacted]` đi
+   thẳng lên AWS ⇒ `InvalidParameterException: The specified nextToken is invalid`.
+3. Nguyên nhân thật nằm ở `redactString`, không phải ở tầng logs.
+
+Cùng lỗi ngầm với **`listLogGroups`** — nó phân trang bằng chính trường này, nên một
+tài khoản có hơn 50 nhóm log sẽ **im lặng dừng ở trang đầu**.
+
+Sửa ở đúng chỗ: `PAGINATION_CURSOR_KEYS` trong
+[redact.ts](../../apps/desktop/sidecar/src/sessions/redact.ts) miễn trừ khoá
+`nextToken` ở cả lớp 1 (field của object) lẫn lớp 3 (gán `khoá: giá trị` trong chuỗi).
+An toàn vì `nextToken` là quy ước **con trỏ** của AWS/Azure — khác hẳn `access_token`/
+`refresh_token` của OAuth — và lớp 2 (theo **hình dạng** giá trị) chạy **trước** lớp 3,
+nên `sk-…`/`ghp_…` nấp dưới đúng khoá đó vẫn bị bắt. Bốn test ghim cả hai chiều:
+`nextToken` sống sót, còn `accessToken`/`refreshToken` vẫn bị che.
+
+**Token chết thì thoát được.** AWS từ chối token (hết hạn 24 giờ, hoặc không nhận) ⇒
+bỏ token + hiện câu chỉ đường tới *Làm mới*, thay vì để lại một nút bấm bao nhiêu lần
+cũng ra đúng một lỗi. Nhận diện theo **tên tham số** trong câu lỗi chứ không theo mã
+`InvalidParameterException`: mã đó còn dùng cho tham số khác, và lỗi mạng tạm thời thì
+phải thử lại được.
 
 **Token là giá trị MỜ — không phán đoán định dạng của nó.** Mô hình API khai
 `NextToken` là `{"type": "string", "min": 1}`: không pattern, không độ dài tối đa.

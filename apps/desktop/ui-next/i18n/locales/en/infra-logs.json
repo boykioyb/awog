@@ -132,5 +132,8 @@
   "infra.logs.tail.loadMore": "Load more",
   "infra.logs.tail.loadMoreHint": "Each press is one AWS call",
   "infra.logs.tail.fullTitle": "Full screen (Esc to exit)",
-  "infra.logs.tail.exitFullTitle": "Exit full screen (Esc)"
+  "infra.logs.tail.exitFullTitle": "Exit full screen (Esc)",
+  "infra.logs.tail.tokenDead": "That continuation point is no longer usable (the token expires after 24 hours). Press Refresh to read the window again.",
+  "infra.logs.results.toTop": "Jump to top",
+  "infra.logs.results.toBottom": "Jump to bottom"
 }

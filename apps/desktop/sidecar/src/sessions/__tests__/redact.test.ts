@@ -445,3 +445,36 @@ describe('redactString — khoá biến môi trường và cờ CLI', () => {
     expect(redactString('grep -N pattern file')).toBe('grep -N pattern file')
   })
 })
+
+describe('con trỏ phân trang không phải bí mật', () => {
+  // Lỗi thật 2026-09-17: `nextToken` khớp phần `token` nên bị che, và nút "Đọc thêm"
+  // của màn Logs gửi đúng chuỗi `[redacted]` lên AWS →
+  // `InvalidParameterException: The specified nextToken is invalid`.
+  it('giữ nguyên nextToken trong stdout JSON của AWS CLI', () => {
+    const token = 'Bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx/ABCdef123456789+/=abcdefghijklmnop'
+    const stdout = JSON.stringify({ events: [], searchedLogStreams: [], nextToken: token }, null, 2)
+    expect(redactString(stdout)).toBe(stdout)
+  })
+
+  it('giữ nguyên nextToken khi nó là field của object', () => {
+    const token = 'Bqqqqqqqqqqqqqqqqqqqqqqqq+/=abcdef'
+    expect(redactDeep({ logGroups: [], nextToken: token })).toEqual({
+      logGroups: [],
+      nextToken: token,
+    })
+  })
+
+  // Miễn trừ này CHỈ gỡ lớp che theo NGỮ CẢNH. Lớp theo hình dạng giá trị chạy trước
+  // nên một bí mật thật nấp dưới đúng khoá đó vẫn bị bắt.
+  it('vẫn che một bí mật có hình dạng nhận ra được nấp dưới nextToken', () => {
+    const out = redactString('{"nextToken": "sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAA"}')
+    expect(out).not.toContain('sk-ant-api03')
+    expect(out).toContain('[redacted]')
+  })
+
+  // Không được nới ra các khoá token THẬT chỉ vì chúng cũng chứa chữ "token".
+  it('vẫn che accessToken / refreshToken', () => {
+    expect(redactDeep({ accessToken: 'abc123def456' })).toEqual({ accessToken: '[redacted]' })
+    expect(redactString('refreshToken: "zzzz1111yyyy2222"')).toContain('[redacted]')
+  })
+})

@@ -148,7 +148,10 @@
                 </button>
               </div>
 
-              <div v-if="tailError" class="lgs-error">{{ tailError }}</div>
+              <div v-if="tailError" class="lgs-error">
+                {{ tailError }}
+                <span v-if="tailTokenDead">— {{ t('infra.logs.tail.tokenDead') }}</span>
+              </div>
 
               <InfraLogsFilters
                 v-model:quick="quickFilter"
@@ -186,7 +189,10 @@
                 :aria-label="t('infra.logs.tail.loadMore')"
                 @click="loadMoreTail"
               >
-                <Icon :name="tailLoadingMore ? 'clock' : 'chev'" class="lgs-more-ic" />
+                <!-- DẤU CỘNG chứ không phải mũi tên xuống: mũi tên xuống trùng
+                     nghĩa với "cuộn xuống cuối", mà nay cạnh nó có đúng một nút làm
+                     việc đó thật. Cộng = thêm dòng vào tập đang có. -->
+                <Icon :name="tailLoadingMore ? 'clock' : 'plus'" class="lgs-more-ic" />
               </button>
             </div>
           </Teleport>
@@ -446,6 +452,7 @@ const {
   tailError,
   tailRanAt,
   tailNextToken,
+  tailTokenDead,
   loadMoreTail,
   openTail,
   refreshTail,

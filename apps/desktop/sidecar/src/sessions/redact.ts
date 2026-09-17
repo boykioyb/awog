@@ -118,6 +118,28 @@ function matchedSecretParts(key: string): readonly string[] {
   return SECRET_KEY_PARTS.filter((part) => normalized.includes(part))
 }
 
+// Khoá là CON TRỎ PHÂN TRANG, không phải bí mật.
+//
+// `nextToken` khớp phần `token` nên lớp 1 và lớp 3 đều che nó — và che một con trỏ
+// phân trang thì HỎNG CHỨC NĂNG chứ không bảo vệ được gì. Đo được ngày 2026-09-17:
+// stdout của `aws logs filter-log-events` về tới `tailWindow` với
+// `"nextToken": "[redacted]"`, nên nút "Đọc thêm" gửi đúng chuỗi đó lên AWS và nhận
+// `InvalidParameterException: The specified nextToken is invalid`. Cùng lỗi ngầm với
+// `listLogGroups`: nó phân trang bằng chính trường này, nên một tài khoản có hơn 50
+// nhóm log sẽ IM LẶNG dừng ở trang đầu.
+//
+// An toàn vì hai lẽ: `nextToken` là quy ước con trỏ của AWS/Azure (khác hẳn
+// `access_token`/`refresh_token` của OAuth), và lớp 2 — theo HÌNH DẠNG giá trị —
+// chạy TRƯỚC lớp 3 nên `sk-…`/`ghp_…` nấp dưới khoá này vẫn bị bắt.
+//
+// Chỉ khai đúng cái đo được là hỏng. Con trỏ của nhà khác (`continuationToken` của
+// S3, `pageToken` của Google) thêm vào đây khi nào thật sự dùng tới.
+const PAGINATION_CURSOR_KEYS: readonly string[] = ['nexttoken']
+
+function isPaginationCursor(key: string): boolean {
+  return PAGINATION_CURSOR_KEYS.includes(normalizeKey(key))
+}
+
 // Ba ngoại lệ hẹp cho lớp 1. Điểm chung: giá trị KHÔNG THỂ chứa byte bí mật, nhưng
 // che nó đi thì mất thông tin người dùng cần.
 //   - `null` dưới `apiKey` = "chưa cấu hình", che thành `[redacted]` là nói dối.
@@ -352,7 +374,10 @@ function redactAssignments(value: string): string {
   return value.replace(
     SENSITIVE_ASSIGN_RE,
     (match: string, key: string, sep: string, dq?: string, sq?: string, bare?: string) =>
-      replaceCapturedValue(`${key}${sep}`, dq, sq, bare, match, ENV_STYLE_KEY_RE.test(key)),
+      // Con trỏ phân trang đi qua nguyên vẹn — xem `PAGINATION_CURSOR_KEYS`.
+      isPaginationCursor(key)
+        ? match
+        : replaceCapturedValue(`${key}${sep}`, dq, sq, bare, match, ENV_STYLE_KEY_RE.test(key)),
   )
 }
 
@@ -416,7 +441,7 @@ export function redactDeep(value: unknown, depth = 0): unknown {
     // thì tên khoá con không còn nhạy cảm nữa, nên đi sâu vào là mất dấu.
     const parts = matchedSecretParts(key)
     if (parts.length > 0) {
-      out[key] = keepAsIs(val, parts) ? val : REDACTED
+      out[key] = isPaginationCursor(key) || keepAsIs(val, parts) ? val : REDACTED
       continue
     }
     out[key] = redactDeep(val, depth + 1)

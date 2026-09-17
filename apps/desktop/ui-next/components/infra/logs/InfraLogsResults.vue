@@ -28,7 +28,7 @@
         </button>
       </div>
 
-      <div class="lrs-tablewrap tblcard">
+      <div ref="scrollerRef" class="lrs-tablewrap tblcard" @scroll.passive="onScroll">
         <table class="lrs-table">
           <thead>
             <tr>
@@ -71,6 +71,33 @@
             </template>
           </tbody>
         </table>
+      </div>
+
+      <!-- Lên đầu / xuống cuối: NỔI ở góc, không chiếm một hàng nào của bảng, cùng
+           khuôn mờ-khi-rảnh với nút đọc thêm. Chỉ hiện khi bảng THỰC SỰ cuộn được và
+           chỉ hiện hướng còn đi được — một nút "lên đầu" khi đang ở đầu là một nút
+           không làm gì. -->
+      <div v-if="canScroll" class="lrs-nav">
+        <button
+          v-if="!atTop"
+          class="lrs-navbtn"
+          type="button"
+          :title="t('infra.logs.results.toTop')"
+          :aria-label="t('infra.logs.results.toTop')"
+          @click="jump('top')"
+        >
+          <Icon name="chev" class="lrs-navic up" />
+        </button>
+        <button
+          v-if="!atBottom"
+          class="lrs-navbtn"
+          type="button"
+          :title="t('infra.logs.results.toBottom')"
+          :aria-label="t('infra.logs.results.toBottom')"
+          @click="jump('bottom')"
+        >
+          <Icon name="chev" class="lrs-navic" />
+        </button>
       </div>
     </template>
 
@@ -148,6 +175,46 @@ const paneRow = computed<AwsInsightsRow | null>(() => {
   return first === undefined ? null : (props.rows[first] ?? null)
 })
 
+// ── Lên đầu / xuống cuối ────────────────────────────────────────────────────
+// Bảng có khung cuộn RIÊNG (`.lrs-tablewrap`), không cuộn theo trang — nên phím
+// Home/End của trình duyệt không tới được nó, và hai nút này là đường duy nhất.
+const scrollerRef = useTemplateRef<HTMLElement>('scrollerRef')
+const canScroll = ref(false)
+const atTop = ref(true)
+const atBottom = ref(false)
+
+/** Ngưỡng coi là "đã chạm mép" — cuộn mượt hiếm khi dừng đúng số nguyên. */
+const EDGE_PX = 8
+
+function measureScroll(): void {
+  const el = scrollerRef.value
+  if (!el) return
+  const max = el.scrollHeight - el.clientHeight
+  canScroll.value = max > EDGE_PX
+  atTop.value = el.scrollTop <= EDGE_PX
+  atBottom.value = el.scrollTop >= max - EDGE_PX
+}
+
+function onScroll(): void {
+  measureScroll()
+}
+
+function jump(where: 'top' | 'bottom'): void {
+  const el = scrollerRef.value
+  if (!el) return
+  el.scrollTo({ top: where === 'top' ? 0 : el.scrollHeight, behavior: 'smooth' })
+}
+
+// Đổi kết quả thì đo lại SAU khi DOM vẽ xong — `rows` đổi trước, chiều cao đổi sau.
+watch(
+  () => props.rows,
+  async () => {
+    await nextTick()
+    measureScroll()
+  },
+)
+onMounted(measureScroll)
+
 function closePane(): void {
   openRows.value = new Set()
 }
@@ -185,6 +252,8 @@ onMounted(reseed)
   flex-direction: column;
   min-height: 0;
   gap: 6px;
+  /* Khối neo cho cụm nút lên/xuống nổi ở góc. */
+  position: relative;
 }
 
 /* Layout Kibana 3/9: bảng lấp đầy cột chính thay vì cao cố định 340px. */
@@ -341,6 +410,52 @@ onMounted(reseed)
   line-height: var(--lh-sm);
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* Cụm nút điều hướng NỔI ở góc dưới phải khung bảng. Cùng luật với nút đọc thêm:
+   `absolute` nên không chiếm ô layout, mờ khi rảnh để không tranh chỗ với chính
+   những dòng log nó giúp đi tới. Đặt bên PHẢI để không đụng nút đọc thêm ở giữa. */
+.lrs-nav {
+  position: absolute;
+  right: 14px;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lrs-navbtn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bgEl);
+  color: var(--textDim);
+  box-shadow: var(--shadow-md);
+  opacity: 0.4;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+
+.lrs-navbtn:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
+.lrs-navic {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+/* Sprite không có mũi tên LÊN — xoay mũi tên xuống. */
+.lrs-navic.up {
+  transform: rotate(180deg);
 }
 
 .lrs-xtd {

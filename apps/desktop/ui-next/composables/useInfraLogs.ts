@@ -104,6 +104,17 @@ export type LogsSeed = {
  */
 const TAIL_PAGE_SIZE = 200
 
+/**
+ * Câu của AWS có phải là "điểm đọc tiếp không còn dùng được" không?
+ *
+ * Khớp theo TÊN THAM SỐ chứ không theo mã lỗi: `InvalidParameterException` còn dùng
+ * cho nhiều tham số khác, và một lỗi mạng tạm thời thì phải thử lại được — bỏ token đi
+ * trong ca đó là làm mất phần đã đọc mà không có lý do.
+ */
+function isDeadTokenError(error: string): boolean {
+  return /nexttoken/i.test(error)
+}
+
 export function useInfraLogs() {
   const api = useAwsLogsApi()
   const sidecar = useSidecar()
@@ -409,6 +420,13 @@ export function useInfraLogs() {
    * Đọc thêm sẽ gửi một token của cửa sổ này kèm `--start-time` của cửa sổ khác.
    */
   const tailPinnedWindow = ref<{ startMs: number; endMs: number } | null>(null)
+  /**
+   * Điểm đọc tiếp vừa bị AWS từ chối ⇒ chỉ còn đường Làm mới.
+   *
+   * Là CỜ chứ không phải câu chữ: composable lo state + IPC, còn câu đã dịch thì
+   * component dựng (SoC — file này không chạm i18n).
+   */
+  const tailTokenDead = ref(false)
 
   // Mới nhất lên đầu — người đọc log tìm dòng vừa xảy ra. Sắp xếp trên TOÀN BỘ tập
   // đã gom, không phải từng trang: cửa sổ bắt đầu trước 2024-01-01 không dùng được
@@ -519,6 +537,7 @@ export function useInfraLogs() {
     if (token) tailLoadingMore.value = true
     else tailLoading.value = true
     tailError.value = ''
+    if (!token) tailTokenDead.value = false
     try {
       const res = await api.tail({
         logGroups: [group],
@@ -539,6 +558,12 @@ export function useInfraLogs() {
           tailEvents.value = []
           tailNextToken.value = null
           tailPinnedWindow.value = null
+        } else if (isDeadTokenError(res.error)) {
+          // Token chết là chết hẳn — hết hạn 24 giờ, hoặc AWS không nhận. Giữ nút lại
+          // thì bấm bao nhiêu lần cũng ra đúng một lỗi. Bỏ token đi để đường duy nhất
+          // còn lại là Làm mới, và bật cờ cho màn nói ra điều đó bằng tiếng người.
+          tailNextToken.value = null
+          tailTokenDead.value = true
         }
         return
       }
@@ -750,6 +775,7 @@ export function useInfraLogs() {
     tailError,
     tailRanAt,
     tailNextToken,
+    tailTokenDead,
     loadMoreTail,
     openTail,
     refreshTail,

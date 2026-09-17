@@ -132,5 +132,8 @@
   "infra.logs.tail.loadMore": "Đọc thêm",
   "infra.logs.tail.loadMoreHint": "Mỗi lượt là một lệnh gọi AWS",
   "infra.logs.tail.fullTitle": "Toàn màn hình (Esc để thoát)",
-  "infra.logs.tail.exitFullTitle": "Thoát toàn màn hình (Esc)"
+  "infra.logs.tail.exitFullTitle": "Thoát toàn màn hình (Esc)",
+  "infra.logs.tail.tokenDead": "Điểm đọc tiếp không còn dùng được (token hết hạn sau 24 giờ). Bấm Làm mới để đọc lại từ đầu khoảng.",
+  "infra.logs.results.toTop": "Lên đầu bảng",
+  "infra.logs.results.toBottom": "Xuống cuối bảng"
 }
