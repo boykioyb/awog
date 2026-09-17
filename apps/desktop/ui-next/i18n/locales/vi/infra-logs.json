@@ -27,8 +27,8 @@
   "infra.logs.groups.retention": "giữ {d} ngày",
   "infra.logs.groups.noRetention": "giữ vĩnh viễn",
   "infra.logs.groups.available": "{n} nhóm",
-  "infra.logs.mode.tail": "Dòng mới nhất",
-  "infra.logs.mode.advanced": "Truy vấn nâng cao",
+  "infra.logs.mode.tail": "Mới nhất",
+  "infra.logs.mode.advanced": "Truy vấn",
   "infra.logs.tail.mode": "xem dòng mới nhất",
   "infra.logs.tail.refresh": "Làm mới",
   "infra.logs.tail.loading": "Đang tải…",
@@ -90,8 +90,11 @@
   "infra.logs.library.lastScan": "lần trước quét {size}",
   "infra.logs.library.scanned": "quét {size}",
   "infra.logs.library.clearHistory": "Xóa lịch sử",
-  "infra.logs.mode.trace": "Lần theo request",
+  "infra.logs.mode.trace": "Lần theo",
   "infra.logs.trace.mode": "lần theo một request",
   "infra.logs.results.trace": "Lần theo request này",
-  "infra.logs.results.traceTitle": "Dựng dòng thời gian cho mã {id}"
+  "infra.logs.results.traceTitle": "Dựng dòng thời gian cho mã {id}",
+  "infra.logs.mode.tailFull": "Dòng log mới nhất của một nhóm",
+  "infra.logs.mode.advancedFull": "Truy vấn nâng cao (CloudWatch Insights)",
+  "infra.logs.mode.traceFull": "Lần theo một request qua các chặng"
 }

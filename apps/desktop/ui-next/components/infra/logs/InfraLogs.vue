@@ -19,6 +19,7 @@
             :class="{ on: mode === m }"
             role="button"
             :aria-pressed="mode === m"
+            :title="t(`infra.logs.mode.${m}Full`)"
             @click="mode = m"
           >
             {{ t(`infra.logs.mode.${m}`) }}
@@ -678,6 +679,24 @@ onBeforeUnmount(() => {
 
 .lgs-mode {
   align-self: stretch;
+}
+
+/* Ba chế độ trong một cột rộng 240–320px.
+ *
+ * ⚠ Đo được ở bản trước: ba nhãn ĐẦY ĐỦ ("Dòng mới nhất" · "Truy vấn nâng cao" ·
+ * "Lần theo request") cần 302px, trong khi cột chỉ cho 230–284px — nên mỗi nhãn bị
+ * bẻ GIỮA CỤM TỪ ("Dòng mới / nhất"), và thanh cao 54–72px thay vì 36px. Nhãn rút
+ * ngắn lại vừa một hàng ở mọi cỡ chữ Appearance 13→18 và mọi bề rộng cột 216→296;
+ * câu đầy đủ nằm ở `title`.
+ *
+ * `white-space: nowrap` là phần KHÔNG được bỏ dù nhãn đã ngắn: khi cột hẹp nhất gặp
+ * cỡ chữ lớn nhất, thanh phải gãy thành hai hàng GỌN chứ không bẻ chữ. */
+.lgs-mode > span {
+  flex: 1 1 auto;
+  text-align: center;
+  white-space: nowrap;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .lgs-block {

@@ -294,8 +294,22 @@ function onClearDraft(): void {
   flex-wrap: wrap;
 }
 
+/* Ô preset.
+ *
+ * ⚠ `white-space: nowrap` + `flex: 1 1 auto` là bản vá cho cột hẹp của màn Nhật ký
+ * (240–320px): ở đó `.itr` bị kéo giãn bằng cả cột, sáu ô không đủ chỗ một hàng, và
+ * bản trước bẻ CHỮ trong ô — "Tuỳ chọn" thành "Tuỳ / chọn" — thay vì xuống hàng theo
+ * ô. Nay ô không bao giờ vỡ chữ, và khi phải xuống hàng thì các ô giãn đều nên hàng
+ * thứ hai đọc ra như một hàng có chủ đích.
+ *
+ * Padding 8px (trước là 10px) đủ để cả sáu ô đứng MỘT hàng trong cột 296px ở cỡ chữ
+ * mặc định. Ở màn Giám sát / Bảng điều khiển không có gì đổi: `.itr` là `inline-flex`
+ * nên nó co theo nội dung, và `flex: 1 1 auto` không có chỗ thừa nào để giãn. */
 .itr-cell {
-  padding: 4px 10px;
+  flex: 1 1 auto;
+  text-align: center;
+  white-space: nowrap;
+  padding: 4px 8px;
   border-radius: var(--r-xs);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);

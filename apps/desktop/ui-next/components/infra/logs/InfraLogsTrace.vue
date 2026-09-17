@@ -3,16 +3,22 @@
     <!-- ── Thanh chạy: id + nút ─────────────────────────────────────────────── -->
     <div class="itoolbar ltr-bar">
       <div class="itoolgrp ltr-idgrp">
-        <input
-          v-model="traceId"
-          class="inp ltr-id"
-          type="text"
-          spellcheck="false"
-          :placeholder="t('infra.trace.idPh')"
-          :aria-label="t('infra.trace.idLabel')"
-          @keydown.enter.prevent="emit('run')"
-        />
-        <span class="ltr-kind">{{ kindLabel }}</span>
+        <!-- Khuôn ô nhập của khu `/infra`: viền + nền ở phần TỬ BỌC, `<input>` để
+             trần bên trong (giống `.lgp-field` của bộ chọn nhóm log ngay cột bên).
+             Bản đầu gắn `class="inp"` — một class KHÔNG tồn tại ở đâu trong repo,
+             nên ô này render bằng mặc định trần của trình duyệt. -->
+        <div class="ltr-field">
+          <input
+            v-model="traceId"
+            class="ltr-id"
+            type="text"
+            spellcheck="false"
+            :placeholder="t('infra.trace.idPh')"
+            :aria-label="t('infra.trace.idLabel')"
+            @keydown.enter.prevent="emit('run')"
+          />
+          <span v-if="kindLabel" class="ltr-kind">{{ kindLabel }}</span>
+        </div>
       </div>
 
       <div class="itoolgrp">
@@ -300,9 +306,27 @@ function formatMs(ms: number): string {
   min-width: 0;
 }
 
+.ltr-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bgInput);
+}
+
 .ltr-id {
   flex: 1 1 auto;
   min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   /* mono-ok: trace id là chuỗi người dùng copy-paste từ log/terminal */
   font-family: var(--code);
 }

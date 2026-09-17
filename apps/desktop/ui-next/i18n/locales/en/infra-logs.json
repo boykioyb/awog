@@ -27,8 +27,8 @@
   "infra.logs.groups.retention": "kept {d} days",
   "infra.logs.groups.noRetention": "kept forever",
   "infra.logs.groups.available": "{n} groups",
-  "infra.logs.mode.tail": "Latest lines",
-  "infra.logs.mode.advanced": "Advanced query",
+  "infra.logs.mode.tail": "Latest",
+  "infra.logs.mode.advanced": "Query",
   "infra.logs.tail.mode": "latest lines",
   "infra.logs.tail.refresh": "Refresh",
   "infra.logs.tail.loading": "Loading…",
@@ -90,8 +90,11 @@
   "infra.logs.library.lastScan": "last run scanned {size}",
   "infra.logs.library.scanned": "scanned {size}",
   "infra.logs.library.clearHistory": "Clear history",
-  "infra.logs.mode.trace": "Trace a request",
+  "infra.logs.mode.trace": "Trace",
   "infra.logs.trace.mode": "tracing one request",
   "infra.logs.results.trace": "Trace this request",
-  "infra.logs.results.traceTitle": "Build a timeline for id {id}"
+  "infra.logs.results.traceTitle": "Build a timeline for id {id}",
+  "infra.logs.mode.tailFull": "Latest log lines of one group",
+  "infra.logs.mode.advancedFull": "Advanced query (CloudWatch Insights)",
+  "infra.logs.mode.traceFull": "Trace one request across its hops"
 }
