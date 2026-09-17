@@ -106,5 +106,17 @@
   "infra.logs.streams.agoMin": "{n} phút trước",
   "infra.logs.streams.agoHour": "{n} giờ trước",
   "infra.logs.streams.agoDay": "{n} ngày trước",
-  "infra.logs.tail.emptyStream": "Stream này chưa có dòng nào trong khoảng thời gian đang chọn."
+  "infra.logs.tail.emptyStream": "Stream này chưa có dòng nào trong khoảng thời gian đang chọn.",
+  "infra.logs.columns.button": "Cột {shown}/{total}",
+  "infra.logs.columns.hint": "Chọn cột hiển thị trong bảng",
+  "infra.logs.columns.title": "Cột hiển thị",
+  "infra.logs.columns.showAll": "Hiện tất cả",
+  "infra.logs.columns.lastOne": "Giữ lại ít nhất một cột — bảng không còn cột nào thì không đọc được gì.",
+  "infra.logs.results.rows": "{n} dòng",
+  "infra.logs.results.openRow": "Bấm để xem chi tiết dòng này",
+  "infra.logs.row.title": "Chi tiết dòng log",
+  "infra.logs.row.message": "Nội dung",
+  "infra.logs.row.fields": "Các trường",
+  "infra.logs.row.copyJson": "Chép JSON",
+  "infra.logs.row.copyMessage": "Chép nội dung"
 }

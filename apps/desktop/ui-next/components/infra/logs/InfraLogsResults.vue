@@ -6,12 +6,18 @@
     </div>
 
     <template v-else>
+      <div class="lrs-bar">
+        <span class="lrs-count">{{ t('infra.logs.results.rows', { n: rows.length }) }}</span>
+        <span class="lrs-gap" />
+        <InfraLogsColumns :all="columns" />
+      </div>
+
       <div class="lrs-tablewrap tblcard">
         <table class="lrs-table">
           <thead>
             <tr>
               <th class="lrs-th-ix">#</th>
-              <th v-for="c in columns" :key="c" class="lrs-th" :title="c">{{ c }}</th>
+              <th v-for="c in visibleColumns" :key="c" class="lrs-th" :title="c">{{ c }}</th>
             </tr>
           </thead>
           <tbody>
@@ -20,11 +26,12 @@
               :key="i"
               class="lrs-tr"
               :class="{ on: selected === i }"
+              :title="t('infra.logs.results.openRow')"
               @click="select(i)"
             >
               <td class="lrs-td-ix">{{ i + 1 }}</td>
               <td
-                v-for="c in columns"
+                v-for="c in visibleColumns"
                 :key="c"
                 class="lrs-td"
                 :class="{ msg: c === '@message' || c === 'message' }"
@@ -35,39 +42,19 @@
           </tbody>
         </table>
       </div>
-
-      <div v-if="selectedRow" class="lrs-detail">
-        <div class="lrs-detail-head">
-          <span class="lrs-detail-title">{{ t('infra.logs.results.detail') }}</span>
-          <span class="lrs-detail-acts">
-            <button class="btn sm" type="button" @click="emit('copy', detailText)">
-              <Icon name="copy" class="lrs-ic" />
-              {{ copied ? t('infra.logs.results.copied') : t('infra.logs.results.copy') }}
-            </button>
-            <button class="btn sm" type="button" @click="emit('send-to-chat', detailText)">
-              <Icon name="message" class="lrs-ic" />
-              {{ t('infra.logs.results.sendToChat') }}
-            </button>
-            <!-- Chỉ hiện khi dòng này THẬT SỰ mang một id lần theo được. Không có
-                 id mà vẫn hiện nút là hứa một việc không làm được. -->
-            <button
-              v-if="rowTraceId"
-              class="btn sm"
-              type="button"
-              :title="t('infra.logs.results.traceTitle', { id: rowTraceId })"
-              @click="emit('trace', rowTraceId)"
-            >
-              <Icon name="branch" class="lrs-ic" />
-              {{ t('infra.logs.results.trace') }}
-            </button>
-            <button class="btn sm" type="button" @click="selected = null">
-              {{ t('infra.logs.results.close') }}
-            </button>
-          </span>
-        </div>
-        <pre class="lrs-json">{{ detailText }}</pre>
-      </div>
     </template>
+
+    <!-- Chi tiết một dòng là MODAL, không phải khối inline dưới bảng: khối cũ ăn
+         chiều cao của chính bảng đang đọc, và một dòng log JSON dài đẩy bảng khuất
+         gần hết. -->
+    <InfraLogRowModal
+      :row="selectedRow"
+      :copied="copied"
+      @close="selected = null"
+      @copy="emit('copy', $event)"
+      @send-to-chat="emit('send-to-chat', $event)"
+      @trace="emit('trace', $event)"
+    />
   </div>
 </template>
 
@@ -80,7 +67,9 @@
 //
 // KHÔNG clipboard ở đây — component chỉ emit; chủ màn sở hữu `navigator.clipboard`
 // và toast, để thông báo nằm cùng chỗ với mọi thông báo khác của màn Logs.
-import { traceIdFromRow } from '~/utils/infra-trace-id'
+import InfraLogRowModal from '~/components/infra/logs/InfraLogRowModal.vue'
+import InfraLogsColumns from '~/components/infra/logs/InfraLogsColumns.vue'
+import { useLogColumnPrefs } from '~/composables/useLogColumnPrefs'
 import type { AwsInsightsRow } from '~/composables/useAwsLogsApi'
 
 const props = defineProps<{
@@ -114,23 +103,9 @@ const selectedRow = computed<AwsInsightsRow | null>(() =>
   selected.value === null ? null : (props.rows[selected.value] ?? null),
 )
 
-/** Id lần theo được của dòng đang mở, hoặc `null` — xem `utils/infra-trace-id.ts`. */
-const rowTraceId = computed(() => {
-  const row = selectedRow.value
-  return row ? traceIdFromRow(row) : null
-})
-
-const detailText = computed(() => {
-  const row = selectedRow.value
-  if (!row) return ''
-  try {
-    return JSON.stringify(row, null, 2)
-  } catch {
-    return Object.entries(row)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join('\n')
-  }
-})
+/** Cột người dùng chọn hiện — thứ tự giữ nguyên như bảng dựng ra. */
+const { visible } = useLogColumnPrefs()
+const visibleColumns = computed(() => visible(columns.value))
 
 function select(i: number): void {
   selected.value = selected.value === i ? null : i
@@ -159,7 +134,25 @@ watch(
   flex: 1 1 auto;
 }
 
-.lrs.fill .lrs-tablewrap {
+.lrs.fill .lrs-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.lrs-count {
+  color: var(--textDim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.lrs-gap {
+  flex: 1 1 auto;
+}
+
+.lrs-tablewrap {
   flex: 1 1 auto;
   max-height: none;
 }
@@ -270,51 +263,5 @@ watch(
   line-height: var(--lh-sm);
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-.lrs-detail {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-  overflow: hidden;
-}
-
-.lrs-detail-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 9px;
-  border-bottom: 1px solid var(--border);
-}
-
-.lrs-detail-title {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 600;
-}
-
-.lrs-detail-acts {
-  display: flex;
-  gap: 4px;
-}
-
-.lrs-ic {
-  width: var(--icon-xs);
-  height: var(--icon-xs);
-}
-
-.lrs-json {
-  margin: 0;
-  padding: 9px;
-  max-height: 220px;
-  overflow: auto;
-  color: var(--text);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  /* mono-ok: JSON của một bản ghi log */
-  font-family: var(--code);
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 </style>

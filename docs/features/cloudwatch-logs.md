@@ -223,6 +223,22 @@ Ba trạng thái của `activeStream` là mô hình của màn này, và **`null
 = đúng một stream. Gộp hai cái đầu làm một thì màn hình không biết nên hiện danh sách
 hay hiện log.
 
+## Bảng kết quả — chọn cột, và chi tiết một dòng (thêm 2026-09-17)
+
+Bảng kết quả (dùng chung cho cả *Dòng mới nhất* lẫn *Truy vấn nâng cao*) có thêm hai
+thứ theo mẫu của AWS Console:
+
+- **Cột hiển thị** — nút `Cột n/N` mở danh sách ĐÚNG những cột đang có trong kết quả và
+  bật/tắt từng cột. Cột là **động** (Insights trả về đúng các trường câu lệnh hỏi), nên
+  lựa chọn nhớ theo **TÊN** cột trong `localStorage`, không theo chỉ số — một chỉ số ở
+  lượt sau sẽ trỏ vào một trường khác. Tên đã ẩn mà lượt này không có thì im lặng bỏ
+  qua. Cột cuối cùng bị khoá: một bảng không còn cột nào thì không nói được gì.
+- **Chi tiết một dòng** — bấm một hàng mở **modal** thay vì khối inline cũ. Khối cũ ăn
+  chiều cao của chính bảng đang đọc, và một dòng log JSON dài đẩy bảng khuất gần hết.
+  Modal in nội dung thô, in thêm bản JSON thụt lề **khi `@message` thực sự parse được**
+  (đoán bừa sẽ dựng ra một cấu trúc không có thật), liệt kê các trường còn lại, và gom
+  đủ hành động: chép JSON · chép nội dung · gửi vào chat · lần theo request này.
+
 ## L5 — trạng thái thực tế (2026-09-16)
 
 Cửa vào: chế độ thứ ba của màn Logs (**Dòng mới nhất · Truy vấn nâng cao · Lần theo

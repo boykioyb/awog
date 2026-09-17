@@ -106,5 +106,17 @@
   "infra.logs.streams.agoMin": "{n}m ago",
   "infra.logs.streams.agoHour": "{n}h ago",
   "infra.logs.streams.agoDay": "{n}d ago",
-  "infra.logs.tail.emptyStream": "This stream has no lines in the selected time range."
+  "infra.logs.tail.emptyStream": "This stream has no lines in the selected time range.",
+  "infra.logs.columns.button": "Columns {shown}/{total}",
+  "infra.logs.columns.hint": "Choose which columns the table shows",
+  "infra.logs.columns.title": "Visible columns",
+  "infra.logs.columns.showAll": "Show all",
+  "infra.logs.columns.lastOne": "Keep at least one column — a table with none says nothing.",
+  "infra.logs.results.rows": "{n} rows",
+  "infra.logs.results.openRow": "Click to see this row in full",
+  "infra.logs.row.title": "Log event",
+  "infra.logs.row.message": "Message",
+  "infra.logs.row.fields": "Fields",
+  "infra.logs.row.copyJson": "Copy JSON",
+  "infra.logs.row.copyMessage": "Copy message"
 }
