@@ -114,6 +114,27 @@ describe('kiểm tra đầu vào (thuần)', () => {
     })
   })
 
+  // ⚠ LỖI CÓ THẬT, ship 2026-09-16, người dùng báo 2026-09-17: màn "Dòng mới nhất"
+  // luôn trả 0 dòng dù CloudWatch có log. `checkWindow` chỉ trả GIÂY (đúng cho
+  // `start-query` của Insights) nhưng `tailWindow` dùng thẳng cho
+  // `filter-log-events`, mà API đó đo bằng MILI-GIÂY — tài liệu của chính AWS CLI
+  // ghi `(long) ... milliseconds`. Cửa sổ "1 giờ gần đây" vì thế biến thành
+  // 21-01-1970, hợp lệ nhưng rỗng, và không có lỗi nào hiện ra.
+  it('trả CẢ HAI đơn vị, và giây đúng bằng 1/1000 mili-giây', () => {
+    const now = Date.parse('2026-09-17T08:00:00Z')
+    const got = checkWindow(now - 3_600_000, now, now)
+    expect(got.ok).toBe(true)
+    if (!got.ok) return
+    expect(got.startMs).toBe(now - 3_600_000)
+    expect(got.endMs).toBe(now)
+    expect(got.startSec).toBe(Math.floor((now - 3_600_000) / 1000))
+    expect(got.endSec).toBe(Math.floor(now / 1000))
+    // Nhầm đơn vị ⇒ lệch 1000 lần, tức rơi về 1970 — đây là con số biến lỗi này
+    // thành "im lặng không có dòng nào" thay vì một thông báo lỗi.
+    expect(new Date(got.startSec).getUTCFullYear()).toBe(1970)
+    expect(new Date(got.startMs).getUTCFullYear()).toBe(2026)
+  })
+
   it('câu lệnh: rỗng · quá dài · chứa file:// đều bị chặn', () => {
     expect(checkQueryString('fields @timestamp | limit 1').ok).toBe(true)
     expect(checkQueryString('   ')).toEqual({ ok: false, error: 'EMPTY_QUERY' })

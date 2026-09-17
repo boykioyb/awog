@@ -404,14 +404,14 @@ export async function getMetricData(
   const missing: MetricQuery[] = []
 
   for (const q of queries) {
-    const hit = input.force === true ? undefined : cache.get(metricCacheKey(scope, win.start, win.end, q))
+    const hit = input.force === true ? undefined : cache.get(metricCacheKey(scope, win.startSec, win.endSec, q))
     if (hit !== undefined && now - hit.at < CACHE_TTL_MS) found.set(q.key, hit.series)
     else missing.push(q)
   }
 
   let calls = 0
   for (const chunk of chunkQueries(missing, MAX_METRICS_PER_CALL)) {
-    const outcome = await fetchChunk(chunk, win.start, win.end, input)
+    const outcome = await fetchChunk(chunk, win.startSec, win.endSec, input)
     if (!outcome.ok) return outcome
     calls += 1
     for (const series of outcome.value) found.set(series.key, series)
@@ -420,7 +420,7 @@ export async function getMetricData(
   for (const q of missing) {
     const series = found.get(q.key)
     if (series === undefined) continue
-    cache.set(metricCacheKey(scope, win.start, win.end, q), { at: now, series })
+    cache.set(metricCacheKey(scope, win.startSec, win.endSec, q), { at: now, series })
   }
   if (missing.length > 0) pruneCache(now)
 

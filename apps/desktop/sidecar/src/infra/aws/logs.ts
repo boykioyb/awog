@@ -247,7 +247,28 @@ export function toEpochSeconds(ms: number): number {
   return Math.floor(ms / 1000)
 }
 
-export type WindowCheck = { ok: true; start: number; end: number } | { ok: false; error: string }
+/**
+ * Cửa sổ đã kiểm, trả về CẢ HAI ĐƠN VỊ và gọi tên chúng ra.
+ *
+ * ⚠ ĐÂY LÀ MỘT LỖI CÓ THẬT, KHÔNG PHẢI PHÒNG XA. Hai API của CloudWatch Logs đo
+ * thời gian bằng hai đơn vị khác nhau, và tài liệu của chính AWS CLI nói vậy:
+ *
+ *   · `logs start-query` (Insights)  — `--start-time (long)`: **GIÂY** từ epoch.
+ *   · `logs filter-log-events`       — `--start-time (long)`: **MILI-GIÂY** từ epoch.
+ *   · `cloudwatch get-metric-data`   — `--start-time (timestamp)`: giây / ISO-8601.
+ *
+ * Bản trước trả đúng một cặp `start`/`end` theo GIÂY, và `tailWindow` dùng thẳng
+ * cặp đó cho `filter-log-events`. Hệ quả đo được: một cửa sổ "1 giờ gần đây" của
+ * 2026-09-17 bị gửi đi thành `1789...` và AWS đọc nó là mili-giây, tức
+ * **21-01-1970** — nên màn "Dòng mới nhất" LUÔN trả 0 dòng dù CloudWatch có log.
+ * Không có lỗi nào hiện ra: cửa sổ hợp lệ, chỉ là cửa sổ của năm 1970.
+ *
+ * Tên `start`/`end` trần không mang đơn vị nên không có cách nào đọc ra sai ở call
+ * site. Hai tên có hậu tố thì chọn nhầm là nhìn thấy được.
+ */
+export type WindowCheck =
+  | { ok: true; startSec: number; endSec: number; startMs: number; endMs: number }
+  | { ok: false; error: string }
 
 /** Cửa sổ thời gian phải nằm trong quá khứ và không dài quá trần. */
 export function checkWindow(startMs: number, endMs: number, now = Date.now()): WindowCheck {
@@ -258,7 +279,13 @@ export function checkWindow(startMs: number, endMs: number, now = Date.now()): W
   if (endMs - startMs > MAX_WINDOW_SECONDS * 1000) return { ok: false, error: 'WINDOW_TOO_LONG' }
   // Cho phép lệch đồng hồ 5 phút, nhưng không cho cửa sổ nằm hẳn ở tương lai.
   if (startMs > now + 5 * 60_000) return { ok: false, error: 'WINDOW_IN_FUTURE' }
-  return { ok: true, start: toEpochSeconds(startMs), end: toEpochSeconds(endMs) }
+  return {
+    ok: true,
+    startSec: toEpochSeconds(startMs),
+    endSec: toEpochSeconds(endMs),
+    startMs: Math.round(startMs),
+    endMs: Math.round(endMs),
+  }
 }
 
 export function checkLogGroups(names: readonly string[]): { ok: true } | { ok: false; error: string } {
@@ -567,8 +594,9 @@ export async function startInsightsQuery(input: StartQueryInput): Promise<LogsOu
   // Một cờ LẶP cho mỗi group: tên group có thể bắt đầu bằng `-` (không thực tế,
   // nhưng) và dạng `=` khoá luôn việc argparse ăn nhầm token tiếp theo.
   for (const g of input.logGroups) args.push(flagValue('--log-group-names', g))
-  args.push(flagValue('--start-time', String(window.start)))
-  args.push(flagValue('--end-time', String(window.end)))
+  // `start-query` đo bằng GIÂY — xem bảng đơn vị ở `WindowCheck`.
+  args.push(flagValue('--start-time', String(window.startSec)))
+  args.push(flagValue('--end-time', String(window.endSec)))
   args.push(flagValue('--query-string', input.query.trim()))
   args.push(flagValue('--limit', String(limit)))
 
@@ -721,8 +749,10 @@ export async function tailWindow(input: TailInput): Promise<LogsOutcome<{ events
   // Thu hẹp về một stream nếu có (tầng group → stream → event). Bỏ trống thì
   // `filter-log-events` gộp mọi stream — chính là lối "Tất cả stream".
   if (stream) args.push(flagValue('--log-stream-names', stream))
-  args.push(flagValue('--start-time', String(window.start)))
-  args.push(flagValue('--end-time', String(window.end)))
+  // `filter-log-events` đo bằng MILI-GIÂY — khác `start-query` ngay bên trên, và
+  // chính chỗ này từng gửi giây, khiến màn "Dòng mới nhất" luôn rỗng.
+  args.push(flagValue('--start-time', String(window.startMs)))
+  args.push(flagValue('--end-time', String(window.endMs)))
   args.push(flagValue('--limit', String(limit)))
   // Pattern rỗng = mọi dòng, nên KHÔNG truyền cờ khi rỗng (CloudWatch từ chối
   // `--filter-pattern=` rỗng ở một số phiên bản, và "không lọc" là mặc định).
