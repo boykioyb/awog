@@ -57,7 +57,14 @@ export function windowEquals(a: InfraWindow, b: InfraWindow): boolean {
 // ── datetime-local <-> ms (tab Absolute) ─────────────────────────────────────
 // `<input type="datetime-local">` nhận/đưa chuỗi GIỜ ĐỊA PHƯƠNG `YYYY-MM-DDTHH:mm`.
 
-/** ms → chuỗi cho `datetime-local` (giờ địa phương, tới phút). */
+/**
+ * ms → chuỗi cho `datetime-local` (giờ địa phương, tới phút).
+ *
+ * `toISOString()` trả giờ UTC, nên phép dịch trước một khoảng bằng ĐÚNG offset tại
+ * thời điểm `ms` là thứ khử lệch — bỏ phép dịch đi thì chuỗi lệch đúng bằng múi giờ
+ * của người dùng. Lấy offset tại `ms` (không phải tại `Date.now()`) nên mốc nằm bên
+ * kia một lần đổi giờ DST vẫn đúng.
+ */
 export function toLocalInput(ms: number): string {
   const d = new Date(ms - new Date(ms).getTimezoneOffset() * 60_000)
   return d.toISOString().slice(0, 16)

@@ -416,14 +416,6 @@ export function formatAxisTime(ms: number, windowSeconds: number): string {
   return `${dd}/${mo} ${hh}:${mm}`
 }
 
-/** `datetime-local` là giờ ĐỊA PHƯƠNG không kèm múi — tự dựng chuỗi, đừng dùng
- *  `toISOString()` (nó trả UTC và lệch đúng bằng offset của người dùng). */
-export function toLocalInput(ms: number): string {
-  const d = new Date(ms)
-  const p = (n: number): string => String(n).padStart(2, '0')
-  return `${String(d.getFullYear())}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
-}
-
 /** Khoảng dài bao nhiêu, viết bằng giờ/ngày — dùng ở dòng "đang xem …". */
 export function formatSpanSeconds(seconds: number): string {
   if (seconds < 3600) return `${String(Math.round(seconds / 60))}m`
