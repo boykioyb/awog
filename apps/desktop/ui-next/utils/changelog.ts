@@ -30,6 +30,61 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.37.0',
+    date: '2026-09-20',
+    highlight: {
+      en: 'A new Monitor screen answers "what is this machine actually doing". It shows which processes are burning CPU, GPU and memory, rolls them up per session so you can see which conversation is the expensive one, finds leftover processes from an earlier run, and — on a second tab — shows where your disk space went, with a safe way to reclaim it into the Trash. It can watch the whole machine, or a server at the other end of an SSH connection, not just AWOG itself.',
+      vi: 'Màn Giám sát mới trả lời câu "máy này đang thật sự làm gì". Nó cho thấy tiến trình nào đang ngốn CPU, GPU và bộ nhớ, gom lại theo từng phiên để bạn biết cuộc trò chuyện nào là cái đắt, tìm ra tiến trình còn sót từ lần chạy trước, và — ở tab thứ hai — cho thấy dung lượng đĩa đã đi đâu, kèm một cách dọn an toàn bằng Thùng rác. Nó xem được cả máy, hoặc máy chủ ở đầu kia một kết nối SSH, chứ không chỉ riêng AWOG.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'A new Monitor screen. CPU, GPU and memory per process, with colours that mean something — they come from your real core count and installed memory, not a fixed number. Group the list by app to see one row per application, sort by any column, and stop a process (or a whole app) from the same row.',
+        vi: 'Màn Giám sát mới. CPU, GPU và bộ nhớ theo từng tiến trình, với màu sắc có nghĩa thật — chúng suy từ số lõi và dung lượng RAM thật của máy bạn, không phải một con số cố định. Gom danh sách theo ứng dụng để mỗi ứng dụng một hàng, sắp xếp theo cột bất kỳ, và dừng một tiến trình (hoặc cả ứng dụng) ngay tại hàng đó.',
+      },
+      {
+        kind: 'added',
+        en: 'See the cost of a conversation. Processes are rolled up per session, so an expensive session is visible as one number instead of a dozen anonymous rows. When a session shares a process with others, it says so plainly rather than claiming numbers that are not its own.',
+        vi: 'Nhìn ra cái giá của một cuộc trò chuyện. Tiến trình được gom theo phiên, nên một phiên tốn tài nguyên hiện ra thành một con số thay vì cả tá hàng vô danh. Khi một phiên dùng chung tiến trình với phiên khác, nó nói thẳng điều đó thay vì nhận con số không phải của mình.',
+      },
+      {
+        kind: 'added',
+        en: 'Find out where your disk went. The Disk tab measures your drives and a list of known junk folders the moment you open it, sorted largest first, and tells you what you actually lose by deleting each one. Scan any folder in depth with real progress, walk into it level by level, and move what you do not need to the Trash — where you can still get it back.',
+        vi: 'Biết dung lượng đĩa đã đi đâu. Tab Đĩa đo ổ đĩa và một danh sách thư mục rác đã biết ngay khi bạn mở tab, sắp theo dung lượng giảm dần, và nói rõ bạn mất gì khi xoá từng mục. Quét sâu thư mục bất kỳ với tiến độ thật, lần xuống từng cấp, và bỏ thứ không cần vào Thùng rác — nơi bạn vẫn lấy lại được.',
+      },
+      {
+        kind: 'added',
+        en: 'AWOG tells you when something goes wrong on its own. It notices processes left running from an earlier AWOG session and a process stuck at high CPU for minutes — the mark of a spin, not of a build. You choose the thresholds, and each alert speaks once until the situation actually changes.',
+        vi: 'AWOG tự báo khi có gì đó không ổn. Nó phát hiện tiến trình còn chạy từ lần mở AWOG trước, và tiến trình kẹt ở mức CPU cao suốt nhiều phút — dấu hiệu của vòng lặp chạy hoài, không phải của một lượt build. Ngưỡng do bạn chọn, và mỗi cảnh báo chỉ nói một lần cho tới khi tình hình thật sự thay đổi.',
+      },
+      {
+        kind: 'added',
+        en: 'Watch more than this machine. The same screen can measure your whole computer, or the server at the other end of an SSH connection you already have open.',
+        vi: 'Xem được nhiều hơn cái máy này. Cùng một màn hình đo được cả máy tính của bạn, hoặc máy chủ ở đầu kia một kết nối SSH bạn đang mở sẵn.',
+      },
+      {
+        kind: 'improved',
+        en: 'A group of sessions now looks like a group. A parent and its sub-sessions sit inside one tinted block joined by a branch line, instead of being told apart by indentation alone.',
+        vi: 'Một nhóm phiên giờ nhìn ra là một nhóm. Phiên cha và các phiên con nằm trong cùng một khối có nền nhạt, nối với nhau bằng nhánh cây, thay vì chỉ phân biệt bằng thụt lề.',
+      },
+      {
+        kind: 'added',
+        en: 'Right-click a parent session to lay all of its sub-sessions out as a grid — every conversation running at once, side by side, each one still typeable.',
+        vi: 'Chuột phải lên một phiên cha để bày toàn bộ phiên con ra dạng lưới — mọi cuộc trò chuyện đang chạy nằm cạnh nhau, và vẫn nhắn được vào từng cái.',
+      },
+      {
+        kind: 'improved',
+        en: 'A message sent from one session to another now reads as a message. It arrives as a card naming where it came from, instead of the raw wrapper the agent needs; if the body tries to imitate that wrapper, the card marks it suspicious and says the agent was told to ignore it.',
+        vi: 'Tin nhắn gửi từ phiên này sang phiên khác giờ đọc ra là một tin nhắn. Nó tới dưới dạng một thẻ nói rõ đến từ đâu, thay vì lớp bọc thô mà agent cần; nếu nội dung tin cố giả dạng lớp bọc đó, thẻ sẽ đánh dấu "đáng ngờ" và nói rằng agent đã được dặn bỏ qua.',
+      },
+      {
+        kind: 'improved',
+        en: 'The SSH and infrastructure approval prompts now offer "Always allow" as well. It lasts for the current session only and is never written to disk — the card says exactly that, and locks the scope selector so it cannot promise otherwise.',
+        vi: 'Hộp duyệt SSH và hạ tầng giờ cũng có nút "Cho phép luôn". Nó chỉ có hiệu lực trong phiên hiện tại và không bao giờ ghi xuống đĩa — thẻ nói đúng như vậy, và khoá bộ chọn phạm vi lại để không hứa điều gì khác.',
+      },
+    ],
+  },
+  {
     version: '0.36.0',
     date: '2026-09-18',
     highlight: {
