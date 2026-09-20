@@ -249,6 +249,19 @@ class SessionManager {
     return [...this.sessions.values()].map((m) => summarizeHeader(m.header)).sort(byUpdatedDesc)
   }
 
+  // sdkSessionId → phiên. Tiến trình CLI của Claude Agent SDK mang khoá resume
+  // trên dòng lệnh (`--resume=<uuid>`), nên đây là cầu duy nhất để màn giám sát
+  // tài nguyên quy một tiến trình hệ điều hành về đúng phiên. Dựng từ bản đồ ấm,
+  // không đọc đĩa — nó bị gọi mỗi nhịp poll.
+  getSdkSessionIndex(): Map<string, { id: string; title: string }> {
+    const index = new Map<string, { id: string; title: string }>()
+    for (const m of this.sessions.values()) {
+      const sdkId = m.header.sdkSessionId
+      if (sdkId) index.set(sdkId, { id: m.header.id, title: m.header.title })
+    }
+    return index
+  }
+
   // Full session with messages. Lazy-loads the transcript on first access.
   async getSession(id: string): Promise<Session | null> {
     const m = this.sessions.get(id)

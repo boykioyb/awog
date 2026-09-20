@@ -287,5 +287,19 @@
   "settings.workspace.linkOpen.desc": "Link web đi đâu khi bạn bấm. ⌘-click thì luôn mở bằng browser của bạn.",
   "settings.workspace.linkOpen.ask": "Hỏi mỗi lần",
   "settings.workspace.linkOpen.app": "Trình duyệt của AWOG",
-  "settings.workspace.linkOpen.external": "Browser của tôi"
+  "settings.workspace.linkOpen.external": "Browser của tôi",
+  "settings.notifications.resources.name": "Cảnh báo tài nguyên",
+  "settings.notifications.resources.desc": "Đo CPU/RAM mỗi phút và báo khi có tiến trình bất thường. Một lượt đo là một lệnh `ps`, gần như không tốn gì.",
+  "settings.notifications.resources.orphans.name": "Tiến trình AWOG sót lại",
+  "settings.notifications.resources.orphans.desc": "Tiến trình còn sống từ một lần chạy AWOG trước đó. Chúng vẫn ăn CPU và RAM cho tới khi bị dừng.",
+  "settings.notifications.resources.cpu.name": "CPU cao kéo dài",
+  "settings.notifications.resources.cpu.desc": "Một tiến trình giữ mức CPU cao liên tục — dấu hiệu vòng lặp chạy tít, không phải một cú build.",
+  "settings.notifications.resources.cpuThreshold.name": "Ngưỡng CPU (%)",
+  "settings.notifications.resources.cpuThreshold.desc": "100% = một lõi. Báo khi một tiến trình vượt mức này.",
+  "settings.notifications.resources.memory.name": "RAM vượt ngưỡng",
+  "settings.notifications.resources.memory.desc": "Tổng RAM của mọi tiến trình AWOG. Mặc định tắt: ngưỡng đúng phụ thuộc vào máy của bạn.",
+  "settings.notifications.resources.memoryThreshold.name": "Ngưỡng RAM (GB)",
+  "settings.notifications.resources.memoryThreshold.desc": "Báo khi tổng RAM của AWOG vượt mức này.",
+  "settings.notifications.resources.cpuMinutes.name": "Giữ liên tục (phút)",
+  "settings.notifications.resources.cpuMinutes.desc": "Phải vượt ngưỡng suốt ngần này phút mới báo — để một cú build không kích hoạt."
 }

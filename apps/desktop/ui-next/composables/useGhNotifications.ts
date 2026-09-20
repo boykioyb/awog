@@ -19,6 +19,11 @@
 // SoC: no fs / no gh here; the sidecar owns the CLI. This orchestrates timing,
 // dedupe and presentation only.
 import { computed, ref, watch } from 'vue'
+import {
+  ensureNotificationPermission,
+  notificationsSupported,
+  presentNotification,
+} from '~/composables/useAppNotify'
 import { githubSlugFromRemote } from '~/components/project/data'
 import { useSidecar } from '~/composables/useSidecar'
 import {
@@ -180,67 +185,18 @@ export function openNotification(n: GhNotification): void {
   if (n.url) void useLinkOpen().openLink(n.url)
 }
 
-const notificationsSupported = (): boolean =>
-  typeof window !== 'undefined' && 'Notification' in window
-
-// Ask once, on demand — called when the user picks a delivery mode that needs the
-// OS (never on app boot: an unprompted permission dialog at startup is hostile).
-export async function ensureNotificationPermission(): Promise<NotificationPermission> {
-  if (!notificationsSupported()) return 'denied'
-  if (Notification.permission !== 'default') return Notification.permission
-  try {
-    return await Notification.requestPermission()
-  } catch {
-    return 'denied'
-  }
-}
-
-// Can the OS path actually deliver right now? Split out because `present()` needs
-// the answer to decide whether suppressing the toast would leave NOTHING visible.
-const osDeliverable = (): boolean =>
-  notificationsSupported() && Notification.permission === 'granted'
-
-// OS notification. `delivery` decides WHEN: 'native' fires always (the toast is
-// suppressed, so something must show even with the app in front); 'both' keeps
-// the original rule — only when the window isn't in front, where the toast alone
-// would be invisible. Never prompts here; that happens in Settings.
-function nativeNotify(n: GhNotification): void {
-  const settings = useSettingsStore()
-  const delivery = settings.notifications.delivery
-  if (delivery === 'toast') return
-  if (delivery === 'both' && !document.hidden && document.hasFocus()) return
-  if (!osDeliverable()) return
-  try {
-    const note = new Notification(n.repo, { body: toastText(n), tag: `gh-${n.id}` })
-    note.onclick = () => {
-      try {
-        window.focus()
-      } catch {
-        /* the OS may refuse; the route below still runs */
-      }
-      openNotification(n)
-    }
-  } catch {
-    // Notification construction can throw in locked-down webviews.
-  }
-}
-
-// The one presentation path. `delivery === 'native'` means the user asked for OS
-// notifications INSTEAD of in-app ones — but only when the OS can actually deliver:
-// if permission was never granted (or the webview has no Notification API), keeping
-// the toast suppressed would drop the notification entirely, which is exactly how
-// this feature looked broken.
+// Kênh gửi (toast / hệ điều hành / cả hai + luật focus + luật dự phòng) nay nằm ở
+// `useAppNotify` — dùng chung với cảnh báo CI/CD và cảnh báo tài nguyên. ⚠ Tiêu đề
+// thông báo hệ điều hành ở đây là TÊN REPO, dòng nội dung mới là văn bản toast.
 function present(n: GhNotification): void {
-  const nativeOnly = useSettingsStore().notifications.delivery === 'native' && osDeliverable()
-  if (!nativeOnly) {
-    useToast().add({
-      title: toastText(n),
-      color: 'info',
-      icon: n.type === 'PullRequest' ? 'fork' : 'alert',
-      onClick: () => openNotification(n),
-    })
-  }
-  nativeNotify(n)
+  presentNotification({
+    text: toastText(n),
+    tag: `gh-${n.id}`,
+    color: 'info',
+    icon: n.type === 'PullRequest' ? 'fork' : 'alert',
+    onClick: () => openNotification(n),
+    nativeTitle: n.repo,
+  })
 }
 
 async function poll(): Promise<void> {

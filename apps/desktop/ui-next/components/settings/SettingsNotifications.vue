@@ -54,6 +54,62 @@
     >
       <SettingsTog v-model="cicdEnabled" />
     </SettingsField>
+
+    <SettingsField
+      :name="t('settings.notifications.resources.name')"
+      :desc="t('settings.notifications.resources.desc')"
+    >
+      <SettingsTog v-model="resourcesEnabled" />
+    </SettingsField>
+
+    <!-- Ngưỡng chỉ hiện khi nguồn đang bật: tắt rồi mà vẫn bày bốn ô số là mời
+         người dùng chỉnh một thứ không chạy. -->
+    <template v-if="resourcesEnabled">
+      <SettingsField
+        :name="t('settings.notifications.resources.orphans.name')"
+        :desc="t('settings.notifications.resources.orphans.desc')"
+      >
+        <SettingsTog v-model="resOrphans" />
+      </SettingsField>
+
+      <SettingsField
+        :name="t('settings.notifications.resources.cpu.name')"
+        :desc="t('settings.notifications.resources.cpu.desc')"
+      >
+        <SettingsTog v-model="resHighCpu" />
+      </SettingsField>
+
+      <SettingsField
+        v-if="resHighCpu"
+        :name="t('settings.notifications.resources.cpuThreshold.name')"
+        :desc="t('settings.notifications.resources.cpuThreshold.desc')"
+      >
+        <SettingsNumber v-model="resCpuPercent" :min="10" :max="1000" :step="10" />
+      </SettingsField>
+
+      <SettingsField
+        v-if="resHighCpu"
+        :name="t('settings.notifications.resources.cpuMinutes.name')"
+        :desc="t('settings.notifications.resources.cpuMinutes.desc')"
+      >
+        <SettingsNumber v-model="resCpuMinutes" :min="1" :max="120" :step="1" />
+      </SettingsField>
+
+      <SettingsField
+        :name="t('settings.notifications.resources.memory.name')"
+        :desc="t('settings.notifications.resources.memory.desc')"
+      >
+        <SettingsTog v-model="resHighMemory" />
+      </SettingsField>
+
+      <SettingsField
+        v-if="resHighMemory"
+        :name="t('settings.notifications.resources.memoryThreshold.name')"
+        :desc="t('settings.notifications.resources.memoryThreshold.desc')"
+      >
+        <SettingsNumber v-model="resMemoryGb" :min="1" :max="128" :step="1" />
+      </SettingsField>
+    </template>
   </div>
 </template>
 
@@ -84,6 +140,51 @@ const deliveryDesc = computed<string>(() => {
   if (nativeProbe.value === 'ok') return t('settings.notifications.delivery.granted')
   return t('settings.notifications.delivery.desc')
 })
+const resources = computed(() => store.notifications.resources)
+
+const resourcesEnabled = computed<boolean>({
+  get: () => resources.value.enabled,
+  set: (v) => {
+    resources.value.enabled = v
+  },
+})
+const resOrphans = computed<boolean>({
+  get: () => resources.value.orphans,
+  set: (v) => {
+    resources.value.orphans = v
+  },
+})
+const resHighCpu = computed<boolean>({
+  get: () => resources.value.highCpu,
+  set: (v) => {
+    resources.value.highCpu = v
+  },
+})
+const resHighMemory = computed<boolean>({
+  get: () => resources.value.highMemory,
+  set: (v) => {
+    resources.value.highMemory = v
+  },
+})
+const resCpuPercent = computed<number>({
+  get: () => resources.value.cpuPercent,
+  set: (v) => {
+    resources.value.cpuPercent = v
+  },
+})
+const resCpuMinutes = computed<number>({
+  get: () => resources.value.cpuMinutes,
+  set: (v) => {
+    resources.value.cpuMinutes = v
+  },
+})
+const resMemoryGb = computed<number>({
+  get: () => resources.value.memoryGb,
+  set: (v) => {
+    resources.value.memoryGb = v
+  },
+})
+
 const delivery = computed<string>({
   get: () => store.notifications.delivery,
   set: (value) => {
@@ -171,3 +272,5 @@ const cicdEnabled = computed<boolean>({
   set: (value) => (store.notifications.cicdEvents = value),
 })
 </script>
+
+<style scoped></style>

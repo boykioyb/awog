@@ -1,7 +1,8 @@
 <template>
   <div
     class="li"
-    :class="[{ on: active, sel: selected, unread: session.unread }, statusClass]"
+    :class="[{ on: active, sel: selected, unread: session.unread }, statusClass, groupClass]"
+    :style="railStyle"
     :data-sid="session.id"
     @click="onRowClick"
     @contextmenu.prevent="onCtx"
@@ -190,6 +191,11 @@ const props = defineProps<{
   collapsed?: boolean
   // Số con cháu đang bị giấu khi hàng này thu gọn.
   descendants?: number
+  // Hàng này thuộc một CỤM (phiên cha có con, hoặc một phiên con) ⇒ vẽ nền nhóm.
+  // Ba cờ do useSessionTree tính; mọi chế độ xem khác không truyền nên không đổi gì.
+  inGroup?: boolean
+  groupTop?: boolean
+  groupBottom?: boolean
 }>()
 const emit = defineEmits<{
   // Right-click → ask the parent to open the session context menu at the cursor.
@@ -204,6 +210,34 @@ const INDENT_PER_LEVEL = 14
 const indentStyle = computed(() => ({
   paddingLeft: `${Math.min(props.depth ?? 0, 6) * INDENT_PER_LEVEL}px`,
 }))
+
+// ⚠ KHÔNG đặt tên `grp`: prototype.css đã có một class TOÀN CỤC tên đó cho header
+// của các chế độ gom nhóm khác, và nó mang `.grp + .grp{margin-top:11px}` (dòng 513).
+// Hai hàng liền nhau trong cụm đều dính class ấy ⇒ mỗi hàng bị đẩy xuống 11px và cụm
+// vỡ thành từng mảnh rời — đúng cái khe mà `margin-bottom: 0` vừa khử xong. Lỗi thật,
+// người dùng chụp màn hình báo. Tiền tố `nest-` không trùng gì trong repo.
+const groupClass = computed(() => ({
+  nest: !!props.inGroup,
+  'nest-top': !!props.groupTop,
+  'nest-bot': !!props.groupBottom,
+  'nest-child': !!props.inGroup && (props.depth ?? 0) > 0,
+}))
+
+// Toạ độ X của ĐƯỜNG RAY nối cha với các con, tính cho khớp TÂM nút xoè của hàng cha:
+// 10px padding trái của `.li` + 7px nửa nút xoè (rộng 14) = 17px ở tầng 1, cộng thêm
+// một bậc thụt lề cho mỗi tầng sâu hơn. Tính bằng số chứ không ghim hằng số trong CSS
+// vì cả ba con số trên đều nằm ở chỗ khác và sẽ trôi khỏi nhau.
+const LI_PAD_X = 10
+const TWISTY_HALF = 7
+const railStyle = computed(() => {
+  const depth = Math.min(props.depth ?? 0, 6)
+  // Chỉ hàng CON vẽ đường kẻ. Hàng cha từng thả một đoạn thân cây xuống cho khớp với
+  // con, nhưng đoạn đó chạy dọc ngay cạnh tiêu đề của chính nó và trông rối — user bác.
+  // Bỏ đi không mất mạch: đoạn dọc của con bắt đầu ngay mép trên hàng con, mà các hàng
+  // trong cụm dính liền nhau nên nó vẫn như chui ra từ dưới hàng cha.
+  if (!props.inGroup || depth < 1) return undefined
+  return { '--grp-rail-x': `${LI_PAD_X + (depth - 1) * INDENT_PER_LEVEL + TWISTY_HALF}px` }
+})
 
 const { t } = useI18n()
 const { STATUS_COLOR } = useSessionsData()
@@ -368,6 +402,88 @@ input.ttl {
 }
 .li.unread:not(.on):not(.sel):hover {
   background: var(--bgHover);
+}
+
+/* ── Cụm nhóm trong chế độ xem "Nhóm" ────────────────────────────────────────
+   Nhóm đọc được thành MỘT khối: nền accent rất nhạt ôm cả cha lẫn con, bo góc ở
+   hai đầu, cộng một đường ray dọc nối chúng lại.
+
+   Nền 6% (không phải xám đặc): nền xám cho một vùng lớn làm cột danh sách trông
+   như bị disable, và `--bgActive` đã dành cho thứ khác. `:not(.on):not(.sel)` là
+   BẮT BUỘC — rule scoped mang thêm một lớp attribute nên nó thắng `.li.on` toàn
+   cục, và nếu không loại trừ thì hàng đang chọn trong nhóm mất hẳn accent-tint.
+   Cặp `:hover` đi kèm cũng vì lý do đó (cùng khuôn với `.li.unread` bên dưới). */
+.li.nest:not(.on):not(.sel) {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.li.nest:not(.on):not(.sel):hover {
+  background: var(--bgHover);
+}
+/* Các hàng trong cụm dính liền nhau: khe 3px giữa hàng sẽ cắt nền thành từng vạch
+   rời và phá đúng cái cảm giác "một khối". Khe chỉ trả lại DƯỚI hàng cuối cụm.
+   `margin-top: 0` là bắt buộc chứ không thừa: `.li` không tự đặt margin-top, nhưng
+   một class trùng tên toàn cục đã từng bơm 11px vào đây (xem chú thích ở `groupClass`)
+   — khai tường minh thì lần sau có ai đặt lại cũng không lọt qua. */
+.li.nest {
+  margin-top: 0;
+  margin-bottom: 0;
+  border-radius: 0;
+}
+.li.nest.nest-top {
+  border-top-left-radius: var(--r-sm);
+  border-top-right-radius: var(--r-sm);
+}
+.li.nest.nest-bot {
+  border-bottom-left-radius: var(--r-sm);
+  border-bottom-right-radius: var(--r-sm);
+  margin-bottom: 3px;
+}
+/* ── Nhánh cây nối cha với từng hàng con ──────────────────────────────────────
+   Khuôn cây thư mục: thân dọc thả từ nút xoè của hàng cha xuống, tới mỗi hàng con thì
+   bo góc rẽ phải vào đúng chấm trạng thái của nó. Bản trước chỉ là một vạch dọc thẳng
+   chạy suốt — nó nói được "mấy hàng này cùng một cụm" nhưng không nói được "hàng NÀY
+   treo vào hàng KIA".
+
+   Y của khuỷu = tâm dòng tiêu đề: 9px padding-top của `.li` (prototype.css:208) + nửa
+   hộp dòng. Lấy `--lh-md` chứ không phải số cố định vì hộp dòng co giãn theo cỡ chữ ở
+   Settings → Appearance, mà khuỷu thì phải bám theo chữ.
+
+   ⚠ Hàng CHA không vẽ gì cả. Bản đầu nó thả một đoạn thân cây từ nút xoè xuống hết
+   hàng, nhưng đoạn đó chạy dọc sát tiêu đề của chính phiên cha và trông rối — user bác.
+   Bỏ đi vẫn liền mạch: đoạn dọc của hàng con bắt đầu ngay mép trên của nó, mà các hàng
+   trong cụm đã dính liền nhau nên đường kẻ trông như chui ra từ dưới hàng cha. */
+.li.nest-child {
+  --nest-elbow: calc(9px + var(--lh-md) / 2);
+}
+/* Thân dọc nối xuống hàng con KẾ TIẾP. Hàng con CUỐI không có — một đường kẻ thõng
+   xuống dưới mà không nối vào đâu là rác thị giác.
+
+   Nối đúng tại khuỷu, không cần chờm lên: góc VUÔNG nên cạnh dọc của khuỷu chạy trọn
+   xuống tới `--nest-elbow` rồi mới gãy ngang. (Bản bo góc trước đó phải bắt đầu sớm
+   hơn một bán kính, vì trong khoảng cong thân cây bị khuyết một khấc.) */
+.li.nest-child:not(.nest-bot)::after {
+  content: '';
+  position: absolute;
+  left: var(--grp-rail-x);
+  top: var(--nest-elbow);
+  bottom: 0;
+  width: 1px;
+  background: var(--accentBorder);
+}
+/* Khuỷu rẽ vào hàng con: dọc từ mép trên hàng xuống khuỷu rồi gãy VUÔNG sang phải,
+   dừng đúng mép trái chấm trạng thái (17px + 7px = 24px = `.li` padding 10 + thụt lề
+   14). Vẫn vẽ bằng border của MỘT hộp (trái + dưới) chứ không phải hai vạch rời: một
+   hộp thì hai cạnh tự gặp nhau đúng góc, hai vạch thì phải tự căn và lệch nửa pixel là
+   thấy ngay. Góc để vuông — không `border-*-radius` — theo yêu cầu. */
+.li.nest-child::before {
+  content: '';
+  position: absolute;
+  left: var(--grp-rail-x);
+  top: 0;
+  width: 7px;
+  height: var(--nest-elbow);
+  border-left: 1px solid var(--accentBorder);
+  border-bottom: 1px solid var(--accentBorder);
 }
 
 /* Nút xoè/thu của chế độ xem "Nhóm". Mũi tên chỉ XUỐNG khi đang xoè và sang PHẢI khi

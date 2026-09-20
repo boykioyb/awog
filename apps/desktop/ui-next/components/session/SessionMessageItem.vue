@@ -26,6 +26,13 @@
         <span class="ucmd-name">/{{ message.command.name }}</span>
         <span v-if="message.command.args" class="ucmd-args">{{ message.command.args }}</span>
       </span>
+      <!-- Tin đến từ NGOÀI phiên (phiên khác gửi, người dùng chuyển tiếp, PR đang
+           theo dõi): thân tin nằm trong một khối hàng rào kèm lời dẫn dành cho model.
+           In nguyên văn thì người đọc phải lội qua cả bộ khung + một thẻ nonce 48 bit
+           mà với mắt người không mang thông tin nào. -->
+      <template v-else-if="fenced">
+        <SessionFencedMessage v-for="(f, k) in fenced" :key="k" :msg="f" />
+      </template>
       <template v-else>
         <SessionLinkedText :text="message.text" />
       </template>
@@ -188,6 +195,7 @@ import {
   getPreviewText,
   blockRole,
 } from '~/utils/session-turns'
+import { parseFencedMessages } from '~/utils/fenced-message'
 
 const props = defineProps<{ message: SessionMessage; fallbackWhen: string; msgIndex: number }>()
 const { t } = useI18n()
@@ -206,6 +214,13 @@ const { publishReport: publishAsReport } = useInfraReportPublish()
 // yields (all done / turn ended). `inlineTodoStep` is that block (or null while it's
 // still in the banner) — matched by reference below so only it shows inline.
 const { inlineTodoStep } = useSessionTodo(() => store.active)
+
+// Tin hộp thư: `null` với mọi message user tự gõ (đường thường), mảng khối khi TOÀN
+// BỘ text là khối hàng rào. Parser fail closed nên chỉ cần null-check ở đây — còn sót
+// một chữ ngoài hàng rào là nó trả null và bubble in nguyên văn như cũ.
+const fenced = computed(() =>
+  props.message.role === 'user' ? parseFencedMessages(props.message.text) : null,
+)
 
 // Assistant-bubble pref (Settings → Sessions): wrap the reply body in an elevated
 // bubble card. Only when there's content (don't paint an empty box mid-stream).

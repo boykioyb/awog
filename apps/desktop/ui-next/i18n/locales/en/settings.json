@@ -287,5 +287,19 @@
   "settings.workspace.linkOpen.desc": "Where a web link goes when you click it. ⌘-click always uses your own browser.",
   "settings.workspace.linkOpen.ask": "Ask every time",
   "settings.workspace.linkOpen.app": "AWOG's browser",
-  "settings.workspace.linkOpen.external": "My browser"
+  "settings.workspace.linkOpen.external": "My browser",
+  "settings.notifications.resources.name": "Resource alerts",
+  "settings.notifications.resources.desc": "Measures CPU/RAM every minute and alerts on abnormal processes. One measurement is a single `ps` call — near-free.",
+  "settings.notifications.resources.orphans.name": "Leftover AWOG processes",
+  "settings.notifications.resources.orphans.desc": "Processes still alive from an earlier AWOG run. They keep consuming CPU and memory until stopped.",
+  "settings.notifications.resources.cpu.name": "Sustained high CPU",
+  "settings.notifications.resources.cpu.desc": "A process holding high CPU continuously — the mark of a spinning loop, not a build.",
+  "settings.notifications.resources.cpuThreshold.name": "CPU threshold (%)",
+  "settings.notifications.resources.cpuThreshold.desc": "100% = one core. Alert when a process goes above this.",
+  "settings.notifications.resources.memory.name": "Memory over threshold",
+  "settings.notifications.resources.memory.desc": "Total memory of all AWOG processes. Off by default: the right threshold depends on your machine.",
+  "settings.notifications.resources.memoryThreshold.name": "Memory threshold (GB)",
+  "settings.notifications.resources.memoryThreshold.desc": "Alert when AWOG's total memory goes above this.",
+  "settings.notifications.resources.cpuMinutes.name": "Sustained for (min)",
+  "settings.notifications.resources.cpuMinutes.desc": "It must stay above the threshold this long before alerting — so a build does not trigger it."
 }

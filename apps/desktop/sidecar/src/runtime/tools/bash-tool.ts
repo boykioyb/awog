@@ -12,6 +12,7 @@
 // logged with the command verbatim.
 
 import { spawn } from 'node:child_process'
+import { registerOwnedProcess, unregisterOwnedProcess } from '../../monitor/owned.js'
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { resolveBashShell, filteredShellEnv } from './shell.js'
@@ -144,12 +145,25 @@ export function createBashTool(
           ),
           windowsHide: true,
         })
+        // Màn Giám sát: lệnh của một lượt là thứ hay ngốn CPU nhất trên nhánh Pi
+        // (nơi bản thân phiên chạy trong tiến trình engine dùng chung, không tách
+        // ra được). Khai ở đây thì cả cây con của lệnh cũng được quy về phiên.
+        registerOwnedProcess({
+          pid: child.pid ?? -1,
+          kind: 'tool-shell',
+          // `bg` chỉ được runtime chat truyền vào, nên task/subagent sẽ không có
+          // sessionId — khi đó tiến trình vẫn hiện trên màn Giám sát, chỉ là nằm
+          // ở nhóm chung thay vì dưới một phiên.
+          ...(bg?.sessionId ? { sessionId: bg.sessionId } : {}),
+          label: params.command.slice(0, 80),
+        })
         let stdout = ''
         let stderr = ''
         let settled = false
         const finish = (exitCode: number | null, extra?: string): void => {
           if (settled) return
           settled = true
+          unregisterOwnedProcess(child.pid)
           clearTimeout(timer)
           // Detach the abort listener on completion. `{ once: true }` only
           // auto-removes when the event FIRES; without this, every finished

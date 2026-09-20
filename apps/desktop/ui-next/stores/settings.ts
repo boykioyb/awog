@@ -204,6 +204,33 @@ export interface NotificationSettings {
   // list` mỗi dự án, nên nó phải là lựa chọn của người dùng. Nhịp nằm trong
   // `useCicdNotify` (sàn 5 phút), không phải một ô cấu hình thứ hai ở đây.
   cicdEvents: boolean
+  // Cảnh báo tài nguyên (docs/features/activity-monitor.md §Cảnh báo).
+  resources: ResourceAlertSettings
+}
+
+/**
+ * Ngưỡng cảnh báo tài nguyên. Khác `cicdEvents` ở chỗ MẶC ĐỊNH BẬT: một lượt đo
+ * là đúng một tiến trình `ps` mỗi phút (~15ms), và ca thúc đẩy tính năng này là
+ * một sidecar mồ côi chạy 18 tiếng ở 99% CPU mà không bề mặt nào nói ra.
+ */
+export interface ResourceAlertSettings {
+  enabled: boolean
+  /** Tiến trình AWOG sót lại từ lần chạy trước. Tín hiệu mạnh, tần suất thấp. */
+  orphans: boolean
+  /** Một tiến trình ăn CPU cao LIÊN TỤC. */
+  highCpu: boolean
+  /** Ngưỡng % (100 = một lõi). */
+  cpuPercent: number
+  /** Phải kéo dài bao nhiêu phút mới báo — chặn một cú build nhất thời. */
+  cpuMinutes: number
+  /**
+   * Tổng RAM của AWOG vượt ngưỡng. MẶC ĐỊNH TẮT, khác hai cái trên: ngưỡng RAM
+   * "đúng" phụ thuộc hoàn toàn vào máy, nên nó phải là con số người dùng tự chọn
+   * chứ không phải con số chúng ta đoán hộ.
+   */
+  highMemory: boolean
+  /** Ngưỡng GB. */
+  memoryGb: number
 }
 
 // LLM used by the selection-to-translate feature (docs/features/selection-translate.md).
@@ -410,6 +437,17 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   toastPosition: 'bottom-right',
   sessionEvents: true,
   cicdEvents: false,
+  resources: {
+    enabled: true,
+    orphans: true,
+    highCpu: true,
+    // 90% của MỘT lõi, giữ trong 5 phút. Đủ cao để một cú `pnpm build` hay một
+    // lượt typecheck không bắn thông báo, đủ thấp để bắt vòng lặp chạy tít.
+    cpuPercent: 90,
+    cpuMinutes: 5,
+    highMemory: false,
+    memoryGb: 4,
+  },
 }
 
 const DEFAULT_CONTEXT: ContextSettings = {
@@ -668,6 +706,10 @@ export const useSettingsStore = defineStore('settings', () => {
       ? { sessionEvents: legacy.sessions.notificationsEnabled }
       : {}),
     ...persisted.notifications,
+    // `resources` là object lồng: spread ở trên thay CẢ nhánh, nên một blob đã
+    // lưu từ trước bản này (không có khoá `resources`) hoặc lưu từ một bản thiếu
+    // khoá con sẽ mất mặc định. Merge riêng một tầng.
+    resources: { ...DEFAULT_NOTIFICATIONS.resources, ...persisted.notifications?.resources },
   })
   const translate = reactive<TranslateSettings>({ ...DEFAULT_TRANSLATE, ...persisted.translate })
   const context = reactive<ContextSettings>({ ...DEFAULT_CONTEXT, ...persisted.context })
@@ -753,7 +795,13 @@ export const useSettingsStore = defineStore('settings', () => {
     if (typeof blob.githubAccount === 'string') githubAccount.value = blob.githubAccount
     if (typeof blob.githubAutoFetchMs === 'number') githubAutoFetchMs.value = blob.githubAutoFetchMs
     if (isObj(blob.githubNotify)) Object.assign(githubNotify, blob.githubNotify)
-    if (isObj(blob.notifications)) Object.assign(notifications, blob.notifications)
+    if (isObj(blob.notifications)) {
+      // Cùng lý do với lúc hydrate: `resources` là object lồng, `Object.assign`
+      // một tầng sẽ thay CẢ nhánh và làm mất khoá con mà blob không mang theo.
+      const { resources, ...flat } = blob.notifications as Partial<NotificationSettings>
+      Object.assign(notifications, flat)
+      if (isObj(resources)) Object.assign(notifications.resources, resources)
+    }
     if (isObj(blob.translate)) Object.assign(translate, blob.translate)
     if (isObj(blob.context)) Object.assign(context, blob.context)
     if (isObj(blob.keymap)) keymap.value = { ...blob.keymap }

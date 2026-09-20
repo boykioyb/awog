@@ -46,7 +46,7 @@ import {
 } from '../../sessions/permission-rules.js'
 import { isSafeToolInputOverride, makeBeforeToolCall, makeTaskToolGate } from '../permission.js'
 import type { CanUseTool } from '../permission-types.js'
-import { parkPermissionRequest } from '../../sessions/permissions.js'
+import { clearSessionPermissions, parkPermissionRequest } from '../../sessions/permissions.js'
 import { dispatch } from '../../transport/rpc.js'
 // Import CÓ TÁC DỤNG PHỤ: đăng ký `sessions.permission` vào registry RPC để test
 // gọi được qua `dispatch` (đúng đường mà UI đi), thay vì dựng lại logic của nó.
@@ -331,7 +331,6 @@ describe('evaluatePermissionRules — session tier', () => {
   })
 })
 
-
 describe('evaluatePermissionRules — file tiers', () => {
   let home: string
   let project: string
@@ -432,7 +431,12 @@ describe('project tier lives in AWOG home, not in the repo (F1)', () => {
       JSON.stringify({ version: 1, rules: [{ rule: 'RunWorkflow', action: 'deny' }] }),
     )
     await expect(
-      evaluatePermissionRules({ toolName: 'RunWorkflow', args: {}, sessionId, projectPath: project }),
+      evaluatePermissionRules({
+        toolName: 'RunWorkflow',
+        args: {},
+        sessionId,
+        projectPath: project,
+      }),
     ).resolves.toBe('ask')
   })
 
@@ -534,7 +538,10 @@ describe('rule file integrity (F2)', () => {
   })
 
   it('preserves existing entries — including unusable ones — when appending', async () => {
-    const file = await writeUserRules([{ rule: 'Bash(rm -rf /)', action: 'deny' }, { rule: 'Bash' }])
+    const file = await writeUserRules([
+      { rule: 'Bash(rm -rf /)', action: 'deny' },
+      { rule: 'Bash' },
+    ])
     await expect(saveRuleToFile(file, rule('Bash(git status)'))).resolves.toEqual({ saved: true })
     const doc = JSON.parse(await readFile(file, 'utf8')) as { rules: { rule: string }[] }
     expect(doc.rules.map((r) => r.rule)).toEqual(['Bash(rm -rf /)', 'Bash', 'Bash(git status)'])
@@ -603,9 +610,9 @@ describe('makeBeforeToolCall — a DENY rule beats every early return (F3)', () 
   it('blocks a non-gated read tool in execute mode', async () => {
     await denyRule('Read(/home/u/.ssh/**)')
     const hook = makeBeforeToolCall(undefined, 'execute')
-    await expect(hook(toolCtx('Read', { file_path: '/home/u/.ssh/id_rsa' }))).resolves.toMatchObject(
-      { block: true },
-    )
+    await expect(
+      hook(toolCtx('Read', { file_path: '/home/u/.ssh/id_rsa' })),
+    ).resolves.toMatchObject({ block: true })
     // Không có luật khớp ⇒ tool đọc vẫn chạy thẳng, không hỏi.
     await expect(hook(toolCtx('Read', { file_path: '/home/u/notes.md' }))).resolves.toBeUndefined()
   })
@@ -613,9 +620,9 @@ describe('makeBeforeToolCall — a DENY rule beats every early return (F3)', () 
   it('blocks WebFetch — a tool the gate never prompts for', async () => {
     await denyRule('WebFetch')
     const hook = makeBeforeToolCall(undefined, 'execute')
-    await expect(
-      hook(toolCtx('WebFetch', { url: 'https://evil.example' })),
-    ).resolves.toMatchObject({ block: true })
+    await expect(hook(toolCtx('WebFetch', { url: 'https://evil.example' }))).resolves.toMatchObject(
+      { block: true },
+    )
   })
 
   it('blocks an SSH tool before sshApprovalMode auto is honoured', async () => {
@@ -629,7 +636,9 @@ describe('makeBeforeToolCall — a DENY rule beats every early return (F3)', () 
       hook(toolCtx('mcp__awogssh__ssh_exec', { host: 'box', command: 'whoami' })),
     ).resolves.toMatchObject({ block: true })
     // Tool SSH khác không bị luật này chạm tới.
-    await expect(hook(toolCtx('ssh_list_dir', { host: 'box', path: '/tmp' }))).resolves.toBeUndefined()
+    await expect(
+      hook(toolCtx('ssh_list_dir', { host: 'box', path: '/tmp' })),
+    ).resolves.toBeUndefined()
   })
 
   it('blocks a gated tool even with auto-approve on', async () => {
@@ -1205,13 +1214,15 @@ describe('ruleMatchesOverriddenInput (F13)', () => {
     expect(
       ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'git status', timeout: 500 }),
     ).toBe(true)
-    expect(
-      ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/a.ts' }),
-    ).toBe(true)
+    expect(ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/a.ts' })).toBe(
+      true,
+    )
   })
 
   it('rejects an override that changes what will actually run', () => {
-    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'rm -rf /' })).toBe(false)
+    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'rm -rf /' })).toBe(
+      false,
+    )
     expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), {})).toBe(false)
     expect(
       ruleMatchesOverriddenInput(rule('Bash(npm run dev)'), {
@@ -1364,6 +1375,81 @@ describe('sessions.permission — alwaysAllow + updatedInput (F13)', () => {
     await expect(
       dispatch('sessions.permission', { requestId, decision: 'deny' }),
     ).resolves.toMatchObject({ resolved: true })
+  })
+})
+
+// ─── Ba cổng, một thẻ: cổng SSH nhớ được "cả phiên này" ─────────────────────
+//
+// Cổng SSH không sinh LUẬT được (quyền của nó đến từ sshApprovalMode, không từ
+// allowlist chung), nhưng "không có luật" ≠ "phải hỏi lại mọi lần". Nó chào một
+// allowance sống trong bộ nhớ, và đây là đường đi đầy đủ của nó: thẻ → RPC → lời
+// gọi sau.
+describe('SSH gate: "cho phép luôn" nhớ cho hết phiên', () => {
+  const sessionId = 'ses-ssh-allowance'
+
+  beforeEach(() => clearSessionPermissions(sessionId))
+  afterEach(() => clearSessionPermissions(sessionId))
+
+  // Cổng UI giả: ghi lại suggestion rồi trả lời qua ĐÚNG RPC mà thẻ duyệt gọi, để
+  // test đi hết đường dây thay vì tự gọi allowSessionTool.
+  function uiGate(answer: { alwaysAllow: boolean; updatedInput?: Record<string, unknown> }) {
+    const seen: { type?: string; subject?: string } = {}
+    let seq = 0
+    const gate: CanUseTool = async (_tool, _input, options) => {
+      seq += 1
+      const requestId = `req-ssh-${sessionId}-${seq}`
+      const suggestion = options.suggestions?.[0] as { type?: string; subject?: string } | undefined
+      seen.type = suggestion?.type
+      seen.subject = suggestion?.subject
+      void parkPermissionRequest(requestId, options.suggestions ?? [])
+      await dispatch('sessions.permission', {
+        requestId,
+        decision: 'allow',
+        ...(answer.alwaysAllow ? { alwaysAllow: true } : {}),
+        ...(answer.updatedInput ? { updatedInput: answer.updatedInput } : {}),
+      })
+      return { behavior: 'allow' }
+    }
+    return { gate, seen, asked: () => seq }
+  }
+
+  it('chào allowance phiên (không phải luật) và lời gọi sau không hỏi nữa', async () => {
+    const ui = uiGate({ alwaysAllow: true })
+    const hook = makeBeforeToolCall(ui.gate, 'ask', sessionId, false, undefined, 'prompt')
+    const call = () => hook(toolCtx('ssh_exec', { host: 'box', command: 'whoami' }))
+
+    await expect(call()).resolves.toBeUndefined()
+    expect(ui.seen.type).toBe('allowSession')
+    expect(ui.seen.subject).toBe('ssh_exec @ box')
+    expect(ui.asked()).toBe(1)
+
+    // Lần hai: allowance đã nhớ ⇒ không đi qua cổng UI nữa.
+    await expect(call()).resolves.toBeUndefined()
+    expect(ui.asked()).toBe(1)
+
+    // Khoá theo (tool, host): host khác vẫn phải hỏi.
+    await expect(
+      hook(toolCtx('ssh_exec', { host: 'other', command: 'whoami' })),
+    ).resolves.toBeUndefined()
+    expect(ui.asked()).toBe(2)
+  })
+
+  it('bấm "cho phép" thường thì KHÔNG nhớ gì', async () => {
+    const ui = uiGate({ alwaysAllow: false })
+    const hook = makeBeforeToolCall(ui.gate, 'ask', sessionId, false, undefined, 'prompt')
+    const call = () => hook(toolCtx('ssh_exec', { host: 'box', command: 'whoami' }))
+    await call()
+    await call()
+    expect(ui.asked()).toBe(2)
+  })
+
+  it('sửa tham số trước khi đồng ý ⇒ không nhớ (khoá đã park mô tả args CŨ)', async () => {
+    const ui = uiGate({ alwaysAllow: true, updatedInput: { host: 'other', command: 'whoami' } })
+    const hook = makeBeforeToolCall(ui.gate, 'ask', sessionId, false, undefined, 'prompt')
+    const call = () => hook(toolCtx('ssh_exec', { host: 'box', command: 'whoami' }))
+    await call()
+    await call()
+    expect(ui.asked()).toBe(2)
   })
 })
 
@@ -1652,9 +1738,9 @@ describe('makeTaskToolGate — tasks stop ignoring the permission rules (F5)', (
     await saveRuleToFile(userRuleFile(), rule('ssh_exec', 'deny'))
     const gate = makeTaskToolGate()
     await expect(gate(toolCtx('ssh_exec', { host: 'box' }))).resolves.toMatchObject({ block: true })
-    await expect(
-      gate(toolCtx('mcp__awogssh__ssh_exec', { host: 'box' })),
-    ).resolves.toMatchObject({ block: true })
+    await expect(gate(toolCtx('mcp__awogssh__ssh_exec', { host: 'box' }))).resolves.toMatchObject({
+      block: true,
+    })
   })
 
   it('does NOT escalate an unreadable call — there is no one to ask (documented residual)', async () => {

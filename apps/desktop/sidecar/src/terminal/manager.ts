@@ -11,6 +11,7 @@
 
 import { isAbsolute, resolve } from 'node:path'
 import { emit } from '../transport/stdio.js'
+import { registerOwnedProcess, unregisterOwnedProcess } from '../monitor/owned.js'
 import { log } from '../util/logger.js'
 
 export interface TerminalSessionRef {
@@ -265,6 +266,10 @@ class TerminalManager {
       buffer: '',
     }
     this.terminals.set(terminalId, record)
+    // Màn Giám sát quy CPU/RAM của PTY (và mọi lệnh chạy trong nó) về đúng phiên
+    // — dòng lệnh của một `zsh` thì phiên nào cũng giống nhau, chỉ nơi spawn mới
+    // biết nó thuộc về ai.
+    registerOwnedProcess({ pid: proc.pid, kind: 'terminal', sessionId, label: 'Terminal' })
 
     proc.onData((chunk) => {
       appendOutput(record, chunk)
@@ -272,6 +277,7 @@ class TerminalManager {
     })
     proc.onExit(({ exitCode, signal }) => {
       this.terminals.delete(terminalId)
+      unregisterOwnedProcess(proc.pid)
       emit('terminal.exit', { terminalId, sessionId, exitCode, signal })
     })
 

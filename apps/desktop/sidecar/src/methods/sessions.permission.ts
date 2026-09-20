@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { getPermissionSuggestions, resolvePermissionRequest } from '../sessions/permissions.js'
+import {
+  allowSessionTool,
+  getPermissionSuggestions,
+  resolvePermissionRequest,
+} from '../sessions/permissions.js'
 import {
   parsePermissionRule,
   persistRule,
@@ -43,6 +47,19 @@ function sessionIdOfSuggestion(suggestion: PermissionUpdate): string | undefined
   return typeof suggestion.sessionId === 'string' ? suggestion.sessionId : undefined
 }
 
+// Allowance "cả phiên này" của cổng SSH / cổng hạ tầng. Cùng luật với luật ghi đĩa:
+// khoá lấy TỪ suggestion đã park (do cổng sinh), không bao giờ từ payload UI — UI
+// chỉ được bấm, không được soạn. Khoá là chuỗi mờ mà chính cổng đó đọc lại.
+function sessionAllowanceOf(
+  suggestion: PermissionUpdate,
+): { sessionId: string; rememberKey: string } | null {
+  if (suggestion.type !== 'allowSession') return null
+  const sessionId = sessionIdOfSuggestion(suggestion)
+  const rememberKey = suggestion.rememberKey
+  if (!sessionId || typeof rememberKey !== 'string' || !rememberKey) return null
+  return { sessionId, rememberKey }
+}
+
 // Resolves a parked canUseTool promise with the user's choice from the UI.
 // Idempotent: if the request was already handled (race with cancel), returns
 // `{ resolved: false }` so the UI knows the prompt is stale and can dismiss it.
@@ -64,6 +81,26 @@ register('sessions.permission', async (raw) => {
       const suggestions = getPermissionSuggestions(params.requestId) ?? []
       const applied: PermissionUpdate[] = []
       for (const suggestion of suggestions) {
+        // Allowance phiên (SSH / hạ tầng): nhớ trong bộ nhớ, không có tầng đĩa nào
+        // để chọn nên `scope` bị bỏ qua — thẻ duyệt cũng khoá picker ở "phiên này".
+        const allowance = sessionAllowanceOf(suggestion)
+        if (allowance) {
+          // Người dùng vừa SỬA tham số thì khoá đã park có thể không còn mô tả thứ
+          // sắp chạy (đổi host của `ssh_exec`, đổi dòng lệnh hạ tầng). Cổng sinh
+          // khoá từ args GỐC, nên ở đây không có cách kiểm rẻ nào ⇒ cho chạy lần
+          // này, không nhớ gì. Chiều hỏng luôn là "hỏi thêm" (F13).
+          if (params.updatedInput !== undefined) {
+            ruleSkipped = true
+            log.warn('sessions.permission: input override, session allowance not remembered', {
+              requestId: params.requestId,
+            })
+            continue
+          }
+          allowSessionTool(allowance.sessionId, allowance.rememberKey)
+          savedScopes.push('session')
+          applied.push({ ...suggestion, destination: 'session' })
+          continue
+        }
         const rule = ruleOfSuggestion(suggestion)
         if (!rule) {
           log.warn('sessions.permission: suggestion carries no usable rule, ignored', {

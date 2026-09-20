@@ -53,32 +53,34 @@ export function rejectPermissionRequest(requestId: string, message: string): boo
   return true
 }
 
-// ─── Session-scoped SSH allowance ───────────────────────────────────────────
-// NOT the general "always allow" path — that one moved to permission-rules.ts
-// (ADR 0080: a remembered allowance keys off the RULE, i.e. the command/path,
-// never off the bare tool name).
+// ─── Session-scoped allowance ───────────────────────────────────────────────
+// NOT the rule path — that one lives in permission-rules.ts (ADR 0080: a rule keys
+// off the COMMAND/PATH and can be written to disk at three tiers).
 //
-// What is left here is the SSH gate's own allowance (ADR 0064 F2): sshApprovalMode
-// 'session' remembers the FIRST approval per (session, host, tool) under an opaque
-// key like `ssh_exec@host`. It is deliberately separate: the SSH gate is driven by
-// sshApprovalMode rather than the general allowlist, it is never persisted to disk,
-// and its key is already content-scoped by host. Cleared on session delete.
-const SESSION_SSH_ALLOWLIST = new Map<string, Set<string>>()
+// This is what the two gates that cannot produce a rule remember instead:
+//   · cổng SSH (ADR 0064 F2) — khoá `ssh_exec@host`, ghi bởi sshApprovalMode
+//     'session' (lần duyệt đầu) hoặc bởi một cú bấm "Cho phép luôn";
+//   · cổng hạ tầng (ADR 0088 §6) — khoá `infra:<tool>:<lớp>@<account>`, CHỈ ghi
+//     bởi một cú bấm "Cho phép luôn".
+// Cả hai là bộ nhớ tiến trình: không bao giờ chạm đĩa, chết cùng phiên, nên chúng
+// không phải nguồn sự thật thứ hai cạnh sshApprovalMode / ma trận quyền. Khoá là
+// chuỗi MỜ do chính cổng sinh ra và chỉ cổng đó đọc lại. Cleared on session delete.
+const SESSION_TOOL_ALLOWLIST = new Map<string, Set<string>>()
 
 export function allowSessionTool(sessionId: string, rememberKey: string): void {
-  let allowed = SESSION_SSH_ALLOWLIST.get(sessionId)
+  let allowed = SESSION_TOOL_ALLOWLIST.get(sessionId)
   if (!allowed) {
     allowed = new Set<string>()
-    SESSION_SSH_ALLOWLIST.set(sessionId, allowed)
+    SESSION_TOOL_ALLOWLIST.set(sessionId, allowed)
   }
   allowed.add(rememberKey)
 }
 
 export function isSessionToolAllowed(sessionId: string, rememberKey: string): boolean {
-  return SESSION_SSH_ALLOWLIST.get(sessionId)?.has(rememberKey) ?? false
+  return SESSION_TOOL_ALLOWLIST.get(sessionId)?.has(rememberKey) ?? false
 }
 
 export function clearSessionPermissions(sessionId: string): void {
-  SESSION_SSH_ALLOWLIST.delete(sessionId)
+  SESSION_TOOL_ALLOWLIST.delete(sessionId)
   clearSessionRules(sessionId)
 }

@@ -14,5 +14,6 @@
   "files.prompt.newFilePh": "vidu.ts",
   "files.prompt.newFolderTitle": "Tên thư mục mới",
   "files.prompt.renameTitle": "Đổi tên",
-  "files.confirm.deleteTitle": "Xoá mục này?"
+  "files.confirm.deleteTitle": "Xoá mục này?",
+  "files.ctx.trash": "Chuyển vào Thùng rác"
 }

@@ -193,6 +193,12 @@ const awog = {
   },
 
   openExternal: (url: string): Promise<void> => ipcRenderer.invoke('shell:openExternal', url),
+  /** Chuyển một đường dẫn vào Thùng rác (hoàn tác được). Main tự kiểm lại đường dẫn. */
+  trashItem: (path: string): Promise<void> => ipcRenderer.invoke('shell:trashItem', { path }),
+  // Hiện một đường dẫn bất kỳ của tab Đĩa trong Finder (phạm vi ĐỌC cả đĩa —
+  // main chặn filesystem ảo; xoá vẫn chỉ trong nhà, xem `trashItem`).
+  revealDiskPath: (path: string): Promise<void> =>
+    ipcRenderer.invoke('shell:revealDiskPath', { path }),
   revealPath: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:revealPath', { root, path }),
   // Reveal a source's folder (~/.awog/sources/<slug>) — main derives + validates

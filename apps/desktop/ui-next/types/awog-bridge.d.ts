@@ -239,6 +239,10 @@ export interface AwogBridge {
   // lights there, so the shell drops their inset). Returns an unsubscribe function.
   onFullscreen?(handler: (fullscreen: boolean) => void): () => void
   openExternal(url: string): Promise<void>
+  /** Chuyển một đường dẫn vào Thùng rác (hoàn tác được). Main tự kiểm lại đường dẫn. */
+  trashItem(path: string): Promise<void>
+  /** Hiện một đường dẫn bất kỳ của tab Đĩa trong Finder (phạm vi ĐỌC cả đĩa). */
+  revealDiskPath(path: string): Promise<void>
   revealPath(root: string, path: string): Promise<void>
   // Reveal a source's folder (~/.awog/sources/<slug>) in the OS file manager.
   // Takes a SLUG only — main derives + validates the path (never renderer input).

@@ -3,7 +3,8 @@
 // Vì sao có file này: trước bản vá, nhánh `bashInfraCall` nhận diện lệnh hạ tầng
 // bằng cách quét MỌI token của chuỗi shell, nên `rg 'aws' src` cũng bị coi là lệnh
 // `aws`. Hậu quả không chỉ là một lần hỏi thừa: thẻ duyệt đổi bố cục sang dạng hạ
-// tầng (`offerAlwaysAllow: false` ⇒ mất nút "Always allow"), dán chip PRODUCTION,
+// tầng (mất nút "Always allow" theo LUẬT — nay nhánh hạ tầng chào allowance phiên
+// thay thế, xem `suggestionType`), dán chip PRODUCTION,
 // và tệ nhất là `classify('aws', [])` trả `write` cho một chuỗi không có động từ
 // nào. Người dùng báo đúng ba triệu chứng đó: "tất cả các command đang đều bị dính
 // vào Infrastructure command, trên form luôn bị đánh thành PRODUCTION, không có
@@ -35,6 +36,11 @@ import { invalidateInfraPolicyCache } from '../../infra/policy-store.js'
 import { makeBeforeToolCall } from '../permission.js'
 import type { InfraGateConfig } from '../permission.js'
 import type { CanUseTool, CanUseToolOptions, PermissionResult } from '../permission-types.js'
+import { clearSessionPermissions, parkPermissionRequest } from '../../sessions/permissions.js'
+import { dispatch } from '../../transport/rpc.js'
+// Import CÓ TÁC DỤNG PHỤ: đăng ký `sessions.permission` để test trả lời qua ĐÚNG
+// đường mà thẻ duyệt đi.
+import '../../methods/sessions.permission.js'
 
 // $HOME tạm: ma trận quyền của người chạy test không được lọt vào kết quả. Không có
 // file `infra-policy.json` ⇒ `loadInfraPolicy()` trả mặc định xuất xưởng, và
@@ -80,12 +86,12 @@ function recordingGate(seen: Seen, behavior: 'allow' | 'deny' = 'allow'): CanUse
   }
 }
 
-async function runBash(command: string, infraGate?: InfraGateConfig) {
+async function runBash(command: string, infraGate?: InfraGateConfig, sessionId?: string) {
   const seen: Seen = { options: undefined }
   const hook = makeBeforeToolCall(
     recordingGate(seen),
     'ask',
-    undefined,
+    sessionId,
     false,
     undefined,
     'prompt',
@@ -94,12 +100,15 @@ async function runBash(command: string, infraGate?: InfraGateConfig) {
   )
   const result = await hook(bashCtx(command))
   const payload = seen.options?.decisionReason as { kind?: string } & Record<string, unknown>
+  const suggestion = seen.options?.suggestions?.[0]
   return {
     result,
     payload,
-    // Bố cục thẻ hạ tầng: `offerAlwaysAllow: false` ⇒ mảng rỗng.
     infraCard: payload?.kind === 'infra',
     alwaysAllowOffered: (seen.options?.suggestions?.length ?? 0) > 0,
+    // Lệnh hạ tầng chỉ được chào allowance SỐNG TRONG PHIÊN. Một `addRule` ở đây là
+    // luật ghi xuống đĩa cạnh ma trận quyền — đúng thứ ADR 0088 §6 cấm.
+    suggestionType: suggestion?.type,
   }
 }
 
@@ -157,7 +166,24 @@ describe('nhận diện: token ở VỊ TRÍ LỆNH, không phải mọi token',
     `echo hi | xargs aws s3 rb s3://bucket`,
   ]
 
-  it.each(IS_INFRA)('%s ⇒ bố cục thẻ hạ tầng, KHÔNG có nút "Always allow"', async (command) => {
+  // Trong một PHIÊN, lệnh hạ tầng có nút "Cho phép luôn" — nhưng thứ nó cấp là
+  // allowance sống trong bộ nhớ, chết cùng phiên (`allowSession`), KHÔNG phải luật
+  // ghi xuống đĩa (`addRule`). Đó là ranh giới ADR 0088 §6 giữ: ma trận quyền vẫn
+  // là nguồn sự thật duy nhất nằm trên đĩa.
+  it.each(IS_INFRA)('%s ⇒ bố cục thẻ hạ tầng + allowance phiên', async (command) => {
+    const { infraCard, alwaysAllowOffered, suggestionType } = await runBash(
+      command,
+      PINNED,
+      'ses-1',
+    )
+    expect(infraCard).toBe(true)
+    expect(alwaysAllowOffered).toBe(true)
+    expect(suggestionType).toBe('allowSession')
+  })
+
+  // Ngoài phiên (task, one-shot) không có gì để nhớ: allowance chỉ tồn tại trong
+  // một phiên, nên thẻ quay về "cho phép một lần".
+  it.each(IS_INFRA)('%s ⇒ không có phiên thì không chào gì cả', async (command) => {
     const { infraCard, alwaysAllowOffered } = await runBash(command, PINNED)
     expect(infraCard).toBe(true)
     expect(alwaysAllowOffered).toBe(false)
@@ -201,10 +227,7 @@ describe('cột account: nhãn và quyết định phải khớp nhau', () => {
     },
   ]
 
-  it.each(NO_HONEST_ACCOUNT)('$label ⇒ cột production THẬT, bị CHẶN', async ({
-    command,
-    gate,
-  }) => {
+  it.each(NO_HONEST_ACCOUNT)('$label ⇒ cột production THẬT, bị CHẶN', async ({ command, gate }) => {
     const { payload, result } = await runBash(command, gate)
     expect(result?.block).toBe(true)
     // Nhãn đỏ phải nằm ngay trên lý do chặn, không phải chỉ trên một thẻ không bao
@@ -237,5 +260,56 @@ describe('phân lớp argv lấy đúng chỗ', () => {
     const { payload } = await runBash(command, PINNED)
     expect(payload?.command).toBe(command)
     expect(payload?.commandClass).toBe('write')
+  })
+})
+
+// ─── "Cho phép luôn" cho lệnh hạ tầng: nhớ cho hết phiên, không chạm đĩa ─────
+describe('allowance phiên cho lệnh hạ tầng', () => {
+  const sessionId = 'ses-infra-allowance'
+
+  beforeEach(() => clearSessionPermissions(sessionId))
+  afterEach(() => clearSessionPermissions(sessionId))
+
+  // Cổng UI giả trả lời qua RPC thật, nên test đi hết dây: suggestion → park →
+  // sessions.permission → allowSessionTool → lời gọi sau.
+  function uiGate(alwaysAllow: boolean) {
+    let asked = 0
+    const gate: CanUseTool = async (_tool, _input, options) => {
+      asked += 1
+      const requestId = `req-infra-${asked}`
+      void parkPermissionRequest(requestId, options.suggestions ?? [])
+      await dispatch('sessions.permission', {
+        requestId,
+        decision: 'allow',
+        ...(alwaysAllow ? { alwaysAllow: true } : {}),
+      })
+      return { behavior: 'allow' }
+    }
+    return { gate, asked: () => asked }
+  }
+
+  function hookFor(gate: CanUseTool) {
+    return makeBeforeToolCall(gate, 'ask', sessionId, false, undefined, 'prompt', undefined, PINNED)
+  }
+
+  it('lệnh cùng ô (binary, lớp, account) không hỏi lại trong phiên', async () => {
+    const ui = uiGate(true)
+    const hook = hookFor(ui.gate)
+    await expect(hook(bashCtx('aws s3 rb s3://bucket'))).resolves.toBeUndefined()
+    expect(ui.asked()).toBe(1)
+    // Cùng ô — một lệnh destructive khác của `aws` trên cùng account.
+    await expect(hook(bashCtx('aws s3 rb s3://other'))).resolves.toBeUndefined()
+    expect(ui.asked()).toBe(1)
+    // Ô khác (binary khác) ⇒ vẫn hỏi.
+    await expect(hook(bashCtx('kubectl delete pod api-0'))).resolves.toBeUndefined()
+    expect(ui.asked()).toBe(2)
+  })
+
+  it('bấm "cho phép" thường thì không nhớ', async () => {
+    const ui = uiGate(false)
+    const hook = hookFor(ui.gate)
+    await hook(bashCtx('aws s3 rb s3://bucket'))
+    await hook(bashCtx('aws s3 rb s3://bucket'))
+    expect(ui.asked()).toBe(2)
   })
 })

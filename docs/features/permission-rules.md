@@ -185,10 +185,33 @@ Khi thẻ còn `pending`, thứ tự đọc là **luật → phạm vi → nút*
 
 1. **Luật sắp cấp, nguyên văn.** In đúng `suggestion.rule` (`Bash(git status)`) bằng font code, chọn/copy được, render bằng text node (dữ liệu L1, không `v-html`). Kèm một câu nói luật khớp cái gì, theo `ruleKind`: `command` → "khớp đúng lệnh này, không phải mọi lệnh Bash", `path` → "khớp đúng đường dẫn này", `bare` → "khớp mọi lời gọi tool này".
 2. **Bộ chọn phạm vi** (`AppSelect`): *Phiên này* / *Dự án này* / *Mọi dự án* ⇒ `scope` = `session | project | user`. **Mặc định `session`** (ít quyền nhất). Mỗi mức có một dòng nói hệ quả (quên khi hết phiên / ghi trong AWOG home theo băm đường dẫn dự án, chỉ áp trên máy này / ghi vào `~/.awog/permission-rules.json`). Phiên không thuộc project nào ⇒ mục *Dự án này* bị **disable** kèm chú thích, không im lặng rơi về `session`.
-3. **Nút "Always allow" chỉ hiện khi có luật.** Không có suggestion (lệnh ghép, đường dẫn tương đối…) ⇒ nút **không được render**, thay bằng một dòng nói vì sao lần này chỉ cho phép một lần. UI cũng coi trường hợp *không nhận được suggestion* (event tới trước khi cửa sổ kịp lắng nghe) là "không có luật" — thà hỏi lại còn hơn đoán ra một luật mà người dùng chưa từng đọc.
+3. **Nút "Always allow" chỉ hiện khi có gì đó để nhớ** — một luật, hoặc một allowance phiên (xem "Ba cổng, một thẻ" dưới). Không có suggestion (lệnh ghép, đường dẫn tương đối…) ⇒ nút **không được render**, thay bằng một dòng nói vì sao lần này chỉ cho phép một lần. UI cũng coi trường hợp *không nhận được suggestion* (event tới trước khi cửa sổ kịp lắng nghe) là "không có luật" — thà hỏi lại còn hơn đoán ra một luật mà người dùng chưa từng đọc.
 4. **Sau khi lưu**, thẻ nói tầng THẬT SỰ đã ghi theo `savedScopes` trả về, kèm lại chuỗi luật; bị hạ cấp `project → session` thì nói rõ; `savedScopes` rỗng (ghi hỏng) thì báo "không lưu được luật — lượt sau vẫn hỏi".
 
 Nợ kỹ thuật đã biết: store `sessions` chưa mang `suggestions` từ event xuống `PermBlock` và `setPermission()` chưa có tham số `scope`, nên composable phải tự lắng nghe `session.permission-request` để lấy chuỗi luật và tự gửi lượt trả lời có `scope` (store gửi thêm một lượt nữa — sidecar đã unpark nên đó là no-op, và suggestion đã tiêu thụ nên không thể ghi luật lần hai). Dọn bằng cách thêm `suggestion` vào `PermBlock` + `scope` vào `setPermission`.
+
+## Ba cổng, một thẻ (2026-09-19)
+
+Cùng một thẻ `SessionGateCard` được vẽ bởi **ba** cổng khác nhau, và trước bản này chúng khác nhau ở chỗ dễ thấy nhất: cái thì có nút "Cho phép luôn", cái thì không — với một dòng giải thích **nói sai lý do** ("lệnh có toán tử shell") cho cả hai cổng kia.
+
+| Cổng | Quyền đến từ đâu | Bấm "Cho phép luôn" thì nhớ cái gì |
+|---|---|---|
+| Chung (ADR 0080) | luật `Bash(git status)` trên đĩa | **luật**, 3 tầng phiên/dự án/mọi dự án |
+| SSH ([ADR 0064](../decisions/0064-session-ssh-link.md) P2) | `sshApprovalMode` của phiên | **allowance phiên**, khoá `ssh_exec@host` |
+| Hạ tầng ([ADR 0088](../decisions/0088-session-infra-context.md) §6) | ma trận Settings → Hạ tầng | **allowance phiên**, khoá `infra:<tool>:<lớp>@<account>` |
+
+**Allowance phiên ≠ luật.** Nó nằm trong `Map` ở `sessions/permissions.ts`, không bao giờ chạm đĩa, chết cùng phiên (`clearSessionPermissions`). Đó chính là lý do hai cổng dưới được phép có nút mà không phản bội ADR của mình: nguồn sự thật **trên đĩa** vẫn chỉ có một (sshApprovalMode / ma trận), thứ vừa cấp không sống qua một lần khởi động lại, và ô `block` của ma trận thì không đường nào lách — nút chỉ xuất hiện ở phán quyết `ask`.
+
+Trên thẻ, khác biệt hiện ra ở đúng ba chỗ: nhãn đổi từ *Sẽ cấp luật* thành *Sẽ cho phép*, bộ chọn phạm vi **khoá ở "Phiên này"** (hai tầng đĩa bị disable — sidecar bỏ qua `scope` của allowance, chào ra là chào một lời hứa không ai giữ), và câu giải thích nói đúng cổng đang hỏi ("áp cho mọi lời gọi tool này tới cùng host, trong phiên này" / "…mọi lệnh cùng nhóm này trên cùng tài khoản…").
+
+Độ mịn của khoá hạ tầng **bằng đúng một ô của ma trận** — (binary, lớp lệnh, account) — vì đó là đơn vị người dùng đã quen đọc ở Settings. Mịn hơn (nguyên dòng lệnh) thì gần như không bao giờ trùng lại nên nút vô dụng; thô hơn (chỉ binary) thì một cú bấm trên `aws s3 ls` mở luôn đường cho lớp `destructive`.
+
+Hai điều kiện giữ nguyên hướng hỏng về phía "hỏi thêm":
+
+- **Không có phiên ⇒ không chào gì.** Task / one-shot không có chỗ để nhớ, thẻ quay về "cho phép một lần".
+- **Sửa tham số trước khi đồng ý ⇒ không nhớ.** Khoá được sinh từ args GỐC (đổi `host` của `ssh_exec` là đổi đích thật), nên `updatedInput` khác rỗng ⇒ chạy lần này, `ruleSkipped: true`, lần sau vẫn hỏi.
+
+Một thay đổi hành vi kèm theo: allowance SSH nay được đọc ở **mọi** `sshApprovalMode`, không chỉ `'session'`. Nó chỉ được ghi bởi hai hành động của chính người dùng (lần duyệt đầu ở chế độ `session`, hoặc cú bấm "Cho phép luôn"), nên đọc nó ở chế độ `prompt` là tôn trọng cú bấm vừa rồi — còn không đọc thì nút nói dối.
 
 ## Trang quản lý luật (Settings → Quyền)
 

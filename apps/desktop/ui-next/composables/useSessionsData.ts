@@ -166,14 +166,25 @@ export function questionAnswered(b: QuestionBlock): boolean {
 // under its old names for Settings → Permissions.
 export type PermRuleScope = 'session' | 'project' | 'user'
 export type PermRuleKind = 'command' | 'path' | 'bare'
-// The rule "Always allow" would create, exactly as the sidecar proposed it
-// (`{ type: 'addRule', rule: 'Bash(git status)', ruleKind }` in the
-// `session.permission-request` event). Absent ⇒ the engine could derive no rule
-// (compound shell command, relative path…) ⇒ the card hides "Always allow" rather
-// than guessing a rule the user never read.
-export type PermRuleSuggestion = { rule: string; ruleKind: PermRuleKind }
+// Cổng nào sinh ra lời hỏi này. Chỉ có mặt trên gợi ý dạng `session` — thứ quyết
+// định câu giải thích trên thẻ ("ssh_exec trên host này" vs "ô này của ma trận").
+export type PermGate = 'ssh' | 'infra'
+// Thứ "Cho phép luôn" sẽ cấp, đúng như sidecar đề xuất trong sự kiện
+// `session.permission-request`. Hai dạng, vì ba cổng quyền nhớ theo hai cách:
+//   · `rule`    — luật ghi được xuống đĩa ở 3 tầng (`{ type: 'addRule', rule:
+//                 'Bash(git status)', ruleKind }`, ADR 0080);
+//   · `session` — allowance chỉ sống trong phiên (`{ type: 'allowSession',
+//                 subject, gate }`), của cổng SSH + cổng hạ tầng: hai cổng đó có
+//                 nguồn sự thật riêng (sshApprovalMode / ma trận) nên không được
+//                 phép đẻ ra luật trên đĩa.
+// Vắng ⇒ không suy được gì (lệnh ghép, đường dẫn tương đối…) ⇒ thẻ giấu nút thay
+// vì đoán một thứ người dùng chưa từng đọc.
+export type PermRuleSuggestion =
+  | { type: 'rule'; rule: string; ruleKind: PermRuleKind }
+  | { type: 'session'; rule: string; gate: PermGate }
 
 const PERM_RULE_KINDS: readonly string[] = ['command', 'path', 'bare']
+const PERM_GATES: readonly string[] = ['ssh', 'infra']
 // The sidecar caps a rule at tool(128) + pattern(512); this is the display-side backstop.
 const MAX_PERM_RULE_LEN = 700
 
@@ -196,11 +207,20 @@ export function parsePermSuggestion(raw: unknown): PermRuleSuggestion | undefine
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
     const s = item as Record<string, unknown>
+    // Allowance phiên: `rememberKey` KHÔNG đi qua đây — renderer không cần biết
+    // khoá và không bao giờ được gửi nó lên (sidecar đọc lại từ suggestion đã
+    // park). Cái duy nhất đi lên là chuỗi để ĐỌC.
+    if (s.type === 'allowSession') {
+      const subject = typeof s.subject === 'string' ? s.subject : ''
+      if (!subject || subject.length > MAX_PERM_RULE_LEN || hasControlChar(subject)) continue
+      if (typeof s.gate !== 'string' || !PERM_GATES.includes(s.gate)) continue
+      return { type: 'session', rule: subject, gate: s.gate as PermGate }
+    }
     if (s.type !== 'addRule' || typeof s.rule !== 'string') continue
     const rule = s.rule
     if (!rule || rule.length > MAX_PERM_RULE_LEN || hasControlChar(rule)) continue
     const kind = typeof s.ruleKind === 'string' && PERM_RULE_KINDS.includes(s.ruleKind)
-    return { rule, ruleKind: kind ? (s.ruleKind as PermRuleKind) : 'bare' }
+    return { type: 'rule', rule, ruleKind: kind ? (s.ruleKind as PermRuleKind) : 'bare' }
   }
   return undefined
 }

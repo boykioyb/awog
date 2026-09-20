@@ -323,6 +323,23 @@
       </symbol>
       <!-- Response-style glyphs (SessionComposer style picker) — lucide outlines. -->
       <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14" /></symbol>
+      <symbol id="i-ruler" viewBox="0 0 24 24">
+        <path
+          d="M21.3 15.3a2.4 2.4 0 0 1 0 3.4l-2.6 2.6a2.4 2.4 0 0 1-3.4 0L2.7 8.7a2.4 2.4 0 0 1 0-3.4l2.6-2.6a2.4 2.4 0 0 1 3.4 0Z"
+        />
+        <path d="m8.5 6.5 2 2M11.5 9.5l2 2M14.5 12.5l2 2M17.5 15.5l2 2" />
+      </symbol>
+      <symbol id="i-disk" viewBox="0 0 24 24">
+        <path
+          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+        />
+        <path d="M22 12H2M6 16h.01M10 16h.01" />
+      </symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24">
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <rect x="9" y="9" width="6" height="6" />
+        <path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2" />
+      </symbol>
       <symbol id="i-zap" viewBox="0 0 24 24">
         <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
       </symbol>

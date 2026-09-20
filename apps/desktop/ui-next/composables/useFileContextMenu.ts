@@ -7,17 +7,36 @@ import { useConfirm } from '~/composables/useConfirm'
 import { useTextPrompt } from '~/composables/useTextPrompt'
 import { copyText } from '~/utils/clipboard'
 
-// The shared, FULL file action menu for local-fs trees (Sessions Files tab +
-// Project Code Workspace editor). Builds the MenuItem list per target kind and
-// runs the chosen action through the sidecar bridge / fs RPCs. Mutating ops are
-// gated by useTextPrompt (names) + useConfirm (delete); errors are surfaced via
-// `notify` and never thrown out of the handler. SoC: orchestrates IPC only.
+// The shared file action menu for local-fs trees. Builds the MenuItem list per
+// target kind and runs the chosen action through the sidecar bridge / fs RPCs.
+// Mutating ops are gated by useTextPrompt (names) + useConfirm (delete); errors
+// are surfaced via `notify` and never thrown out of the handler. SoC: orchestrates
+// IPC only.
+//
+// TWO SHAPES, one menu:
+//   • workspace (mặc định) — Sessions Files tab + Project Code Workspace. Đường dẫn
+//     TƯƠNG ĐỐI với một root, đủ hàng kể cả sửa/xoá qua `fs.*`.
+//   • `absolute: true` — tab Giám sát → Đĩa. Đường dẫn TUYỆT ĐỐI, KHÔNG có
+//     workspace root nào cả, nên những hàng cần root (`fs.*`, VS Code, copy đường
+//     dẫn tương đối) vắng mặt và xoá đi qua `onTrash` của bề mặt (Thùng rác,
+//     hoàn tác được) chứ không phải `fs.deletePath`.
+// Tách hai bề mặt ra hai menu riêng thì hàng "Copy đường dẫn"/"Hiện trong Finder"
+// bị chép lần thứ ba — đây đúng là chỗ dùng chung.
 
 export type FileMenuTarget = { path: string; kind: 'file' | 'dir' }
 
 export type FileContextMenuConfig = {
   // Workspace root the relative paths resolve against. null = unavailable (no-op).
+  // Ignored (and allowed to be null) when `absolute` is set.
   root: () => string | null
+  // Target paths are already absolute and live outside any workspace.
+  absolute?: boolean
+  // `absolute` only: move the target to the Trash. The surface owns confirm +
+  // toast + cache invalidation, so the menu just calls it. Omitted → no delete row.
+  onTrash?: (target: FileMenuTarget) => void | Promise<void>
+  // `absolute` only: whether THIS path may be trashed (Electron main enforces the
+  // real rule — in-home, depth >= 2; this just hides a row that would always fail).
+  canTrash?: (path: string) => boolean
   // How "Open" behaves per surface (Sessions → preview modal; Editor → open tab).
   // Omitted → the "Open" item is hidden.
   onOpen?: (target: FileMenuTarget) => void
@@ -55,6 +74,22 @@ export function useFileContextMenu(config: FileContextMenuConfig) {
     if (tgt.kind === 'file' && config.onOpen) {
       rows.push({ id: 'open', label: t('files.ctx.open') })
     }
+
+    if (config.absolute) {
+      // Không có workspace root ⇒ bỏ VS Code + "mở bằng ứng dụng mặc định" (cái
+      // sau CHẠY trình xử lý của file, mạnh hơn hẳn việc chỉ hiện chỗ nó nằm, nên
+      // không nới theo) + copy đường dẫn tương đối (tương đối với cái gì?).
+      rows.push({ id: 'reveal', label: t('files.ctx.reveal') })
+      rows.push(sep)
+      rows.push({ id: 'copy-path', label: t('files.ctx.copyPath') })
+      rows.push({ id: 'copy-name', label: t('files.ctx.copyName') })
+      if (config.onTrash && (config.canTrash?.(tgt.path) ?? true)) {
+        rows.push(sep)
+        rows.push({ id: 'trash', label: t('files.ctx.trash'), danger: true })
+      }
+      return rows
+    }
+
     if (vscode.value) rows.push({ id: 'vscode', label: t('files.ctx.openInVscode') })
     rows.push({ id: 'reveal', label: t('files.ctx.reveal') })
     rows.push({ id: 'os-open', label: t('files.ctx.openDefault') })
@@ -72,9 +107,38 @@ export function useFileContextMenu(config: FileContextMenuConfig) {
 
   async function onSelect(id: string): Promise<void> {
     const tgt = target.value
-    const root = config.root()
     close()
-    if (!tgt || !root) return
+    if (!tgt) return
+
+    if (config.absolute) {
+      try {
+        switch (id) {
+          case 'open':
+            config.onOpen?.(tgt)
+            break
+          case 'reveal':
+            await window.awog?.revealDiskPath(tgt.path)
+            break
+          case 'copy-path':
+            await copyText(tgt.path)
+            break
+          case 'copy-name':
+            await copyText(tgt.path.split('/').pop() ?? tgt.path)
+            break
+          case 'trash':
+            await config.onTrash?.(tgt)
+            break
+          default:
+            break
+        }
+      } catch (err) {
+        notify(err instanceof Error && err.message ? err.message : String(err), 'error')
+      }
+      return
+    }
+
+    const root = config.root()
+    if (!root) return
 
     const { path, kind } = tgt
     const abs = `${root}/${path}`

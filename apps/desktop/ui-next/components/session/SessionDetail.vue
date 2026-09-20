@@ -119,7 +119,7 @@
                  không phải một nút thường trực — header cố ý chỉ có tiêu đề + đúng hai
                  điều khiển (xem chú thích đầu file); nút thứ ba làm hàng nút xuống dòng
                  và tràn khỏi thanh cao cố định. -->
-            <div class="mi" @click="runOverflow(() => (gridMode = !gridMode))">
+            <div class="mi" @click="runOverflow(toggleGrid)">
               <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ gridMode ? t('sessions.grid.off') : t('sessions.grid.on') }}
               <Icon
@@ -232,7 +232,7 @@
             <!-- Chế độ LƯỚI: phiên này + các phiên con, mỗi phiên một ô có transcript
                  và composer riêng. Thay CHỖ của transcript + composer đơn, không nằm
                  cạnh — hai composer cho cùng một phiên trên một màn hình là mơ hồ. -->
-            <SessionGrid v-if="gridMode" :session="session" />
+            <SessionGrid v-if="gridMode" :session="session" :reveal-tick="gridRevealTick" />
             <SessionTranscript
               v-else
               :messages="session.msgs"
@@ -1077,6 +1077,32 @@ const wpOpen = ref(false)
 // khi người dùng chỉ muốn đọc transcript thì hại hơn lợi. Ô nào hiện TRONG lưới thì
 // có nhớ (SessionGrid tự lo).
 const gridMode = ref(false)
+
+// Yêu cầu "xem các phiên con dạng lưới" đến từ menu chuột phải của DANH SÁCH — cột
+// sibling, không với tới `gridMode` ở đây (docs/features/session-groups.md §5). Mỗi
+// lần nhận, tick tăng để lưới quên sở thích "ô nào hiện" của lần trước và bày lại đủ
+// các phiên con: người dùng vừa yêu cầu đúng điều đó.
+//
+// `immediate` + gate `isActive`/`ownsThisSession` giống hệt đường pendingJump: danh
+// sách đặt yêu cầu TRƯỚC khi instance này mount cho một phiên mở lần đầu, còn
+// <KeepAlive> thì giữ instance của các phiên khác sống và vẫn phản ứng.
+const gridRevealTick = ref(0)
+function toggleGrid() {
+  gridMode.value = !gridMode.value
+  // Tắt lưới ⇒ quên yêu cầu "bày lại đủ các con". Không đưa về 0 thì lần bật sau từ
+  // `⋯` vẫn mang tick cũ, và lưới lại xoá sở thích "ô nào hiện" của người dùng.
+  if (!gridMode.value) gridRevealTick.value = 0
+}
+watch(
+  [() => store.pendingGrid, isActive, ownsThisSession],
+  () => {
+    if (!isActive.value || !ownsThisSession.value) return
+    if (!store.consumeGridRequest(props.session.id)) return
+    gridMode.value = true
+    gridRevealTick.value += 1
+  },
+  { immediate: true },
+)
 
 const ALL_VIEWS = [
   'Diff',

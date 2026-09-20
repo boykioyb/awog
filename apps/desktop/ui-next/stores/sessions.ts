@@ -2550,6 +2550,22 @@ export const useSessionsStore = defineStore('sessions', () => {
     return p.eid
   }
 
+  // ── Mở thẳng vào chế độ LƯỚI, yêu cầu từ NGOÀI phiên ─────────────────────────
+  // Menu chuột phải của danh sách nằm ở cột SIBLING của cột chi tiết, nên nó không
+  // với tới `gridMode` (ref cục bộ của SessionDetail) — nó đặt yêu cầu ở đây rồi
+  // instance đang hiện của đúng phiên đó nhặt lên. Cùng khuôn `pendingJump`.
+  const pendingGrid = ref<number | null>(null)
+  function requestGridView(sessionId: number): void {
+    pendingGrid.value = sessionId
+  }
+  // Đọc-rồi-xoá: đây là MỘT lần điều hướng, không phải trạng thái phải áp lại mỗi lần
+  // render. Trả false khi yêu cầu thuộc về phiên khác.
+  function consumeGridRequest(sessionId: number): boolean {
+    if (pendingGrid.value !== sessionId) return false
+    pendingGrid.value = null
+    return true
+  }
+
   // ── Queue (§2) ───────────────────────────────────────────────────────────────
 
   function enqueue(id: number, text: string, att?: SessionAttachment[], command?: SlashCommandRef) {
@@ -5114,6 +5130,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     pendingJump,
     requestMessageJump,
     consumeMessageJump,
+    // open-in-grid handoff (list context menu → session detail)
+    pendingGrid,
+    requestGridView,
+    consumeGridRequest,
     // pin / bulk
     togglePin,
     toggleSelect,

@@ -18,6 +18,7 @@ import { useInfraContext } from '~/composables/useInfraContext'
 import { useInfraCicdApi } from '~/composables/useInfraCicdApi'
 import { CICD_SOURCES, githubProjectsFor } from '~/composables/useInfraCicd'
 import { useSidecar } from '~/composables/useSidecar'
+import { presentNotification } from '~/composables/useAppNotify'
 import { useToast } from '~/composables/useToast'
 import { useProjectsStore } from '~/stores/projects'
 import { useSettingsStore } from '~/stores/settings'
@@ -86,14 +87,6 @@ function writeSeen(): void {
   }
 }
 
-function osDeliverable(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    'Notification' in window &&
-    Notification.permission === 'granted'
-  )
-}
-
 function toastText(run: CicdRun, t: (k: string, p?: Record<string, string>) => string): string {
   const params = { project: run.project, title: run.title }
   if (run.status === 'waiting') return t('infra.cicd.notify.waiting', params)
@@ -107,45 +100,19 @@ function openRun(run: CicdRun): void {
   if (run.url) void useLinkOpen().openLink(run.url)
 }
 
-/**
- * Thông báo hệ điều hành. `delivery` quyết định KHI NÀO, y hệt useGhNotifications:
- * 'native' bắn luôn (toast đã bị bỏ nên phải có gì đó hiện), 'both' chỉ khi cửa sổ
- * không ở trước mặt. Không tự xin quyền ở đây — chỗ xin là Settings.
- */
-function nativeNotify(run: CicdRun, text: string): void {
-  const delivery = useSettingsStore().notifications.delivery
-  if (delivery === 'toast') return
-  if (delivery === 'both' && !document.hidden && document.hasFocus()) return
-  if (!osDeliverable()) return
-  try {
-    const body = [run.branch, run.commit].filter(Boolean).join(' · ') || undefined
-    const note = new Notification(text, { body, tag: `awog-cicd-${run.id}` })
-    note.onclick = () => {
-      try {
-        window.focus()
-      } catch {
-        /* hệ điều hành có thể từ chối; đường mở bên dưới vẫn chạy */
-      }
-      openRun(run)
-    }
-  } catch {
-    // Webview khoá cứng có thể ném khi dựng Notification.
-  }
-}
-
+// Kênh gửi (toast / hệ điều hành / cả hai + luật focus + luật dự phòng) nằm ở
+// `useAppNotify`, dùng chung với hộp thư GitHub và cảnh báo tài nguyên.
 function present(run: CicdRun): void {
   const { t } = useI18n()
-  const text = toastText(run, t)
-  const nativeOnly = useSettingsStore().notifications.delivery === 'native' && osDeliverable()
-  if (!nativeOnly) {
-    useToast().add({
-      title: text,
-      color: run.status === 'failed' ? 'error' : 'info',
-      icon: run.status === 'failed' ? 'alert' : 'zap',
-      onClick: () => openRun(run),
-    })
-  }
-  nativeNotify(run, text)
+  const body = [run.branch, run.commit].filter(Boolean).join(' · ')
+  presentNotification({
+    text: toastText(run, t),
+    ...(body ? { body } : {}),
+    tag: `awog-cicd-${run.id}`,
+    color: run.status === 'failed' ? 'error' : 'info',
+    icon: run.status === 'failed' ? 'alert' : 'zap',
+    onClick: () => openRun(run),
+  })
 }
 
 // Một vòng poll. Im lặng khi hỏng (chưa cấu hình AWS, gh chưa đăng nhập, mất

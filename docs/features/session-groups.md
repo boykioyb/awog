@@ -141,11 +141,33 @@ Sự chênh lệch đó là có chủ ý và được **khoá bằng test**: `li
 
 Lời dẫn của tool cũng nói thẳng một điều dễ hiểu nhầm: *"không chạy" không có nghĩa là "đã xong"* — nó có thể đang chờ người dùng giao việc cho. Thiếu câu đó, phiên cha sẽ coi mọi phiên im lặng là hoàn thành.
 
+### 4b. Nhóm nhìn ra là nhóm
+
+Bản đầu của chế độ xem "Nhóm" chỉ **thụt lề** phiên con. Thụt lề nói được *quan hệ*, nhưng không nói được *ranh giới*: trong một cột 280px xen kẽ hàng lẻ và hàng con, người dùng báo "nhìn không ra cái nào là nhóm".
+
+Nay cụm được vẽ thành **một khối**: nền accent ~6% ôm cả phiên cha lẫn các con, bo góc ở hai đầu, cộng **nhánh cây** nối chúng — thân dọc chạy qua các hàng con, tới mỗi hàng thì bo góc rẽ phải vào đúng chấm trạng thái của nó (khuôn cây thư mục; vẽ bằng border trái + dưới + bo góc dưới-trái của MỘT hộp nên chỗ cong liền một nét). Hàng con **cuối** không có thân chạy tiếp, và **hàng cha không vẽ gì cả** — bản đầu nó thả một đoạn thân từ nút xoè xuống hết hàng, nhưng đoạn đó chạy dọc sát tiêu đề của chính phiên cha và trông rối (user bác). Bỏ đi vẫn liền mạch: đoạn dọc của hàng con bắt đầu ngay mép trên của nó, mà các hàng trong cụm đã dính liền nhau. Ba chi tiết đáng ghi vì mỗi cái đều là một cái bẫy:
+
+- **Các hàng trong cụm dính liền nhau** (`margin-bottom: 0`, khe 3px chỉ trả lại dưới hàng cuối). Giữ khe thì nền bị cắt thành từng vạch rời và không còn là "một khối" nữa — mà cái khối mới là thứ người dùng cần thấy.
+- **`:not(.on):not(.sel)` là bắt buộc.** Rule nằm trong `<style scoped>` nên nó mang thêm một lớp attribute và **thắng `.li.on` toàn cục**; không loại trừ thì hàng đang chọn nằm trong nhóm mất hẳn accent-tint + thanh 2px. Cặp `:hover` đi kèm cũng vì lý do đó — cùng khuôn với rule `.li.unread` ngay bên cạnh.
+- **Toạ độ nhánh tính bằng số, không ghim hằng trong CSS**: X = `10px` padding trái của `.li` + `7px` nửa nút xoè + một bậc thụt lề cho mỗi tầng — ba con số đó nằm ở ba chỗ khác nhau (prototype.css, markup nút xoè, `INDENT_PER_LEVEL`) và sẽ trôi khỏi nhau nếu chép cứng. Y của khuỷu thì ngược lại, phải ở **trong CSS**: `calc(9px + var(--lh-md) / 2)`, vì hộp dòng co giãn theo cỡ chữ ở Settings → Appearance mà khuỷu phải bám theo chữ.
+- **Thân dọc bắt đầu SỚM hơn khuỷu đúng một bán kính.** Trong khoảng đó border của khuỷu đang cong rẽ sang phải; không đè lên thì thân cây khuyết một khấc 6px ngay chỗ rẽ nhánh.
+- **Class KHÔNG được đặt tên `grp`.** `prototype.css:511-513` đã có class toàn cục tên đó cho header của các chế độ gom nhóm khác, kèm `.grp + .grp{margin-top:11px}` — mọi hàng liền nhau trong cụm dính rule ấy và bị đẩy xuống 11px, cụm vỡ thành từng mảnh rời (lỗi thật, user chụp màn hình báo). `<style scoped>` không cứu được: rule global vẫn áp lên element, và nó set một property mà rule scoped không hề khai. Tên hiện tại: `nest` / `nest-top` / `nest-bot` / `nest-child`.
+
+Biên của cụm (`inGroup` / `groupTop` / `groupBottom`) do [`useSessionTree`](../../apps/desktop/ui-next/composables/useSessionTree.ts) tính trong một lượt quét sau khi đã làm phẳng cây: một hàng chỉ biết mình có phải hàng CUỐI cụm không khi đã nhìn thấy hàng kế tiếp. Phiên lẻ (không cha không con) không thuộc cụm nào và giữ nguyên hình dạng hàng rời như ở mọi chế độ xem khác.
+
+**Không** thêm chip đếm số con thường trực ở hàng cha: xoè ra là đếm được, và con số chỉ có ích khi nhóm đang thu gọn — chỗ đó đã có sẵn nhãn `+N inside`.
+
 ### 5. Chế độ lưới
 
 Mục **Xem dạng lưới** trong menu `⋯` của header phiên đổi cột chat thành **lưới**: mỗi phiên một ô có transcript riêng và một composer rút gọn — xem và **hích** được từng phiên mà không rời màn hình. Bảng trạng thái trả lời *"ai xong"*; lưới trả lời *"nó đang NÓI gì"*.
 
-Ô của phiên đang mở luôn đứng đầu và không ẩn được. Các phiên con hiện thành **chip bật/tắt** trên thanh trên cùng, và ô nào đang hiện được nhớ theo phiên gốc trong `localStorage` (sở thích hiển thị của một máy, không phải dữ liệu của phiên ⇒ không qua IPC).
+**Đường thứ hai, đi thẳng từ nhóm:** chuột phải lên phiên **cha** trong danh sách → **Xem các phiên con dạng lưới**. Mục này chỉ hiện khi phiên đó có con (mở lưới từ một phiên lẻ là mở ra khung rỗng), và nó **quên sở thích "ô nào hiện" của lần trước** để bày lại đủ các con — người dùng vừa yêu cầu đúng điều đó, mà một danh sách đã tắt bớt sẽ làm lệnh trông như không chạy. Vì `gridMode` là ref cục bộ của `SessionDetail` còn menu chuột phải sống ở cột danh sách (cột SIBLING), lệnh đi qua một yêu cầu một-lần trên store — `requestGridView` / `consumeGridRequest`, cùng khuôn `pendingJump` của nhảy-tới-message, gate `isActive` + `ownsThisSession` như nhau.
+
+**Mặc định là ĐỦ CÁC PHIÊN CON, không có ô của phiên cha.** Lưới mở ra từ một phiên cha là để nhìn các con; transcript của cha thì vừa đọc xong ở chế độ đơn. Ô cha vẫn bật lại được bằng **chip đầu thanh** (tách khỏi nhóm chip con bằng một vạch), và nó **ẩn được như mọi ô khác** — lưới neo vào cái *nhóm* (thanh chip) chứ không vào một ô cụ thể, nên không có ô nào phải ở lại. Tắt hết ô là trạng thái hợp lệ và có empty state nói rõ vì sao khung trống.
+
+Ô nào đang hiện được nhớ theo phiên gốc trong `localStorage` (sở thích hiển thị của một máy, không phải dữ liệu của phiên ⇒ không qua IPC). Giá trị lưu phân biệt **`null` (chưa chọn gì ⇒ bày hết con ra)** với **`[]` (đã tắt hết ⇒ để trống)**: trên đĩa hai cái trông như nhau nhưng nghĩa ngược nhau, và gộp chúng lại thì lần mở đầu tiên của mọi nhóm đều ra một lưới rỗng.
+
+**Bố cục:** luôn **hai cột**, và ô **cuối** khi tổng số ô là **lẻ** chiếm trọn hàng — 2 ô ⇒ 6/6, 3 ô ⇒ 6/6 rồi 12, 1 ô ⇒ 12. Số cột **không tăng** theo bề rộng (ba transcript một hàng thì mỗi cái hẹp tới mức không đọc được), chỉ **giảm** về một cột khi khung hẹp. Ngưỡng đó đo bằng **container query trên `.sgpanes`**, không phải `@media`: cột chat co lại khi mở workspace panel trong khi cửa sổ vẫn rộng nguyên, và đo cửa sổ thì bỏ sót đúng trường hợp đó.
 
 **Ô tìm phiên** là đường để làm việc này với **một phiên bất kỳ**, không cần họ hàng gì: gõ tên (hoặc dán id), chọn, nó lên lưới, xem và điều khiển được ngay. Vì vậy nút lưới hiện ở **mọi** phiên, kể cả phiên chưa có con nào.
 

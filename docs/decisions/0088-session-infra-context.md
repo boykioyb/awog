@@ -78,6 +78,8 @@ Ma trận ở Settings đặt quyền tối đa. Chip ngữ cảnh trong phiên 
 
 Đường `Bash` vẫn còn (agent cần `sam`, `helm`, script riêng). Nhưng `aws`, `terraform`, `kubectl`, `helm`, `gcloud`, `az` chạy qua `Bash` được **phân loại bằng chính `classify()`** rồi áp đúng ma trận — và nút "Always allow" của ADR 0080 **không** phủ được chúng, vì nếu phủ được thì có hai nguồn sự thật về quyền hạ tầng và người dùng sẽ tin nhầm cái yếu hơn. Muốn cho chạy thẳng thì mở ở ma trận, nơi nhìn thấy được và hết hạn được.
 
+> **Đính chính 2026-09-19 —** nút vẫn không sinh **luật**, nhưng thẻ duyệt nay chào một **allowance chỉ sống trong phiên** (khoá `infra:<tool>:<lớp>@<account>`, bằng đúng một ô của ma trận, nằm trong RAM và chết cùng phiên). Nguồn sự thật trên đĩa vì thế vẫn chỉ có ma trận, còn người dùng không phải duyệt lại cùng một ô mười lần trong một phiên. Ô `block` không đổi: nút chỉ xuất hiện ở phán quyết `ask`. Xem [permission-rules.md § Ba cổng, một thẻ](../features/permission-rules.md#ba-cổng-một-thẻ-2026-09-19).
+
 Prompt duyệt luôn hiển thị **dòng lệnh đầy đủ + ngữ cảnh đang ghim** (profile/account id, thư mục/workspace, context/namespace) — không phải một chữ "cho phép kubectl".
 
 ### 7. Ngữ cảnh là **của không gian làm việc**, không phải của riêng màn chat.

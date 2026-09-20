@@ -16,8 +16,9 @@
       >
         <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
-      <!-- Ô chính không ẩn được: ẩn nó thì lưới không còn neo vào phiên nào. -->
-      <button v-if="!primary" class="gpib" :title="t('sessions.grid.hide')" @click="emit('hide')">
+      <!-- MỌI ô ẩn được, kể cả ô của phiên cha: lưới neo vào cái NHÓM (chip trên thanh)
+           chứ không vào một ô cụ thể, nên không có ô nào phải ở lại. -->
+      <button class="gpib" :title="t('sessions.grid.hide')" @click="emit('hide')">
         <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
     </div>
@@ -85,7 +86,7 @@ import { relativeTime } from '~/utils/relative-time'
 
 const props = defineProps<{
   session: Session
-  // Ô của phiên mà lưới đang neo vào (phiên đang mở). Không ẩn được.
+  // Ô của phiên CHA của nhóm. Chỉ để tô viền cho dễ nhận — nó ẩn được như mọi ô khác.
   primary?: boolean
 }>()
 const emit = defineEmits<{ hide: []; openFull: [id: number] }>()

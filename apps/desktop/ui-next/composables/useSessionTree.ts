@@ -21,6 +21,14 @@ export type SessionTreeRow = {
   // Tổng số con cháu mọi tầng, để hàng cha thu gọn vẫn nói được nó đang giấu bao nhiêu.
   descendants: number
   collapsed: boolean
+  // ── Biên của CỤM, để danh sách vẽ được nhóm thành một khối liền ──────────────
+  // Một phiên lẻ (không cha không con) KHÔNG thuộc cụm nào: nó giữ nguyên hình dạng
+  // hàng rời như ở mọi chế độ xem khác.
+  inGroup: boolean
+  // Hàng đầu cụm = chính phiên cha. Hàng cuối = con cuối cùng (hoặc chính phiên cha
+  // khi cụm đang thu gọn). Hai cờ này chỉ để bo góc + chừa khoảng dưới đúng chỗ.
+  groupTop: boolean
+  groupBottom: boolean
 }
 
 // Số GỐC trên một trang. Đếm theo gốc chứ không theo hàng: cắt trang giữa một nhóm
@@ -85,6 +93,10 @@ function buildRows(sessions: Session[], collapsedIds: Set<string>): SessionTreeR
       hasChildren: kids.length > 0,
       descendants: eid && kids.length ? countDescendants(eid, new Set()) : 0,
       collapsed,
+      // Điền ở lượt quét sau: biên của cụm chỉ biết được khi đã có hàng KẾ TIẾP.
+      inGroup: false,
+      groupTop: false,
+      groupBottom: false,
     })
     if (collapsed) return
     for (const k of kids) visit(k, depth + 1)
@@ -97,7 +109,28 @@ function buildRows(sessions: Session[], collapsedIds: Set<string>): SessionTreeR
   for (const s of sessions) {
     if (visited.has(s.id)) continue
     visited.add(s.id)
-    rows.push({ session: s, depth: 0, hasChildren: false, descendants: 0, collapsed: false })
+    rows.push({
+      session: s,
+      depth: 0,
+      hasChildren: false,
+      descendants: 0,
+      collapsed: false,
+      inGroup: false,
+      groupTop: false,
+      groupBottom: false,
+    })
+  }
+
+  // Đánh dấu biên cụm. Một hàng thuộc cụm khi nó là phiên CHA có con, hoặc là một
+  // phiên con (depth > 0). Cụm kết thúc ngay trước hàng depth 0 kế tiếp — hàng đó
+  // hoặc mở một cụm mới, hoặc là một phiên lẻ; cả hai đều không thuộc cụm đang chạy.
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    if (!r) continue
+    if (r.depth === 0 && !r.hasChildren) continue
+    r.inGroup = true
+    r.groupTop = r.depth === 0
+    r.groupBottom = (rows[i + 1]?.depth ?? 0) === 0
   }
   return rows
 }

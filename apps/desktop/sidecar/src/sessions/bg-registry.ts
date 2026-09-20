@@ -23,6 +23,7 @@
 // credentials), all files live inside the AWOG-home session folder.
 
 import { spawn, type ChildProcess } from 'node:child_process'
+import { registerOwnedProcess, unregisterOwnedProcess } from '../monitor/owned.js'
 import {
   mkdirSync,
   writeFileSync,
@@ -299,6 +300,15 @@ export async function startBackground(input: {
   // Backstop: catches completion after a restart (no child handle) + orphans.
   state.poll = setInterval(() => pollShell(state), POLL_INTERVAL_MS)
 
+  // Màn Giám sát: một shell nền là tiến trình sống lâu nhất của phiên, nên phải
+  // quy được về đúng phiên (dòng lệnh không nói lên điều đó).
+  registerOwnedProcess({
+    pid: meta.pid,
+    kind: 'background-shell',
+    sessionId,
+    label: command.slice(0, 80),
+  })
+
   emit('session.background-started', { sessionId, shellId, command, startedAt })
   log.info('bg-registry: started', { sessionId, shellId, pid: meta.pid })
   return meta
@@ -329,6 +339,7 @@ function finalize(state: LiveShell, forced?: BgShellStatus): void {
   if (state.poll) clearInterval(state.poll)
   state.poll = undefined
   state.child = undefined
+  unregisterOwnedProcess(state.meta.pid)
 
   const dir = shellDirFor(state.meta.sessionId, state.meta.shellId)
   const hasExit = existsSync(exitPathFor(dir))

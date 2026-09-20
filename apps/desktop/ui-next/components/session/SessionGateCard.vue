@@ -103,7 +103,7 @@
            creates it. "Always allow" on `git status` grants `Bash(git status)` — not
            every Bash call — and the only way the user can know that is to read it. -->
       <div v-if="canRemember" class="prule">
-        <span class="prulelbl">{{ t('sessionsPerm.ruleLabel') }}</span>
+        <span class="prulelbl">{{ ruleLabel }}</span>
         <span class="prulecode">{{ ruleText }}</span>
         <span class="prulehint">{{ ruleMeaning }}</span>
       </div>
@@ -261,9 +261,11 @@ const cancelled = computed(
 // whether the "This project" tier is even available.
 const {
   rule: ruleText,
+  ruleLabel,
   ruleMeaning,
   noRuleReason,
   canAlwaysAllow,
+  sessionOnly,
   scope: permScope,
   setScope,
   scopeOptions,
@@ -287,12 +289,14 @@ const isProdInfra = computed<boolean>(() => infra.value?.accountKind === 'produc
 // Thẻ đang "sáng đèn" chờ người duyệt — màu (hổ phách hay đỏ) do isProdInfra chọn.
 const gateLit = computed<boolean>(() => permStatus.value === 'pending' && !cancelled.value)
 
-// KHÔNG có nút "Always allow" cho lệnh hạ tầng: nhớ được một lệnh là dựng nguồn sự
-// thật thứ hai cạnh ma trận quyền, và người dùng sẽ tin nhầm cái yếu hơn (ADR 0088
-// §6). Cổng ở sidecar đã không chào luật nào (`offerAlwaysAllow: false`) nên hôm nay
-// `canAlwaysAllow` vốn đã false; điều kiện này giữ cho nút không bao giờ mọc lại nếu
-// một đường khác lỡ gửi kèm suggestion — bấm vào nó sẽ không có tác dụng gì.
-const canRemember = computed<boolean>(() => canAlwaysAllow.value && !infra.value)
+// Lệnh hạ tầng nhớ được — nhưng CHỈ trong phiên. Luật ghi xuống đĩa cho nó là dựng
+// nguồn sự thật thứ hai cạnh ma trận quyền và người dùng sẽ tin nhầm cái yếu hơn
+// (ADR 0088 §6); allowance sống trong bộ nhớ, chết cùng phiên, thì không. Cổng ở
+// sidecar đã chỉ chào đúng dạng đó, nên điều kiện này là lưới thứ hai: một đường
+// khác lỡ gửi kèm luật cho prompt hạ tầng vẫn không mọc ra nút.
+const canRemember = computed<boolean>(
+  () => canAlwaysAllow.value && (!infra.value || sessionOnly.value),
+)
 
 type InfraChip = { key: string; label: string; tone: '' | 'warn' | 'danger' }
 // Lớp lệnh tô theo mức hậu quả, không theo mức quyền: `write` còn quay lại được,

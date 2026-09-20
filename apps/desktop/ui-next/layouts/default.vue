@@ -101,6 +101,11 @@ startGhNotifications()
 // Settings → Thông báo. Main window only — popout không toast lần thứ hai.
 startCicdNotifications()
 
+// Canh gác tài nguyên: tiến trình AWOG mồ côi, CPU cao kéo dài, RAM vượt ngưỡng →
+// thông báo (docs/features/activity-monitor.md §Cảnh báo). Mặc định BẬT — một lượt
+// đo là một tiến trình `ps` mỗi phút. Main window only — popout không báo lần hai.
+startResourceAlerts()
+
 // Drive the live system-tray status surface (rate limits / usage / running /
 // attention) + route tray menu clicks. No-op outside Electron.
 useTrayStatus()

@@ -98,6 +98,32 @@ export interface PermissionRuleSuggestion extends PermissionUpdate {
   action: 'allow'
 }
 
+// ─── AWOG "nhớ cho phiên này" (cổng SSH + cổng hạ tầng) ─────────────────────
+// Hai cổng dưới đây KHÔNG sinh được luật: SSH chạy theo `sshApprovalMode` của
+// phiên (ADR 0064 P2) và hạ tầng chạy theo ma trận ở Settings (ADR 0088 §6) —
+// ghi một luật ALLOW xuống đĩa cho chúng là dựng nguồn sự thật thứ hai cạnh nơi
+// người dùng thật sự chỉnh quyền. Nhưng "không ghi được luật" không có nghĩa là
+// phải hỏi lại mọi lời gọi: thứ ba cổng chào chung là một allowance SỐNG TRONG
+// BỘ NHỚ, chết cùng phiên (sessions/permissions.ts → allowSessionTool).
+//
+// `rememberKey` là khoá mờ do chính cổng sinh ra và chỉ cổng đó đọc lại —
+// `ssh_exec@host` / `infra:aws_cli:read@<account>`. UI không bao giờ soạn nó
+// (đúng luật ADR 0080 mục 5: renderer chọn TẦNG, không soạn nội dung quyền).
+// `subject` là chuỗi người dùng ĐỌC trước khi bấm, và phải mô tả đúng cái khoá.
+export interface PermissionSessionSuggestion extends PermissionUpdate {
+  type: 'allowSession'
+  toolName: string
+  // Allowance này không có tầng nào khác: nó không bao giờ chạm đĩa.
+  destination: 'session'
+  rememberKey: string
+  // Văn bản hiện trên thẻ duyệt, vd `ssh_exec @ prod-box` / `aws_cli · read @ 123…`.
+  subject: string
+  // Cổng nào sinh ra — UI chọn câu giải thích theo cái này.
+  gate: 'ssh' | 'infra'
+  action: 'allow'
+  sessionId?: string
+}
+
 // ─── Permission result ──────────────────────────────────────────────────────
 // The discriminated shape AWOG produces in sessions.permission.ts and consumes
 // in runtime/permission.ts. Mirrors the exact fields read/written there:

@@ -292,6 +292,9 @@
               :has-children="r.hasChildren"
               :collapsed="r.collapsed"
               :descendants="r.descendants"
+              :in-group="r.inGroup"
+              :group-top="r.groupTop"
+              :group-bottom="r.groupBottom"
               @click="$emit('select', r.session.id)"
               @ctxmenu="(p) => openCtx(p, r.session)"
               @toggle-children="toggleTree(r.session.engineId)"
@@ -497,6 +500,13 @@
               ? t('sessions.ctx.changeGroup')
               : t('sessions.ctx.moveToGroup')
           }}
+        </div>
+        <!-- Lưới các phiên con. Chỉ hiện trên phiên CÓ con: mở lưới từ một phiên lẻ
+             là mở ra một khung rỗng. Menu `⋯` của header vẫn giữ mục lưới cho MỌI
+             phiên — ở đó còn ô tìm phiên để kéo một phiên bất kỳ lên lưới. -->
+        <div v-if="ctxHasChildren" class="mi" @click="ctxGrid">
+          <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          {{ t('sessions.ctx.gridChildren') }}
         </div>
         <!-- Tự giao tin trong nhóm. CHỈ hiện trên phiên GỐC của nhóm (phiên có con và
              không có cha): cờ nằm ở gốc và là công tắc của cả nhóm, nên hiện nó ở một
@@ -972,6 +982,22 @@ const ctxIsGroupRoot = computed(() => {
   if (!s?.engineId || s.groupParentId) return false
   return props.sessions.some((x) => x.groupParentId === s.engineId)
 })
+// Phiên được bấm có phiên con nào không. Quét TOÀN BỘ store chứ không phải
+// `props.sessions` (đã lọc theo tab project + ô tìm kiếm): một phiên con bị lọc khỏi
+// danh sách vẫn là con, và lưới vẫn phải mở được nó ra.
+const ctxHasChildren = computed(() => {
+  const eid = ctx.value?.session.engineId
+  return !!eid && store.sessions.some((x) => x.groupParentId === eid)
+})
+// Mở phiên cha RỒI đặt yêu cầu lưới: `gridMode` là ref cục bộ của SessionDetail, cột
+// này không với tới được (xem `requestGridView` trong store).
+function ctxGrid() {
+  const s = ctx.value?.session
+  ctx.value = null
+  if (!s) return
+  store.requestGridView(s.id)
+  emit('select', s.id)
+}
 function ctxToggleAutoDeliver() {
   if (ctx.value) store.toggleGroupAutoDeliver(ctx.value.session.id)
   ctx.value = null

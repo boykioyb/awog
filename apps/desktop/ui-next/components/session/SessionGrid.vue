@@ -1,9 +1,22 @@
 <template>
   <div class="sgrid">
-    <!-- Thanh điều khiển: bật/tắt từng ô + thêm một phiên BẤT KỲ bằng id. Chip là
-         danh sách các phiên con; phiên thêm tay nằm sau, có dấu ✕ để bỏ hẳn. -->
+    <!-- Thanh điều khiển: bật/tắt từng ô + thêm một phiên BẤT KỲ bằng id. Chip đầu
+         tiên là chính phiên cha (mặc định tắt), rồi tới các phiên con; phiên thêm tay
+         nằm sau cùng, có dấu ✕ để bỏ hẳn. -->
     <div class="sgbar">
       <span class="sglbl">{{ t('sessions.grid.panes') }}</span>
+      <!-- Ô của CHÍNH phiên cha: mặc định tắt (lưới mở ra là để nhìn các con), bật lại
+           bằng chip này. -->
+      <button
+        class="sgchip"
+        :class="{ on: parentChip.shown }"
+        :title="parentChip.title"
+        @click="toggle(parentChip.engineId)"
+      >
+        <span class="sgcdot" :style="{ background: parentChip.color }" />
+        {{ parentChip.label }}
+      </button>
+      <span v-if="childChips.length" class="sgsep" />
       <button
         v-for="c in childChips"
         :key="c.id"
@@ -50,26 +63,35 @@
       </div>
     </div>
 
-    <div class="sgpanes" :style="{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }">
+    <div v-if="panes.length" class="sgpanes">
       <SessionGridPane
-        v-for="p in panes"
+        v-for="(p, i) in panes"
         :key="p.id"
+        class="sgpane"
+        :class="{ wide: lastIsWide && i === panes.length - 1 }"
         :session="p"
         :primary="p.id === session.id"
         @hide="hide(p)"
         @open-full="openFull"
       />
     </div>
+    <!-- Tắt hết ô là một trạng thái hợp lệ (ô cha cũng ẩn được), nhưng một khung trống
+         không nói được vì sao nó trống. -->
+    <div v-else class="sgempty">{{ t('sessions.grid.empty') }}</div>
   </div>
 </template>
 
 <script setup lang="ts">
-// Chế độ LƯỚI của một phiên: phiên đang mở + các phiên con của nó, mỗi phiên một ô có
-// transcript và composer riêng (docs/features/session-groups.md).
+// Chế độ LƯỚI của một phiên: các phiên CON của nó (và, nếu bật, chính nó), mỗi phiên
+// một ô có transcript và composer riêng (docs/features/session-groups.md).
 //
 // Vì sao nó đáng có: một phiên điều phối mà phải bấm qua bấm lại từng phiên con thì
 // người dùng mất hết cảm giác "cả nhóm đang làm gì". Bảng trạng thái (tab Group) trả
 // lời "ai xong"; lưới này trả lời "nó đang NÓI gì" — và cho hích một câu vào ô nào cần.
+//
+// Mặc định là ĐỦ CÁC PHIÊN CON, không có ô của phiên cha: mở lưới từ một phiên cha là
+// để nhìn các con: chính transcript của cha thì vừa đọc xong ở chế độ đơn. Ô cha vẫn
+// bật lại được bằng chip đầu thanh — nó là một ô như mọi ô khác, không phải cái neo.
 //
 // Ô nào hiện được nhớ theo phiên gốc trong localStorage, nên mở lại không phải bật
 // lại từ đầu. KHÔNG qua IPC: đây là sở thích hiển thị của một máy, không phải dữ liệu
@@ -79,7 +101,13 @@ import { useI18n } from '~/composables/useI18n'
 import { useSessionsStore } from '~/stores/sessions'
 import { useSessionsData, type Session } from '~/composables/useSessionsData'
 
-const props = defineProps<{ session: Session }>()
+const props = defineProps<{
+  // Phiên GỐC của lưới (phiên cha). Các ô mặc định là những phiên con của nó.
+  session: Session
+  // Tăng lên mỗi lần người dùng gọi "Xem các phiên con dạng lưới" từ menu chuột phải
+  // của danh sách ⇒ quên sở thích cũ và bày lại đủ các phiên con.
+  revealTick?: number
+}>()
 
 const { t } = useI18n()
 const store = useSessionsStore()
@@ -87,8 +115,10 @@ const { STATUS_COLOR } = useSessionsData()
 
 const STORAGE = 'awog.sessionGrid.'
 
-// engineId của các ô đang hiện (không kể ô chính). Đọc/ghi theo phiên gốc.
-const shown = ref<string[]>([])
+// engineId của các ô đang hiện. `null` = CHƯA có sở thích ⇒ hiện mọi phiên con.
+// Phân biệt `null` với `[]` là bắt buộc: trên đĩa hai cái trông như nhau nhưng nghĩa
+// ngược nhau — "chưa chọn gì" (bày hết ra) và "đã tắt hết" (để trống).
+const shown = ref<string[] | null>(null)
 const query = ref('')
 
 function storageKey(): string {
@@ -97,14 +127,14 @@ function storageKey(): string {
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(storageKey()) ?? 'null')
-    shown.value = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : []
+    shown.value = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === 'string') : null
   } catch {
-    shown.value = []
+    shown.value = null
   }
 }
 function save() {
   try {
-    localStorage.setItem(storageKey(), JSON.stringify(shown.value))
+    localStorage.setItem(storageKey(), JSON.stringify(shown.value ?? []))
   } catch {
     // Riêng tư / hết quota: lưới vẫn chạy trong phiên làm việc này, chỉ không nhớ.
   }
@@ -112,31 +142,69 @@ function save() {
 // Đổi phiên gốc ⇒ đọc lại danh sách của phiên đó (ô hiện là sở thích THEO NHÓM).
 watch(() => props.session.id, load, { immediate: true })
 
+// `immediate` là BẮT BUỘC, không phải cho gọn: lệnh từ menu chuột phải bật `gridMode`
+// và tăng tick trong CÙNG một nhịp, nên component này MOUNT khi tick đã là 1 — một
+// watcher chỉ-theo-thay-đổi sẽ không bao giờ thấy nó, và lưới mở ra với sở thích cũ
+// (có thể là rỗng) đúng lúc người dùng vừa bảo "bày hết các con ra".
+//
+// `0`/`undefined` = không có yêu cầu nào (mở từ menu `⋯`) ⇒ tôn trọng sở thích đã lưu.
+// SessionDetail đưa tick về 0 mỗi lần tắt lưới, nên một tick cũ không sống sót sang
+// lần bật sau.
+//
+// Đặt SAU watcher `load` một cách cố ý: hai cái cùng bắn trong một nhịp thì cái chạy
+// sau thắng, và lệnh của người dùng phải thắng cái đọc từ localStorage.
+watch(
+  () => props.revealTick,
+  (v) => {
+    if (!v) return
+    shown.value = null
+    try {
+      localStorage.removeItem(storageKey())
+    } catch {
+      // Như `save`: không nhớ được thì thôi, lưới vẫn đúng trong phiên làm việc này.
+    }
+  },
+  { immediate: true },
+)
+
 const children = computed<Session[]>(() => {
   const eid = props.session.engineId
   if (!eid) return []
   return store.sessions.filter((s) => s.groupParentId === eid)
 })
 const childEids = computed(() => new Set(children.value.map((c) => c.engineId ?? '')))
+const parentEid = computed(() => props.session.engineId ?? '')
 
-// Phiên đang hiện mà KHÔNG phải con — tức người dùng tự thêm bằng id.
+// engineId của mọi ô đang hiện. Chưa có sở thích ⇒ đủ các phiên con.
+const visible = computed<string[]>(
+  () => shown.value ?? children.value.map((c) => c.engineId ?? '').filter(Boolean),
+)
+
+// Phiên đang hiện mà không phải cha cũng không phải con — tức người dùng tự thêm.
 const extras = computed<Session[]>(() =>
-  shown.value
-    .filter((eid) => !childEids.value.has(eid))
+  visible.value
+    .filter((eid) => eid !== parentEid.value && !childEids.value.has(eid))
     .map((eid) => store.sessions.find((s) => s.engineId === eid))
     .filter((s): s is Session => Boolean(s)),
 )
 
-// Ô chính LUÔN đứng đầu; các ô còn lại theo thứ tự con trước, thêm-tay sau.
-const panes = computed<Session[]>(() => [
-  props.session,
-  ...children.value.filter((c) => c.engineId && shown.value.includes(c.engineId)),
-  ...extras.value,
-])
+// Thứ tự ô: cha (nếu bật) → các con → thêm-tay. Ổn định theo cấu trúc nhóm chứ không
+// theo thứ tự bấm chip: ô nhảy chỗ mỗi lần bật/tắt thì không ai theo kịp mình đang đọc
+// transcript của ai.
+const panes = computed<Session[]>(() => {
+  const set = new Set(visible.value)
+  const out: Session[] = []
+  if (parentEid.value && set.has(parentEid.value)) out.push(props.session)
+  for (const c of children.value) if (c.engineId && set.has(c.engineId)) out.push(c)
+  out.push(...extras.value)
+  return out
+})
 
-// Số cột: 1 ô ⇒ 1 cột, 2 ⇒ 2, từ 3 trở lên ⇒ 2 cột (3 ô một hàng thì mỗi transcript
-// hẹp tới mức không đọc được trên màn hình laptop). Lưới tự xuống hàng theo grid.
-const cols = computed(() => (panes.value.length <= 1 ? 1 : 2))
+// Bố cục: lưới luôn HAI cột, và ô CUỐI của một số ô lẻ chiếm trọn hàng (2 ô ⇒ 6/6;
+// 3 ô ⇒ 6/6 rồi 12; 1 ô ⇒ 12). Ba ô một hàng thì mỗi transcript hẹp tới mức không đọc
+// được trên màn hình laptop, nên số cột không tăng theo bề rộng — chỉ GIẢM về một cột
+// khi khung hẹp (container query dưới `.sgpanes`).
+const lastIsWide = computed(() => panes.value.length % 2 === 1)
 
 type Chip = {
   id: number
@@ -152,20 +220,25 @@ const chipOf = (s: Session): Chip => ({
   label: s.groupRole || s.title,
   title: s.title,
   color: STATUS_COLOR[s.status],
-  shown: !!s.engineId && shown.value.includes(s.engineId),
+  shown: !!s.engineId && visible.value.includes(s.engineId),
 })
+// Chip của CHÍNH phiên cha, đứng đầu thanh và tách khỏi nhóm chip con bằng một vạch:
+// nó là ô duy nhất không phải "phiên con", và mặc định TẮT.
+const parentChip = computed<Chip>(() => ({
+  ...chipOf(props.session),
+  title: t('sessions.grid.parentChip', { title: props.session.title }),
+}))
 const childChips = computed<Chip[]>(() => children.value.map(chipOf))
 const extraChips = computed<Chip[]>(() => extras.value.map(chipOf))
 
 function toggle(engineId: string) {
   if (!engineId) return
-  shown.value = shown.value.includes(engineId)
-    ? shown.value.filter((x) => x !== engineId)
-    : [...shown.value, engineId]
+  const cur = visible.value
+  shown.value = cur.includes(engineId) ? cur.filter((x) => x !== engineId) : [...cur, engineId]
   save()
 }
 function drop(engineId: string) {
-  shown.value = shown.value.filter((x) => x !== engineId)
+  shown.value = visible.value.filter((x) => x !== engineId)
   save()
 }
 function hide(pane: Session) {
@@ -180,7 +253,7 @@ const matches = computed(() => {
   const q = query.value.trim().toLowerCase()
   if (!q) return []
   return store.sessions
-    .filter((s) => s.engineId && s.id !== props.session.id && !shown.value.includes(s.engineId))
+    .filter((s) => s.engineId && !visible.value.includes(s.engineId))
     .filter(
       (s) =>
         s.title.toLowerCase().includes(q) ||
@@ -199,8 +272,8 @@ const matches = computed(() => {
 
 function addSession(engineId: string) {
   if (!engineId) return
-  if (!shown.value.includes(engineId)) {
-    shown.value = [...shown.value, engineId]
+  if (!visible.value.includes(engineId)) {
+    shown.value = [...visible.value, engineId]
     save()
   }
   query.value = ''
@@ -373,13 +446,29 @@ function openFull(id: number) {
   flex: 1 1 auto;
   min-height: 0;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   overflow-y: auto;
+  /* Container query chứ không phải @media: cột chat co lại khi mở workspace panel
+     trong khi cửa sổ vẫn rộng nguyên — đo cửa sổ thì bỏ sót đúng cái trường hợp đó. */
+  container-type: inline-size;
+  container-name: sgpanes;
+}
+/* Ô CUỐI khi tổng số ô là LẺ chiếm trọn hàng: 3 ô ⇒ 6/6 rồi 12, 1 ô ⇒ 12. */
+.sgpane.wide {
+  grid-column: 1 / -1;
 }
 /* Một ô hẹp hơn chừng này thì transcript không còn đọc được — dồn về một cột. */
-@media (max-width: 900px) {
+@container sgpanes (max-width: 900px) {
   .sgpanes {
-    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-columns: minmax(0, 1fr);
   }
+}
+.sgempty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--textFaint);
 }
 </style>

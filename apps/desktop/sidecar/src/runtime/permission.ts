@@ -57,6 +57,7 @@ import type { BeforeToolCallResult } from '@earendil-works/pi-agent-core'
 import type {
   CanUseTool,
   PermissionRuleSuggestion,
+  PermissionSessionSuggestion,
   PermissionUpdate,
 } from './permission-types.js'
 import type { AgentMode, SshApprovalMode } from '../types/shared.js'
@@ -243,6 +244,46 @@ function buildRuleSuggestion(
   }
 }
 
+// Khoá + nhãn của một allowance hạ tầng. Độ mịn CỐ Ý bằng đúng ô của ma trận
+// quyền — (binary, lớp lệnh, account) — vì đó là đơn vị người dùng đã quen đọc ở
+// Settings → Hạ tầng. Mịn hơn (nguyên dòng lệnh) thì gần như không bao giờ trùng
+// lại nên nút thành vô dụng; thô hơn (chỉ binary) thì một cú bấm trên `aws … ls`
+// mở luôn đường cho lớp `destructive`.
+function infraRememberKey(tool: string, cls: string, accountId: string | undefined): string {
+  return `infra:${tool}:${cls}@${accountId ?? 'default'}`
+}
+
+function infraRememberSubject(tool: string, cls: string, accountId: string | undefined): string {
+  return accountId ? `${tool} · ${cls} @ ${accountId}` : `${tool} · ${cls}`
+}
+
+// Gợi ý "nhớ cho phiên này" — thứ ba cổng quyền chào chung (xem
+// PermissionSessionSuggestion). Không sinh luật, không chạm đĩa: nó chỉ mô tả một
+// khoá mà `allowSessionTool` sẽ nhớ cho tới khi phiên chết.
+//
+// Không có `sessionId` ⇒ null: allowance chỉ tồn tại TRONG một phiên, nên một lời
+// gọi không thuộc phiên nào (task, one-shot) không có gì để nhớ và thẻ duyệt quay
+// về "cho phép một lần" — đúng hành vi cũ.
+function buildSessionSuggestion(
+  toolName: string,
+  rememberKey: string,
+  subject: string,
+  gate: 'ssh' | 'infra',
+  sessionId: string | undefined,
+): PermissionSessionSuggestion | null {
+  if (!sessionId) return null
+  return {
+    type: 'allowSession',
+    toolName,
+    destination: 'session',
+    rememberKey,
+    subject,
+    gate,
+    action: 'allow',
+    sessionId,
+  }
+}
+
 // Per-source runtime gate resolved from each active source's trust +
 // permissions.json (ADR 0060 P4). All fields optional + no-op when empty, so a
 // turn with no P4 config leaves the gate's behaviour byte-identical to before.
@@ -385,7 +426,6 @@ type InfraCall = {
   /** Lệnh `read` trả về NỘI DUNG log ⇒ `decide()` siết lên `ask` ở production. */
   sensitive?: string | undefined
 }
-
 
 // `infra_context` đổi ngữ cảnh khi lời gọi mang field ghi (`set`/`profile`/…).
 // Đọc thủ công vì args là dữ liệu L1 không tin: hình dạng lạ ⇒ coi như ĐANG ĐỔI
@@ -1059,9 +1099,9 @@ export function makeBeforeToolCall(
     const promptViaUi = async (
       forceRemember: boolean,
       // SSH tools override these: `rememberKey` scopes the remembered allowance per
-      // (session, host, tool) (F2); `offerAlwaysAllow=false` hides the "Always allow"
-      // button, which no-ops for the SSH gate (it consults sshApprovalMode, not the
-      // general allowlist — a dead button in 'prompt' mode, F6).
+      // (session, host, tool) (F2); `offerAlwaysAllow=false` tắt gợi ý LUẬT — cổng
+      // SSH và cổng hạ tầng không sinh luật được, chúng chào `sessionOffer` thay
+      // thế (allowance trong bộ nhớ, chết cùng phiên).
       // Nhánh hạ tầng thêm `decisionReason` (payload có cấu trúc: dòng lệnh,
       // account, lớp lệnh) và `description` (dòng lệnh dạng chữ cho bề mặt không
       // biết gì về hạ tầng). Cả hai đi thẳng vào `session.permission-request`
@@ -1069,6 +1109,7 @@ export function makeBeforeToolCall(
       opts?: {
         rememberKey?: string
         offerAlwaysAllow?: boolean
+        sessionOffer?: PermissionSessionSuggestion | null
         decisionReason?: unknown
         description?: string
       },
@@ -1093,9 +1134,12 @@ export function makeBeforeToolCall(
         // command, missing/relative path…) ⇒ empty array ⇒ no "Always allow"
         // button: this call has to be answered on its own merits.
         const input = (context.args ?? {}) as Record<string, unknown>
-        const suggestion = offerAlwaysAllow
-          ? buildRuleSuggestion(toolName, context.args, sessionId)
-          : null
+        // Đúng MỘT gợi ý mỗi lời hỏi, và ba cổng chào chung một chỗ: luật (cổng
+        // chung) HOẶC allowance phiên (SSH / hạ tầng). Không bao giờ cả hai — hai
+        // gợi ý cùng lúc là hai thứ khác nhau dưới một nút bấm.
+        const suggestion =
+          opts?.sessionOffer ??
+          (offerAlwaysAllow ? buildRuleSuggestion(toolName, context.args, sessionId) : null)
         const suggestions: PermissionUpdate[] = suggestion ? [suggestion] : []
         const result = await canUseTool(toolName, input, {
           signal: signal ?? new AbortController().signal,
@@ -1234,15 +1278,26 @@ export function makeBeforeToolCall(
       // no host arg (drives the watched shell) → keyed by name alone.
       const hostArg = (context.args as { host?: string } | undefined)?.host
       const sshKey = hostArg ? `${sshName}@${hostArg}` : sshName
-      if (sshApprovalMode === 'session' && sessionId && isSessionToolAllowed(sessionId, sshKey)) {
-        return undefined
-      }
+      // Không gate theo `sshApprovalMode` nữa: allowance này chỉ được ghi bởi hai
+      // hành động CỦA CHÍNH NGƯỜI DÙNG — lần duyệt đầu ở chế độ 'session', hoặc một
+      // cú bấm "Cho phép luôn" ở chế độ 'prompt'. Đọc nó chỉ ở chế độ 'session' thì
+      // nút vừa bấm không có tác dụng gì và lần gọi sau vẫn hỏi (nút nói dối).
+      if (sessionId && isSessionToolAllowed(sessionId, sshKey)) return undefined
       // 'prompt' (every call) or 'session' first-use → park. 'session' remembers on
-      // approval (forceRemember); 'prompt' never does. No "Always allow" button: the
-      // SSH gate keys off sshApprovalMode, not the general allowlist (F6).
+      // approval (forceRemember); 'prompt' chỉ nhớ khi người dùng TỰ bấm "Cho phép
+      // luôn". Nút đó chào một allowance phiên khoá theo (phiên, host, tool) — cùng
+      // đúng cái khoá mà chế độ 'session' dùng — chứ KHÔNG chào một luật: luật SSH
+      // ghi xuống đĩa sẽ là nguồn sự thật thứ hai cạnh sshApprovalMode (F6).
       return promptViaUi(sshApprovalMode === 'session', {
         rememberKey: sshKey,
         offerAlwaysAllow: false,
+        sessionOffer: buildSessionSuggestion(
+          toolName,
+          sshKey,
+          hostArg ? `${sshName} @ ${hostArg}` : sshName,
+          'ssh',
+          sessionId,
+        ),
       })
     }
 
@@ -1289,10 +1344,25 @@ export function makeBeforeToolCall(
       // 'auto' = ô ma trận (hoặc bypass tạm thời) cho chạy thẳng. Nhật ký vẫn có
       // đúng một dòng — `infra.run` ghi tại chỗ chạy, không phải tại cổng này.
       if (verdict.mode === 'auto') return undefined
-      // 'ask' — park chờ người duyệt. Không có nút "Always allow": nhớ được một
-      // lệnh hạ tầng là dựng nguồn sự thật thứ hai cạnh ma trận (ADR 0088 §6).
+      // 'ask' — park chờ người duyệt, TRỪ khi người dùng đã bấm "Cho phép luôn" cho
+      // đúng ô này trong phiên. Allowance nằm trong bộ nhớ và chết cùng phiên, nên
+      // nó KHÔNG phải nguồn sự thật thứ hai cạnh ma trận (ADR 0088 §6): ma trận vẫn
+      // là thứ duy nhất ghi xuống đĩa, và ô `block` ở trên không đường nào lách.
+      const infraKey = infraRememberKey(
+        infraCall.name,
+        infraCall.class,
+        infraGate?.context?.accountId,
+      )
+      if (sessionId && isSessionToolAllowed(sessionId, infraKey)) return undefined
       return promptViaUi(false, {
         offerAlwaysAllow: false,
+        sessionOffer: buildSessionSuggestion(
+          toolName,
+          infraKey,
+          infraRememberSubject(infraCall.name, infraCall.class, infraGate?.context?.accountId),
+          'infra',
+          sessionId,
+        ),
         decisionReason: infraPromptPayload(infraCall, verdict, infraGate?.context),
         description: infraCall.command,
       })
@@ -1351,6 +1421,10 @@ export function makeBeforeToolCall(
       // "đây có phải lệnh đọc nội dung log không". Bỏ qua ở đó là chiều an toàn:
       // `cls` đã bị ép `write`, tức đằng nào cũng phải hỏi.
       const sensitive = bashInfra.clean ? sensitiveReadOf(bashInfra.tool, bashInfra.argv) : null
+      // Dòng lệnh + account chấm cột: dựng NGOÀI `try` vì khoá "nhớ cho phiên này"
+      // dưới kia cũng đọc chúng. Cả hai đều là hàm thuần, không ném.
+      const command = String(argBag(context.args)?.command ?? '')
+      const pinnedAccountId = bashInfraAccountId(infraGate?.context, command)
       let verdict: { mode: InfraMode; reason: string; accountKind: InfraAccountKind }
       try {
         const policy = await loadInfraPolicy()
@@ -1368,8 +1442,6 @@ export function makeBeforeToolCall(
         // chặt nhất, `destructive` thành `block`. Đoán sai theo chiều cấp quyền là
         // leo thang, nên chiều đó không được phép; đoán sai theo chiều hỏi thừa
         // chỉ tốn một cú bấm.
-        const command = String(argBag(context.args)?.command ?? '')
-        const pinnedAccountId = bashInfraAccountId(infraGate?.context, command)
         verdict = decide({
           policy,
           class: cls,
@@ -1382,7 +1454,10 @@ export function makeBeforeToolCall(
         verdict = { mode: 'ask', reason: 'matrix', accountKind: 'normal' }
       }
       if (mode === 'plan' && cls !== 'read') {
-        return { block: true, reason: `Blocked in plan mode: ${toolName} is not allowed while planning.` }
+        return {
+          block: true,
+          reason: `Blocked in plan mode: ${toolName} is not allowed while planning.`,
+        }
       }
       // Ghi nhật ký cho ĐƯỜNG BASH (audit #1 F5). `runInfra()` không tham gia đường
       // này mà nhật ký lại được ghi ở đó, nên trước bản vá mọi lệnh hạ tầng chạy
@@ -1422,13 +1497,28 @@ export function makeBeforeToolCall(
         }
       }
       if (verdict.mode === 'ask') {
+        // Đã bấm "Cho phép luôn" cho đúng ô này trong phiên ⇒ chạy thẳng, nhưng
+        // VẪN ghi nhật ký: câu "app đã làm gì trên account của tôi" không được phép
+        // mất dòng chỉ vì lần duyệt nằm ở một lời gọi trước đó.
+        const bashInfraKey = infraRememberKey(`Bash:${bashInfra.tool}`, cls, pinnedAccountId)
+        if (sessionId && isSessionToolAllowed(sessionId, bashInfraKey)) {
+          noteBash('approved')
+          return undefined
+        }
         noteBash('approved')
         // Cùng payload với tool `aws_cli` nên thẻ duyệt vẽ được account/lớp lệnh —
         // trước bản này đường Bash chỉ ra một thẻ trơn, người duyệt không biết
         // lệnh chạm tài khoản nào. `offerAlwaysAllow: false`: lệnh hạ tầng không
-        // bao giờ nhớ được (task 0.14).
+        // sinh LUẬT được (task 0.14) — nó chào allowance phiên như hai cổng kia.
         return promptViaUi(false, {
           offerAlwaysAllow: false,
+          sessionOffer: buildSessionSuggestion(
+            toolName,
+            bashInfraKey,
+            infraRememberSubject(`Bash(${bashInfra.tool})`, cls, pinnedAccountId),
+            'infra',
+            sessionId,
+          ),
           // Ngữ cảnh đã ghim ĐI VÀO payload, kèm cờ `shell` (§F3 ở trên). Bản đầu
           // truyền `undefined` vì `Bash` chưa nhận `AWS_PROFILE` — khi đó thẻ nêu
           // tên account là nói về một tài khoản lệnh KHÔNG chạm tới. Nay env đã
@@ -1457,7 +1547,10 @@ export function makeBeforeToolCall(
     // still routes through the ask path below so a read can be approved. Checked
     // BEFORE auto-approve so plan mode stays read-only even with auto-approve on.
     if (mode === 'plan' && builtInGated) {
-      return { block: true, reason: `Blocked in plan mode: ${toolName} is not allowed while planning.` }
+      return {
+        block: true,
+        reason: `Blocked in plan mode: ${toolName} is not allowed while planning.`,
+      }
     }
 
     // An ALLOW rule matched this call's CONTENT (this exact command / this file),

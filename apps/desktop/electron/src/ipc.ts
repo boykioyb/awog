@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
-import { join, sep } from 'node:path'
+import { isAbsolute, join, sep } from 'node:path'
+import { realpath } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import { browser, type Rect, type TabInfo } from './browser'
@@ -176,6 +177,62 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // #2). pathToFileURL handles encoding (spaces, unicode). Used for HTML/PDF
   // "Show in browser"; for HTML the default handler is the browser, for PDF it's
   // the OS default (best effort — the in-app preview covers in-browser rendering).
+  // Chuyển một đường dẫn vào THÙNG RÁC cho trang Giám sát → Đĩa.
+  //
+  // Vì sao `shell.trashItem` chứ không phải `fs.rm`: trashItem HOÀN TÁC ĐƯỢC. Một
+  // cú `rm -rf` sai đường dẫn không có đường lùi, và ở đây đường dẫn đến từ
+  // renderer (dữ liệu L1) rồi mới tới người dùng bấm xác nhận.
+  //
+  // Ba hàng rào, cưỡng chế Ở ĐÂY chứ không tin UI đã lọc:
+  //   1. phải là đường dẫn tuyệt đối, và `realpath` để khử symlink trỏ ra ngoài;
+  //   2. phải nằm TRONG thư mục nhà — nhưng KHÔNG được là chính thư mục nhà;
+  //   3. phải sâu ít nhất hai cấp dưới nhà, để một lỗi nào đó không biến thành
+  //      "vứt cả ~/Documents vào thùng rác".
+  ipcMain.handle('shell:trashItem', async (_e, { path: target }: { path: string }) => {
+    if (typeof target !== 'string' || !isAbsolute(target)) {
+      throw new Error('trashItem: path must be absolute')
+    }
+    // realpath: một symlink trong nhà trỏ ra `/` sẽ lộ ra ở đây chứ không lọt qua
+    // phép so tiền tố bên dưới.
+    const real = await realpath(target)
+    const home = homedir()
+    if (real === home || !real.startsWith(`${home}/`)) {
+      throw new Error('trashItem: refusing a path outside the home directory')
+    }
+    const depth = real.slice(home.length + 1).split('/').filter(Boolean).length
+    if (depth < 2) {
+      throw new Error('trashItem: refusing a top-level folder in the home directory')
+    }
+    await shell.trashItem(real)
+  })
+
+  // Hiện một đường dẫn của trang Giám sát → Đĩa trong Finder.
+  //
+  // Vì sao KHÔNG dùng `shell:revealPath` sẵn có: cái đó đòi một workspace root và
+  // chặn mọi thứ ngoài nó. Tab Đĩa cố ý ĐỌC cả đĩa (`/Applications`, `/Library`,
+  // ổ gắn ngoài — chính là chỗ 360 GB nằm), nên một nút "Hiện trong Finder" gắn
+  // vào phạm vi workspace sẽ chết ở đúng những dòng người dùng muốn bấm nhất.
+  //
+  // Phạm vi ở đây khớp với phần ĐỌC của sidecar (`assertScannable`), không phải
+  // phần xoá: chặn filesystem ảo và snapshot, còn lại cho qua. Việc này chỉ MỞ
+  // Finder ở một vị trí — yếu hơn hẳn quyền liệt kê + đo mà trang đã có, và
+  // KHÔNG đọc nội dung, KHÔNG chạy trình xử lý mặc định của file (đó là lý do
+  // `shell:openPath` không được nới theo).
+  //
+  // ⚠ Ranh giới XOÁ vẫn nguyên: `shell:trashItem` ở trên chỉ nhận đường dẫn
+  // trong nhà, sâu ≥ 2 cấp. Nhìn được cả đĩa ≠ xoá được cả đĩa.
+  const UNREVEALABLE = ['/dev', '/proc', '/sys', '/Volumes/.timemachine', '/.Snapshot']
+  ipcMain.handle('shell:revealDiskPath', async (_e, { path: target }: { path: string }) => {
+    if (typeof target !== 'string' || !isAbsolute(target)) {
+      throw new Error('revealDiskPath: path must be absolute')
+    }
+    const real = await realpath(target)
+    if (UNREVEALABLE.some((p) => real === p || real.startsWith(`${p}/`))) {
+      throw new Error(`revealDiskPath: refusing ${real}`)
+    }
+    shell.showItemInFolder(real)
+  })
+
   ipcMain.handle('shell:openFileExternal', async (_e, { root, path }: PathPayload) => {
     const target = resolveInsideWorkspace(root, path)
     await shell.openExternal(pathToFileURL(target).href)

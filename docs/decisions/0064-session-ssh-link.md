@@ -68,7 +68,7 @@ Cân nhắc mô hình mỗi host thành một MCP source (dùng lại Connection
 Audit surface LLM → remote exec/write. 8 invariant AWOG PASS (secret không rời sidecar, host-key headless fail-closed, gate đặt trước short-circuit + fail-closed, `ssh_exec` không shell-concat, không SSRF/eval, hostId path-sanitize, agent tools không chạm local FS). Đã fix ngay trong P2/P3:
 - **F2 (MEDIUM):** `session`-mode allowlist key theo `(sessionId, hostId, toolName)` (trước chỉ `(sessionId, toolName)` → duyệt host A carry sang host B khi re-link). Fix: thread `sshHostId` vào `makeBeforeToolCall`, key = `${toolName}@${hostId}`.
 - **F3 (LOW):** `ssh_write_file` thêm cap 5MB (parity read cap).
-- **F6 (INFO/UX):** ẩn nút "Always allow" cho SSH tool ở mode `prompt` (nó no-op vì gate keys off `sshApprovalMode`).
+- **F6 (INFO/UX):** ẩn nút "Always allow" cho SSH tool ở mode `prompt` (nó no-op vì gate keys off `sshApprovalMode`). — **Đảo hướng 2026-09-19:** nút quay lại, nhưng thứ nó cấp là **allowance phiên** (đúng khoá `ssh_exec@host` mà mode `session` dùng), không phải luật trên đĩa; allowance đó nay được đọc ở **mọi** mode, nếu không thì nút vẫn no-op. Xem [permission-rules.md § Ba cổng, một thẻ](../features/permission-rules.md#ba-cổng-một-thẻ-2026-09-19).
 
 **Đã xử lý:**
 - **F1 (MEDIUM) — RESOLVED (user chốt 2026-07-15):** gate luôn `ssh_read_file`/`ssh_list_dir` ở `prompt`+`session` (auto vẫn free, plan vẫn cho read). Đưa cả 4 tool vào `SSH_GATED_TOOLS`, tách `SSH_MUTATING_TOOLS` cho plan-mode block.

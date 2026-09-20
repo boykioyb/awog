@@ -17,7 +17,9 @@
 // Server requests and notifications both carry `threadId` in params, which is
 // how one daemon's stream is demultiplexed back to the right session.
 
+import { basename } from 'node:path'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { registerOwnedProcess, unregisterOwnedProcess } from '../../monitor/owned.js'
 import { resolveCodexBinary } from './binary.js'
 import { log } from '../../util/logger.js'
 import type { CodexInitializeResponse } from './protocol.js'
@@ -121,6 +123,14 @@ export class CodexDaemon {
     this.child = child
     this.exitReason = undefined
     this.buf = ''
+    // Màn Giám sát: daemon này DÙNG CHUNG cho mọi phiên cùng `codexHome`, nên cố ý
+    // KHÔNG khai `sessionId` — gán nó cho một phiên là nói dối về chỗ CPU thực sự
+    // nằm. Nhãn mang tên thư mục home để phân biệt daemon của từng account.
+    registerOwnedProcess({
+      pid: child.pid ?? -1,
+      kind: 'codex-daemon',
+      label: `Codex · ${basename(this.codexHome)}`,
+    })
 
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => this.onData(chunk))
@@ -131,7 +141,10 @@ export class CodexDaemon {
       const text = chunk.trim()
       if (text) log.info('codex app-server stderr', { text: text.slice(0, 500) })
     })
-    child.on('exit', (code, signal) => this.onExit(code, signal))
+    child.on('exit', (code, signal) => {
+      unregisterOwnedProcess(child.pid)
+      this.onExit(code, signal)
+    })
     child.on('error', (err) => this.onExit(null, null, err.message))
 
     const res = (await this.request('initialize', {

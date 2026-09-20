@@ -114,6 +114,22 @@ Tên tách bạch với `sessions.sendMessage` — cái kia **bắt đầu một
 
 Chỉ cấp cho chat session (khuôn `ToolFilter.chatSession`): tin tới đích là để **một người** xem rồi quyết. Task chạy không người trông, subagent đã có đường trả kết quả về phiên cha qua tool `Task` — ở đó hai tool này chỉ là token thừa.
 
+### Tin đã giao hiện thế nào trong transcript
+
+Khối giao cho model là `lời dẫn\n\n<session-message-«nonce»>\nthân tin\n</session-message-«nonce»>`, và nó đi vào lượt chat **dưới dạng text của một message role `user`** — đó là chỗ duy nhất một tin đến từ ngoài có thể đứng. Nghĩa là transcript từng in nguyên văn cả bộ khung: bốn câu chỉ dẫn mức tin cậy (viết cho model, người đọc không dùng được gì) cộng một thẻ nonce 48 bit, kẹp lấy vài dòng nội dung thật. Người dùng báo "nhìn không ra cái gì".
+
+Nay `SessionMessageItem` cho text của message user qua [`utils/fenced-message.ts`](../../apps/desktop/ui-next/utils/fenced-message.ts): khớp khuôn ⇒ vẽ một thẻ `SessionFencedMessage` cho mỗi khối (nhãn nguồn + thân tin), không khớp ⇒ in nguyên văn như cũ.
+
+Thẻ **không có nền/viền/bo góc của riêng nó**: nó nằm trong bong bóng user (`.mu` — đã có sẵn cả ba), nên thêm một lớp nữa là hai khung lồng nhau (user báo "lại có 2 background à?"). Cùng quy ước với card lồng trong panel infra: khối bọc giữ skin, card con khử khung. Dòng nhãn *"Tin từ phiên «X»"* mới là thứ mang thông tin; nhiều tin giao trong cùng một lượt thì ngăn nhau bằng một vạch mảnh, vẫn không phải một cái khung.
+
+Ba quyết định trong đó:
+
+- **Đọc lại từ `text` chứ không gắn metadata lúc giao.** `text` là thứ DUY NHẤT được persist cho một message user, và mọi transcript đã nằm trên đĩa cũng chỉ có nó — parse ở tầng hiển thị thì các phiên cũ đẹp lên ngay, không phải đổi hình dạng JSONL cho một thứ thuần trình bày.
+- **Fail closed.** Chỉ nhận khi các khối phủ **hết** phần có chữ của message; sót một đoạn ngoài hàng rào ⇒ trả `null` và in nguyên văn. Giấu bớt chữ của một tin L1 tệ hơn nhiều so với hiển thị xấu.
+- **Thẻ đóng khớp bằng back-reference.** Một dòng `</session-message-…>` mang nonce KHÁC nằm trong thân tin — đúng cú injection mà hàng rào sinh ra để chặn — không cắt được khối, và thân tin vẫn hiện đủ. Khi sidecar đã gắn câu cảnh báo giả-dạng-hàng-rào vào lời dẫn thì thẻ nâng nó thành **huy hiệu "đáng ngờ"**: đó là thông tin duy nhất trong lời dẫn mà người dùng thật sự cần thấy.
+
+Cùng khuôn này đọc luôn khối `[pull request watch]` của [`github/pr-watch-block.ts`](../../apps/desktop/sidecar/src/github/pr-watch-block.ts) — nó có hình dạng y hệt, chỉ khác tên thẻ và lời dẫn.
+
 ### Store (`stores/sessions.ts`)
 
 `pendingInboxFor` · `canDeliverInbox` · `deliverInbox` · `dismissInboxMessage` · `dismissInbox` · `postToSession` · `listMessagingTargets`.
@@ -131,6 +147,8 @@ Hàng đợi là state của renderer, **giống `pendingWakes`**: reload mất 
 | `apps/desktop/sidecar/src/runtime/claude-sdk/session-messaging-sdk-server.ts` | Cầu MCP `awogsessions` cho nhánh Claude SDK |
 | `apps/desktop/sidecar/src/sessions/__tests__/inbox.test.ts` | Test hàng rào danh bạ |
 | `apps/desktop/ui-next/stores/sessions.ts` | Hàng đợi renderer + action giao/bỏ qua/gửi |
+| `apps/desktop/ui-next/utils/fenced-message.ts` | Đọc lại khối hàng rào từ text message (fail closed) |
+| `apps/desktop/ui-next/components/session/SessionFencedMessage.vue` | Thẻ hiện một tin đã giao trong transcript |
 | `apps/desktop/ui-next/i18n/locales/{en,vi}/sessions-inbox.json` | Chuỗi UI (`sessionsInbox.`) |
 
 ## Phần chưa làm

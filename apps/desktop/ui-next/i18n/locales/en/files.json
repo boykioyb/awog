@@ -14,5 +14,6 @@
   "files.prompt.newFilePh": "example.ts",
   "files.prompt.newFolderTitle": "New folder name",
   "files.prompt.renameTitle": "Rename",
-  "files.confirm.deleteTitle": "Delete this item?"
+  "files.confirm.deleteTitle": "Delete this item?",
+  "files.ctx.trash": "Move to Trash"
 }
