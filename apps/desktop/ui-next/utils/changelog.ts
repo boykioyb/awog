@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.37.1',
+    date: '2026-09-21',
+    highlight: {
+      en: 'Three fixes for small UI snags: the buttons in the file preview, the pet’s close button, and an agent reply that could hide itself among the thinking notes.',
+      vi: 'Ba bản sửa cho những vướng nhỏ ở giao diện: các nút trong ô xem trước tệp, nút đóng của pet, và một câu trả lời của agent có thể tự giấu mình trong phần ghi chú suy nghĩ.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Buttons in the file preview — copy path, reveal in finder, close — respond to clicks again. They had stopped working when the preview covered the window’s title bar.',
+        vi: 'Các nút trong ô xem trước tệp — sao chép đường dẫn, hiện trong Finder, đóng — lại bấm được. Trước đó chúng ngừng hoạt động khi ô xem trước phủ lên thanh tiêu đề cửa sổ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The pet’s close button now works even when the main window is closed. Closing it used to depend on the main window being open, so the button did nothing when you were only glancing at the pet.',
+        vi: 'Nút đóng của pet giờ hoạt động cả khi cửa sổ chính đã đóng. Trước đây việc đóng phụ thuộc vào cửa sổ chính đang mở, nên khi bạn chỉ liếc pet thì nút không làm gì.',
+      },
+      {
+        kind: 'fixed',
+        en: 'An agent reply written early — for example while a background helper is still running — no longer gets tucked away next to the thinking notes. A substantial reply now shows as its own block.',
+        vi: 'Một câu trả lời của agent viết sớm — ví dụ trong lúc một trợ lý nền còn đang chạy — không còn bị giấu cạnh phần ghi chú suy nghĩ. Câu trả lời đáng kể giờ hiện thành khối riêng.',
+      },
+    ],
+  },
+  {
     version: '0.37.0',
     date: '2026-09-20',
     highlight: {
