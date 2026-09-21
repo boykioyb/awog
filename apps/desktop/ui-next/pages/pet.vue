@@ -8,7 +8,7 @@
          finds nothing, so the window falls back to fully click-through and no
          quip/trick/animation runs (the DOM isn't mounted). A new prompt in any session
          flips `dismissed` back off (usePetDismiss). -->
-    <div v-if="!model.dismissed" class="pet-canvas">
+    <div v-if="!isDismissed" class="pet-canvas">
       <div v-if="hudOpen" ref="hudRef" class="pet-hudwrap">
         <PetHud
           :model="model"
@@ -35,7 +35,8 @@
       >
         <!-- Temporary-dismiss X. Sits INSIDE the anchor rect so the existing hit-test
              already covers it. Stops its own pointer/click so it never triggers the
-             anchor's pin/drag; sends `dismiss` (does NOT touch the enabled pref). -->
+             anchor's pin/drag; hides the pet locally AND sends `dismiss` (does NOT
+             touch the enabled pref). -->
         <button
           v-if="hovering"
           type="button"
@@ -43,7 +44,7 @@
           :title="t('pet.dismiss')"
           @pointerdown.stop
           @pointerup.stop
-          @click.stop="send({ kind: 'dismiss' })"
+          @click.stop="onDismiss"
         >
           <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true">
             <path d="M6 6l12 12M18 6L6 18" />
@@ -159,6 +160,20 @@ const tooltip = computed(() => {
 })
 
 const send = (cmd: AwogPetCommand): void => bridge?.sendPetCommand?.(cmd)
+
+// Ẩn pet CỤC BỘ ngay khi bấm X. Logic dismiss "thật" sống trong usePetStatus() của cửa
+// sổ chính (nó tính lại model rồi push `dismissed:true` về đây); khi cửa sổ chính đã
+// đóng thì không còn ai tính, nên `dismiss` gửi đi bị nuốt và pet không bao giờ ẩn —
+// bấm X thành no-op. Local dismiss sửa dứt điểm việc đó bất kể cửa sổ chính còn hay
+// không. VẪN gửi `dismiss` để cửa sổ chính (nếu còn) đồng bộ model. Cờ được reset khi
+// một model mới về với `dismissed:false` (một prompt mới ở phiên bất kỳ — usePetDismiss).
+const localDismissed = ref(false)
+const isDismissed = computed(() => model.value.dismissed || localDismissed.value)
+
+function onDismiss(): void {
+  localDismissed.value = true
+  send({ kind: 'dismiss' })
+}
 
 function onOpen(item: AwogPetItem): void {
   send({
@@ -431,6 +446,9 @@ watch(
 onMounted(() => {
   window.addEventListener('error', onUncaught)
   offModel = bridge?.onPetModel?.((next) => {
+    // Một model mới báo `dismissed:false` = pet được đánh thức lại (prompt mới) → gỡ
+    // cờ ẩn cục bộ để pet hiện lại.
+    if (!next.dismissed) localDismissed.value = false
     model.value = next
   })
 })
@@ -554,11 +572,13 @@ body,
 }
 
 /* Temporary-dismiss X — top-left corner, opposite the count badge (top-right). Only
-   shown on hover (v-if), so it never covers the idle sprite. */
+   shown on hover (v-if), so it never covers the idle sprite. Phải nằm GỌN trong rect
+   anchor (66×68): offset âm trước đây thò nút ra ngoài rect, mà phần thò rơi vào vùng
+   click-through (setIgnoreMouseEvents khi hit() = false) nên click bị bỏ qua. */
 .pet-dismiss {
   position: absolute;
-  top: -6px;
-  left: -6px;
+  top: 0;
+  left: 0;
   z-index: 2;
   display: flex;
   align-items: center;
