@@ -99,8 +99,48 @@ export function deriveTurnPhase(m: AssistantMessage): TurnPhase {
 // todo      → a TodoWrite carrier step (handled by the docked banner / inline todo)
 export type BlockRole = 'response' | 'activity' | 'gate' | 'todo'
 
+// Ngưỡng độ dài (ký tự) để coi một đoạn text lẻ là deliverable "đáng kể" BẤT KỂ cấu
+// trúc. ~200 ký tự ≈ vài câu — đủ dài để gần như chắc chắn là nội dung bàn giao chứ
+// không phải commentary chuyển cảnh.
+const SIGNIFICANT_TEXT_MIN_CHARS = 200
+
+// Sàn độ dài nhỏ cho nhánh cấu trúc (markdown / nhiều dòng). Một câu dẫn ngắn như
+// "1. xong", "- ok", "# note" hay hai dòng cụt vẫn KHỚP các mẫu cấu trúc nhưng KHÔNG
+// phải deliverable — vậy nên nhánh cấu trúc chỉ tính "đáng kể" khi text cũng vượt sàn
+// này (≈ một câu ngắn). Deliverable thật (heading + nội dung, list nhiều mục) luôn dài
+// hơn, nên vẫn được promote.
+const SIGNIFICANT_TEXT_STRUCTURE_MIN_CHARS = 40
+
+// Dấu hiệu cấu trúc markdown của một deliverable: heading (1–6 dấu #) hoặc list item
+// (bullet -/*/+ hoặc numbered "1." / "1)") ở đầu một dòng bất kỳ.
+const MARKDOWN_STRUCTURE_RE = /^\s{0,3}(#{1,6}\s|[-*+]\s|\d+[.)]\s)/m
+
+// Phương án 2 (ADR/quyết định sản phẩm): một text part được coi là "đáng kể" — tức là
+// deliverable thật, phải hiện thành khối response chứ không giấu vào activity thu gọn —
+// khi: đủ dài (≥200, luôn đáng kể), HOẶC có cấu trúc markdown (heading/list) / nhiều
+// đoạn·dòng NHƯNG cũng phải vượt sàn độ dài nhỏ để loại câu dẫn ngắn. One-liner
+// narration ("Giờ tôi sẽ…", "- ok") vẫn thu gọn như cũ.
+export function isSignificantText(raw: string): boolean {
+  const text = raw.trim()
+  if (!text) return false
+  if (text.length >= SIGNIFICANT_TEXT_MIN_CHARS) return true
+  // Nhánh cấu trúc: chỉ xét khi đã qua sàn độ dài nhỏ (khử one-liner có mặt list/heading).
+  if (text.length < SIGNIFICANT_TEXT_STRUCTURE_MIN_CHARS) return false
+  if (MARKDOWN_STRUCTURE_RE.test(text)) return true
+  // Nhiều đoạn: có dòng trống ngăn đoạn, hoặc ≥2 dòng nội dung.
+  if (/\n\s*\n/.test(text)) return true
+  return text.split('\n').filter((line) => line.trim()).length >= 2
+}
+
 export function blockRole(block: AssistantBlock, index: number, finalIdx: number): BlockRole {
-  if (block.kind === 'text') return index === finalIdx ? 'response' : 'activity'
+  if (block.kind === 'text') {
+    // Khối text cuối (finalIdx) luôn là response. Ngoài ra, mọi text part "đáng kể"
+    // cũng được promote thành response — model có thể viết deliverable sớm rồi còn
+    // chạy nhiều tool step và chốt bằng một câu ngắn, đừng để deliverable bị đẩy vào
+    // activity mờ. Text lẻ ngắn (commentary) vẫn nằm trong activity thu gọn.
+    if (index === finalIdx) return 'response'
+    return isSignificantText(block.text) ? 'response' : 'activity'
+  }
   if (block.kind === 'thinking') return 'activity'
   if (block.kind === 'step') return block.todos ? 'todo' : 'activity'
   return 'gate' // plan | question | perm | steer | error

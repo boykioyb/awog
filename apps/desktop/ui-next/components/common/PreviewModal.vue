@@ -669,6 +669,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   align-items: stretch;
   padding: 0;
   cursor: default;
+  /* Modal phủ từ y=0 nên header đè lên dải kéo cửa sổ `.top` (`-webkit-app-region:
+     drag`). Vùng kéo tính ở tầng compositor bất kể z-index, nên mousedown lên nút
+     sẽ khởi động kéo cửa sổ và nuốt @click (Copy path / Reveal / Close không bấm
+     được). Modal không bao giờ cần làm tay kéo → carve toàn overlay thành no-drag. */
+  -webkit-app-region: no-drag;
 }
 /* Popout window (pages/preview.vue): the modal IS the whole window, so drop `.ovl`'s dim
    backdrop — there is nothing behind it to dim, and the wash only muddies the content. */
