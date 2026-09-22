@@ -1897,3 +1897,129 @@ export interface ContextConfig {
   // explicitly via `@skill:<id>` still work; only the up-front listing is dropped.
   skillsCatalogEnabled?: boolean | undefined
 }
+
+// ── Logtime (ADR 0091) ────────────────────────────────────────────────────────
+// Giờ công soạn trong AWOG rồi đẩy lên PMS qua MCP. Nháp sống ở
+// ~/.awog/logtime/<YYYY-MM>.json; nguồn sự thật là PMS (worklogId + lockedAt).
+
+export type LogtimeStatus = 'draft' | 'posted' | 'locked'
+
+export interface LogtimeTaskRef {
+  // taskId của PMS (worklog_list_tasks → value). Rỗng nếu chỉ gắn bằng issue URL.
+  id?: string | undefined
+  // Số issue GitHub — dùng để dựng link và để người đọc nhận ra.
+  issue?: number | undefined
+  title?: string | undefined
+}
+
+export interface LogtimeEntry {
+  // id nội bộ của AWOG, KHÔNG phải worklogId của PMS.
+  id: string
+  // Khoá nối sang settings.links → (sourceId, pmsProjectId).
+  projectKey: string
+  note: string
+  hours: number
+  task?: LogtimeTaskRef | undefined
+  status: LogtimeStatus
+  worklogId?: string | undefined
+  lockedAt?: string | undefined
+  // refId của gợi ý (`LogtimeSuggestion.refId` — id phiên/task) đã sinh ra dòng này.
+  // Chỉ để panel "Hôm nay bạn đã làm" nhận ra thẻ đã được khai KỂ CẢ khi note đã bị
+  // AI viết lại khác tiêu đề gốc (so theo refId thay vì so chữ). KHÔNG tham gia lời
+  // gọi PMS.
+  sourceRefId?: string | undefined
+  updatedAt: number
+}
+
+export interface LogtimeDay {
+  entries: LogtimeEntry[]
+}
+
+export interface LogtimeMonth {
+  month: string // YYYY-MM
+  days: Record<string, LogtimeDay> // key = YYYY-MM-DD
+}
+
+// Một việc AWOG TỰ ĐO ĐƯỢC là đã xảy ra trong ngày — phiên chat có hoạt động,
+// hoặc task tạo mới. Dùng để gợi ý dòng công ở tab Ngày.
+//
+// ⚠ CỐ Ý KHÔNG có trường `hours`. AWOG không đo được người dùng đã bỏ bao lâu cho
+// một phiên, và một con số suy diễn ở đây đi thẳng lên PMS như giờ công thật. Người
+// dùng tự đặt giờ bằng nút ± rồi qua cổng `addEntry` như mọi dòng khác.
+export interface LogtimeSuggestion {
+  // Phiên chat hay task — hai nguồn duy nhất, quyết định nhãn và icon ở UI.
+  kind: 'session' | 'task'
+  // id phiên / id task. UI dùng làm `:key` và để tự ẩn gợi ý đã thêm.
+  refId: string
+  // projectKey của logtime — tức `Project.id`, xem LogtimeSetup.
+  projectKey: string
+  title: string
+  // Thời điểm đáng chú ý của việc đó, ISO. Phiên = lần hoạt động cuối, task = lúc tạo.
+  at: string
+  // Số issue GitHub NẾU nguồn nói chắc đó là issue. Không bao giờ là link: UI tự
+  // dựng URL từ `LogtimeLink.githubRepo`.
+  issue?: number | undefined
+  // Số PR nếu phiên mở từ link `/pull/<n>`. KHÁC issue: KHÔNG auto-link được (API
+  // worklog chỉ nhận issue) — chỉ để model nhắc trong note.
+  pr?: number | undefined
+}
+
+// Một dòng công do model SOẠN (tính năng "Soạn bằng AI"). KHÁC `LogtimeSuggestion`:
+// gợi ý cố ý không mang `hours` (bề mặt bị động, không được bịa số), còn compose là
+// hành động NGƯỜI DÙNG chủ động gọi và duyệt từng dòng — model được đề xuất `hours`,
+// nhưng dòng nhận về vẫn là NHÁP đi qua cổng `addEntry` như mọi dòng khác và đẩy PMS
+// vẫn là bước riêng có xác nhận. Model không bao giờ tự đẩy.
+export interface LogtimeComposeLine {
+  // Phải thuộc tập dự án đã nối PMS truyền vào — model không được bịa projectKey.
+  projectKey: string
+  note: string
+  hours: number
+  // Số issue model rút ra được (chỉ issue, không PR — xem quy ước ở suggestions).
+  issue?: number | undefined
+}
+
+// Một dự án AWOG nối với đúng một dự án trên đúng một nguồn PMS.
+export interface LogtimeLink {
+  projectKey: string
+  label?: string | undefined
+  sourceId: string
+  pmsProjectId: string
+  pmsProjectName?: string | undefined
+  // owner/repo — chỉ để dựng link issue GitHub, không tham gia lời gọi PMS.
+  githubRepo?: string | undefined
+  color?: string | undefined
+}
+
+export interface LogtimeSettings {
+  dailyHours: number
+  roundStep: number
+  remindAt: string
+  remindEnabled: boolean
+  // Nguồn MCP mà Logtime ĐƯỢC PHÉP dùng, do người dùng chọn ở tab Thiết lập.
+  // Không suy ra từ `links`: nếu suy ra thì mọi server MCP đang bật đều bị dò
+  // `tools/list` (mỗi lần dò là một handshake thật) chỉ để vẽ ra một bảng đầy dấu ✗.
+  sourceIds: string[]
+  links: LogtimeLink[]
+}
+
+// Năng lực dò được của một nguồn (tools/list → có tool nào). `canPush` = đủ tool
+// bắt buộc; UI khoá nút đẩy theo cờ này chứ không theo tên PMS.
+export interface LogtimeSourceCapability {
+  sourceId: string
+  name: string
+  url?: string | undefined
+  tools: string[]
+  missing: string[]
+  canPush: boolean
+  canListTasks: boolean
+  canPull: boolean
+  error?: string | undefined
+}
+
+// Kết quả đẩy MỘT dòng — trả về từng dòng để lỗi giữa chừng biết đúng dòng nào.
+export interface LogtimePushResult {
+  entryId: string
+  ok: boolean
+  worklogId?: string | undefined
+  error?: string | undefined
+}

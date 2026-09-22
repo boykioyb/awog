@@ -83,6 +83,7 @@ import { isBrowserToolName, isMutatingBrowserAction } from './tools/browser-tool
 import { isDevServerToolName, isMutatingDevServerAction } from './tools/dev-server-tool.js'
 import { SOURCE_MUTATING_TOOL_NAMES } from './tools/source-tools.js'
 import { WIKI_MUTATING_TOOL_NAMES } from './tools/wiki-tools.js'
+import { LOGTIME_MUTATING_TOOL_NAMES } from './tools/logtime-tools.js'
 import { INFRA_APP_MUTATING_TOOL_NAMES } from './tools/infra-app-tools.js'
 // Ma trận quyền hạ tầng (ADR 0088 §5). `classify` + `decide` là hàm THUẦN;
 // `loadInfraPolicy` đọc đĩa nhưng đã tự phòng thủ (không bao giờ ném, có cache).
@@ -165,6 +166,14 @@ function isWikiMutatingTool(name: string): boolean {
   return WIKI_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
 }
 
+// `logtime_add` / `logtime_remove` ghi vào sổ giờ công của người dùng — gate như
+// `wiki_write` và vì đúng lý do đó. Việc ĐẨY lên PMS không có tool nào (ADR 0091
+// D-5), nên cổng này chỉ đứng trước phần nháp. Khớp cả tên trần (Pi) lẫn
+// `mcp__awoglogtime__logtime_add` (Claude SDK), nếu không lời gọi bắc cầu lọt cổng.
+function isLogtimeMutatingTool(name: string): boolean {
+  return LOGTIME_MUTATING_TOOL_NAMES.some((n) => name === n || name.endsWith(`__${n}`))
+}
+
 // Tool tạo ra một thực thể trong app của người dùng (một bảng điều khiển, một kế hoạch
 // dọn dẹp). Gate như `wiki_write` và vì đúng lý do đó: nó ghi vào không gian của họ.
 // KHÔNG đổi gì trên AWS — kế hoạch dọn dẹp mới chỉ là file, chạy nó vẫn phải qua vòng
@@ -200,6 +209,7 @@ function isGatedTool(name: string, args: unknown): boolean {
     SSH_GATED_TOOLS.has(name) ||
     isSourceMutatingTool(name) ||
     isWikiMutatingTool(name) ||
+    isLogtimeMutatingTool(name) ||
     isInfraAppMutatingTool(name)
   )
 }

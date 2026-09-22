@@ -25,6 +25,7 @@ import { CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES } from './code-index-tool.
 import { SESSION_MESSAGING_MCP_SERVER, SESSION_MESSAGING_TOOL_NAMES } from './session-tools.js'
 import { INFRA_MCP_SERVER, INFRA_TOOL_NAMES } from './infra-tools.js'
 import { INFRA_APP_TOOL_NAMES } from './infra-app-tools.js'
+import { LOGTIME_MCP_SERVER, LOGTIME_TOOL_NAMES } from './logtime-tools.js'
 
 // Nguồn: DẪN XUẤT từ chính các hằng danh sách tool mà mỗi server export, chứ
 // không chép tay tên tool. Thêm một tool vào `SURFACE_TOOL_NAMES` là bảng này tự
@@ -43,6 +44,7 @@ const BRIDGED_SERVERS: readonly (readonly [string, readonly string[]])[] = [
   // khoản AWS) và `infra-app-tools` (chạm tài nguyên phía AWOG của các màn đó). Hai
   // entry cùng khoá server sẽ tuỳ tầng tiêu thụ mà cái sau đè cái trước.
   [INFRA_MCP_SERVER, [...INFRA_TOOL_NAMES, ...INFRA_APP_TOOL_NAMES]],
+  [LOGTIME_MCP_SERVER, LOGTIME_TOOL_NAMES],
   ['awogwiki', ['wiki_search', 'wiki_read', 'wiki_write', 'wiki_delete']],
   ['awogmemory', ['memory_remember', 'memory_forget', 'memory_read']],
   [

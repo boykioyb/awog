@@ -8,6 +8,7 @@
   "nav.tasks": "Tasks",
   "nav.workflows": "Workflows",
   "nav.schedules": "Lịch chạy",
+  "nav.logtime": "Logtime",
   "nav.agents": "Agents",
   "nav.skills": "Skills",
   "nav.commands": "Commands",

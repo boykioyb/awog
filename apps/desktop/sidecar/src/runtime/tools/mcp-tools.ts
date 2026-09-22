@@ -781,6 +781,27 @@ async function executeMcpCall(
   }
 }
 
+// Gọi một tool MCP NGOÀI vòng lặp LLM — dùng cho các tính năng CRUD tất định như
+// Logtime (ADR 0091 D-1/D-2), nơi một lời gọi `worklog_create` không nên đi qua
+// model. Cùng đường transport/abort/clip với đường của agent; kết quả trả về dạng
+// text đã gộp để caller tự `JSON.parse` (MCP server gói JSON trong content text).
+//
+// KHÔNG dùng pool: caller là RPC one-shot, không có session để bám.
+export async function callMcpToolText(
+  serverId: string,
+  server: McpServersConfig[string],
+  toolName: string,
+  params: unknown,
+): Promise<{ text: string; isError: boolean }> {
+  const result = await executeMcpCall(serverId, server, toolName, params, [], undefined)
+  const text = result.content
+    .filter((c): c is TextContent => c.type === 'text')
+    .map((c) => c.text)
+    .join('\n')
+  const isError = (result.details as { isError?: boolean } | undefined)?.isError === true
+  return { text, isError }
+}
+
 // Synthesize one Pi AgentTool from an MCP tool descriptor (direct path).
 function synthTool(
   serverId: string,

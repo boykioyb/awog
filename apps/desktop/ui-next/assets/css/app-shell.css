@@ -2387,6 +2387,26 @@ body[data-platform='linux']:has(.app) {
   --titlebar-inset-end: calc(100vw - env(titlebar-area-width, 100vw));
 }
 
+/* …and taking the inset is only half of it: the drag region is resolved at WINDOW
+   level, so an overlay painted ON TOP of `.top` does not cancel its
+   `-webkit-app-region: drag` — it inherits a dead strip and swallows every click in
+   it. `.ovl` is `position: fixed; inset: 0` (prototype.css), i.e. EVERY modal covers
+   the bar, so the opt-out belongs here once rather than in each of the ~23 call
+   sites. Reported symptom: the copy-path / reveal buttons in PreviewModal's header
+   did nothing, because that row sits inside the top 52px of the shell window. Same
+   trap already documented in MonitorDiskDrawer.vue.
+
+   The four scrims that do NOT use `.ovl` are listed alongside it: each is its own
+   `position: fixed; inset: 0` layer, so each would otherwise keep a strip where
+   click-to-close is dead. */
+.ovl,
+.cmdk-ovl,
+.tph-ovl,
+.lop-scrim,
+.shell-scrim {
+  -webkit-app-region: no-drag;
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    Interaction states (docs/features/native-macos-polish.md §4 W2)
 

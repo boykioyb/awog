@@ -42,6 +42,7 @@ import { createAskUserQuestionTool } from './ask-user-question-tool.js'
 import { createSourceTools } from './source-tools.js'
 import { createSurfaceTools } from './surface-tools.js'
 import { createWikiTools } from './wiki-tools.js'
+import { createLogtimeTools } from './logtime-tools.js'
 import { createMemoryTools } from './memory-tools.js'
 import { createInfraTools, type CreateInfraToolsOptions } from './infra-tools.js'
 import { createTodoWriteTool } from './builtin-stubs.js'
@@ -112,6 +113,12 @@ export interface ToolFilter {
   includeWikiTools?: {
     projectId?: string | undefined
     // Agent may create/update/delete wiki pages (Settings → Wiki, default off).
+    canWrite?: boolean | undefined
+  }
+  // Logtime tools (ADR 0091). Chỉ set khi người dùng ĐÃ nối ít nhất một dự án với
+  // PMS — ai không dùng Logtime thì không trả một token schema nào. `canWrite` cho
+  // phép agent thêm/xoá dòng NHÁP; đẩy lên PMS không có tool nào (D-5).
+  includeLogtimeTools?: {
     canWrite?: boolean | undefined
   }
   // Memory tools (ADR 0073 D-11). `autoWrite` gates memory_remember/memory_forget
@@ -290,6 +297,8 @@ export function createAwogToolDefinitions(
     ...(filter.includeSourceTools ? createSourceTools() : []),
     // Wiki lookup (ADR 0073) — present only when the wiki has LLM-visible pages.
     ...(filter.includeWikiTools ? createWikiTools(filter.includeWikiTools) : []),
+    // Logtime (ADR 0091) — chỉ khi đã nối dự án với PMS.
+    ...(filter.includeLogtimeTools ? createLogtimeTools(filter.includeLogtimeTools) : []),
     // Memory (ADR 0073 part B) — write tools only when the user opted in.
     ...(filter.includeMemoryTools ? createMemoryTools(filter.includeMemoryTools) : []),
     // Hạ tầng (ADR 0088 §4): `aws_cli` chèn cờ ngữ cảnh phía sidecar, nên agent

@@ -104,6 +104,20 @@ export async function loadSource(slug: string): Promise<SourceConfig | null> {
   }
 }
 
+// Look a source up by its STABLE `id` rather than the folder slug.
+//
+// The two are different keys and are not interchangeable: `slug` is the folder
+// name and is user-editable (`renameSource` moves the directory), while `id` is
+// the durable identity — keychain account prefix, agent/session whitelist key,
+// and the value every RPC payload carries (`logtime.projects { sourceId }`,
+// `logtime.capabilities` → `available[].id`). Passing an id to `loadSource`
+// builds a path that does not exist and comes back as a silent "source not
+// found", so callers holding an id must come through here.
+export async function loadSourceById(id: string): Promise<SourceConfig | null> {
+  const all = await listSources()
+  return all.find((s) => s.id === id) ?? null
+}
+
 export async function listSources(): Promise<SourceConfig[]> {
   let names: string[]
   try {

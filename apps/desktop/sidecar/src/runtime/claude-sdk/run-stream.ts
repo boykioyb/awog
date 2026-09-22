@@ -67,6 +67,8 @@ import { buildApiSdkServers } from './api-sdk-server.js'
 import { buildSourceToolsSdkServer } from './source-sdk-server.js'
 import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
 import { buildWikiToolsSdkServer } from './wiki-sdk-server.js'
+import { buildLogtimeToolsSdkServer } from './logtime-sdk-server.js'
+import { hasLogtimeLinks } from '../../logtime/store.js'
 import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
 import { buildSurfaceToolsSdkServer } from './surface-sdk-server.js'
@@ -645,6 +647,8 @@ export async function runStreamClaude(
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
   const memoryAutoWrite = ctxCfg?.memoryAutoWrite === true
   const memoryBodies = memoryOn && (await hasMemoryBodies(args.projectId))
+  // Logtime (ADR 0091): chỉ khi đã nối dự án với PMS — cùng luật với nhánh Pi.
+  const logtimeOn = await hasLogtimeLinks()
   // Source nào sắp bị chính AWOG nuốt mất tool thì phải NÓI RA. Không tự đổi tên
   // giữa lượt — đổi id ở đây làm hỏng whitelist per-agent và tiền tố account
   // keychain; việc của dòng này là biến một lỗi câm thành một lỗi đọc được.
@@ -672,6 +676,9 @@ export async function runStreamClaude(
           awogwiki: buildWikiToolsSdkServer(args.projectId, ctxCfg?.wikiAutoWrite === true),
         }
       : {}),
+    // Logtime → mcp__awoglogtime__logtime_day / _projects / _add / _remove.
+    // KHÔNG có tool đẩy lên PMS (ADR 0091 D-5): người dùng tự bấm ở trang Logtime.
+    ...(logtimeOn ? { awoglogtime: buildLogtimeToolsSdkServer({ canWrite: true }) } : {}),
     // Memory → mcp__awogmemory__memory_remember / _forget / _read.
     ...(memoryAutoWrite || memoryBodies
       ? {

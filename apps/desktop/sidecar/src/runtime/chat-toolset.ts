@@ -19,6 +19,7 @@ import { createRuntimeToolDefinitions, isToolAllowed } from './tools/index.js'
 import type { RuntimeToolset } from './tools/index.js'
 import { hasWikiContext } from '../wiki/inject.js'
 import { hasMemory, hasMemoryBodies } from '../memory/inject.js'
+import { hasLogtimeLinks } from '../logtime/store.js'
 import { listAgents } from '../agents/store.js'
 import { listWorkflows } from '../workflows/store.js'
 import { listHosts } from '../ssh/store.js'
@@ -63,6 +64,9 @@ export async function buildChatToolset(
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
   const memoryAutoWrite = ctxCfg?.memoryAutoWrite === true
   const memoryBodies = memoryOn && (await hasMemoryBodies(args.projectId))
+  // Logtime (ADR 0091): tool chỉ tồn tại khi người dùng ĐÃ nối ít nhất một dự án
+  // với PMS. Chưa dùng Logtime ⇒ không có schema nào ⇒ không tốn token.
+  const logtimeOn = await hasLogtimeLinks()
   const built = await createRuntimeToolDefinitions(
     args.cwd ?? process.cwd(),
     args.mcpServers,
@@ -92,6 +96,10 @@ export async function buildChatToolset(
             },
           }
         : {}),
+      // Logtime (ADR 0091) — phiên chat trả lời được "hôm nay khai mấy tiếng" và ghi
+      // hộ một dòng nháp. KHÔNG có tool đẩy lên PMS: đó là thao tác ra ngoài, người
+      // dùng tự bấm (D-5). Tool ghi vẫn qua cổng quyền từng lời gọi.
+      ...(logtimeOn ? { includeLogtimeTools: { canWrite: true } } : {}),
       // Memory write/read tools (ADR 0073 D-11). Omitted entirely when the user has
       // not opted into agent writes and no fact has extra detail to read.
       ...(memoryAutoWrite || memoryBodies
