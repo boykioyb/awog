@@ -2,7 +2,7 @@
   "name": "awog-ui-next",
   "private": true,
   "type": "module",
-  "version": "0.37.1",
+  "version": "0.38.0",
   "scripts": {
     "build": "node scripts/inline-katex-fonts.mjs && nuxt build",
     "dev": "nuxt dev",
