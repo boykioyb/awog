@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.38.0',
+    date: '2026-09-22',
+    highlight: {
+      en: 'A new Logtime screen: write down your hours for the day once, in one place, and send them to every project management system you work with. It suggests rows from the sessions and tasks you actually ran that day, keeps you under your daily cap, and never sends anything to your company’s systems until you have seen the exact payload and confirmed it yourself.',
+      vi: 'Màn Logtime mới: khai giờ công của một ngày ở một chỗ duy nhất, rồi đẩy đi mọi hệ PMS bạn đang làm. Nó gợi ý dòng công từ chính những phiên và tác vụ bạn đã chạy hôm đó, giữ bạn không vượt mức giờ mỗi ngày, và không bao giờ gửi gì lên hệ thống của công ty trước khi bạn tự xem payload và tự xác nhận.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'A new Logtime screen. One row is "what you did · how long · which project", typed in a few seconds. A budget bar shows how much of the day you have accounted for and how much is left, and AWOG stops you at your cap instead of letting the timesheet come back from accounting.',
+        vi: 'Màn Logtime mới. Một dòng công là "làm gì · mấy tiếng · dự án nào", gõ trong vài giây. Thanh ngân sách cho thấy đã khai bao nhiêu và còn thiếu bao nhiêu, và AWOG chặn lại khi bạn vượt mức thay vì để kế toán trả về.',
+      },
+      {
+        kind: 'added',
+        en: 'Send your hours to several systems from one place. Each project is linked to the project management system it belongs to, and AWOG writes to that system directly — you no longer open two or three web pages at the end of the day. Pull the day back to see which rows are already there and which the company has locked.',
+        vi: 'Đẩy giờ công đi nhiều hệ tại một chỗ. Mỗi dự án được nối với hệ PMS của nó, và AWOG ghi thẳng lên hệ đó — bạn không còn phải mở hai ba trang web cuối mỗi ngày. Kéo ngày đó về để biết dòng nào đã có trên đó và dòng nào công ty đã khoá.',
+      },
+      {
+        kind: 'added',
+        en: 'Nothing leaves without your say. Pushing shows you the exact rows about to be sent, one by one, and the button stays locked until you tick the confirmation. Rows are sent one at a time, so if one fails you know which one.',
+        vi: 'Không gì đi ra ngoài mà bạn chưa đồng ý. Lúc đẩy, AWOG cho bạn xem đúng từng dòng sắp gửi, và nút vẫn khoá cho tới khi bạn tích ô xác nhận. Các dòng được gửi lần lượt, nên lỗi một dòng thì bạn biết đúng dòng nào.',
+      },
+      {
+        kind: 'added',
+        en: '"What you did today", filled in for you. A side panel lists the sessions and tasks you actually ran that day on projects you have linked, and one click turns a raw title into a readable note with the issue link attached. Or let AI draft the whole day — you still review every row, and you still press the button.',
+        vi: '"Hôm nay bạn đã làm", điền sẵn cho bạn. Một panel bên cạnh liệt kê những phiên và tác vụ bạn đã chạy hôm đó trên các dự án đã nối, và một cú bấm biến tiêu đề thô thành một note đọc được kèm link issue. Hoặc để AI soạn cả ngày — bạn vẫn duyệt từng dòng, và vẫn tự bấm nút.',
+      },
+      {
+        kind: 'added',
+        en: 'A week at a glance, and a report to paste. The Week view puts every project against the seven days so a gap is visible before Friday, and any day or week can be copied out as a short summary, a table, or raw data.',
+        vi: 'Một tuần trong một cái nhìn, và báo cáo để dán. Màn Tuần đặt từng dự án cạnh bảy ngày để chỗ thiếu hiện ra trước thứ Sáu, và ngày hay tuần nào cũng sao ra được dưới dạng tóm tắt gọn, bảng, hoặc dữ liệu thô.',
+      },
+      {
+        kind: 'added',
+        en: 'Ask in chat. You can ask a session what you logged today, or have it add and remove draft rows for you — each write asks your permission first, and it has no way to push to your company’s systems.',
+        vi: 'Hỏi ngay trong chat. Bạn có thể hỏi một phiên hôm nay đã khai gì, hay nhờ nó thêm và bỏ dòng nháp — mỗi lần ghi đều xin phép bạn trước, và nó không có đường nào để đẩy lên hệ thống công ty.',
+      },
+      {
+        kind: 'added',
+        en: 'Your numbers, not ours. The daily cap, the rounding step and the hour you get reminded are all settings, and adding a new project management system needs no update from us as long as it speaks the same convention.',
+        vi: 'Con số của bạn, không phải của chúng tôi. Mức giờ mỗi ngày, bậc làm tròn và giờ được nhắc đều là cấu hình, và thêm một hệ PMS mới không cần chúng tôi cập nhật gì, miễn là nó nói cùng một quy ước.',
+      },
+    ],
+  },
+  {
     version: '0.37.1',
     date: '2026-09-21',
     highlight: {
