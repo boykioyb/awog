@@ -30,6 +30,21 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.38.1',
+    date: '2026-09-23',
+    highlight: {
+      en: 'A fix for chat on Claude models, which had started answering every message with an error about an out-of-date version instead of a reply.',
+      vi: 'Bản sửa cho chat trên các model Claude, vốn đã bắt đầu trả lời mọi tin nhắn bằng một lỗi về phiên bản cũ thay vì một câu trả lời.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Chat on Claude models works again. Anthropic raised the minimum version their service accepts, so every turn came back with “does not support this model; version 2.1.280 or newer is required”. AWOG now ships that newer version.',
+        vi: 'Chat trên các model Claude chạy lại được. Anthropic nâng phiên bản tối thiểu mà dịch vụ của họ chấp nhận, nên mọi lượt đều trả về “does not support this model; version 2.1.280 or newer is required”. AWOG nay đóng gói sẵn phiên bản mới đó.',
+      },
+    ],
+  },
+  {
     version: '0.38.0',
     date: '2026-09-22',
     highlight: {
