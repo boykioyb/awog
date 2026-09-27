@@ -47,6 +47,72 @@ const READ_ONLY = [
 // Read methods that take a `workspaceRoot` → must be scoped to a known project (F3).
 const GIT_SCOPED = ['git.status', 'git.diff', 'git.log'] as const
 
+// Same scoping for the read-only workspace file APIs the Files panel needs.
+// Both take `workspaceRoot` + a RELATIVE `path`; the sidecar re-runs
+// assertInsideWorkspace, so a `../` that slips past us still dies there.
+// Writes stay out — no fs.writeFile/create/rename/delete from a remote origin.
+const FS_SCOPED = ['fs.listDir', 'fs.readFile'] as const
+
+// Terminal + SSH (ADR 0063/0019 surface). Every one of these is `execute`-class
+// power — a live PTY on the desktop, or arbitrary commands/files on a
+// configured SSH host — with NO approval card in the loop, so the whole group
+// sits in UNATTENDED_ONLY below: reachable only while the desktop's own
+// unattended switch is on. Params pass through unchanged: the sidecar zod
+// schemas bound every field (id regexes, command/path caps), and none of these
+// carries a workspaceRoot for us to pin. `terminal.create` is the exception —
+// it takes workspaceRoot + sessionId, so it goes through the scoped branch and
+// is listed next to FS_SCOPED instead.
+//
+// Deliberately EXCLUDED even under unattended:
+//   ssh.sftp.upload / ssh.sftp.download — they take a `localPath`, i.e. a
+//   phone-chosen arbitrary file path ON THE DESKTOP (write-anything on
+//   download, read-anything on upload). No remote frame may pick a local path.
+const MACHINE_METHODS = [
+  'terminal.list',
+  'terminal.write',
+  'terminal.resize',
+  'terminal.kill',
+  'ssh.list',
+  'ssh.connections',
+  'ssh.test',
+  'ssh.connect',
+  'ssh.disconnect',
+  'ssh.exec',
+  'ssh.runInShell',
+  'ssh.write',
+  'ssh.resize',
+  'ssh.confirmHostKey',
+  'ssh.upsert',
+  'ssh.delete',
+  'ssh.setCredential',
+  'ssh.getCredential',
+  'ssh.identityUpsert',
+  'ssh.identityDelete',
+  'ssh.detectKeyType',
+  'ssh.importConfig',
+  'ssh.importConfigApply',
+  'ssh.forward.list',
+  'ssh.forward.start',
+  'ssh.forward.stop',
+  'ssh.sftp.list',
+  'ssh.sftp.statx',
+  'ssh.sftp.read',
+  'ssh.sftp.mkdir',
+  'ssh.sftp.createFile',
+  'ssh.sftp.rename',
+  'ssh.sftp.delete',
+  'ssh.sftp.compress',
+  'ssh.sftp.extract',
+  'ssh.sftp.copy',
+  'ssh.sftp.chmod',
+  'ssh.sftp.chown',
+  'ssh.sftp.toolcheck',
+] as const
+
+// terminal.create is scoped like fs.listDir: the phone sends `projectId`, the
+// gateway pins workspaceRoot. Still UNATTENDED_ONLY on top of that.
+const TERMINAL_SCOPED = ['terminal.create'] as const
+
 // Mutating / turn-driving methods → bespoke param-pick below (F1).
 const BESPOKE = [
   'sessions.sendMessage',
@@ -77,7 +143,14 @@ const BESPOKE = [
 
 // Remote allowlist (exact-match, default-deny) — validated against the sidecar
 // registry at boot (remote-gateway.ts).
-export const REMOTE_ALLOWLIST: readonly string[] = [...READ_ONLY, ...GIT_SCOPED, ...BESPOKE]
+export const REMOTE_ALLOWLIST: readonly string[] = [
+  ...READ_ONLY,
+  ...GIT_SCOPED,
+  ...FS_SCOPED,
+  ...TERMINAL_SCOPED,
+  ...MACHINE_METHODS,
+  ...BESPOKE,
+]
 export const METHOD_ALLOWLIST: ReadonlySet<string> = new Set(REMOTE_ALLOWLIST)
 
 export function isMethodAllowed(method: string): boolean {
@@ -90,7 +163,9 @@ export function isMethodAllowed(method: string): boolean {
 // same power as a remote `execute` turn, wearing a different name. Supervising an
 // EXISTING task (approve/cancel/pause/resume) is not here: those act on a DAG the
 // desktop user authored, which is exactly what ADR 0067 §3 allowlisted.
-const UNATTENDED_ONLY = new Set<string>(['tasks.create'])
+// Terminal + SSH join it: a PTY or an exec on a saved host is unattended-class
+// power — a command stream no approval card ever sees.
+const UNATTENDED_ONLY = new Set<string>(['tasks.create', 'terminal.create', ...MACHINE_METHODS])
 
 export function requiresUnattended(method: string): boolean {
   return UNATTENDED_ONLY.has(method)
@@ -99,9 +174,12 @@ export function requiresUnattended(method: string): boolean {
 // --- F2: event egress allowlist -------------------------------------------
 
 // Only these event types may ever be forwarded to a phone. Everything else —
-// crucially `auth.oauth-url`, `source.oauth-url`, `terminal.*`, `ssh:*`, `vpn:*`,
+// crucially `auth.oauth-url`, `source.oauth-url`, `ssh:*`, `vpn:*`,
 // `source.tools-log`, `fs:changed`, `git:status:changed` — is blocked. The gateway
 // ALSO scopes these by the session/task a device has subscribed to (see gateway).
+// `terminal.data`/`terminal.exit` ride the same session subscription — the
+// payload's sessionId scopes them the moment a terminal is created for that
+// session, and no terminal exists without an unattended-gated create first.
 const EVENT_EGRESS = new Set<string>([
   'session.chunk',
   'session.step',
@@ -109,6 +187,8 @@ const EVENT_EGRESS = new Set<string>([
   'session.message.done',
   'session.background-started',
   'session.background-done',
+  'terminal.data',
+  'terminal.exit',
 ])
 
 export function isEventForwardable(type: string): boolean {
@@ -142,7 +222,7 @@ export function eventSessionId(payload: unknown): string | null {
 // and the note right here said what that cost: `execute` skips the permission park
 // outright (sidecar runtime/permission.ts — `if (mode === 'execute') return
 // undefined`), so a remote turn ran Bash/Write with no approval card. That is full
-// RCE reachable by anything holding a device token on the tailnet, and forcing
+// RCE reachable by anything holding a device token on the mesh, and forcing
 // `autoApprove:false` never held it back.
 //
 // The rule now: a REMOTE origin may not cause a mutation nobody approved. Both
@@ -592,7 +672,11 @@ export async function sanitizeRemoteParams(
     return raw ?? null
   }
 
-  if ((GIT_SCOPED as readonly string[]).includes(method)) {
+  if (
+    (GIT_SCOPED as readonly string[]).includes(method) ||
+    (FS_SCOPED as readonly string[]).includes(method) ||
+    (TERMINAL_SCOPED as readonly string[]).includes(method)
+  ) {
     // F3: never trust `workspaceRoot`. The phone sends a `projectId`; we resolve it
     // to that project's on-disk path server-side and force it as the root.
     const p = asObject(raw)
@@ -606,6 +690,12 @@ export async function sanitizeRemoteParams(
     delete rest.projectId
     delete rest.workspaceRoot // drop any client-supplied root, no matter what
     return { ...rest, workspaceRoot: project.path }
+  }
+
+  // Machine methods carry no workspaceRoot to pin — connId/hostId/keychain refs
+  // are bounded by the sidecar schemas, so the params pass through verbatim.
+  if ((MACHINE_METHODS as readonly string[]).includes(method)) {
+    return raw ?? null
   }
 
   switch (method) {

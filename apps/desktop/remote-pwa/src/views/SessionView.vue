@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import { Ellipsis } from 'lucide-vue-next'
 import {
   activeTurnIds,
   cancelTurn,
-  closeSession,
   current,
+  navPop,
   pendingLabel,
   sendMessage,
   steer,
@@ -21,13 +22,16 @@ import MessageItem from '../components/MessageItem.vue'
 import PermissionCard from '../components/PermissionCard.vue'
 import Composer from '../components/Composer.vue'
 import DiffPanel from '../components/DiffPanel.vue'
+import FilesPanel from '../components/FilesPanel.vue'
+import TerminalPanel from '../components/TerminalPanel.vue'
 import CostPanel from '../components/CostPanel.vue'
 import TodoBanner from '../components/TodoBanner.vue'
 import BackgroundChips from '../components/BackgroundChips.vue'
+import NavBar from '../components/NavBar.vue'
 import SessionMenuSheet from '../components/SessionMenuSheet.vue'
 import type { AgentMode, SessionAttachment } from '../types'
 
-type Tab = 'chat' | 'diff' | 'cost'
+type Tab = 'chat' | 'diff' | 'files' | 'term' | 'cost'
 const tab = ref<Tab>('chat')
 const menuOpen = ref(false)
 
@@ -40,7 +44,7 @@ const streaming = computed(
 )
 const pending = computed(() => cur.value?.pending ?? [])
 // Header subtitle: where it runs. The model/account/effort/style live in the
-// config bar below, where they are one tap from being changed.
+// composer context row, one tap from the same config sheet.
 const subtitle = computed(() =>
   cur.value?.projectId ? projectName(cur.value.projectId) : '',
 )
@@ -49,7 +53,7 @@ const styleLabel = (id: string): string =>
   RESPONSE_STYLES.flatMap((g) => g.rows).find((r) => r.id === id)?.label ?? id
 
 // The desktop keeps model · account · effort · style as always-visible status
-// chips; on a phone they'd never fit, so this is one summary row that opens the
+// chips; on a phone they're one scrollable strip in the composer that opens the
 // same config sheet.
 const configChips = computed<string[]>(() => {
   const s = cur.value?.settings
@@ -102,34 +106,70 @@ watch(
 
 <template>
   <div v-if="cur" class="session">
-    <header class="head">
-      <button
-        class="back"
-        title="Quay lại"
-        aria-label="Quay lại danh sách"
-        @click="closeSession"
-      >
-        <ChevronLeft class="icn-lg" />
-      </button>
-      <button class="titlebox" @click="menuOpen = true">
-        <span class="title">{{ cur.title || 'Session' }}</span>
-        <span v-if="subtitle" class="sub muted">{{ subtitle }}</span>
-      </button>
-      <button
-        class="menu"
-        title="Tuỳ chọn"
-        aria-label="Tuỳ chọn session"
-        @click="menuOpen = true"
-      >
-        <Ellipsis class="icn-lg" />
-      </button>
-    </header>
+    <NavBar
+      :title="cur.title || 'Session'"
+      :subtitle="subtitle"
+      back
+      @back="navPop"
+      @title="menuOpen = true"
+    >
+      <template #trailing>
+        <button
+          class="navbtn"
+          title="Tuỳ chọn"
+          aria-label="Tuỳ chọn session"
+          @click="menuOpen = true"
+        >
+          <Ellipsis class="icn-lg" />
+        </button>
+      </template>
+    </NavBar>
 
-    <nav class="tabs">
-      <button :class="{ on: tab === 'chat' }" @click="tab = 'chat'">Chat</button>
-      <button v-if="hasProject" :class="{ on: tab === 'diff' }" @click="tab = 'diff'">Diff</button>
-      <button :class="{ on: tab === 'cost' }" @click="tab = 'cost'">Cost</button>
-    </nav>
+    <div class="seg" role="tablist" aria-label="Nội dung session">
+      <button
+        role="tab"
+        :aria-selected="tab === 'chat'"
+        :class="{ on: tab === 'chat' }"
+        @click="tab = 'chat'"
+      >
+        Chat
+      </button>
+      <button
+        v-if="hasProject"
+        role="tab"
+        :aria-selected="tab === 'diff'"
+        :class="{ on: tab === 'diff' }"
+        @click="tab = 'diff'"
+      >
+        Diff
+      </button>
+      <button
+        v-if="hasProject"
+        role="tab"
+        :aria-selected="tab === 'files'"
+        :class="{ on: tab === 'files' }"
+        @click="tab = 'files'"
+      >
+        Tệp
+      </button>
+      <button
+        v-if="hasProject"
+        role="tab"
+        :aria-selected="tab === 'term'"
+        :class="{ on: tab === 'term' }"
+        @click="tab = 'term'"
+      >
+        Term
+      </button>
+      <button
+        role="tab"
+        :aria-selected="tab === 'cost'"
+        :class="{ on: tab === 'cost' }"
+        @click="tab = 'cost'"
+      >
+        Cost
+      </button>
+    </div>
 
     <TodoBanner v-if="tab === 'chat'" />
 
@@ -143,14 +183,15 @@ watch(
     </div>
 
     <DiffPanel v-if="tab === 'diff' && cur.projectId" :project-id="cur.projectId" />
+    <FilesPanel v-if="tab === 'files' && cur.projectId" :project-id="cur.projectId" />
+    <TerminalPanel
+      v-if="tab === 'term' && cur.projectId"
+      :session-id="cur.id"
+      :project-id="cur.projectId"
+    />
     <CostPanel v-if="tab === 'cost'" :session-id="cur.id" />
 
     <template v-if="tab === 'chat'">
-      <button v-if="configChips.length" class="cfgbar" @click="menuOpen = true">
-        <span v-for="(c, i) in configChips" :key="i" class="cfg">{{ c }}</span>
-        <span class="cfg-edit">Đổi</span>
-      </button>
-
       <div v-if="pending.length" class="queued">
         <span class="qdot" />
         <span class="qtxt">{{ pendingLabel }}</span>
@@ -159,10 +200,12 @@ watch(
       <Composer
         :streaming="streaming"
         :mode="cur.mode"
+        :config="configChips"
         @send="onSend"
         @steer="steer"
         @stop="cancelTurn"
         @update:mode="setMode"
+        @open-menu="menuOpen = true"
       />
     </template>
 
@@ -177,103 +220,42 @@ watch(
   flex-direction: column;
   min-height: 0;
 }
-.head {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  /* Fixed rows in a flex column must not absorb the transcript's overflow. */
+/* iOS segmented control — replaces the pill tabs. The buttons are deliberately
+   36px inside a padded track: HIG's own segmented control is ~32pt and the hit
+   target is the full-width segment, not a lone 44px circle. */
+.seg {
   flex: 0 0 auto;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
-}
-.back {
-  width: var(--tap);
-  height: var(--tap);
-  flex-shrink: 0;
-  border: none;
-  background: transparent;
-  color: var(--accent);
   display: flex;
-  align-items: center;
-  justify-content: center;
+  gap: 0;
+  margin: 8px 14px 8px;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: var(--r-btn);
 }
-.back:active,
-.menu:active {
-  opacity: 0.55;
-}
-.titlebox {
+.seg button {
   flex: 1;
   min-width: 0;
-  min-height: var(--tap);
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 1px;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  padding: 4px 2px;
-  text-align: left;
-}
-.titlebox:active {
-  opacity: 0.55;
-}
-.title {
-  font-weight: 600;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.menu {
-  width: var(--tap);
-  height: var(--tap);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--text-dim);
-}
-.tabs {
-  display: flex;
-  gap: 6px;
-  flex: 0 0 auto;
-  /* 4px instead of 8: the pills grew to the 44px hit box, so the bar keeps
-     roughly its old total height. */
-  padding: 4px 12px;
-  border-bottom: 1px solid var(--border);
-}
-.tabs button {
+  min-height: 36px;
   display: inline-flex;
   align-items: center;
-  min-height: var(--tap);
-  border: 1px solid var(--border);
+  justify-content: center;
+  border: none;
+  border-radius: calc(var(--r-btn) - 3px);
   background: transparent;
   color: var(--text-dim);
-  border-radius: var(--r-pill);
-  padding: 0 16px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 500;
+  padding: 0 10px;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
-.tabs button:active {
-  background: var(--surface-2);
-}
-.tabs button.on {
-  color: var(--accent);
-  border-color: var(--accent);
+.seg button.on {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 .body {
   flex: 1;
@@ -292,42 +274,6 @@ watch(
 }
 .state.danger {
   color: var(--danger);
-}
-.cfgbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  width: 100%;
-  min-height: var(--tap);
-  padding: 7px 12px;
-  border: none;
-  border-top: 1px solid var(--border);
-  background: transparent;
-  color: var(--text-dim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  text-align: left;
-}
-.cfgbar:active {
-  background: var(--surface);
-}
-.cfg {
-  flex: 0 0 auto;
-  padding: 3px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  white-space: nowrap;
-}
-.cfg-edit {
-  flex: 0 0 auto;
-  margin-left: auto;
-  padding-left: 8px;
-  color: var(--accent);
-  font-weight: 600;
-  white-space: nowrap;
 }
 .queued {
   display: flex;

@@ -50,7 +50,7 @@ function short(command: string): string {
   flex: 0 0 auto;
   padding: 4px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-btn);
   /* sm, not xs: the chip's content is a shell command line — text to read, not a
      badge to glance at. */
   font-size: var(--fs-sm);

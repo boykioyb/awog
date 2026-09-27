@@ -1,18 +1,60 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { X } from 'lucide-vue-next'
 
 // Bottom sheet — the phone stand-in for the desktop's modals/popovers. Backdrop
-// tap closes; the panel itself keeps the safe-area inset so it clears the home bar.
+// tap closes; the grab strip is a real drag handle (pull down to dismiss, like
+// iOS sheets), and the panel keeps the safe-area inset so it clears the home bar.
 defineProps<{ open: boolean; title?: string }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
+
+const panel = ref<HTMLElement | null>(null)
+const dragY = ref(0)
+const dragging = ref(false)
+let startY = 0
+
+function grabStart(e: TouchEvent): void {
+  startY = e.touches[0].clientY
+  dragging.value = true
+}
+
+function grabMove(e: TouchEvent): void {
+  if (!dragging.value) return
+  const dy = e.touches[0].clientY - startY
+  dragY.value = Math.max(0, dy)
+  if (dy > 0 && e.cancelable) e.preventDefault()
+}
+
+function grabEnd(): void {
+  if (!dragging.value) return
+  dragging.value = false
+  const h = panel.value?.offsetHeight ?? 0
+  if (dragY.value > Math.max(80, h * 0.25)) {
+    emit('close')
+  }
+  dragY.value = 0
+}
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="sheet">
       <div v-if="open" class="scrim" @click.self="emit('close')">
-        <div class="sheet">
-          <div class="grab" />
+        <div
+          ref="panel"
+          class="sheet"
+          :class="{ dragging }"
+          :style="dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined"
+        >
+          <div
+            class="grabwrap"
+            @touchstart.passive="grabStart"
+            @touchmove="grabMove"
+            @touchend="grabEnd"
+            @touchcancel="grabEnd"
+          >
+            <div class="grab" />
+          </div>
           <header v-if="title" class="head">
             <span class="title">{{ title }}</span>
             <button class="x" title="Đóng" aria-label="Đóng" @click="emit('close')">
@@ -53,6 +95,19 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   border-bottom: none;
   border-radius: var(--r-panel) var(--r-panel) 0 0;
   padding-bottom: var(--sab, env(safe-area-inset-bottom));
+  /* Drives the snap-back after a cancelled drag. The enter/leave transitions
+     below keep their own timing — this is only for post-gesture settle. */
+  transition: transform 0.18s ease-out;
+}
+.sheet.dragging {
+  transition: none;
+}
+/* A wider invisible hit area around the 38×4 handle — the handle itself is far
+   too small to grab. */
+.grabwrap {
+  padding: 10px 0 8px;
+  flex-shrink: 0;
+  touch-action: none;
 }
 .grab {
   width: 38px;
@@ -60,14 +115,13 @@ const emit = defineEmits<{ (e: 'close'): void }>()
   /* design-token-ok: 2px = half of the 4px handle, i.e. the pill shape itself. */
   border-radius: 2px;
   background: var(--surface-3);
-  margin: 8px auto 2px;
-  flex-shrink: 0;
+  margin: 0 auto;
 }
 .head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px 10px;
+  padding: 4px 16px 10px;
   border-bottom: 1px solid var(--border);
 }
 .title {

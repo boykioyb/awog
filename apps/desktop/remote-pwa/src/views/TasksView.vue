@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ChevronLeft, Plus, RefreshCw, TriangleAlert } from 'lucide-vue-next'
+import { ChevronDown, Plus, TriangleAlert } from 'lucide-vue-next'
 import { capabilities, projectName, projects, workflowName, workflowsFor } from '../catalog'
-import { route, showToast } from '../store'
+import { showToast } from '../store'
+import { usePullToRefresh, useScrollCollapse } from '../gestures'
 import {
   approvePhase,
   closeTask,
@@ -18,6 +19,7 @@ import {
 } from '../tasks'
 import { errMsg, relTime } from '../util'
 import AppSheet from '../components/AppSheet.vue'
+import NavBar from '../components/NavBar.vue'
 import type { RemoteTaskSummary } from '../types'
 
 // Tasks (#18) — theo dõi, duyệt phase, dừng, và (khi desktop cho phép) chạy một
@@ -27,6 +29,10 @@ import type { RemoteTaskSummary } from '../types'
 const creating = ref(false)
 const busy = ref(false)
 const form = ref({ projectId: '', workflowId: '', title: '', description: '' })
+
+const scroller = ref<HTMLElement | null>(null)
+const { pull, refreshing, engaged, threshold } = usePullToRefresh(scroller, loadTasks)
+const collapsed = useScrollCollapse(scroller)
 
 onMounted(() => void loadTasks())
 
@@ -109,63 +115,63 @@ async function submit(): Promise<void> {
 
 <template>
   <div class="tasks">
-    <header class="head">
-      <button
-        class="icon"
-        title="Quay lại"
-        aria-label="Quay lại danh sách session"
-        @click="route = 'list'"
-      >
-        <ChevronLeft />
-      </button>
-      <h1>Tasks</h1>
-      <button
-        class="icon"
-        :disabled="taskListLoading"
-        title="Làm mới"
-        aria-label="Làm mới danh sách task"
-        @click="loadTasks"
-      >
-        <span v-if="taskListLoading" class="spin" />
-        <RefreshCw v-else />
-      </button>
-    </header>
+    <NavBar title="Tasks" large :collapsed="collapsed">
+      <template #trailing>
+        <button
+          v-if="canCreate"
+          class="navbtn"
+          title="Chạy workflow"
+          aria-label="Chạy workflow mới"
+          @click="creating = true"
+        >
+          <Plus class="icn-lg" />
+        </button>
+      </template>
+    </NavBar>
 
-    <p v-if="!canCreate" class="note">
-      Chỉ xem và điều khiển task đang có. Tạo task mới cần bật "chạy không cần duyệt"
-      ở Settings → Devices trên máy desktop — node của task chạy không hỏi duyệt.
-    </p>
+    <div ref="scroller" class="scroll">
+      <div
+        class="ptr"
+        :style="{
+          height: `${refreshing ? 44 : pull}px`,
+          transition: engaged ? 'none' : 'height .18s ease',
+        }"
+      >
+        <span v-if="refreshing" class="spin" />
+        <ChevronDown v-else class="icn-md" :class="{ met: pull >= threshold }" />
+      </div>
 
-    <div v-if="taskListError" class="state danger">{{ taskListError }}</div>
-    <div v-else-if="taskListLoading && !taskList.length" class="state">
-      <span class="spin" /><span>Đang tải…</span>
+      <h1 class="big">Tasks</h1>
+
+      <p v-if="!canCreate" class="note">
+        Chỉ xem và điều khiển task đang có. Tạo task mới cần bật "chạy không cần duyệt"
+        ở Settings → Devices trên máy desktop — node của task chạy không hỏi duyệt.
+      </p>
+
+      <div v-if="taskListError" class="state danger">{{ taskListError }}</div>
+      <ul v-else-if="taskListLoading && !taskList.length" class="rows">
+        <li v-for="i in 4" :key="i" class="row skel-row">
+          <div class="skel w60" />
+          <div class="skel w40" />
+        </li>
+      </ul>
+      <div v-else-if="!taskList.length" class="state muted">Chưa có task nào.</div>
+
+      <ul v-else class="rows">
+        <li v-for="t in taskList" :key="t.id" class="row" @click="open(t.id)">
+          <div class="row-top">
+            <span class="title">{{ t.title }}</span>
+            <span class="time muted">{{ relTime(t.createdAt) }}</span>
+          </div>
+          <div class="row-bot">
+            <span class="badge" :class="statusCls(t.status)">{{ t.status }}</span>
+            <span v-if="t.waitingApproval" class="badge awaiting">chờ duyệt</span>
+            <span class="muted">{{ projectName(t.projectId) }}</span>
+            <span class="muted">{{ progress(t) }}</span>
+          </div>
+        </li>
+      </ul>
     </div>
-    <div v-else-if="!taskList.length" class="state muted">Chưa có task nào.</div>
-
-    <ul v-else class="rows">
-      <li v-for="t in taskList" :key="t.id" class="row" @click="open(t.id)">
-        <div class="row-top">
-          <span class="title">{{ t.title }}</span>
-          <span class="time muted">{{ relTime(t.createdAt) }}</span>
-        </div>
-        <div class="row-bot">
-          <span class="badge" :class="statusCls(t.status)">{{ t.status }}</span>
-          <span v-if="t.waitingApproval" class="badge awaiting">chờ duyệt</span>
-          <span class="muted">{{ projectName(t.projectId) }}</span>
-          <span class="muted">{{ progress(t) }}</span>
-        </div>
-      </li>
-    </ul>
-
-    <button
-      v-if="canCreate"
-      class="fab"
-      title="Chạy workflow"
-      aria-label="Chạy workflow mới"
-      @click="creating = true"
-    >
-      <Plus class="icn-lg" />
-    </button>
 
     <!-- Chi tiết task -->
     <AppSheet :open="!!openTask" :title="openTask?.title" @close="closeTask">
@@ -261,53 +267,18 @@ async function submit(): Promise<void> {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow-y: auto;
   position: relative;
 }
-.head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  padding: 14px 14px 8px;
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 2;
-}
-.head h1 {
-  /* min-width:0 + ellipsis so the row still fits when the 44px hit boxes and the
-     gate badge are all present on a 375px screen. */
+.scroll {
   flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: var(--fs-2xl);
-  line-height: var(--lh-2xl);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.icon {
-  width: var(--tap);
-  height: var(--tap);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  color: var(--text);
-}
-.icon:active {
-  background: var(--surface-3);
-}
-.icon:disabled {
-  opacity: 0.45;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 .note,
 .warn-box {
-  margin: 0 14px 12px;
+  margin: 0 16px 12px;
   padding: 9px 11px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -331,7 +302,7 @@ async function submit(): Promise<void> {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 26px 14px;
+  padding: 40px 14px;
   color: var(--text-dim);
   font-size: var(--fs-md);
   line-height: var(--lh-md);
@@ -342,15 +313,31 @@ async function submit(): Promise<void> {
 .muted {
   color: var(--text-dim);
 }
+/* Plain-style rows — full-bleed, hairline separators, same language as the
+   session list. */
 .rows {
   list-style: none;
   margin: 0;
-  padding: 0 14px 90px;
+  padding: 0 0 16px;
 }
-.row,
-.phase {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
+.row {
+  position: relative;
+  padding: 12px 16px;
+}
+.row:active {
+  background: var(--surface-2);
+}
+.row::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--border);
+}
+.row:last-child::after {
+  display: none;
 }
 .row-top {
   display: flex;
@@ -384,7 +371,7 @@ async function submit(): Promise<void> {
 }
 .badge {
   padding: 2px 8px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
   background: var(--surface-3);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
@@ -411,6 +398,10 @@ async function submit(): Promise<void> {
   list-style: none;
   margin: 0 0 14px;
   padding: 0;
+}
+.phase {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
 }
 .out {
   margin: 8px 0 0;
@@ -490,24 +481,20 @@ async function submit(): Promise<void> {
   font-family: inherit;
   resize: vertical;
 }
-.fab {
-  position: fixed;
-  right: 18px;
-  bottom: calc(24px + var(--sab, env(safe-area-inset-bottom)));
+.skel-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent);
-  color: var(--on-accent);
-  box-shadow: var(--shadow-1);
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  padding-bottom: 14px;
 }
-.fab:active {
-  background: color-mix(in srgb, var(--accent) 80%, black);
+.skel-row .skel {
+  height: 14px;
 }
-/* .spin comes from style.css — a second local copy meant the app had two spinner
-   sizes and only one of them honoured prefers-reduced-motion. */
+.w60 {
+  width: 60%;
+}
+.w40 {
+  width: 40%;
+}
 </style>

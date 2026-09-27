@@ -291,6 +291,111 @@ export interface GitFileStatus {
   deletions?: number
 }
 
+// fs.listDir — one row of the workspace tree; `path` is workspace-relative.
+export interface FsEntry {
+  name: string
+  path: string
+  kind: 'file' | 'dir'
+  size?: number
+}
+
+// fs.readFile — text preview of one file (binary/huge files flag instead).
+export interface FsFileContent {
+  path: string
+  content: string
+  language?: string
+  truncated: boolean
+  isBinary: boolean
+}
+
+// terminal.list — one PTY owned by a session (sidecar terminal/manager.ts).
+export interface TerminalRef {
+  terminalId: string
+  sessionId: string
+  createdAt: string
+}
+
+// ssh.list / ssh.connections — a saved host config NEVER carries secrets; live
+// connections are connId + hostId only.
+export interface SshHost {
+  id: string
+  name: string
+  host: string
+  port: number
+  user: string
+  authMethod: 'password' | 'key' | 'agent'
+  identityId?: string
+  folder?: string
+  tags?: string[]
+  agentEnabled?: boolean
+  portForwards?: SshForward[]
+  connectionStatus?: 'connected' | 'disconnected' | 'error' | 'unknown'
+  connectionError?: string
+  lastConnectedAt?: string
+}
+
+export interface SshIdentity {
+  id: string
+  name: string
+  keyType?: 'ed25519' | 'rsa' | 'ecdsa' | 'other'
+  keyPath?: string
+  inlineStored?: boolean
+  hasPassphrase?: boolean
+}
+
+export interface SshConnection {
+  connId: string
+  hostId: string
+}
+
+export interface SshForward {
+  id: string
+  type: 'local' | 'remote' | 'dynamic'
+  label?: string
+  bindHost?: string
+  bindPort: number
+  destHost: string
+  destPort: number
+}
+
+export interface SshActiveForward {
+  forwardId: string
+  connId: string
+  forward: SshForward
+  status: 'active' | 'error'
+  error?: string
+}
+
+export interface SftpEntry {
+  name: string
+  type: 'file' | 'dir' | 'symlink' | 'other'
+  size: number
+  mtime: number
+  atime: number
+  mode: number
+  uid: number
+  gid: number
+}
+
+export interface SshExecResult {
+  stdout: string
+  stderr: string
+  code: number
+}
+
+// terminal.data / terminal.exit payloads.
+export interface TerminalDataPayload {
+  terminalId: string
+  sessionId: string
+  chunk: string
+}
+export interface TerminalExitPayload {
+  terminalId: string
+  sessionId: string
+  exitCode: number | null
+  signal?: string
+}
+
 export interface GitStatus {
   branch: string | null
   detached: boolean

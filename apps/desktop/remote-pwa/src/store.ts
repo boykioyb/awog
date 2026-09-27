@@ -2,6 +2,7 @@ import { computed, ref, watch } from 'vue'
 import { gateway, isDisconnect } from './gateway'
 import { loadCatalog, toAgentMode } from './catalog'
 import { buzz, notify, setBadge } from './notify'
+import { onTerminalData, onTerminalExit } from './terminal'
 import { errMsg, randomId } from './util'
 import type {
   AgentMode,
@@ -22,6 +23,8 @@ import type {
   SessionStep,
   SessionStepPayload,
   SessionSummary,
+  TerminalDataPayload,
+  TerminalExitPayload,
   TodoItem,
   TodoStatus,
 } from './types'
@@ -30,9 +33,112 @@ import type {
 // is a standalone Vite app). Wires gateway events into the open session and drives
 // reconnect resume via gateway.readySignal.
 
-export type Route = 'list' | 'session' | 'tasks'
+export type Route = 'list' | 'session' | 'tasks' | 'ssh' | 'ssh-host'
 
 export type Block = { kind: 'text'; text: string } | { kind: 'step'; step: SessionStep }
+
+// ─── Navigation stack ───────────────────────────────────────────────────────
+//
+// Mobile-style navigation, not a router: the bottom entry is the tab root
+// ('list' | 'tasks'), exactly one layer can be pushed on top ('session').
+// Each stack entry carries a history key (`k`); every push writes a matching
+// history.pushState so Android's back button pops the session instead of
+// closing the PWA. `popstate` below is the single authority for back —
+// navPop() and a committed edge-swipe both funnel into history.back().
+
+interface NavEntry {
+  route: Route
+  k: number
+}
+
+const stack = ref<NavEntry[]>([{ route: 'list', k: 0 }])
+let nextKey = 1
+// The session most recently popped — lets a browser "forward" restore it
+// (Android/iOS have no forward gesture, but desktop browsers do).
+let lastClosed: { id: string; title: string } | null = null
+// The ssh-host layer's param lives outside the stack entry (same shape as
+// `current` for sessions) — the stack only records that a layer exists.
+export const sshHostId = ref<string | null>(null)
+
+export const route = computed<Route>(() => stack.value[stack.value.length - 1].route)
+export const rootRoute = computed<Route>(() => stack.value[0].route)
+export const atRoot = computed(() => stack.value.length === 1)
+
+function stackPush(r: Route, k?: number): void {
+  if (k === undefined) {
+    k = nextKey++
+    try {
+      history.pushState({ k }, '')
+    } catch {
+      // Non-history context — the stack still works, back just won't reach us.
+    }
+  } else {
+    nextKey = Math.max(nextKey, k + 1)
+  }
+  stack.value = [...stack.value, { route: r, k }]
+}
+
+function stackPop(): void {
+  if (stack.value.length <= 1) return
+  const top = stack.value[stack.value.length - 1]
+  stack.value = stack.value.slice(0, -1)
+  if (top.route === 'session') {
+    const cur = current.value
+    if (cur) {
+      lastClosed = { id: cur.id, title: cur.title }
+      gateway.unsubscribe(cur.id)
+    }
+    current.value = null
+    void loadSessions()
+  }
+  if (top.route === 'ssh-host') sshHostId.value = null
+}
+
+// Tab switch. Only callable at root in practice — the pushed session covers the
+// tab bar — but it unwinds defensively without touching history if not.
+export function navTab(r: 'list' | 'tasks' | 'ssh'): void {
+  if (stack.value.length > 1) stackPop()
+  const top = stack.value[stack.value.length - 1]
+  if (top.route === r) return
+  stack.value = [{ route: r, k: top.k }]
+  buzz(6)
+}
+
+// Back out of the pushed layer. Goes through history.back() when the current
+// entry is one of ours, so the browser's back stack stays in sync; pops the
+// stack directly otherwise (or if history is unavailable).
+export function navPop(): void {
+  if (stack.value.length <= 1) return
+  const top = stack.value[stack.value.length - 1]
+  const hk = (history.state as { k?: number } | null)?.k
+  if (hk === top.k) {
+    history.back()
+    return
+  }
+  stackPop()
+}
+
+function onPopstate(e: PopStateEvent): void {
+  const st = e.state as { k?: number } | null
+  const k = typeof st?.k === 'number' ? st.k : 0
+  const top = stack.value[stack.value.length - 1]
+  if (k < top.k) {
+    stackPop()
+    return
+  }
+  if (k > top.k) {
+    // Forward into a dead entry. The only restorable view is the session that
+    // was just popped; adopt its entry key so no new history entry is written.
+    if (lastClosed && stack.value.length === 1) {
+      const { id, title } = lastClosed
+      lastClosed = null
+      openSessionInner({ id, title, projectId: null }, k)
+      return
+    }
+    // Nothing to restore — adopt the position so the depth math stays sane.
+    top.k = k
+  }
+}
 
 export interface UiMessage {
   id: string
@@ -91,8 +197,6 @@ export interface InterruptedTurn {
   // reported to the user instead of silently re-sent in a weaker form.
   requeueable: boolean
 }
-
-export const route = ref<Route>('list')
 
 export const sessionList = ref<SessionSummary[]>([])
 export const activeTurnIds = ref<Set<string>>(new Set())
@@ -241,13 +345,25 @@ function blankCurrent(id: string, title: string, projectId: string | null): Curr
   }
 }
 
-export function openSession(summary: Pick<SessionSummary, 'id' | 'title' | 'projectId'>): void {
+// `k` is set only when a history.forward is restoring the view — the entry key
+// is adopted instead of writing a new history entry.
+function openSessionInner(
+  summary: Pick<SessionSummary, 'id' | 'title' | 'projectId'>,
+  k?: number,
+): void {
   const existing = current.value
   if (existing) gateway.unsubscribe(existing.id)
   current.value = blankCurrent(summary.id, summary.title, summary.projectId)
-  route.value = 'session'
+  // Re-opening while already inside a session (e.g. a search-result tap) keeps
+  // the same stack layer — pushing again would strand a dead 'session' entry.
+  if (route.value !== 'session') stackPush('session', k)
   gateway.subscribe(summary.id)
   void hydrateAndFlush()
+}
+
+export function openSession(summary: Pick<SessionSummary, 'id' | 'title' | 'projectId'>): void {
+  lastClosed = null
+  openSessionInner(summary)
 }
 
 // Opening a session is — besides a reconnect — the other moment its outbox can go
@@ -267,11 +383,15 @@ export function openSessionById(sessionId: string, title = ''): void {
 }
 
 export function closeSession(): void {
-  const cur = current.value
-  if (cur) gateway.unsubscribe(cur.id)
-  current.value = null
-  route.value = 'list'
-  void loadSessions()
+  navPop()
+}
+
+// SSH host detail pushes a 'ssh-host' layer on top of the 'ssh' root — the same
+// push/pop machinery the session layer uses, param carried by `sshHostId`.
+export function openSshHost(id: string): void {
+  lastClosed = null
+  sshHostId.value = id
+  if (route.value !== 'ssh-host') stackPush('ssh-host')
 }
 
 export async function refetchCurrent(): Promise<void> {
@@ -521,6 +641,7 @@ export function sendMessage(text: string, attachments?: SessionAttachment[]): vo
   const cur = current.value
   if (!cur) return
   if (!trimmed && !attachments?.length) return
+  buzz(8)
   if (!gateway.canSend()) {
     // Nowhere to send it right now. Park the text rather than throw the tap away
     // — except with attachments, which the outbox deliberately doesn't hold.
@@ -735,6 +856,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
 export function resolvePermission(decision: 'allow' | 'deny'): void {
   const cur = current.value
   if (!cur || !cur.permission) return
+  buzz(10)
   const { requestId } = cur.permission
   cur.permission = null
   gateway.request('sessions.permission', { requestId, decision }).catch(() => {
@@ -748,6 +870,7 @@ export function resolvePermission(decision: 'allow' | 'deny'): void {
 // override — `cur.mode` is untouched, so the session goes back to its own mode on
 // the next message.
 export function approvePlan(step: SessionStep): void {
+  buzz(10)
   step.planStatus = 'approved'
   void runTurn('The plan is approved. Proceed to implement it now, following the plan.', {
     mode: 'execute',
@@ -880,6 +1003,14 @@ function onGatewayEvent(evt: GatewayEvent): void {
       void loadSessions()
       return
     }
+    case 'terminal.data': {
+      onTerminalData(evt.payload as TerminalDataPayload)
+      return
+    }
+    case 'terminal.exit': {
+      onTerminalExit(evt.payload as TerminalExitPayload)
+      return
+    }
     default:
       return
   }
@@ -892,6 +1023,13 @@ let started = false
 export function initStore(): void {
   if (started) return
   started = true
+  try {
+    // Tag the landing entry so popstate can measure direction against it.
+    history.replaceState({ k: 0 }, '')
+  } catch {
+    // Non-history context: navPop() falls back to stackPop() on its own.
+  }
+  window.addEventListener('popstate', onPopstate)
   gateway.onEvent(onGatewayEvent)
   // Each transition into 'ready' (first connect + every reconnect) refreshes the
   // list, re-hydrates the open session (full refetch resume — AC-RES-1/2),

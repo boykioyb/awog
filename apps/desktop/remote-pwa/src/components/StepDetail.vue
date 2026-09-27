@@ -162,11 +162,11 @@ function diffClass(line: string): string {
    and double-space every other one. */
 .ln.add {
   color: var(--add);
-  background: color-mix(in srgb, var(--add) 10%, transparent);
+  background: color-mix(in srgb, var(--add) 16%, transparent);
 }
 .ln.del {
   color: var(--del);
-  background: color-mix(in srgb, var(--del) 10%, transparent);
+  background: color-mix(in srgb, var(--del) 14%, transparent);
 }
 .ln.hunk {
   color: var(--text-faint);

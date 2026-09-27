@@ -60,13 +60,7 @@ const icon = computed<Component>(() => {
   }
 })
 
-const counts = computed(() => {
-  const { additions, deletions } = props.step
-  if (additions == null && deletions == null) return ''
-  const a = additions ? `+${additions}` : ''
-  const d = deletions ? `−${deletions}` : ''
-  return [a, d].filter(Boolean).join(' ')
-})
+const hasCounts = computed(() => props.step.additions != null || props.step.deletions != null)
 </script>
 
 <template>
@@ -82,7 +76,10 @@ const counts = computed(() => {
       <component :is="icon" class="icn-sm ic" />
       <span class="label">{{ step.label }}</span>
       <span v-if="step.target" class="target">{{ step.target }}</span>
-      <span v-if="counts" class="counts">{{ counts }}</span>
+      <span v-if="hasCounts" class="counts">
+        <span v-if="step.additions" class="add">+{{ step.additions }}</span>
+        <span v-if="step.deletions" class="del">−{{ step.deletions }}</span>
+      </span>
       <ChevronRight v-if="expandable" class="icn-sm chev" :class="{ open }" />
     </div>
 
@@ -147,11 +144,18 @@ const counts = computed(() => {
 }
 .counts {
   flex-shrink: 0;
+  display: inline-flex;
+  gap: 5px;
   /* mono-ok: +/- line counts, read against the diff they summarise. */
   font-family: var(--mono);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--text-faint);
+}
+.counts .add {
+  color: var(--add);
+}
+.counts .del {
+  color: var(--del);
 }
 .chev {
   margin-left: auto;

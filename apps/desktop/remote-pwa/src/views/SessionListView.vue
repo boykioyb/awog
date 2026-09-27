@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { ListTodo, Plus, RefreshCw, Settings, X } from 'lucide-vue-next'
+import { ChevronDown, Settings, SquarePen, X } from 'lucide-vue-next'
 import {
   activeTurnIds,
   awaitingCount,
   clearSearch,
+  deleteSession,
   listError,
   listLoading,
   loadSessions,
@@ -12,20 +13,27 @@ import {
   openSessionById,
   runSearch,
   searchLoading,
-  route,
   searchResults,
   sessionList,
 } from '../store'
 import { projectColor, projectName, projects } from '../catalog'
+import { usePullToRefresh, useScrollCollapse } from '../gestures'
 import { relTime } from '../util'
+import NavBar from '../components/NavBar.vue'
 import NewSessionSheet from '../components/NewSessionSheet.vue'
 import SettingsSheet from '../components/SettingsSheet.vue'
+import SwipeRow from '../components/SwipeRow.vue'
 import type { SessionSummary } from '../types'
 
 const filter = ref<string>('all')
 const query = ref('')
 const creating = ref(false)
 const settingsOpen = ref(false)
+const openRowId = ref<string | null>(null)
+
+const scroller = ref<HTMLElement | null>(null)
+const { pull, refreshing, engaged, threshold } = usePullToRefresh(scroller, loadSessions)
+const collapsed = useScrollCollapse(scroller)
 
 // Debounce the full-text search — every keystroke would otherwise fold every
 // session's JSONL on the desktop (sessions.search is the one heavy read).
@@ -63,125 +71,150 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
 
 <template>
   <div class="list">
-    <header class="head">
-      <h1>Sessions</h1>
-      <span v-if="awaitingCount" class="badge awaiting gate">{{ awaitingCount }} chờ duyệt</span>
-      <button
-        class="icon"
-        :disabled="listLoading"
-        title="Làm mới"
-        aria-label="Làm mới danh sách session"
-        @click="loadSessions"
-      >
-        <span v-if="listLoading" class="spin" />
-        <RefreshCw v-else />
-      </button>
-      <button class="icon" title="Tasks" aria-label="Mở Tasks" @click="route = 'tasks'">
-        <ListTodo />
-      </button>
-      <button
-        class="icon"
-        title="Cài đặt"
-        aria-label="Cài đặt"
-        @click="settingsOpen = true"
-      >
-        <Settings />
-      </button>
-    </header>
-
-    <div class="search">
-      <input
-        v-model="query"
-        type="search"
-        inputmode="search"
-        placeholder="Tìm trong transcript…"
-        autocapitalize="off"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <button
-        v-if="query"
-        class="clear"
-        title="Xoá"
-        aria-label="Xoá từ khoá"
-        @click="query = ''"
-      >
-        <X class="icn-sm" />
-      </button>
-    </div>
-
-    <div v-if="!searching && chips.length" class="chips">
-      <button class="chip" :class="{ on: filter === 'all' }" @click="filter = 'all'">Tất cả</button>
-      <button
-        v-for="p in chips"
-        :key="p.id"
-        class="chip"
-        :class="{ on: filter === p.id }"
-        :style="p.color ? { borderColor: filter === p.id ? p.color : undefined } : undefined"
-        @click="filter = p.id"
-      >
-        {{ p.name }}
-      </button>
-      <button class="chip" :class="{ on: filter === 'none' }" @click="filter = 'none'">
-        Không project
-      </button>
-    </div>
-
-    <!-- Search results (one row per matched message) -->
-    <template v-if="searching">
-      <div v-if="searchLoading" class="state"><span class="spin" /><span>Đang tìm…</span></div>
-      <div v-else-if="!searchResults.length" class="state muted">Không có kết quả.</div>
-      <ul v-else class="rows">
-        <li
-          v-for="r in searchResults"
-          :key="`${r.sessionId}-${r.messageId}`"
-          class="row"
-          @click="openSessionById(r.sessionId, r.sessionTitle)"
+    <NavBar title="Sessions" large :collapsed="collapsed">
+      <template #trailing>
+        <button
+          class="navbtn"
+          title="Cài đặt"
+          aria-label="Cài đặt"
+          @click="settingsOpen = true"
         >
-          <div class="row-top">
-            <span class="title">{{ r.sessionTitle || 'Không tiêu đề' }}</span>
-            <span class="time muted">{{ relTime(r.at) }}</span>
-          </div>
-          <div class="snippet muted">{{ r.snippet }}</div>
-        </li>
-      </ul>
-    </template>
+          <Settings class="icn-lg" />
+        </button>
+        <button
+          class="navbtn"
+          title="Session mới"
+          aria-label="Session mới"
+          @click="creating = true"
+        >
+          <SquarePen class="icn-lg" />
+        </button>
+      </template>
+    </NavBar>
 
-    <!-- Normal list -->
-    <template v-else>
-      <div v-if="listError" class="state danger">{{ listError }}</div>
-      <div v-else-if="listLoading && !sessions.length" class="state">
-        <span class="spin" />
-        <span>Đang tải…</span>
+    <div ref="scroller" class="scroll">
+      <div
+        class="ptr"
+        :style="{
+          height: `${refreshing ? 44 : pull}px`,
+          transition: engaged ? 'none' : 'height .18s ease',
+        }"
+      >
+        <span v-if="refreshing" class="spin" />
+        <ChevronDown v-else class="icn-md" :class="{ met: pull >= threshold }" />
       </div>
-      <div v-else-if="!sessions.length" class="state muted">Chưa có session nào.</div>
 
-      <ul v-else class="rows">
-        <li v-for="s in sessions" :key="s.id" class="row" @click="openSession(s)">
-          <div class="row-top">
-            <span class="title">{{ s.title || 'Không tiêu đề' }}</span>
-            <span class="time muted">{{ relTime(s.updatedAt) }}</span>
-          </div>
-          <div class="row-bot">
-            <span v-if="statusLabel(s)" class="badge" :class="statusLabel(s)!.cls">
-              {{ statusLabel(s)!.text }}
-            </span>
-            <span
-              v-if="s.projectId"
-              class="proj"
-              :style="projectColor(s.projectId) ? { color: projectColor(s.projectId)! } : undefined"
-            >
-              {{ projectName(s.projectId) }}
-            </span>
-            <span class="preview muted">{{ s.lastPreview || `${s.messageCount} tin nhắn` }}</span>
-          </div>
-        </li>
-      </ul>
-    </template>
+      <h1 class="big">
+        Sessions
+        <span v-if="awaitingCount" class="badge awaiting gate">{{ awaitingCount }} chờ duyệt</span>
+      </h1>
 
-    <button class="fab" title="Session mới" aria-label="Session mới" @click="creating = true">
-      <Plus class="icn-lg" />
-    </button>
+      <div class="search">
+        <input
+          v-model="query"
+          type="search"
+          inputmode="search"
+          placeholder="Tìm trong transcript…"
+          autocapitalize="off"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button
+          v-if="query"
+          class="clear"
+          title="Xoá"
+          aria-label="Xoá từ khoá"
+          @click="query = ''"
+        >
+          <X class="icn-sm" />
+        </button>
+      </div>
+
+      <div v-if="!searching && chips.length" class="chips">
+        <button class="chip" :class="{ on: filter === 'all' }" @click="filter = 'all'">
+          Tất cả
+        </button>
+        <button
+          v-for="p in chips"
+          :key="p.id"
+          class="chip"
+          :class="{ on: filter === p.id }"
+          :style="p.color ? { borderColor: filter === p.id ? p.color : undefined } : undefined"
+          @click="filter = p.id"
+        >
+          {{ p.name }}
+        </button>
+        <button class="chip" :class="{ on: filter === 'none' }" @click="filter = 'none'">
+          Không project
+        </button>
+      </div>
+
+      <!-- Search results (one row per matched message) -->
+      <template v-if="searching">
+        <div v-if="searchLoading" class="state"><span class="spin" /><span>Đang tìm…</span></div>
+        <div v-else-if="!searchResults.length" class="state muted">Không có kết quả.</div>
+        <ul v-else class="rows">
+          <li
+            v-for="r in searchResults"
+            :key="`${r.sessionId}-${r.messageId}`"
+            class="row"
+            @click="openSessionById(r.sessionId, r.sessionTitle)"
+          >
+            <div class="row-top">
+              <span class="title">{{ r.sessionTitle || 'Không tiêu đề' }}</span>
+              <span class="time muted">{{ relTime(r.at) }}</span>
+            </div>
+            <div class="snippet muted">{{ r.snippet }}</div>
+          </li>
+        </ul>
+      </template>
+
+      <!-- Normal list -->
+      <template v-else>
+        <div v-if="listError" class="state danger">{{ listError }}</div>
+        <ul v-else-if="listLoading && !sessions.length" class="rows">
+          <li v-for="i in 5" :key="i" class="row skel-row">
+            <div class="skel w60" />
+            <div class="skel w40" />
+          </li>
+        </ul>
+        <div v-else-if="!sessions.length" class="state muted">Chưa có session nào.</div>
+
+        <ul v-else class="rows">
+          <SwipeRow
+            v-for="s in sessions"
+            :key="s.id"
+            :open="openRowId === s.id"
+            @open="openRowId = s.id"
+            @close="openRowId = null"
+            @tap="openSession(s)"
+            @del="deleteSession(s.id)"
+          >
+            <div class="row">
+              <div class="row-top">
+                <span class="title">{{ s.title || 'Không tiêu đề' }}</span>
+                <span class="time muted">{{ relTime(s.updatedAt) }}</span>
+              </div>
+              <div class="row-bot">
+                <span v-if="statusLabel(s)" class="badge" :class="statusLabel(s)!.cls">
+                  {{ statusLabel(s)!.text }}
+                </span>
+                <span
+                  v-if="s.projectId"
+                  class="proj"
+                  :style="
+                    projectColor(s.projectId) ? { color: projectColor(s.projectId)! } : undefined
+                  "
+                >
+                  {{ projectName(s.projectId) }}
+                </span>
+                <span class="preview muted">{{ s.lastPreview || `${s.messageCount} tin nhắn` }}</span>
+              </div>
+            </div>
+          </SwipeRow>
+        </ul>
+      </template>
+    </div>
 
     <NewSessionSheet :open="creating" @close="creating = false" />
     <SettingsSheet :open="settingsOpen" @close="settingsOpen = false" />
@@ -194,57 +227,21 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow-y: auto;
   position: relative;
 }
-.head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  /* In a flex COLUMN, flex-shrink works on the height: the tall `.rows` list
-     would otherwise squash these auto-height rows to nothing (the chips row
-     vanished entirely) instead of scrolling. */
-  flex: 0 0 auto;
-  padding: 14px 14px 8px;
-  position: sticky;
-  top: 0;
-  background: var(--bg);
-  z-index: 2;
-}
-.head h1 {
-  /* min-width:0 + ellipsis so the row still fits when the 44px hit boxes and the
-     gate badge are all present on a 375px screen. */
+.scroll {
   flex: 1;
-  min-width: 0;
-  margin: 0;
-  font-size: var(--fs-2xl);
-  line-height: var(--lh-2xl);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  /* Chrome's own pull-to-reload must not fight our pull-to-refresh. */
+  overscroll-behavior-y: contain;
 }
 .gate {
   background: color-mix(in srgb, var(--warn) 22%, transparent);
   color: var(--warn);
-}
-.icon {
-  width: var(--tap);
-  height: var(--tap);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  border-radius: var(--r-btn);
-  color: var(--text-dim);
-}
-.icon:active {
-  background: var(--surface-3);
-  color: var(--text);
-}
-.icon:disabled {
-  opacity: 0.45;
+  vertical-align: 2px;
+  margin-left: 8px;
 }
 .search {
   position: relative;
@@ -253,19 +250,19 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
 }
 .search input {
   width: 100%;
-  min-height: var(--tap);
+  min-height: 40px;
   background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-pill);
-  padding: 9px 48px 9px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--r-btn);
+  padding: 8px 48px 8px 16px;
   font-size: var(--fs-md);
   line-height: var(--lh-md);
 }
 .search input:focus {
   border-color: var(--accent);
 }
-/* Stretched to the field's own height so the hit box is 44 wide × 44 tall
-   without a bigger glyph or a taller row. */
+/* Stretched to the field's own height so the hit box stays 44 wide × tall
+   without a bigger glyph. */
 .clear {
   position: absolute;
   right: 12px;
@@ -274,7 +271,7 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   align-items: center;
   justify-content: center;
   width: var(--tap);
-  height: var(--tap);
+  height: 40px;
   border: none;
   background: transparent;
   color: var(--text-dim);
@@ -290,18 +287,26 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+/* Filter chips are selectors in a scroll row, not actions — 32px, with the
+   ::before giving each one back its 44px touch target. */
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  min-height: var(--tap);
+  min-height: 32px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
-  border-radius: var(--r-pill);
-  padding: 0 14px;
+  border-radius: var(--r-btn);
+  padding: 0 12px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
+}
+.chip::before {
+  content: '';
+  position: absolute;
+  inset: -6px -2px;
 }
 .chip:active {
   background: var(--surface-2);
@@ -314,28 +319,38 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 0 0 auto;
   padding: 40px 18px;
   justify-content: center;
 }
 .state.danger {
   color: var(--danger);
 }
+/* Plain-style rows: full-bleed, hairline separators, no card chrome — the
+   Messages/Telegram look instead of a desktop card feed. */
 .rows {
   list-style: none;
   margin: 0;
-  flex: 0 0 auto;
-  padding: 0 12px 88px;
+  padding: 0 0 16px;
 }
 .row {
-  padding: 13px 14px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  border-radius: var(--r-card);
-  margin-bottom: 8px;
+  position: relative;
+  padding: 11px 16px;
 }
 .row:active {
   background: var(--surface-2);
+}
+/* Inset hairline, iOS table-view style. */
+.row::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--border);
+}
+.row:last-child::after {
+  display: none;
 }
 .row-top {
   display: flex;
@@ -358,7 +373,7 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 4px;
   overflow: hidden;
 }
 .proj {
@@ -397,23 +412,20 @@ function statusLabel(s: SessionSummary): { text: string; cls: string } | null {
   background: color-mix(in srgb, var(--danger) 22%, transparent);
   color: var(--danger);
 }
-.fab {
-  position: fixed;
-  right: 18px;
-  bottom: calc(22px + var(--sab, env(safe-area-inset-bottom)) + var(--kb, 0px));
+.skel-row {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  border: none;
-  background: var(--accent);
-  color: var(--on-accent);
-  box-shadow: var(--shadow-1);
-  z-index: 3;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  padding-bottom: 14px;
 }
-.fab:active {
-  background: color-mix(in srgb, var(--accent) 80%, black);
+.skel-row .skel {
+  height: 14px;
+}
+.w60 {
+  width: 60%;
+}
+.w40 {
+  width: 40%;
 }
 </style>

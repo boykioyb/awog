@@ -131,10 +131,11 @@ watch(() => props.sessionId, load)
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  margin-bottom: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.day:last-child {
+  border-bottom: none;
 }
 /* No mono in this list: a date, a token count and an amount are numbers to read,
    not code to copy. tabular-nums is what actually keeps them in a column. */

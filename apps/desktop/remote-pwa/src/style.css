@@ -43,7 +43,6 @@
   --r-btn: 10px; /* button, input, select */
   --r-card: 14px; /* card, list row, chat bubble */
   --r-panel: 20px; /* bottom sheet, composer box */
-  --r-pill: 999px;
 
   /* Icon — fixed px, every step EVEN. An odd icon centred in an even box falls
      on a half pixel ((44 − 15) / 2 = 14.5) and the stroke misses the pixel grid.
@@ -109,8 +108,10 @@
     --accent-dim: #d1fae5; /* user bubble fill; --text on it is ~14:1 */
     --danger: #991b1b; /* 8.3:1 · 5.6:1 */
     --warn: #92400e; /* 7.1:1 · 5.0:1 */
-    --add: #065f46;
-    --del: #991b1b;
+    /* Diff ink sits on a pastel tint of the same hue — it needs the 900s, not
+       the 800s the badges get, to stay readable instead of washing out. */
+    --add: #064e3b;
+    --del: #7f1d1d;
     --on-accent: #ffffff;
     --on-warn: #ffffff;
     --scrim: rgba(0, 0, 0, 0.35);
@@ -130,6 +131,17 @@ body,
   margin: 0;
 }
 
+/* Mobile browsers count the URL-bar strip in `height: 100%`, which is what
+   parks the composer under it. 100dvh tracks the bar coming and going; engines
+   without dvh keep the plain-100% rule above. */
+@supports (height: 100dvh) {
+  html,
+  body,
+  #app {
+    height: 100dvh;
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -146,6 +158,11 @@ body {
   flex-direction: column;
   max-width: 720px;
   margin: 0 auto;
+  /* Safe-area TOP lives on the shell, not per-view: viewport-fit=cover draws the
+     page under the notch, and one pad here covers the nav bar, the connection
+     strip and every pushed layer at once. --kb never touches it — the keyboard
+     only eats the bottom edge. */
+  padding-top: env(safe-area-inset-top);
 }
 
 button {
@@ -238,6 +255,26 @@ select {
   color: var(--text-dim);
 }
 
+/* Borderless accent-tinted button for NavBar slots — the iOS bar-button look.
+   Scoped styles inside NavBar can't reach slot content, so the class lives
+   here. */
+.navbtn {
+  width: var(--tap);
+  height: var(--tap);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--accent);
+}
+.navbtn:active {
+  opacity: 0.5;
+}
+.navbtn:disabled {
+  opacity: 0.35;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
@@ -246,7 +283,7 @@ select {
   line-height: var(--lh-xs);
   font-weight: 600;
   padding: 2px 7px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-xs);
 }
 
 /* Every icon in the app is a lucide SVG, so one rule gives the whole app a
@@ -288,12 +325,74 @@ select {
   height: var(--icon-xl);
 }
 
+/* iOS large title — sits INSIDE the scroll area at the top and scrolls away;
+   the NavBar's compact title fades in (via .collapsed) once it passes under the
+   bar. Shared by both list-style views, so it lives here. */
+.big {
+  margin: 0;
+  padding: 4px 16px 10px;
+  font-size: var(--fs-2xl);
+  line-height: var(--lh-2xl);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* Pull-to-refresh slot pinned at the top of a scroller. Height is driven
+   inline (finger-following while dragging, animated on release), this rule
+   just centres the arrow/spinner inside whatever height it gets. */
+.ptr {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+}
+.ptr .lucide {
+  transition: transform 0.15s ease;
+}
+.ptr .met {
+  transform: rotate(180deg);
+}
+
+/* Skeleton rows — shown instead of a bare spinner while a list loads for the
+   first time. The shimmer is a moving highlight, so `surface-2` must be the
+   base colour or the gradient has nothing to slide over. */
+.skel {
+  position: relative;
+  overflow: hidden;
+  background: var(--surface-2);
+  border-radius: var(--r-xs);
+}
+.skel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--text) 7%, transparent),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
 /* Reduced motion: the three infinite animations in the app. The spinner keeps
    turning (it is the only signal that a request is still in flight) but slowly;
    the pulsing dot and the blinking caret stop entirely — their information is
-   already carried by colour and position. */
+   already carried by colour and position. The skeleton shimmer also stops — the
+   static bars still say "content is coming". */
 @media (prefers-reduced-motion: reduce) {
   .spin {
     animation-duration: 2.4s;
+  }
+  .skel::after {
+    animation: none;
   }
 }

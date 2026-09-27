@@ -13,7 +13,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  REMOTE_ALLOWLIST,
   RemoteRejected,
   clampPersistedMode,
   clampRemoteMode,
@@ -68,8 +67,25 @@ test('allowlist is exact-match and default-deny', () => {
   assert.equal(isMethodAllowed('sessions.sendMessage'), true)
   assert.equal(isMethodAllowed('sessions.sendmessage'), false)
   assert.equal(isMethodAllowed('sessions.'), false)
-  for (const m of ['fs.writeFile', 'terminal.start', 'settings.set', 'accounts.remove', 'ssh.exec']) {
+  for (const m of ['fs.writeFile', 'terminal.start', 'settings.set', 'accounts.remove', 'ssh.nope']) {
     assert.equal(isMethodAllowed(m), false, m)
+  }
+  // upload/download take a `localPath` — a phone-picked file path ON THE
+  // DESKTOP. They stay out even when the unattended switch is on.
+  for (const m of ['ssh.sftp.upload', 'ssh.sftp.download']) {
+    assert.equal(isMethodAllowed(m), false, m)
+  }
+})
+
+test('terminal/ssh methods are allowlisted but ONLY via the unattended gate', () => {
+  for (const m of ['terminal.list', 'terminal.write', 'terminal.kill', 'ssh.exec', 'ssh.connect', 'ssh.sftp.list']) {
+    assert.equal(isMethodAllowed(m), true, m)
+    assert.equal(requiresUnattended(m), true, m)
+  }
+  assert.equal(requiresUnattended('terminal.create'), true)
+  // Reads that never touch a shell stay switch-free.
+  for (const m of ['sessions.list', 'fs.listDir', 'git.status', 'tasks.approvePhase']) {
+    assert.equal(requiresUnattended(m), false, m)
   }
 })
 
@@ -85,16 +101,14 @@ test('task surface: only the five methods #18 needs', () => {
   }
 })
 
-test('only tasks.create needs the unattended switch', () => {
-  assert.equal(requiresUnattended('tasks.create'), true)
-  for (const m of REMOTE_ALLOWLIST.filter((x) => x !== 'tasks.create')) {
-    assert.equal(requiresUnattended(m), false, m)
-  }
-})
-
-test('event egress stays closed for credential/terminal channels', () => {
+test('event egress allows terminal output but stays closed for the rest', () => {
   assert.equal(isEventForwardable('session.chunk'), true)
-  for (const t of ['auth.oauth-url', 'terminal.data', 'ssh:data', 'task.trace']) {
+  // terminal.data/exit ride the session subscription — the payload's sessionId
+  // scopes them, and no terminal exists without an unattended-gated create.
+  for (const t of ['terminal.data', 'terminal.exit']) {
+    assert.equal(isEventForwardable(t), true, t)
+  }
+  for (const t of ['auth.oauth-url', 'ssh:data', 'task.trace']) {
     assert.equal(isEventForwardable(t), false, t)
   }
 })

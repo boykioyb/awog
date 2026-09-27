@@ -156,13 +156,12 @@ watch(() => props.projectId, load)
   width: var(--tap);
   height: var(--tap);
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
-  border-radius: var(--r-btn);
-  color: var(--text-dim);
+  border: none;
+  background: transparent;
+  color: var(--accent);
 }
 .refresh:active {
-  background: var(--surface-3);
+  opacity: 0.5;
 }
 .state {
   display: flex;
@@ -178,13 +177,10 @@ watch(() => props.projectId, load)
 .files {
   list-style: none;
   margin: 0;
-  padding: 8px 10px 20px;
+  padding: 0 0 20px;
 }
 .file {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  margin-bottom: 6px;
-  overflow: hidden;
+  border-bottom: 1px solid var(--border);
 }
 .file-head {
   display: flex;
@@ -193,10 +189,10 @@ watch(() => props.projectId, load)
   width: 100%;
   min-height: var(--tap);
   text-align: left;
-  background: var(--surface);
+  background: transparent;
   border: none;
   color: var(--text);
-  padding: 9px 11px;
+  padding: 9px 14px;
 }
 .file-head:active {
   background: var(--surface-2);
@@ -262,11 +258,11 @@ watch(() => props.projectId, load)
 }
 .ln.add {
   color: var(--add);
-  background: color-mix(in srgb, var(--add) 10%, transparent);
+  background: color-mix(in srgb, var(--add) 16%, transparent);
 }
 .ln.del {
   color: var(--del);
-  background: color-mix(in srgb, var(--del) 10%, transparent);
+  background: color-mix(in srgb, var(--del) 14%, transparent);
 }
 .no-hunk {
   padding: 8px 12px;

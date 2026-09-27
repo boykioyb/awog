@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { ArrowUp, Camera, Check, Plus, Square, TriangleAlert, X, Zap } from 'lucide-vue-next'
+import {
+  ArrowUp,
+  Camera,
+  Check,
+  File,
+  Plus,
+  Square,
+  TriangleAlert,
+  X,
+  Zap,
+} from 'lucide-vue-next'
 import { MAX_ATTACHMENT_BYTES, toAttachment } from '../attachments'
 import { AGENT_MODES } from '../catalog'
 import { showToast } from '../store'
@@ -14,6 +24,9 @@ const props = defineProps<{
   streaming: boolean
   mode: AgentMode
   disabled?: boolean
+  // The desktop's status chips (model · account · effort · style) as one
+  // scrollable strip — a tap opens the session menu over the same settings.
+  config?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -21,6 +34,7 @@ const emit = defineEmits<{
   (e: 'steer', text: string): void
   (e: 'stop'): void
   (e: 'update:mode', mode: AgentMode): void
+  (e: 'open-menu'): void
 }>()
 
 const MAX_ATTACHMENTS = 4
@@ -34,6 +48,7 @@ const text = ref('')
 const attachments = ref<SessionAttachment[]>([])
 const busy = ref(false)
 const modeOpen = ref(false)
+const attachOpen = ref(false)
 const box = ref<HTMLTextAreaElement | null>(null)
 const filePicker = ref<HTMLInputElement | null>(null)
 const cameraPicker = ref<HTMLInputElement | null>(null)
@@ -97,6 +112,16 @@ function remove(id: string): void {
   attachments.value = attachments.value.filter((a) => a.id !== id)
 }
 
+function pickFile(): void {
+  attachOpen.value = false
+  filePicker.value?.click()
+}
+
+function pickCamera(): void {
+  attachOpen.value = false
+  cameraPicker.value?.click()
+}
+
 // Four modes don't fit a toggle, and cycling through them would put `execute`
 // (gate off) one stray tap away — so the chip opens a picker that spells out what
 // each mode lets the agent do unattended.
@@ -120,7 +145,7 @@ function pickMode(mode: AgentMode): void {
       </div>
     </div>
 
-    <div class="bar">
+    <div class="ctx">
       <button
         class="chip"
         :class="[mode, { ungated: modeRow?.ungated }]"
@@ -129,62 +154,61 @@ function pickMode(mode: AgentMode): void {
       >
         {{ modeRow?.label ?? mode }}
       </button>
+      <button v-if="config?.length" class="cfgs" @click="emit('open-menu')">
+        <span class="cfgtxt">{{ config.join(' · ') }}</span>
+        <span class="cfg-edit">Đổi</span>
+      </button>
       <span v-if="streaming" class="hint muted">Gửi = chen vào lượt đang chạy</span>
     </div>
 
+    <!-- One rounded box, not a pill row: the textarea sits on top, the tool row
+         (+ / stop / send) lives inside the same border as the box's footer. -->
     <div class="composer">
-      <button
-        class="icon"
-        title="Đính kèm"
-        aria-label="Đính kèm tệp"
-        :disabled="busy"
-        @click="filePicker?.click()"
-      >
-        <span v-if="busy" class="spin" />
-        <Plus v-else class="icn-lg" />
-      </button>
-      <button
-        class="icon"
-        title="Chụp ảnh"
-        aria-label="Chụp ảnh"
-        :disabled="busy"
-        @click="cameraPicker?.click()"
-      >
-        <Camera class="icn-lg" />
-      </button>
-
       <!-- Enter inserts a NEWLINE (a phone keyboard's return key must not fire a
            turn); ⌘/Ctrl+Enter sends, for when a hardware keyboard is attached. -->
       <textarea
         ref="box"
         v-model="text"
-        rows="1"
+        rows="2"
         enterkeyhint="enter"
         :placeholder="streaming ? 'Chen thêm hướng dẫn…' : 'Nhắn cho agent…'"
         @keydown.enter.meta.prevent="submit"
         @keydown.enter.ctrl.prevent="submit"
       />
 
-      <button
-        v-if="streaming"
-        class="stop"
-        title="Dừng lượt"
-        aria-label="Dừng lượt"
-        @click="emit('stop')"
-      >
-        <Square class="icn-sm" fill="currentColor" />
-      </button>
-      <button
-        class="send"
-        :class="{ steer: streaming }"
-        :disabled="!canSend"
-        :title="streaming ? 'Chen vào lượt' : 'Gửi'"
-        :aria-label="streaming ? 'Chen vào lượt đang chạy' : 'Gửi'"
-        @click="submit"
-      >
-        <Zap v-if="streaming" class="icn-lg" />
-        <ArrowUp v-else class="icn-lg" />
-      </button>
+      <div class="tools">
+        <button
+          class="tool"
+          title="Đính kèm"
+          aria-label="Đính kèm tệp hoặc ảnh"
+          :disabled="busy"
+          @click="attachOpen = true"
+        >
+          <span v-if="busy" class="spin" />
+          <Plus v-else class="icn-lg" />
+        </button>
+        <span class="tspace" />
+        <button
+          v-if="streaming"
+          class="tool stop"
+          title="Dừng lượt"
+          aria-label="Dừng lượt"
+          @click="emit('stop')"
+        >
+          <Square class="icn-sm" fill="currentColor" />
+        </button>
+        <button
+          class="tool send"
+          :class="{ steer: streaming }"
+          :disabled="!canSend"
+          :title="streaming ? 'Chen vào lượt' : 'Gửi'"
+          :aria-label="streaming ? 'Chen vào lượt đang chạy' : 'Gửi'"
+          @click="submit"
+        >
+          <Zap v-if="streaming" class="icn-lg" />
+          <ArrowUp v-else class="icn-lg" />
+        </button>
+      </div>
     </div>
 
     <input
@@ -196,6 +220,25 @@ function pickMode(mode: AgentMode): void {
       @change="pick"
     />
     <input ref="cameraPicker" type="file" accept="image/*" capture="environment" hidden @change="pick" />
+
+    <!-- One "+" like iMessage: the attachment picker is an action sheet, not two
+         dedicated buttons in the composer. -->
+    <AppSheet :open="attachOpen" title="Đính kèm" @close="attachOpen = false">
+      <button class="act" @click="pickFile">
+        <File class="icn-lg" />
+        <span class="act-txt">
+          <span class="act-name">Tệp / ảnh</span>
+          <span class="act-hint">Ảnh, markdown, log, mã nguồn — tối đa 4 tệp</span>
+        </span>
+      </button>
+      <button class="act" @click="pickCamera">
+        <Camera class="icn-lg" />
+        <span class="act-txt">
+          <span class="act-name">Chụp ảnh</span>
+          <span class="act-hint">Camera sau — ảnh mới chụp</span>
+        </span>
+      </button>
+    </AppSheet>
 
     <AppSheet :open="modeOpen" title="Chế độ" @close="modeOpen = false">
       <button
@@ -270,7 +313,7 @@ function pickMode(mode: AgentMode): void {
   right: -8px;
   width: 28px;
   height: 28px;
-  border-radius: 50%;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
   background: var(--surface-3);
   color: var(--text);
@@ -287,24 +330,36 @@ function pickMode(mode: AgentMode): void {
 .rm:active {
   background: var(--surface-2);
 }
-.bar {
+/* One context row instead of the old stack (mode row + config bar): the mode
+   chip stays pinned at the left, the config strip scrolls if it overflows. */
+.ctx {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 4px 12px 0;
 }
+/* A mode SELECTOR, not an action — it sits inside the context row, so it reads
+   as a 30px label chip. The ::before stretches the touch area back to ~44px so
+   shrinking it doesn't cost the tap target. */
 .chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: var(--tap);
+  flex: 0 0 auto;
+  min-height: 30px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-dim);
-  border-radius: var(--r-pill);
-  padding: 0 14px;
+  border-radius: var(--r-btn);
+  padding: 0 10px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 600;
+}
+.chip::before {
+  content: '';
+  position: absolute;
+  inset: -7px -4px;
 }
 .chip:active {
   background: var(--surface-2);
@@ -325,6 +380,43 @@ function pickMode(mode: AgentMode): void {
   color: var(--danger);
   border-color: var(--danger);
   background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.cfgs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  overflow: hidden;
+  padding: 0 2px;
+  text-align: left;
+}
+.cfgs:active {
+  opacity: 0.6;
+}
+.cfgtxt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cfg-edit {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.hint {
+  flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .mode-row {
   position: relative;
@@ -370,63 +462,70 @@ function pickMode(mode: AgentMode): void {
   right: 14px;
   color: var(--accent);
 }
-.hint {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
+/* The composer is ONE bordered box: textarea on top, tool row as its footer.
+   56px of textarea minimum keeps the box substantial even when empty. */
 .composer {
   display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  padding: 8px 12px 10px;
+  flex-direction: column;
+  margin: 8px 12px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
+  background: var(--surface-2);
+}
+.composer:focus-within {
+  border-color: var(--accent);
 }
 textarea {
-  flex: 1;
+  width: 100%;
   /* resize:none on purpose — a phone has no resize gutter, and the box already
      grows with its content (watch on `text` above). */
   resize: none;
   max-height: 140px;
-  min-height: var(--tap);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  padding: 10px 14px;
+  min-height: 56px;
+  border: none;
+  background: transparent;
+  padding: 12px 14px 4px;
   line-height: var(--lh-md);
 }
 textarea:focus {
-  border-color: var(--accent);
+  outline: none;
+  border: none;
 }
-.icon {
-  width: var(--tap);
-  height: var(--tap);
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 8px;
+}
+.tspace {
+  flex: 1;
+}
+/* Footer buttons are 36px tall — under --tap — so ::before stretches the touch
+   area to 44 without growing the box's footer visually. */
+.tool {
+  position: relative;
+  min-width: 44px;
+  height: 36px;
   flex-shrink: 0;
   border: none;
+  border-radius: var(--r-btn);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
-.icon:active {
+.tool::before {
+  content: '';
+  position: absolute;
+  inset: -4px 0;
+}
+.tool:active {
+  background: var(--surface-3);
   color: var(--text);
 }
-.icon:disabled {
+.tool:disabled {
   opacity: 0.45;
-}
-.send,
-.stop {
-  width: var(--tap);
-  height: var(--tap);
-  flex-shrink: 0;
-  border: none;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.send:active,
-.stop:active {
-  opacity: 0.6;
 }
 .send {
   background: var(--accent);
@@ -436,12 +535,54 @@ textarea:focus {
   background: var(--warn);
   color: var(--on-warn);
 }
+.send:active {
+  background: var(--accent);
+  color: var(--on-accent);
+  opacity: 0.7;
+}
 .send:disabled {
   opacity: 0.4;
 }
 .stop {
-  background: transparent;
   border: 1px solid var(--danger);
   color: var(--danger);
+}
+/* Attachment action-sheet rows. */
+.act {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--tap);
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+}
+.act:active {
+  background: var(--surface-3);
+}
+.act .lucide {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.act-txt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.act-name {
+  font-weight: 600;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+.act-hint {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--text-dim);
 }
 </style>
