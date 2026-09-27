@@ -12,13 +12,16 @@ Trước bản này, trình duyệt của agent **không có bề mặt nào đ�
 | View picker của Session | nút Workspace ở header → chọn **Browser** |
 | Nút `+` trong panel | thêm view vào panel đang mở |
 | Tray → *Toggle browser window* | mở tab đang active ra **cửa sổ riêng** (popout) |
+| Menu `⋯` → **Picture in Picture** · `⇧⌘B` | card nổi trong app giữ view SỐNG — kéo/resize được (xem "Picture-in-Picture" bên dưới) |
+| **Auto** — `browserAutoPip` | agent duyệt web mà không ai hiển thị trang ⇒ card PiP tự hiện |
 
 Tab được **mount lười và giữ mounted** như Terminal: chưa mở thì không tốn Chromium nào, mở rồi thì trang (và trạng thái đăng nhập) sống qua mọi lần đổi tab.
 
 ## Nhìn thấy gì
 
-- **Tab strip** — mỗi tab của agent một chip, có spinner khi đang tải, `×` để đóng, `+` để mở tab mới. Strip cập nhật **theo từng lần agent điều hướng**, không cần refresh.
-- **URL bar** — gõ URL để tự mở, `⏎` để đi; back/forward/reload; rồi nhóm hành động trên trang: 📌 ghim, copy URL, dịch phần bôi đen, trích phần bôi đen vào chat, chọn một phần tử để thêm vào chat. Nút đẩy tab ra cửa sổ riêng (⧉) nằm ở hàng tab, cùng nhóm với split-view · `⋮` · mở rộng · đóng.
+- **Tab strip** — mỗi tab của agent một chip: **favicon** của trang (fallback icon globe; spinner đè lên đúng chỗ đó khi tab đang tải), tên tab, `×` để đóng; `+` để mở tab mới. Strip cập nhật **theo từng lần agent điều hướng**, không cần refresh. Favicon đi đường `page-favicon-updated` trên `webContents` → `TabInfo.favicon` → `browser:changed`; URL icon là string do trang khai (L1) nên renderer chỉ gán vào `<img :src>` (chỉ chấp nhận `https?://` và `data:image/`, lỗi tải → globe), không innerHTML.
+- **URL bar** — hai chế độ một khung. **Không focus:** bản đọc — ổ khoá cho `https`, tam giác cảnh báo cho `http`, host nổi bật còn path/search/hash mờ (`--textDim`), scheme giấu đi; bấm vào (hay Tab tới) thì lớp đọc nhường chỗ cho ô nhập, focus + select-all đúng thói quen omnibox. **Đang focus:** input URL đầy đủ như cũ, `⏎` để đi (chuỗi gõ vẫn chuẩn hoá bởi `normalizeUserUrl` ở main). Trước/sau: `←` `→` `⟳`, rồi nút `⋯` gom mọi hành động trên trang + dock + popout + mở rộng.
+- **Thanh tiến trình** — vạch accent cao 2px dọc mép dưới hàng URL, chạy vô định (indeterminate — renderer không biết % tải của trang) khi `activeTab.loading`; tôn trọng `prefers-reduced-motion` bằng vạch đứng yên.
 - **Trang đã ghim** — dải chip dưới URL bar, chỉ hiện khi có pin. Bấm chip = mở tab mới trên trang đó; `×` để bỏ ghim; chip của trang đang xem được tô accent.
 - **Copy URL** — copy **URL đang tải thật** (`activeTab.url`), không phải chuỗi trong ô input (ô đó là thứ người dùng đang gõ). Icon đổi thành ✓ khoảng 1,4 giây.
 - **Khung trang** — chính trang web, tương tác trực tiếp bằng chuột/bàn phím.
@@ -26,16 +29,17 @@ Tab được **mount lười và giữ mounted** như Terminal: chưa mở thì 
 
 ## Chrome dùng chung cho panel và cửa sổ popout
 
-Bố cục theo Claude, hai hàng: **hàng 1** = tab strip (`+` mở tab mới) bên trái, nhóm nút "cửa sổ" bên phải; **hàng 2** = `←` `→` `⟳` + ô URL + nhóm hành động trên trang. Cả hai hàng nằm trong [BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue) và được **hai** bề mặt dùng lại:
+Bố cục theo Claude, hai hàng: **hàng 1** = tab strip (`+` mở tab mới) bên trái, nhóm nút "cửa sổ" (`⋮` menu + `×` đóng) bên phải; **hàng 2** = `←` `→` `⟳` + ô URL + nút `⋯` + vạch tiến trình 2px. [BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue) giờ chỉ còn **ghép mảng + `surface`** — chi tiết sống trong [BrowserTabs.vue](../../apps/desktop/ui-next/components/browser/BrowserTabs.vue) (tab strip + `+`, favicon chip) và [BrowserNavBar.vue](../../apps/desktop/ui-next/components/browser/BrowserNavBar.vue) (nav + ô URL đọc/soạn + `⋯` + cả ba menu). Logic các mục menu nằm ở [useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts); sizing/dock/expand của panel nằm ở [useBrowserPanelSizing.ts](../../apps/desktop/ui-next/composables/useBrowserPanelSizing.ts). Nút `⋮` ở hàng 1 mở menu render trong NavBar qua `defineExpose`. Cả hai bề mặt dùng lại:
 
-| Bề mặt | Khung placeholder | Nhóm nút hàng 1 |
-|---|---|---|
-| view Browser của panel — [WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | một hộp trong panel | split-view (đổi mép dock) · `⋮` · popout · mở rộng panel · đóng view |
-| cửa sổ popout — [pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | cả cửa sổ | `⋮` · đóng cửa sổ |
+| Bề mặt | Khung placeholder | Nhóm nút hàng 1 | Menu `⋯` |
+|---|---|---|---|
+| view Browser của panel — [WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | một hộp trong panel | `⋮` · `×` đóng view | trang (ghim · copy · dịch · trích · chọn) + split-view · mở rộng · **PiP** · popout |
+| cửa sổ popout — [pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | cả cửa sổ | `⋮` · `×` đóng cửa sổ | chỉ mục trang (dock/expand/popout vô nghĩa trong cửa sổ riêng) |
+| **card PiP** — [BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) | thân card nổi (Teleport body) | mini-bar riêng (không dùng BrowserChrome): favicon · title · panel · popout · `×` | — |
 
 `useEmbeddedBrowser` sống ở **bề mặt**, không ở chrome: rect dán vào hộp placeholder của chính bề mặt đó, nên mọi luật của composable (view phải đang thật sự hiện trong document, `onDeactivated`/`onActivated`, một-chủ-một-view) vẫn đo trên đúng cái hộp mà người dùng đang nhìn. Cửa sổ popout **không cần kênh IPC mới**: `browser:attach|bounds|detach` lấy cửa sổ đích từ `event.sender`, nên trang tự nhận view vào rect của mình. Nó cũng mount `AppGlobalHosts` — không có nó thì `confirm()` của "Xoá dữ liệu duyệt web", toast đường dẫn ảnh chụp và popover dịch đều im lặng trong cửa sổ đó.
 
-Ba nút "panel" (split-view / mở rộng / đóng) **không** đi qua props của panel — panel không truyền handler xuống view: chúng ghi thẳng vào `settings.workspacePanel` (dock + cỡ) và gọi `useWorkspacePanel().toggleView('Browser')`, cùng đường mà nút Browser ở status bar dùng, nên SessionDetail vẫn là nơi duy nhất sở hữu danh sách view đang mở. Hệ quả đã biết: đổi dock sang mép **đang có view khác active** thì Browser vào đó dưới dạng tab *không* active (chọn tab active là việc của panel).
+Ba nút "panel" (split-view / mở rộng ở menu `⋯`, đóng ở `×` hàng 1) **không** đi qua props của panel — panel không truyền handler xuống view: chúng ghi thẳng vào `settings.workspacePanel` (dock + cỡ, qua `useBrowserPanelSizing`) và gọi `useWorkspacePanel().toggleView('Browser')`, cùng đường mà nút Browser ở status bar dùng, nên SessionDetail vẫn là nơi duy nhất sở hữu danh sách view đang mở. Hệ quả đã biết: đổi dock sang mép **đang có view khác active** thì Browser vào đó dưới dạng tab *không* active (chọn tab active là việc của panel).
 
 ## Mở rộng panel: theo chỗ thật, không theo hằng số
 
@@ -110,16 +114,19 @@ Chỉ CHỖ RENDER khác nhau: cả hai dùng chung state, cache theo `(lang, te
 
 `.sttpop` **vẫn phải** nằm trong `OVERLAYS`: bôi đen trong transcript khi panel Browser đang mở thì popover đó có thể chồng lên rect của view. Còn nguồn `'browser'` dùng strip trong chrome nên nằm ngoài rect — đọc được mà không phải ẩn trang, đó mới là lý do chọn nó.
 
-## Hai trạng thái thay cho trang
+## Ba trạng thái thay cho trang
 
 | Trạng thái | Khi nào | Hiện gì |
 |---|---|---|
 | **Không khả dụng** | chạy trong browser-dev (`pnpm dev` ở :3031), không có shell Electron | "Trình duyệt nhúng chỉ có trong app desktop." |
-| **Đang ở chỗ khác** | tab đang hiển thị ở dock kia hoặc ở popout | placeholder + nút **Hiện ở đây** |
+| **Đang ở chỗ khác** | tab đang hiển thị ở popout/cửa sổ khác (`shownElsewhere` do main báo) hoặc dock kia trong cùng cửa sổ (instance khác giữ `owner`) | [BrowserElsewhere.vue](../../apps/desktop/ui-next/components/browser/BrowserElsewhere.vue): icon + tiêu đề **phân biệt hai nơi đó** + gợi ý + nút **Hiện ở đây** |
+| **Trang trắng** | `about:blank` hoặc chưa có tab nào (`empty` = `!hasPage()` trong composable) | [BrowserEmptyState.vue](../../apps/desktop/ui-next/components/browser/BrowserEmptyState.vue): icon + hướng dẫn ngắn + **pin dạng card** bấm-mở được (tái dùng `useBrowserPins`) |
 
-Trạng thái thứ hai là hệ quả trực tiếp của việc trang là một **view native**, không phải element: một `webContents` không nằm được trong hai hình chữ nhật.
+Trạng thái "chỗ khác" là hệ quả trực tiếp của việc trang là một **view native**, không phải element: một `webContents` không nằm được trong hai hình chữ nhật.
 
-Có một trạng thái thứ ba **không hiện chữ gì**: khi app mở hộp thoại/menu chồng lên khung thì trang nhường chỗ và khung để trống — xem phần ngay dưới.
+Trạng thái "trang trắng" cần thêm một luật nữa: **tab trắng không bao giờ attach view** — `hasPage()` nằm trong `wanted` của `syncOnce`, vì một `WebContentsView` trắng vẽ ĐÈ lên DOM sẽ che luôn empty-state phía dưới. Đổi URL tab ↔ trắng được `applyList` + watcher `empty` gỡ/gắn lại; bấm card pin gán `urlDraft` rồi `submitUrl` (navigate đúng tab trắng đó, `open` ở main tự tạo tab nếu chưa có).
+
+Có một trạng thái thứ tư **không hiện chữ gì**: khi app mở hộp thoại/menu chồng lên khung thì trang nhường chỗ và khung để trống — xem phần ngay dưới.
 
 ## Luật "nhường chỗ" — ba đời, và vì sao đời 3 khác hẳn
 
@@ -195,22 +202,21 @@ Và một cạm bẫy thứ tự: Vue có thể **activate instance mới trư�
 
 ## Panel hẹp: thanh công cụ xuống dòng, không bị bóp
 
-Panel kéo được xuống tới **240px** (`WP_SIDE.min` trong SessionDetail). Ở đó, một hàng công cụ đơn không tràn ra ngoài — nó **bóp ô URL còn 41px**, tức một ô nhập không hiển thị được gì (đo được). Nên **hàng 2** được chia thành **hai nhóm cố định + một ô co giãn**, và cho phép `flex-wrap`:
+Panel kéo được xuống tới **240px** (`WP_SIDE.min` trong SessionDetail). Ở đó, một hàng công cụ đơn không tràn ra ngoài — nó **bóp ô URL** thành một ô nhập không hiển thị được gì (bản 5 nút hành động đo được còn 41px). Nên **hàng 2** được chia thành **hai nhóm cố định + một ô co giãn**, và giữ `flex-wrap` làm dây an toàn:
 
-`nav (74px) + basis + actions (126px) + gap (8) + padding (16) ≤ bề rộng panel`
+`nav (74px) + basis + actions (22px) + gap (8) + padding (16) ≤ bề rộng panel`
 
-`flex: 1 1 96px` trên ô URL biến bất đẳng thức đó thành ngưỡng xuống dòng — nên **basis là số học, không phải khẩu vị**. Nhóm hành động giờ nặng **126px** (5 nút: ghim · copy · dịch · trích · chọn phần tử) thay cho 96px của bản 4 nút, nên basis phải tụt 110 → 96 để panel mặc định 322px **vẫn còn một dòng**: 74 + 96 + 126 + 8 + 16 = **320**.
+`flex: 1 1 96px` trên ô URL biến bất đẳng thức đó thành ngưỡng xuống dòng — nên **basis là số học, không phải khẩu vị**. Sau §3.6 nhóm phải chỉ còn **một** nút `⋯` (22px — 5 hành động trang đã vào menu), nên ngưỡng tụt **320 → 216px**: thấp hơn cả `WP_MIN` (240), tức hàng 2 **không còn kịch bản xuống dòng** ở bề rộng hợp lệ nào. (`flex-wrap` giữ nguyên: phòng nút mới và để bất đẳng thức trên vẫn tự chữa.)
 
 | Bề rộng panel | Bố cục hàng 2 | Ô URL | Cao hàng 2 |
 |---|---|---|---|
-| 560 (max) · 420 · **322 (mặc định)** | **một dòng** | 336 · 196 · 98px | 40px |
-| 300 · **240 (min)** | hai dòng (5 nút hành động xuống dòng dưới) | 206 · 146px | 66px |
+| 560 (max) · 420 · **322 (mặc định)** · **240 (min)** | **một dòng** | 440 · 300 · 202 · 120px | 40px |
 
-Ngưỡng đo được đúng bằng số học: **320px = một dòng, 319px = hai dòng**. Ở mọi bề rộng: `scrollWidth − clientWidth = 0` trên **cả hai** hàng (không tràn) và **cả 13 nút đều hiển thị** — hàng 1: 5 nút cửa sổ, hàng 2: 3 nút điều hướng + 5 nút hành động.
+(Trước §3.6, actions = 126px và ngưỡng là 320px: 560/420/322 một dòng với ô 336/196/98px, 300/240 hai dòng với ô 206/146px.) Ở mọi bề rộng: `scrollWidth − clientWidth = 0` trên **cả hai** hàng (không tràn) và mọi nút đều hiển thị — hàng 1: `⋮` + `×`; hàng 2: 3 nút điều hướng + `⋯`.
 
 Hàng 1 **không** xuống dòng: tab strip là phần co được (`flex: 1 1 auto` + `overflow-x: auto`) nên panel hẹp cuộn tab chứ không đẩy nút; cái giá là +11px chiều cao khi thanh cuộn ngang xuất hiện (≤ 318px, đo trong Chromium headless — macOS dùng overlay scrollbar nên thực tế thường không mất chỗ).
 
-⚠ **Thêm nút vào hàng 2 ⇒ phải tính lại con số 126**, và sửa cả comment ở `.bch-url` trong BrowserChrome.vue lẫn bảng này.
+⚠ **Thêm nút vào hàng 2 ⇒ phải tính lại con số 22**, và sửa cả comment ở `.bch-url` trong BrowserNavBar.vue lẫn bảng này.
 
 ⚠ **Cửa sổ hẹp hơn 1040px thì KHÔNG có panel nào cả** — `prototype.css:640` có `@media(max-width:1040px){.wpanel,.rszwp{display:none!important}}`, áp cho mọi view (Diff/Files/Terminal…), không riêng Browser. Chip "Trình duyệt" ở status bar vẫn sáng trong khi không thấy gì. Đây là hành vi có sẵn từ prototype, không phải do tính năng này; nhưng nó tương tác đúng với luật ở trên: `display:none` ⇒ `onScreen` false ⇒ view **được gỡ** (đo: `detach` bắn khi thu cửa sổ qua ngưỡng), nên không để lại lớp phủ chết.
 
@@ -224,6 +230,44 @@ Vì thế pin là một **danh sách `{url, title}` persist** ([useBrowserPins.t
 
 Một `webContents` không thể ở hai hình chữ nhật. Panel có thể dock 2 chỗ cùng lúc (phải + dưới), nên `useEmbeddedBrowser` có trọng tài cấp module: instance đầu tiên giữ view, instance còn lại vẽ "đang hiển thị ở chỗ khác" + nút giành lại. Cùng mô hình hand-off với [session popout](session-popout-window.md).
 
+## Picture-in-Picture — bề mặt thứ ba (2026-09-22)
+
+[BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) + [useBrowserPip.ts](../../apps/desktop/ui-next/composables/useBrowserPip.ts): một **card nổi trong app** (`Teleport` ra `body`, `position:fixed`, z **96** — trên page/dock 95, dưới modal 100) giữ chính `WebContentsView` sống. Khác PiP của Codex ở đúng chỗ quyết định: đây không phải preview/ảnh chụp — **trang vẫn tương tác** (gõ, bấm, cuộn) vì nó vẫn là webContents thật. Cũng không dùng `documentPictureInPicture` hay cửa sổ always-on-top: view native chỉ đổi **rect**, không đổi bản chất.
+
+- **Mở:** menu `⋯` → *Picture in Picture*, `⇧⌘B` (`toggleBrowserPip` trong keymap), hoặc **tự mở** — xem dưới.
+- **Thanh tiêu đề** = tay kéo (pointer capture; focus được, phím mũi tên nudge 16px / ⇧64px) + favicon/spinner + title + ba nút: **về panel** (`useWorkspacePanel().toggleView('Browser')` — cùng đường nút status bar, kiểm `openViews` trước vì nó là toggle), **popout**, **× đóng**. Double-click thanh cũng = về panel.
+- **Resize** bằng tay nắm góc dưới-phải (cũng nhận phím mũi tên). Min 280×180, trần = cửa sổ trừ mép.
+- **Geometry** `{x,y,w,h}` persist ở `localStorage` key `awog.browserPip`, clamp vào viewport lúc nạp + mỗi `window.resize` (vị trí đã lưu có thể trỏ ra ngoài sau khi đổi monitor). Card sửa inline `style` mỗi pointermove → MutationObserver (`style` trên body subtree) + ResizeObserver sẵn có của `useEmbeddedBrowser` `nudge`→`sync`→`setBounds` — **không có đường geometry IPC riêng**, và `sameRect` vẫn lọc nghẽn như cũ.
+- **State thay trang:** `BrowserElsewhere` khi view ở chỗ khác (kèm nút lấy lại — đường retry khi attach lỗi), mini empty-state khi tab trắng, dòng unavailable trong browser-dev. Card **không** nằm trong `OVERLAYS` — nó là host của view, khai báo vào đó là tự che mình.
+
+### Sở hữu ba chiều
+
+Trọng tài `owner` của `useEmbeddedBrowser` giờ phân xử **ba** bề mặt cùng cửa sổ (hai dock + PiP), còn `shownElsewhere` phân xử xuyên cửa sổ (popout) như cũ:
+
+| Bàn giao | Cơ chế |
+|---|---|
+| Mở PiP | watcher `open` → `nextTick` → `takeOver()` — chủ động nhận `owner` rồi attach, **giật được cả view đang ở popout**; panel/dock tự chuyển `elsewhere` |
+| Đóng PiP | `v-if` gỡ viewport el → watcher viewport → `sync` → `!wanted` → nhả `owner` + `detach()` → main park view + `changed` → nhánh reclaim của `applyList` ở panel gắn lại — **không reload trang** |
+| View bị giật khi PiP mở | PiP **tự đóng**: watcher `elsewhere` bắn sau khi card đã từng giữ view (`armed`) — cú "Hiện ở đây" của panel hay một popout mới đều thu card lại thay vì để một khung trống nổi |
+| `list.tabs` rỗng | subscriber auto-open đóng card + reset `dismissed` |
+
+Mở PiP phải đợi `nextTick` trước `takeOver`: sync chạy khi viewport el chưa mount thì `onScreen` false ⇒ `!wanted` ⇒ nhả luôn claim vừa nhận, và lần sync sau (với view ở popout) lại dừng ở nhánh `shownElsewhere` ⇒ PiP không bao giờ giật được.
+
+**Fix đi kèm trong `syncOnce`:** nhánh `!wanted` chỉ được `api.detach()` khi `owner` đã về `null`. `detachFrom(window)` ở main park **mọi** tab của cửa sổ, nên detach trễ từ instance vừa mất claim (panel lúc PiP takeover) sẽ gỡ nhầm view của chủ mới — cú nhấp nháy đen + vòng reclaim IPC ngay lúc bàn giao. Cùng lỗi lớp-đã-biết của `detachNow`, nay được chặn ở cả hai đầu.
+
+### Auto-PiP + `dismissed`
+
+Một subscriber `browser.onChanged` duy nhất, đăng ký **lazy** ở lần `useBrowserPip()` đầu tiên — vốn chỉ xảy ra từ layout default ⇒ **chỉ cửa sổ chính** (popout `layout:false` không bao giờ auto-PiP, và card cũng không được mount ở đó). Điều kiện mở, dùng đúng cờ per-window của main:
+
+```
+settings.sessions.browserAutoPip (mặc định BẬT, Settings → Workspace)
+∧ !open ∧ !dismissed
+∧ activeTab tồn tại ∧ !activeTab.shown ∧ !activeTab.shownElsewhere
+∧ url thật (không rỗng, không about:blank)
+```
+
+Bấm `×` = `dismissPip()` — đóng + im auto-open tới **hết burst** (`tabs` rỗng) hoặc tới khi người dùng tự mở lại (`openPip`/`⇧⌘B` xoá cờ). `closePip()` — các đóng hệ thống (về panel, sang popout, mất owner, hết tab) — **không** đặt cờ: đóng popout xong thấy view rảnh thì card được phép quay lại. `about:blank` không auto-open: `hasPage` cũng từ chối attach nó, nên nháy một khung trống lên mỗi lần agent mở tab đúng là thứ PiP được sinh ra để xoá.
+
 ## Bảo mật
 
 Kế thừa toàn bộ hàng rào của [browser-tool.md](browser-tool.md) — SSRF 3 sự kiện (`will-navigate`/`will-redirect`/`will-frame-navigate`), chặn popup/download/permission request, partition riêng — cộng bốn điểm của riêng bề mặt này:
@@ -232,6 +276,7 @@ Kế thừa toàn bộ hàng rào của [browser-tool.md](browser-tool.md) — S
 - **Renderer không addressing được cửa sổ khác.** `browser:attach|bounds|detach` lấy cửa sổ đích từ `event.sender`; không có window id nào đi qua IPC (invariant #4).
 - **Rect là L1** → `clampRect` ghim mọi field thành số nguyên trong `±10000` trước khi xuống tầng native.
 - **Nội dung trang vẫn chỉ có một cửa vào app.** Bề mặt IPC mới chỉ có điều hướng + hình học. Mọi hành động ĐỌC trang (snapshot/extract/console/network/screenshot) vẫn đi đường sidecar, nơi có hàng rào nonce + `redactString`.
+- **Favicon là string do trang khai (L1).** `page-favicon-updated` đẩy URL icon lên `TabInfo.favicon`; renderer lọc theo `^(https?://|data:image/)` rồi chỉ gán vào `<img :src>` — không `innerHTML`, không `v-html`. Icon chết/parse hỏng → fallback globe. Một điểm mở có chủ đích: `<img src="https://host/...">` khiến cửa sổ app phát một GET tới host đó qua session mặc định (KHÔNG phải partition `persist:awog-browser` của trang) — trang agent vừa tải host đó nên request không lộ gì mới, chỉ mất rằng nó đi ngoài jar của browser.
 
 Từ 2026-09-09 tab này còn có nút ⬇ **nhập cả profile browser thật** (Chrome/Edge/Brave/Arc/Vivaldi/Chromium) vào jar của agent — cookie + Local Storage + IndexedDB, không bao giờ mật khẩu đã lưu: [browser-profile-import.md](browser-profile-import.md).
 
@@ -244,23 +289,40 @@ Từ 2026-09-09 tab này còn có nút ⬇ **nhập cả profile browser thật*
 - Trang bị gỡ khỏi màn hình một nhịp mỗi lần có popover mở.
 - **Cửa sổ popout không suy ra được workspace root** (nó là renderer riêng, không có session nào đang active) ⇒ "Lưu ảnh chụp trang" tắt ở đó. Muốn bật thì main phải truyền project vào URL của cửa sổ.
 - Đổi mép dock từ chrome không kéo theo "làm tab active" ở mép đích khi mép đó đang có view khác — chọn tab active là việc của panel.
+- PiP chỉ có ở cửa sổ chính (mount trong layout default; popout `layout:false`), và là bề mặt per-window: cửa sổ popout session không có card PiP của riêng nó.
+- **Mọi handle DOM của card PiP phải nằm NGOÀI rect của `.bpip-view`** — view native vẽ trên DOM nên một nút đặt chồng lên khung vừa vô hình vừa chết click. Đó là lý do card có khung DOM 5px (`padding-right`/`padding-bottom` trên `.bpip`): hai dải resize `e`/`s` + góc `se` sống trong khung đó (kiểu border-resize của cửa sổ frameless), và view vuông góc không còn đè lên bo góc dưới của card. Phần trên-trái của handle `se` vẫn chồng view (vùng chết) — chỉ chữ L trong khung là bấm được.
 
 ## File chạm
 
 | File | Thay đổi |
 |---|---|
-| [electron/src/browser.ts](../../apps/desktop/electron/src/browser.ts) | tab = `WebContentsView`; `holder` vô hình + `park`/`ensurePainted`; `attachTo`/`setViewBounds`/`detachFrom`; `openFromUser`/`goBack`/`goForward`/`reload`; popout thay cho show/hide theo cửa sổ-mỗi-tab; `listTabs(forWindow)` + `info()` |
+| [electron/src/browser.ts](../../apps/desktop/electron/src/browser.ts) | tab = `WebContentsView`; `holder` vô hình + `park`/`ensurePainted`; `attachTo`/`setViewBounds`/`detachFrom`; `openFromUser`/`goBack`/`goForward`/`reload`; popout thay cho show/hide theo cửa sổ-mỗi-tab; `listTabs(forWindow)` + `info()`; **+ `BrowserTab.favicon` / `page-favicon-updated` → `TabInfo.favicon`** |
 | [electron/src/ipc.ts](../../apps/desktop/electron/src/ipc.ts) | **Mới** `registerBrowserViewIpc()` — 12 kênh `browser:*` + broadcast `browser:changed` theo từng cửa sổ |
-| [electron/src/preload.ts](../../apps/desktop/electron/src/preload.ts) | `window.awog.browser.*` |
-| [ui-next/composables/useEmbeddedBrowser.ts](../../apps/desktop/ui-next/composables/useEmbeddedBrowser.ts) | **Mới** — glue rect ↔ view, luật nhường chỗ (`OVERLAYS`), trọng tài một-chủ, follow tab của agent, poll `selectionText`, action cho chrome |
-| [ui-next/components/browser/BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue) | **Mới** — chrome 2 hàng dùng chung (tab strip · nhóm nút cửa sổ · nav + URL + hành động), menu `⋮`, ghim/copy, dịch, trang → chat |
+| [electron/src/preload.ts](../../apps/desktop/electron/src/preload.ts) | `window.awog.browser.*`; `BrowserTabInfo.favicon?` |
+| [ui-next/composables/useEmbeddedBrowser.ts](../../apps/desktop/ui-next/composables/useEmbeddedBrowser.ts) | **Mới** — glue rect ↔ view, luật nhường chỗ (`OVERLAYS`), trọng tài một-chủ, follow tab của agent, poll `selectionText`, action cho chrome; **+ `hasPage` gate trong `wanted` (tab trắng không attach), `empty`/`isOwner` export, detach theo `owner === id`; + nhánh `!wanted` của `syncOnce` chỉ detach khi `owner` đã về `null` (không park nhầm view của chủ mới cùng cửa sổ — fix nhấp nháy lúc PiP/dock takeover)** |
+| [ui-next/composables/useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts) | **Mới (refactor)** — menu `⋯`/dock/`⋮`: anchors, `actionItems`, ghim/copy/dịch/trích/chọn phần tử |
+| [ui-next/composables/useBrowserPanelSizing.ts](../../apps/desktop/ui-next/composables/useBrowserPanelSizing.ts) | **Mới (refactor)** — toàn bộ sizing panel chuyển từ WorkspaceBrowser: `WP_*`/`CHAT_FLOOR`/`room` observer/`expandTarget`/`shrinkTarget`/`canExpand`/`expanded` |
+| [ui-next/components/browser/BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue) | **Mới** — chrome 2 hàng dùng chung; sau refactor chỉ còn ghép mảng (BrowserTabs + nhóm cửa sổ + BrowserNavBar + PinStrip + TranslateStrip) + `surface` |
+| [ui-next/components/browser/BrowserTabs.vue](../../apps/desktop/ui-next/components/browser/BrowserTabs.vue) | **Mới (refactor)** — tab strip + `+`; chip có favicon `<img>` (fallback globe, spinner khi loading) |
+| [ui-next/components/browser/BrowserNavBar.vue](../../apps/desktop/ui-next/components/browser/BrowserNavBar.vue) | **Mới (refactor)** — nav + ô URL (chế độ đọc: lock/warn + host nổi, focus → ô soạn select-all) + `⋯` + thanh tiến trình 2px + ba menu |
+| [ui-next/components/browser/BrowserEmptyState.vue](../../apps/desktop/ui-next/components/browser/BrowserEmptyState.vue) | **Mới** — state "trang trắng": icon + hướng dẫn + pin dạng card |
+| [ui-next/components/browser/BrowserElsewhere.vue](../../apps/desktop/ui-next/components/browser/BrowserElsewhere.vue) | **Mới** — state "ở chỗ khác" phân biệt popout/dock + nút lấy về |
 | [ui-next/components/browser/BrowserSitesModal.vue](../../apps/desktop/ui-next/components/browser/BrowserSitesModal.vue) | **Mới** — `⋮` → quản lý site được phép (`off` / `allowlist` + host list) |
-| [ui-next/pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | **Mới** — route của cửa sổ popout: BrowserChrome + placeholder + `AppGlobalHosts` |
-| [ui-next/components/session/workspace/WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | **Mới** — BrowserChrome + placeholder box + 3 trạng thái + chỗ nối vào panel (dock · mở rộng · đóng view) |
+| [ui-next/components/IconSprite.vue](../../apps/desktop/ui-next/components/IconSprite.vue) | **+ `i-lock`, `i-warn`** (chỉ báo https/http của thanh URL) |
+| [ui-next/pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | **Mới** — route của cửa sổ popout: BrowserChrome + placeholder + `AppGlobalHosts`; + empty/elsewhere states giống panel |
+| [ui-next/components/session/workspace/WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | **Mới** — sau refactor: BrowserChrome + placeholder + 3 trạng thái (unavailable/elsewhere/empty); sizing → `useBrowserPanelSizing` |
 | [ui-next/components/session/SessionWorkspacePanel.vue](../../apps/desktop/ui-next/components/session/SessionWorkspacePanel.vue) | mount lười + giữ mounted, `FLUSH_TABS`/`HANDLED_TABS` |
 | [ui-next/components/session/SessionDetail.vue](../../apps/desktop/ui-next/components/session/SessionDetail.vue) | `ALL_VIEWS` thêm `Browser` |
 | [ui-next/components/shell/AppStatusBar.vue](../../apps/desktop/ui-next/components/shell/AppStatusBar.vue) | nút Browser một-cú-bấm |
 | [ui-next/composables/useSessionsData.ts](../../apps/desktop/ui-next/composables/useSessionsData.ts) | `WPVIEWS` thêm `['Browser', 'globe']` |
-| [ui-next/types/awog-bridge.d.ts](../../apps/desktop/ui-next/types/awog-bridge.d.ts) | `AwogBrowserRect` / `AwogBrowserTab` / `AwogBrowserTabList` |
-| i18n `sessions.json` + `statusbar.json` (en/vi) | 11 + 1 key |
-| i18n `browser.json` (en/vi) | **Mới** — 28 key: menu `⋮`, hộp thoại site, dịch/trích/chọn phần tử, toast |
+| [ui-next/types/awog-bridge.d.ts](../../apps/desktop/ui-next/types/awog-bridge.d.ts) | `AwogBrowserRect` / `AwogBrowserTab` / `AwogBrowserTabList`; **+ `AwogBrowserTab.favicon?`** |
+| i18n `sessions.json` + `statusbar.json` (en/vi) | 11 + 1 key; **− `sessions.workspace.browser.elsewhere`** (tách thành 3 key mới) |
+| i18n `browser.json` (en/vi) | **Mới** — 28 key menu `⋮`/site/dịch/trích/toast; **+ 5 key: `empty.*`, `elsewhere.*`; + 7 key `pip.*`** |
+| [ui-next/composables/useBrowserPip.ts](../../apps/desktop/ui-next/composables/useBrowserPip.ts) | **Mới** — state UI cấp module của PiP (`open`/`dismissed`/`rect` + localStorage `awog.browserPip` + clamp), subscriber auto-open lazy chỉ-ở-cửa-sổ-chính |
+| [ui-next/components/browser/BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) | **Mới** — card nổi Teleport-body z 96: mini-bar kéo được (favicon/title/về-panel/popout/×), viewport placeholder, tay nắm resize, 3 trạng thái thay trang |
+| [ui-next/layouts/default.vue](../../apps/desktop/ui-next/layouts/default.vue) | mount `<BrowserPip />` — cố ý NGOÀI `AppGlobalHosts` (popout session lắp lại host stack; PiP chỉ ở cửa sổ chính) |
+| [ui-next/composables/useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts) | + mục **Picture in Picture** (`i-pip`) trong menu `⋯` của panel, cạnh dock/popout |
+| [ui-next/components/IconSprite.vue](../../apps/desktop/ui-next/components/IconSprite.vue) | **+ `i-pip`** (lucide picture-in-picture-2) |
+| [ui-next/composables/useKeymap.ts](../../apps/desktop/ui-next/composables/useKeymap.ts) · [useGlobalShortcuts.ts](../../apps/desktop/ui-next/composables/useGlobalShortcuts.ts) | + action `toggleBrowserPip` mặc định `⇧⌘B` (nhóm session) |
+| [ui-next/stores/settings.ts](../../apps/desktop/ui-next/stores/settings.ts) · [SettingsWorkspace.vue](../../apps/desktop/ui-next/components/settings/SettingsWorkspace.vue) | + `sessions.browserAutoPip` (synced, mặc định BẬT) + toggle ở Settings → Workspace |
+| i18n `settings.json` + `settings-keymap.json` (en/vi) | + `settings.workspace.browserPip.*`, `settingsKeymap.act.toggleBrowserPip` |

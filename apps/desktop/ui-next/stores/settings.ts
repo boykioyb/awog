@@ -151,6 +151,10 @@ export interface SessionSettings {
   // and the session is idle, auto-start a turn so the model continues. Default OFF
   // = notify-only (a "Continue" card; the user clicks to resume).
   autoContinueOnBackground: boolean
+  // Browser PiP (docs/features/session-browser-panel.md): khi agent duyệt web mà
+  // không bề mặt nào hiển thị trang (view Browser đóng, không popout), tự bật
+  // card nổi trong app. Preference → nằm trong slice synced `sessions`.
+  browserAutoPip: boolean
 }
 
 export interface QuotaWarningSettings {
@@ -407,6 +411,7 @@ const DEFAULT_SESSIONS: SessionSettings = {
   pasteAsFile: true,
   pasteThreshold: 2000,
   autoContinueOnBackground: false,
+  browserAutoPip: true,
 }
 
 const DEFAULT_QUOTA: QuotaWarningSettings = {

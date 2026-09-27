@@ -19,6 +19,7 @@ export type KeymapActionId =
   | 'toggleFiles'
   | 'toggleDiff'
   | 'togglePlan'
+  | 'toggleBrowserPip'
   | 'openSettings'
   | 'nextSession'
   | 'prevSession'
@@ -110,6 +111,12 @@ export const KEYMAP_ACTIONS: readonly KeymapAction[] = [
     labelKey: 'settingsKeymap.act.togglePlan',
     group: 'session',
     default: { mod: true, shift: true, code: 'KeyP' },
+  },
+  {
+    id: 'toggleBrowserPip',
+    labelKey: 'settingsKeymap.act.toggleBrowserPip',
+    group: 'session',
+    default: { mod: true, shift: true, code: 'KeyB' },
   },
   {
     id: 'nextSession',

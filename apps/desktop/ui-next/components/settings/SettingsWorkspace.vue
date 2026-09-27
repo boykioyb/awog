@@ -45,6 +45,17 @@
       <AppSelect v-model="linkMode" :options="linkModeOptions" width="220px" />
     </SettingsField>
 
+    <!-- Browser PiP — synced preference trong slice `sessions` (mặc định BẬT):
+         agent duyệt web mà view Browser đóng + không popout thì card nổi sống
+         tự hiện. Cùng section với linkOpen vì cả hai đều điều phối "trang web
+         đi/hiện ở đâu". -->
+    <SettingsField
+      :name="t('settings.workspace.browserPip.name')"
+      :desc="t('settings.workspace.browserPip.desc')"
+    >
+      <SettingsTog v-model="browserAutoPip" />
+    </SettingsField>
+
     <SettingsField
       v-if="sidecar.available"
       :name="t('settings.workspace.diagnostics.name')"
@@ -102,6 +113,12 @@ const linkModeOptions = computed(() => [
   { label: t('settings.workspace.linkOpen.app'), value: 'app' },
   { label: t('settings.workspace.linkOpen.external'), value: 'external' },
 ])
+
+// Auto-PiP của trình duyệt — synced pref, đi qua `updateSessions` để persist.
+const browserAutoPip = computed<boolean>({
+  get: () => settings.sessions.browserAutoPip,
+  set: (v) => settings.updateSessions({ browserAutoPip: v }),
+})
 
 const copied = ref(false)
 let copyResetTimer: ReturnType<typeof setTimeout> | null = null

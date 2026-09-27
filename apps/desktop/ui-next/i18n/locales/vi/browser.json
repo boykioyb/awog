@@ -28,5 +28,17 @@
   "browser.sites.empty": "Chưa có host nào — allowlist rỗng thì chặn mọi trang.",
   "browser.sites.remove": "Xoá",
   "browser.window.title": "Trình duyệt",
-  "browser.actions.title": "Hành động trên trang"
+  "browser.actions.title": "Hành động trên trang",
+  "browser.empty.title": "Chưa có trang nào",
+  "browser.empty.hint": "Gõ một URL ở thanh trên, hoặc mở lại một trang đã ghim dưới đây.",
+  "browser.elsewhere.window": "Trang này đang hiển thị ở cửa sổ riêng.",
+  "browser.elsewhere.dock": "Trang này đang hiển thị ở dock kia của panel.",
+  "browser.elsewhere.hint": "Một trang chỉ hiển thị được ở một chỗ.",
+  "browser.pip.open": "Picture in Picture",
+  "browser.pip.title": "Picture in Picture",
+  "browser.pip.move": "Kéo để dời — phím mũi tên để nudge",
+  "browser.pip.resize": "Đổi cỡ",
+  "browser.pip.toPanel": "Trả về panel",
+  "browser.pip.close": "Đóng Picture in Picture",
+  "browser.pip.empty": "Chưa có gì để xem — tab đang trắng."
 }

@@ -41,6 +41,12 @@
     <OnboardingWizard />
     <TourHost />
     <AppGlobalHosts />
+    <!-- Browser PiP — card nổi cấp app giữ view native sống (docs/features/
+         session-browser-panel.md). Cố ý ở ĐÂY chứ không vào AppGlobalHosts:
+         AppGlobalHosts lắp lại trong cửa sổ popout phiên, còn PiP chỉ tồn tại ở
+         cửa sổ chính — subscriber auto-open của useBrowserPip cũng chỉ đăng ký
+         khi layout này chạm tới composable. -->
+    <BrowserPip />
     <!-- Phiên bong bóng ở góc phải (mini session, thư mục riêng `awog-infra`).
          Cố ý ở lại ĐÂY chứ không vào AppGlobalHosts: một cửa sổ popout ĐÃ là một
          phiên, nên thêm một phiên thu nhỏ nổi bên trong nó là hai điều khiển cho

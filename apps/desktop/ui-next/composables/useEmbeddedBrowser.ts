@@ -107,6 +107,22 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   // The view is somewhere we are not: the popout window, or the other dock.
   const elsewhere = computed(() => !isOwner.value || activeTab.value?.shownElsewhere === true)
 
+  // Tab trắng — chưa commit document nào (`''`) hoặc đúng `about:blank` — KHÔNG
+  // ĐƯỢC attach view: trang trắng của WebContentsView vẽ ĐÈ lên DOM, sẽ che luôn
+  // empty-state (icon + gợi ý + pins) phía dưới. Khung giữ DOM của mình tới khi
+  // tab có URL thật, lúc đó `wanted` mới đủ điều kiện attach.
+  //
+  // Cùng một phán đoán cho selection poll: hỏi một webContents chưa commit
+  // document làm `executeJavaScript` treo vô hạn ở main (main giờ cũng tự chặn,
+  // đây là lớp thứ hai để khỏi tốn IPC mỗi 1,2s).
+  const hasPage = (): boolean => {
+    const url = activeTab.value?.url?.trim() ?? ''
+    return !!url && url !== 'about:blank'
+  }
+  // Empty-state của viewport: chưa có tab nào, hoặc tab active là trang trắng.
+  // DOM bên trong khung tự render hướng dẫn — view native không bao giờ gắn vào.
+  const empty = computed(() => !hasPage())
+
   // ── Geometry ──────────────────────────────────────────────────────────────
 
   // `getBoundingClientRect` is already in the window's content coordinates — the
@@ -148,13 +164,26 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     const api = bridge.value
     const el = options.viewport.value
     if (!api) return
-    const wanted = onScreen(el) && options.visible() && !covered.value && isOwner.value
+    // `hasPage` nằm trong `wanted`: tab trắng thì DOM empty-state hiện thay,
+    // attach một trang trắng lên chỉ để che nó đi. Khi tab commit URL thật,
+    // watcher `empty` bên dưới + nhánh reclaim trong `applyList` lo phần gắn lại.
+    const wanted = onScreen(el) && options.visible() && !covered.value && isOwner.value && hasPage()
     if (!wanted) {
       lastRect = null
-      if (holding.value) {
+      // `holding` chỉ là cờ lạc quan — `selectTab`/`newTab`/`closeTab` dọn nó
+      // TRƯỚC khi sync trong khi main vẫn còn vẽ view của mình. `owner === id`
+      // mới là câu trả lời "main còn gắn view vào cửa sổ này không": thiếu nó,
+      // một cú đổi sang tab trắng (hasPage ⇒ wanted=false) hay một cú bấm lúc
+      // đang bị overlay che sẽ để view cũ vẽ đè DOM mãi mãi.
+      if (holding.value || owner.value === id) {
         holding.value = false
         if (owner.value === id) owner.value = null
-        await api.detach().catch(() => {})
+        // CHỈ detach khi view thật sự "về nhà" (không ai giữ nữa). `owner` vừa
+        // chuyển sang instance KHÁC cùng cửa sổ (dock mép kia, BrowserPip) thì
+        // view đang nằm trong rect của chủ mới — `detachFrom(window)` của main
+        // park MỌI tab của cửa sổ, nên một lời detach trễ ở đây sẽ gỡ nhầm view
+        // của chủ mới: cú nhấp nháy đen + một vòng reclaim IPC ngay lúc bàn giao.
+        if (owner.value === null) await api.detach().catch(() => {})
       }
       return
     }
@@ -272,14 +301,6 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   // xấu có thể mất, nên không có cờ này thì các lời gọi xếp hàng: lỗi thật
   // 2026-09-09 là 12 lời gọi treo cùng lúc rồi cùng ném timeout.
   let selectionInFlight = false
-
-  // Tab trắng thì không có gì để đọc — và quan trọng hơn, KHÔNG ĐƯỢC hỏi: một
-  // webContents chưa commit document nào làm `executeJavaScript` treo vô hạn ở
-  // main (main giờ cũng tự chặn, đây là lớp thứ hai để khỏi tốn IPC mỗi 1,2s).
-  const hasPage = (): boolean => {
-    const url = activeTab.value?.url?.trim() ?? ''
-    return !!url && url !== 'about:blank'
-  }
 
   const refreshSelection = async (): Promise<void> => {
     const api = bridge.value
@@ -457,7 +478,10 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     if (el && ro) ro.observe(el)
     void sync()
   })
-  watch([() => options.visible(), covered, isOwner], () => void sync())
+  // `empty` cũng là một trigger: tab đang giữ view mà navigate về about:blank
+  // thì `applyList` không gọi sync (tab vẫn `shown`), nên watcher này là nơi
+  // duy nhất gỡ view ra để nhường chỗ cho empty-state — và ngược lại.
+  watch([() => options.visible(), covered, isOwner, empty], () => void sync())
 
   // Poll only while the page is on screen in THIS instance: a parked panel has no
   // selection to report, and asking would cost an IPC round-trip per tick per dock.
@@ -506,6 +530,8 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     error,
     holding,
     elsewhere,
+    isOwner,
+    empty,
     selectionText,
     submitUrl,
     back,

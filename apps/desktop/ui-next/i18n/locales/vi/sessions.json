@@ -238,7 +238,6 @@
   "sessions.workspace.browser.unpin": "Bỏ ghim trang này",
   "sessions.workspace.browser.copyUrl": "Copy URL",
   "sessions.workspace.browser.urlPlaceholder": "Nhập URL",
-  "sessions.workspace.browser.elsewhere": "Tab này đang hiển thị ở cửa sổ khác.",
   "sessions.workspace.browser.takeOver": "Hiện ở đây",
   "sessions.workspace.browser.import.title": "Nhập profile từ browser",
   "sessions.workspace.browser.import.warn": "Mọi thứ profile này đang đăng nhập sẽ thành thứ agent đọc được, mà agent thì đọc trang web không đáng tin.",

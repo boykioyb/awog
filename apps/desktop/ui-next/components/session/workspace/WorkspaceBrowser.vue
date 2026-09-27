@@ -34,14 +34,13 @@
 
       <!-- Khung xem. Element này CHỈ là placeholder: trang web là một view native
            do main process đặt đúng lên hình chữ nhật này (ADR 0086) — vì thế không
-           có iframe nào ở đây, và hộp phải giữ kích thước ổn định. -->
+           có iframe nào ở đây, và hộp phải giữ kích thước ổn định. Hai state phụ
+           thuộc sự thật của view: "đang hiện chỗ khác" (elsewhere) thắng trước,
+           rồi tới "tab trắng" (empty) — tab trắng không bao giờ được attach nên
+           DOM ở đây thật sự nhìn thấy. -->
       <div ref="viewportEl" class="wsbr-view">
-        <div v-if="elsewhere" class="empty" style="padding: 24px">
-          <div class="et">{{ t('sessions.workspace.browser.elsewhere') }}</div>
-          <button type="button" class="wsbr-takeover" @click="takeOver">
-            {{ t('sessions.workspace.browser.takeOver') }}
-          </button>
-        </div>
+        <BrowserElsewhere v-if="elsewhere" :where="elsewhereWhere" @takeover="takeOver" />
+        <BrowserEmptyState v-else-if="empty" @open="onEmptyOpen" />
       </div>
     </template>
   </div>
@@ -57,11 +56,10 @@
 // Mọi thứ model ĐỌC từ trang vẫn đi qua browser_tool của sidecar (hàng rào nonce +
 // redaction), không bao giờ qua bề mặt này.
 //
-// Ba việc còn lại của file này đều là "chỗ nối vào panel", chứ không phải chuyện
-// trình duyệt: đổi mép dock, mở rộng panel, đóng view.
-import type { WorkspaceDockSide } from '~/stores/settings'
+// Sau refactor file này chỉ còn ghép: chrome + viewport + ba state (unavailable /
+// elsewhere / empty). Cục sizing/dock/expand sống ở `useBrowserPanelSizing`.
 import { useEmbeddedBrowser } from '~/composables/useEmbeddedBrowser'
-import { useSettingsStore } from '~/stores/settings'
+import { useBrowserPanelSizing } from '~/composables/useBrowserPanelSizing'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 import { useSessionsStore } from '~/stores/sessions'
@@ -69,7 +67,6 @@ import { useSessionsStore } from '~/stores/sessions'
 const props = defineProps<{ active?: boolean }>()
 
 const { t } = useI18n()
-const settings = useSettingsStore()
 const sessions = useSessionsStore()
 const viewportEl = useTemplateRef<HTMLElement>('viewportEl')
 
@@ -77,9 +74,11 @@ const {
   available,
   tabs,
   activeTabId,
+  activeTab,
   urlDraft,
   error,
   elsewhere,
+  empty,
   selectionText,
   submitUrl,
   back,
@@ -98,174 +97,37 @@ const {
   visible: () => props.active !== false,
 })
 
+// Sizing/dock/expand của panel — đo hộp flex qua `closest('.wpanel')` từ chính
+// viewport element. Mọi comment "vì sao" (WP_*, CHAT_FLOOR, lỗi observer loop)
+// sống trong composable, không nhân bản lại đây.
+const { dock, onSetDock, expanded, canExpand, onToggleExpand } = useBrowserPanelSizing({
+  viewport: viewportEl,
+})
+
 // Project của session đang xem → root tuyệt đối để lưu ảnh chụp trang. Panel không
 // truyền `session` xuống view này, nên lấy từ store: view Browser chỉ render bên
 // trong session đang hiển thị, và `active` chính là session đó.
 const project = computed(() => sessions.active?.project)
 const { root } = useWorkspaceData(project)
 
-// ── Chỗ nối vào panel ───────────────────────────────────────────────────────
-
-const BROWSER_VIEW = 'Browser'
-// Bằng WP_SIDE / WP_BOTTOM trong SessionDetail.vue — panel sở hữu việc kéo tay và
-// không export biên, nên ba bộ số này phải trùng nhau bằng mắt.
-const WP_MAX = { side: 560, bottom: 600 } as const
-const WP_MIN = { side: 240, bottom: 120 } as const
-const WP_DEFAULT = { side: 322, bottom: 260 } as const
-
-const dock = computed<WorkspaceDockSide>(() => settings.workspaceDockOf(BROWSER_VIEW))
-const onSetDock = (side: WorkspaceDockSide): void => {
-  settings.setWorkspaceDock(BROWSER_VIEW, side)
-}
-
-const isBottom = computed(() => dock.value === 'bottom')
-const panelSize = computed(() =>
-  dock.value === 'bottom'
-    ? settings.workspacePanel.bottomHeight
-    : dock.value === 'left'
-      ? settings.workspacePanel.leftWidth
-      : settings.workspacePanel.rightWidth,
+// "Ở chỗ khác" cụ thể là ở đâu: `shownElsewhere` (main báo) ⇒ cửa sổ popout/app
+// khác; còn chỉ `!isOwner` thì là instance dock kia TRONG CÙNG cửa sổ này đang
+// giữ view (panel docked ở hai mép cùng lúc).
+const elsewhereWhere = computed<'dock' | 'window'>(() =>
+  activeTab.value?.shownElsewhere ? 'window' : 'dock',
 )
-// Chỗ mà panel THẬT SỰ có: hộp flex chứa nó (chat + panel). Đo từ element của
-// chính component này (`closest`), không `document.querySelector` — panel sở hữu
-// việc kéo tay và không export biên nào, nên đây là cách duy nhất biết còn bao
-// nhiêu chỗ mà không cần SessionDetail truyền xuống.
-const CHAT_FLOOR = { side: 320, bottom: 220 } as const
-// Phải là REF, không phải hàm đọc DOM gọi trong computed: computed chỉ tính lại khi
-// một dep REACTIVE đổi, còn kích thước cửa sổ thì không phải dep nào cả. Bản đầu
-// của bản vá này mắc đúng lỗi đó — kéo cửa sổ từ 680 lên 1180 mà nút vẫn nghĩ
-// panel đã mở hết cỡ (đo được: ở row 1180, panel 360 vẫn hiện "Trả bảng về cỡ cũ").
-const room = ref<number | null>(null)
-let roomObserver: ResizeObserver | null = null
-let observedBox: Element | null = null
 
-const boxOf = (): Element | null => viewportEl.value?.closest('.wpanel')?.parentElement ?? null
-
-// CHỈ đo, không bao giờ đăng ký lại observer ở đây.
-//
-// LỖI THẬT (bản vá đầu của chính chỗ này): callback gọi `disconnect()` rồi
-// `observe()` lại — mà `observe()` một element LUÔN phát callback ngay lần đầu,
-// nên nó tự gọi lại mình vô hạn và Chromium đổ log
-// "ResizeObserver loop completed with undelivered notifications" liên tục.
-// Đăng ký là việc của `watchBox`, chạy ngoài callback.
-//
-// Chỉ ghi khi số THỰC SỰ đổi: mỗi lần ghi là một lần đánh thức `expandTarget` và
-// watcher clamp phía dưới.
-const measureRoom = (): void => {
-  const box = boxOf()
-  if (!box) {
-    if (room.value !== null) room.value = null
-    return
-  }
-  const r = box.getBoundingClientRect()
-  const next = Math.round(isBottom.value ? r.height : r.width)
-  if (next !== room.value) room.value = next
-}
-
-// Theo dõi chính hộp flex chứa panel: nó co lại khi cửa sổ đổi cỡ, khi danh sách
-// phiên gập/mở, hay khi panel mép kia mở ra — nhiều đường hơn là `window.resize`.
-// Ghi cỡ panel KHÔNG làm hộp này đổi bề rộng (hộp do cha nó định), nên quan sát nó
-// không tạo vòng phản hồi.
-const watchBox = (): void => {
-  const box = boxOf()
-  if (!roomObserver || box === observedBox) return
-  if (observedBox) roomObserver.unobserve(observedBox)
-  observedBox = box
-  if (box) roomObserver.observe(box)
-}
-
-onMounted(() => {
-  roomObserver = new ResizeObserver(measureRoom)
-  watchBox()
-  measureRoom()
-})
-onUnmounted(() => {
-  roomObserver?.disconnect()
-  roomObserver = null
-  observedBox = null
-})
-// Khung tới muộn (mở view sau khi mount) và đổi mép dock thì trục đo cũng đổi.
-watch([viewportEl, dock], () => {
-  watchBox()
-  measureRoom()
-})
-
-const setPanelSize = (next: number): void => {
-  if (dock.value === 'bottom') settings.setWorkspaceBottomHeight(next)
-  else if (dock.value === 'left') settings.setWorkspaceLeftWidth(next)
-  else settings.setWorkspaceRightWidth(next)
-}
-
-// Mở rộng tới đâu là ĐỦ, chứ không phải tới hằng số.
-//
-// LỖI THẬT 2026-09-09: nút này nhảy thẳng lên `WP_MAX` (560 / 600) bất kể cửa sổ
-// rộng bao nhiêu. Đo ở row 680px: panel 560 ⇒ **chat còn 114px**, tức cột chat bị
-// nghiền thành một dải card dẹt — người dùng đọc ra là "tràn, không fit màn hình".
-// Nay trần là min(WP_MAX, 60% của hộp, hộp − sàn chat): trên màn rộng không đổi gì
-// (row 1200 ⇒ vẫn 560), trên màn hẹp thì nó dừng trước khi giết cột chat.
-//
-// Sàn là WP_MIN (cỡ nhỏ nhất kéo tay được), KHÔNG phải WP_DEFAULT: lấy mặc định
-// làm sàn thì trên cửa sổ hẹp trần bị NÂNG lên đúng bằng mặc định, và nút "mở
-// rộng" thành một cú bấm không làm gì trong khi icon vẫn khoe "đang mở rộng" —
-// đúng triệu chứng "lỗi expand". Trần thấp hơn mặc định là một sự thật về chỗ
-// trống, chỗ để nói ra là `canExpand` chứ không phải giấu bằng cách nâng trần.
-const expandTarget = computed<number>(() => {
-  const cap = isBottom.value ? WP_MAX.bottom : WP_MAX.side
-  const box = room.value
-  if (box === null) return cap
-  const floor = isBottom.value ? CHAT_FLOOR.bottom : CHAT_FLOOR.side
-  return Math.max(
-    isBottom.value ? WP_MIN.bottom : WP_MIN.side,
-    Math.min(cap, Math.round(box * 0.6), box - floor),
-  )
-})
-
-// Thu về mặc định — nhưng không bao giờ vượt trần. Trên cửa sổ hẹp, mặc định
-// (322) LỚN HƠN trần, nên trả về mặc định là giao cho watcher clamp bên dưới kéo
-// xuống ngay: hai bên đá qua đá lại và panel nhấp nháy.
-const shrinkTarget = computed(() =>
-  Math.min(isBottom.value ? WP_DEFAULT.bottom : WP_DEFAULT.side, expandTarget.value),
-)
-// Còn chỗ để mở rộng thật không? Hết chỗ thì nút phải TẮT, không phải im lặng
-// không làm gì.
-const canExpand = computed(() => expandTarget.value - shrinkTarget.value > 4)
-
-// Cửa sổ NHỎ LẠI thì panel phải nhỏ theo.
-//
-// Chặn cú bấm "mở rộng" mới là nửa việc: mở rộng ở màn 1700 (panel 560) rồi thu
-// cửa sổ về 1200 thì panel vẫn 560 và chat lại còn 114px — cùng một cái nghiền,
-// chỉ khác đường tới. Panel không tự co được (`flex: 0 0 <size>`, cố ý: nó là cột
-// có cỡ do người dùng đặt), nên chỗ duy nhất sửa được là ghi lại cỡ.
-//
-// Có mất preference: kéo rộng 560 rồi thu cửa sổ là mất số 560 đó. Đổi lại là một
-// layout còn dùng được, và bấm mở rộng lần nữa trên màn rộng là lấy lại ngay —
-// giữ một con số mà cột chat không đọc nổi thì không phải là giữ gì cả.
-// CHỈ theo `expandTarget`, không theo `panelSize`.
-//
-// Theo cả `panelSize` thì mỗi `pointermove` của tay kéo panel đều bị kéo ngược
-// về trần ngay trong cùng một tick: panel không nhúc nhích quá 60% hộp và cú kéo
-// giật ngược liên tục (triệu chứng "giật giật" + "kéo không rộng ra được"). Sự
-// kiện cần phản ứng là CHỖ TRỐNG HẸP LẠI (cửa sổ thu nhỏ, mở panel mép kia), và
-// đó đúng là lúc `expandTarget` đổi. Người dùng tự kéo rộng hơn trần là lựa chọn
-// tường minh của họ — để yên.
-watch(expandTarget, (target) => {
-  if (panelSize.value <= target) return
-  setPanelSize(target)
-})
-
-// "Đã mở rộng" = đang ở (gần) mức lớn nhất mà chỗ này cho phép, không phải bằng
-// hằng số — nếu không thì trên màn hẹp nút sẽ mãi hiện "mở rộng" dù không nới
-// thêm được nữa.
-const expanded = computed(() => panelSize.value >= expandTarget.value - 4)
-const onToggleExpand = (): void => {
-  if (!canExpand.value) return
-  setPanelSize(expanded.value ? shrinkTarget.value : expandTarget.value)
+// Bấm card pin ở empty-state: có tab trắng sẵn thì navigate luôn tab đó (đừng
+// sinh thêm tab trắng thừa), không có tab nào thì `open` ở main tự tạo.
+const onEmptyOpen = (url: string): Promise<void> => {
+  urlDraft.value = url
+  return submitUrl()
 }
 
 // Đóng view Browser (không phải đóng cả panel): đi qua đúng cầu nối mà status bar
 // dùng, nên SessionDetail vẫn là nơi duy nhất sở hữu danh sách view đang mở.
 const { toggleView } = useWorkspacePanel()
-const onClose = (): void => toggleView(BROWSER_VIEW)
+const onClose = (): void => toggleView('Browser')
 </script>
 
 <style scoped>
@@ -293,22 +155,5 @@ const onClose = (): void => toggleView(BROWSER_VIEW)
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.wsbr-takeover {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wsbr-takeover {
-  margin-top: 10px;
-  padding: 4px 12px;
-  border-radius: var(--r-btn);
-  background: transparent;
-  border: 1px solid var(--border);
-  cursor: pointer;
-}
-.wsbr-takeover:hover {
-  border-color: var(--accentBorder);
-  color: var(--text);
 }
 </style>

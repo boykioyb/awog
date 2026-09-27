@@ -8,6 +8,7 @@ type BrowserTabInfo = {
   tabId: string
   url: string
   title: string
+  favicon?: string
   active: boolean
   loading: boolean
   canGoBack: boolean

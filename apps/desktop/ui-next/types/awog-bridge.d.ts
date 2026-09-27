@@ -29,6 +29,10 @@ export type AwogBrowserTab = {
   tabId: string
   url: string
   title: string
+  // Favicon URL the page declares ('' / undefined = none). L1 page data: assign
+  // to <img :src> only, never innerHTML. Optional because a pre-favicon preload
+  // may not send the field.
+  favicon?: string
   active: boolean
   loading: boolean
   canGoBack: boolean

@@ -284,6 +284,17 @@
         <path d="M3 12h18" />
         <path d="M12 3c2.5 2.5 3.7 6 3.7 9s-1.2 6.5-3.7 9c-2.5-2.5-3.7-6-3.7-9s1.2-6.5 3.7-9z" />
       </symbol>
+      <!-- Ổ khoá + tam giác cảnh báo: chỉ báo https/http của thanh URL browser
+           (ADR 0086). lock = lucide `lock`, warn = lucide `triangle-alert`. -->
+      <symbol id="i-lock" viewBox="0 0 24 24">
+        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+      </symbol>
+      <symbol id="i-warn" viewBox="0 0 24 24">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+        <path d="M12 9v4" />
+        <path d="M12 17h.01" />
+      </symbol>
       <symbol id="i-palette" viewBox="0 0 24 24">
         <path d="M12 3s6 5.5 6 10a6 6 0 0 1-12 0c0-4.5 6-10 6-10z" />
       </symbol>
@@ -412,6 +423,12 @@
       <symbol id="i-terminal" viewBox="0 0 24 24">
         <path d="m4 17 6-6-6-6" />
         <line x1="12" y1="19" x2="20" y2="19" />
+      </symbol>
+      <!-- picture-in-picture-2 (lucide) — Browser PiP: khung lớn + khung nhỏ nổi
+           chồng lên góc dưới-phải. -->
+      <symbol id="i-pip" viewBox="0 0 24 24">
+        <path d="M21 9V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10c0 1.1.9 2 2 2h4" />
+        <rect width="10" height="7" x="12" y="13" rx="2" />
       </symbol>
     </defs>
   </svg>

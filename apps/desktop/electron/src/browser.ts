@@ -666,6 +666,12 @@ interface BrowserTab {
   // Window currently displaying the tab (embedded panel or popout), or null when
   // the tab is parked in the invisible holder.
   host: BrowserWindow | null
+  // Favicon URL mà Chromium báo qua `page-favicon-updated` (thường là http(s)
+  // của `<link rel=icon>`, đôi khi `data:` cho icon inline). '' = chưa biết/trang
+  // không có icon — renderer fallback về glyph globe. Đây vẫn là string do TRANG
+  // khai (L1): renderer chỉ được gán nó vào attribute `src` của <img>, không
+  // innerHTML.
+  favicon: string
 }
 
 // Picker đang chờ người dùng bấm. Chỉ có MỘT tại một thời điểm (xem pickElement),
@@ -683,6 +689,9 @@ export interface TabInfo {
   tabId: string
   url: string
   title: string
+  // Favicon URL the page declares ('' when none/unknown). Rendered as <img src>
+  // only — the string is L1 page data, never markup.
+  favicon: string
   active: boolean
   loading: boolean
   // Renderer chrome (URL bar buttons + "showing elsewhere" placeholder). The
@@ -916,6 +925,7 @@ class BrowserController {
       debuggerOk: false,
       painted: false,
       host: null,
+      favicon: '',
     }
     const wc = view.webContents
     wc.on('destroyed', () => {
@@ -927,11 +937,27 @@ class BrowserController {
     // panel is watching the AGENT browse, so a navigation it triggers has to reach
     // the renderer without the renderer polling for it.
     const notify = (): void => this.changed()
-    wc.on('did-navigate', notify)
+    wc.on('did-navigate', () => {
+      // Document mới thì icon của trang CŨ không còn đúng: xoá rồi để
+      // `page-favicon-updated` của trang mới điền lại (trang không khai icon thì
+      // nó bắn một danh sách rỗng). Cú "globe" chớp giữa chừng bị che bởi
+      // spinner `loading` trên tab chip, nên giá của việc xoá sớm gần như bằng 0.
+      tab.favicon = ''
+      notify()
+    })
     wc.on('did-navigate-in-page', notify)
     wc.on('did-start-loading', notify)
     wc.on('did-stop-loading', notify)
     wc.on('page-title-updated', notify)
+    // Favicon là của chip tab trên chrome — renderer không tự hỏi được (icon nằm
+    // trong webContents của trang), nên main phải bắn `changed` khi nó đổi.
+    wc.on('page-favicon-updated', (_event, favicons) => {
+      const list = Array.isArray(favicons) ? favicons : []
+      const next = list.find((f) => typeof f === 'string' && f.length > 0) ?? ''
+      if (next === tab.favicon) return
+      tab.favicon = next
+      notify()
+    })
     // Chặn điều hướng tới host nội bộ/loopback. BA sự kiện, không phải một:
     //
     //   will-navigate       — điều hướng do trang khởi xướng ở khung chính
@@ -1471,6 +1497,7 @@ class BrowserController {
       tabId: tab.id,
       url: wc.getURL(),
       title: wc.getTitle(),
+      favicon: tab.favicon,
       active: tab.id === this.activeId,
       loading: wc.isLoading(),
       canGoBack: wc.navigationHistory.canGoBack(),

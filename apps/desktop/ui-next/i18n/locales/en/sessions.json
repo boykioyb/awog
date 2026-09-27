@@ -238,7 +238,6 @@
   "sessions.workspace.browser.unpin": "Unpin this page",
   "sessions.workspace.browser.copyUrl": "Copy URL",
   "sessions.workspace.browser.urlPlaceholder": "Enter a URL",
-  "sessions.workspace.browser.elsewhere": "This tab is showing in another window.",
   "sessions.workspace.browser.takeOver": "Show it here",
   "sessions.workspace.browser.import.title": "Import a browser profile",
   "sessions.workspace.browser.import.warn": "Everything this profile is signed into becomes readable by the agent, and the agent reads untrusted web pages.",

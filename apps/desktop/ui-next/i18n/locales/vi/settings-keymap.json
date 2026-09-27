@@ -5,6 +5,7 @@
   "settingsKeymap.act.openSettings": "Mở Cài đặt",
   "settingsKeymap.act.toggleDiff": "Bật/tắt Diff (trong phiên)",
   "settingsKeymap.act.togglePlan": "Bật/tắt Plan (trong phiên)",
+  "settingsKeymap.act.toggleBrowserPip": "Bật/tắt trình duyệt Picture-in-Picture",
   "settingsKeymap.act.nextSession": "Phiên kế tiếp",
   "settingsKeymap.act.prevSession": "Phiên trước đó",
   "settingsKeymap.act.goSessions": "Tới trang Phiên",

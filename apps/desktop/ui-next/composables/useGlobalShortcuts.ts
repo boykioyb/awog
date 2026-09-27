@@ -23,6 +23,7 @@ import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 //                    session is active)
 //   toggleDiff     → same, for the Diff view
 //   togglePlan     → same, for the Plan view
+//   toggleBrowserPip → open/đóng card Picture-in-Picture của trình duyệt
 //   openSettings   → open the Settings modal
 //   next/prevSession → step through the session list and jump to Sessions
 //   goSessions / goTasks / goProjects → route jumps
@@ -37,6 +38,7 @@ export function useGlobalShortcuts(): void {
   const gitModal = useGitModal()
   const prSummary = usePrSummaryModal()
   const workspace = useWorkspacePanel()
+  const pip = useBrowserPip()
   const settingsModal = useSettingsModal()
   const keymap = useKeymap()
 
@@ -73,6 +75,9 @@ export function useGlobalShortcuts(): void {
     toggleFiles: () => workspace.toggleView('Files'),
     toggleDiff: () => workspace.toggleView('Diff'),
     togglePlan: () => workspace.toggleView('Plan'),
+    // Card PiP của trình duyệt (docs/features/session-browser-panel.md) — toggle
+    // mở/đóng; đóng qua phím tắt = dismissPip (im auto-open tới hết burst).
+    toggleBrowserPip: () => pip.togglePip(),
     openSettings: () => settingsModal.openSettings(),
     nextSession: () => cycleSession(1),
     prevSession: () => cycleSession(-1),

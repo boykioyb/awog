@@ -4,7 +4,7 @@
 > mô phỏng workspace switcher của Claude Code (Diff / Files / Plan / Terminal /
 > Background tasks / Preview).
 
-- **Trạng thái:** Implemented (MVP) — 7 tab wired (thêm **Browser** 2026-09-09, [ADR 0086](../decisions/0086-embedded-browser-panel.md) + [spec riêng](session-browser-panel.md): trình duyệt của agent nhúng thật vào panel, không phải iframe — nó là `WebContentsView` native nên **vẽ trên toàn bộ DOM** và có luật tự ẩn khi có modal/menu mở). Terminal cần verify đóng gói native ([ADR 0019](../decisions/0019-pty-terminal-in-sidecar.md)).
+- **Trạng thái:** Implemented (MVP) — 7 tab wired (thêm **Browser** 2026-09-09, [ADR 0086](../decisions/0086-embedded-browser-panel.md) + [spec riêng](session-browser-panel.md): trình duyệt của agent nhúng thật vào panel, không phải iframe — nó là `WebContentsView` native nên **vẽ trên toàn bộ DOM** và có luật tự ẩn khi có modal/menu mở; trang còn xem được ở **cửa sổ popout** hoặc **card Picture-in-Picture nổi trong app** — ba bề mặt chia nhau một view qua trọng tài `owner`). Terminal cần verify đóng gói native ([ADR 0019](../decisions/0019-pty-terminal-in-sidecar.md)).
 - **Liên quan:** [sessions.md](sessions.md), [git-manager.md](git-manager.md), [ADR 0017](../decisions/0017-git-manager-ipc-contract.md), [ADR 0019](../decisions/0019-pty-terminal-in-sidecar.md)
 
 ## Bối cảnh

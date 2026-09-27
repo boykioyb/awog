@@ -29,12 +29,10 @@
            lấy cửa sổ đích từ `event.sender`, nên trang này tự nhận view vào rect
            của CHÍNH nó mà không cần kênh IPC nào thêm. -->
       <div ref="viewportEl" class="bwin-view">
-        <div v-if="elsewhere" class="empty" style="padding: 24px">
-          <div class="et">{{ t('sessions.workspace.browser.elsewhere') }}</div>
-          <button type="button" class="bwin-takeover" @click="takeOver">
-            {{ t('sessions.workspace.browser.takeOver') }}
-          </button>
-        </div>
+        <!-- Ở popout thì "chỗ khác" gần như luôn là cửa sổ CHÍNH (dock bất kỳ) —
+             cửa sổ này là renderer riêng nên `!isOwner` không xảy ra được. -->
+        <BrowserElsewhere v-if="elsewhere" where="window" @takeover="takeOver" />
+        <BrowserEmptyState v-else-if="empty" @open="onEmptyOpen" />
       </div>
     </template>
 
@@ -73,6 +71,7 @@ const {
   urlDraft,
   error,
   elsewhere,
+  empty,
   selectionText,
   submitUrl,
   back,
@@ -94,6 +93,13 @@ const onClose = async (): Promise<void> => {
   await window.awog?.closeSelf().catch(() => {
     // Shell cũ không có closeSelf — người dùng vẫn đóng bằng nút của OS.
   })
+}
+
+// Bấm card pin ở empty-state: navigate tab trắng hiện tại nếu có, main tự tạo
+// tab mới nếu chưa có tab nào (`open` xử lý cả hai).
+const onEmptyOpen = (url: string): Promise<void> => {
+  urlDraft.value = url
+  return submitUrl()
 }
 
 // Tiêu đề cửa sổ = tiêu đề trang đang xem, để nhiều cửa sổ phân biệt được trong
@@ -133,22 +139,5 @@ useHead({
   display: flex;
   align-items: center;
   justify-content: center;
-}
-.bwin-takeover {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.bwin-takeover {
-  margin-top: 10px;
-  padding: 4px 12px;
-  border-radius: var(--r-btn);
-  background: transparent;
-  border: 1px solid var(--border);
-  cursor: pointer;
-}
-.bwin-takeover:hover {
-  border-color: var(--accentBorder);
-  color: var(--text);
 }
 </style>

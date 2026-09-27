@@ -288,6 +288,8 @@
   "settings.workspace.linkOpen.ask": "Hỏi mỗi lần",
   "settings.workspace.linkOpen.app": "Trình duyệt của AWOG",
   "settings.workspace.linkOpen.external": "Browser của tôi",
+  "settings.workspace.browserPip.name": "Trình duyệt Picture-in-Picture",
+  "settings.workspace.browserPip.desc": "Khi agent duyệt web mà view Browser đang đóng, tự bật một khung mini sống của trang — kéo được, đóng được.",
   "settings.notifications.resources.name": "Cảnh báo tài nguyên",
   "settings.notifications.resources.desc": "Đo CPU/RAM mỗi phút và báo khi có tiến trình bất thường. Một lượt đo là một lệnh `ps`, gần như không tốn gì.",
   "settings.notifications.resources.orphans.name": "Tiến trình AWOG sót lại",

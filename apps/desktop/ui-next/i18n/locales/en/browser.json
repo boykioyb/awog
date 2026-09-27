@@ -28,5 +28,17 @@
   "browser.sites.empty": "No host listed — an allowlist with no host blocks every page.",
   "browser.sites.remove": "Remove",
   "browser.window.title": "Browser",
-  "browser.actions.title": "Page actions"
+  "browser.actions.title": "Page actions",
+  "browser.empty.title": "No page here yet",
+  "browser.empty.hint": "Type a URL above, or open a pinned page below.",
+  "browser.elsewhere.window": "This page is showing in its own window.",
+  "browser.elsewhere.dock": "This page is showing in the panel's other dock.",
+  "browser.elsewhere.hint": "A page can only be in one place at a time.",
+  "browser.pip.open": "Picture in Picture",
+  "browser.pip.title": "Picture in Picture",
+  "browser.pip.move": "Drag to move — arrows nudge",
+  "browser.pip.resize": "Resize",
+  "browser.pip.toPanel": "Back to the panel",
+  "browser.pip.close": "Close Picture in Picture",
+  "browser.pip.empty": "Nothing to show — the tab is blank."
 }
