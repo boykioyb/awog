@@ -42,6 +42,9 @@ import type {
   SessionStatus,
   SessionUsage,
   SlashCommandRef,
+  SpawnChildSpec,
+  SpawnSessionConfig,
+  SessionSpawnRequest,
   SshApprovalMode,
   StepBlock,
   SubAgent,
@@ -366,6 +369,35 @@ const isSessionCreatedPayload = (raw: unknown): raw is SessionCreatedPayload => 
   return typeof dto.id === 'string' && typeof dto.title === 'string'
 }
 
+// `session.spawn-request` — tool `create_session` park chờ popover điều phối.
+// `sessionId` là phiên CHA đang gọi (cổng sở hữu lọc theo nó); `children` là bản
+// đề xuất của model — popover mở ở trạng thái đó và cho sửa trước khi duyệt.
+type SpawnRequestPayload = {
+  requestId: string
+  sessionId: string
+  rootId: string
+  children: SpawnChildSpec[]
+  goal?: string
+}
+const isSpawnRequestPayload = (raw: unknown): raw is SpawnRequestPayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return (
+    typeof p.requestId === 'string' &&
+    typeof p.sessionId === 'string' &&
+    typeof p.rootId === 'string' &&
+    Array.isArray(p.children)
+  )
+}
+// `session.spawn-closed` — request tan mà không qua popover (lượt bị huỷ). Chỉ
+// cần requestId để đóng đúng hộp thoại đang mở.
+type SpawnClosedPayload = { requestId: string; sessionId: string }
+const isSpawnClosedPayload = (raw: unknown): raw is SpawnClosedPayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return typeof p.requestId === 'string' && typeof p.sessionId === 'string'
+}
+
 // Terminal "turn finished" event (sidecar emits it right before returning the
 // sessions.sendMessage result). We only need the ids to clear the streaming
 // indicator; text/stopReason ride along so the byline can settle authoritatively.
@@ -427,6 +459,8 @@ type SessionSummaryDto = {
   groupParentId?: string
   groupRole?: string
   groupAutoDeliver?: boolean
+  // Cấu hình spawn đã nhớ của nhóm — mirrors sidecar SessionSummary.
+  groupSpawnConfig?: SpawnSessionConfig
   messageCount: number
   lastPreview?: string
   // Resting status derived by the sidecar from the last message (never 'streaming')
@@ -500,6 +534,7 @@ type SessionGetDto = {
   groupParentId?: string
   groupRole?: string
   groupAutoDeliver?: boolean
+  groupSpawnConfig?: SpawnSessionConfig
   // Ngữ cảnh hạ tầng đã đóng băng (ADR 0088) — mirrors sidecar Session.infra.
   infra?: InfraContext
   // Reading anchors persisted in the session header (ADR 0074). The sidecar already
@@ -1246,6 +1281,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.groupParentId) session.groupParentId = dto.groupParentId
     if (dto.groupRole) session.groupRole = dto.groupRole
     if (dto.groupAutoDeliver) session.groupAutoDeliver = true
+    if (dto.groupSpawnConfig) session.groupSpawnConfig = dto.groupSpawnConfig
     return session
   }
 
@@ -1328,6 +1364,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         target.groupParentId = full.groupParentId
         target.groupRole = full.groupRole
         target.groupAutoDeliver = full.groupAutoDeliver
+        // Gán trọn, cùng lý do với ba field trên: "ngừng điều phối" là XOÁ key.
+        target.groupSpawnConfig = full.groupSpawnConfig
         // Đĩa là nguồn sự thật của ngữ cảnh đã ghim: một cửa sổ khác (hoặc popout)
         // có thể vừa đổi nó qua infra.setSessionContext.
         if (full.infra) target.infra = full.infra
@@ -3305,6 +3343,123 @@ export const useSessionsStore = defineStore('sessions', () => {
     delete pendingInbox.value[engineId]
   }
 
+  // ── Popover điều phối (session.spawn-request) ───────────────────────────────
+  //
+  // `create_session` park trong sidecar chờ người dùng duyệt/sửa ở popover —
+  // xem sessions/spawn-approval.ts. Nhiều phiên cha có thể park đồng thời nên
+  // đây là một HÀNG ĐỢI; host chỉ mở request đầu tiên.
+  const pendingSpawns = ref<SessionSpawnRequest[]>([])
+  // Request đang hiện trong popover (bản đầu tiên của hàng đợi).
+  const pendingSpawn = computed(() => pendingSpawns.value[0] ?? null)
+
+  // Popover trả lời một request đang park. Cờ nhóm được áp LẠC QUAN trước RPC:
+  // tin giao việc của phiên con có thể tới cùng tick với phản hồi, mà nếu bản
+  // local chưa đứng thì chúng rơi về chip chờ người bấm — đúng thứ popover vừa
+  // duyệt bỏ. RPC thất bại ⇒ hoàn nguyên (sidecar cũng chưa ghi gì).
+  async function resolveSpawn(input: {
+    requestId: string
+    approved: boolean
+    children?: SpawnChildSpec[]
+    config?: SpawnSessionConfig
+    remember?: boolean
+    message?: string
+  }): Promise<boolean> {
+    const req = pendingSpawns.value.find((r) => r.requestId === input.requestId)
+    const root = req ? byEngineId(req.rootId) : undefined
+    const prev = root ? { auto: root.groupAutoDeliver, spawn: root.groupSpawnConfig } : null
+    if (input.approved && root) {
+      root.groupAutoDeliver = true
+      if (input.remember && input.config) root.groupSpawnConfig = input.config
+    }
+    const res = await pushRequest<{ resolved: boolean }>('sessions.spawnResolve', input)
+    if (!res) {
+      if (root && prev) {
+        root.groupAutoDeliver = prev.auto
+        root.groupSpawnConfig = prev.spawn
+      }
+      return false
+    }
+    pendingSpawns.value = pendingSpawns.value.filter((r) => r.requestId !== input.requestId)
+    return res.resolved
+  }
+
+  // Đường THỦ CÔNG: menu ⋯ của một phiên → cùng một popover → RPC spawnChildren
+  // (không qua tool của model). Trả về kết quả tạo để dialog báo phần thất bại.
+  async function spawnChildrenFromUi(input: {
+    parentId: number
+    children: SpawnChildSpec[]
+    config?: SpawnSessionConfig
+    remember?: boolean
+  }): Promise<{
+    created: { id: string; title: string }[]
+    failed: { title: string; reason: string }[]
+  } | null> {
+    const s = byId(input.parentId)
+    if (!s?.engineId || !useIpc) return null
+    const rootId = groupRootEid(s)
+    const root = rootId ? byEngineId(rootId) : undefined
+    const prev = root ? { auto: root.groupAutoDeliver, spawn: root.groupSpawnConfig } : null
+    if (root) {
+      root.groupAutoDeliver = true
+      if (input.remember && input.config) root.groupSpawnConfig = input.config
+    }
+    const res = await pushRequest<{
+      created: { id: string; title: string }[]
+      failed: { title: string; reason: string }[]
+    }>('sessions.spawnChildren', {
+      sessionId: s.engineId,
+      children: input.children,
+      ...(input.config ? { config: input.config } : {}),
+      ...(input.remember !== undefined ? { remember: input.remember } : {}),
+    })
+    if (!res) {
+      if (root && prev) {
+        root.groupAutoDeliver = prev.auto
+        root.groupSpawnConfig = prev.spawn
+      }
+      return null
+    }
+    return res
+  }
+
+  // Sinh draft bằng AI cho popover điều phối (sessions.spawnDraft RPC):
+  // mode 'team' → cả ê-kíp từ `brief`; mode 'field' → một ô (title/role/prompt)
+  // của một con, với `context` là các ô đang có. Trả null khi IPC lỗi.
+  async function generateSpawnDraft(input: {
+    sessionId: string
+    brief: string
+    mode: 'team' | 'field'
+    field?: 'title' | 'role' | 'prompt'
+    context?: { title?: string; role?: string; prompt?: string }
+  }): Promise<{ children?: SpawnChildSpec[]; value?: string } | null> {
+    if (!useIpc) return null
+    return pushRequest<{ children?: SpawnChildSpec[]; value?: string }>(
+      'sessions.spawnDraft',
+      input,
+    )
+  }
+
+  // Ghi nhớ / thu hồi cấu hình spawn của nhóm (menu ⋯ → "ngừng điều phối").
+  // Lạc quan + hoàn nguyên khi RPC lỗi, y hệt hai action trên.
+  async function setGroupSpawnConfig(
+    id: number,
+    config: SpawnSessionConfig | null,
+  ): Promise<boolean> {
+    const s = byId(id)
+    if (!s?.engineId || !useIpc) return false
+    const prev = s.groupSpawnConfig
+    s.groupSpawnConfig = config ?? undefined
+    const res = await pushRequest<{ ok: boolean }>('sessions.setGroupSpawn', {
+      id: s.engineId,
+      config,
+    })
+    if (res?.ok !== true) {
+      s.groupSpawnConfig = prev
+      return false
+    }
+    return true
+  }
+
   // Người dùng gửi một tin sang phiên khác. Ném lỗi ra ngoài (khác các action
   // "bắn rồi quên" ở trên) để UI nói được vì sao không gửi được: đích đã xoá / đã
   // lưu trữ / tin quá dài.
@@ -3558,6 +3713,31 @@ export const useSessionsStore = defineStore('sessions', () => {
           // Idempotent: một event lặp (reconnect) không được đẻ ra hàng thứ hai.
           if (byEngineId(dto.id)) return
           sessions.value = [summaryToSession(dto), ...sessions.value]
+          return
+        }
+        // Tool `create_session` park chờ popover điều phối. Cổng sở hữu phía
+        // trên đã lọc theo `payload.sessionId` = phiên CHA, nên request chỉ mở
+        // ở đúng cửa sổ đang lái nó.
+        if (evt.type === 'session.spawn-request') {
+          if (!isSpawnRequestPayload(evt.payload)) return
+          const p = evt.payload
+          pendingSpawns.value = [
+            ...pendingSpawns.value.filter((r) => r.requestId !== p.requestId),
+            {
+              requestId: p.requestId,
+              sessionId: p.sessionId,
+              rootId: p.rootId,
+              children: p.children,
+              ...(typeof p.goal === 'string' ? { goal: p.goal } : {}),
+            },
+          ]
+          return
+        }
+        if (evt.type === 'session.spawn-closed') {
+          if (!isSpawnClosedPayload(evt.payload)) return
+          // Request tan (lượt bị huỷ giữa chừng) — đóng popover nếu đang mở nó.
+          const closed = evt.payload
+          pendingSpawns.value = pendingSpawns.value.filter((r) => r.requestId !== closed.requestId)
           return
         }
         if (evt.type === 'session.inbox-message') {
@@ -5023,6 +5203,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     sessions,
     activeId,
     active,
+    byEngineId,
     activeCanSteer,
     providerOfId,
     canSteerId,
@@ -5048,6 +5229,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     dismissInbox,
     postToSession,
     listMessagingTargets,
+    // điều phối phiên con (popover spawn — docs/features/session-groups.md)
+    pendingSpawn,
+    resolveSpawn,
+    spawnChildrenFromUi,
+    generateSpawnDraft,
+    setGroupSpawnConfig,
     // project tabs (VSCode-style)
     openProjectTabs,
     activeTab,

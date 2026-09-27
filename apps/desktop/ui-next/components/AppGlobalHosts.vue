@@ -8,6 +8,9 @@
   <SessionExportModal />
   <SessionForkTreeModal />
   <NewTaskModalHost />
+  <!-- Popover điều phối phiên con — cổng duyệt duy nhất của tool create_session
+       + đường thủ công từ menu ⋯ (docs/features/session-groups.md). -->
+  <SessionSpawnHost />
   <ConfirmDialogHost />
   <TextPromptHost />
   <!-- SSH host-key TOFU prompt: an SSH connect can be triggered from a session's

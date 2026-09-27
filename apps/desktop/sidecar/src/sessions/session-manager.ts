@@ -18,6 +18,7 @@ import type {
   SessionMessage,
   SessionSummary,
   SessionHeader,
+  SpawnSessionConfig,
 } from '../types/shared.js'
 import {
   createSessionHeader,
@@ -128,6 +129,7 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.groupParentId !== undefined) summary.groupParentId = h.groupParentId
   if (h.groupRole !== undefined) summary.groupRole = h.groupRole
   if (h.groupAutoDeliver !== undefined) summary.groupAutoDeliver = h.groupAutoDeliver
+  if (h.groupSpawnConfig !== undefined) summary.groupSpawnConfig = h.groupSpawnConfig
   if (h.compaction) summary.hasCompaction = true
   if (h.lastPreview) summary.lastPreview = h.lastPreview
   return summary
@@ -432,6 +434,36 @@ class SessionManager {
     // không được rơi mất vì thoát app trong cửa sổ debounce 500ms.
     await sessionPersistenceQueue.flush(id)
     return 'ok'
+  }
+
+  // Ghi nhớ (hoặc xoá) cấu hình spawn của nhóm trên phiên GỐC — "duyệt một lần
+  // cho cả workflow" của popover điều phối (sessions/spawn-approval.ts).
+  //
+  // Tách khỏi updateMetadata vì "ngừng nhớ" phải XOÁ HẲN key — cùng lý do đã
+  // viết ở setArchived/setInfra/setGroup: spread patch không xoá được key và
+  // `exactOptionalPropertyTypes` cấm gán `undefined`.
+  //
+  // `updatedAt` KHÔNG bump, cùng lý do với setGroup: đây là thao tác cấu hình
+  // của con người, không phải hoạt động của phiên.
+  // Trả false khi id không tồn tại để RPC báo lỗi thay vì im lặng nuốt.
+  async setGroupSpawn(id: string, config: SpawnSessionConfig | null): Promise<boolean> {
+    const m = this.sessions.get(id)
+    if (!m) {
+      log.warn('session-manager: setGroupSpawn on unknown session', { id })
+      return false
+    }
+    if (config && Object.values(config).some((v) => v !== undefined)) {
+      m.header = { ...m.header, groupSpawnConfig: config }
+    } else {
+      const { groupSpawnConfig: _cleared, ...rest } = m.header
+      m.header = rest
+    }
+    this.persistSession(m)
+    // Flush ngay: bật/tắt "nhóm tự điều phối" là hành động rời rạc, thoát app
+    // trong 500ms mà mất nó nghĩa là tool create_session lượt sau hỏi lại — hoặc
+    // tệ hơn: tự đẻ tiếp dù người dùng vừa thu hồi.
+    await sessionPersistenceQueue.flush(id)
+    return true
   }
 
   // Append (or upsert-by-id) a message and persist. Upsert-by-id matches the

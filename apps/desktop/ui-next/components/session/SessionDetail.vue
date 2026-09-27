@@ -129,6 +129,12 @@
                 style="width: var(--icon-sm); height: var(--icon-sm)"
               />
             </div>
+            <!-- Điều phối phiên con THỦ CÔNG — cùng popover với cổng duyệt của
+                 tool create_session, nhưng do người dùng đề xuất ê-kíp. -->
+            <div class="mi" @click="runOverflow(() => spawnDlg.open(session.id))">
+              <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              {{ t('sessions.spawn.menu') }}
+            </div>
             <!-- Ẩn khi chưa resolve được workspace root (browser-dev / phiên không project). -->
             <div v-if="codeRoot" class="mi" @click="runOverflow(openInCode)">
               <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -407,6 +413,7 @@ const { projects, projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()
 const exportModal = useSessionExportModal()
+const spawnDlg = useSessionSpawnDialog()
 const translate = useSelectionTranslate()
 const { isCute } = useThemeFamily()
 

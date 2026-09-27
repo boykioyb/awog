@@ -713,7 +713,10 @@ export async function runStreamClaude(
     // _send_session_message. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat —
     // đúng điều kiện `filter.chatSession` mà nhánh Pi dùng; một task/subagent
     // không có người ngồi đọc hộp thư để bấm giao.
-    [SESSION_MESSAGING_MCP_SERVER]: buildSessionMessagingSdkServer(args.sessionId),
+    [SESSION_MESSAGING_MCP_SERVER]: buildSessionMessagingSdkServer(
+      args.sessionId,
+      args.abortController?.signal,
+    ),
     // Dev server của dự án (docs/features/dev-server.md) → mcp__awogdev__dev_server.
     // KHÔNG vô điều kiện: nhánh Pi gate nó bằng `filter.backgroundExec`, tức
     // `!inPlanMode` — nó nói về chính những background shell mà plan mode cấm tạo,

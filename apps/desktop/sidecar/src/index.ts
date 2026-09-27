@@ -61,6 +61,8 @@ import './methods/sessions.save-export.js'
 // Nhắn tin giữa các phiên (docs/features/session-messaging.md)
 import './methods/sessions.list-agents.js'
 import './methods/sessions.post-message.js'
+// Điều phối phiên con: popover spawn + "nhớ cho nhóm" (docs/features/session-groups.md)
+import './methods/sessions.spawn.js'
 import './methods/account.usage.js'
 import './methods/dashboard.usage.js'
 import './methods/monitor.sample.js'

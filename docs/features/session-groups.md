@@ -239,9 +239,62 @@ Thanh chọn-văn-bản thì đi đường khác vì nó sống ở `SessionDeta
 
 `draftSeed` nay mang thêm `sid`; `null` = phiên đang mở, nên caller không có khái niệm phiên (ngữ cảnh browser, hỏi-agent từ màn infra) không phải đổi gì.
 
+### 9. Popover điều phối — "duyệt một lần cho cả workflow"
+
+Chốt 2026-09-17: `create_session` không còn đi qua thẻ quyền chung (*"Give to agent"* cũng biến mất theo — phiên con được duyệt là **tự nhận việc luôn**, không về chip chờ bấm). Cổng của nó là một **popover cấu hình riêng**, park ngay trong thân tool:
+
+```
+model gọi create_session (title/role/prompt hoặc children[])
+   └─ gốc nhóm đã có groupSpawnConfig? ── có ──► đẻ thẳng theo config đã nhớ
+                                     └─ chưa ─► phiên đang execute? ── có ─► đẻ thẳng
+                                              │                              (kế thừa cha,
+                                              │                               arm tự-giao)
+                                              └─ chưa ─► park tool + phát `session.spawn-request`
+                                                └─ renderer hiện SessionSpawnHost
+                                                     ├─ Duyệt → sessions.spawnResolve
+                                                     │            (ghi groupAutoDeliver +
+                                                     │             tuỳ chọn groupSpawnConfig,
+                                                     │             TRƯỚC khi tool chạy tiếp)
+                                                     ├─ Từ chối / Esc / click nền → deny
+                                                     └─ lượt bị Dừng → abort signal →
+                                                        `session.spawn-closed` (popover tự tan)
+```
+
+| Chỗ | Vai trò |
+|---|---|
+| `sessions/spawn-approval.ts` | registry request đang park (`requestSpawnApproval` / `resolveSpawnRequest` / `peekSpawnRequest`) — cùng khuôn `questions.ts`; abort của lượt giết request + báo renderer đóng popover |
+| `runtime/permission.ts` | `create_session` vẫn trong `SPAWN_TOOLS` (DENY + chặn cứng plan mode nguyên vẹn) nhưng **nhường `promptViaUi`** — hỏi có/không hai lần liên tiếp là lỗi UX |
+| `methods/sessions.spawn.ts` | bốn RPC: `spawnResolve` (trả lời request park), `setGroupSpawn` (ghi/xoá `groupSpawnConfig` — luôn resolve về **gốc** nhóm), `spawnChildren` (đường thủ công từ menu ⋯), `spawnDraft` (sinh draft bằng AI — xem dưới) |
+| `components/session/SessionSpawnHost.vue` | popover duy nhất cho cả hai đường: ô "Yêu cầu" + các nút sinh bằng AI, sửa danh sách con, cấu hình chung (account/model/level/style/markdown/mode) + đè riêng từng phiên |
+| `composables/useSessionSpawnDialog.ts` | state mở THỦ CÔNG (menu ⋯); đường do model đề xuất hiện qua `store.pendingSpawn` |
+
+Ba điểm dễ trượt:
+
+- **Thứ tự ghi cờ.** RPC `spawnResolve` ghi `groupAutoDeliver: true` (+ `groupSpawnConfig` khi `remember`) lên gốc **trước** khi héo request — nếu không, tin giao việc của phiên con có thể tới renderer cùng tick với phản hồi và rơi về chip chờ, đúng thứ lần duyệt vừa bỏ. Renderer mirror lạc quan trên bản local (`resolveSpawn`) và hoàn nguyên khi RPC thất bại.
+- **"Nhớ" sống trên gốc, không trên phiên gọi.** `groupRootOf` tra config ở gốc nhóm; `setGroupSpawn` cũng leo về gốc trước khi ghi — mở ⋯ trên một phiên CON mà ghi thẳng vào nó thì config nằm nơi không ai tra.
+- **`''` trong draft ≠ `false`/`Default`.** Mọi select của popover mang hàng "theo cha / theo chung" ở value `''`, và `cfgOf` chỉ ghi field **được đặt** — một config toàn `''` thành `undefined`, phiên con kế thừa nguyên settings của cha (`mergeSpawnConfig`).
+
+Cũng ở đợt này: `create_session` nhận thêm `children[]` để model đề xuất **cả ê-kíp trong một lần duyệt** thay vì bốn cú gọi rời = bốn lần popover; trần `MAX_SPAWNS_PER_TURN = 4` đếm theo **tổng con đã duyệt** trong lượt.
+
+**Sinh draft bằng AI (2026-10-21).** Popover có ô "Yêu cầu" (brief) + nút **Tạo bằng AI**: RPC `sessions.spawnDraft` gọi `completePi` one-shot với provider/model/account của *phiên cha* (model rẻ trước — `CHEAP_MODEL` mirror `sessions.generateTitle` — rồi fallback model phiên). Hai mode:
+
+- `team` — model trả JSON array `{title, role, prompt}` → parse + sanitize qua `oneLineLabel`, trần `MAX_SPAWNS_PER_TURN`, **đổ vào list như draft** để sửa tiếp (không tự tạo phiên).
+- `field` — nút sparkle trên ô tiêu đề / việc giao của từng con: chỉ sinh lại đúng ô đó, gửi kèm brief + các ô đang có làm ngữ cảnh.
+
+Bố cục popover ưu tiên yêu cầu + phiên con: ô "Yêu cầu" đứng **đầu**, "Cấu hình chung" thu vào một chip (dòng tóm tắt account·model·level·mode, bấm mới mở lưới select). Ô yêu cầu được đổ sẵn: `create_session` có thêm param `goal` — model trích mục tiêu của người dùng truyền qua `session.spawn-request`; không có `goal` thì renderer suy từ đề xuất (một con lấy nguyên prompt, nhiều con ghép "title — role"). Nội dung ô này được `sendMessage` vào phiên cha khi duyệt thành công.
+
+**Execute = không hỏi lại (JEV).** Workflow đã được duyệt thì phiên con phải chạy tự trị — hai nơi vẫn có thể "hỏi lại" đã được đóng:
+
+- `create_session` ở phiên `mode: 'execute'` **đẻ thẳng**, không park popover (session-tools.ts) — bypass nghĩa là bypass mọi cổng người, kể cả cổng điều phối; nhóm vẫn được arm `groupAutoDeliver` trước khi đẻ. Gốc nhóm ở execute cũng vậy: không popover, con kế thừa settings của cha. Cổng DENY và chặn cứng plan mode không đổi.
+- Phiên **con** của nhóm (`groupParentId`) không được wire `askUserQuestion` — `AskUserQuestion` trả "no interactive user, proceed" (Pi) / không được quảng cáo (Claude SDK), và MCP elicitation tự từ chối. Con cần người quyết thì leo lên cha bằng `send_session_message` — câu hỏi hiện ở transcript cha, chỗ người dùng thực sự nhìn.
+
+Cổng **SSH** (`sshApprovalMode`) và **ma trận hạ tầng** cố tình giữ nguyên — chúng là "Settings là trần", mode nào cũng không nới được, kể cả trong workflow tự trị.
+
+Khi **Duyệt & tạo** thành công (có ít nhất một con được tạo), nội dung brief được `store.sendMessage` vào phiên cha như một tin nhắn thường — cha nhận mục tiêu điều phối trong transcript; tin tự queue nếu cha đang bận (đường duyệt thì cha đang park giữa tool call nên brief thành lượt kế tiếp).
+
 ## Phần chưa làm
 
 1. **Kéo–thả** để xếp nhóm. Hiện tại đi qua context menu → hộp chọn.
 2. **Vai đi vào prompt của phiên.** `groupRole` hiện là NHÃN: nó hiện trên hàng và trong danh bạ, nhưng KHÔNG được tiêm vào system prompt của phiên đó. Tiêm được thì mới đúng nghĩa "vai trò", nhưng đó là quyết định về context nên cần cân với `<pinned_context>` đang có.
-3. **Duyệt rồi mới đi tiếp.** Chưa có cổng duyệt ở cấp phiên: hiện phiên cha tự quyết khi nào giao bước sau. Cổng quyền của `create_session` là thứ gần nhất, nhưng nó hỏi về *việc tạo phiên*, không phải về *kết quả đã đạt chưa*.
-4. **Chạy thử end-to-end.** Bốn mảnh đã typecheck/lint/test nhưng chưa ai mở app dựng một nhóm thật để xem cả dây chuyền chạy.
+3. **Duyệt rồi mới đi tiếp.** Phần spawn đã có cổng (mục 9), nhưng cổng duyệt *kết quả đã đạt chưa* trước khi giao bước sau vẫn chưa có — phiên cha tự quyết khi nào đi tiếp.
+4. **Chạy thử end-to-end.** Đã typecheck/lint nhưng chưa ai mở app dựng một nhóm thật để xem cả dây chuyền chạy.

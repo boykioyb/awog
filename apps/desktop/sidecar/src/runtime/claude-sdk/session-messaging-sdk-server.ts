@@ -22,7 +22,7 @@
 
 import { z } from 'zod'
 import { MAX_TEXT_LEN } from '../../sessions/inbox.js'
-import { MAX_ROLE_LEN, MAX_TITLE_LEN } from '../../sessions/spawn.js'
+import { MAX_ROLE_LEN, MAX_SPAWNS_PER_TURN, MAX_TITLE_LEN } from '../../sessions/spawn.js'
 import {
   createSdkMcpServer,
   tool,
@@ -34,8 +34,13 @@ import {
   createSessionMessagingRunners,
 } from '../tools/session-tools.js'
 
-export function buildSessionMessagingSdkServer(sessionId: string): McpSdkServerConfigWithInstance {
-  const run = createSessionMessagingRunners({ sessionId })
+export function buildSessionMessagingSdkServer(
+  sessionId: string,
+  // Abort của lượt — popover điều phối của create_session đang mở phải tan theo
+  // khi người dùng bấm Dừng (giống kênh `chatSession.signal` bên nhánh Pi).
+  signal?: AbortSignal,
+): McpSdkServerConfigWithInstance {
+  const run = createSessionMessagingRunners({ sessionId, ...(signal ? { signal } : {}) })
 
   return createSdkMcpServer({
     name: SESSION_MESSAGING_MCP_SERVER,
@@ -82,12 +87,43 @@ export function buildSessionMessagingSdkServer(sessionId: string): McpSdkServerC
           // Trần thật nằm ở sessions/spawn.ts (nó cắt ngắn chứ không từ chối); khai
           // lại ở đây để lớp phòng thủ đầu tiên giống nhau ở hai runtime — cùng lý do
           // với `message` bên trên.
-          title: z.string().max(MAX_TITLE_LEN).describe(SESSION_MESSAGING_TEXT.createTitle),
-          role: z.string().max(MAX_ROLE_LEN).describe(SESSION_MESSAGING_TEXT.createRole),
-          prompt: z.string().max(MAX_TEXT_LEN).describe(SESSION_MESSAGING_TEXT.createPrompt),
+          title: z.string().max(MAX_TITLE_LEN).optional().describe(SESSION_MESSAGING_TEXT.createTitle),
+          role: z.string().max(MAX_ROLE_LEN).optional().describe(SESSION_MESSAGING_TEXT.createRole),
+          prompt: z.string().max(MAX_TEXT_LEN).optional().describe(SESSION_MESSAGING_TEXT.createPrompt),
+          children: z
+            .array(
+              z.object({
+                title: z.string().max(MAX_TITLE_LEN).describe(SESSION_MESSAGING_TEXT.createTitle),
+                role: z.string().max(MAX_ROLE_LEN).optional().describe(SESSION_MESSAGING_TEXT.createRole),
+                prompt: z.string().max(MAX_TEXT_LEN).describe(SESSION_MESSAGING_TEXT.createPrompt),
+              }),
+            )
+            .max(MAX_SPAWNS_PER_TURN)
+            .optional()
+            .describe(SESSION_MESSAGING_TEXT.createChildren),
+          goal: z
+            .string()
+            .max(MAX_TEXT_LEN / 10)
+            .optional()
+            .describe(SESSION_MESSAGING_TEXT.createGoal),
         },
         async (args) => {
-          const r = await run.createSession(args.title, args.role, args.prompt)
+          // Cùng phép chuẩn hoá hai-hình-thức như vỏ AgentTool của nhánh Pi:
+          // `children` khi có, không thì bộ ba title/role/prompt.
+          const specs = args.children?.length
+            ? args.children.map((c) => ({
+                title: c.title,
+                role: c.role ?? '',
+                prompt: c.prompt,
+              }))
+            : [
+                {
+                  title: args.title ?? '',
+                  role: args.role ?? '',
+                  prompt: args.prompt ?? '',
+                },
+              ]
+          const r = await run.createSession(specs, args.goal)
           return {
             content: [{ type: 'text' as const, text: r.text }],
             ...(r.isError ? { isError: true } : {}),

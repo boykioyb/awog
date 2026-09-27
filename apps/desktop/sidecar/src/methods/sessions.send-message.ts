@@ -1007,11 +1007,17 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // nó được đóng băng lúc tạo phiên, và một renderer cũ gửi lên bản cũ sẽ đổi tài
   // khoản mà lệnh chạy vào — đúng thứ "ngữ cảnh được chỉ định" sinh ra để chặn.
   let sessionInfra: SessionSettings['infra']
+  // Phiên CON của một nhóm điều phối (groupParentId) không được park câu hỏi
+  // lên người dùng — một thẻ hỏi bỏ quên trong phiên con chặn cả workflow.
+  // Nó tự quyết (tool trả "no interactive user — proceed") hoặc leo lên phiên
+  // cha qua send_session_message. Nguồn dữ liệu: cùng lượt loadSession ở trên.
+  let isGroupChild = false
   try {
     const withTodos = await loadSession(params.sessionId)
     sessionChecklist = buildSessionChecklistBlock(withTodos?.todos)
     if (withTodos?.todos?.length) sessionTodos = withTodos.todos
     if (withTodos?.infra) sessionInfra = withTodos.infra
+    isGroupChild = !!withTodos?.groupParentId
   } catch {
     /* best-effort: never block the turn on the checklist block */
   }
@@ -1429,7 +1435,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
             }
           : {}),
         canUseTool,
-        askUserQuestion,
+        // JEV: phiên con không có người tương tác — để askUserQuestion vắng mặt
+        // làm AskUserQuestion trả "no interactive user" (Pi) / tool không được
+        // quảng cáo (Claude SDK), thay vì park một thẻ hỏi không ai đọc.
+        ...(isGroupChild ? {} : { askUserQuestion }),
         ...(validatedFolders.length > 0 ? { extraDirs: validatedFolders } : {}),
         abortController,
         // Claude SDK resume handle (ADR 0058, Anthropic path). Ignored by Pi.

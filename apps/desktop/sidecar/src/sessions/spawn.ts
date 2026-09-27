@@ -21,8 +21,18 @@ import { randomBytes } from 'node:crypto'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { InboxError, oneLineLabel, postSessionMessage } from './inbox.js'
-import { createSession, listSessionSummaries } from './store.js'
-import type { Session, SessionSummary } from '../types/shared.js'
+import {
+  createSession,
+  listSessionSummaries,
+  updateSessionMetadata,
+} from './store.js'
+import type {
+  Session,
+  SessionSettings,
+  SessionSummary,
+  SpawnChildSpec,
+  SpawnSessionConfig,
+} from '../types/shared.js'
 
 // Trần số con TRỰC TIẾP của một phiên. Nhóm lớn hơn chừng này thì vấn đề không còn là
 // điều phối nữa — và người dùng vẫn tự tay xếp thêm được qua UI.
@@ -68,6 +78,55 @@ export interface SpawnChildInput {
   role: string
   // Lời giao việc, đặt vào hộp thư phiên con.
   prompt: string
+  // Cấu hình NGƯỜI DÙNG đã duyệt trong popover điều phối (chung của lô đã trộn
+  // xong với đè riêng của phiên này). Vắng mặt = kế thừa nguyên settings của cha.
+  config?: SpawnSessionConfig
+}
+
+// Trộn cấu hình đã duyệt lên settings kế thừa của phiên cha. Chỉ field ĐƯỢC ĐẶT
+// trong config mới đè — vắng mặt giữ nguyên giá trị cha (đúng nghĩa "kế thừa
+// trừ khi người dùng chọn khác trong popover").
+export function mergeSpawnConfig(
+  base: SessionSettings,
+  config: SpawnSessionConfig | undefined,
+): SessionSettings {
+  if (!config) return base
+  const merged: SessionSettings = { ...base }
+  if (config.provider !== undefined) merged.provider = config.provider
+  if (config.modelId !== undefined) merged.modelId = config.modelId
+  if (config.accountId !== undefined) merged.accountId = config.accountId
+  if (config.level !== undefined) merged.level = config.level
+  if (config.ultracode !== undefined) merged.ultracode = config.ultracode
+  if (config.mode !== undefined) merged.mode = config.mode
+  if (config.responseStyle !== undefined) merged.responseStyle = config.responseStyle
+  if (config.responseStyleNoMarkdown !== undefined) {
+    merged.responseStyleNoMarkdown = config.responseStyleNoMarkdown
+  }
+  return merged
+}
+
+// Phiên GỐC của nhóm chứa `sessionId` — chính nó khi nó không thuộc nhóm nào
+// hoặc đã là gốc. Trả `undefined` khi id lạ (phiên chưa lưu). Đây cũng là nơi
+// `groupSpawnConfig` được tra: popover điều phối chỉ được BỎ QUA khi gốc đã
+// nhớ một cấu hình — "duyệt một lần cho cả nhóm" là của NHÓM, không của phiên.
+// Bật "workflow tự chạy" cho nhóm của `rootId`: `groupAutoDeliver` lên gốc.
+// `updateSessionMetadata` không phát event nào — nếu chỉ ghi đĩa thì renderer
+// không biết cờ đã đứng, và tin giao việc đến ngay sau đó rơi vào chip chờ
+// "Giao cho agent" (đúng thứ cờ này sinh ra để bỏ). `session.group-armed` là
+// kênh duy nhất đẩy cờ xuống UI, nó còn vá luôn khe hở cửa sổ-popout.
+export async function armGroupAutoDeliver(rootId: string): Promise<void> {
+  await updateSessionMetadata(rootId, { groupAutoDeliver: true })
+  emit('session.group-armed', { sessionId: rootId })
+}
+
+export function groupRootOf(
+  summaries: SessionSummary[],
+  sessionId: string,
+): SessionSummary | undefined {
+  const caller = summaries.find((s) => s.id === sessionId)
+  if (!caller) return undefined
+  if (!caller.groupParentId) return caller
+  return summaries.find((s) => s.id === caller.groupParentId) ?? caller
 }
 
 export interface SpawnChildResult {
@@ -107,9 +166,11 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
 
   const id = mintSessionId()
   const now = new Date().toISOString()
-  // Kế thừa provider/model/account của phiên cha. CỐ Ý không cho model chọn: chọn nhà
-  // cung cấp là tiêu tiền trên một tài khoản cụ thể, và đó là quyết định của người
-  // dùng. Họ đổi được sau, ngay trên phiên con, bằng bộ chọn thường ngày.
+  // Kế thừa provider/model/account của phiên cha, ĐÈ bởi cấu hình người dùng đã
+  // duyệt trong popover điều phối (input.config). Model không tự chọn được nhà
+  // cung cấp — `config` chỉ tới từ quyết định của NGƯỜI DÙNG (spawn-approval) hoặc
+  // RPC spawnChildren của UI, không bao giờ từ tham số tool.
+  const settings = mergeSpawnConfig(parent.settings, input.config)
   const session: Session = {
     id,
     title,
@@ -119,7 +180,7 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
     invitedAgentIds: [],
     messages: [],
     pendingAgentIds: [],
-    settings: parent.settings,
+    settings,
     groupParentId: parentId,
     ...(role ? { groupRole: role } : {}),
   }
@@ -137,7 +198,7 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
     status: 'idle',
     invitedAgentIds: [],
     pendingAgentIds: [],
-    settings: parent.settings,
+    settings,
     messageCount: 0,
     groupParentId: parentId,
     ...(role ? { groupRole: role } : {}),
@@ -161,4 +222,58 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
   }
 
   return { id, title }
+}
+
+export interface SpawnChildrenResult {
+  created: { id: string; title: string }[]
+  // Từng phiên con là một hệ quả độc lập: một phiên hỏng (tiêu đề rỗng, chạm
+  // trần giữa chừng) không được làm mất phần đã tạo — danh sách lỗi đi kèm để
+  // model/UI nói được chuyện gì đã xảy ra.
+  failed: { title: string; reason: string }[]
+}
+
+// Tạo MỘT LÔ phiên con dưới cùng một cha (popover điều phối duyệt nhiều phiên
+// một lần, hoặc RPC `sessions.spawnChildren` của UI). Trần nhóm (MAX_CHILDREN)
+// vẫn cầm chừng qua `spawnChildSession` ở mỗi vòng — nhưng đếm TRƯỚC cả lô để
+// trả một lỗi sạch sẽ thay vì nửa đẻ nửa từ chối.
+export async function spawnChildrenSessions(
+  parentId: string,
+  children: SpawnChildSpec[],
+): Promise<SpawnChildrenResult> {
+  const summaries = await listSessionSummaries()
+  const caller = summaries.find((s) => s.id === parentId)
+  if (!caller) {
+    throw new SpawnError(
+      'unknown-parent',
+      'This session is not saved yet, so it cannot own a sub-session.',
+    )
+  }
+  const rootId = caller.groupParentId ?? parentId
+  const existing = summaries.filter((s) => s.groupParentId === rootId).length
+  if (existing + children.length > MAX_CHILDREN) {
+    throw new SpawnError(
+      'too-many-children',
+      `This group already has ${existing} sub-sessions and the request asks for ${children.length} more, over the limit of ${MAX_CHILDREN}. Drop some and try again.`,
+    )
+  }
+  const created: { id: string; title: string }[] = []
+  const failed: { title: string; reason: string }[] = []
+  for (const child of children) {
+    try {
+      created.push(
+        await spawnChildSession({
+          parentId,
+          title: child.title,
+          role: child.role,
+          prompt: child.prompt,
+          ...(child.config ? { config: child.config } : {}),
+        }),
+      )
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err)
+      log.warn('spawnChildren: a child failed', { title: child.title, reason })
+      failed.push({ title: child.title || '(untitled)', reason })
+    }
+  }
+  return { created, failed }
 }

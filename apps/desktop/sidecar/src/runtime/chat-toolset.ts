@@ -127,7 +127,14 @@ export async function buildChatToolset(
         : {}),
       // "This turn belongs to a chat session" — plan mode included. Carries the
       // read-only terminal tool, which background exec's gate would wrongly drop.
-      ...(args.sessionId ? { chatSession: { sessionId: args.sessionId } } : {}),
+      ...(args.sessionId
+        ? {
+            chatSession: {
+              sessionId: args.sessionId,
+              ...(args.abortController ? { signal: args.abortController.signal } : {}),
+            },
+          }
+        : {}),
       // Editable checklist: persist every TodoWrite as the session's current
       // checklist so a user edit in the UI has something authoritative to write to
       // and the next turn re-injects it (sessions/todo-context.ts). Sessions only.

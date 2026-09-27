@@ -59,6 +59,20 @@ const PinnedContextSchema = z.object({
   notePresets: z.array(z.string()).optional(),
 })
 
+// Cấu hình spawn đã nhớ của nhóm (popover điều phối → "nhớ cho nhóm"). Là tập
+// con có chủ đích của SessionSettings — CÙNG các field mà popover cho sửa.
+// Giới hạn độ dài khớp schema của chính field đó trên Session (modelId, style).
+const SpawnSessionConfigSchema = z.object({
+  provider: z.enum(['anthropic', 'openai', 'google']).optional(),
+  modelId: z.string().max(200).optional(),
+  accountId: z.string().max(64).optional(),
+  level: ThinkingLevelSchema.optional(),
+  ultracode: z.boolean().optional(),
+  mode: z.enum(['ask', 'accept-edits', 'plan', 'execute']).optional(),
+  responseStyle: z.string().max(200).optional(),
+  responseStyleNoMarkdown: z.boolean().optional(),
+})
+
 const SessionSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -96,6 +110,10 @@ const SessionSchema = z.object({
   // nhóm sau lúc tạo là RPC riêng `sessions.setGroup`. Cùng khuôn với `infra`.
   groupParentId: z.string().optional(),
   groupRole: z.string().max(60).optional(),
+  // Cấu hình spawn đã nhớ — chỉ đọc ở nhánh 'create', CỐ Ý không có trong patch
+  // của 'update-metadata' (cùng khuôn với groupParentId/infra): "ngừng nhớ" phải
+  // XOÁ HẲN key mà patch spread không làm được. Đường ghi là `sessions.setGroupSpawn`.
+  groupSpawnConfig: SpawnSessionConfigSchema.optional(),
   // Fork lineage.
   parentSessionId: z.string().optional(),
   forkFromMessageId: z.string().optional(),
@@ -142,6 +160,26 @@ function toInfraContext(
   return Object.keys(c).length ? c : undefined
 }
 
+// Dựng lại config bỏ hẳn key không có mặt (exactOptionalPropertyTypes). Object
+// rỗng hoàn toàn ⇒ undefined: header không mang `groupSpawnConfig: {}` vô nghĩa.
+function toSpawnConfig(
+  parsed: z.infer<typeof SpawnSessionConfigSchema> | undefined,
+): Session['groupSpawnConfig'] {
+  if (!parsed) return undefined
+  const c: NonNullable<Session['groupSpawnConfig']> = {}
+  if (parsed.provider !== undefined) c.provider = parsed.provider
+  if (parsed.modelId !== undefined) c.modelId = parsed.modelId
+  if (parsed.accountId !== undefined) c.accountId = parsed.accountId
+  if (parsed.level !== undefined) c.level = parsed.level
+  if (parsed.ultracode !== undefined) c.ultracode = parsed.ultracode
+  if (parsed.mode !== undefined) c.mode = parsed.mode
+  if (parsed.responseStyle !== undefined) c.responseStyle = parsed.responseStyle
+  if (parsed.responseStyleNoMarkdown !== undefined) {
+    c.responseStyleNoMarkdown = parsed.responseStyleNoMarkdown
+  }
+  return Object.keys(c).length ? c : undefined
+}
+
 function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   const base: Session = {
     id: parsed.id,
@@ -165,6 +203,8 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.groupAutoDeliver !== undefined) base.groupAutoDeliver = parsed.groupAutoDeliver
   if (parsed.groupParentId !== undefined) base.groupParentId = parsed.groupParentId
   if (parsed.groupRole !== undefined) base.groupRole = parsed.groupRole
+  const spawnConfig = toSpawnConfig(parsed.groupSpawnConfig)
+  if (spawnConfig) base.groupSpawnConfig = spawnConfig
   const budget = toBudget(parsed.budget)
   if (budget) base.budget = budget
   const pinned = toPinnedContext(parsed.pinnedContext)

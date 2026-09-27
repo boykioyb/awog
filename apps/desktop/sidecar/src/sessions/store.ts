@@ -18,6 +18,7 @@ import type {
   SessionCompaction,
   SessionMessage,
   SessionSummary,
+  SpawnSessionConfig,
 } from '../types/shared.js'
 import {
   readSessionJsonl,
@@ -133,6 +134,17 @@ export async function setSessionGroup(
 ): Promise<Awaited<ReturnType<typeof sessionManager.setGroup>>> {
   await sessionManager.ensureLoaded()
   return sessionManager.setGroup(id, parentId, role)
+}
+
+// Ghi nhớ / xoá cấu hình spawn của nhóm trên phiên gốc — "duyệt một lần cho cả
+// workflow" (sessions/spawn-approval.ts). `null` (hoặc object rỗng) = xoá hẳn
+// key, đúng khuôn setSessionGroup/setSessionInfra.
+export async function setSessionGroupSpawn(
+  id: string,
+  config: SpawnSessionConfig | null,
+): Promise<boolean> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setGroupSpawn(id, config)
 }
 
 // Đọc thô các dòng JSONL của một phiên (nền cho `sessions.listEvents`). `null` khi

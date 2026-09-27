@@ -65,6 +65,10 @@ type HeaderMetadataSignature = {
   groupParentId: string | undefined
   groupRole: string | undefined
   groupAutoDeliver: boolean | undefined
+  // Cấu hình spawn đã nhớ của nhóm (`sessions.setGroupSpawn`) — cùng lý do với
+  // bộ ba trên: thiếu nó ở chữ ký thì một lần "ngừng điều phối" ở cửa sổ khác bị
+  // lần ghi thân bài kế tiếp lặng lẽ ghi đè.
+  groupSpawnConfig: SessionHeader['groupSpawnConfig']
 }
 
 function headerMetadataSignature(header: SessionHeader): string {
@@ -85,6 +89,7 @@ function headerMetadataSignature(header: SessionHeader): string {
     groupParentId: header.groupParentId,
     groupRole: header.groupRole,
     groupAutoDeliver: header.groupAutoDeliver,
+    groupSpawnConfig: header.groupSpawnConfig,
   }
   return JSON.stringify(sig)
 }
@@ -118,16 +123,29 @@ function mergeHeaderWithExternalMetadata(
   // Cặp nhóm lấy TRỌN theo đĩa, cùng lý do với archived/infra: tách khỏi nhóm là
   // XOÁ HẲN key (session-manager setGroup), nên "chỉ copy khi đĩa có" sẽ giữ lại
   // cha cũ của bản local và hoàn tác đúng thao tác vừa làm bên ngoài.
-  const { groupParentId: _localGroup, groupRole: _localRole, ...restNoGroup } = restNoInfra
+  // `groupSpawnConfig` cũng lấy TRỌN theo đĩa: "ngừng điều phối" là XOÁ HẲN key
+  // (session-manager setGroupSpawn), không phải ghi một giá trị falsy. Nó đi
+  // RIÊNG khỏi cặp parentId/role vì field này sống trên phiên GỐC của nhóm —
+  // phiên mà `groupParentId` luôn vắng mặt, nên gộp vào `diskGroup` sẽ đánh
+  // mất nó ngay trên đúng phiên mang nó.
+  const {
+    groupParentId: _localGroup,
+    groupRole: _localRole,
+    groupSpawnConfig: _localSpawn,
+    ...restNoGroup
+  } = restNoInfra
   const diskGroup: Pick<SessionHeader, 'groupParentId' | 'groupRole'> = disk.groupParentId
     ? {
         groupParentId: disk.groupParentId,
         ...(disk.groupRole !== undefined ? { groupRole: disk.groupRole } : {}),
       }
     : {}
+  const diskSpawn: Pick<SessionHeader, 'groupSpawnConfig'> =
+    disk.groupSpawnConfig !== undefined ? { groupSpawnConfig: disk.groupSpawnConfig } : {}
   return {
     ...restNoGroup,
     ...diskGroup,
+    ...diskSpawn,
     title: disk.title,
     projectId: disk.projectId,
     ...diskArchived,

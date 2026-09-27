@@ -649,6 +649,41 @@ export type SshApprovalMode = 'prompt' | 'session' | 'auto'
 // the sidecar SessionBookmark; deliberately no excerpt (derived at render time).
 export type SessionBookmark = { id: string; at: string }
 
+// ── Điều phối phiên con (popover spawn — docs/features/session-groups.md) ────
+// Mirrors sidecar SpawnSessionConfig (types/shared.ts): tập con có chủ đích của
+// SessionSettings — CHỈ những field popover cho sửa. Engine-mode strings
+// ('ask'…), KHÔNG phải display ('Ask'…) — payload này đi thẳng qua RPC.
+export type SpawnSessionConfig = {
+  provider?: ProviderName
+  modelId?: string
+  accountId?: string
+  level?: ThinkingLevel
+  ultracode?: boolean
+  mode?: 'ask' | 'accept-edits' | 'plan' | 'execute'
+  responseStyle?: string
+  responseStyleNoMarkdown?: boolean
+}
+
+// Một phiên con được đề xuất/duyệt trong popover. `config` = đè riêng của phiên
+// đó lên cấu hình chung của lô (đã trộn xong trước khi gửi RPC).
+export type SpawnChildSpec = {
+  title: string
+  role: string
+  prompt: string
+  config?: SpawnSessionConfig
+}
+
+// Một `session.spawn-request` đang chờ người dùng trong popover. `sessionId` =
+// engineId của phiên CHA đang gọi create_session; `rootId` = gốc nhóm của nó.
+// `goal` = mục tiêu model trích ra — popover đổ sẵn vào ô "Yêu cầu".
+export type SessionSpawnRequest = {
+  requestId: string
+  sessionId: string
+  rootId: string
+  children: SpawnChildSpec[]
+  goal?: string
+}
+
 // Hard cap on bookmarks per session. Mirrors MAX_BOOKMARKS in
 // apps/desktop/sidecar/src/sessions/ids.ts, which enforces the same number at the RPC
 // boundary AND on the load path. The two packages share no module, so the constant is
@@ -722,6 +757,10 @@ export type Session = {
   // Tự giao tin trong nhóm. Chỉ có nghĩa trên phiên GỐC của nhóm — nó là công tắc của
   // cả nhóm. Mặc định TẮT; xem ghi chú ở types/shared.ts.
   groupAutoDeliver?: boolean
+  // Cấu hình spawn đã nhớ của nhóm — chỉ có nghĩa trên phiên GỐC (mirrors sidecar
+  // Session.groupSpawnConfig). Ghi/xoá qua `sessions.setGroupSpawn`, KHÔNG qua
+  // sessions.upsert ("ngừng điều phối" phải xoá hẳn key).
+  groupSpawnConfig?: SpawnSessionConfig
   // ── Engine-bridge fields (IPC path only; unset without a bridge) ──────────
   // Sidecar session id (string). The numeric `id` stays the stable client key
   // for Vue lists; `engineId` is what the RPCs use. Set when hydrated from

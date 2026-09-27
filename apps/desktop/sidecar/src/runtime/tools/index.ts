@@ -106,7 +106,7 @@ export interface ToolFilter {
   // from `backgroundExec`, which is deliberately off in plan mode because Bash is
   // blocked there. A read-only tool like `read_terminal` should still be reachable
   // while planning — that is exactly when "what did the user just run?" matters.
-  chatSession?: { sessionId: string }
+  chatSession?: { sessionId: string; signal?: AbortSignal }
   // Wiki tools (ADR 0073). Set ONLY when the wiki actually has a page the LLM may
   // see, so a user who never made a wiki pays zero tokens for its tool schemas.
   // `projectId` scopes the project-tier wiki for the turn.
@@ -249,7 +249,12 @@ export function createAwogToolDefinitions(
     // Nhắn giữa các phiên (list_sessions / send_session_message). Chat session
     // only: một task/subagent không có người ngồi đọc hộp thư để bấm giao.
     ...(filter.chatSession
-      ? createSessionMessagingTools({ sessionId: filter.chatSession.sessionId })
+      ? createSessionMessagingTools({
+          sessionId: filter.chatSession.sessionId,
+          // Abort của lượt — popover điều phối của create_session đang mở phải
+          // tan theo khi người dùng bấm Dừng.
+          ...(filter.chatSession.signal ? { signal: filter.chatSession.signal } : {}),
+        })
       : []),
     // schedule_wakeup: agent tự hẹn quay lại phiên này sau N giây (gói #14). Cùng
     // điều kiện `chatSession` và cùng lý do như hai tool trên: tới giờ nó chỉ ĐẶT

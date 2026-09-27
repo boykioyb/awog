@@ -124,6 +124,14 @@ function isSpawnTool(name: string): boolean {
   if (SPAWN_TOOLS.has(name)) return true
   return [...SPAWN_TOOLS].some((n) => name.endsWith(`__${n}`))
 }
+// `create_session` RIÊNG (khớp cả tên bắc cầu `mcp__awogsessions__create_session`):
+// cổng duyệt của nó là POPOVER CẤU HÌNH park trong thân tool (spawn-approval.ts),
+// không phải thẻ quyền chung — hỏi hai lần liên tiếp là lỗi UX. Nó VẪN nằm trong
+// SPAWN_TOOLS phía trên nên chặn cứng plan mode và luật DENY không đổi; chỉ cú
+// `promptViaUi` cuối được nhường (xem đoạn ngay trước `promptViaUi` ở dưới).
+function isCreateSessionTool(name: string): boolean {
+  return name === 'create_session' || name.endsWith('__create_session')
+}
 // SSH tools that act on the LINKED remote host (ADR 0064 P2), all gated via the
 // per-session sshApprovalMode (NOT the general AgentMode). MUTATING = command /
 // file write (higher consequence — also blocked in plan mode). READ = remote read
@@ -1583,6 +1591,13 @@ export function makeBeforeToolCall(
     if (mode === 'accept-edits' && WRITE_TOOLS.has(toolName) && !(await guardedByDeny())) {
       return undefined
     }
+
+    // `create_session` không qua thẻ quyền chung: cổng duyệt của nó là popover
+    // cấu hình điều phối park trong THÂN tool (spawn-approval.ts), nơi người
+    // dùng vừa duyệt vừa sửa danh sách/cấu hình. Đặt ở đây — SAU luật DENY và
+    // sau chặn cứng plan mode — nên hai rào chắn đó vẫn nguyên; thứ duy nhất bị
+    // nhường là thẻ hỏi có/không trống.
+    if (isCreateSessionTool(toolName)) return undefined
 
     // ask (and accept-edits for Bash): defer to the UI permission prompt.
     return promptViaUi(false)

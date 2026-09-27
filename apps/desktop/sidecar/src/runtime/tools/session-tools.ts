@@ -33,8 +33,16 @@ import {
   MAX_CHILDREN,
   MAX_SPAWNS_PER_TURN,
   SpawnError,
-  spawnChildSession,
+  groupRootOf,
+  spawnChildrenSessions,
 } from '../../sessions/spawn.js'
+import {
+  listSessionSummaries,
+  loadSession,
+  updateSessionMetadata,
+} from '../../sessions/store.js'
+import { requestSpawnApproval } from '../../sessions/spawn-approval.js'
+import type { SpawnChildSpec, SpawnSessionConfig } from '../../types/shared.js'
 
 // Tên server MCP in-process bắc hai tool này sang nhánh Claude SDK, và danh sách
 // tool nó mang. Đặt Ở ĐÂY chứ không trong file SDK: `sessions/step-mapper.ts` cần
@@ -78,15 +86,23 @@ export const SESSION_MESSAGING_TEXT = {
   sessionId: 'Id of the session to deliver to (call list_sessions first to get the ids).',
   message: `What to tell that session, as plain prose (max ${MAX_TEXT_LEN} characters). Say who you are and what you need or found; it is read without your conversation for context.`,
   createDescription:
-    'Create a NEW session as a sub-session of this one and hand it its first assignment — use it to split work across specialists (a spec writer, an implementer, a reviewer) that each keep their own conversation and can be opened and steered by the user. ' +
-    'It inherits this session\'s provider, model and project. The assignment is queued for it the same way send_session_message is, so nothing runs there unless the user has turned auto-deliver on for this group or hands it over themselves. ' +
-    `At most ${MAX_SPAWNS_PER_TURN} per turn and ${MAX_CHILDREN} sub-sessions in total. ` +
+    'Create NEW session(s) as sub-sessions of this one and hand each its first assignment — use it to split work across specialists (a spec writer, an implementer, a reviewer) that each keep their own conversation and can be opened and steered by the user. ' +
+    'Pass `children` to propose a whole team in ONE call instead of calling once per member. ' +
+    'Always pass `goal`: the user\'s objective this spawn serves — it pre-fills the request box in their review popover. ' +
+    'Spawns wait at the user\'s review popover first — UNLESS this session runs in execute mode or its group already remembered a config, in which case new sessions are created directly. In the popover the user may adjust the child list and each session\'s settings (account, model, effort, style, mode). ' +
+    'Approved children start their assignment automatically and inherit this session\'s provider, model and project unless the user overrode them in the popover. ' +
+    `At most ${MAX_SPAWNS_PER_TURN} new sub-sessions per turn and ${MAX_CHILDREN} in total. ` +
     'Prefer the Task tool for work you just need done inside this turn: this is for work that deserves its own ongoing conversation.',
+  createChildren:
+    'Propose a whole team in one call: one entry per sub-session ({title, role, prompt}). ' +
+    'Preferred over repeated single calls — the user reviews them together in one approval popover.',
   createTitle:
     'Short title for the new session, shown in the session list (max 80 characters). Name the work, not the role.',
   createRole:
     'What this session does in the group, a couple of words (max 60 characters) — for example "Reviewer" or "Backend dev". Other sessions see it when they look up who to ask.',
   createPrompt: `The first assignment for that session, as plain prose (max ${MAX_TEXT_LEN} characters). It starts with NO knowledge of this conversation, so state the goal, the constraints and where the relevant files are, in full.`,
+  createGoal:
+    `The user's objective this spawn serves, in one or two sentences (max ${MAX_TEXT_LEN / 10} characters) — it pre-fills the request box in the review popover so they see why the team exists.`,
   statusDescription:
     'Check where the sub-sessions of THIS session stand: which are running a turn right now, when each last did anything, and how deep the group goes. ' +
     'Call it before you decide what to hand out next, or when the user asks how the group is doing — never guess a sub-session is finished. ' +
@@ -102,10 +118,27 @@ const SendParams = Type.Object({
 
 const StatusParams = Type.Object({})
 
-const CreateParams = Type.Object({
+const CreateChildSchema = Type.Object({
   title: Type.String({ description: SESSION_MESSAGING_TEXT.createTitle }),
-  role: Type.String({ description: SESSION_MESSAGING_TEXT.createRole }),
+  role: Type.Optional(Type.String({ description: SESSION_MESSAGING_TEXT.createRole })),
   prompt: Type.String({ description: SESSION_MESSAGING_TEXT.createPrompt }),
+})
+
+const CreateParams = Type.Object({
+  // title/role/prompt = đường spawn MỘT phiên (giữ nguyên cho tương thích).
+  // `children` = đề xuất cả ê-kíp trong MỘT lần duyệt — popover hiện đủ hội.
+  title: Type.Optional(Type.String({ description: SESSION_MESSAGING_TEXT.createTitle })),
+  role: Type.Optional(Type.String({ description: SESSION_MESSAGING_TEXT.createRole })),
+  prompt: Type.Optional(Type.String({ description: SESSION_MESSAGING_TEXT.createPrompt })),
+  children: Type.Optional(
+    Type.Array(CreateChildSchema, {
+      description: SESSION_MESSAGING_TEXT.createChildren,
+      maxItems: MAX_SPAWNS_PER_TURN,
+    }),
+  ),
+  // Mục tiêu người dùng — đổ sẵn vào ô "Yêu cầu" của popover (xem
+  // spawn-approval.ts: truyền nguyên trạng trong session.spawn-request).
+  goal: Type.Optional(Type.String({ description: SESSION_MESSAGING_TEXT.createGoal })),
 })
 
 interface ListSessionsDetails {
@@ -119,7 +152,7 @@ interface SendMessageDetails {
 }
 
 interface CreateSessionDetails {
-  sessionId?: string
+  sessionIds?: string[]
   isError?: true
 }
 
@@ -146,7 +179,7 @@ export interface SendSessionMessageRunResult {
 
 export interface CreateSessionRunResult {
   text: string
-  sessionId?: string
+  sessionIds?: string[]
   isError?: true
 }
 
@@ -158,8 +191,39 @@ export interface GroupStatusRunResult {
 export interface SessionMessagingRunners {
   listSessions: () => Promise<ListSessionsRunResult>
   sendSessionMessage: (sessionId: string, message: string) => Promise<SendSessionMessageRunResult>
-  createSession: (title: string, role: string, prompt: string) => Promise<CreateSessionRunResult>
+  // create_session nhận BỘ ĐẶC TẢ con (chuẩn hoá từ title/role/prompt hoặc
+  // children[] ở vỏ tool) kèm `goal` = mục tiêu người dùng để đổ sẵn vào ô
+  // yêu cầu của popover. Phần duyệt — popover cấu hình hay cấu hình nhóm đã
+  // nhớ — nằm TRONG runner để cả hai runtime đi chung một đường.
+  createSession: (children: SpawnChildSpec[], goal?: string) => Promise<CreateSessionRunResult>
   groupStatus: () => Promise<GroupStatusRunResult>
+}
+
+// Trộn cấu hình CHUNG của lô với đè RIÊNG của một phiên con. JSON không mang
+// `undefined` nên vòng lặp chỉ ghi key thật sự có mặt trong overlay.
+function overlaySpawnConfig(
+  base: SpawnSessionConfig | undefined,
+  overlay: SpawnSessionConfig | undefined,
+): SpawnSessionConfig | undefined {
+  if (!base && !overlay) return undefined
+  const out: SpawnSessionConfig = { ...base }
+  for (const [key, value] of Object.entries(overlay ?? {})) {
+    if (value !== undefined) {
+      ;(out as Record<string, unknown>)[key] = value
+    }
+  }
+  return out
+}
+
+// Gắn cấu hình đã trộn vào một spec con. exactOptionalPropertyTypes cấm gán
+// `config: undefined`, nên key bị GỠ hẳn khi không có gì để ghi.
+function withSpawnConfig(
+  spec: SpawnChildSpec,
+  shared: SpawnSessionConfig | undefined,
+): SpawnChildSpec {
+  const merged = overlaySpawnConfig(shared, spec.config)
+  const { config: _dropped, ...rest } = spec
+  return merged ? { ...rest, config: merged } : rest
 }
 
 // Phần thân dùng chung cho cả hai runtime. KHÔNG được nhân bản sang bridge: trần
@@ -173,6 +237,9 @@ export interface SessionMessagingRunners {
 // nghĩa "trần theo lượt" — hết lượt là quên.
 export function createSessionMessagingRunners(input: {
   sessionId: string
+  // Abort của LƯỢT — popover điều phối đang mở phải tan theo khi người dùng
+  // bấm Dừng (spawn-approval.ts lắng trên signal này).
+  signal?: AbortSignal
 }): SessionMessagingRunners {
   let sentThisTurn = 0
   // Trần theo LƯỢT cho việc đẻ phiên con. Cùng khuôn với `sentThisTurn`: toolset
@@ -242,28 +309,77 @@ export function createSessionMessagingRunners(input: {
       }
     },
 
-    async createSession(title, role, prompt): Promise<CreateSessionRunResult> {
-      if (spawnedThisTurn >= MAX_SPAWNS_PER_TURN) {
+    async createSession(children, goal): Promise<CreateSessionRunResult> {
+      if (children.length === 0) {
         return {
-          text: `You have already created ${spawnedThisTurn} sub-sessions this turn, which is the limit. Use the ones you have, or finish your answer to the user.`,
+          text: 'Nothing to create — pass title/role/prompt for one session, or a children[] list for a team.',
+          isError: true,
+        }
+      }
+      if (spawnedThisTurn + children.length > MAX_SPAWNS_PER_TURN) {
+        return {
+          text: `That would bring this turn to ${spawnedThisTurn + children.length} new sub-sessions, over the limit of ${MAX_SPAWNS_PER_TURN}. Propose fewer, or use the ones already running.`,
           isError: true,
         }
       }
       try {
-        const child = await spawnChildSession({
-          parentId: input.sessionId,
-          title,
-          role,
-          prompt,
-        })
-        spawnedThisTurn += 1
-        return {
-          text:
-            `Created session "${child.title}" (id ${child.id}) as a sub-session of this one, and queued your assignment for it. ` +
-            'It runs on its own from here: nothing came back to you, and there is no reply to wait for. ' +
-            'Use send_session_message with that id to follow up, and tell the user it exists so they can open it.',
-          sessionId: child.id,
+        // CỔNG ĐIỀU PHỐI: gốc của nhóm đã nhớ một cấu hình ⇒ người dùng đã cho
+        // phép nhóm tự điều phối — đẻ thẳng với cấu hình đó. Chưa nhớ ⇒ park
+        // tool call + phát `session.spawn-request`; popover của renderer trả
+        // lời qua `sessions.spawnResolve` (danh sách + cấu hình có thể đã bị
+        // người dùng sửa).
+        const root = groupRootOf(await listSessionSummaries(), input.sessionId)
+        if (!root) {
+          throw new SpawnError(
+            'unknown-parent',
+            'This session is not saved yet, so it cannot own a sub-session. Answer the user here instead.',
+          )
         }
+        let specs = children
+        if (root.groupSpawnConfig) {
+          const remembered = root.groupSpawnConfig
+          specs = children.map((c) => withSpawnConfig(c, remembered))
+        } else if ((await loadSession(input.sessionId))?.settings.mode === 'execute') {
+          // Bypass/JEV: mode execute nghĩa là "đã duyệt, cứ làm" — popover điều
+          // phối là một cổng NGƯỜI nên phiên execute bỏ qua nó, giống mọi cổng
+          // quyền khác. Con đẻ thẳng với settings kế thừa của cha; nhóm vẫn phải
+          // được arm tự-giao, nếu không con mới lại rơi vào chip "Giao cho agent".
+          await updateSessionMetadata(root.id, { groupAutoDeliver: true })
+        } else {
+          const res = await requestSpawnApproval({
+            sessionId: input.sessionId,
+            rootId: root.id,
+            children,
+            ...(goal ? { goal } : {}),
+            ...(input.signal ? { signal: input.signal } : {}),
+          })
+          if (!res.approved) {
+            return {
+              text:
+                res.message ??
+                (res.aborted
+                  ? 'The turn was stopped while the spawn popover was open — no sub-sessions were created.'
+                  : 'The user did not approve creating these sub-sessions. Do not retry unless they ask for it.'),
+              isError: true,
+            }
+          }
+          const approved = res.children?.length ? res.children : children
+          specs = approved.map((c) => withSpawnConfig(c, res.config))
+        }
+        const r = await spawnChildrenSessions(input.sessionId, specs)
+        spawnedThisTurn += r.created.length
+        if (r.created.length === 0) {
+          const why = r.failed.map((f) => `"${f.title}" — ${f.reason}`).join('; ')
+          return { text: `No sub-session was created. ${why}`, isError: true }
+        }
+        const list = r.created.map((c) => `"${c.title}" (id ${c.id})`).join(', ')
+        let text =
+          `Created ${r.created.length} sub-session(s): ${list}. Each was handed its assignment and runs on its own from here — nothing came back to you, and there is no reply to wait for. ` +
+          'Use send_session_message with an id to follow up, and tell the user they exist so they can open them.'
+        if (r.failed.length > 0) {
+          text += ` ${r.failed.length} spec(s) did not become sessions: ${r.failed.map((f) => `"${f.title}" — ${f.reason}`).join('; ')}.`
+        }
+        return { text, sessionIds: r.created.map((c) => c.id) }
       } catch (err) {
         // Từ chối có lý do (phiên này chưa lưu, chạm trần số con, tiêu đề rỗng) —
         // trả nguyên câu giải thích cho model, KHÔNG nuốt thành "đã tạo".
@@ -309,7 +425,10 @@ export function createSessionMessagingRunners(input: {
 }
 
 // Vỏ AgentTool của nhánh Pi.
-export function createSessionMessagingTools(input: { sessionId: string }): AgentTool[] {
+export function createSessionMessagingTools(input: {
+  sessionId: string
+  signal?: AbortSignal
+}): AgentTool[] {
   const run = createSessionMessagingRunners(input)
 
   const listSessions: AgentTool<typeof ListParams, ListSessionsDetails> = {
@@ -343,11 +462,26 @@ export function createSessionMessagingTools(input: { sessionId: string }): Agent
     description: SESSION_MESSAGING_TEXT.createDescription,
     parameters: CreateParams,
     async execute(_id, params): Promise<AgentToolResult<CreateSessionDetails>> {
-      const r = await run.createSession(params.title, params.role, params.prompt)
+      // Chuẩn hoá hai hình thức gọi về CÙNG một bộ đặc tả con: `children` khi có,
+      // không thì bộ ba title/role/prompt của đường một-phiên.
+      const specs: SpawnChildSpec[] = params.children?.length
+        ? params.children.map((c) => ({
+            title: c.title,
+            role: c.role ?? '',
+            prompt: c.prompt,
+          }))
+        : [
+            {
+              title: params.title ?? '',
+              role: params.role ?? '',
+              prompt: params.prompt ?? '',
+            },
+          ]
+      const r = await run.createSession(specs, params.goal)
       return {
         content: [{ type: 'text', text: r.text }],
         details: {
-          ...(r.sessionId ? { sessionId: r.sessionId } : {}),
+          ...(r.sessionIds ? { sessionIds: r.sessionIds } : {}),
           ...(r.isError ? { isError: true as const } : {}),
         },
       }

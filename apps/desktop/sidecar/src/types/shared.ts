@@ -159,6 +159,33 @@ export type ThinkingLevel = 'low' | 'medium' | 'high' | 'extra-high' | 'max'
 
 export type AgentMode = 'ask' | 'accept-edits' | 'plan' | 'execute'
 
+// Cấu hình con người duyệt trong popover điều phối trước khi một lô phiên con
+// chạy (xem sessions/spawn-approval.ts). Là tập con có chủ đích của
+// SessionSettings: CHỈ những field người dùng chọn trong popover — không gì khác
+// được nới từ đường này.
+export interface SpawnSessionConfig {
+  provider?: ProviderName
+  modelId?: string
+  accountId?: string
+  level?: ThinkingLevel
+  // Cờ Ultracode (ADR 0089) — chỉ nhánh Claude SDK đọc; giữ nguyên ngữ nghĩa
+  // "chỉ ghi khi BẬT" của SessionSettings.ultracode.
+  ultracode?: boolean
+  mode?: AgentMode
+  responseStyle?: string
+  responseStyleNoMarkdown?: boolean
+}
+
+// Một phiên con được đề xuất/duyệt trong popover điều phối. `config` là đè RIÊNG
+// của phiên đó lên cấu hình chung của lô (popover "tuỳ chỉnh riêng từng phiên").
+export interface SpawnChildSpec {
+  title: string
+  role: string
+  // Lời giao việc đầu tiên — đi vào hộp thư phiên con qua postSessionMessage.
+  prompt: string
+  config?: SpawnSessionConfig
+}
+
 // Per-session SSH tool approval mode (ADR 0064 P2). Governs the gated SSH tools
 // (ssh_exec / ssh_write_file) INDEPENDENTLY of the session AgentMode — running a
 // command or writing a file on a REMOTE host is higher-consequence than a local
@@ -486,6 +513,15 @@ export interface Session {
   // thật chứ không phải "xoá key", nên nó đi được đường patch spread của
   // updateSessionMetadata y như `pinned`.
   groupAutoDeliver?: boolean
+  // Cấu hình spawn đã duyệt + NHỚ cho nhóm này (popover điều phối → "nhớ cho nhóm").
+  // Chỉ có nghĩa trên phiên GỐC của nhóm: `create_session` nhìn thấy nó sẽ BỎ QUA
+  // popover và đẻ phiên con thẳng với cấu hình này — đúng nghĩa "duyệt một lần cho
+  // cả workflow". KHÔNG có nghĩa là bỏ cổng quyền tool bên trong phiên con:
+  // `mode` ở đây vẫn đi qua PreToolUse y như mọi phiên khác.
+  //
+  // Vì "ngừng nhớ" phải XOÁ HẲN key (spread patch không xoá được), đường ghi duy
+  // nhất là RPC `sessions.setGroupSpawn` — cùng lý do đã viết ở groupParentId.
+  groupSpawnConfig?: SpawnSessionConfig
   // Task this session was opened to discuss (ADR 0055). When set, buildContext
   // injects a <linked_task> block (the task's latest output + a trace summary)
   // each turn so the agent can reason about the task's results. Absent for a
@@ -600,6 +636,10 @@ export interface SessionSummary {
   // danh sách vì renderer phải quyết định tự giao hay không NGAY khi tin tới, kể cả khi
   // phiên gốc của nhóm chưa được mở lần nào trong phiên làm việc này.
   groupAutoDeliver?: boolean
+  // Cấu hình spawn đã nhớ của nhóm — mirrors Session.groupSpawnConfig. Lên summary
+  // để renderer hiện chip "đang điều phối" và menu "ngừng điều phối" mà không cần
+  // nạp transcript của phiên gốc.
+  groupSpawnConfig?: SpawnSessionConfig
   // True when a compaction checkpoint exists — lets the UI badge it without
   // loading the transcript.
   hasCompaction?: boolean

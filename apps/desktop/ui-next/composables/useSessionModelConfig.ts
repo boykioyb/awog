@@ -43,7 +43,9 @@ const USER_STYLE_ICON = 'palette'
 const MAX_STYLE_DESC = 240
 const clampDesc = (text: string): string =>
   text.length > MAX_STYLE_DESC ? `${text.slice(0, MAX_STYLE_DESC).trimEnd()}…` : text
-const RESPONSE_STYLES: StyleGroup[] = [
+// Exported so the spawn-orchestration dialog can build its style picker from the
+// same catalog instead of duplicating it.
+export const RESPONSE_STYLES: StyleGroup[] = [
   {
     key: 'default',
     rows: [
