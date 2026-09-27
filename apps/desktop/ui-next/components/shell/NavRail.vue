@@ -91,8 +91,9 @@ const sessionsAttention = computed(
 )
 
 // Grouping mirrors awog-prototype.html; `label`/`title` are i18n keys (resolved
-// via t()). The Sessions badge is live (sessionsAttention); Tasks has no live
-// store in ui-next yet, so it carries no badge.
+// via t()). The Sessions badge is live (sessionsAttention). Tasks, Workflows,
+// Agents, Commands, Rules, Hooks and Templates are intentionally hidden from
+// the rail (user request) — their pages still exist, only the nav entries are gone.
 const groups = computed<NavGroup[]>(() => [
   { items: [{ to: '/', icon: 'home', label: 'nav.home' }] },
   {
@@ -106,8 +107,6 @@ const groups = computed<NavGroup[]>(() => [
           ? { badge: { kind: 'wait', n: sessionsAttention.value } as NavBadge }
           : {}),
       },
-      { to: '/tasks', icon: 'tasks', label: 'nav.tasks' },
-      { to: '/workflows', icon: 'workflows', label: 'nav.workflows' },
       { to: '/schedules', icon: 'clock', label: 'nav.schedules' },
       { to: '/logtime', icon: 'table', label: 'nav.logtime' },
     ],
@@ -115,12 +114,8 @@ const groups = computed<NavGroup[]>(() => [
   {
     title: 'nav.group.library',
     items: [
-      { to: '/agents', icon: 'agents', label: 'nav.agents' },
       { to: '/skills', icon: 'skills', label: 'nav.skills' },
-      { to: '/commands', icon: 'commands', label: 'nav.commands' },
-      { to: '/rules', icon: 'rules', label: 'nav.rules' },
       { to: '/wiki', icon: 'book', label: 'nav.wiki' },
-      { to: '/templates', icon: 'templates', label: 'nav.templates' },
     ],
   },
   {
@@ -131,7 +126,6 @@ const groups = computed<NavGroup[]>(() => [
       { to: '/connections', icon: 'conn', label: 'nav.connections' },
       { to: '/ssh', icon: 'ssh', label: 'nav.ssh' },
       { to: '/infra', icon: 'layers', label: 'nav.infra' },
-      { to: '/hooks', icon: 'hooks', label: 'nav.hooks' },
       { to: '/monitor', icon: 'cpu', label: 'nav.monitor' },
     ],
   },
