@@ -29,7 +29,7 @@
            đăng nhập AWS thì lựa chọn đó là một cái bẫy — người dùng sẽ gõ mật khẩu
            AWS vào Chromium của app. Hai link dưới đây luôn ra browser hệ điều hành,
            và đi thẳng qua openExternally() nên không bao giờ hiện popover.
-           (Cùng lý do + cùng khuôn với SettingsDevices.vue → openTailscale.) -->
+           (Cùng lý do + cùng khuôn với SettingsDevices.vue → openNetbird.) -->
       <div class="ach-links">
         <button type="button" class="ach-link" @click="openSignIn">
           <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />

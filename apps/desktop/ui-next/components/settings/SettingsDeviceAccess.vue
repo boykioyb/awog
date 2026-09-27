@@ -49,7 +49,7 @@ let copiedTimer: ReturnType<typeof setTimeout> | undefined
 const url = computed(() => `http://${props.host}:${props.port}/`)
 
 // Render lazily: the QR is only built once the user asks to see it (and again if
-// the tailnet address changes underneath).
+// the mesh address changes underneath).
 watch(
   [showQr, url],
   async ([open, address]) => {

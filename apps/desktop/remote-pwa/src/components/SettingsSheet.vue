@@ -75,8 +75,8 @@ function forget(): void {
       </div>
       <p v-if="!supported" class="hint muted">
         Trình duyệt chỉ cho phép thông báo trên kết nối bảo mật. PWA đang chạy qua HTTP trên IP
-        tailnet nên phần này tắt; khi có tên HTTPS (Tailscale serve) nó tự bật lại. Hiện tại app vẫn
-        rung nhẹ và hiện huy hiệu số gate đang chờ.
+        mesh nên phần này tắt; khi có tên HTTPS (reverse proxy trên NetBird) nó tự bật lại. Hiện
+        tại app vẫn rung nhẹ và hiện huy hiệu số gate đang chờ.
       </p>
     </section>
 

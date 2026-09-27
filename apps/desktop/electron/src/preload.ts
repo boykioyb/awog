@@ -142,7 +142,7 @@ type RemoteDevice = {
 }
 type GatewayStatus = {
   enabled: boolean
-  tailnet: 'connected' | 'disconnected'
+  mesh: 'connected' | 'disconnected'
   host: string | null
   port: number
   bound: boolean

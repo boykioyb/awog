@@ -148,8 +148,8 @@ if (!gotLock) {
     // báo OS từ main. Cài TRƯỚC khi mở cửa sổ để không bỏ sót sự kiện nào.
     registerNotifyIpc()
     installWakeBridge({ getWindow, showWindow })
-    // Mobile Remote Control (ADR 0067): WS gateway bound to the tailnet only.
-    // Fail-closed — a no-op when Tailscale isn't up.
+    // Mobile Remote Control (ADR 0067): WS gateway bound to the private mesh
+    // interface only. Fail-closed — a no-op when NetBird isn't up.
     startRemoteGateway(getWindow)
     setupUpdater(getWindow)
     // Scheduled runs (ADR 0082): nhịp 30s so `nextRunAt`. Lịch chỉ chạy khi

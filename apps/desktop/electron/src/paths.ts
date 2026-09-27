@@ -44,7 +44,7 @@ export function preloadPath(): string {
 }
 
 // Static assets of the Mobile Remote Control PWA (ADR 0067, Wave 3). Served by the
-// Remote Gateway over HTTP on the tailnet interface. Dev: the separate remote-pwa
+// Remote Gateway over HTTP on the mesh-VPN interface. Dev: the separate remote-pwa
 // package's Vite `dist/`. Packaged: shipped as an extraResource `remote-pwa/`.
 export function remotePwaDir(): string {
   if (app.isPackaged) {

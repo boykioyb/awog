@@ -76,7 +76,7 @@ watch(
       </button>
 
       <p class="hint muted">
-        Điện thoại phải cùng tailnet (Tailscale) với desktop. Không có API key nào được lưu trên
+        Điện thoại phải cùng mạng NetBird với desktop. Không có API key nào được lưu trên
         thiết bị này.
       </p>
     </div>

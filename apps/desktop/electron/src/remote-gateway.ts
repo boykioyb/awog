@@ -6,7 +6,7 @@ import { log } from './logger'
 import { remotePwaDir } from './paths'
 import { createStaticHandler } from './remote-gateway-http'
 import { DeviceStore } from './remote-gateway-devices'
-import { findTailnetAddress, isTailnetAddress } from './remote-gateway-tailnet'
+import { findMeshAddress, isMeshAddress } from './remote-gateway-mesh'
 import { handleLocalMethod, isLocalMethod } from './remote-gateway-catalog'
 import {
   REMOTE_ALLOWLIST,
@@ -21,7 +21,8 @@ import {
 
 // Remote Gateway (mobile-remote-control, ADR 0067). Lives in Electron main — the
 // process that owns the network + holds NO API key (invariant #1). Bridges a
-// WebSocket bound ONLY to the Tailscale interface (F5) ⇄ engine.request /
+// WebSocket bound ONLY to the private mesh-VPN interface — NetBird (F5) — ⇄
+// engine.request /
 // engine.onEvent, gated by a device token (F6), a method allowlist (F4),
 // param-pick sanitization (F1/F3), event-egress filtering (F2) and per-device
 // budget (F8). See spec §Contract kỹ thuật.
@@ -82,13 +83,13 @@ const LIFECYCLE_WRITES = new Set([
 const TASK_STARTS = new Set(['tasks.create'])
 
 type GatewayStatus = {
-  // User opt-in (persisted). False → nothing is listening, whatever the tailnet does.
+  // User opt-in (persisted). False → nothing is listening, whatever the mesh does.
   enabled: boolean
   // Second opt-in (persisted, default OFF): may a remote frame start agent work
   // that runs without a per-call approval — the ungated agent modes and
   // `tasks.create`. See remote-gateway-policy.ts UNGATED_MODES.
   unattended: boolean
-  tailnet: 'connected' | 'disconnected'
+  mesh: 'connected' | 'disconnected'
   host: string | null
   port: number
   bound: boolean
@@ -171,16 +172,16 @@ class RemoteGateway {
   // --- bind (F5) -----------------------------------------------------------
 
   private bindIfPossible(): void {
-    // Opt-in gate: a network listener must never appear because Tailscale happens
-    // to be running — only because the user turned remote control on.
+    // Opt-in gate: a network listener must never appear because a mesh client
+    // happens to be running — only because the user turned remote control on.
     if (!this.store.isEnabled()) {
       if (this.boundAddress !== null) this.closeServer()
       return
     }
-    const addr = findTailnetAddress()
+    const addr = findMeshAddress()
     if (!addr) {
       if (this.boundAddress !== null) {
-        log.warn('remote-gateway: tailnet interface gone — closing')
+        log.warn('remote-gateway: mesh interface gone — closing')
         this.closeServer()
       }
       this.emitStatus()
@@ -193,7 +194,7 @@ class RemoteGateway {
 
   private openServer(addr: string): void {
     try {
-      // One HTTP server bound to the tailnet IP serves the PWA static assets AND
+      // One HTTP server bound to the mesh IP serves the PWA static assets AND
       // carries the WS upgrade (same origin). ws attaches via { server }.
       const httpServer = createServer((req, res) => this.staticHandler?.(req, res))
       httpServer.on('error', (err) => log.error('remote-gateway http error', { message: err.message }))
@@ -201,8 +202,8 @@ class RemoteGateway {
       wss.on('connection', (ws, req) => {
         const ip = req.socket.remoteAddress ?? ''
         // Second line after bind (F5): even a mis-detected interface can't serve a
-        // non-tailnet peer.
-        if (!isTailnetAddress(ip)) {
+        // non-mesh peer.
+        if (!isMeshAddress(ip)) {
           ws.terminate()
           return
         }
@@ -244,7 +245,7 @@ class RemoteGateway {
   // --- connection lifecycle ------------------------------------------------
 
   private onConnection(ws: WebSocket, ip: string): void {
-    // F-2: cap concurrent un-authenticated sockets so a tailnet peer can't exhaust
+    // F-2: cap concurrent un-authenticated sockets so a mesh peer can't exhaust
     // main by opening connections that never authenticate.
     const unauth = [...this.conns.values()].filter((s) => !s.deviceId).length
     if (unauth >= MAX_UNAUTH_CONNS) {
@@ -593,14 +594,14 @@ class RemoteGateway {
   // --- renderer IPC (Settings → Devices) -----------------------------------
 
   private status(): GatewayStatus {
-    // Report the tailnet independently of the binding: while remote control is
-    // off nothing is bound, but the panel should still say whether Tailscale is
+    // Report the mesh independently of the binding: while remote control is
+    // off nothing is bound, but the panel should still say whether NetBird is
     // up — otherwise enabling it looks broken.
-    const addr = this.boundAddress ?? findTailnetAddress()
+    const addr = this.boundAddress ?? findMeshAddress()
     return {
       enabled: this.store.isEnabled(),
       unattended: this.store.isUnattended(),
-      tailnet: addr ? 'connected' : 'disconnected',
+      mesh: addr ? 'connected' : 'disconnected',
       host: addr,
       port: PORT,
       bound: this.wss !== null,
@@ -650,7 +651,7 @@ class RemoteGateway {
     ipcMain.handle('gateway:listDevices', () => this.store.list())
     ipcMain.handle('gateway:createPairing', () => {
       if (!this.store.isEnabled()) throw new Error('remote control is off')
-      if (!this.boundAddress) throw new Error('tailnet not connected')
+      if (!this.boundAddress) throw new Error('mesh network not connected')
       const { code, expiresAt } = this.store.createPairing()
       return { code, expiresAt, host: this.boundAddress, port: PORT }
     })

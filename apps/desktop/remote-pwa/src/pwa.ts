@@ -4,7 +4,7 @@ import { ref } from 'vue'
 // for a newer build shipped by the desktop, and let the user swap it in.
 //
 // Registration is a no-op unless the page is a secure context — the gateway
-// serves plain HTTP on the tailnet IP today, and browsers refuse service workers
+// serves plain HTTP on the mesh IP today, and browsers refuse service workers
 // there. Everything else in the app works the same either way.
 
 export const updateReady = ref(false)

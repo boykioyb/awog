@@ -183,3 +183,35 @@ DAG do người dùng viết trên desktop) và `tasks.create` **chỉ khi** cô
 **Hệ quả cần theo dõi:** infosec re-audit bắt buộc (mở rộng allowlist); công tắc chưa có UI
 ở Settings → Devices nên tới lúc nối xong, mode ungated từ xa bị chặn cứng và `tasks.create`
 từ xa luôn bị từ chối.
+
+## Đính chính 2026-09-27 — đổi mesh Tailscale → NetBird
+
+Người dùng chốt đổi VPN mesh mà Remote Gateway bind vào: **NetBird** thay Tailscale
+(tham chiếu self-host: [NetBird external relays](https://docs.netbird.io/selfhosted/maintenance/scaling/set-up-external-relays)).
+Bản chất quyết định không đổi — Option A vẫn là "mesh VPN riêng tư + gateway bind
+interface-only, fail-closed"; chỉ nhà cung cấp mesh đổi.
+
+**Vì sao NetBird:** cùng nền WireGuard + CGNAT `100.64.0.0/10` nhưng **self-host được toàn
+bộ control plane** (management + signal + relay), khớp local-first hơn control-plane hosted
+của Tailscale; vẫn có app iOS/Android cho phone.
+
+**Thực tế đã đổi:**
+
+- `remote-gateway-tailnet.ts` → `remote-gateway-mesh.ts`; `findTailnetAddress` →
+  `findMeshAddress`, `isTailnetAddress` → `isMeshAddress`. Heuristic giữ nguyên 2 lớp
+  (CIDR `100.64/10` + tên interface), regex mở rộng `^(utun|tailscale|ts|wt|nb|netbird)`
+  — `wt0`/`utun` của NetBird khớp sẵn, Tailscale vẫn khớp (không phải đường được support).
+- `GatewayStatus.tailnet` → `GatewayStatus.mesh` (field IPC `gateway:status`; preload +
+  `awog-bridge.d.ts` + `useRemoteGateway` đổi theo — contract nội bộ, không có persisted
+  compat). Lỗi `createPairing`: `'mesh network not connected'`.
+- Toàn bộ copy Settings → Devices + PWA PairView đổi Tailscale → NetBird; link download
+  `tailscale.com/download` → `netbird.io` (`openTailscale` → `openNetbird`).
+
+**Giới hạn đã biết (fail-closed đúng thiết kế):** self-hosted NetBird đổi pool mặc định
+khỏi `100.64/10` sẽ **không** được detect — `remoteAddress` check là cố ý invariant #6,
+không nới. Cần thì mở option "trusted interface" (đã từng là open question Q3/T3).
+
+**Invariant giữ nguyên:** #6 no-public-port (bind IP mesh, không `0.0.0.0`), #1 (listener ở
+main, không giữ key), #4 (allowlist + param-pick), F5 (bind theo định danh interface +
+remoteAddress ∈ mesh mỗi kết nối), F6 pairing/token, F8 budget. **infosec re-audit vẫn là
+hard gate** trước release — đổi mesh provider không giảm được nó.

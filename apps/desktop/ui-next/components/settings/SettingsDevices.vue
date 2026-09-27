@@ -13,7 +13,7 @@
       <SettingsTog v-model="remoteEnabled" />
     </SettingsField>
 
-    <!-- Tailnet status + pair CTA -->
+    <!-- Mesh status + pair CTA -->
     <div class="dev-status">
       <span class="dev-badge" :style="badgeStyle">
         <span class="dev-dot" :style="{ background: dotColor }" />
@@ -53,20 +53,18 @@
         class="dev-banner-icon"
       />
       <div>
-        <div class="dev-banner-title">{{ t('settings.devices.tailnetDisconnected') }}</div>
+        <div class="dev-banner-title">{{ t('settings.devices.meshDisconnected') }}</div>
         <div class="dev-banner-hint">{{ t('settings.devices.installHint') }}</div>
       </div>
     </div>
 
-    <!-- Tailscale setup guide: expanded while disconnected, collapsible for reference once connected. -->
+    <!-- NetBird setup guide: expanded while disconnected, collapsible for reference once connected. -->
     <details class="dev-guide" :open="enabled && !connected">
       <summary class="dev-guide-sum">{{ t('settings.devices.guide.title') }}</summary>
       <ol class="dev-guide-steps">
         <li>
           {{ t('settings.devices.guide.step1') }}
-          <button type="button" class="dev-guide-link" @click="openTailscale">
-            tailscale.com/download
-          </button>
+          <button type="button" class="dev-guide-link" @click="openNetbird">netbird.io</button>
         </li>
         <li>{{ t('settings.devices.guide.step2') }}</li>
         <li>{{ t('settings.devices.guide.step3') }}</li>
@@ -126,7 +124,7 @@
 
 <script setup lang="ts">
 // Settings → Devices (Mobile Remote Control, Wave 2). Manages device pairing +
-// revoke for the Tailscale-bound gateway. All gateway I/O and lifecycle lives in
+// revoke for the mesh-VPN-bound gateway. All gateway I/O and lifecycle lives in
 // useRemoteGateway; this component is the thin view (status badge, banner, list,
 // empty state) plus a per-platform label + status colors. Browser-dev (no bridge)
 // simply shows the disconnected state — every action is a no-op.
@@ -140,13 +138,13 @@ const { t } = useI18n()
 const now = useNow()
 const sc = useSidecar()
 
-// Open the Tailscale download page in the OS browser (setup guide, step 1).
+// Open the NetBird download page in the OS browser (setup guide, step 1).
 // NOT through useLinkOpen: the point of this link is to DOWNLOAD an installer, and
 // downloads are blocked in the agent's browser partition (will-download →
 // preventDefault), so offering "open in the app" would offer a dead end.
-function openTailscale(): void {
-  if (sc.available) void sc.openExternal('https://tailscale.com/download')
-  else window.open('https://tailscale.com/download', '_blank')
+function openNetbird(): void {
+  if (sc.available) void sc.openExternal('https://netbird.io')
+  else window.open('https://netbird.io', '_blank')
 }
 
 const {
@@ -171,13 +169,11 @@ const remoteEnabled = computed<boolean>({
 })
 
 // Three states, in order of what the user must act on: off (their choice) →
-// no tailnet (needs Tailscale) → live.
+// no mesh (needs NetBird) → live.
 const isLive = computed(() => enabled.value && connected.value)
 const statusLabel = computed(() => {
   if (!enabled.value) return t('settings.devices.off')
-  return connected.value
-    ? t('settings.devices.tailnetConnected')
-    : t('settings.devices.disconnected')
+  return connected.value ? t('settings.devices.meshConnected') : t('settings.devices.disconnected')
 })
 const dotColor = computed(() => (isLive.value ? 'var(--green)' : 'var(--textFaint)'))
 const badgeStyle = computed(() =>
@@ -219,7 +215,7 @@ function platformLabel(platform: string): string {
   flex: 0 0 auto;
 }
 .dev-host {
-  /* mono-ok: tailnet hostname */
+  /* mono-ok: mesh IP */
   font-family: var(--code);
   font-size: 12px;
   line-height: 18px;

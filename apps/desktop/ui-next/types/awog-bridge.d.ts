@@ -187,7 +187,7 @@ export type AwogPetPrefs = {
 }
 
 // ── Mobile Remote Control gateway (Electron main; Wave 2) ────────────────────
-// Device pairing + revoke for the Tailscale-bound HTTP gateway. The gateway
+// Device pairing + revoke for the mesh-VPN-bound HTTP gateway. The gateway
 // itself (binding, HTTP server, token store) lives entirely in the main process;
 // the renderer only manages pairing sessions and the paired-device list.
 export type AwogRemoteDevice = {
@@ -199,9 +199,9 @@ export type AwogRemoteDevice = {
 }
 export type AwogGatewayStatus = {
   // User opt-in for remote control. False → main binds no port at all, however
-  // the tailnet reads below.
+  // the mesh network reads below.
   enabled: boolean
-  tailnet: 'connected' | 'disconnected'
+  mesh: 'connected' | 'disconnected'
   host: string | null
   port: number
   bound: boolean
@@ -218,7 +218,7 @@ export interface AwogGatewayBridge {
   // Resolves with the resulting status.
   setEnabled(on: boolean): Promise<AwogGatewayStatus>
   listDevices(): Promise<AwogRemoteDevice[]>
-  // Rejects when the tailnet is not connected — there is no reachable host to
+  // Rejects when the mesh network is not connected — there is no reachable host to
   // pair against, so the UI must gate this behind a connected status.
   createPairing(): Promise<AwogPairingInfo>
   revokeDevice(id: string): Promise<boolean>

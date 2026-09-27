@@ -3,7 +3,7 @@ import { extname, join, normalize, sep } from 'node:path'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 
 // Static file server for the Remote Gateway's PWA (mobile-remote-control, Wave 3).
-// The phone loads the PWA over HTTP on the tailnet interface, then upgrades to WS
+// The phone loads the PWA over HTTP on the mesh interface, then upgrades to WS
 // on the same origin. Kept tiny + containment-checked (invariant #2): a request
 // can only reach files inside the PWA dist dir; anything else → SPA index fallback.
 

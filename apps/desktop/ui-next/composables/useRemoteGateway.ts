@@ -3,7 +3,7 @@ import { useConfirm } from '~/composables/useConfirm'
 import type { AwogGatewayStatus, AwogPairingInfo, AwogRemoteDevice } from '~/types/awog-bridge'
 
 // Wave 2 of Mobile Remote Control — renderer controller for the Electron main
-// gateway (`window.awog.gateway`). Owns the tailnet status, the paired-device
+// gateway (`window.awog.gateway`). Owns the mesh-network status, the paired-device
 // list, and the currently-open pairing session, and mirrors them live via the
 // gateway's change events.
 //
@@ -25,7 +25,7 @@ export function useRemoteGateway() {
   const pairing = ref<AwogPairingInfo | null>(null)
   const pairingBusy = ref(false)
 
-  const connected = computed(() => status.value?.tailnet === 'connected')
+  const connected = computed(() => status.value?.mesh === 'connected')
   const host = computed(() => status.value?.host ?? '')
   const port = computed(() => status.value?.port ?? 0)
   // Remote control is opt-in: until the user turns it on, main binds nothing.
@@ -50,7 +50,7 @@ export function useRemoteGateway() {
   }
 
   // Flip the gateway on/off. Main answers with the resulting status, so the panel
-  // reflects what actually happened (e.g. enabled but no tailnet yet). Turning it
+  // reflects what actually happened (e.g. enabled but no mesh yet). Turning it
   // off also closes any open pairing — the code points at a host that is gone.
   async function setEnabled(on: boolean): Promise<void> {
     if (!gw) return
@@ -66,7 +66,7 @@ export function useRemoteGateway() {
   }
 
   // Open (or regenerate) a pairing session. Guarded by `connected` at the call
-  // site; the gateway also rejects when the tailnet is down, surfaced as a toast.
+  // site; the gateway also rejects when the mesh is down, surfaced as a toast.
   async function createPairing(): Promise<void> {
     if (!gw || pairingBusy.value) return
     pairingBusy.value = true
@@ -121,9 +121,9 @@ export function useRemoteGateway() {
     })
     offStatus = gw.onStatusChanged((s) => {
       status.value = s
-      // Tailnet dropped while a pairing modal is open → the code is unreachable,
+      // Mesh dropped while a pairing modal is open → the code is unreachable,
       // so close it rather than show a stale QR that no device can consume.
-      if (s.tailnet !== 'connected') pairing.value = null
+      if (s.mesh !== 'connected') pairing.value = null
     })
   })
 

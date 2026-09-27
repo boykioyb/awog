@@ -3,13 +3,13 @@ import { ref } from 'vue'
 // Alerts for the "away from desk" case: a permission gate / finished turn should
 // reach the user even when the PWA is not the foreground app.
 //
-// CAPABILITY NOTE — the gateway serves the PWA over plain HTTP on the tailnet IP
+// CAPABILITY NOTE — the gateway serves the PWA over plain HTTP on the mesh IP
 // (invariant #6: no public bind, no cert), so the page is NOT a secure context.
 // Browsers gate `Notification` + `serviceWorker` + `setAppBadge` on that, so all
 // three are feature-detected and degrade to the in-app signal (a vibration + the
-// gate badge in the session list). Put the PWA behind a Tailscale HTTPS name
-// (`tailscale serve`) and the same code lights up with real notifications —
-// nothing here needs to change.
+// gate badge in the session list). Put the PWA behind an HTTPS name on the mesh
+// (e.g. a NetBird reverse proxy) and the same code lights up with real
+// notifications — nothing here needs to change.
 
 export type NotifyState = 'unsupported' | 'default' | 'granted' | 'denied'
 

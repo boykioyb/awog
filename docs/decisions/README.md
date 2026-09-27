@@ -51,7 +51,7 @@ Thư mục này lưu các quyết định kiến trúc quan trọng của AWOG. 
 | [0060](./0060-connections-adopt-craft-sources-model.md) | Connections áp dụng mô hình "Sources" của Craft | Accepted |
 | [0061](./0061-session-craft-parity-render-model.md) | Session UI áp dụng model turn/activity + render pipeline của Craft | Accepted |
 | [0062](./0062-adopt-craft-session-storage-model.md) | Session storage áp dụng mô hình lưu + nạp của Craft (header + messages, warm cache) — amend 0048 | Accepted |
-| [0067](./0067-mobile-remote-control-transport.md) | Transport điều khiển session từ điện thoại = Tailscale/WireGuard mesh + Remote Gateway | Proposed |
+| [0067](./0067-mobile-remote-control-transport.md) | Transport điều khiển session từ điện thoại = NetBird/WireGuard mesh + Remote Gateway | Proposed |
 | [0070](./0070-share-claude-home-for-config.md) | Dùng chung `.claude` làm nhà cho skills/agents/commands | Accepted |
 | [0071](./0071-senior-engineer-prompt-core.md) | Lõi prompt cấp senior: orientation, quy trình, dẫn chứng (2 runtime) | Accepted (amended by 0077) |
 | [0072](./0072-cute-theme-family.md) | Theme family thứ hai (`cute`): 1 stylesheet scoped theo `data-theme-family`, opt-in | Accepted |

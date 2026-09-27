@@ -84,7 +84,7 @@ Còn những chỗ mở link **bằng lệnh** (không phải `<a>`) thì đã �
 |---|---|
 | `SettingsOAuthDialog` (Claude) | luồng OAuth phải vào browser có **phiên thật** của người dùng; auth code **không được** rơi vào jar của agent |
 | `SettingsCodexDialog` (OpenAI) | như trên |
-| `SettingsDevices` → tải Tailscale | partition của agent **chặn download** (`will-download` → `preventDefault`), nên "mở trong app" là ngõ cụt |
+| `SettingsDevices` → tải NetBird | partition của agent **chặn download** (`will-download` → `preventDefault`), nên "mở trong app" là ngõ cụt |
 | `stores/connections.ts` → `source.oauth-url` | URL authorize của MCP source: cùng lý do hai dialog trên — phải vào browser giữ phiên thật, auth code không được vào jar của agent |
 
 Cả bốn có comment ghi lý do ngay tại dòng, để lần sau không ai "dọn dẹp" cho nhất quán.

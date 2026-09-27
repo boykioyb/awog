@@ -325,7 +325,7 @@ Ba ràng buộc của khối này:
   đó kèm validate.
 - **Không đi qua popover "mở trong app".** Hai link gọi thẳng `openExternally()` thay vì để
   interceptor của `useLinkOpen` bắt `<a href>`: popover 2 lựa chọn (ADR 0086) sẽ mời người dùng
-  gõ mật khẩu AWS vào Chromium của app. Cùng khuôn với `SettingsDevices.vue → openTailscale`.
+  gõ mật khẩu AWS vào Chromium của app. Cùng khuôn với `SettingsDevices.vue → openNetbird`.
 - **Không có ô nhập username/password** ở đây, và không được thêm — mật khẩu Console thậm chí
   không phải credential mà sidecar dùng được (luật cứng #2).
 

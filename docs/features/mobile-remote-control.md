@@ -873,3 +873,18 @@ từ xa ghi một dòng `log.warn` — đây là hành động từ xa duy nhấ
   `npx tsc -p tsconfig.json && node --test dist/__tests__/*.test.js`. Gói `@awog/desktop`
   chưa có test runner nên file test cũng bị build vào `dist/`; thêm `'!dist/__tests__/**'`
   vào `files:` của `electron-builder.yml` khi có người sở hữu file đó.
+
+## Đính chính 2026-09-27 — transport mesh: Tailscale → NetBird
+
+Từ bản này mesh VPN được support/document là **NetBird** (WireGuard, self-host được cả
+management + relay — xem [đính chính ADR 0067](../decisions/0067-mobile-remote-control-transport.md#đính-chính-2026-09-27--đổi-mesh-tailscale--netbird)).
+Trong toàn bộ spec này, đọc **"tailnet" = "mạng mesh NetBird của user"**: cùng dải CGNAT
+`100.64.0.0/10`, cùng mô hình bind-fail-closed, chỉ đổi tên provider.
+
+Đổi kèm theo ở code: `remote-gateway-mesh.ts` (thay `remote-gateway-tailnet.ts`) nhận diện
+interface theo `^(utun|tailscale|ts|wt|nb|netbird)` + CIDR; field `gateway:status`
+`tailnet` → `mesh`; UI Settings → Devices và PWA chỉ còn nhắc NetBird (link `netbird.io`).
+
+Lưu ý edge: NetBird self-hosted với **pool IP khác `100.64/10`** không được detect (CIDR
+check là cố ý fail-closed) — nếu cần custom range thì mở lại Q3/T3 ("trusted interface do
+user đánh dấu") trước khi nới heuristic.

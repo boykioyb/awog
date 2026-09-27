@@ -1,5 +1,5 @@
 // Small pure helpers. No DOM secure-context APIs (the PWA is served over plain
-// HTTP on the tailnet IP, so crypto.randomUUID / crypto.subtle are unavailable —
+// HTTP on the mesh IP, so crypto.randomUUID / crypto.subtle are unavailable —
 // only crypto.getRandomValues works in an insecure context).
 
 // 32-hex-char id used for client-generated messageIds (the assistant turn id the
