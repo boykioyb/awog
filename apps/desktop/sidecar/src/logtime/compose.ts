@@ -106,11 +106,24 @@ export function buildComposeSystemPrompt(): string {
     '  Không bịa dự án, không trả tên dự án — chỉ trả tag.',
     '- Gộp các việc cùng dự án + cùng bản chất thành một dòng khi hợp lý; note một câu',
     '  ngắn, đúng như nó sẽ hiện trên hệ PMS của công ty (tiếng Việt).',
-    '- Viết theo hướng NGHIỆP VỤ (kiểu backlog refinement): nói yêu cầu/chức năng nghiệp',
-    '  vụ nào được xử lý và CÁCH TIẾP CẬN ở mức nghiệp vụ (làm rõ/phân tích/thống nhất).',
-    '  KHÔNG nêu chi tiết kỹ thuật (tên file, hàm/biến, câu lệnh, code, tên bảng/cột).',
-    '  Khi việc có phần nội dung (thụt dòng bên dưới), đọc để hiểu rồi diễn đạt theo nghiệp',
-    '  vụ — KHÔNG viết chung chung kiểu "xử lý yêu cầu #192"/"lập kế hoạch triển khai".',
+    '',
+    'Giọng note: viết như chính dev đó ngồi ghi lại cuối ngày — đúng việc, tự nhiên,',
+    'không phải văn báo cáo. Động từ đời thường của dev đều dùng được (sửa, fix, check,',
+    'review, update, triển khai/implement, dò, test, viết UT, deploy, refactor…). Giữ',
+    'NGUYÊN thuật ngữ IT, đừng dịch sang tiếng Việt ("fix bug"/"review PR", chứ không',
+    '"khắc phục lỗi"/"xem xét yêu cầu hợp nhất"). Nói yêu cầu/chức năng NGHIỆP VỤ nào',
+    'được xử lý, KHÔNG nêu chi tiết kỹ thuật (tên file, hàm/biến, câu lệnh, code, tên',
+    'bảng/cột) — còn tên màn hình, loại mail/báo cáo, số issue thì giữ. Mỗi dòng mở',
+    'đầu một kiểu khác nhau; KHÔNG ép mọi note vào cùng một khuôn kiểu "Làm rõ và thống',
+    'nhất …" (chỉ dùng mấy động từ đó khi việc thật sự là làm rõ hay chốt phương án).',
+    'Khi việc có phần nội dung (thụt dòng bên dưới), đọc để hiểu rồi viết bám vào đó —',
+    'KHÔNG viết chung chung kiểu "xử lý yêu cầu #192"/"lập kế hoạch triển khai".',
+    '',
+    'Ví dụ note nghe như người thật (noi GIỌNG, không phải chép nội dung):',
+    '"Fix bug màn confirm hiển thị sai số tiền khi áp giảm giá" · "Triển khai #594:',
+    'thêm validate ngày nghỉ trùng trên màn đăng ký phép" · "Review lại spec màn chi',
+    'tiết rồi confirm phần trạng thái với BrSE".',
+    '',
     '- Đề xuất số giờ đã LÀM TRÒN LÊN theo bậc được cho, và cố gắng cho TỔNG khớp mức',
     '  giờ mỗi ngày (budget). Thời lượng đo được chỉ là tham khảo — nó đo thời gian việc',
     '  tồn tại, không đo công sức.',
@@ -146,24 +159,38 @@ export interface LineSummaryInput {
   // note CỤ THỂ thay vì diễn giải lại tiêu đề. Vắng ⇒ chỉ có tiêu đề như cũ.
   detail?: string | undefined
   // Nháp NGƯỜI DÙNG tự gõ ("review PR 590") — model khai thác/mở rộng theo đúng hướng
-  // đó thành note nghiệp vụ đầy đủ (dựa thêm vào detail nếu có). Đây là "Sửa bằng AI".
+  // đó thành câu note hoàn chỉnh (dựa thêm vào detail nếu có). Đây là "Sửa bằng AI".
   seed?: string | undefined
 }
 
 export function buildLineSummarySystemPrompt(): string {
   return [
-    'Bạn viết note worklog cho một kỹ sư phần mềm, theo hướng NGHIỆP VỤ (kiểu backlog',
-    'refinement). Cho tiêu đề + (nếu có) trích nội dung thực của phiên, hãy viết MỘT câu',
-    'tiếng Việt mô tả: yêu cầu/chức năng NGHIỆP VỤ nào được xử lý và CÁCH TIẾP CẬN ở mức',
-    'nghiệp vụ (làm rõ/định nghĩa/phân tích/thống nhất cái gì).',
+    'Bạn viết note worklog cho một kỹ sư phần mềm — nghe như chính dev đó tự ghi lại',
+    'cuối ngày, không phải văn báo cáo chính thức. Cho tiêu đề + (nếu có) trích nội',
+    'dung thực của phiên, hãy viết MỘT câu tiếng Việt nói đúng việc đã làm.',
     '',
-    'KHÔNG đi vào chi tiết KỸ THUẬT triển khai: không nêu tên file, tên hàm/biến, câu lệnh,',
-    'đoạn code, tên bảng/cột kỹ thuật. Nói "làm gì cho nghiệp vụ", KHÔNG nói "sửa code thế nào".',
-    'Cũng KHÔNG viết chung chung kiểu "xử lý yêu cầu #192"/"lập kế hoạch triển khai".',
+    'Giọng dev thật: câu ngắn, động từ đời thường (sửa, fix, check, review, update,',
+    'triển khai/implement, dò, test, viết UT, deploy, refactor…). Giữ NGUYÊN thuật',
+    'ngữ IT, đừng dịch sang tiếng Việt ("fix bug" chứ không "khắc phục lỗi", "review',
+    'PR" chứ không "xem xét yêu cầu hợp nhất"). ĐỪNG ép mọi câu vào khuôn "Làm rõ và',
+    'thống nhất …" — chỉ dùng "làm rõ/thống nhất/phân tích" khi việc đó thật sự là làm',
+    'rõ hay chốt phương án.',
     '',
-    'Ví dụ TỐT: "Làm rõ và thống nhất quy tắc xuất mã tỉnh theo chuẩn JIS cho màn danh sách".',
+    'Nói yêu cầu/chức năng NGHIỆP VỤ nào được xử lý, KHÔNG đi vào chi tiết KỸ THUẬT',
+    'triển khai: không nêu tên file, tên hàm/biến, câu lệnh, đoạn code, tên bảng/cột.',
+    'Tên màn hình, loại mail/báo cáo, số issue/PR thì giữ. Cũng KHÔNG viết chung chung',
+    'kiểu "xử lý yêu cầu #192"/"lập kế hoạch triển khai".',
+    '',
+    'Ví dụ note nghe tự nhiên (noi GIỌNG, không phải chép nội dung):',
+    '- "Fix bug màn confirm hiển thị sai số tiền khi áp giảm giá"',
+    '- "Triển khai #594: thêm validate ngày nghỉ trùng trên màn đăng ký phép"',
+    '- "Review lại spec màn chi tiết rồi confirm phần trạng thái với BrSE"',
+    '- "Điều tra nguyên nhân job xuất báo cáo chạy chậm, note lại cho anh leader"',
+    '',
     'Ví dụ XẤU (quá kỹ thuật): "Sửa hàm exportCsv thêm cột ken_cd, cập nhật migration".',
     'Ví dụ XẤU (quá chung): "Xử lý yêu cầu #594".',
+    'Ví dụ XẤU (giọng báo cáo, một khuôn cho mọi việc):',
+    '"Làm rõ và thống nhất phương án xử lý cho yêu cầu #594".',
     '',
     'Chỉ trả về ĐÚNG một câu note, không giải thích, không dấu ngoặc, không xuống dòng.',
     'Giữ mã issue/PR (ví dụ #192) trong câu nếu có. Bám nội dung thật, không bịa.',
@@ -178,17 +205,17 @@ export function buildLineSummaryUserPrompt(input: LineSummaryInput): string {
   if (input.pr !== undefined) parts.push(`Pull request: #${input.pr} (nhắc "(PR #${input.pr})" trong câu)`)
   parts.push(`Tiêu đề: ${input.title}`)
   if (input.detail) {
-    parts.push('', 'Nội dung (đọc để hiểu việc, rồi viết note theo hướng nghiệp vụ):', input.detail)
+    parts.push('', 'Nội dung (đọc để hiểu việc, rồi viết note bám vào đó):', input.detail)
   }
   if (input.seed) {
     parts.push(
       '',
       `Bản nháp người dùng gõ: "${input.seed}"`,
       'Khai thác/mở rộng đúng theo hướng bản nháp này (dựa thêm vào Nội dung nếu có),',
-      'giữ đúng ý người dùng, viết thành note nghiệp vụ đầy đủ hơn.',
+      'giữ đúng ý người dùng, viết thành một câu note hoàn chỉnh hơn.',
     )
   }
-  parts.push('', 'Viết một câu note tiếng Việt theo hướng nghiệp vụ (không chi tiết kỹ thuật).')
+  parts.push('', 'Viết một câu note tiếng Việt, giọng dev tự ghi lại — đúng việc, không chi tiết kỹ thuật.')
   return parts.join('\n')
 }
 
