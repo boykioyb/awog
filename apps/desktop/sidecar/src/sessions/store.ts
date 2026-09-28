@@ -137,14 +137,23 @@ export async function setSessionGroup(
 }
 
 // Ghi nhớ / xoá cấu hình spawn của nhóm trên phiên gốc — "duyệt một lần cho cả
-// workflow" (sessions/spawn-approval.ts). `null` (hoặc object rỗng) = xoá hẳn
-// key, đúng khuôn setSessionGroup/setSessionInfra.
+// workflow" (sessions/spawn-approval.ts). `null` = xoá hẳn key, đúng khuôn
+// setSessionGroup/setSessionInfra. `{}` là marker HỢP LỆ ("đã duyệt, kế thừa
+// toàn bộ cha") — xem session-manager.setGroupSpawn.
 export async function setSessionGroupSpawn(
   id: string,
   config: SpawnSessionConfig | null,
 ): Promise<boolean> {
   await sessionManager.ensureLoaded()
   return sessionManager.setGroupSpawn(id, config)
+}
+
+// Ép persist một phiên NGAY (qua persistence-queue), bỏ qua debounce 500ms —
+// cho những ghi rời rạc mà thoát app trong cửa sổ đó sẽ nuốt mất (cùng khuôn
+// `flush` mà setArchived/setGroup/setGroupSpawn đã gọi ở tầng manager).
+export async function flushSession(id: string): Promise<void> {
+  await sessionManager.ensureLoaded()
+  await sessionManager.flush(id)
 }
 
 // Đọc thô các dòng JSONL của một phiên (nền cho `sessions.listEvents`). `null` khi

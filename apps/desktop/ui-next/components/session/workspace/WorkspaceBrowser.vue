@@ -60,6 +60,7 @@
 // elsewhere / empty). Cục sizing/dock/expand sống ở `useBrowserPanelSizing`.
 import { useEmbeddedBrowser } from '~/composables/useEmbeddedBrowser'
 import { useBrowserPanelSizing } from '~/composables/useBrowserPanelSizing'
+import { useBrowserPip } from '~/composables/useBrowserPip'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 import { useSessionsStore } from '~/stores/sessions'
@@ -103,6 +104,29 @@ const {
 const { dock, onSetDock, expanded, canExpand, onToggleExpand } = useBrowserPanelSizing({
   viewport: viewportEl,
 })
+
+// View Browser vừa được đưa lên mặt mà card PiP đang giữ view → card nhường
+// NGAY: người dùng đã nói "tôi muốn xem ở panel" bằng chính việc mở view, đừng
+// bắt họ bấm "Hiện ở đây" thêm một lần trên placeholder elsewhere. closePip trước
+// (system close — không dismissed) rồi takeOver để claim trực tiếp; lời detach
+// trễ của PiP lúc unmount đã được chặn bởi guard owner trong syncOnce/detachNow.
+//
+// `nextTick` trước takeOver: watcher bắn TRƯỚC khi Vue gỡ `display:none`/bind
+// viewportEl (immediate chạy giữa setup, el còn null). sync ở thời điểm đó thấy
+// `onScreen` false ⇒ `!wanted` ⇒ vừa nhả claim vừa `api.detach()` — mà
+// `detachFrom` ở main park MỌI tab của cửa sổ, tức đạp luôn view PiP đang cầm:
+// panel không attach được mà card cũng mất trang, cả hai trông "kẹt".
+const pip = useBrowserPip()
+watch(
+  () => props.active !== false,
+  async (v) => {
+    if (!v || !pip.open.value) return
+    pip.closePip()
+    await nextTick()
+    void takeOver()
+  },
+  { immediate: true },
+)
 
 // Project của session đang xem → root tuyệt đối để lưu ảnh chụp trang. Panel không
 // truyền `session` xuống view này, nên lấy từ store: view Browser chỉ render bên

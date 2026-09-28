@@ -12,7 +12,7 @@
     <div
       v-if="open"
       class="bpip"
-      :class="{ dragging }"
+      :class="{ dragging, min: minimized }"
       :style="cardStyle"
       role="dialog"
       :aria-label="t('browser.pip.title')"
@@ -27,28 +27,49 @@
         @keydown="onBarKeydown"
         @dblclick="onBarDblclick"
       >
-        <Icon
-          v-if="activeTab?.loading"
-          name="refresh"
-          class="bpip-spin"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
-        />
-        <img
-          v-else-if="favicon"
-          class="bpip-fav"
-          :src="favicon"
-          alt=""
-          draggable="false"
-          @error="favBroken = true"
-        />
-        <Icon
-          v-else
-          name="globe"
-          class="bpip-favicon"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
-        />
-        <span class="bpip-title" :title="activeTab?.url">{{ title }}</span>
+        <div
+          class="bpip-lead"
+          :class="{ clickable: minimized }"
+          :title="minimized ? t('browser.pip.restore') : undefined"
+          @click="onLeadClick"
+        >
+          <Icon
+            v-if="activeTab?.loading"
+            name="refresh"
+            class="bpip-spin"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
+          <img
+            v-else-if="favicon"
+            class="bpip-fav"
+            :src="favicon"
+            alt=""
+            draggable="false"
+            @error="favBroken = true"
+          />
+          <Icon
+            v-else
+            name="globe"
+            class="bpip-favicon"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
+          <span class="bpip-title" :title="activeTab?.url">{{ title }}</span>
+        </div>
         <button
+          type="button"
+          class="bpip-btn"
+          :title="t(minimized ? 'browser.pip.restore' : 'browser.pip.minimize')"
+          :aria-label="t(minimized ? 'browser.pip.restore' : 'browser.pip.minimize')"
+          @pointerdown.stop
+          @click="toggleMinimize"
+        >
+          <Icon
+            :name="minimized ? 'maximize' : 'minimize'"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
+        </button>
+        <button
+          v-if="!minimized"
           type="button"
           class="bpip-btn"
           :title="t('browser.pip.toPanel')"
@@ -59,6 +80,7 @@
           <Icon name="panel" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
+          v-if="!minimized"
           type="button"
           class="bpip-btn"
           :title="t('sessions.workspace.browser.popout')"
@@ -79,8 +101,8 @@
           <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
       </header>
-      <div v-if="error" class="bpip-err">{{ error }}</div>
-      <div ref="viewportEl" class="bpip-view">
+      <div v-if="error && !minimized" class="bpip-err">{{ error }}</div>
+      <div v-if="!minimized" ref="viewportEl" class="bpip-view">
         <div v-if="!available" class="bpip-empty">
           {{ t('sessions.workspace.browser.unavailable') }}
         </div>
@@ -104,9 +126,20 @@
            mép dưới = dọc, góc = cả hai (giống border-resize của cửa sổ frameless).
            Góc giữ keyboard cho người không kéo được chuột; hai mép là pointer-only
            (aria-hidden) vì lặp chức năng. -->
-      <div class="bpip-rsz e" aria-hidden="true" @pointerdown="(ev) => onResizeStart(ev, 'e')" />
-      <div class="bpip-rsz s" aria-hidden="true" @pointerdown="(ev) => onResizeStart(ev, 's')" />
+      <div
+        v-if="!minimized"
+        class="bpip-rsz e"
+        aria-hidden="true"
+        @pointerdown="(ev) => onResizeStart(ev, 'e')"
+      />
+      <div
+        v-if="!minimized"
+        class="bpip-rsz s"
+        aria-hidden="true"
+        @pointerdown="(ev) => onResizeStart(ev, 's')"
+      />
       <button
+        v-if="!minimized"
         type="button"
         class="bpip-rsz se"
         :aria-label="t('browser.pip.resize')"
@@ -128,24 +161,36 @@
 import BrowserElsewhere from '~/components/browser/BrowserElsewhere.vue'
 
 const { t } = useI18n()
-const { open, rect, setPos, setSize, persistGeometry, dismissPip, closePip } = useBrowserPip()
+const {
+  open,
+  minimized,
+  rect,
+  setPos,
+  setSize,
+  persistGeometry,
+  dismissPip,
+  closePip,
+  toggleMinimize,
+} = useBrowserPip()
 const workspace = useWorkspacePanel()
 
 const viewportEl = useTemplateRef<HTMLElement>('viewportEl')
 const { available, activeTab, error, empty, elsewhere, holding, popout, takeOver } =
   useEmbeddedBrowser({
     viewport: viewportEl,
-    // Card chỉ hiện khi `open` — v-if gỡ el khỏi DOM là đủ để sync nhả view.
-    visible: () => open.value,
+    // Card chỉ giữ view khi mở VÀ không thu nhỏ — v-if gỡ viewport el khỏi DOM
+    // là đủ để sync nhả view về holder (trang chạy nền, không reload).
+    visible: () => open.value && !minimized.value,
   })
 
-// Mở card = CHỦ ĐỘNG giật view về đây (khác với reclaim thụ động của panel).
-// Phải đợi v-if mount xong viewport — sync thấy el=null sẽ nhả luôn claim vừa
-// nhận, và lần sync sau (khi view ở popout) lại dừng ở nhánh shownElsewhere.
+// Mở card (hoặc bung ra sau khi thu nhỏ) = CHỦ ĐỘNG giật view về đây (khác với
+// reclaim thụ động của panel). Phải đợi v-if mount xong viewport — sync thấy
+// el=null sẽ nhả luôn claim vừa nhận, và lần sync sau (khi view ở popout) lại
+// dừng ở nhánh shownElsewhere.
 const armed = ref(false)
-watch(open, async (v) => {
+watch([open, minimized], async () => {
   armed.value = false
-  if (!v) return
+  if (!open.value || minimized.value) return
   await nextTick()
   void takeOver()
 })
@@ -153,11 +198,12 @@ watch(open, async (v) => {
 // Mất quyền sở hữu SAU KHI đã từng giữ view = một bề mặt khác đã giật (nút
 // "Hiện ở đây" của panel, cửa sổ popout) → card tự đóng. `armed` chặn nhịp
 // transient lúc mount: trước khi attach kịp chạy `elsewhere` vẫn có thể bật.
+// Đang THU NHỎ thì không đóng: user chỉ xếp card lại, restore sẽ giành view về.
 watch(holding, (v) => {
   if (v) armed.value = true
 })
 watch(elsewhere, (v) => {
-  if (v && armed.value) closePip()
+  if (v && armed.value && !minimized.value) closePip()
 })
 
 // ── Header ─────────────────────────────────────────────────────────────────
@@ -182,20 +228,40 @@ const title = computed(
   () => activeTab.value?.title || activeTab.value?.url || t('browser.pip.title'),
 )
 
-const cardStyle = computed(() => ({
-  left: `${rect.x}px`,
-  top: `${rect.y}px`,
-  width: `${rect.w}px`,
-  height: `${rect.h}px`,
-}))
+const cardStyle = computed(() => {
+  // Thu nhỏ = chip neo góc phải-dưới (trên status bar — cùng vị trí "đậu" mặc
+  // định của card: STATUSBAR 26 + MARGIN 16). rect giữ nguyên nên restore bung
+  // đúng chỗ cũ.
+  if (minimized.value) {
+    return { left: 'auto', top: 'auto', right: '16px', bottom: '42px' }
+  }
+  return {
+    left: `${rect.x}px`,
+    top: `${rect.y}px`,
+    width: `${rect.w}px`,
+    height: `${rect.h}px`,
+  }
+})
 
 // ── Actions ────────────────────────────────────────────────────────────────
 
-// Dblclick thanh = "về panel" (thói quen title-bar). Event bubble lên từ cả ba
+// Bấm vào favicon/title của chip đang thu nhỏ = bung ra (titlebar thu nhỏ là
+// affordance duy nhất còn lại). Khi bung thì vùng này chỉ để kéo, click thường
+// không làm gì — drag đã chiếm pointerdown.
+const onLeadClick = (): void => {
+  if (minimized.value) toggleMinimize()
+}
+
+// Dblclick thanh = "về panel" (thói quen title-bar) — trừ khi đang thu nhỏ, lúc
+// đó nó là chip neo góc và dblclick phải bung ra. Event bubble lên từ cả các
 // nút con — bấm đúp × mà nhảy về panel thì nút đó tự huỷ hành vi của mình, nên
 // phải lọc theo target.
 const onBarDblclick = (ev: MouseEvent): void => {
   if ((ev.target as HTMLElement).closest('.bpip-btn')) return
+  if (minimized.value) {
+    toggleMinimize()
+    return
+  }
   returnToPanel()
 }
 
@@ -219,7 +285,9 @@ const toPopout = (): void => {
 const dragging = ref(false)
 
 const onDragStart = (ev: PointerEvent): void => {
-  if (ev.button !== 0) return
+  // Chip đang neo góc thì không kéo: style của nó không dùng rect nữa, kéo chỉ
+  // đổi rect ngầm mà mắt không thấy.
+  if (ev.button !== 0 || minimized.value) return
   const bar = ev.currentTarget as HTMLElement
   bar.setPointerCapture(ev.pointerId)
   dragging.value = true
@@ -239,6 +307,13 @@ const onDragStart = (ev: PointerEvent): void => {
 // Phím mũi tên trên thanh tiêu đề nudge card 16px (Shift = 64px) — tay nắm kéo
 // bằng chuột không dùng được cho người chỉ gõ phím.
 const onBarKeydown = (ev: KeyboardEvent): void => {
+  if (minimized.value) {
+    if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault()
+      toggleMinimize()
+    }
+    return
+  }
   const step = ev.shiftKey ? 64 : 16
   const delta: Record<string, [number, number]> = {
     ArrowLeft: [-step, 0],
@@ -315,6 +390,29 @@ const onResizeKeydown = (ev: KeyboardEvent): void => {
 .bpip.dragging {
   user-select: none;
   border-color: var(--accentBorder);
+}
+/* Thu nhỏ = chip neo góc: không còn view nên bỏ luôn khung 5px hai cạnh, header
+   khép kín, giới hạn bề ngang để title dài không kéo chip thành thanh. */
+.bpip.min {
+  padding: 0;
+  max-width: 240px;
+}
+.bpip.min .bpip-bar {
+  border-bottom: none;
+  cursor: default;
+}
+.bpip-lead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.bpip-lead.clickable {
+  cursor: pointer;
+}
+.bpip.min .bpip-title {
+  max-width: 130px;
 }
 .bpip-bar {
   display: flex;

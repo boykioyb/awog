@@ -156,7 +156,16 @@ function mergeHeaderWithExternalMetadata(
     ...(disk.aboutTaskId !== undefined ? { aboutTaskId: disk.aboutTaskId } : {}),
     ...(disk.aboutSshHostId !== undefined ? { aboutSshHostId: disk.aboutSshHostId } : {}),
     ...(disk.aboutGhUrl !== undefined ? { aboutGhUrl: disk.aboutGhUrl } : {}),
-    ...(disk.groupAutoDeliver !== undefined ? { groupAutoDeliver: disk.groupAutoDeliver } : {}),
+    // `groupAutoDeliver`: đường ghi DUY NHẤT sau tạo phiên là RPC riêng
+    // (`sessions.setGroupAutoDeliver` + arm phía spawn) qua updateSessionMetadata
+    // — generic upsert của renderer cố ý KHÔNG mang field này nữa. Vì vậy `local`
+    // có mặt = một lần ghi sidecar có chủ đích ⇒ local thắng cả hai chiều; vắng
+    // mặt ⇒ giữ của đĩa (đồng bộ metadata từ renderer không xoá được cờ).
+    ...(local.groupAutoDeliver !== undefined
+      ? { groupAutoDeliver: local.groupAutoDeliver }
+      : disk.groupAutoDeliver !== undefined
+        ? { groupAutoDeliver: disk.groupAutoDeliver }
+        : {}),
     // todos/bookmarks luôn được ghi thành MẢNG (rỗng khi xoá hết) chứ không bị xoá
     // key, nên "copy khi đĩa có" đã diễn tả đủ cả hướng dựng lẫn hướng xoá.
     ...(disk.todos !== undefined ? { todos: disk.todos } : {}),

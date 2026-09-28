@@ -39,6 +39,8 @@
   "browser.pip.move": "Kéo để dời — phím mũi tên để nudge",
   "browser.pip.resize": "Đổi cỡ",
   "browser.pip.toPanel": "Trả về panel",
+  "browser.pip.minimize": "Thu nhỏ",
+  "browser.pip.restore": "Mở rộng",
   "browser.pip.close": "Đóng Picture in Picture",
   "browser.pip.empty": "Chưa có gì để xem — tab đang trắng."
 }

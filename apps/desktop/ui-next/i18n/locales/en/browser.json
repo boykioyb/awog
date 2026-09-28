@@ -39,6 +39,8 @@
   "browser.pip.move": "Drag to move — arrows nudge",
   "browser.pip.resize": "Resize",
   "browser.pip.toPanel": "Back to the panel",
+  "browser.pip.minimize": "Minimize",
+  "browser.pip.restore": "Expand",
   "browser.pip.close": "Close Picture in Picture",
   "browser.pip.empty": "Nothing to show — the tab is blank."
 }

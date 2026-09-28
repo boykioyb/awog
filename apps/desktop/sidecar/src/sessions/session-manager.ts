@@ -452,7 +452,11 @@ class SessionManager {
       log.warn('session-manager: setGroupSpawn on unknown session', { id })
       return false
     }
-    if (config && Object.values(config).some((v) => v !== undefined)) {
+    // `{}` là marker hợp lệ — "đã duyệt điều phối, kế thừa toàn bộ cha" (xem
+    // sessions.spawn.ts: duyệt với mọi field kế thừa vẫn phải ghi marker, nếu
+    // không groupSpawnConfig vắng mặt và popover lại hiện ở lần spawn sau).
+    // Chỉ `null` mới là "ngừng điều phối" (xoá hẳn key).
+    if (config !== null) {
       m.header = { ...m.header, groupSpawnConfig: config }
     } else {
       const { groupSpawnConfig: _cleared, ...rest } = m.header

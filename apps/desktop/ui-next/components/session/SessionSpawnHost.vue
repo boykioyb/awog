@@ -623,15 +623,17 @@ async function approve() {
       if (msg && pid != null) void store.sendMessage(pid, msg)
     }
     if (req.value) {
-      await store.resolveSpawn({
+      // Chỉ chat yêu cầu vào cha khi request thật sự được héo — resolved:false
+      // (lượt cha vừa bị huỷ) hay RPC lỗi mà vẫn gửi thì cha nhận một tin "đã
+      // điều phối" mồ côi trong khi không con nào được tạo.
+      const ok = await store.resolveSpawn({
         requestId: req.value.requestId,
         approved: true,
         children: specs,
         ...(cfg ? { config: cfg } : {}),
         remember: remember.value,
       })
-      // resolveSpawn xoá request khỏi hàng — request kế tiếp (nếu có) tự hiện.
-      sendBriefToParent()
+      if (ok) sendBriefToParent()
     } else if (dlg.parentId.value != null) {
       // Bỏ tick "nhớ" trên nhóm ĐÃ nhớ ⇒ revoke luôn — checkbox phải thành lời
       // hứa thật, không được im lặng giữ config cũ.

@@ -11,6 +11,9 @@
   <!-- Popover điều phối phiên con — cổng duyệt duy nhất của tool create_session
        + đường thủ công từ menu ⋯ (docs/features/session-groups.md). -->
   <SessionSpawnHost />
+  <!-- Popover "bật tự-giao nhóm" — cổng duyệt của tool arm_group: model xin bật
+       groupAutoDeliver, người dùng duyệt một cú (spawn-approval.ts). -->
+  <SessionArmHost />
   <ConfirmDialogHost />
   <TextPromptHost />
   <!-- SSH host-key TOFU prompt: an SSH connect can be triggered from a session's

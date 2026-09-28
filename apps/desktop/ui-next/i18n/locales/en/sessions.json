@@ -49,7 +49,7 @@
   "sessions.group.autoDeliverOn": "Auto-deliver inside this group",
   "sessions.group.autoDeliverOff": "Stop auto-delivering in this group",
   "sessions.group.autoDeliverBadge": "auto",
-  "sessions.group.autoDeliverBadgeHint": "Messages between sessions in this group are handed to the agent automatically, capped at 20 turns per 30 minutes. Messages from outside the group still wait for you.",
+  "sessions.group.autoDeliverBadgeHint": "Messages between sessions in this group are handed to the agent automatically, capped at 40 turns per 30 minutes. Messages from outside the group still wait for you.",
   "sessions.grid.on": "Show as a grid with its sub-sessions",
   "sessions.grid.off": "Back to a single conversation",
   "sessions.grid.panes": "Panes",
@@ -516,5 +516,10 @@
   "sessions.spawn.generating": "Generating…",
   "sessions.spawn.genField": "Generate with AI",
   "sessions.spawn.genFailed": "Could not generate a draft — try again",
-  "sessions.spawn.menu": "Orchestrate child sessions…"
+  "sessions.spawn.menu": "Orchestrate child sessions…",
+  "sessions.arm.title": "Arm group auto-delivery",
+  "sessions.arm.sub": "The agent in \"{parent}\" asks to let this group self-run.",
+  "sessions.arm.body": "Arming means messages between sessions in this group auto-start the receiving session — children take work and reply without you pressing “Deliver” each time (capped at 40 turns per 30 minutes). Messages from outside the group still wait for you. You can turn it off anytime via the root session's right-click menu.",
+  "sessions.arm.approve": "Arm the group",
+  "sessions.arm.deny": "Decline"
 }

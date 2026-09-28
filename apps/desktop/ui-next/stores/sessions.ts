@@ -44,6 +44,7 @@ import type {
   SlashCommandRef,
   SpawnChildSpec,
   SpawnSessionConfig,
+  SessionArmRequest,
   SessionSpawnRequest,
   SshApprovalMode,
   StepBlock,
@@ -386,7 +387,18 @@ const isSpawnRequestPayload = (raw: unknown): raw is SpawnRequestPayload => {
     typeof p.requestId === 'string' &&
     typeof p.sessionId === 'string' &&
     typeof p.rootId === 'string' &&
-    Array.isArray(p.children)
+    Array.isArray(p.children) &&
+    // Một item thiếu title/prompt sẽ ném trong canSubmit/approve (`.trim()` trên
+    // undefined) — sàng ngay tại cổng thay vì để popover render một draft hỏng.
+    p.children.every(
+      (c) =>
+        !!c &&
+        typeof c === 'object' &&
+        typeof (c as SpawnChildSpec).title === 'string' &&
+        typeof (c as SpawnChildSpec).prompt === 'string' &&
+        ((c as SpawnChildSpec).role === undefined ||
+          typeof (c as SpawnChildSpec).role === 'string'),
+    )
   )
 }
 // `session.spawn-closed` — request tan mà không qua popover (lượt bị huỷ). Chỉ
@@ -397,6 +409,27 @@ const isSpawnClosedPayload = (raw: unknown): raw is SpawnClosedPayload => {
   const p = raw as Record<string, unknown>
   return typeof p.requestId === 'string' && typeof p.sessionId === 'string'
 }
+
+// `session.arm-request`/`session.arm-closed` — tool `arm_group` park chờ một cú
+// duyệt bật tự-giao nhóm (spawn-approval.ts). Cùng khuôn spawn ở trên nhưng
+// payload chỉ mang rootId + câu `reason` của model.
+type ArmRequestPayload = {
+  requestId: string
+  sessionId: string
+  rootId: string
+  reason?: string
+}
+const isArmRequestPayload = (raw: unknown): raw is ArmRequestPayload => {
+  if (!raw || typeof raw !== 'object') return false
+  const p = raw as Record<string, unknown>
+  return (
+    typeof p.requestId === 'string' &&
+    typeof p.sessionId === 'string' &&
+    typeof p.rootId === 'string' &&
+    (p.reason === undefined || typeof p.reason === 'string')
+  )
+}
+const isArmClosedPayload = isSpawnClosedPayload
 
 // Terminal "turn finished" event (sidecar emits it right before returning the
 // sessions.sendMessage result). We only need the ids to clear the streaming
@@ -2647,12 +2680,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (text) s.draft = text
     else delete s.draft
   }
+  // Một sendMessage có thể đang nằm trong preamble async (đọc quota +
+  // auto-compact) TRƯỚC khi placeholder streaming tồn tại. Một lệnh send thứ
+  // hai trong cửa sổ đó sẽ vượt qua được guard "có bubble đang streaming" phía
+  // dưới và mở LƯỢT THỨ HAI — đúng con đường tới lỗi dual-finalize (hai tin
+  // inbox tự giao tới sát nhau là kịch bản điển hình). Latch này bưng khe hở
+  // đó: thêm khi sendMessage vào preamble, nhả ngay khi placeholder được push
+  // trong runEngineTurn (giống autoWakeStarting của đường wake).
+  const sendInFlight = new Set<number>()
+
   // Drain the head of the queue as a fresh turn (FIFO). Called once a turn settles
   // and the session is idle/done.
-  function drainQueue(id: number) {
+  async function drainQueue(id: number) {
     const s = byId(id)
     if (!s) return
-    if (s.status === 'streaming' || s.status === 'awaiting') return
+    if (s.status === 'streaming' || s.status === 'awaiting' || sendInFlight.has(id)) return
     if (!s.queue || !s.queue.length) {
       // Idle with an empty queue — the moment to auto-continue a finished
       // background command (ADR 0066 P2). No-op unless the setting is on and a
@@ -2660,11 +2702,28 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (s.engineId) maybeAutoContinue(s.engineId)
       return
     }
-    const head = s.queue.shift()
-    if (!s.queue.length) delete s.queue
+    // Cổng quota phải đứng TRƯỚC khi shift: bản cũ shift trước rồi sendMessage
+    // từ chối bên trong → tin hàng đợi (kể cả lời giao việc auto-deliver) bốc
+    // hơi âm thầm — phiên trông "chưa chạy" mà không có chip nào để giao lại.
+    // Bị chặn thì tin NẰM LẠI trong hàng đợi, thấy rõ trên UI, drain lại khi
+    // hết hạn quota.
+    if (await checkSendBlocked(id)) {
+      notifyBlocked?.(accountById(s.accountId ?? '')?.label ?? '', 'send')
+      return
+    }
+    // Re-đọc sau await: trạng thái/hàng đợi có thể đã đổi trong lúc chờ quota —
+    // tra lại thay vì tin bản snapshot trước await.
+    const fresh = byId(id)
+    if (!fresh) return
+    if (fresh.status === 'streaming' || fresh.status === 'awaiting' || sendInFlight.has(id)) {
+      return
+    }
+    const head = fresh.queue?.shift()
+    if (!fresh.queue?.length) delete fresh.queue
     // Pass the item's own quote snapshot as an override so draining doesn't consume
     // (or get clobbered by) any quotes the user added to the composer meanwhile.
-    if (head) void sendMessage(id, head.text, head.att, head.command, head.quotes)
+    if (head)
+      void sendMessage(id, head.text, head.att, head.command, head.quotes, head.autoDelivered)
   }
   // "Send now" from a queued chip: stop the current turn and run THIS queued message
   // immediately (jump the queue). The sidecar serializes turns per session
@@ -2677,10 +2736,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     const queue = s?.queue
     const item = queue?.[index]
     if (!s || !queue || !item) return
+    // Cổng quota trước khi splice — bị chặn thì tin giữ nguyên chỗ trong hàng
+    // (splice rồi mới chặn sẽ nuốt mất nó, y hệt lỗi drainQueue cũ).
+    if (await checkSendBlocked(id)) {
+      notifyBlocked?.(accountById(s.accountId ?? '')?.label ?? '', 'send')
+      return
+    }
     queue.splice(index, 1)
     if (!queue.length) delete s.queue
     await cancel(id)
-    await sendMessage(id, item.text, item.att, item.command, item.quotes)
+    await sendMessage(id, item.text, item.att, item.command, item.quotes, item.autoDelivered)
   }
 
   // ── Turn runner ──────────────────────────────────────────────────────────────
@@ -3257,7 +3322,11 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Số lượt một NHÓM được tự khởi động trong cửa sổ đó. Đây là trần về TIỀN, khác hẳn
   // trần hop của sidecar (trần đó đo độ dài một chuỗi qua lại). Chạm trần ⇒ tin rơi
   // về hàng đợi hộp thư và chờ người bấm, KHÔNG bị vứt.
-  const MAX_AUTO_DELIVERS_PER_GROUP = 20
+  // 40 (không phải 20): một workflow đã được duyệt đi qua lại nhiều — một vòng
+  // cha→con→báo-về→giao-tiếp của ê-kíp 4 phiên đã là ~8 lượt; 20 nghẹt ngay vòng
+  // thứ hai của việc dùng THẬT. Trần này chỉ để phanh vòng lặp chạy loạn, không
+  // phải để giới hạn một workflow người dùng đã bật.
+  const MAX_AUTO_DELIVERS_PER_GROUP = 40
   // Chỉ trong bộ nhớ, như sổ cái bên sidecar: đây là hàng rào cho một vòng lặp đang
   // quay, không phải lịch sử.
   const autoDeliverLedger = new Map<string, number[]>()
@@ -3277,32 +3346,87 @@ export const useSessionsStore = defineStore('sessions', () => {
   }
 
   // Tin này có được tự giao không? Đúng BỐN điều kiện, thiếu một là về nút bấm tay.
+  // Chỉ WARN cho tin TRONG NHÓM đáng lẽ tự giao nhưng bị chặn — tin thường (người
+  // dùng forward, phiên ngoài nhóm) rơi về chip là hành vi đúng, không phải lỗi.
   function mayAutoDeliver(fromEngineId: string | null, toEngineId: string): boolean {
     // 1. Phải đến TỪ một phiên. Nguồn 'external' (CI, lời tự hẹn) có fromSessionId
     //    null — chúng không thuộc nhóm nào nên không bao giờ tự chạy.
     if (!fromEngineId) return false
     const from = byEngineId(fromEngineId)
     const to = byEngineId(toEngineId)
-    if (!from || !to) return false
-    // 2. Cùng một nhóm.
+    if (!from || !to) {
+      console.warn('[inbox] auto-deliver skipped — endpoint not in store', {
+        from: fromEngineId,
+        to: toEngineId,
+        fromFound: !!from,
+        toFound: !!to,
+      })
+      return false
+    }
+    // 2. Cùng một nhóm — ngoài nhóm là đường tay bình thường, không warn.
     const root = groupRootEid(to)
     if (!root || groupRootEid(from) !== root) return false
     // 3. Gốc nhóm đã bật công tắc.
-    if (!byEngineId(root)?.groupAutoDeliver) return false
+    if (!byEngineId(root)?.groupAutoDeliver) {
+      console.warn('[inbox] group message parked for manual delivery — group not armed', {
+        root,
+        to: toEngineId,
+      })
+      return false
+    }
     // 4. Nhóm chưa chạm trần trong cửa sổ.
     const now = Date.now()
     const recent = (autoDeliverLedger.get(root) ?? []).filter(
       (t) => now - t <= AUTO_DELIVER_WINDOW_MS,
     )
     autoDeliverLedger.set(root, recent)
-    return recent.length < MAX_AUTO_DELIVERS_PER_GROUP
+    if (recent.length >= MAX_AUTO_DELIVERS_PER_GROUP) {
+      console.warn('[inbox] group auto-deliver cap reached — message parked for manual delivery', {
+        root,
+        to: toEngineId,
+        count: recent.length,
+      })
+      return false
+    }
+    return true
   }
 
+  // Ghi một lượt tự giao ĐÃ mở turn vào sổ trần của nhóm. Chỉ được gọi từ
+  // runEngineTurn khi placeholder streaming đã push — tin chỉ mới xếp hàng
+  // (phiên đích đang bận) chưa tiêu tiền nên chưa được tính.
   function noteAutoDeliver(toEngineId: string): void {
     const to = byEngineId(toEngineId)
     const root = to ? groupRootEid(to) : undefined
     if (!root) return
     autoDeliverLedger.set(root, [...(autoDeliverLedger.get(root) ?? []), Date.now()])
+  }
+
+  // Nhóm vừa được arm ⇒ mọi tin TRONG NHÓM đang nằm chờ bấm tay phải được nhả ra:
+  // arm chính là quyết định "workflow này tự chạy" của người dùng, nên các lời
+  // giao việc/báo cáo park trước đó (ví dụ gửi khi cờ chưa kịp đứng) không được
+  // ở lì trong hộp thư. Chỉ đụng tin phiên↔phiên cùng nhóm — tin người dùng
+  // forward hay nguồn ngoài vẫn chờ bấm tay như thường. Tin chuyển sang queue
+  // mang cờ autoDelivered nên vẫn tính trần đúng lúc turn thật mở.
+  function flushParkedGroupInbox(rootEid: string): void {
+    for (const [engineId, msgs] of Object.entries(pendingInbox.value)) {
+      const target = byEngineId(engineId)
+      if (!target || groupRootEid(target) !== rootEid) continue
+      const inGroup = msgs.filter((m) => {
+        if (m.origin !== 'session' || !m.fromSessionId) return false
+        const from = byEngineId(m.fromSessionId)
+        return !!from && groupRootEid(from) === rootEid
+      })
+      if (!inGroup.length) continue
+      const parked = new Set(inGroup.map((m) => m.id))
+      const rest = msgs.filter((m) => !parked.has(m.id))
+      if (rest.length) pendingInbox.value[engineId] = rest
+      else delete pendingInbox.value[engineId]
+      target.queue = [
+        ...(target.queue ?? []),
+        ...inGroup.map((m) => ({ text: m.block, autoDelivered: true })),
+      ]
+      void drainQueue(target.id)
+    }
   }
 
   // Xếp một tin đã tới vào hàng đợi của phiên đích và cho nó chạy. Trả về true khi
@@ -3314,21 +3438,28 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Đẩy thẳng vào `s.queue` thay vì gọi `enqueue()`: enqueue còn CHỤP `s.followups`
     // vào item rồi xoá đi, nên một lượt tự giao sẽ cuỗm mất mấy đoạn trích người dùng
     // đang dựng dở trong composer của phiên đó.
-    s.queue = [...(s.queue ?? []), { text: msg.block }]
-    noteAutoDeliver(engineId)
+    s.queue = [...(s.queue ?? []), { text: msg.block, autoDelivered: true }]
     // Đang bận ⇒ không gọi drainQueue: lượt hiện tại kết thúc sạch sẽ tự gọi. Đang
     // rảnh thì không ai gọi hộ, nên gọi ngay tại đây.
-    if (idle) drainQueue(s.id)
+    if (idle) void drainQueue(s.id)
     return true
   }
 
   // Bật/tắt tự giao cho NHÓM mà phiên này làm gốc. Cờ nằm trên phiên gốc, nên UI chỉ
-  // nên hiện công tắc ở đó.
-  function toggleGroupAutoDeliver(id: number) {
+  // nên hiện công tắc ở đó. Ghi qua RPC RIÊNG (không qua update-metadata): patch
+  // spread không phân biệt được "tắt có chủ đích" với "cờ true cũ của cửa sổ chưa
+  // nghe disarm" — còn RPC này emit `session.group-armed` kèm giá trị mới nên mọi
+  // cửa sổ/popout hội tụ ngay. Optimistic + rollback y hệt resolveSpawn.
+  async function toggleGroupAutoDeliver(id: number): Promise<void> {
     const s = byId(id)
-    if (!s) return
-    s.groupAutoDeliver = !s.groupAutoDeliver
-    if (useIpc) pushUpsert(s, 'update-metadata')
+    if (!s?.engineId || !useIpc) return
+    const next = !s.groupAutoDeliver
+    s.groupAutoDeliver = next
+    const res = await pushRequest<{ ok: boolean }>('sessions.setGroupAutoDeliver', {
+      id: s.engineId,
+      value: next,
+    })
+    if (!res?.ok) s.groupAutoDeliver = !next
   }
 
   function dismissInboxMessage(engineId: string, messageId: string): void {
@@ -3369,17 +3500,50 @@ export const useSessionsStore = defineStore('sessions', () => {
     const prev = root ? { auto: root.groupAutoDeliver, spawn: root.groupSpawnConfig } : null
     if (input.approved && root) {
       root.groupAutoDeliver = true
-      if (input.remember && input.config) root.groupSpawnConfig = input.config
+      // `remember` mà không mang config = "nhớ: kế thừa toàn bộ" — sidecar ghi
+      // marker `{}` thay vì không ghi gì, nên local phải đặt `{}` cho khớp.
+      if (input.remember) root.groupSpawnConfig = input.config ?? {}
     }
     const res = await pushRequest<{ resolved: boolean }>('sessions.spawnResolve', input)
-    if (!res) {
+    // Rollback cả khi `resolved === false` (request đã tan — abort vừa hạ lượt):
+    // sidecar không arm gì cả nên cờ local không được đứng một mình. Nếu một cửa
+    // sổ khác đã duyệt thật thì event `session.group-armed` sẽ đặt lại cờ sau.
+    if (!res || !res.resolved) {
       if (root && prev) {
         root.groupAutoDeliver = prev.auto
         root.groupSpawnConfig = prev.spawn
       }
-      return false
+      if (!res) return false
     }
     pendingSpawns.value = pendingSpawns.value.filter((r) => r.requestId !== input.requestId)
+    return res.resolved
+  }
+
+  // ── Popover arm nhóm (session.arm-request — tool `arm_group`) ────────────────
+  // Cùng hàng đợi như pendingSpawns nhưng cho một quyết định nhẹ hơn: bật cờ
+  // `groupAutoDeliver` trên gốc. Model KHÔNG tự arm được — đây là đường thứ ba
+  // giữa "nhờ user bấm công tắc" và "đi qua popover spawn".
+  const pendingArms = ref<SessionArmRequest[]>([])
+  const pendingArm = computed(() => pendingArms.value[0] ?? null)
+
+  // Trả lời một arm-request. Duyệt ⇒ optimistic bật cờ trên gốc trước RPC (tin
+  // nhóm park có thể được flush cùng tick event `group-armed` tới); RPC thất
+  // bại/request đã tan ⇒ hoàn nguyên, event sẽ đặt lại nếu cửa sổ khác duyệt.
+  async function resolveArm(input: {
+    requestId: string
+    approved: boolean
+    message?: string
+  }): Promise<boolean> {
+    const req = pendingArms.value.find((r) => r.requestId === input.requestId)
+    const root = req ? byEngineId(req.rootId) : undefined
+    const prev = root ? root.groupAutoDeliver : null
+    if (input.approved && root) root.groupAutoDeliver = true
+    const res = await pushRequest<{ resolved: boolean }>('sessions.armResolve', input)
+    if (!res || !res.resolved) {
+      if (root) root.groupAutoDeliver = prev ?? undefined
+      if (!res) return false
+    }
+    pendingArms.value = pendingArms.value.filter((r) => r.requestId !== input.requestId)
     return res.resolved
   }
 
@@ -3401,7 +3565,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     const prev = root ? { auto: root.groupAutoDeliver, spawn: root.groupSpawnConfig } : null
     if (root) {
       root.groupAutoDeliver = true
-      if (input.remember && input.config) root.groupSpawnConfig = input.config
+      // Giống resolveSpawn: remember + không config ⇒ marker `{}` (xem trên).
+      if (input.remember) root.groupSpawnConfig = input.config ?? {}
     }
     const res = await pushRequest<{
       created: { id: string; title: string }[]
@@ -3599,6 +3764,32 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!useIpc || unlisten) return
     try {
       unlisten = await sc.onEvent((evt) => {
+        // `session.group-armed` phải đứng TRƯỚC cổng sở hữu: cờ `groupAutoDeliver`
+        // nằm trên phiên GỐC, nhưng quyết định tự giao (mayAutoDeliver) do cửa sổ
+        // sở hữu phiên CON đưa ra — nếu gốc đang popout ở cửa sổ khác thì event bị
+        // gate chặn và con vẫn rơi vào chip chờ. Set cờ là idempotent, không phải
+        // live-stream nên không có chuyện apply kép.
+        if (evt.type === 'session.group-armed') {
+          const gp = evt.payload as {
+            sessionId?: string
+            groupAutoDeliver?: boolean
+            groupSpawnConfig?: SpawnSessionConfig
+          } | null
+          const gs = typeof gp?.sessionId === 'string' ? byEngineId(gp.sessionId) : undefined
+          if (gs && gp?.sessionId) {
+            // Payload mang giá trị tường minh (true khi arm, false khi toggle
+            // tắt qua sessions.setGroupAutoDeliver); vắng mặt coi như arm.
+            gs.groupAutoDeliver = gp.groupAutoDeliver !== false
+            // Config "đã nhớ" đi kèm event (kể cả `{}` = duyệt-mọi-field-kế-thừa)
+            // để cửa sổ khác không phải chờ reload mới thấy nhóm đã được nhớ.
+            if (gp.groupSpawnConfig) gs.groupSpawnConfig = gp.groupSpawnConfig
+            // Arm (không phải disarm): nhả luôn các tin trong nhóm đã park trước
+            // đó — với một ê-kíp được spawn khi cờ chưa kịp đứng, đây là cú hích
+            // cuối để cả workflow chạy thật thay vì nằm chờ bấm tay từng con.
+            if (gs.groupAutoDeliver) flushParkedGroupInbox(gp.sessionId)
+          }
+          return
+        }
         // Ownership gate (session popout hand-off). Engine events reach EVERY window,
         // but a session is live in exactly one of them: ignore the stream of a session
         // this renderer doesn't own, so a handed-off turn is never applied twice (two
@@ -3740,6 +3931,28 @@ export const useSessionsStore = defineStore('sessions', () => {
           pendingSpawns.value = pendingSpawns.value.filter((r) => r.requestId !== closed.requestId)
           return
         }
+        // Tool `arm_group` park chờ một cú duyệt bật tự-giao — cổng sở hữu đã
+        // lọc theo payload.sessionId = phiên đang gọi, y hệt spawn-request.
+        if (evt.type === 'session.arm-request') {
+          if (!isArmRequestPayload(evt.payload)) return
+          const p = evt.payload
+          pendingArms.value = [
+            ...pendingArms.value.filter((r) => r.requestId !== p.requestId),
+            {
+              requestId: p.requestId,
+              sessionId: p.sessionId,
+              rootId: p.rootId,
+              ...(typeof p.reason === 'string' ? { reason: p.reason } : {}),
+            },
+          ]
+          return
+        }
+        if (evt.type === 'session.arm-closed') {
+          if (!isArmClosedPayload(evt.payload)) return
+          const closed = evt.payload
+          pendingArms.value = pendingArms.value.filter((r) => r.requestId !== closed.requestId)
+          return
+        }
         if (evt.type === 'session.inbox-message') {
           if (!isInboxPayload(evt.payload)) return
           const p = evt.payload
@@ -3853,7 +4066,7 @@ export const useSessionsStore = defineStore('sessions', () => {
               p.stopReason !== 'error' &&
               p.stopReason !== 'budget-exceeded' &&
               p.stopReason !== 'aborted'
-            if (clean) drainQueue(s.id)
+            if (clean) void drainQueue(s.id)
           }
           return
         }
@@ -4005,8 +4218,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     // omitted only for sessions that never linked a host (undefined). See setAboutSshHost.
     if (s.aboutSshHostId !== undefined) session.aboutSshHostId = s.aboutSshHostId
     if (s.aboutGhUrl) session.aboutGhUrl = s.aboutGhUrl
-    // Gửi khi ĐÃ ĐỊNH NGHĨA (kể cả false) để tắt công tắc cũng persist được.
-    if (s.groupAutoDeliver !== undefined) session.groupAutoDeliver = s.groupAutoDeliver
+    // `groupAutoDeliver` CỐ Ý không gửi: đường ghi duy nhất là RPC
+    // `sessions.setGroupAutoDeliver` (giống `infra`/`groupParentId` ngay bên
+    // dưới) — một bản `true` cũ của cửa sổ chưa nghe disarm đi qua đây sẽ lặng
+    // lẽ hồi sinh cờ vừa được tắt.
     // CHỈ ở 'create': sau đó đường ghi duy nhất là infra.setSessionContext (sidecar
     // cũng bỏ qua field này ở nhánh update-metadata). Gửi kèm mọi lần đổi tên/ghim
     // thì bản `infra` cũ của cửa sổ này sẽ ghi đè lần đổi vừa làm ở cửa sổ kia.
@@ -4067,6 +4282,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // passes the item's own quotes). When given, the live set is left untouched — the
     // user may have added new quotes for their next message meanwhile.
     quotesOverride?: Followup[],
+    // Item này đến từ đường tự giao của nhóm — sổ trần ghi khi turn THẬT khởi
+    // động (xem runEngineTurn), giữ nguyên cờ qua mọi lần xếp lại hàng.
+    autoDelivered?: boolean,
   ) {
     const s = byId(id)
     const trimmed = text.trim()
@@ -4074,12 +4292,29 @@ export const useSessionsStore = defineStore('sessions', () => {
     const quotes = quotesOverride ?? s?.followups ?? []
     if (!s || (!trimmed && atts.length === 0 && quotes.length === 0)) return
 
+    // Một send đang nằm trong preamble async của chính session này → xếp lại
+    // ĐẦU hàng đợi (đúng ngữ nghĩa của guard streaming phía dưới) thay vì để
+    // hai call rẽ nhánh song song — hai lượt gọi `sessions.sendMessage` cho
+    // cùng một phiên là đầu nguồn của dual-finalize.
+    if (sendInFlight.has(id)) {
+      const requeued: QueuedMessage = { text: trimmed }
+      if (atts.length) requeued.att = [...atts]
+      if (command) requeued.command = command
+      if (quotes.length) requeued.quotes = [...quotes]
+      if (autoDelivered) requeued.autoDelivered = true
+      s.queue = [requeued, ...(s.queue ?? [])]
+      if (!quotesOverride) s.followups = []
+      return
+    }
+    sendInFlight.add(id)
+
     // Usage-quota gate (Settings → Usage quota): when blocking is on and this session's
     // account has crossed its 5-hour threshold, refuse to start a turn — the message is
     // NOT added. Awaits a fresh usage read so it blocks reliably even right after app
     // open. Same gate as create(), extended to new messages; backstop for every
     // turn-starting path (the composer also gates sendNow to preserve the draft).
     if (await checkSendBlocked(id)) {
+      sendInFlight.delete(id)
       notifyBlocked?.(accountById(s.accountId ?? '')?.label ?? '', 'send')
       return
     }
@@ -4107,10 +4342,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     // of order. Re-queue at the FRONT so this message runs next, in FIFO order, once the
     // in-flight turn settles (drainQueue fires again on that turn's clean finish).
     if (s.msgs.some((m) => m.role === 'assistant' && m.streaming)) {
+      sendInFlight.delete(id)
       const requeued: QueuedMessage = { text: trimmed }
       if (atts.length) requeued.att = [...atts]
       if (command) requeued.command = command
       if (quotes.length) requeued.quotes = [...quotes]
+      if (autoDelivered) requeued.autoDelivered = true
       s.queue = [requeued, ...(s.queue ?? [])]
       if (!quotesOverride) s.followups = []
       return
@@ -4144,6 +4381,7 @@ export const useSessionsStore = defineStore('sessions', () => {
 
     // No bridge = no runtime. Surface that instead of inventing an answer.
     if (!useIpc) {
+      sendInFlight.delete(id)
       s.msgs.push({ role: 'system', text: ENGINE_UNAVAILABLE, at: 'vừa xong' })
       s.status = 'error'
       return
@@ -4155,9 +4393,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     // that had already happened. Awaited — compaction must land before sendMessage
     // reads the checkpoint back from the persisted session. The prior turns are what
     // gets summarised; this message is not persisted yet, so it is never cut away.
-    await maybeAutoCompact(s)
+    try {
+      await maybeAutoCompact(s)
 
-    await runEngineTurn(s, modelText, atts, userMessageId, nativeCommand)
+      await runEngineTurn(s, modelText, atts, userMessageId, nativeCommand, autoDelivered)
+    } finally {
+      // Backstop: runEngineTurn nhả latch ngay khi push placeholder (đường
+      // chính) — finally này chỉ còn việc gỡ latch khi nó ném TRƯỚC chỗ đó
+      // (ví dụ maybeAutoCompact/reject), nếu không session khóa gửi mãi mãi.
+      sendInFlight.delete(id)
+    }
   }
 
   // Drive one real turn over IPC: placeholder bubble + stream subscription folds
@@ -4172,6 +4417,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // `text` is one of the Claude CLI's own commands (/goal, /context…) and must
     // reach the CLI verbatim — see the sidecar's RunNonStreamArgs.nativeCommand.
     nativeCommand?: boolean,
+    // Turn này là một lượt tự giao của nhóm — sổ trần auto-deliver ghi ở đây,
+    // ngay khi placeholder được push = turn THẬT đã khởi động.
+    autoDelivered?: boolean,
   ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
@@ -4205,6 +4453,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     // The turn is now genuinely streaming — release the auto-wake launch latch so
     // sendMessage's own concurrency guard governs from here (ADR 0066 P2).
     if (s.engineId) autoWakeStarting.delete(s.engineId)
+    // Cùng lý do nhả latch send-preamble: từ đây guard "đang streaming" trong
+    // sendMessage lo phần còn lại của race.
+    sendInFlight.delete(s.id)
+    // Đếm trần auto-deliver tại đây — lúc turn THẬT khởi động — thay vì lúc tin
+    // chỉ mới xếp hàng: một lời giao việc đến phiên đang bận phải chờ lượt hiện
+    // tại xong, đếm ngay từ đầu sẽ đốt trần của nhóm vào các tin chưa từng chạy.
+    if (autoDelivered && s.engineId) noteAutoDeliver(s.engineId)
 
     // Kick off the AI title NOW, in parallel with the turn — titling from the user's
     // opening message (passed directly, no dependency on the turn finishing or the
@@ -4360,7 +4615,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       s.status = statusFromMessages(s.msgs)
       flagSettledUnread(s)
       // Clean finish → drain the next queued message FIFO.
-      if (result.stopReason !== 'error' && !refused) drainQueue(s.id)
+      if (result.stopReason !== 'error' && !refused) void drainQueue(s.id)
       // Fallback: if the early (on-send) title kickoff failed/raced, retry now that
       // the full first exchange is persisted (uses user + agent text from disk).
       // Deduped via kickoffAutoTitle — a no-op when the early one already landed, and
@@ -5232,6 +5487,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     // điều phối phiên con (popover spawn — docs/features/session-groups.md)
     pendingSpawn,
     resolveSpawn,
+    pendingArm,
+    resolveArm,
     spawnChildrenFromUi,
     generateSpawnDraft,
     setGroupSpawnConfig,

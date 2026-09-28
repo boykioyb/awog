@@ -1221,8 +1221,27 @@ watch(
   },
   { immediate: true },
 )
+// "View Browser đang thực sự hiển thị" — cờ cho auto-PiP (useBrowserPip). Khác
+// openViews (chỉ liệt kê view MỞ): để che được trang thì view phải đang là tab
+// active của dock nó, workspace panel phải đang mở (wpOpen=false = panel sập,
+// view vẫn nằm trong openViews nhưng không render), VÀ session này đang được
+// xem. Đổi route / đổi session (bị KeepAlive giấu) thì deactivate → cờ rơi →
+// card được phép hiện lại.
+const browserViewActive = computed(() => {
+  if (!isActive.value || !wpOpen.value || !openViews.value.includes('Browser')) return false
+  const side = settings.workspaceDockOf('Browser')
+  const active =
+    side === 'left' ? activeLeft.value : side === 'right' ? activeRight.value : activeBottom.value
+  return active === 'Browser'
+})
+watch(browserViewActive, (v) => wpBridge.publishBrowserActive(v), { immediate: true })
+onDeactivated(() => wpBridge.publishBrowserActive(false))
+onActivated(() => wpBridge.publishBrowserActive(browserViewActive.value))
 onBeforeUnmount(() => {
-  if (isActive.value) wpBridge.publishOpenViews([])
+  if (isActive.value) {
+    wpBridge.publishOpenViews([])
+    wpBridge.publishBrowserActive(false)
+  }
 })
 // Panel "×": close every view docked on that side.
 function closeSide(side: WorkspaceDockSide) {

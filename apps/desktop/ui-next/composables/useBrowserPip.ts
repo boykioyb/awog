@@ -1,5 +1,6 @@
 import type { AwogBrowserTabList } from '~/types/awog-bridge'
 import { useSettingsStore } from '~/stores/settings'
+import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 
 // Browser Picture-in-Picture — bề mặt THỨ BA của trình duyệt nhúng (ADR 0086),
 // cạnh view "Browser" của workspace panel và cửa sổ popout: một card nổi TRONG
@@ -36,6 +37,11 @@ const open = ref(false)
 // Người dùng đã gạt card trong "burst" hiện tại → auto-open im cho tới khi list
 // rỗng (hết đợt hoạt động) hoặc họ tự gọi `openPip`/`togglePip`.
 const dismissed = ref(false)
+// Thu nhỏ = card sập còn thanh tiêu đề, view native park về holder (trang vẫn
+// chạy nền — `backgroundThrottling:false`) chứ KHÔNG phải đóng: `dismissed`
+// không bật, chủ khác (panel/popout) được quyền giành view, và bấm restore là
+// giành lại. Không persist — mở lại card là muốn thấy ngay.
+const minimized = ref(false)
 const rect = reactive<PipRect>({ x: 0, y: 0, w: DEFAULT_W, h: DEFAULT_H })
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), hi)
@@ -97,7 +103,15 @@ const openPip = (): void => {
   // "Chủ động mở" xoá cờ dismissed — người dùng đã đổi ý, auto-open lại được
   // phép chạy tiếp cho đợt này nữa.
   dismissed.value = false
+  minimized.value = false
   open.value = true
+  // MỞ PiP = "chuyển browser ra card nổi": một trang chỉ sống ở MỘT bề mặt, nên
+  // view Browser đang mở trong panel thì đóng luôn — để nó lại thì cả cửa sổ
+  // thấy card trang + placeholder "elsewhere" trông như render trùng (lỗi thật
+  // 2026-09-28). "Trả về panel" mở lại đúng view này. Cú đóng-view này KHÔNG
+  // tính là dismiss — watcher `requested` bên dưới skip khi `open` đã bật.
+  const { openViews, toggleView } = useWorkspacePanel()
+  if (openViews.value.includes('Browser')) toggleView('Browser')
 }
 
 // Đóng "theo hệ thống": burst hết, view bị panel/popout giành lại, popout mở.
@@ -118,6 +132,10 @@ const togglePip = (): void => {
   else openPip()
 }
 
+const toggleMinimize = (): void => {
+  minimized.value = !minimized.value
+}
+
 // Phán đoán auto-open trên một lần broadcast `browser:changed`.
 const maybeAutoPip = (list: AwogBrowserTabList): void => {
   // Hết burst: thu card (nếu đang mở) + trả quyền auto-open cho đợt sau.
@@ -128,6 +146,15 @@ const maybeAutoPip = (list: AwogBrowserTabList): void => {
   }
   if (!useSettingsStore().sessions.browserAutoPip) return
   if (open.value || dismissed.value) return
+  // View Browser đang HIỂN THỊ trong panel của session hiện tại → panel là nhà
+  // của nó, card không được nhảy vào giành. `browserActive` (khác openViews —
+  // chỉ true khi view là tab ACTIVE của dock và session đang được xem) cover đúng
+  // race thật (2026-09-28): `openInApp` của useLinkOpen mở view + tạo tab cùng
+  // lúc, event `changed` tới trước khi panel kịp attach (`shown` còn false) →
+  // PiP giành view, panel vỡ thành "elsewhere". Tab Browser đang park hay page
+  // bị KeepAlive giấu thì cờ false → card vẫn được phép hiện (đúng semantics
+  // "không ai đang hiển thị trang").
+  if (useWorkspacePanel().browserActive.value) return
   const active = list.tabs.find((t) => t.tabId === list.activeTabId)
   // `shown`/`shownElsewhere` đã là per-window của main: cả hai cùng false nghĩa
   // là KHÔNG bề mặt nào — panel, dock mép kia, PiP, popout — đang hiển thị trang.
@@ -137,6 +164,7 @@ const maybeAutoPip = (list: AwogBrowserTabList): void => {
   // mỗi khi agent mở tab là đúng cái phiền mà PiP được sinh ra để xoá.
   const url = active.url.trim()
   if (!url || url === 'about:blank') return
+  minimized.value = false
   open.value = true
 }
 
@@ -146,6 +174,25 @@ const init = (): void => {
   initialized = true
   loadGeometry()
   window.addEventListener('resize', clampToWindow)
+  const { requested, openViews } = useWorkspacePanel()
+  // User vừa ĐÓNG view Browser của panel (nút × của chrome hay chip status bar,
+  // cả hai đều đi qua `requested`) → coi như "giấu trình duyệt đi": nếu để mặc
+  // định, `changed` kế tiếp sẽ thấy view mồ côi và auto-open bật card lên NGAY
+  // — đúng cái "tôi vừa đóng nó" gây khó chịu nhất. `requested` chỉ bắn trên
+  // cú toggle tường minh nên đổi session (publish openViews mới) không bị cuốn
+  // theo. Toggle này mở view thì danh sách chưa chứa 'Browser' → không chạm.
+  //
+  // DETACHED scope: init() chạy trong setup của component gọi đầu tiên — nếu là
+  // WorkspaceBrowser thì đóng view sẽ unmount nó và giết luôn watcher này.
+  const scope = effectScope(true)
+  scope.run(() => {
+    watch(requested, (req) => {
+      // `open` đã bật ⇒ cú đóng view này là của chính vụ move trong openPip (hoặc
+      // user đóng view khi card đang giữ nó — suppress cũng đúng), không tính.
+      if (req?.view !== 'Browser' || open.value) return
+      if (openViews.value.includes('Browser')) dismissed.value = true
+    })
+  })
   // `?` vì browser-dev không có bridge — mở thủ công vẫn được (card hiện trạng
   // thái unavailable), còn auto-open thì không có gì để nghe.
   const api = window.awog?.browser
@@ -160,6 +207,7 @@ export function useBrowserPip() {
   return {
     open,
     dismissed,
+    minimized,
     rect,
     setPos,
     setSize,
@@ -169,6 +217,7 @@ export function useBrowserPip() {
     closePip,
     dismissPip,
     togglePip,
+    toggleMinimize,
     maybeAutoPip,
   }
 }

@@ -20,9 +20,10 @@
 import { randomBytes } from 'node:crypto'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
-import { InboxError, oneLineLabel, postSessionMessage } from './inbox.js'
+import { InboxError, MAX_TEXT_LEN, oneLineLabel, postSessionMessage } from './inbox.js'
 import {
   createSession,
+  flushSession,
   listSessionSummaries,
   updateSessionMetadata,
 } from './store.js'
@@ -105,20 +106,33 @@ export function mergeSpawnConfig(
   return merged
 }
 
-// Phiên GỐC của nhóm chứa `sessionId` — chính nó khi nó không thuộc nhóm nào
-// hoặc đã là gốc. Trả `undefined` khi id lạ (phiên chưa lưu). Đây cũng là nơi
-// `groupSpawnConfig` được tra: popover điều phối chỉ được BỎ QUA khi gốc đã
-// nhớ một cấu hình — "duyệt một lần cho cả nhóm" là của NHÓM, không của phiên.
 // Bật "workflow tự chạy" cho nhóm của `rootId`: `groupAutoDeliver` lên gốc.
 // `updateSessionMetadata` không phát event nào — nếu chỉ ghi đĩa thì renderer
 // không biết cờ đã đứng, và tin giao việc đến ngay sau đó rơi vào chip chờ
 // "Giao cho agent" (đúng thứ cờ này sinh ra để bỏ). `session.group-armed` là
 // kênh duy nhất đẩy cờ xuống UI, nó còn vá luôn khe hở cửa sổ-popout.
-export async function armGroupAutoDeliver(rootId: string): Promise<void> {
+export async function armGroupAutoDeliver(
+  rootId: string,
+  spawnConfig?: SpawnSessionConfig,
+): Promise<void> {
   await updateSessionMetadata(rootId, { groupAutoDeliver: true })
-  emit('session.group-armed', { sessionId: rootId })
+  // Flush ngay (không chỉ debounce): cờ này là bản ghi của một lần DUYỆT —
+  // thoát app trong cửa sổ 500ms mà mất nó nghĩa là phiên con vừa đẻ reload xong
+  // lại rơi vào chip chờ "Giao cho agent" (cùng lý do với setGroup/setGroupSpawn).
+  await flushSession(rootId)
+  // Gửi kèm giá trị cờ: cùng event này mang `false` khi người dùng tắt công tắc
+  // (sessions.setGroupAutoDeliver) — payload tường minh để hai chiều hội tụ.
+  emit('session.group-armed', {
+    sessionId: rootId,
+    groupAutoDeliver: true,
+    ...(spawnConfig ? { groupSpawnConfig: spawnConfig } : {}),
+  })
 }
 
+// Phiên GỐC của nhóm chứa `sessionId` — chính nó khi không thuộc nhóm nào
+// hoặc đã là gốc. Trả `undefined` khi id lạ (phiên chưa lưu). Đây cũng là nơi
+// `groupSpawnConfig` được tra: popover điều phối chỉ được BỎ QUA khi gốc đã
+// nhớ một cấu hình — "duyệt một lần cho cả nhóm" là của NHÓM, không của phiên.
 export function groupRootOf(
   summaries: SessionSummary[],
   sessionId: string,
@@ -132,6 +146,29 @@ export function groupRootOf(
 export interface SpawnChildResult {
   id: string
   title: string
+}
+
+// Lời giao việc đầu tiên phải LUÔN qua được hộp thư: phiên con đã được tạo (và
+// đã hiện trong danh sách của người dùng) TRƯỚC khi tin này đi, nên một refusal
+// từ `postSessionMessage` để lại một phiên "mồ côi" — trông như chưa chạy, mà
+// không có chip nào để giao tay nữa, và cha thì nhận lỗi rồi có thể gọi
+// `create_session` lại (popover hỏi lại). Hai chuẩn hoá duy nhất tin này cần:
+//   • rỗng → lời giao tối thiểu nhắc nó là ai + hỏi lại cha;
+//   • dài quá trần hộp thư → cắt có dấu hiệu (không âm thầm mất phần đuôi —
+//     dòng marker cho con biết nó đang đọc bản thiếu).
+// Mọi refusal còn lại (đích lạ / đã lưu trữ / tự gửi cho mình) vẫn ném —
+// chúng là lỗi lập trình thật, không phải độ dài.
+function spawnPromptText(prompt: string, title: string, role: string): string {
+  const trimmed = prompt.trim()
+  if (!trimmed) {
+    return (
+      `You are "${title}"${role ? ` (role: ${role})` : ''}, a sub-session created under an approved orchestrated workflow. ` +
+      'Your assignment arrived empty — send_session_message back to the parent session to ask what it needs from you.'
+    )
+  }
+  if (trimmed.length <= MAX_TEXT_LEN) return trimmed
+  const marker = `\n\n[truncated — the assignment exceeded the ${MAX_TEXT_LEN}-character message limit; ask the parent session for the missing part if needed]`
+  return trimmed.slice(0, MAX_TEXT_LEN - marker.length) + marker
 }
 
 // Tạo một phiên con dưới `parentId` rồi giao việc đầu tiên cho nó.
@@ -206,9 +243,14 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
   emit('session.created', { session: summary })
 
   // Giao việc đi đúng đường của mọi tin liên phiên: khử bí mật + hàng rào nonce + ba
-  // trần. Đây là cạnh cha→con nên nó được miễn trần hop (xem isGroupHandoff).
+  // trần. Đây là cạnh cha→con nên nó được miễn trần hop (xem isGroupHandoff). Tin
+  // đi qua spawnPromptText trước — một refusal ở đây mồ côi hoá phiên vừa tạo.
   try {
-    await postSessionMessage({ from: input.parentId, to: id, text: input.prompt })
+    await postSessionMessage({
+      from: input.parentId,
+      to: id,
+      text: spawnPromptText(input.prompt, title, role),
+    })
   } catch (err) {
     // Phiên đã tạo xong: KHÔNG xoá nó đi. Người dùng vẫn mở được và tự giao việc bằng
     // tay — im lặng xoá một phiên vừa hiện ra trong danh sách còn khó hiểu hơn nhiều

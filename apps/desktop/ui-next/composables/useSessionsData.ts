@@ -620,6 +620,10 @@ export type QueuedMessage = {
   att?: SessionAttachment[]
   command?: SlashCommandRef
   quotes?: Followup[]
+  // Tin đến từ đường tự giao của nhóm (autoDeliver) — đánh dấu để sổ trần
+  // auto-deliver chỉ ghi khi item này THỰC SỰ mở turn (placeholder push trong
+  // runEngineTurn), chứ không tính lúc nó chỉ nằm chờ phiên đang bận.
+  autoDelivered?: boolean
 }
 
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.
@@ -682,6 +686,16 @@ export type SessionSpawnRequest = {
   rootId: string
   children: SpawnChildSpec[]
   goal?: string
+}
+
+// Một `session.arm-request` đang chờ người dùng — tool `arm_group` của model
+// xin bật `groupAutoDeliver` trên `rootId`. `reason` là câu giải thích của
+// model, hiện trong popover.
+export type SessionArmRequest = {
+  requestId: string
+  sessionId: string
+  rootId: string
+  reason?: string
 }
 
 // Hard cap on bookmarks per session. Mirrors MAX_BOOKMARKS in

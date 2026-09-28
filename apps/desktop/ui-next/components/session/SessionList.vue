@@ -999,7 +999,7 @@ function ctxGrid() {
   emit('select', s.id)
 }
 function ctxToggleAutoDeliver() {
-  if (ctx.value) store.toggleGroupAutoDeliver(ctx.value.session.id)
+  if (ctx.value) void store.toggleGroupAutoDeliver(ctx.value.session.id)
   ctx.value = null
 }
 function ctxUngroup() {

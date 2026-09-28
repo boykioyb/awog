@@ -35,7 +35,7 @@ Bố cục theo Claude, hai hàng: **hàng 1** = tab strip (`+` mở tab mới) 
 |---|---|---|---|
 | view Browser của panel — [WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | một hộp trong panel | `⋮` · `×` đóng view | trang (ghim · copy · dịch · trích · chọn) + split-view · mở rộng · **PiP** · popout |
 | cửa sổ popout — [pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | cả cửa sổ | `⋮` · `×` đóng cửa sổ | chỉ mục trang (dock/expand/popout vô nghĩa trong cửa sổ riêng) |
-| **card PiP** — [BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) | thân card nổi (Teleport body) | mini-bar riêng (không dùng BrowserChrome): favicon · title · panel · popout · `×` | — |
+| **card PiP** — [BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) | thân card nổi (Teleport body) | mini-bar riêng (không dùng BrowserChrome): favicon · title · **thu nhỏ** · panel · popout · `×` | — |
 
 `useEmbeddedBrowser` sống ở **bề mặt**, không ở chrome: rect dán vào hộp placeholder của chính bề mặt đó, nên mọi luật của composable (view phải đang thật sự hiện trong document, `onDeactivated`/`onActivated`, một-chủ-một-view) vẫn đo trên đúng cái hộp mà người dùng đang nhìn. Cửa sổ popout **không cần kênh IPC mới**: `browser:attach|bounds|detach` lấy cửa sổ đích từ `event.sender`, nên trang tự nhận view vào rect của mình. Nó cũng mount `AppGlobalHosts` — không có nó thì `confirm()` của "Xoá dữ liệu duyệt web", toast đường dẫn ảnh chụp và popover dịch đều im lặng trong cửa sổ đó.
 
@@ -249,6 +249,7 @@ Trọng tài `owner` của `useEmbeddedBrowser` giờ phân xử **ba** bề m�
 | Mở PiP | watcher `open` → `nextTick` → `takeOver()` — chủ động nhận `owner` rồi attach, **giật được cả view đang ở popout**; panel/dock tự chuyển `elsewhere` |
 | Đóng PiP | `v-if` gỡ viewport el → watcher viewport → `sync` → `!wanted` → nhả `owner` + `detach()` → main park view + `changed` → nhánh reclaim của `applyList` ở panel gắn lại — **không reload trang** |
 | View bị giật khi PiP mở | PiP **tự đóng**: watcher `elsewhere` bắn sau khi card đã từng giữ view (`armed`) — cú "Hiện ở đây" của panel hay một popout mới đều thu card lại thay vì để một khung trống nổi |
+| Thu nhỏ PiP (nút `−`) | `visible() = open ∧ !minimized` → `v-if` gỡ viewport → nhả `owner` + park view (trang chạy nền, `backgroundThrottling:false` — tab KHÔNG mất); card sập thành **chip neo góc phải-dưới** (favicon + title + restore/×, style `right/bottom` chứ không theo `rect` — nên drag/nudge bị gate khi đang thu), watcher `elsewhere` bị gate nên chủ khác giành view mà chip vẫn còn; bung ra (bấm chip / nút maximize / dblclick / Enter) chạy lại đúng đường `nextTick → takeOver` |
 | `list.tabs` rỗng | subscriber auto-open đóng card + reset `dismissed` |
 
 Mở PiP phải đợi `nextTick` trước `takeOver`: sync chạy khi viewport el chưa mount thì `onScreen` false ⇒ `!wanted` ⇒ nhả luôn claim vừa nhận, và lần sync sau (với view ở popout) lại dừng ở nhánh `shownElsewhere` ⇒ PiP không bao giờ giật được.
@@ -262,11 +263,19 @@ Một subscriber `browser.onChanged` duy nhất, đăng ký **lazy** ở lần `
 ```
 settings.sessions.browserAutoPip (mặc định BẬT, Settings → Workspace)
 ∧ !open ∧ !dismissed
+∧ !browserActive — cờ publish từ SessionDetail: view Browser đang là tab ACTIVE
+  của dock nó ∧ workspace panel mở ∧ session đó đang được xem
 ∧ activeTab tồn tại ∧ !activeTab.shown ∧ !activeTab.shownElsewhere
 ∧ url thật (không rỗng, không about:blank)
 ```
 
 Bấm `×` = `dismissPip()` — đóng + im auto-open tới **hết burst** (`tabs` rỗng) hoặc tới khi người dùng tự mở lại (`openPip`/`⇧⌘B` xoá cờ). `closePip()` — các đóng hệ thống (về panel, sang popout, mất owner, hết tab) — **không** đặt cờ: đóng popout xong thấy view rảnh thì card được phép quay lại. `about:blank` không auto-open: `hasPage` cũng từ chối attach nó, nên nháy một khung trống lên mỗi lần agent mở tab đúng là thứ PiP được sinh ra để xoá.
+
+Ba guard bổ sung đều là sửa-từ-lỗi-thật (2026-09-28):
+
+- **`browserActive` (không phải `openViews ∌ 'Browser'`)** — `openInApp` của `useLinkOpen` (mode `app`: bấm link → mở thẳng trình duyệt nhúng, không hỏi) mở view + tạo tab gần như cùng lúc; `changed` tới trước khi panel attach (`shown` còn false) ⇒ PiP giành view và panel vỡ thành "elsewhere" — card + sidebar hiện cùng lúc. Bản đầu gate bằng `openViews` nhưng quá rộng: nó chỉ nói view **mở**, không nói view **hiện** — một tab Browser bị park sau tab khác của dock, hay workspace panel sập (`wpOpen=false`), hay session bị KeepAlive giấu đều vẫn nằm trong `openViews` trong khi không ai nhìn thấy trang ⇒ auto-PiP bị chặn ở đúng ca chính của nó. `browserViewActive` (SessionDetail → `wpBridge.publishBrowserActive`) chỉ true khi `isActive ∧ wpOpen ∧ openViews ∋ 'Browser' ∧ tab active của dock đó là 'Browser'`, và rơi ngay qua `onDeactivated` khi page bị giấu — publish vẫn tức thời trong cú `toggleView` nên race `openInApp` vẫn bị đứng.
+- **`openPip` = move, không phải duplicate.** Mở PiP trong lúc view Browser đang mở trong panel thì `toggleView('Browser')` đóng luôn view đó — card là bề mặt của nó, một trang chỉ sống ở một chỗ. Cú đóng-view-do-openPip **không** tính là dismiss (watcher `requested` skip khi `open` đã bật). Ngược lại — **panel vừa hiện mà PiP đang giữ view → card nhường ngay**: watcher `active` của `WorkspaceBrowser` gọi `closePip()` rồi `takeOver()`; mở view đã là intent "xem ở đây", đừng bắt user bấm "Hiện ở đây" thêm lần nữa.
+- **Đóng view Browser = giấu trình duyệt → suppress auto-open.** Watcher `requested` trong `init()` (detached `effectScope` — init chạy trong setup của component gọi đầu tiên, watcher theo scope thường sẽ chết cùng component đó): một `toggleView('Browser')` mà view đang mở là một cú ĐÓNG → `dismissed=true`. Nếu không, `changed` kế tiếp lại bật card lên đúng lúc user vừa đóng nó.
 
 ## Bảo mật
 
@@ -317,8 +326,8 @@ Từ 2026-09-09 tab này còn có nút ⬇ **nhập cả profile browser thật*
 | [ui-next/composables/useSessionsData.ts](../../apps/desktop/ui-next/composables/useSessionsData.ts) | `WPVIEWS` thêm `['Browser', 'globe']` |
 | [ui-next/types/awog-bridge.d.ts](../../apps/desktop/ui-next/types/awog-bridge.d.ts) | `AwogBrowserRect` / `AwogBrowserTab` / `AwogBrowserTabList`; **+ `AwogBrowserTab.favicon?`** |
 | i18n `sessions.json` + `statusbar.json` (en/vi) | 11 + 1 key; **− `sessions.workspace.browser.elsewhere`** (tách thành 3 key mới) |
-| i18n `browser.json` (en/vi) | **Mới** — 28 key menu `⋮`/site/dịch/trích/toast; **+ 5 key: `empty.*`, `elsewhere.*`; + 7 key `pip.*`** |
-| [ui-next/composables/useBrowserPip.ts](../../apps/desktop/ui-next/composables/useBrowserPip.ts) | **Mới** — state UI cấp module của PiP (`open`/`dismissed`/`rect` + localStorage `awog.browserPip` + clamp), subscriber auto-open lazy chỉ-ở-cửa-sổ-chính |
+| i18n `browser.json` (en/vi) | **Mới** — 28 key menu `⋮`/site/dịch/trích/toast; **+ 5 key: `empty.*`, `elsewhere.*`; + 9 key `pip.*`** |
+| [ui-next/composables/useBrowserPip.ts](../../apps/desktop/ui-next/composables/useBrowserPip.ts) | **Mới** — state UI cấp module của PiP (`open`/`dismissed`/`minimized`/`rect` + localStorage `awog.browserPip` + clamp), subscriber auto-open lazy chỉ-ở-cửa-sổ-chính, watcher `requested` (detached scope) suppress auto-open khi user đóng view Browser |
 | [ui-next/components/browser/BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) | **Mới** — card nổi Teleport-body z 96: mini-bar kéo được (favicon/title/về-panel/popout/×), viewport placeholder, tay nắm resize, 3 trạng thái thay trang |
 | [ui-next/layouts/default.vue](../../apps/desktop/ui-next/layouts/default.vue) | mount `<BrowserPip />` — cố ý NGOÀI `AppGlobalHosts` (popout session lắp lại host stack; PiP chỉ ở cửa sổ chính) |
 | [ui-next/composables/useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts) | + mục **Picture in Picture** (`i-pip`) trong menu `⋯` của panel, cạnh dock/popout |

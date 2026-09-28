@@ -1,4 +1,5 @@
-// Cổng duyệt ĐIỀU PHỐI — popover "mở phiên con" của tool `create_session`.
+// Cổng duyệt ĐIỀU PHỐI — popover "mở phiên con" của tool `create_session` và
+// popover "bật tự-giao nhóm" của tool `arm_group` (block cuối file).
 //
 // Bản chất giống hệt questions.ts / permission.ts: lời gọi tool park một Promise
 // ở đây, popover cấu hình trên renderer trả lời qua RPC `sessions.spawnResolve`,
@@ -120,5 +121,82 @@ export function resolveSpawnRequest(requestId: string, res: SpawnResolution): bo
     approved: res.approved,
     children: res.children?.length,
   })
+  return true
+}
+
+// ─── Cổng duyệt ARM nhóm (tool `arm_group`) ──────────────────────────────────
+// Cùng khuôn park ở trên nhưng cho một quyết định nhẹ hơn nhiều: model xin bật
+// `groupAutoDeliver` trên gốc nhóm — không kèm danh sách con hay cấu hình.
+// Request park trong thân tool `arm_group` (session-tools.ts); renderer hiện
+// popover `session.arm-request` và trả lời qua RPC `sessions.armResolve`.
+// Cờ được ghi TRONG RPC handler (trước khi request héo) nên cùng luật thứ tự
+// với cổng spawn: đĩa + event arm đi trước, tool tiếp tục sau.
+
+export interface ArmResolution {
+  approved: boolean
+  message?: string
+  aborted?: boolean
+}
+
+interface ParkedArm {
+  sessionId: string
+  rootId: string
+  resolve: (res: ArmResolution) => void
+  onAbort?: () => void
+  signal?: AbortSignal
+}
+
+const PENDING_ARM = new Map<string, ParkedArm>()
+
+// Phát `session.arm-request` rồi park tới khi người dùng quyết. `sessionId` là
+// phiên ĐANG GỌI (để cổng sở hữu đẩy popover về đúng cửa sổ lái nó); `rootId`
+// là gốc nhóm sẽ được arm — RPC đọc nó qua peek để ghi cờ.
+// `reason` là câu model tự giải thích "vì sao cần nhóm tự chạy" — hiện trong
+// popover để người dùng duyệt một cú mà không phải đoán.
+export function requestArmApproval(input: {
+  sessionId: string
+  rootId: string
+  reason?: string
+  signal?: AbortSignal
+}): Promise<ArmResolution> {
+  if (input.signal?.aborted) {
+    return Promise.resolve({ approved: false, aborted: true })
+  }
+  const requestId = `arm-${randomBytes(6).toString('hex')}`
+  emit('session.arm-request', {
+    requestId,
+    sessionId: input.sessionId,
+    rootId: input.rootId,
+    ...(input.reason ? { reason: input.reason.slice(0, MAX_TEXT_LEN / 10) } : {}),
+  })
+  return new Promise<ArmResolution>((resolve) => {
+    const parked: ParkedArm = { sessionId: input.sessionId, rootId: input.rootId, resolve }
+    if (input.signal) {
+      parked.signal = input.signal
+      parked.onAbort = (): void => {
+        if (!PENDING_ARM.delete(requestId)) return
+        emit('session.arm-closed', { requestId, sessionId: input.sessionId })
+        resolve({ approved: false, aborted: true })
+      }
+      input.signal.addEventListener('abort', parked.onAbort, { once: true })
+    }
+    PENDING_ARM.set(requestId, parked)
+  })
+}
+
+export function peekArmRequest(
+  requestId: string,
+): { sessionId: string; rootId: string } | undefined {
+  const parked = PENDING_ARM.get(requestId)
+  return parked ? { sessionId: parked.sessionId, rootId: parked.rootId } : undefined
+}
+
+export function resolveArmRequest(requestId: string, res: ArmResolution): boolean {
+  const parked = PENDING_ARM.get(requestId)
+  if (!parked) return false
+  PENDING_ARM.delete(requestId)
+  if (parked.onAbort) parked.signal?.removeEventListener('abort', parked.onAbort)
+  parked.resolve(res)
+  log.info('arm request resolved', { requestId, approved: res.approved })
   return true
 }

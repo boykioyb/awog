@@ -10,7 +10,7 @@
 // Một lần DUYỆT đồng nghĩa hai ghi trên phiên GỐC của nhóm:
 //   1. `groupAutoDeliver: true`  — workflow được duyệt thì phải TỰ CHẠY, nếu
 //      không phiên con lại rơi về chip "Give to agent" mà tính năng này sinh ra
-//      để xoá. Trần 20 tin/30 phút của auto-deliver vẫn áp ở renderer.
+//      để xoá. Trần 40 tin/30 phút của auto-deliver vẫn áp ở renderer.
 //   2. `groupSpawnConfig` khi `remember` — lần `create_session` sau của nhóm này
 //      bỏ qua popover, đẻ thẳng theo cấu hình đã nhớ (xem spawn.ts/groupRootOf).
 //
@@ -21,7 +21,9 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import {
+  peekArmRequest,
   peekSpawnRequest,
+  resolveArmRequest,
   resolveSpawnRequest,
 } from '../sessions/spawn-approval.js'
 import {
@@ -29,16 +31,20 @@ import {
   MAX_ROLE_LEN,
   MAX_SPAWNS_PER_TURN,
   MAX_TITLE_LEN,
+  SpawnError,
+  armGroupAutoDeliver,
   groupRootOf,
   spawnChildrenSessions,
 } from '../sessions/spawn.js'
 import { MAX_TEXT_LEN, oneLineLabel } from '../sessions/inbox.js'
 import {
+  flushSession,
   listSessionSummaries,
   loadSession,
   setSessionGroupSpawn,
   updateSessionMetadata,
 } from '../sessions/store.js'
+import { emit } from '../transport/stdio.js'
 import { completePi } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
 import type { ProviderName, SpawnChildSpec, SpawnSessionConfig } from '../types/shared.js'
@@ -71,7 +77,9 @@ const ChildSpecSchema = z.object({
 })
 
 // exactOptionalPropertyTypes: dựng lại object chỉ với key thật sự có mặt —
-// object rỗng hoàn toàn trả undefined để không ghi `groupSpawnConfig: {}`.
+// object rỗng hoàn toàn trả undefined: caller phải phân biệt "không gửi config"
+// với "config rỗng". Riêng đường remember, `armGroupWorkflow` cố ý đổi rỗng →
+// `{}` (marker "đã duyệt điều phối, kế thừa hết") — xem comment tại đó.
 function toSpawnConfig(
   parsed: z.infer<typeof SpawnConfigSchema> | undefined,
 ): SpawnSessionConfig | undefined {
@@ -104,9 +112,17 @@ function toChildSpecs(
 
 // Bật "workflow tự chạy" cho nhóm của `rootId`: tự giao tin + (tuỳ chọn) nhớ
 // cấu hình spawn. Gọi TRƯỚC khi resolve/spawn — xem khối comment đầu file.
+// `remember` mà config rỗng (mọi field kế thừa) vẫn ghi `{}` — marker "đã duyệt
+// rồi đừng hỏi nữa": groupRootOf chỉ bỏ qua popover khi `groupSpawnConfig` tồn
+// tại, và config thiếu hẳn sẽ làm lời hứa "allow 1 lần" thất hứa lần sau.
+// `setGroupSpawn` của session-manager coi `{}` là ghi, chỉ `null` mới là xoá.
 async function armGroupWorkflow(rootId: string, remember: boolean, config?: SpawnSessionConfig): Promise<void> {
-  await updateSessionMetadata(rootId, { groupAutoDeliver: true })
-  if (remember && config) await setSessionGroupSpawn(rootId, config)
+  const saved = remember ? (config ?? {}) : undefined
+  if (saved) await setSessionGroupSpawn(rootId, saved)
+  // Emit SAU khi config đã nằm trên đĩa để payload group-armed mang theo nó —
+  // renderer khác (kể cả popout) nhận đủ trạng thái một lần, không phải chờ
+  // reload mới thấy nhóm đã "nhớ".
+  await armGroupAutoDeliver(rootId, saved)
 }
 
 // ─── sessions.spawnResolve ────────────────────────────────────────────────────
@@ -149,6 +165,37 @@ register('sessions.spawnResolve', async (raw) => {
   return { resolved: true }
 })
 
+// ─── sessions.armResolve ─────────────────────────────────────────────────────
+// Trả lời một `session.arm-request` đang park (tool `arm_group` của model —
+// spawn-approval.ts). Chỉ mang một quyết định duyệt/không kèm lời từ chối tự
+// do; không có children/config như spawnResolve vì request chỉ xin BẬT cờ
+// `groupAutoDeliver` trên gốc nhóm.
+// Duyệt ⇒ ghi cờ TRƯỚC khi request héo — cùng luật thứ tự với cổng spawn:
+// `session.group-armed` tới renderer → flush tin park trong nhóm, rồi tool mới
+// tiếp tục và trả kết quả "đã bật" cho model.
+
+const ArmResolveParams = z.object({
+  requestId: z.string().regex(/^arm-[a-f0-9]+$/),
+  approved: z.boolean(),
+  message: z.string().max(500).optional(),
+})
+
+register('sessions.armResolve', async (raw) => {
+  const params = ArmResolveParams.parse(raw)
+  const parked = peekArmRequest(params.requestId)
+  if (!parked) return { resolved: false }
+  if (params.approved) {
+    await armGroupAutoDeliver(parked.rootId)
+    resolveArmRequest(params.requestId, { approved: true })
+  } else {
+    resolveArmRequest(params.requestId, {
+      approved: false,
+      ...(params.message ? { message: params.message } : {}),
+    })
+  }
+  return { resolved: true }
+})
+
 // ─── sessions.setGroupSpawn ───────────────────────────────────────────────────
 // Ghi nhớ/xoá cấu hình spawn trên phiên GỐC. `config: null` = "ngừng điều phối"
 // (xoá hẳn key — vì vậy phải là RPC riêng, patch spread không xoá được key).
@@ -166,6 +213,36 @@ register('sessions.setGroupSpawn', async (raw) => {
   if (!root) throw new RpcError(-32004, 'Session not found')
   const ok = await setSessionGroupSpawn(root.id, toSpawnConfig(params.config ?? undefined) ?? null)
   if (!ok) throw new RpcError(-32004, 'Session not found')
+  return { ok: true }
+})
+
+// ─── sessions.setGroupAutoDeliver ────────────────────────────────────────────
+// Công tắc tự-giao của nhóm — viết TRÊN GỐC, giống setGroupSpawn. Đường ghi duy
+// nhất sau khi tạo phiên: field này CỐ Ý không đi `sessions.upsert` nữa — patch
+// spread của update-metadata không phân biệt được "cờ tắt có chủ đích" với "cờ
+// true cũ của một cửa sổ chưa nghe disarm" (persistence-queue lấy theo đĩa khi
+// local vắng mặt, nên để upsert mang nó sẽ hồi sinh cờ sau toggle-off). RPC riêng
+// emit `session.group-armed` kèm giá trị mới để MỌI cửa sổ/popout hội tụ — kể
+// cả chiều tắt.
+
+const SetGroupAutoDeliverParams = z.object({
+  id: z.string().min(1).regex(SESSION_ID_RE),
+  value: z.boolean(),
+})
+
+register('sessions.setGroupAutoDeliver', async (raw) => {
+  const params = SetGroupAutoDeliverParams.parse(raw)
+  const root = groupRootOf(await listSessionSummaries(), params.id)
+  if (!root) throw new RpcError(-32004, 'Session not found')
+  await updateSessionMetadata(root.id, { groupAutoDeliver: params.value })
+  // Flush ngay như các ghi rời rạc khác (setGroup/setGroupSpawn): thoát app trong
+  // cửa sổ debounce 500ms mà mất cờ này thì nhóm vừa arm lại hỏi popover, hoặc
+  // nhóm vừa disarm lại tự chạy sau reload.
+  await flushSession(root.id)
+  emit('session.group-armed', {
+    sessionId: root.id,
+    groupAutoDeliver: params.value,
+  })
   return { ok: true }
 })
 
@@ -189,11 +266,24 @@ register('sessions.spawnChildren', async (raw) => {
   if (!root) throw new RpcError(-32004, 'Session not found')
   const config = toSpawnConfig(params.config)
   await armGroupWorkflow(root.id, params.remember === true, config)
-  const result = await spawnChildrenSessions(params.sessionId, toChildSpecs(params.children))
-  if (result.created.length === 0 && result.failed.length > 0) {
-    throw new RpcError(-32602, result.failed.map((f) => `${f.title}: ${f.reason}`).join('; '))
+  // KHÔNG throw khi lô hỏng: arm đã ghi đĩa trước đó, throw sẽ làm renderer
+  // rollback cờ local trong khi disk vẫn armed — hai bên lệch nhau tới khi
+  // reload. SpawnError (cha mất, chạm trần con) cũng xếp vào `failed` để UI báo
+  // theo từng con bằng toast sẵn có.
+  try {
+    return await spawnChildrenSessions(params.sessionId, toChildSpecs(params.children))
+  } catch (err) {
+    // Dù lỗi gì thì arm ĐÃ ghi đĩa — rethrow làm renderer rollback cờ local
+    // trong khi disk vẫn armed (hai bên lệch nhau tới reload). Trả `failed` để
+    // UI báo bằng toast; lỗi lạ (không phải SpawnError) vẫn được log lại.
+    if (!(err instanceof SpawnError)) {
+      log.warn('spawnChildren failed unexpectedly', { err: String(err) })
+    }
+    return {
+      created: [],
+      failed: [{ title: '(spawn)', reason: err instanceof Error ? err.message : String(err) }],
+    }
   }
-  return result
 })
 
 // ─── sessions.spawnDraft ──────────────────────────────────────────────────────

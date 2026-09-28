@@ -100,9 +100,10 @@ const SessionSchema = z.object({
   workspaceFolder: z.string().optional(),
   // Soft + hard spend caps.
   budget: BudgetSchema.optional(),
-  // Công tắc tự giao tin trong nhóm (chỉ có nghĩa trên phiên GỐC của nhóm). Là
-  // boolean nên đi được đường patch spread — khác `groupParentId`/`groupRole` ngay bên
-  // dưới.
+  // Công tắc tự giao tin trong nhóm (chỉ có nghĩa trên phiên GỐC). CHỈ còn
+  // nghĩa ở nhánh 'create' — đường ghi sau khi tạo là RPC riêng
+  // `sessions.setGroupAutoDeliver` (xem sessions.spawn.ts): qua patch spread thì
+  // cờ `true` cũ của một cửa sổ chưa nghe disarm sẽ lặng lẽ hồi sinh cờ vừa tắt.
   groupAutoDeliver: z.boolean().optional(),
   // Nhóm của phiên. Chỉ đọc ở nhánh 'create' (phiên sinh ra ĐÃ nằm trong một nhóm —
   // "Phiên mới trong nhóm này"), CỐ Ý không có trong patch của 'update-metadata':
@@ -264,7 +265,8 @@ register('sessions.upsert', async (raw) => {
   if (session.aboutTaskId !== undefined) patch.aboutTaskId = session.aboutTaskId
   if (session.aboutSshHostId !== undefined) patch.aboutSshHostId = session.aboutSshHostId
   if (session.aboutGhUrl !== undefined) patch.aboutGhUrl = session.aboutGhUrl
-  if (session.groupAutoDeliver !== undefined) patch.groupAutoDeliver = session.groupAutoDeliver
+  // `groupAutoDeliver` CỐ Ý không có trong patch — cùng khuôn `infra`: đường ghi
+  // duy nhất sau lúc tạo là `sessions.setGroupAutoDeliver`.
   if (session.pinnedContext !== undefined) patch.pinnedContext = session.pinnedContext
   if (session.workspaceFolder !== undefined) patch.workspaceFolder = session.workspaceFolder
   if (session.budget !== undefined) patch.budget = session.budget

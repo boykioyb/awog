@@ -49,7 +49,7 @@
   "sessions.group.autoDeliverOn": "Tự giao tin trong nhóm này",
   "sessions.group.autoDeliverOff": "Ngừng tự giao trong nhóm này",
   "sessions.group.autoDeliverBadge": "tự giao",
-  "sessions.group.autoDeliverBadgeHint": "Tin giữa các phiên trong nhóm này được giao thẳng cho agent, trần 20 lượt / 30 phút. Tin từ ngoài nhóm vẫn chờ bạn bấm.",
+  "sessions.group.autoDeliverBadgeHint": "Tin giữa các phiên trong nhóm này được giao thẳng cho agent, trần 40 lượt / 30 phút. Tin từ ngoài nhóm vẫn chờ bạn bấm.",
   "sessions.grid.on": "Xem dạng lưới cùng các phiên con",
   "sessions.grid.off": "Về một hội thoại đơn",
   "sessions.grid.panes": "Ô",
@@ -516,5 +516,10 @@
   "sessions.spawn.generating": "Đang tạo…",
   "sessions.spawn.genField": "Sinh bằng AI",
   "sessions.spawn.genFailed": "Không tạo được draft — thử lại",
-  "sessions.spawn.menu": "Điều phối phiên con…"
+  "sessions.spawn.menu": "Điều phối phiên con…",
+  "sessions.arm.title": "Bật tự-giao cho nhóm",
+  "sessions.arm.sub": "Agent ở \"{parent}\" xin phép nhóm này tự chạy.",
+  "sessions.arm.body": "Bật tự-giao nghĩa là tin nhắn giữa các phiên trong nhóm tự khởi động phiên nhận — phiên con nhận việc và trả lời mà không cần bạn bấm “Giao” từng lần (trần 40 lượt / 30 phút). Tin từ ngoài nhóm vẫn chờ bạn duyệt. Bạn tắt lại được bất cứ lúc nào qua menu chuột phải của phiên gốc.",
+  "sessions.arm.approve": "Bật tự-giao",
+  "sessions.arm.deny": "Từ chối"
 }
