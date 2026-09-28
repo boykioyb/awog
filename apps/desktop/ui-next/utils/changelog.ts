@@ -30,6 +30,56 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.39.0',
+    date: '2026-09-28',
+    highlight: {
+      en: 'Sessions can now build and run a whole team of sub-sessions with one approval, the agent’s browser gets a floating mini window, and your phone can reach the terminal, SSH hosts and project files.',
+      vi: 'Phiên nay dựng và chạy được cả một ê-kíp phiên con chỉ với một lần duyệt, trình duyệt của agent có cửa sổ mini nổi, và điện thoại truy cập được terminal, máy SSH và file dự án.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'When a session proposes new sub-sessions, a dedicated window lets you edit the team, pick account, model, reasoning level and style for all or each one, then approve once. Tick “Remember for this group” and later sub-sessions start without asking again. You can also build a team yourself from the session’s ⋯ menu, with an AI-drafted starting point.',
+        vi: 'Khi một phiên đề xuất tạo phiên con, một cửa sổ riêng cho phép sửa ê-kíp, chọn account, model, mức suy luận và phong cách cho tất cả hoặc từng phiên, rồi duyệt một lần. Tích “Nhớ cho nhóm này” thì các phiên con sau sẽ chạy luôn không hỏi lại. Bạn cũng có thể tự dựng ê-kíp từ menu ⋯ của phiên, với bản nháp do AI soạn sẵn.',
+      },
+      {
+        kind: 'added',
+        en: 'A session can ask you to turn on automatic hand-off inside its group, explaining why. Once you approve, messages between sessions in that group — including ones that were waiting — are delivered on their own.',
+        vi: 'Một phiên có thể xin bạn bật tự-giao trong nhóm của nó, kèm lý do. Duyệt xong, tin nhắn giữa các phiên trong nhóm — kể cả những tin đang nằm chờ — sẽ tự được giao.',
+      },
+      {
+        kind: 'improved',
+        en: 'Group workflows run more reliably: the hand-off limit only counts turns that actually ran and is raised to 40 per 30 minutes, a sub-session no longer occasionally runs the same task twice, and sessions in an approved group act on assignments instead of asking you again.',
+        vi: 'Workflow theo nhóm chạy ổn định hơn: giới hạn tự-giao chỉ đếm những lượt thực sự chạy và được nâng lên 40 lượt / 30 phút, phiên con không còn thỉnh thoảng chạy trùng một việc hai lần, và phiên trong nhóm đã duyệt làm luôn việc được giao thay vì hỏi lại bạn.',
+      },
+      {
+        kind: 'added',
+        en: 'The agent’s browser can float as a small Picture-in-Picture window you can drag, resize or minimize to a corner chip (⌘⇧B / Ctrl+Shift+B). It opens by itself when the agent browses and no browser panel is visible — you can turn that off in Settings → Workspace. Tabs now show site icons.',
+        vi: 'Trình duyệt của agent có thể nổi thành cửa sổ Picture-in-Picture nhỏ — kéo, đổi cỡ, hoặc thu thành chip ở góc (⌘⇧B / Ctrl+Shift+B). Cửa sổ tự hiện khi agent duyệt web mà không có panel trình duyệt nào đang mở — tắt được ở Settings → Workspace. Tab nay hiện icon của trang.',
+      },
+      {
+        kind: 'added',
+        en: 'Remote control from your phone now includes a live terminal, your saved SSH hosts (connect, run commands, browse files) and read-only browsing of project files, with a reworked, more iOS-like layout.',
+        vi: 'Điều khiển từ xa trên điện thoại nay có terminal trực tiếp, các máy SSH đã lưu (kết nối, chạy lệnh, duyệt file) và xem file dự án (chỉ đọc), cùng bố cục mới gần với iOS hơn.',
+      },
+      {
+        kind: 'changed',
+        en: 'Remote control now connects over NetBird instead of Tailscale, so you can host the network yourself. Install NetBird on both the computer and the phone to keep using it.',
+        vi: 'Điều khiển từ xa nay kết nối qua NetBird thay cho Tailscale, nên bạn có thể tự host mạng. Cài NetBird trên cả máy tính và điện thoại để tiếp tục dùng.',
+      },
+      {
+        kind: 'changed',
+        en: 'The side navigation is trimmed to the core pages; Tasks, Workflows, Agents, Commands, Rules, Hooks and Templates are no longer listed there.',
+        vi: 'Thanh điều hướng bên được rút gọn còn các trang chính; Tasks, Workflows, Agents, Commands, Rules, Hooks và Templates không còn nằm ở đó.',
+      },
+      {
+        kind: 'improved',
+        en: 'Logtime writes worklog notes in plain, everyday developer language instead of one stiff report-style phrasing for every line.',
+        vi: 'Logtime viết ghi chú giờ công bằng giọng dev thường ngày, tự nhiên hơn, thay vì một khuôn câu kiểu báo cáo cứng nhắc cho mọi dòng.',
+      },
+    ],
+  },
+  {
     version: '0.38.1',
     date: '2026-09-23',
     highlight: {
