@@ -88,7 +88,7 @@
 
     <!-- Menu chuột phải DÙNG CHUNG với tab Files của Sessions (`useFileContextMenu`
          chế độ `absolute`) — cùng một danh sách hàng, cùng một component. -->
-    <ContextMenu
+    <AppContextMenu
       :open="disk.fileMenu.menu.value !== null"
       :position="disk.fileMenu.menu.value ?? { x: 0, y: 0 }"
       :items="disk.fileMenu.items.value"
@@ -130,15 +130,15 @@
         />
         <div class="srch monsrch">
           <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <input v-model="search" :placeholder="t('monitor.search')" />
+          <Input v-model="search" unstyled :placeholder="t('monitor.search')" />
         </div>
-        <button class="btn" @click="paused = !paused">
+        <Button variant="outline" @click="paused = !paused">
           <Icon
             :name="paused ? 'play' : 'stop'"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
           {{ paused ? t('monitor.resume') : t('monitor.pause') }}
-        </button>
+        </Button>
       </div>
 
       <div v-if="error" class="monerr">
@@ -217,6 +217,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useMonitorManager } from '~/composables/useMonitorManager'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 

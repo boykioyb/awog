@@ -79,10 +79,9 @@
             <label class="axp-label" for="axp-confirm">
               {{ t('infra.export.secrets.confirmLabel') }}
             </label>
-            <input
+            <Input
               id="axp-confirm"
               v-model="confirmName"
-              class="axp-input"
               :placeholder="t('infra.export.secrets.confirmPh')"
               :disabled="!selectedNames.length"
               spellcheck="false"
@@ -114,26 +113,26 @@
 
           <div class="axp-actions">
             <span style="flex: 1" />
-            <button
+            <Button
               v-if="!includeSecrets"
               type="button"
-              class="btn"
               :disabled="!preview"
+              variant="outline"
               @click="onCopyConfig"
             >
               <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.copy') }}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              class="btn pri"
               :disabled="!canExportFile"
               :title="saveTitle"
+              variant="default"
               @click="onSaveFile"
             >
               <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.export.saveToFile') }}
-            </button>
+            </Button>
           </div>
         </template>
 
@@ -155,15 +154,15 @@
           </div>
           <div class="axp-actions">
             <span style="flex: 1" />
-            <button
+            <Button
               type="button"
-              class="btn pri"
               :disabled="!commandsList.length"
+              variant="default"
               @click="onCopyCommands"
             >
               <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.copy') }}
-            </button>
+            </Button>
           </div>
         </template>
       </template>
@@ -171,7 +170,7 @@
 
     <template #footer>
       <span style="flex: 1" />
-      <button type="button" class="btn" @click="onClose">{{ t('common.close') }}</button>
+      <Button type="button" variant="outline" @click="onClose">{{ t('common.close') }}</Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -197,6 +196,8 @@ import { useAwsProfilesApi } from '~/composables/useAwsProfilesApi'
 import { hasBridge, saveFilePath } from '~/composables/useFolderPicker'
 import { useToast } from '~/composables/useToast'
 import type { AwsProfile } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean

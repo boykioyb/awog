@@ -83,18 +83,18 @@
             {{ done ? t('logtime.push.hintDone') : t('logtime.push.hint') }}
           </span>
           <span class="ltsp" />
-          <button class="btn" type="button" @click="close">
+          <Button type="button" variant="outline" @click="close">
             {{ done ? t('common.close') : t('common.cancel') }}
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="!done"
-            class="btn pri"
             type="button"
             :disabled="!pushConfirmed || pushing || pushableDrafts.length === 0"
+            variant="default"
             @click="runPush"
           >
             {{ t('logtime.push.go', { n: pushableDrafts.length }) }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -108,6 +108,7 @@ import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
 import type { LogtimeEntry } from '~/stores/logtime'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const {

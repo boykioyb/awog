@@ -1,23 +1,23 @@
 <template>
   <div class="slashint">
-    <div class="sihead">
-      <span>{{ t('sessions.composer.slashCommands') }}</span>
-      <span class="sihint">{{ t('sessions.composer.slashHint') }}</span>
+    <div class="silabel">{{ t('sessions.composer.slashCommands') }}</div>
+    <div class="silist">
+      <div
+        v-for="(c, i) in items"
+        :key="c.key"
+        class="si2"
+        :class="{ on: i === active }"
+        @mousedown.prevent="emit('select', i)"
+        @mouseenter="emit('hover', i)"
+      >
+        <span class="sc" :title="`/${c.label}`">/{{ c.label }}</span>
+        <span class="sd" :title="c.desc">{{ c.desc }}</span>
+        <span class="sd sitag" :style="tagStyle(c.kind)">
+          {{ t(`sessions.composer.kind.${c.kind}`) }}
+        </span>
+      </div>
     </div>
-    <div
-      v-for="(c, i) in items"
-      :key="c.key"
-      class="si2"
-      :class="{ on: i === active }"
-      @mousedown.prevent="emit('select', i)"
-      @mouseenter="emit('hover', i)"
-    >
-      <span class="sc" :title="`/${c.label}`">/{{ c.label }}</span>
-      <span class="sd" :title="c.desc">{{ c.desc }}</span>
-      <span class="sd sitag" :style="tagStyle(c.kind)">
-        {{ t(`sessions.composer.kind.${c.kind}`) }}
-      </span>
-    </div>
+    <div class="sifoot">{{ t('sessions.composer.slashHint') }}</div>
   </div>
 </template>
 
@@ -37,14 +37,14 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 
-// Tag accent per kind: builtin = accent, command = blue, skill = violet, Claude CLI
-// = amber. Exposed as a `--tagc` custom property so the pill derives both text +
-// tinted background from one color (the CSS uses color-mix on it).
+// Tag accent per kind: builtin = primary, command = info, skill = violet, Claude
+// CLI = warning. Exposed as a `--tagc` custom property so the pill derives both
+// text + tinted background from one color (the CSS uses color-mix on it).
 const TAG_COLOR: Record<SlashItem['kind'], string> = {
-  builtin: 'var(--accent)',
-  command: 'var(--blue)',
+  builtin: 'var(--primary)',
+  command: 'var(--info)',
   skill: 'var(--violet)',
-  cli: 'var(--amber)',
+  cli: 'var(--warning)',
 }
 function tagStyle(kind: SlashItem['kind']) {
   return { '--tagc': TAG_COLOR[kind] }
@@ -52,32 +52,40 @@ function tagStyle(kind: SlashItem['kind']) {
 </script>
 
 <style scoped>
-/* Bound the dropdown height so a long catalog (all built-ins + commands + skills,
-   shown when the query is empty) scrolls inside the menu instead of growing tall
-   enough to cover the screen. Overrides the prototype's overflow:hidden on
-   .slashint; the header stays pinned while the rows scroll. */
+/* Popover chrome — shadcn tokens: popover surface + hairline border + --radius +
+   mid shadow, dense p-1 item padding. Label + footer hint pin outside the scroll
+   region; the list itself scrolls (a bare `/` query can run past 80 rows). */
 .slashint {
+  display: flex;
+  flex-direction: column;
   max-height: min(340px, 42vh);
+  padding: 4px;
+  background: var(--popover);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+.silist {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
-/* Header strip for the slash dropdown (reuses prototype .slashint frame + .si2/.sc
-   /.sd rows from prototype.css; only the header + active highlight are local). */
-.sihead {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 11px;
+/* Header label (DropdownMenuLabel tone) + footer hint strip. */
+.silabel {
+  flex: 0 0 auto;
+  padding: 5px 8px 4px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
-  background: var(--bgEl);
-  border-bottom: 1px solid var(--border);
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
-.sihint {
-  font-style: italic;
+.sifoot {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  padding: 5px 8px 3px;
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 /* Three-column grid so name / description / tag align into clean vertical columns
@@ -85,15 +93,16 @@ function tagStyle(kind: SlashItem['kind']) {
    read as ragged). Column 1 is a fixed rem width — scales with the Appearance font
    size — so descriptions start at the same x; longer names truncate (full name in
    the title tooltip). Overrides the prototype .si2 flex. */
-.si2 {
+.silist .si2 {
   display: grid;
   grid-template-columns: 10.5rem minmax(0, 1fr) auto;
   align-items: center;
   column-gap: 12px;
+  padding: 5px 8px;
+  border-radius: var(--r-xs);
 }
-.si2.on {
-  background: var(--bgHover);
-  box-shadow: inset 2px 0 0 var(--accent);
+.silist .si2.on {
+  background: var(--accent-wash);
 }
 /* Command name (col 1): single line, truncate with ellipsis past the column. */
 .sc {
@@ -104,18 +113,19 @@ function tagStyle(kind: SlashItem['kind']) {
   line-height: var(--lh-sm);
 }
 /* Description (col 2): single line, truncate; matches the name's size so baselines
-   line up — hierarchy comes from the dim color, not a smaller font. */
-.si2 .sd:not(.sitag) {
+   line up — hierarchy comes from the muted color, not a smaller font. */
+.silist .si2 .sd:not(.sitag) {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
-/* Kind tag (col 3): right-aligned pill, text + faint tint from --tagc (set inline). */
-.sitag {
+/* Kind tag (col 3): right-aligned pill, text + faint tint from --tagc (set inline).
+   Nested under .si2 so the scoped rule beats the global `.slashint .sd` color. */
+.silist .si2 .sitag {
   justify-self: end;
   font-size: 12px;
   line-height: 12px;

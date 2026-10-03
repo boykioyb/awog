@@ -3,16 +3,17 @@
     <div class="ltop">
       <div class="srch">
         <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <input v-model="query" :placeholder="t('projects.list.search')" />
+        <Input v-model="query" unstyled :placeholder="t('projects.list.search')" />
       </div>
-      <button
-        class="iconbtn"
+      <Button
         :title="t('projects.list.new')"
         style="width: 32px; height: 32px"
+        variant="outline"
+        size="iconMd"
         @click="emit('new')"
       >
         <Icon name="plus" />
-      </button>
+      </Button>
     </div>
     <div class="lscroll">
       <div
@@ -46,6 +47,8 @@
 // mono path). Binds the real Project entities; selection emits the project id.
 import { computed, ref, watch } from 'vue'
 import type { Project } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ projects: Project[]; selectedId: string | null }>()
 const emit = defineEmits<{ (e: 'select', id: string): void; (e: 'new'): void }>()

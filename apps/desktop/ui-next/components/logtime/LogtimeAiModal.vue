@@ -77,17 +77,17 @@
         <div class="ltai-foot">
           <span class="ltai-hint">{{ t('logtime.ai.hint') }}</span>
           <span class="ltai-sp" />
-          <button class="btn" type="button" @click="aiOpen = false">
+          <Button type="button" variant="outline" @click="aiOpen = false">
             {{ t('logtime.ai.editManually') }}
-          </button>
-          <button
-            class="btn pri"
+          </Button>
+          <Button
             type="button"
             :disabled="store.composeBusy || store.composeLines.length === 0"
+            variant="default"
             @click="acceptCompose"
           >
             {{ t('logtime.ai.accept', { n: store.composeLines.length }) }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -101,6 +101,7 @@
 import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { aiOpen, store, date, longDateOf, labelOf, fmt, acceptCompose } = useLogtimeManager()

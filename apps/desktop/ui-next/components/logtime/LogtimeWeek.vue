@@ -25,15 +25,16 @@
         <span class="ltheads">{{ weekMeta }}</span>
       </span>
       <span class="ltsp" />
-      <button
-        class="btn ltbtn"
+      <Button
         type="button"
         :disabled="weekRows.length === 0"
+        class="ltbtn"
+        variant="outline"
         @click="openWeekReport"
       >
         <Icon name="file" />
         {{ t('logtime.week.report') }}
-      </button>
+      </Button>
     </div>
 
     <div class="ltwbody">
@@ -134,6 +135,7 @@
 import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const {

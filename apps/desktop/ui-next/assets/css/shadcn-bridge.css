@@ -1,0 +1,93 @@
+/* shadcn token bridge — hybrid mode (quyết định 2026-10: zinc surfaces + emerald accent).
+ *
+ *   Cung cấp tên var chuẩn shadcn (--background, --primary, --card, …) cho toàn app.
+ *   Ba tầng:
+ *     1. `body` — alias thương hiệu/trạng thái về token AWOG (primary emerald, ring,
+ *        destructive, success/warning/info, radius). Alias resolve tại `body` nên
+ *        flip theo body.light / theme-cute miễn phí.
+ *     2. `body:not(cute)` + `body.light:not(cute)` — surfaces/text zinc oklch chuẩn
+ *        shadcn (dark + light). Đây là phần "look mới": nền zinc, muted zinc — chỉ
+ *        primary giữ emerald.
+ *     3. `body[cute]` — cùng var nhưng alias về token AWOG/cute, để theme family
+ *        Cute vẫn điều khiển được các component đã port (zinc sẽ đè mất nó).
+ *
+ *   ⚠ KHÔNG đụng `--accent` (brand emerald AWOG, hàng trăm chỗ dùng) và `--border`
+ *   (hairline AWOG ≈ zinc white/9-10% — cùng giá trị, giữ nguyên để legacy chrome
+ *   không lệch). Hover-wash trung tính của shadcn = `--accent-wash`.
+ *   `body.proto-shadcn` cụ thể hơn `body` nên /proto vẫn giữ bộ stock riêng. */
+
+/* Tầng 1 — alias AWOG (mọi theme) */
+body {
+  --primary: var(--accent);
+  --primary-foreground: var(--accentText);
+  --destructive: var(--danger);
+  --destructive-foreground: #ffffff;
+  --input: var(--borderStrong);
+  --ring: var(--accentBorder); /* emerald 42% — focus ring giữ identity AWOG */
+  --sidebar-primary: var(--accent);
+  --sidebar-primary-foreground: var(--accentText);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--accentBorder);
+  --success: var(--green);
+  --warning: var(--amber);
+  --info: var(--blue);
+  --radius: var(--r-btn); /* 10px = stock → sm6/md8/lg10/xl14 */
+}
+
+/* Tầng 2 — zinc surfaces (dark mặc định + light), gated off cute */
+body:not([data-theme-family='cute']) {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent-wash: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+}
+body.light:not([data-theme-family='cute']) {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent-wash: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+}
+
+/* Tầng 3 — Cute: alias về token theme-family (cute tự flip dark/light trong file nó) */
+body[data-theme-family='cute'] {
+  --background: var(--bg);
+  --foreground: var(--text);
+  --card: var(--bgEl);
+  --card-foreground: var(--text);
+  --popover: var(--bgEl);
+  --popover-foreground: var(--text);
+  --secondary: var(--bgEl);
+  --secondary-foreground: var(--text);
+  --muted: var(--bgSubtle);
+  --muted-foreground: var(--textMuted);
+  --accent-wash: var(--bgHover);
+  --accent-foreground: var(--text);
+  --sidebar: var(--bgPanel);
+  --sidebar-foreground: var(--text);
+  --sidebar-accent: var(--bgHover);
+  --sidebar-accent-foreground: var(--text);
+}

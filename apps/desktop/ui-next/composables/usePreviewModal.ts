@@ -1283,6 +1283,10 @@ export function usePreviewModal(
       return
     }
     if (e.key === 'Escape') {
+      // Preview là overlay trên cùng (listener đăng ký từ boot qua AppGlobalHosts →
+      // chạy trước mọi modal mở sau): đánh dấu Esc đã-tiêu-thụ để các lớp DƯỚI
+      // (board editor, settings…) không đóng cùng — Esc chỉ đóng một lớp/nhấn.
+      e.preventDefault()
       // Close the find bar first (shallowest layer the user just opened), then the
       // usual rename → confirm → back-stack → close chain.
       if (find.findOpen.value) find.closeFind()

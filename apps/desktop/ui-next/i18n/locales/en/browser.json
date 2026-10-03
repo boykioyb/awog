@@ -42,5 +42,6 @@
   "browser.pip.minimize": "Minimize",
   "browser.pip.restore": "Expand",
   "browser.pip.close": "Close Picture in Picture",
+  "browser.pip.actions": "Actions",
   "browser.pip.empty": "Nothing to show — the tab is blank."
 }

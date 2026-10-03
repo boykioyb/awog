@@ -1,25 +1,42 @@
 <template>
   <div class="top">
+    <!-- Rail collapse toggle (the proto's SidebarTrigger): header-left, momentary
+         flip of the shared navCollapsed state — no .on state. Full width only;
+         in compact mode the rail is an off-canvas drawer with its own ☰ below. -->
+    <Button
+      v-if="!compact"
+      variant="ghost"
+      size="iconSm"
+      class="shelltgl"
+      :title="t('nav.collapse')"
+      @click="toggleNavCollapsed"
+    >
+      <Icon name="dock-left" style="width: var(--icon-md); height: var(--icon-md)" />
+    </Button>
     <!-- Compact-mode drawer toggles (≤1100px): ☰ reveals the nav rail; the
          panel-left icon reveals the page's secondary list. Hidden at full width. -->
-    <button
+    <Button
       v-if="compact"
+      variant="ghost"
+      size="iconSm"
       class="shelltgl"
       :class="{ on: navOpen }"
       :title="t('topbar.openNav')"
       @click="toggleNav"
     >
       <Icon name="menu" style="width: var(--icon-md); height: var(--icon-md)" />
-    </button>
-    <button
+    </Button>
+    <Button
       v-if="compact && hasList"
+      variant="ghost"
+      size="iconSm"
       class="shelltgl"
       :class="{ on: listOpen }"
       :title="t('topbar.openList')"
       @click="toggleList"
     >
       <Icon name="dock-left" style="width: var(--icon-md); height: var(--icon-md)" />
-    </button>
+    </Button>
     <span class="ptitle">{{ title }}</span>
     <span class="sp" />
     <!-- GitHub notification inbox (bell + unread badge). Left of the search box so
@@ -36,10 +53,10 @@
       <span class="kbd-label">{{ t('topbar.search') }}</span>
       <span class="kk">⌘K</span>
     </button>
-    <button class="btn pri" data-tour="new-btn" :title="t('topbar.new')" @click="onNew">
+    <Button size="sm" class="shrink-0" data-tour="new-btn" :title="t('topbar.new')" @click="onNew">
       <Icon name="plus" />
       <span>{{ t('topbar.new') }}</span>
-    </button>
+    </Button>
   </div>
 </template>
 
@@ -71,7 +88,8 @@ const TITLE_KEYS: Record<string, string> = {
 
 const { t } = useI18n()
 const route = useRoute()
-const { compact, navOpen, listOpen, hasList, toggleNav, toggleList } = useResponsiveShell()
+const { compact, navOpen, listOpen, hasList, toggleNav, toggleList, toggleNavCollapsed } =
+  useResponsiveShell()
 
 // Search box opens the ⌘K command palette (the keyboard shortcut is bound in the
 // layout; this makes the visible box clickable too).
@@ -95,30 +113,18 @@ function onNew() {
 </script>
 
 <style scoped>
-/* Compact drawer toggles — icon buttons sized to match the top bar, sitting left
-   of the page title. Default muted; accent when the drawer they control is open. */
+/* Compact drawer toggles — ghost iconSm Buttons (28px) left of the page title.
+   Geometry + hover/focus come from the primitive; scoped keeps the resting dim
+   icon and the drawer-open wash (same idiom as the nav rail's selection). */
 .shelltgl {
-  width: 28px;
-  height: 28px;
   flex: 0 0 auto;
-  border: 0;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
   color: var(--textDim);
-  background: transparent;
-  cursor: pointer;
 }
 .shelltgl:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
 }
 .shelltgl.on {
-  color: var(--accent);
-  background: var(--accentDim);
-}
-.shelltgl:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 </style>

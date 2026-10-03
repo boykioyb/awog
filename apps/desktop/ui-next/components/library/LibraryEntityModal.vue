@@ -6,9 +6,9 @@
           <span class="lem-title">{{ title }}</span>
           <span v-if="$slots['header-extra']" class="lem-hx"><slot name="header-extra" /></span>
           <span style="flex: 1" />
-          <button class="iconbtn lem-x" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          <Button variant="ghost" size="iconSm" :title="t('common.close')" @click="emit('close')">
+            <Icon name="x" class="size-3.5" />
+          </Button>
         </div>
         <div class="lem-body">
           <slot />
@@ -22,6 +22,8 @@
 </template>
 
 <script setup lang="ts">
+import Button from '~/components/ui/button/Button.vue'
+
 // Generic library modal shell — the BaseModal/EditorShell idiom for ui-next,
 // rendered in prototype CSS to match SettingsModelDialog (`.ovl` scrim + a
 // centered card with a titled header, a body slot, and an optional footer slot
@@ -92,10 +94,6 @@ useEscToClose(
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.lem-x {
-  width: 28px;
-  height: 28px;
 }
 .lem-body {
   overflow-y: auto;

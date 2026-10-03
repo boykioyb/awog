@@ -51,13 +51,13 @@
     </div>
 
     <div v-if="sel" class="lhg-actions">
-      <button class="btn sm" type="button" @click="applyZoom">
+      <Button type="button" variant="outline" size="sm" @click="applyZoom">
         <Icon name="search" class="lhg-ic" />
         {{ t('infra.logs.hist.zoom') }}
-      </button>
-      <button class="btn sm" type="button" @click="sel = null">
+      </Button>
+      <Button type="button" variant="outline" size="sm" @click="sel = null">
         {{ t('infra.logs.hist.clear') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -77,6 +77,7 @@
 // Kéo chọn KHÔNG tự chạy lại truy vấn: nó chỉ đặt lại cửa sổ thời gian và để
 // người dùng nhìn con số ước lượng mới trước khi bấm Chạy (2.6).
 import { useTemplateRef } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   buckets: { n: number; t: number }[]

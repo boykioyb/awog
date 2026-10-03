@@ -92,6 +92,7 @@ import { useSidecar } from '~/composables/useSidecar'
 import { useSessionsStore } from '~/stores/sessions'
 import { DEFAULT_PR_REVIEW_PROMPT, useSettingsStore } from '~/stores/settings'
 import { fillPrReviewPrompt } from '~/utils/pr-review-prompt'
+import { ghRefTitle } from '~/utils/gh-ref'
 
 const props = withDefaults(
   defineProps<{
@@ -221,7 +222,12 @@ async function onNewSession(item: GhThreadSummary): Promise<void> {
   // Quota warning). Bail out — the guard already surfaced the reason.
   const id = sessions.create(props.projectId)
   if (id == null) return
-  sessions.rename(id, `#${item.number} ${item.title}`)
+  // Title theo quy ước `#<n>_IS:` / `#<n>_PR:` (gh-ref.ts) — logtime đọc ngược
+  // số issue từ chính prefix này.
+  sessions.rename(
+    id,
+    ghRefTitle({ kind: props.kind === 'pr' ? 'pr' : 'issue', number: item.number }, item.title),
+  )
   if (url) sessions.setAboutGh(id, url)
   sessions.setDraft(id, seed)
   await navigateTo('/sessions')
@@ -251,7 +257,10 @@ async function onStartReview(): Promise<void> {
   // surfaced the reason.
   const id = sessions.create(props.projectId)
   if (id == null) return
-  sessions.rename(id, t('projects.gh.reviewSessionTitle', { number: thread.number }))
+  sessions.rename(
+    id,
+    ghRefTitle({ kind: 'pr', number: thread.number }, t('projects.gh.reviewSessionTitle')),
+  )
   if (url) sessions.setAboutGh(id, url)
   // Settings → Git can pin the account / model / effort reviews run on; unset
   // leaves the session on whatever a new session in this project would inherit.

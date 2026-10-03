@@ -1,6 +1,12 @@
 <template>
   <Teleport to="body">
-    <div v-if="pending" class="lop-scrim" @click="cancelPending" @contextmenu.prevent>
+    <!-- Scrim chỉ là wrapper hình học — pointer-events:none để click XUYÊN QUA
+         tới link/modal bên dưới. Vì sao: một cú bấm lên link khi card đang mở
+         phải tới được interceptor của useLinkOpen (nó re-anchor card theo link
+         mới), chứ không được "đóng như click-ra-ngoài" — nếu scrim hứng click,
+         bấm link lần 2 sẽ đóng card (lỗi thật). Dismiss ngoài-card đã chuyển
+         sang listener cấp document (onDocDismiss) bên dưới. -->
+    <div v-if="pending" class="lop-scrim">
       <div class="lop" :style="style" role="dialog" aria-modal="true" @click.stop>
         <div class="lop-url" :title="pending.url">{{ pending.url }}</div>
         <button class="lop-row" @click="pick('app')">
@@ -58,27 +64,47 @@ const onKey = (e: KeyboardEvent): void => {
   if (e.key === 'Escape' && pending.value) cancelPending()
 }
 
+// Dismiss "bấm ra ngoài card" ở cấp document (scrim đã pointer-events:none nên
+// không còn tự hứng click). Chạy ở bubble phase: cú bấm lên một <a> đã bị
+// interceptor capture của useLinkOpen stopPropagation — nghĩa là "bấm link lần
+// 2" re-anchor card chứ KHÔNG đóng, còn bấm chỗ trống mới đóng. Contextmenu cũ
+// bấm lên scrim chỉ preventDefault — giờ xuyên qua, coi như một dismiss để không
+// mở context menu dưới một câu hỏi đang chờ.
+const onDocDismiss = (e: MouseEvent): void => {
+  if (!pending.value) return
+  if ((e.target as HTMLElement | null)?.closest?.('.lop')) return
+  cancelPending()
+}
+
 let uninstall: (() => void) | null = null
 onMounted(() => {
   uninstall = installInterceptor()
   window.addEventListener('keydown', onKey)
+  document.addEventListener('click', onDocDismiss)
+  document.addEventListener('contextmenu', onDocDismiss)
 })
 onUnmounted(() => {
   uninstall?.()
   window.removeEventListener('keydown', onKey)
+  document.removeEventListener('click', onDocDismiss)
+  document.removeEventListener('contextmenu', onDocDismiss)
 })
 </script>
 
 <style scoped>
-/* Invisible scrim: catches the outside click without dimming the page — the
-   decision is small and the context behind it matters. */
+/* Scrim vô hình + không hứng click: chỉ là lớp ĐỊNH VỊ cho card. Dismiss đi qua
+   listener document. z-index phải đứng ĐẦU thang overlay (ftovl 470 < pvovl 480
+   < select 490 < lbox 540): câu hỏi "mở link ở đâu" được hỏi TỪ mọi mặt, kể cả
+   bên trong PreviewModal — dưới nó thì user bấm link mà không thấy gì hỏi. */
 .lop-scrim {
   position: fixed;
   inset: 0;
-  z-index: 130;
+  z-index: 560;
+  pointer-events: none;
 }
 .lop {
   position: fixed;
+  pointer-events: auto;
   width: 268px;
   background: var(--bgEl);
   border: 1px solid var(--borderStrong);

@@ -62,6 +62,16 @@ defineOptions({ name: 'BrowserWindowPage' })
 
 const { t } = useI18n()
 const viewportEl = useTemplateRef<HTMLElement>('viewportEl')
+const route = useRoute()
+
+// Scope của cửa sổ popout do MAIN ghi vào query lúc mở (`browser?scope=` trong
+// ensurePopout): pop out từ panel của session A thì cửa sổ này chỉ thấy và chỉ
+// thao tác lên tab của A. Vắng param (tray toggle, cửa sổ mở trước khi tính
+// năng per-session có mặt) ⇒ pool global — cửa sổ trình duyệt chung của app.
+const popoutScope = computed(() => {
+  const s = route.query.scope
+  return typeof s === 'string' && s ? s : undefined
+})
 
 const {
   available,
@@ -85,6 +95,7 @@ const {
   viewport: viewportEl,
   // Cả cửa sổ là một view Browser duy nhất — không có tab nào khác che nó.
   visible: () => true,
+  scope: () => popoutScope.value,
 })
 
 // Nút × đóng CỬA SỔ (khác panel: ở đó × đóng view). Main lấy cửa sổ từ sender, nên

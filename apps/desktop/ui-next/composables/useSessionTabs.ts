@@ -8,6 +8,7 @@ import { useI18n } from './useI18n'
 import { useProjects } from './useProjects'
 import { PROJECT_COLOR_DEFAULT, useProjectColors } from './useProjectColors'
 import { useSessionsStore } from '~/stores/sessions'
+import { isBoardSession } from './useSessionsData'
 
 export type SessionTab = {
   id: string // engine projectId; '' = the Default tab
@@ -31,9 +32,13 @@ export function useSessionTabs() {
 
   // Attention (unread / awaiting) count per project, for the tab badge. Matches the
   // NavRail sessions badge (unread OR parked on a gate) so the two surfaces agree.
+  // Phiên board (member team / lone-agent do item dispatch) bị ẩn khỏi list —
+  // đếm chúng sẽ báo badge "1 unread" mà mở tab ra không thấy gì. Vòng đời của
+  // chúng sống ở board/Teams (await row, peek, roster), không phải màn Sessions.
   const unreadByProject = computed<Record<string, number>>(() => {
     const out: Record<string, number> = {}
     for (const s of store.sessions) {
+      if (isBoardSession(s)) continue
       if (s.unread || s.status === 'awaiting') out[s.project] = (out[s.project] ?? 0) + 1
     }
     return out
@@ -45,6 +50,7 @@ export function useSessionTabs() {
   const runningByProject = computed<Record<string, boolean>>(() => {
     const out: Record<string, boolean> = {}
     for (const s of store.sessions) {
+      if (isBoardSession(s)) continue
       if (s.status === 'streaming') out[s.project] = true
     }
     return out
@@ -56,6 +62,7 @@ export function useSessionTabs() {
   const doneUnreadByProject = computed<Record<string, boolean>>(() => {
     const out: Record<string, boolean> = {}
     for (const s of store.sessions) {
+      if (isBoardSession(s)) continue
       if (s.unread && s.status === 'done') out[s.project] = true
     }
     return out

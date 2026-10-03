@@ -663,6 +663,12 @@ interface BrowserTab {
   // Has this view ever held a live compositor surface? Gate for capturePage —
   // see ensurePainted, and the header note on what the view model costs.
   painted: boolean
+  // Owning scope: a session's engineId for tabs that session's agent or user
+  // opened, `task:…` for a workflow node, undefined for the global pool (popout /
+  // tray). A scoped surface sees ONLY its own scope's tabs — "session nào mở
+  // browser thì session đó hiện" — while unscoped callers resolve the global
+  // active tab exactly as before.
+  scope?: string
   // Window currently displaying the tab (embedded panel or popout), or null when
   // the tab is parked in the invisible holder.
   host: BrowserWindow | null
@@ -692,6 +698,9 @@ export interface TabInfo {
   // Favicon URL the page declares ('' when none/unknown). Rendered as <img src>
   // only — the string is L1 page data, never markup.
   favicon: string
+  // Owning scope (session engineId / `task:…`); absent on the global pool. The
+  // renderer filters a surface's tab list by it — "the browser of THIS session".
+  scope?: string
   active: boolean
   loading: boolean
   // Renderer chrome (URL bar buttons + "showing elsewhere" placeholder). The
@@ -798,12 +807,22 @@ const VIEWPORT_PRESETS: Record<
 
 class BrowserController {
   private tabs = new Map<string, BrowserTab>()
+  // "Active" hai tầng: `activeId` là con trỏ GLOBAL — cho popout, tray và mọi
+  // caller không mang scope (giữ nguyên hành vi cũ); `activeByScope` là con trỏ
+  // RIÊNG của từng scope, vì "tab đang chọn của session A" không liên quan gì tới
+  // tab session B đang nhìn. `activate()` là chỗ duy nhất đồng bộ cả hai.
   private activeId: string | null = null
+  private activeByScope = new Map<string, string>()
   private tabSeq = 0
   // Invisible parent for every tab that is not on screen. See ensureHolder.
   private holder: BrowserWindow | null = null
   // Standalone window for the tray toggle / "pop out" (at most one).
   private popoutWin: BrowserWindow | null = null
+  // Scope mà renderer của cửa sổ popout đang hiển thị (query `?scope=` lúc load
+  // route). `null` = pool global. Phải nhớ ở đây vì cửa sổ là singleton: một cú
+  // popout từ panel của session khác phải RE-POINT cửa sổ, còn cú toggle của
+  // tray (không scope) thì không được phép đổi hướng cửa sổ đang mở.
+  private popoutScope: string | null = null
   // Renderer subscribers (tab strip + URL bar). Set by the IPC layer, not
   // imported here: this module must not know how the renderer is reached.
   private onChange: (() => void) | null = null
@@ -896,7 +915,7 @@ class BrowserController {
 
   // ── Tab lifecycle ────────────────────────────────────────────────────────
 
-  private createTab(): BrowserTab {
+  private createTab(scope?: string): BrowserTab {
     if (this.tabs.size >= MAX_TABS) {
       throw new Error(`too many browser tabs open (max ${MAX_TABS}) — close one first`)
     }
@@ -926,11 +945,12 @@ class BrowserController {
       painted: false,
       host: null,
       favicon: '',
+      ...(scope !== undefined ? { scope } : {}),
     }
     const wc = view.webContents
     wc.on('destroyed', () => {
       this.tabs.delete(id)
-      if (this.activeId === id) this.activeId = this.tabs.keys().next().value ?? null
+      this.dropActive(tab)
       this.changed()
     })
     // Anything that changes what the tab strip / URL bar shows. The point of the
@@ -986,7 +1006,10 @@ class BrowserController {
     // still return `deny` so Chromium never creates a window of its own.
     wc.setWindowOpenHandler(({ url }) => {
       if (/^https?:\/\//i.test(url) && !hostBlocked(url)) {
-        void this.newTab(url).catch((err: unknown) => {
+        // Popup của một tab scoped phải giữ NGUYÊN scope của nó — không thì link
+        // `target=_blank` trong session A sẽ rơi vào pool global và hiện lên
+        // mọi session khác.
+        void this.newTab(url, true, tab.scope).catch((err: unknown) => {
           log.warn('browser popup tab failed', {
             err: err instanceof Error ? err.message : String(err),
           })
@@ -1015,23 +1038,69 @@ class BrowserController {
     })
     this.attachDebugger(tab)
     this.tabs.set(id, tab)
-    this.activeId = id
+    this.activate(tab)
     this.park(tab)
     this.changed()
     return tab
   }
 
-  private tab(tabId?: string): BrowserTab {
+  // "Active" hai tầng: `activeId` là con trỏ GLOBAL — cho popout, tray và mọi
+  // caller không mang scope (giữ nguyên hành vi cũ); `activeByScope` là con trỏ
+  // RIÊNG của từng scope, vì "tab đang chọn của session A" không liên quan gì
+  // tới tab session B đang nhìn. `activate()` là chỗ duy nhất đồng bộ cả hai.
+  private activate(tab: BrowserTab): void {
+    this.activeId = tab.id
+    if (tab.scope !== undefined) this.activeByScope.set(tab.scope, tab.id)
+  }
+
+  // Tab biến mất (đóng/renderer crash): dọn cả hai con trỏ active. Thay thế bằng
+  // tab đầu tiên còn sống TRONG CÙNG scope — tuyệt đối không nhảy sang tab của
+  // session khác. Xoá khóa scope hẳn khi scope đó hết tab để `activeByScope`
+  // không rỉ dữ liệu mỗi phiên.
+  private dropActive(tab: BrowserTab): void {
+    if (this.activeId === tab.id) {
+      this.activeId = this.tabs.keys().next().value ?? null
+    }
+    if (tab.scope !== undefined && this.activeByScope.get(tab.scope) === tab.id) {
+      const next = [...this.tabs.values()].find((t) => t.scope === tab.scope)
+      if (next) this.activeByScope.set(tab.scope, next.id)
+      else this.activeByScope.delete(tab.scope)
+    }
+  }
+
+  // Active tab của một scope (không create-on-demand — chỉ đọc).
+  private scopedActiveTab(scope: string): BrowserTab | undefined {
+    const id = this.activeByScope.get(scope)
+    const tab = id ? this.tabs.get(id) : undefined
+    return tab && !tab.view.webContents.isDestroyed() ? tab : undefined
+  }
+
+  // Resolve a tab. Không có id → active tab CỦA SCOPE ĐÓ (active global khi
+  // caller không mang scope); active hỏng/thiếu thì rơi về một tab mới TRONG
+  // scope nên `navigate` lúc pool trống vẫn chạy. Id tường minh thuộc scope
+  // khác → cùng lỗi 'no such tab' với id không tồn tại: một session không bao
+  // giờ được chạm, huống chi mutate, tab của session khác — và không được phép
+  // THĂM DÒ sự tồn tại của tab đó qua thông điệp lỗi khác nhau.
+  private tab(tabId?: string, scope?: string): BrowserTab {
     if (tabId) {
       const found = this.tabs.get(tabId)
-      if (!found || found.view.webContents.isDestroyed()) {
+      if (
+        !found ||
+        found.view.webContents.isDestroyed() ||
+        (scope !== undefined && found.scope !== scope)
+      ) {
         throw new Error(`no such browser tab: ${tabId}`)
       }
       return found
     }
-    const active = this.activeId ? this.tabs.get(this.activeId) : undefined
+    const active =
+      scope === undefined
+        ? this.activeId
+          ? this.tabs.get(this.activeId)
+          : undefined
+        : this.scopedActiveTab(scope)
     if (active && !active.view.webContents.isDestroyed()) return active
-    return this.createTab()
+    return this.createTab(scope)
   }
 
   // ── Console capture ──────────────────────────────────────────────────────
@@ -1179,10 +1248,11 @@ class BrowserController {
   async navigate(
     url: string,
     tabId?: string,
+    scope?: string,
   ): Promise<{ url: string; title: string; tabId: string }> {
     const reason = hostBlocked(url)
     if (reason) throw new Error(`blocked URL — ${reason}`)
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     await this.withTimeout(tab.view.webContents.loadURL(url), NAV_TIMEOUT_MS, 'navigation')
     return {
       url: tab.view.webContents.getURL(),
@@ -1194,8 +1264,9 @@ class BrowserController {
   async click(
     target: { selector?: string; ref?: string },
     tabId?: string,
+    scope?: string,
   ): Promise<{ found: boolean; tabId: string }> {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const code = `(function () {${FIND_BY_REF_FN}
   var el = ${targetExpr(target)};
   if (!el) return false;
@@ -1212,8 +1283,9 @@ class BrowserController {
     target: { selector?: string; ref?: string },
     value: string,
     tabId?: string,
+    scope?: string,
   ): Promise<{ found: boolean; tabId: string }> {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const code = `(function () {${FIND_BY_REF_FN}
   var el = ${targetExpr(target)};
   if (!el) return false;
@@ -1233,8 +1305,9 @@ class BrowserController {
     mode: 'text' | 'dom',
     selector?: string,
     tabId?: string,
+    scope?: string,
   ): Promise<{ content: string; tabId: string }> {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const target = selector
       ? `document.querySelector(${JSON.stringify(selector)})`
       : mode === 'dom'
@@ -1255,6 +1328,7 @@ class BrowserController {
   async snapshot(
     selector?: string,
     tabId?: string,
+    scope?: string,
   ): Promise<{
     text: string
     nodes: number
@@ -1264,7 +1338,7 @@ class BrowserController {
     title: string
     tabId: string
   }> {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const raw = await this.run(tab, snapshotScript(selector, SNAPSHOT_MAX_NODES), 'snapshot')
     if (raw === null) {
       throw new Error(selector ? `no element matches ${selector}` : 'no document loaded')
@@ -1340,13 +1414,16 @@ class BrowserController {
     }
   }
 
-  async screenshot(tabId?: string): Promise<{
+  async screenshot(
+    tabId?: string,
+    scope?: string,
+  ): Promise<{
     base64: string
     width: number
     height: number
     tabId: string
   }> {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const img = await this.captureOrThrow(tab)
     const size = img.getSize()
     return {
@@ -1361,8 +1438,9 @@ class BrowserController {
     level: string | undefined,
     limit: number,
     tabId?: string,
+    scope?: string,
   ): { entries: ConsoleEntry[]; total: number; tabId: string } {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const wanted = level && level !== 'all' ? level : null
     const filtered = wanted ? tab.console.filter((e) => e.level === wanted) : tab.console
     return {
@@ -1376,13 +1454,14 @@ class BrowserController {
     filter: string | undefined,
     limit: number,
     tabId?: string,
+    scope?: string,
   ): {
     entries: NetworkEntry[]
     total: number
     available: boolean
     tabId: string
   } {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const needle = filter ? filter.toLowerCase() : null
     const filtered = needle
       ? tab.network.filter(
@@ -1400,13 +1479,14 @@ class BrowserController {
   async networkBody(
     requestId: string,
     tabId?: string,
+    scope?: string,
   ): Promise<{
     body: string
     base64: boolean
     entry: NetworkEntry | null
     tabId: string
   }> {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     if (!tab.debuggerOk) throw new Error('network recording is not available on this tab')
     const entry = tab.networkById.get(requestId) ?? null
     if (!entry) throw new Error(`no recorded request ${requestId} on ${tab.id}`)
@@ -1432,6 +1512,7 @@ class BrowserController {
   async viewport(
     input: ViewportInput,
     tabId?: string,
+    scope?: string,
   ): Promise<{
     width: number
     height: number
@@ -1440,7 +1521,7 @@ class BrowserController {
     emulated: boolean
     tabId: string
   }> {
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     const preset = input.preset ? VIEWPORT_PRESETS[input.preset] : undefined
     if (input.preset && !preset) {
       throw new Error(
@@ -1498,6 +1579,7 @@ class BrowserController {
       url: wc.getURL(),
       title: wc.getTitle(),
       favicon: tab.favicon,
+      scope: tab.scope,
       active: tab.id === this.activeId,
       loading: wc.isLoading(),
       canGoBack: wc.navigationHistory.canGoBack(),
@@ -1507,16 +1589,30 @@ class BrowserController {
     }
   }
 
-  listTabs(forWindow?: BrowserWindow): {
+  // `scope` lọc danh sách VÀ đổi nghĩa của `active`/`activeTabId`: với scope
+  // thì "active" là con trỏ RIÊNG của scope đó — một mặt session không bao giờ
+  // nhìn thấy tab của session khác, kể cả chỉ qua cờ `active` trên danh sách.
+  // `activeByScope` snapshot để renderer phân rã cho nhiều scope cùng lúc (panel
+  // KeepAlive của session đang ngủ vẫn biết nó trông thế nào).
+  listTabs(forWindow?: BrowserWindow, scope?: string): {
     tabs: TabInfo[]
     activeTabId: string | null
+    activeByScope: Record<string, string>
   } {
+    const scopedActive = scope === undefined ? this.activeId : (this.activeByScope.get(scope) ?? null)
     const tabs: TabInfo[] = []
     for (const tab of this.tabs.values()) {
       if (tab.view.webContents.isDestroyed()) continue
-      tabs.push(this.info(tab, forWindow))
+      if (scope !== undefined && tab.scope !== scope) continue
+      const info = this.info(tab, forWindow)
+      if (scope !== undefined) info.active = tab.id === scopedActive
+      tabs.push(info)
     }
-    return { tabs, activeTabId: this.activeId }
+    return {
+      tabs,
+      activeTabId: scopedActive,
+      activeByScope: Object.fromEntries(this.activeByScope),
+    }
   }
 
   // `waitForLoad` quyết định lời gọi này trả về LÚC NÀO, không phải nó làm gì.
@@ -1532,15 +1628,16 @@ class BrowserController {
   async newTab(
     url?: string,
     waitForLoad = true,
+    scope?: string,
   ): Promise<{ tabId: string; url: string; title: string }> {
-    const tab = this.createTab()
+    const tab = this.createTab(scope)
     if (!url) return { tabId: tab.id, url: '', title: '' }
     if (!waitForLoad) {
       // Guard host chạy TRƯỚC và đồng bộ, nên URL bị chặn vẫn ném ngay cho người
       // gọi — chỉ phần tải là không chờ.
       const reason = hostBlocked(url)
       if (reason) throw new Error(`cannot open ${url}: ${reason}`)
-      void this.navigate(url, tab.id).catch((err: unknown) => {
+      void this.navigate(url, tab.id, scope).catch((err: unknown) => {
         log.warn('browser background navigation failed', {
           tab: tab.id,
           err: err instanceof Error ? err.message : String(err),
@@ -1548,29 +1645,30 @@ class BrowserController {
       })
       return { tabId: tab.id, url, title: '' }
     }
-    const res = await this.navigate(url, tab.id)
+    const res = await this.navigate(url, tab.id, scope)
     return { tabId: tab.id, url: res.url, title: res.title }
   }
 
-  // Make a tab the active one. "Active" is the tab a tool call with no `tabId`
-  // lands on; it is NOT a visibility change any more — a window that is showing
-  // some other tab keeps showing it until its renderer asks to attach this one
-  // (attachTo). That split is what lets the agent switch tabs mid-turn without
-  // yanking the view out from under whoever is watching.
-  selectTab(tabId: string): TabInfo {
-    const tab = this.tab(tabId)
-    this.activeId = tab.id
+  // Make a tab the active one. "Active" is PER-SCOPE: the tab a scoped tool
+  // call with no `tabId` lands on; it is NOT a visibility change any more — a
+  // window that is showing some other tab keeps showing it until its renderer
+  // asks to attach this one (attachTo). That split is what lets the agent
+  // switch tabs mid-turn without yanking the view out from under whoever is
+  // watching — and what lets two sessions each keep their own "current tab".
+  selectTab(tabId: string, scope?: string): TabInfo {
+    const tab = this.tab(tabId, scope)
+    this.activate(tab)
     this.changed()
     return this.info(tab)
   }
 
-  closeTab(tabId: string): { closed: string; remaining: number } {
-    const tab = this.tab(tabId)
+  closeTab(tabId: string, scope?: string): { closed: string; remaining: number } {
+    const tab = this.tab(tabId, scope)
     if (tab.host && !tab.host.isDestroyed()) tab.host.contentView.removeChildView(tab.view)
     // `destroyed` on the webContents does the bookkeeping (see createTab).
     tab.view.webContents.close()
     this.tabs.delete(tab.id)
-    if (this.activeId === tab.id) this.activeId = this.tabs.keys().next().value ?? null
+    this.dropActive(tab)
     this.changed()
     return { closed: tab.id, remaining: this.tabs.size }
   }
@@ -1581,7 +1679,7 @@ class BrowserController {
   // host window from the IPC sender, never from a payload — a renderer can only
   // ever fill its OWN window (security invariant #4). The rect is L1: clamped here.
 
-  attachTo(host: BrowserWindow, tabId: string | undefined, rect: Rect): TabInfo {
+  attachTo(host: BrowserWindow, tabId: string | undefined, rect: Rect, scope?: string): TabInfo {
     // `tabId` từ renderer là một BẢN CACHE, và cache thì cũ được: renderer giữ
     // danh sách tab từ event `changed` cuối cùng nó nhận, nên nó hoàn toàn có thể
     // xin `tab_1` sau khi tab đó đã bị đóng (lỗi thật 2026-09-09:
@@ -1590,10 +1688,17 @@ class BrowserController {
     // `this.tab(id)` NÉM cho một id không còn — đúng cho mọi hành động chỉ định
     // tab (đọc/điều hướng tab nào là ý muốn rõ ràng), nhưng SAI cho `attach`:
     // đây là một yêu cầu HÌNH HỌC ("cho tôi một view vào hình chữ nhật này"), và
-    // main là nguồn sự thật. Nên id lạ thì rơi về tab active (tạo mới nếu chưa
-    // có) và TabInfo trả về mang id thật để renderer tự sửa mình theo.
+    // main là nguồn sự thật. Nên id lạ — hoặc id của MỘT SCOPE KHÁC (panel cũ
+    // của một session KeepAlive vẫn có thể giữ cache cũ) — thì rơi về tab active
+    // CỦA SCOPE đó (tạo mới trong scope nếu chưa có) và TabInfo trả về mang id
+    // thật để renderer tự sửa mình theo.
     const known = tabId ? this.tabs.get(tabId) : undefined
-    const tab = known && !known.view.webContents.isDestroyed() ? known : this.tab()
+    const tab =
+      known &&
+      !known.view.webContents.isDestroyed() &&
+      (scope === undefined || known.scope === scope)
+        ? known
+        : this.tab(undefined, scope)
     // One webContents cannot be in two rects, so attaching hands the tab over:
     // any other window showing it loses it, and any other tab in THIS window is
     // parked. Whoever lost it sees `shown: false` on the next change event and
@@ -1614,16 +1719,28 @@ class BrowserController {
     }
     tab.view.setBounds(clampRect(rect))
     tab.painted = true
-    this.activeId = tab.id
+    this.activate(tab)
     this.changed()
     return this.info(tab, host)
   }
 
   // Follow the panel's layout: scroll, resize, dock change. Bounds-only, so it is
-  // cheap enough to call from a ResizeObserver.
-  setViewBounds(host: BrowserWindow, tabId: string | undefined, rect: Rect): void {
-    const tab = tabId ? this.tabs.get(tabId) : this.activeTab()
+  // cheap enough to call from a ResizeObserver. `scope` khoá resolve về active
+  // của scope đó — một payload cũ của panel ngủ không được dời rect của tab
+  // session khác.
+  setViewBounds(
+    host: BrowserWindow,
+    tabId: string | undefined,
+    rect: Rect,
+    scope?: string,
+  ): void {
+    const tab = tabId
+      ? this.tabs.get(tabId)
+      : scope !== undefined
+        ? this.scopedActiveTab(scope)
+        : this.activeTab()
     if (!tab || tab.view.webContents.isDestroyed() || tab.host !== host) return
+    if (scope !== undefined && tab.scope !== scope) return
     tab.view.setBounds(clampRect(rect))
   }
 
@@ -1665,11 +1782,11 @@ class BrowserController {
   // (it can be pasted from model output). `hostBlocked` keeps the loopback/private
   // rule identical for both callers — this is not a back door around invariant #7.
 
-  async openFromUser(url: string, tabId?: string): Promise<TabInfo> {
+  async openFromUser(url: string, tabId?: string, scope?: string): Promise<TabInfo> {
     const target = normalizeUserUrl(url)
     const reason = hostBlocked(target)
     if (reason) throw new Error(`cannot open ${target}: ${reason}`)
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     await this.withTimeout(
       tab.view.webContents.loadURL(target),
       NAV_TIMEOUT_MS,
@@ -1682,21 +1799,21 @@ class BrowserController {
       })
     })
     this.changed()
-    return this.selectTab(tab.id)
+    return this.selectTab(tab.id, scope)
   }
 
-  goBack(tabId?: string): void {
-    const wc = this.tab(tabId).view.webContents
+  goBack(tabId?: string, scope?: string): void {
+    const wc = this.tab(tabId, scope).view.webContents
     if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack()
   }
 
-  goForward(tabId?: string): void {
-    const wc = this.tab(tabId).view.webContents
+  goForward(tabId?: string, scope?: string): void {
+    const wc = this.tab(tabId, scope).view.webContents
     if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward()
   }
 
-  reload(tabId?: string): void {
-    this.tab(tabId).view.webContents.reload()
+  reload(tabId?: string, scope?: string): void {
+    this.tab(tabId, scope).view.webContents.reload()
   }
 
   // ── Popout window (tray toggle) ──────────────────────────────────────────
@@ -1710,12 +1827,13 @@ class BrowserController {
   // của chính nó — cơ chế attach theo `event.sender` đã có sẵn, không cần thêm
   // gì. Vì vậy `show()` KHÔNG attach nữa.
 
-  show(): void {
-    // Vẫn đảm bảo có ít nhất một tab: mở trình duyệt từ tray mà chưa tab nào là
-    // trường hợp bình thường, và renderer cần một tab để attach. Không attach ở
-    // đây — đó là việc của renderer.
-    this.tab()
-    const win = this.ensurePopout()
+  show(scope?: string): void {
+    // Vẫn đảm bảo có ít nhất một tab TRONG SCOPE của caller: popout từ panel của
+    // một session chưa có tab thì phải tạo tab THUỘC session đó (không thì cửa
+    // sổ scope=A mở lên nhìn thấy tab global — hoặc trống rỗng). Tray không mang
+    // scope ⇒ pool global như cũ. Không attach ở đây — đó là việc của renderer.
+    this.tab(undefined, scope)
+    const win = this.ensurePopout(scope)
     win.show()
     win.focus()
   }
@@ -1728,8 +1846,22 @@ class BrowserController {
     return !!this.popoutWin && !this.popoutWin.isDestroyed() && this.popoutWin.isVisible()
   }
 
-  private ensurePopout(): BrowserWindow {
-    if (this.popoutWin && !this.popoutWin.isDestroyed()) return this.popoutWin
+  private ensurePopout(scope?: string): BrowserWindow {
+    const existing = this.popoutWin
+    if (existing && !existing.isDestroyed()) {
+      // Re-scope CHỈ khi caller nêu scope tường minh và nó khác scope đang hiển
+      // thị — nạp lại route với query mới để renderer re-scope. Cú `show()`
+      // trần của tray không vào nhánh này: tray bật/tắt cửa sổ, không đổi chủ
+      // của nó (đổi = giật tầm nhìn của người đang popout từ một session).
+      if (scope !== undefined && scope !== this.popoutScope) {
+        this.popoutScope = scope
+        // Park view của scope cũ TRƯỚC khi nạp lại — nếu không nó vẫn là child
+        // của cửa sổ này và đè lên trang mới cho tới khi renderer mới kịp attach.
+        this.detachFrom(existing)
+        loadAppRoute(existing, `browser?scope=${encodeURIComponent(scope)}`)
+      }
+      return existing
+    }
     const win = new BrowserWindow({
       width: 1280,
       height: 860,
@@ -1745,6 +1877,10 @@ class BrowserController {
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
+        // Cửa sổ này host chrome của app (thanh địa chỉ…) — spellcheck macOS chỉ
+        // thêm log NSSpellServer timeout; tab web bên trong là WebContentsView
+        // riêng, spellcheck của trang web vẫn giữ nguyên.
+        spellcheck: false,
       },
     })
     applyNavigationGuards(win)
@@ -1753,10 +1889,15 @@ class BrowserController {
     win.on('close', () => this.detachFrom(win))
     win.on('closed', () => {
       this.popoutWin = null
+      this.popoutScope = null
       this.changed()
     })
     this.popoutWin = win
-    loadAppRoute(win, 'browser')
+    this.popoutScope = scope ?? null
+    loadAppRoute(
+      win,
+      this.popoutScope ? `browser?scope=${encodeURIComponent(this.popoutScope)}` : 'browser',
+    )
     return win
   }
 
@@ -1768,8 +1909,8 @@ class BrowserController {
   // ở đây bắt đầu từ một cú bấm của người dùng trong chrome của trình duyệt, và
   // text hạ cánh trong UI của chính họ — không tự chảy vào prompt.
 
-  async readSelection(tabId?: string): Promise<PageSelection> {
-    const tab = this.tab(tabId)
+  async readSelection(tabId?: string, scope?: string): Promise<PageSelection> {
+    const tab = this.tab(tabId, scope)
     const wc = tab.view.webContents
     // Tab vừa mở chưa nạp gì: KHÔNG gọi vào renderer.
     //
@@ -1802,8 +1943,8 @@ class BrowserController {
   // Một picker tại một thời điểm: lời gọi mới HUỶ cái đang chờ (kể cả ở tab
   // khác) thay vì ném, vì hai vùng highlight cùng lúc là thứ người dùng không
   // hiểu, còn một lỗi thì không dạy họ điều gì.
-  async pickElement(tabId?: string): Promise<PickedElement | null> {
-    const tab = this.tab(tabId)
+  async pickElement(tabId?: string, scope?: string): Promise<PickedElement | null> {
+    const tab = this.tab(tabId, scope)
     this.cancelPick()
     const wc = tab.view.webContents
     return new Promise<PickedElement | null>((resolve) => {
@@ -1857,16 +1998,22 @@ class BrowserController {
   }
 
   // `tabId` chỉ để lọc, không để tra: `this.tab()` TẠO tab mới khi chưa có tab
-  // nào, và "huỷ" thì không được phép tạo ra thứ gì.
-  cancelPick(tabId?: string): void {
+  // nào, và "huỷ" thì không được phép tạo ra thứ gì. `scope` cũng chỉ lọc: một
+  // cancel của scope khác không được đụng vào picker đang arm trên tab không
+  // thuộc nó (picker là singleton toàn app).
+  cancelPick(tabId?: string, scope?: string): void {
     const pending = this.pendingPick
     if (!pending) return
     if (tabId && pending.tabId !== tabId) return
+    if (scope !== undefined) {
+      const owner = this.tabs.get(pending.tabId)
+      if (owner && owner.scope !== scope) return
+    }
     pending.cancel()
   }
 
-  async pageContext(tabId?: string): Promise<PageContext> {
-    const tab = this.tab(tabId)
+  async pageContext(tabId?: string, scope?: string): Promise<PageContext> {
+    const tab = this.tab(tabId, scope)
     const wc = tab.view.webContents
     // Cùng lý do với readSelection: chưa commit document thì lời gọi treo mãi.
     // `@page` trên một tab trắng phải trả rỗng để renderer nói "chưa mở trang nào",
@@ -1892,11 +2039,11 @@ class BrowserController {
   //
   // Tên file do main sinh từ đồng hồ, không có mảnh input nào của người gọi,
   // nên không còn bề mặt traversal nào ở phần cuối đường dẫn.
-  async saveScreenshot(root: string, tabId?: string): Promise<{ path: string }> {
+  async saveScreenshot(root: string, tabId?: string, scope?: string): Promise<{ path: string }> {
     if (!root || !isAbsolute(root)) {
       throw new Error('saveScreenshot: workspace root must be an absolute path')
     }
-    const tab = this.tab(tabId)
+    const tab = this.tab(tabId, scope)
     // Kiểm đích ghi TRƯỚC khi chụp: một root sai thì không có lý gì tốn một lần
     // capture (và một lần primeSurface) rồi mới ném.
     const rootCanon = realpathSync(root)
@@ -1933,6 +2080,7 @@ class BrowserController {
     }
     this.tabs.clear()
     this.activeId = null
+    this.activeByScope.clear()
     if (this.popoutWin && !this.popoutWin.isDestroyed()) this.popoutWin.destroy()
     this.popoutWin = null
     if (this.holder && !this.holder.isDestroyed()) this.holder.destroy()
@@ -1944,9 +2092,15 @@ export const browser = new BrowserController()
 
 // Register the browser.* methods the sidecar invokes via hostRequest(). Each
 // validates its params (main is also a trust boundary) and returns plain JSON.
+// `scope` trong mọi params dưới đây là chủ sở hữu tab theo thiết kế per-session
+// (session engineId từ chat, `task:<id>:<node>` từ workflow node). Nó đến TỪ
+// SIDECAR — nơi biết lượt agent nào đang gọi — chứ không phải từ model: model
+// chỉ nói "tab nào / action gì", tool wrapper gắn scope lên. Main check scope
+// ↔ tab ownership ở `this.tab()` nên một agent không thể mượn tabId của session
+// khác để đọc hay điều hướng trang đó.
 export function registerBrowserHostHandlers(): void {
   engine.registerHostHandler('browser.navigate', async (p) =>
-    browser.navigate(requireString(p, 'url'), optionalString(p, 'tabId')),
+    browser.navigate(requireString(p, 'url'), optionalString(p, 'tabId'), optionalString(p, 'scope')),
   )
   engine.registerHostHandler('browser.click', async (p) =>
     browser.click(
@@ -1955,6 +2109,7 @@ export function registerBrowserHostHandlers(): void {
         ref: optionalString(p, 'ref'),
       },
       optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
     ),
   )
   engine.registerHostHandler('browser.fill', async (p) =>
@@ -1965,24 +2120,35 @@ export function registerBrowserHostHandlers(): void {
       },
       requireString(p, 'value'),
       optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
     ),
   )
   engine.registerHostHandler('browser.extract', async (p) => {
     const o = asObject(p)
     const mode = o.mode === 'dom' ? 'dom' : 'text'
-    return browser.extract(mode, optionalString(p, 'selector'), optionalString(p, 'tabId'))
+    return browser.extract(
+      mode,
+      optionalString(p, 'selector'),
+      optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
+    )
   })
   engine.registerHostHandler('browser.screenshot', async (p) =>
-    browser.screenshot(optionalString(p, 'tabId')),
+    browser.screenshot(optionalString(p, 'tabId'), optionalString(p, 'scope')),
   )
   engine.registerHostHandler('browser.snapshot', async (p) =>
-    browser.snapshot(optionalString(p, 'selector'), optionalString(p, 'tabId')),
+    browser.snapshot(
+      optionalString(p, 'selector'),
+      optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
+    ),
   )
   engine.registerHostHandler('browser.console', async (p) =>
     browser.readConsole(
       optionalString(p, 'level'),
       Math.max(1, Math.min(200, optionalNumber(p, 'limit') ?? 50)),
       optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
     ),
   )
   engine.registerHostHandler('browser.network', async (p) =>
@@ -1990,10 +2156,15 @@ export function registerBrowserHostHandlers(): void {
       optionalString(p, 'filter'),
       Math.max(1, Math.min(200, optionalNumber(p, 'limit') ?? 50)),
       optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
     ),
   )
   engine.registerHostHandler('browser.networkBody', async (p) =>
-    browser.networkBody(requireString(p, 'requestId'), optionalString(p, 'tabId')),
+    browser.networkBody(
+      requireString(p, 'requestId'),
+      optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
+    ),
   )
   engine.registerHostHandler('browser.viewport', async (p) =>
     browser.viewport(
@@ -2004,17 +2175,20 @@ export function registerBrowserHostHandlers(): void {
         mobile: asObject(p).mobile === true ? true : undefined,
       },
       optionalString(p, 'tabId'),
+      optionalString(p, 'scope'),
     ),
   )
-  engine.registerHostHandler('browser.tabs', async () => browser.listTabs())
+  engine.registerHostHandler('browser.tabs', async (p) =>
+    browser.listTabs(undefined, optionalString(p, 'scope')),
+  )
   engine.registerHostHandler('browser.tabNew', async (p) =>
-    browser.newTab(optionalString(p, 'url')),
+    browser.newTab(optionalString(p, 'url'), true, optionalString(p, 'scope')),
   )
   engine.registerHostHandler('browser.tabSelect', async (p) =>
-    browser.selectTab(requireString(p, 'tabId')),
+    browser.selectTab(requireString(p, 'tabId'), optionalString(p, 'scope')),
   )
   engine.registerHostHandler('browser.tabClose', async (p) =>
-    browser.closeTab(requireString(p, 'tabId')),
+    browser.closeTab(requireString(p, 'tabId'), optionalString(p, 'scope')),
   )
   engine.registerHostHandler('browser.show', async () => {
     browser.show()

@@ -14,6 +14,7 @@ import {
 import { SURFACE_MCP_SERVER, SURFACE_TOOL_NAMES } from '../surface-tools.js'
 import { READ_TERMINAL_TOOL_NAMES, TERMINAL_MCP_SERVER } from '../read-terminal-tool.js'
 import { BROWSER_MCP_SERVER, BROWSER_TOOL_NAME } from '../browser-tool.js'
+import { TEAM_MCP_SERVER, TEAM_TOOL_NAMES } from '../board-tools.js'
 
 describe('bảng khớp với hằng tên server thật', () => {
   // Đổi tên một server mà quên bảng ⇒ test đỏ ngay, thay vì phát hiện qua một
@@ -29,6 +30,15 @@ describe('bảng khớp với hằng tên server thật', () => {
       expect(AWOG_BRIDGE_SERVER_OF[name]).toBe(TERMINAL_MCP_SERVER)
     }
     expect(AWOG_BRIDGE_SERVER_OF[BROWSER_TOOL_NAME]).toBe(BROWSER_MCP_SERVER)
+  })
+
+  it('mọi tool ê-kíp trỏ về server awogteam', () => {
+    // Board + channel + member_diff sống dưới MỘT server in-process trên nhánh
+    // Claude SDK; thiếu entry nào thì permission/step-mapper thấy tên mcp__…
+    // trần thay vì tên tool trần mà nhánh Pi phân loại.
+    for (const name of TEAM_TOOL_NAMES) {
+      expect(AWOG_BRIDGE_SERVER_OF[name], `thiếu ${name} trong bảng`).toBe(TEAM_MCP_SERVER)
+    }
   })
 })
 

@@ -42,13 +42,13 @@
           />
         </div>
         <div v-if="row.mode === 'rename'" class="aps-rename">
-          <input
-            class="aps-rename-input mono"
+          <Input
             :class="{ 'has-err': !!rowError(row) }"
-            :value="row.to"
+            :model-value="row.to"
             :placeholder="t('infra.import.file.preview.renamePlaceholder')"
             spellcheck="false"
-            @input="emit('set-to', row.name, ($event.target as HTMLInputElement).value)"
+            class="mono"
+            @update:model-value="emit('set-to', row.name, $event)"
           />
           <span v-if="rowError(row)" class="aps-rename-err">{{ rowError(row) }}</span>
         </div>
@@ -65,6 +65,7 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import type { AwsProfileImportEntry } from '~/composables/useAwsProfilesApi'
 import type { AwsProfileKind } from '~/types'
 import { AWS_PROFILE_NAME_RE } from '~/utils/aws-profile-view'
+import Input from '~/components/ui/input/Input.vue'
 
 export type ImportRowMode = 'create' | 'overwrite' | 'rename' | 'skip'
 export type ImportRow = AwsProfileImportEntry & { mode: ImportRowMode; to: string }

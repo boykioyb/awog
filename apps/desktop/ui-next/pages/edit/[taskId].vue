@@ -12,9 +12,9 @@
       @change-view="setView"
     >
       <template #actions>
-        <button class="iconbtn" :title="t('editor.copy')" @click="copyContent">
+        <Button :title="t('editor.copy')" variant="outline" size="iconMd" @click="copyContent">
           <Icon name="copy" class="acticon" />
-        </button>
+        </Button>
       </template>
     </EditorTopBar>
 
@@ -84,6 +84,7 @@ import EditorArtifactList from '~/components/editor/EditorArtifactList.vue'
 import EditorViewerPane from '~/components/editor/EditorViewerPane.vue'
 import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import { useTaskArtifacts } from '~/composables/useTaskArtifacts'
+import Button from '~/components/ui/button/Button.vue'
 
 definePageMeta({ layout: false })
 defineOptions({ name: 'TaskArtifactEditPage' })

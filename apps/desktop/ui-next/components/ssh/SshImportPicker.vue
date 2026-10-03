@@ -38,10 +38,10 @@
     <template #footer>
       <span class="ssp-count">{{ t('ssh.import.selectedCount', { n: selected.size }) }}</span>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!selected.size" @click="confirm">
+      <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!selected.size" variant="default" @click="confirm">
         {{ t('ssh.import.apply') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -54,6 +54,7 @@
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { SshConfigCandidate } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

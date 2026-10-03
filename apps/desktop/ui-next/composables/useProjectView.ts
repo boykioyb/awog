@@ -5,6 +5,7 @@ import { useTasksStore } from '~/stores/tasks'
 import { useAgentsStore } from '~/stores/agents'
 import { useGitStore } from '~/stores/git'
 import { githubSlugFromRemote, type ProjectRepo, type ProjectView } from '~/components/project/data'
+import { isBoardSession } from './useSessionsData'
 
 // Derive the compact overview view-model (`ProjectView`) for a project id from the
 // live stores (entity + git repos + agents/sessions/tasks). Shared single source so
@@ -55,8 +56,11 @@ export function useProjectView(getProjectId: () => string | null): ComputedRef<P
     // "borrow" the other's sessions in the overview while the Sessions tab (strict id)
     // showed them empty — the split-project bug. (linkProject now dedups by path too.)
     const nameUnique = projectsStore.projects.filter((x) => x.name === p.name).length === 1
+    // Phiên board (member team / lone-agent do item dispatch) ẩn khỏi Sessions
+    // list — strip "recent sessions" của overview phải cùng phạm vi, không thì
+    // hiện một hàng mà sang màn Sessions không thấy.
     const sessions = sessionsStore.sessions.filter(
-      (s) => s.project === p.id || (nameUnique && s.project === p.name),
+      (s) => !isBoardSession(s) && (s.project === p.id || (nameUnique && s.project === p.name)),
     )
     const ses = sessions.slice(0, 6).map((s) => ({ id: s.id, t: s.title, w: s.when }))
     const anyRunning = sessions.some((s) => s.status === 'streaming' || s.status === 'awaiting')

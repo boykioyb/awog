@@ -9,21 +9,27 @@
     <header class="ixc-hd">
       <!-- Chỉ hiện khi THẬT SỰ có view để quay về: một nút dẫn tới khung trống còn
            tệ hơn không có nút (cùng luật với nút ↗ ở màn Nhật ký). -->
-      <button
+      <Button
         v-if="closable"
-        class="btn sm"
         type="button"
         :title="t('infra.explorer.services.back')"
+        variant="outline"
+        size="sm"
         @click="$emit('close')"
       >
         <Icon name="chev-left" />
         {{ t('infra.explorer.services.back') }}
-      </button>
+      </Button>
       <Icon name="layers" />
       <span class="ixc-ttl">{{ t('infra.explorer.services.title') }}</span>
       <label class="srch ixc-srch">
         <Icon name="search" />
-        <input ref="searchEl" v-model="q" :placeholder="t('infra.explorer.services.search')" />
+        <Input
+          ref="searchEl"
+          v-model="q"
+          unstyled
+          :placeholder="t('infra.explorer.services.search')"
+        />
         <span class="ixc-kbd">⌘K</span>
       </label>
       <!-- Nút ⓘ ở góc phải. `title` trên badge chỉ giúp người biết cần rê chuột;
@@ -37,16 +43,17 @@
            Dùng chung khuôn `iwrap`/`ibackdrop`/`ipop` của ba chip hạ tầng — bấm ra
            ngoài để đóng, nên vẫn nhìn thấy thẻ phía sau như bản cũ. -->
       <span class="iwrap ixc-info">
-        <button
-          class="iconbtn"
+        <Button
           type="button"
           :aria-label="t('infra.explorer.levels.open')"
           :aria-expanded="infoOpen"
           :title="t('infra.explorer.levels.open')"
+          variant="outline"
+          size="iconMd"
           @click.stop="infoOpen = !infoOpen"
         >
           <Icon name="info" />
-        </button>
+        </Button>
         <template v-if="infoOpen">
           <div class="ibackdrop" @click="infoOpen = false" />
           <!-- Bảng chú giải dùng CHÍNH những badge đang có trên thẻ, không phải ảnh
@@ -60,14 +67,16 @@
           >
             <div class="ixc-legend-hd">
               <span class="ixc-legend-ttl">{{ t('infra.explorer.levels.title') }}</span>
-              <button
-                class="iconbtn ixc-legend-x"
+              <Button
                 type="button"
                 :aria-label="t('common.close')"
+                class="ixc-legend-x"
+                variant="outline"
+                size="iconMd"
                 @click="infoOpen = false"
               >
                 <Icon name="x" />
-              </button>
+              </Button>
             </div>
             <p class="ixc-legend-intro">{{ t('infra.explorer.levels.intro') }}</p>
             <ul class="ixc-legend-list">
@@ -155,23 +164,27 @@
               <span v-if="inUse.has(s.id)" class="chip inuse">
                 {{ t('infra.explorer.services.inUse') }}
               </span>
-              <button
+              <Button
                 v-if="s.target.kind !== 'console'"
-                class="btn sm ixc-go"
                 type="button"
+                class="ixc-go"
+                variant="outline"
+                size="sm"
                 @click="$emit('open-target', s.target)"
               >
                 <Icon name="chev-right" />
-              </button>
-              <button
+              </Button>
+              <Button
                 v-else-if="s.consoleUrl"
-                class="btn sm ixc-go"
                 type="button"
                 :title="t('infra.explorer.console')"
+                class="ixc-go"
+                variant="outline"
+                size="sm"
                 @click="$emit('console', s.consoleUrl)"
               >
                 <Icon name="external" />
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -192,10 +205,16 @@
         </span>
         <!-- Nút chỉ có nghĩa khi đã CÓ cầu nối mà lời gọi hỏng. Chưa có cầu nối thì
              gọi lại cũng không sinh ra nó giữa phiên — bấm nút ở đó là hứa suông. -->
-        <button v-if="error === 'failed'" class="btn sm" type="button" @click="$emit('retry')">
+        <Button
+          v-if="error === 'failed'"
+          type="button"
+          variant="outline"
+          size="sm"
+          @click="$emit('retry')"
+        >
           <Icon name="refresh" />
           {{ t('infra.explorer.services.retry') }}
-        </button>
+        </Button>
       </p>
       <p v-else-if="loading && !services.length" class="ixc-empty">
         {{ t('infra.explorer.loading') }}
@@ -214,6 +233,8 @@
 // một con số đoán mò còn tệ hơn nói thẳng giới hạn này.
 import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
 import type { InfraCatalogService } from '~/composables/useInfraResourcesApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 /** Một dòng đã nạp ở màn Explorer, để ⌘K tìm được cả dữ liệu chứ không chỉ tên. */
 export type InfraRowHit = {

@@ -27,8 +27,8 @@ const { t } = useI18n()
 .fnode {
   width: 188px;
   padding: 9px 11px;
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
+  border-radius: var(--radius); /* rounded-lg */
+  background: var(--card);
   border: 1px solid var(--border);
   cursor: pointer;
   transition:
@@ -36,16 +36,16 @@ const { t } = useI18n()
     background 0.12s ease;
 }
 .fnode:hover {
-  border-color: var(--borderStrong);
-  background: var(--bgHover);
+  border-color: var(--input);
+  background: var(--accent-wash);
 }
 .fnode.current {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
+  border-color: var(--ring);
+  background: var(--accent-wash);
 }
 .fnode-title {
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -57,10 +57,10 @@ const { t } = useI18n()
   margin-top: 3px;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .fnode-cur {
   margin-left: auto;
-  color: var(--accent);
+  color: var(--primary);
 }
 </style>

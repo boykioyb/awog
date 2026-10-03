@@ -5,10 +5,10 @@
       <span v-if="updatedAt" class="iov-when">
         {{ t('infra.ov.updated', { when: updatedLabel }) }}
       </span>
-      <button class="btn sm" type="button" :disabled="loading" @click="refresh">
+      <Button type="button" :disabled="loading" variant="outline" size="sm" @click="refresh">
         <Icon name="refresh" />
         {{ t('infra.ov.refresh') }}
-      </button>
+      </Button>
     </div>
     <p class="iov-sub">{{ t('infra.ov.subtitle') }}</p>
     <p v-if="!pinnedProfile" class="iov-note">
@@ -47,17 +47,18 @@
         <p class="iov-text">{{ card.text }}</p>
         <p v-if="card.note" class="iov-card-note">{{ card.note }}</p>
         <div class="iov-acts">
-          <button
+          <Button
             v-for="action in card.actions"
             :key="action.id"
-            class="btn sm"
             :class="{ pri: action.kind === 'primary' }"
             type="button"
             :disabled="action.disabled"
+            variant="outline"
+            size="sm"
             @click="action.run()"
           >
             {{ action.label }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -99,6 +100,7 @@
 // `ec2 describe-instances` (không tốn tiền, nhưng vẫn cần người bấm), thẻ Lỗi đi hai
 // bước có nhìn thấy số tiền (Ước lượng → Chạy).
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
+import Button from '~/components/ui/button/Button.vue'
 import {
   OVERVIEW_ERRORS_WINDOW_SECONDS,
   OVERVIEW_OPEN_LOGS_QUERY,

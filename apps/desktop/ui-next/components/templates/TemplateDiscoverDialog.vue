@@ -11,12 +11,7 @@
     <div v-else class="tdd">
       <div class="tdd-bar">
         <Icon name="search" class="tdd-bar-ic" />
-        <input
-          v-model="query"
-          type="text"
-          class="tdd-input"
-          :placeholder="t('templatesDiscover.search')"
-        />
+        <Input v-model="query" type="text" :placeholder="t('templatesDiscover.search')" />
         <button
           type="button"
           class="tdd-refresh"
@@ -67,18 +62,18 @@
     <div v-if="error" class="tdd-error">{{ error }}</div>
 
     <template #footer>
-      <button v-if="inspection" class="btn" :disabled="installing" @click="back">
+      <Button v-if="inspection" :disabled="installing" variant="outline" @click="back">
         {{ t('templatesDiscover.consent.back') }}
-      </button>
-      <button v-else class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button
+      </Button>
+      <Button v-else variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      <Button
         v-if="inspection"
-        class="btn pri"
         :disabled="installing || !inspection.entities.length"
+        variant="default"
         @click="onInstall"
       >
         {{ installing ? t('templatesDiscover.installing') : installLabel }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -97,6 +92,8 @@
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import TemplateConsentPanel from '~/components/templates/TemplateConsentPanel.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import {
   useTemplatesStore,
   type MarketplaceEntry,

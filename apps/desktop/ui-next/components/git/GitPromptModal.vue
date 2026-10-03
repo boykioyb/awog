@@ -1,33 +1,38 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="gpm-ovl" @click.self="emit('close')">
-      <div class="gpm-card" role="dialog" aria-modal="true">
-        <div class="gpm-title">{{ title }}</div>
-        <input
-          ref="input"
-          class="gpm-input"
-          :value="modelValue"
-          :placeholder="placeholder"
-          @input="onInput"
-          @keydown.enter.prevent="submit"
-          @keydown.esc.prevent="emit('close')"
-        />
-        <div class="gpm-foot">
-          <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-          <button class="btn pri" :disabled="!modelValue.trim()" @click="submit">
-            {{ submitLabel ?? t('common.confirm') }}
-          </button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
+  <Dialog :open="open" @update:open="onOpenChange">
+    <DialogContent class="sm:max-w-sm">
+      <DialogHeader>
+        <DialogTitle>{{ title }}</DialogTitle>
+      </DialogHeader>
+      <Input
+        ref="input"
+        :model-value="modelValue"
+        :placeholder="placeholder"
+        @update:model-value="(v) => emit('update:modelValue', String(v))"
+        @keydown.enter.prevent="submit"
+      />
+      <DialogFooter>
+        <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+        <Button :disabled="!modelValue.trim()" @click="submit">
+          {{ submitLabel ?? t('common.confirm') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
 // Small reusable prompt modal for single-line git input (new branch name, rename
 // branch, tag name…). Caller owns the value via v-model + supplies the labels;
-// this component only renders the overlay + wires keyboard/focus behaviour.
+// this component only renders the dialog + wires keyboard/focus behaviour.
 import { nextTick, useTemplateRef, watch } from 'vue'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean
@@ -45,10 +50,11 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const input = useTemplateRef<HTMLInputElement>('input')
+const input = useTemplateRef<{ $el?: HTMLInputElement } | HTMLInputElement>('input')
 
-function onInput(e: Event) {
-  emit('update:modelValue', (e.target as HTMLInputElement).value)
+// Reka manages Esc/outside-close centrally; map both to the one `close` event.
+function onOpenChange(v: boolean) {
+  if (!v) emit('close')
 }
 
 function submit() {
@@ -63,7 +69,7 @@ watch(
   (isOpen) => {
     if (!isOpen) return
     nextTick(() => {
-      const el = input.value
+      const el = input.value instanceof HTMLInputElement ? input.value : input.value?.$el
       if (!el) return
       el.focus()
       el.select()
@@ -71,55 +77,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.gpm-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.gpm-card {
-  width: 360px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.gpm-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.gpm-input {
-  width: 100%;
-  padding: 9px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-  font-family: var(--sans);
-}
-.gpm-input:focus {
-  border-color: var(--accent);
-}
-.gpm-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.gpm-foot .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-</style>

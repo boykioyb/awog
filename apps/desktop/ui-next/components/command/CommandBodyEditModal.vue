@@ -36,24 +36,34 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button v-if="draft" class="btn" @click="resetDraft">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button v-if="draft" variant="outline" @click="resetDraft">
         <Icon name="refresh" />
         {{ t('commands.bodyEdit.regenerate') }}
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!draft"
-        class="btn pri"
         :disabled="isGenerating || !prompt.trim()"
+        variant="outline"
+        :title="t('library.bgEdit.hint')"
+        @click="onGenerateSave"
+      >
+        <Icon name="check" />
+        {{ t('library.bgEdit.generateSave') }}
+      </Button>
+      <Button
+        v-if="!draft"
+        :disabled="isGenerating || !prompt.trim()"
+        variant="default"
         @click="onGenerate"
       >
         <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
         {{ isGenerating ? t('commands.bodyEdit.generating') : t('commands.bodyEdit.generate') }}
-      </button>
-      <button v-else class="btn pri" @click="onApply">
+      </Button>
+      <Button v-else variant="default" @click="onApply">
         <Icon name="check" />
         {{ t('commands.bodyEdit.apply') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -69,6 +79,8 @@ import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useCommandsStore, type Command } from '~/stores/commands'
+import { startAiEditSave } from '~/composables/useAiEditSave'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean
@@ -130,10 +142,8 @@ const onGenerate = async () => {
   }
 }
 
-const onApply = () => {
-  const d = draft.value
-  if (!d) return
-  // Preserve identity/location; only content fields come from the model.
+// Preserve identity/location; only content fields come from the model.
+const applyDraft = (d: Draft): Command => {
   const updated: Command = {
     ...props.command,
     name: d.name,
@@ -141,7 +151,50 @@ const onApply = () => {
     body: d.body,
   }
   if (d.argumentHint) updated.argumentHint = d.argumentHint
-  emit('apply', updated)
+  return updated
+}
+
+const onApply = () => {
+  const d = draft.value
+  if (!d) return
+  emit('apply', applyDraft(d))
+}
+
+// "Sửa + lưu": generate + apply + save chạy nền — đóng modal ngay, xong/lỗi
+// bắn toast. Chụp entity + account lúc bấm vì modal unmount sau emit('cancel').
+const onGenerateSave = () => {
+  const text = prompt.value.trim()
+  if (!text || isGenerating.value) return
+  if (!sc.available || !props.accountId) {
+    error.value = t('common.aiUnavailable')
+    return
+  }
+  const command = props.command
+  const accountId = props.accountId
+  const current = {
+    name: command.name,
+    description: command.description,
+    argumentHint: command.argumentHint ?? '',
+    body: command.body,
+  }
+  emit('cancel')
+  startAiEditSave({
+    key: `command-${command.id}`,
+    name: command.name || command.id,
+    task: async () => {
+      const d = await store.generateCommand(text, accountId, current)
+      if (!d.name || !d.body) throw new Error('Model returned an incomplete draft')
+      const updated: Command = {
+        ...command,
+        name: d.name,
+        description: d.description,
+        body: d.body,
+      }
+      if (d.argumentHint) updated.argumentHint = d.argumentHint
+      await store.saveCommand(updated)
+      return undefined
+    },
+  })
 }
 </script>
 

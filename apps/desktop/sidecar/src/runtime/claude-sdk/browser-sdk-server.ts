@@ -58,7 +58,12 @@ function bridge(result: Awaited<ReturnType<typeof runBrowserAction>>): {
   }
 }
 
-export function buildBrowserToolSdkServer(cwd: string): McpSdkServerConfigWithInstance {
+// `scope` = chủ tab của lượt này (session engineId / `task:…`) — wrapper gắn,
+// model không đặt được. Cùng một thân `runBrowserAction` với nhánh Pi.
+export function buildBrowserToolSdkServer(
+  cwd: string,
+  scope?: string,
+): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: BROWSER_MCP_SERVER,
     version: '1.0.0',
@@ -136,7 +141,7 @@ export function buildBrowserToolSdkServer(cwd: string): McpSdkServerConfigWithIn
             .optional()
             .describe('Which tab to act on. Defaults to the active tab.'),
         },
-        async (args) => bridge(await runBrowserAction(cwd, args as BrowserActionInput)),
+        async (args) => bridge(await runBrowserAction(cwd, args as BrowserActionInput, scope)),
       ),
     ],
   })

@@ -74,9 +74,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 100%;
   max-width: 680px;
   max-height: 80vh;
-  background: var(--bgEl);
+  background: var(--card);
+  color: var(--card-foreground);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -86,7 +87,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 9px;
   padding: 11px 14px;
   border-bottom: 1px solid var(--border);
-  color: var(--text);
+  color: var(--foreground);
 }
 .amtitle {
   font-weight: 600;
@@ -95,13 +96,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .amxbtn:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .amgrid {
   display: grid;
@@ -117,13 +118,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 9px;
   padding: 7px 9px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgActive);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
   cursor: pointer;
   min-width: 0;
 }
 .amitem:hover {
-  border-color: var(--accentBorder);
+  border-color: var(--ring);
 }
 .amthumb {
   display: grid;
@@ -131,9 +132,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 30px;
   height: 30px;
   flex: 0 0 auto;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   overflow: hidden;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .amimg {
   width: 100%;
@@ -144,7 +145,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 20px;
   height: 20px;
   border-radius: var(--r-xs);
-  background: linear-gradient(135deg, var(--blue), var(--violet));
+  background: linear-gradient(135deg, var(--info), var(--violet));
 }
 .aminfo {
   display: flex;
@@ -155,7 +156,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 .amname {
   /* mono-ok: attachment file name */
   font-family: var(--code);
-  color: var(--text);
+  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -164,19 +165,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .amrm {
   display: grid;
   place-items: center;
   padding: 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   flex: 0 0 auto;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .amrm:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
+  background: rgb(from var(--destructive) r g b / 0.1);
+  color: var(--destructive);
 }
 </style>

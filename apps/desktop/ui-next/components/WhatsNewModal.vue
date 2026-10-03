@@ -8,14 +8,15 @@
             style="width: var(--icon-md); height: var(--icon-md); color: var(--accent)"
           />
           <span>{{ t('whatsnew.title') }}</span>
-          <button
-            class="iconbtn"
+          <Button
             style="width: 28px; height: 28px"
             :title="t('common.close')"
+            variant="outline"
+            size="iconMd"
             @click="closePanel"
           >
             <Icon name="x" />
-          </button>
+          </Button>
         </div>
         <div class="setmodalbody">
           <section v-for="rel in releases" :key="rel.version" class="wn-rel">
@@ -44,6 +45,7 @@
 // the active locale. Ports apps/desktop/ui/components/WhatsNewModal.vue to the
 // ui-next prototype-CSS modal (.ovl/.setmodal). Open state from useWhatsNew.
 import type { ChangeKind, LocalizedText } from '~/utils/changelog'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t, locale } = useI18n()
 const { open, closePanel, releases } = useWhatsNew()

@@ -12,51 +12,57 @@
         </div>
       </div>
       <div class="iad-actions">
-        <button
-          class="iconbtn"
+        <Button
           type="button"
           :disabled="identity?.loading"
           :title="t('infra.list.action.checkIdentity')"
+          variant="outline"
+          size="iconMd"
           @click="emit('check-identity')"
         >
           <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           type="button"
           :disabled="!canEdit"
           :title="canEdit ? t('common.edit') : t('infra.list.action.editDisabledProcess')"
+          variant="outline"
+          size="iconMd"
           @click="canEdit && emit('edit')"
         >
           <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           type="button"
           :title="t('infra.list.action.duplicate')"
+          variant="outline"
+          size="iconMd"
           @click="emit('duplicate')"
         >
           <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           type="button"
           :disabled="isDefault"
           :title="
             isDefault ? t('infra.list.action.alreadyDefault') : t('infra.list.action.setDefault')
           "
+          variant="outline"
+          size="iconMd"
           @click="!isDefault && emit('set-default')"
         >
           <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn iad-danger"
+        </Button>
+        <Button
           type="button"
           :title="t('common.delete')"
+          class="iad-danger"
+          variant="outline"
+          size="iconMd"
           @click="emit('delete')"
         >
           <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        </Button>
       </div>
     </header>
 
@@ -268,6 +274,7 @@ import { AWS_PROFILE_SOURCE_LABEL_KEY, computeExpiry } from '~/utils/aws-profile
 import type { AwsProfile, AwsProfileKind } from '~/types'
 import type { AwsIdentityCheckResult } from '~/composables/useAwsProfilesApi'
 import type { ResolvedAccountId } from '~/composables/useAwsProfileAccountIds'
+import Button from '~/components/ui/button/Button.vue'
 
 // Trạng thái kiểm tra danh tính của ĐÚNG profile đang hiện — orchestrator giữ một
 // Map theo tên profile (đổi profile không mất kết quả lần kiểm tra trước), còn ở

@@ -13,21 +13,21 @@
         <div class="lcd-body">{{ description }}</div>
         <slot name="extra" />
         <div class="lcd-foot">
-          <button class="btn" @click="emit('cancel')">
+          <Button variant="outline" @click="emit('cancel')">
             {{ cancelLabel || t('common.cancel') }}
-          </button>
-          <button
-            class="btn"
+          </Button>
+          <Button
             :class="{ pri: kind !== 'danger' }"
             :style="
               kind === 'danger'
                 ? { background: 'var(--danger)', color: 'var(--bg)', borderColor: 'transparent' }
                 : undefined
             "
+            variant="outline"
             @click="emit('confirm')"
           >
             {{ confirmLabel || (kind === 'danger' ? t('common.delete') : t('common.confirm')) }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -42,6 +42,7 @@
 // defaults to 'danger' so the common Delete flow stays red. Caller owns the
 // open state + supplies localized title/description.
 import { onBeforeUnmount, onMounted } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

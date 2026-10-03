@@ -1,32 +1,24 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="prm-ovl" @click.self="emit('close')">
-      <div class="prm-card" role="dialog" aria-modal="true">
-        <!-- Header -->
-        <div class="prm-head">
-          <div class="prm-headmain">
-            <Icon
-              name="sparkles"
-              style="width: var(--icon-md); height: var(--icon-md); color: var(--accent)"
-            />
-            <span class="prm-title">{{ t('git.prSummary.title') }}</span>
-          </div>
-          <button class="prm-x" :title="t('common.close')" @click="emit('close')">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-        </div>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="max-h-[88vh] grid-rows-[auto_1fr_auto] sm:max-w-2xl">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2">
+          <Icon name="sparkles" class="size-4 shrink-0 text-primary" />
+          {{ t('git.prSummary.title') }}
+        </DialogTitle>
+      </DialogHeader>
 
+      <div class="grid min-h-0 gap-3 overflow-y-auto pr-1">
         <!-- Compare row: head → base picker -->
-        <div class="prm-compare">
-          <span class="prm-branch">
-            <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <div class="flex flex-wrap items-center gap-2">
+          <span
+            class="inline-flex items-center gap-1.5 rounded-md border border-input bg-transparent px-2 py-0.5 font-mono text-xs"
+          >
+            <Icon name="branch" class="size-3" />
             {{ head }}
           </span>
-          <Icon
-            name="fork"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
-          />
-          <span class="prm-into">{{ t('git.prSummary.into') }}</span>
+          <Icon name="fork" class="size-3.5 text-muted-foreground" />
+          <span class="text-sm text-muted-foreground">{{ t('git.prSummary.into') }}</span>
           <AppSelect
             v-if="baseOptions.length"
             :model-value="base"
@@ -35,16 +27,15 @@
             :disabled="loading"
             @update:model-value="onBaseChange"
           />
-          <span v-else class="prm-nobase">{{ t('git.prSummary.noBase') }}</span>
+          <span v-else class="text-sm italic text-muted-foreground">
+            {{ t('git.prSummary.noBase') }}
+          </span>
         </div>
 
         <!-- Rule row: which commit-rule file governs the title + Generate action -->
-        <div class="prm-rulerow">
-          <Icon
-            name="rules"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
-          />
-          <span class="prm-into">{{ t('git.prSummary.ruleLabel') }}</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <Icon name="rules" class="size-3.5 text-muted-foreground" />
+          <span class="text-sm text-muted-foreground">{{ t('git.prSummary.ruleLabel') }}</span>
           <AppSelect
             :model-value="rulePath"
             :options="ruleOptions"
@@ -52,149 +43,169 @@
             :disabled="loading"
             @update:model-value="onRuleChange"
           />
-          <span style="flex: 1" />
-          <button
-            class="btn pri sm"
-            type="button"
-            :disabled="loading || !base || !head"
-            @click="runGenerate"
-          >
-            <Icon
-              name="sparkles"
-              :class="{ prmspin: loading }"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+          <span class="flex-1" />
+          <Button size="sm" :disabled="loading || !base || !head" @click="runGenerate">
+            <span class="relative inline-flex size-3.5 items-center justify-center">
+              <Icon name="sparkles" class="size-3.5" />
+              <span
+                v-if="loading"
+                class="absolute -inset-[3px] animate-spin rounded-full border border-transparent border-t-primary-foreground"
+              />
+            </span>
             {{ generated ? t('git.prSummary.regenerate') : t('git.prSummary.generate') }}
-          </button>
+          </Button>
         </div>
 
         <!-- Error banner -->
-        <div v-if="error" class="prm-err">
-          <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div
+          v-if="error"
+          class="flex items-center gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-sm text-destructive"
+        >
+          <Icon name="alert" class="size-3.5 shrink-0" />
           <span>{{ error }}</span>
         </div>
 
         <!-- Loading -->
-        <div v-if="loading" class="prm-loading">
-          <Icon
-            name="sparkles"
-            class="prmspin"
-            style="width: var(--icon-md); height: var(--icon-md)"
-          />
+        <div
+          v-if="loading"
+          class="flex items-center justify-center gap-2.5 py-10 text-sm text-muted-foreground"
+        >
+          <span class="relative inline-flex size-4 items-center justify-center">
+            <Icon name="sparkles" class="size-4" />
+            <span
+              class="absolute -inset-[3px] animate-spin rounded-full border border-transparent border-t-primary"
+            />
+          </span>
           <span>{{ t('git.prSummary.generating') }}</span>
         </div>
 
         <!-- Empty state (before the first generation) -->
-        <div v-else-if="!generated" class="prm-placeholder">
-          <Icon name="sparkles" style="width: 22px; height: 22px; color: var(--textDim)" />
+        <div
+          v-else-if="!generated"
+          class="flex min-h-[200px] flex-col items-center justify-center gap-2.5 py-10 text-center text-sm text-muted-foreground"
+        >
+          <Icon name="sparkles" class="size-5 text-muted-foreground" />
           <span>{{ t('git.prSummary.emptyHint') }}</span>
         </div>
 
         <template v-else>
           <!-- Title field -->
-          <div class="prm-field">
-            <div class="prm-fieldhd">
-              <span class="prm-label">{{ t('git.prSummary.titleLabel') }}</span>
-              <button
-                class="prm-copy"
-                type="button"
+          <div class="grid gap-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-muted-foreground">
+                {{ t('git.prSummary.titleLabel') }}
+              </span>
+              <Button
+                variant="outline"
+                size="xs"
+                class="ml-auto"
                 :title="t('common.copy')"
                 @click="copy(title, 'title')"
               >
-                <Icon
-                  :name="copied === 'title' ? 'check' : 'copy'"
-                  style="width: var(--icon-xs); height: var(--icon-xs)"
-                />
+                <Icon :name="copied === 'title' ? 'check' : 'copy'" class="size-3" />
                 {{ copied === 'title' ? t('common.copied') : t('common.copy') }}
-              </button>
+              </Button>
             </div>
-            <input v-model="title" class="prm-input" :placeholder="t('git.prSummary.titleLabel')" />
+            <Input v-model="title" :placeholder="t('git.prSummary.titleLabel')" />
           </div>
 
           <!-- Description editor (Write / Preview) -->
-          <div class="prm-field prm-descfield">
-            <div class="prm-fieldhd">
-              <span class="prm-label">{{ t('git.prSummary.descLabel') }}</span>
-              <div class="prm-seg">
-                <button
-                  class="prm-segbtn"
-                  :class="{ on: mode === 'write' }"
+          <div class="grid min-h-0 gap-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-muted-foreground">
+                {{ t('git.prSummary.descLabel') }}
+              </span>
+              <!-- segmented Write/Preview — shadcn tabs-list shape -->
+              <div
+                class="inline-flex h-[var(--ctrl-h-xs)] items-center gap-0.5 rounded-md bg-muted p-0.5"
+              >
+                <Button
+                  variant="ghost"
                   type="button"
+                  class="h-auto p-0 rounded-sm px-2.5 text-xs font-medium transition-colors"
+                  :class="
+                    mode === 'write'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  "
                   @click="mode = 'write'"
                 >
                   {{ t('git.prSummary.write') }}
-                </button>
-                <button
-                  class="prm-segbtn"
-                  :class="{ on: mode === 'preview' }"
+                </Button>
+                <Button
+                  variant="ghost"
                   type="button"
+                  class="h-auto p-0 rounded-sm px-2.5 text-xs font-medium transition-colors"
+                  :class="
+                    mode === 'preview'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  "
                   @click="mode = 'preview'"
                 >
                   {{ t('git.prSummary.preview') }}
-                </button>
+                </Button>
               </div>
-              <span style="flex: 1" />
-              <div v-if="mode === 'write'" class="prm-tools">
-                <button
+              <span class="flex-1" />
+              <div v-if="mode === 'write'" class="inline-flex gap-0.5">
+                <Button
                   v-for="tool in TOOLS"
                   :key="tool.k"
-                  class="prm-tool"
-                  type="button"
+                  variant="ghost"
+                  size="iconSm"
                   :title="tool.k"
+                  :aria-label="tool.k"
                   @click="tool.run()"
                 >
-                  <Icon :name="tool.icon" style="width: var(--icon-xs); height: var(--icon-xs)" />
-                </button>
+                  <Icon :name="tool.icon" class="size-3" />
+                </Button>
               </div>
-              <button
-                class="prm-copy"
-                type="button"
+              <Button
+                variant="outline"
+                size="xs"
                 :title="t('common.copy')"
                 @click="copy(description, 'desc')"
               >
-                <Icon
-                  :name="copied === 'desc' ? 'check' : 'copy'"
-                  style="width: var(--icon-xs); height: var(--icon-xs)"
-                />
+                <Icon :name="copied === 'desc' ? 'check' : 'copy'" class="size-3" />
                 {{ copied === 'desc' ? t('common.copied') : t('common.copy') }}
-              </button>
+              </Button>
             </div>
 
-            <textarea
+            <!-- Bounded height (not flex-fill) so the modal never grows past the
+                 viewport — the box scrolls internally; resize:none keeps the Write
+                 box the same footprint as Preview (no shift on toggle). -->
+            <Textarea
               v-show="mode === 'write'"
               ref="ta"
               v-model="description"
-              class="prm-textarea"
+              class="max-h-[42vh] min-h-[200px] resize-none font-mono"
               :placeholder="t('git.prSummary.descLabel')"
             />
-            <div v-if="mode === 'preview'" class="prm-preview">
+            <div
+              v-if="mode === 'preview'"
+              class="max-h-[42vh] min-h-[200px] overflow-y-auto rounded-md border border-input px-3 py-2.5 text-sm"
+            >
               <ProjectGhMarkdown v-if="description.trim()" :source="description" />
-              <div v-else class="prm-empty">{{ t('git.prSummary.previewEmpty') }}</div>
+              <div v-else class="italic text-muted-foreground">
+                {{ t('git.prSummary.previewEmpty') }}
+              </div>
             </div>
           </div>
         </template>
-
-        <!-- Footer -->
-        <div class="prm-foot">
-          <span v-if="truncated" class="prm-hint">{{ t('git.prSummary.truncated') }}</span>
-          <span style="flex: 1" />
-          <button class="btn" type="button" @click="emit('close')">{{ t('common.close') }}</button>
-          <button
-            class="btn pri"
-            type="button"
-            :disabled="loading || !title.trim() || !description.trim()"
-            @click="copyAll"
-          >
-            <Icon
-              :name="copied === 'all' ? 'check' : 'copy'"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-            {{ copied === 'all' ? t('common.copied') : t('git.prSummary.copyAll') }}
-          </button>
-        </div>
       </div>
-    </div>
-  </Teleport>
+
+      <DialogFooter class="items-center">
+        <span v-if="truncated" class="mr-auto text-xs text-muted-foreground">
+          {{ t('git.prSummary.truncated') }}
+        </span>
+        <Button variant="outline" @click="emit('close')">{{ t('common.close') }}</Button>
+        <Button :disabled="loading || !title.trim() || !description.trim()" @click="copyAll">
+          <Icon :name="copied === 'all' ? 'check' : 'copy'" class="size-3.5" />
+          {{ copied === 'all' ? t('common.copied') : t('git.prSummary.copyAll') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -208,6 +219,14 @@
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import ProjectGhMarkdown from '~/components/project/ProjectGhMarkdown.vue'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
+import Textarea from '~/components/ui/textarea/Textarea.vue'
 import type { BranchInfo } from './git-types'
 import type { PrSummaryResult } from '~/composables/useGitApi'
 
@@ -243,7 +262,7 @@ const generated = ref(false)
 const error = ref<string | null>(null)
 const truncated = ref(false)
 const copied = ref<'title' | 'desc' | 'all' | null>(null)
-const ta = useTemplateRef<HTMLTextAreaElement>('ta')
+const ta = useTemplateRef<{ $el?: HTMLTextAreaElement } | HTMLTextAreaElement>('ta')
 
 // Common merge targets, most-preferred first — used to pick a sensible default base.
 const DEFAULT_BASES = ['main', 'master', 'develop', 'trunk']
@@ -362,17 +381,19 @@ function copyAll() {
 }
 
 // ── Markdown insert helpers (mirror ProjectGhComposer) ──
+const taEl = () => (ta.value instanceof HTMLTextAreaElement ? ta.value : (ta.value?.$el ?? null))
+
 function applyEdit(next: string, selStart: number, selEnd: number) {
   description.value = next
   void nextTick(() => {
-    const el = ta.value
+    const el = taEl()
     if (!el) return
     el.focus()
     el.setSelectionRange(selStart, selEnd)
   })
 }
 function surround(before: string, after: string) {
-  const el = ta.value
+  const el = taEl()
   if (!el) return
   const s = el.selectionStart
   const e = el.selectionEnd
@@ -385,7 +406,7 @@ function surround(before: string, after: string) {
   )
 }
 function prefixLines(prefix: string) {
-  const el = ta.value
+  const el = taEl()
   if (!el) return
   const s = el.selectionStart
   const e = el.selectionEnd
@@ -406,274 +427,3 @@ const TOOLS: { k: string; icon: string; run: () => void }[] = [
   { k: 'quote', icon: 'quote', run: () => prefixLines('> ') },
 ]
 </script>
-
-<style scoped>
-.prm-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-  padding: 24px;
-}
-.prm-card {
-  width: 720px;
-  max-width: 94vw;
-  max-height: 88vh;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.prm-head {
-  display: flex;
-  align-items: center;
-}
-.prm-headmain {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-.prm-title {
-  font-size: 1.08em;
-  font-weight: 600;
-  color: var(--text);
-}
-.prm-x {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.prm-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.prm-compare,
-.prm-rulerow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.prm-branch {
-  /* mono-ok: git branch name */
-  font-family: var(--code);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 12px;
-  line-height: 18px;
-}
-.prm-into {
-  font-size: 1em;
-  color: var(--textDim);
-}
-.prm-nobase {
-  font-size: 1em;
-  color: var(--textDim);
-  font-style: italic;
-}
-.prm-err {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  background: var(--dangerBg);
-  border: 1px solid var(--dangerBorder);
-  color: var(--danger);
-  font-size: 1em;
-}
-.prm-loading,
-.prm-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  min-height: 200px;
-  padding: 40px 0;
-  color: var(--textDim);
-  font-size: 1em;
-  text-align: center;
-}
-.prm-loading {
-  flex-direction: row;
-  min-height: 0;
-  padding: 40px 0;
-}
-.prm-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-}
-.prm-descfield {
-  min-height: 0;
-}
-.prm-fieldhd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.prm-label {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--textDim);
-}
-.prm-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  font-size: 12px;
-  line-height: 18px;
-}
-.prm-copy:hover {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-}
-.prm-input {
-  width: 100%;
-  padding: 9px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-  font-family: var(--sans);
-}
-.prm-input:focus {
-  border-color: var(--accent);
-}
-.prm-seg {
-  display: inline-flex;
-  gap: 2px;
-}
-.prm-segbtn {
-  font-size: 1em;
-  font-weight: 500;
-  padding: 3px 10px;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.prm-segbtn:hover {
-  color: var(--text);
-}
-.prm-segbtn.on {
-  color: var(--accent);
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
-  font-weight: 600;
-}
-.prm-tools {
-  display: inline-flex;
-  gap: 2px;
-}
-.prm-tool {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--r-xs);
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.prm-tool:hover {
-  color: var(--text);
-  border-color: var(--border);
-}
-.prm-textarea {
-  width: 100%;
-  /* Bounded height (not flex-fill) so the modal never grows past the viewport /
-     the host Git modal — the box scrolls internally instead. resize:none keeps the
-     Write box the same footprint as the Preview box (no shift on toggle). */
-  min-height: 200px;
-  max-height: 42vh;
-  resize: none;
-  padding: 10px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  /* mono-ok: PR body — markdown with fenced code, written to a fixed column */
-  font-family: var(--code);
-  font-size: 1em;
-  line-height: var(--lh-md);
-}
-.prm-textarea:focus {
-  border-color: var(--accent);
-}
-.prm-preview {
-  min-height: 200px;
-  max-height: 42vh;
-  overflow-y: auto;
-  padding: 10px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  font-size: 1em;
-  line-height: var(--lh-prose);
-}
-.prm-empty {
-  color: var(--textDim);
-  font-style: italic;
-}
-.prm-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.prm-hint {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.prmspin {
-  animation: prmspin 0.9s linear infinite;
-}
-@keyframes prmspin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .prmspin {
-    animation: none;
-  }
-}
-</style>

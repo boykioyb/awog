@@ -48,12 +48,12 @@
     <template #footer>
       <span class="lim-count">{{ t('library.import.selectedCount', { n: selected.size }) }}</span>
       <span style="flex: 1" />
-      <button class="btn" :disabled="importing" @click="emit('close')">
+      <Button :disabled="importing" variant="outline" @click="emit('close')">
         {{ t('common.cancel') }}
-      </button>
-      <button class="btn pri" :disabled="!selected.size || importing" @click="confirm">
+      </Button>
+      <Button :disabled="!selected.size || importing" variant="default" @click="confirm">
         {{ importing ? t('library.import.importing') : t('library.import.action') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -70,6 +70,7 @@ import type { ImportCandidate } from '~/composables/useConfigImport'
 import { candidateKey, useLibraryImport } from '~/composables/useLibraryImport'
 import { useProjects } from '~/composables/useProjects'
 import type { ConfigKind } from '~/stores/templates'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

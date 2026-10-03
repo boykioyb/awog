@@ -8,7 +8,7 @@
     <div class="ssi">
       <div class="ssi-field">
         <label class="ssi-label">{{ t('ssh.identity.name') }}</label>
-        <input v-model="name" class="ssi-input" :placeholder="t('ssh.identity.namePh')" />
+        <Input v-model="name" :placeholder="t('ssh.identity.namePh')" />
       </div>
 
       <div class="ssi-field">
@@ -33,17 +33,24 @@
       <div v-if="keySource === 'file'" class="ssi-field">
         <label class="ssi-label">{{ t('ssh.identity.keyPath') }}</label>
         <div class="ssi-path-row">
-          <input
+          <Input
             v-model="keyPath"
-            class="ssi-input mono"
             :placeholder="t('ssh.identity.keyPathPh')"
             spellcheck="false"
+            class="mono"
             @blur="autodetectPath"
           />
-          <button v-if="canBrowse" type="button" class="btn sm ssi-browse" @click="browseKey">
+          <Button
+            v-if="canBrowse"
+            type="button"
+            class="ssi-browse"
+            variant="outline"
+            size="sm"
+            @click="browseKey"
+          >
             <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ t('ssh.identity.browse') }}
-          </button>
+          </Button>
         </div>
         <div class="ssi-hint">{{ t('ssh.identity.keyPathHint') }}</div>
       </div>
@@ -73,13 +80,13 @@
           />
           <span class="ssi-secret-title">{{ t('ssh.identity.passphrase') }}</span>
         </div>
-        <input
+        <Input
           v-model="passphrase"
           type="password"
-          class="ssi-input mono"
           :placeholder="t('ssh.identity.passphrasePh')"
           spellcheck="false"
           autocomplete="off"
+          class="mono"
         />
         <div class="ssi-hint">
           {{ isExisting ? t('ssh.identity.secretHintKeep') : t('ssh.identity.secretHint') }}
@@ -89,10 +96,10 @@
 
     <template #footer>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('ssh.identity.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -110,6 +117,8 @@ import { pickFile } from '~/composables/useFolderPicker'
 import { useSshApi } from '~/composables/useSshApi'
 import type { SshIdentity, SshKeyType } from '~/stores/ssh'
 import type { SshIdentitySecret } from '~/composables/useSshPage'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean

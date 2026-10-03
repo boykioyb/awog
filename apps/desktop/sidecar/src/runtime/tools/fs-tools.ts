@@ -10,7 +10,7 @@ import { readFile, writeFile, stat, mkdir, open } from 'node:fs/promises'
 import { dirname, extname } from 'node:path'
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
-import { assertInsideWorkspace } from '../../git/path-sanitize.js'
+import { assertInsideAny } from '../../git/path-sanitize.js'
 import { runGit } from '../../git/runner.js'
 import { buildUnifiedDiff } from './text-diff.js'
 import { clampForLlm } from './output-budget.js'
@@ -130,7 +130,19 @@ function readWindow(content: string, offset: number, limit: number): ReadWindow 
   }
 }
 
-export function createReadTool(cwd: string, reads: ReadRegistry): AgentTool<typeof ReadParams> {
+// Optional `roots` — agent repo-access whitelist (agents/repo-access.ts). When
+// set, path gating accepts the union of roots (roots[0] is the relative base);
+// when absent every factory behaves exactly as before (cwd only).
+const gateOf = (cwd: string, roots?: string[]) => {
+  const effective = roots && roots.length > 0 ? roots : [cwd]
+  return (p: string) => assertInsideAny(effective, p)
+}
+
+export function createReadTool(
+  cwd: string,
+  reads: ReadRegistry,
+  roots?: string[],
+): AgentTool<typeof ReadParams> {
   return {
     name: 'Read',
     label: 'Read',
@@ -146,7 +158,7 @@ export function createReadTool(cwd: string, reads: ReadRegistry): AgentTool<type
     ].join('\n'),
     parameters: ReadParams,
     async execute(_id, params): Promise<TextResult> {
-      const abs = assertInsideWorkspace(cwd, params.file_path)
+      const abs = gateOf(cwd, roots)(params.file_path)
       const st = await stat(abs)
       if (st.isDirectory()) throw new Error(`Path is a directory: ${params.file_path}`)
 
@@ -270,7 +282,11 @@ const WriteParams = Type.Object({
   content: Type.String({ description: 'Full file contents to write (overwrites).' }),
 })
 
-export function createWriteTool(cwd: string, reads: ReadRegistry): AgentTool<typeof WriteParams> {
+export function createWriteTool(
+  cwd: string,
+  reads: ReadRegistry,
+  roots?: string[],
+): AgentTool<typeof WriteParams> {
   return {
     name: 'Write',
     label: 'Write',
@@ -283,7 +299,7 @@ export function createWriteTool(cwd: string, reads: ReadRegistry): AgentTool<typ
     ].join('\n'),
     parameters: WriteParams,
     async execute(_id, params): Promise<TextResult> {
-      const abs = assertInsideWorkspace(cwd, params.file_path)
+      const abs = gateOf(cwd, roots)(params.file_path)
       const bytes = Buffer.byteLength(params.content, 'utf8')
       if (bytes > WRITE_MAX_BYTES) throw new Error(`File too large to write (> ${WRITE_MAX_BYTES} bytes)`)
       // Gate BEFORE writing: 'ok' also covers a path that does not exist yet,
@@ -341,8 +357,9 @@ async function openForEdit(
   cwd: string,
   reads: ReadRegistry,
   filePath: string,
+  roots?: string[],
 ): Promise<{ abs: string; before: string }> {
-  const abs = assertInsideWorkspace(cwd, filePath)
+  const abs = gateOf(cwd, roots)(filePath)
   const current = await statForGate(abs, filePath)
   if (current === null) throw new Error(`File not found: ${filePath}`)
   const gate = reads.gate(abs, current)
@@ -363,7 +380,11 @@ async function commitEdit(
   reads.markRead(abs, { mtimeMs: after.mtimeMs, size: after.size })
 }
 
-export function createEditTool(cwd: string, reads: ReadRegistry): AgentTool<typeof EditParams> {
+export function createEditTool(
+  cwd: string,
+  reads: ReadRegistry,
+  roots?: string[],
+): AgentTool<typeof EditParams> {
   return {
     name: 'Edit',
     label: 'Edit',
@@ -377,7 +398,7 @@ export function createEditTool(cwd: string, reads: ReadRegistry): AgentTool<type
     ].join('\n'),
     parameters: EditParams,
     async execute(_id, params): Promise<TextResult> {
-      const { abs, before } = await openForEdit(cwd, reads, params.file_path)
+      const { abs, before } = await openForEdit(cwd, reads, params.file_path, roots)
       const next = applyEdit(before, params)
       await commitEdit(abs, reads, next)
       return textResult(`Edited ${params.file_path}`, {
@@ -408,7 +429,11 @@ const MultiEditParams = Type.Object({
   ),
 })
 
-export function createMultiEditTool(cwd: string, reads: ReadRegistry): AgentTool<typeof MultiEditParams> {
+export function createMultiEditTool(
+  cwd: string,
+  reads: ReadRegistry,
+  roots?: string[],
+): AgentTool<typeof MultiEditParams> {
   return {
     name: 'MultiEdit',
     label: 'Edit (multi)',
@@ -422,7 +447,7 @@ export function createMultiEditTool(cwd: string, reads: ReadRegistry): AgentTool
     parameters: MultiEditParams,
     async execute(_id, params): Promise<TextResult> {
       if (params.edits.length === 0) throw new Error('edits is empty — nothing to do')
-      const { abs, before } = await openForEdit(cwd, reads, params.file_path)
+      const { abs, before } = await openForEdit(cwd, reads, params.file_path, roots)
       let content = before
       // Apply all edits in memory first; any throw aborts before the write.
       params.edits.forEach((edit, i) => {
@@ -470,7 +495,7 @@ const GrepParams = Type.Object({
   head_limit: Type.Optional(Type.Number({ description: 'Keep only the first N result lines.' })),
 })
 
-export function createGrepTool(cwd: string): AgentTool<typeof GrepParams> {
+export function createGrepTool(cwd: string, roots?: string[]): AgentTool<typeof GrepParams> {
   return {
     name: 'Grep',
     label: 'Grep',
@@ -488,10 +513,14 @@ export function createGrepTool(cwd: string): AgentTool<typeof GrepParams> {
     async execute(_id, params): Promise<TextResult> {
       // Validate the optional subdir scope (defence-in-depth; the backends also
       // refuse to escape cwd, but the check belongs at the tool boundary).
-      if (params.path) assertInsideWorkspace(cwd, params.path)
+      if (params.path) gateOf(cwd, roots)(params.path)
       const context = params['-C']
       const outputMode: GrepOutputMode = params.output_mode ?? 'content'
-      const { lines, note } = await runGrep(cwd, {
+      // Narrowed agents (repo whitelist ⊆ cwd) search inside the first root;
+      // with several roots the `path` param still reaches the others by
+      // absolute path. Union roots keep cwd — same as before.
+      const searchRoot = roots?.[0] ?? cwd
+      const { lines, note } = await runGrep(searchRoot, {
         pattern: params.pattern,
         path: params.path,
         glob: params.glob,
@@ -547,7 +576,7 @@ async function gitGlob(cwd: string, pattern: string, path: string | undefined): 
   }
 }
 
-export function createGlobTool(cwd: string): AgentTool<typeof GlobParams> {
+export function createGlobTool(cwd: string, roots?: string[]): AgentTool<typeof GlobParams> {
   return {
     name: 'Glob',
     label: 'Glob',
@@ -561,13 +590,14 @@ export function createGlobTool(cwd: string): AgentTool<typeof GlobParams> {
     ].join('\n'),
     parameters: GlobParams,
     async execute(_id, params): Promise<TextResult> {
-      if (params.path) assertInsideWorkspace(cwd, params.path)
-      const tracked = await gitGlob(cwd, params.pattern, params.path)
+      if (params.path) gateOf(cwd, roots)(params.path)
+      const searchRoot = roots?.[0] ?? cwd
+      const tracked = await gitGlob(searchRoot, params.pattern, params.path)
       // Outside a repo, walk the tree ourselves rooted at the requested scope.
-      const root = params.path ? assertInsideWorkspace(cwd, params.path) : cwd
+      const root = params.path ? gateOf(cwd, roots)(params.path) : searchRoot
       const hits =
         tracked !== null
-          ? await sortByMtime(cwd, tracked)
+          ? await sortByMtime(searchRoot, tracked)
           : (await walkGlob(root, params.pattern)).map((h) => ({
               // Re-anchor a walk result to the workspace so both branches return
               // paths the model can hand straight back to Read.

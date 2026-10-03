@@ -9,6 +9,8 @@ type BrowserTabInfo = {
   url: string
   title: string
   favicon?: string
+  // Owning scope (session engineId / `task:<id>:<node>`); absent = global pool.
+  scope?: string
   active: boolean
   loading: boolean
   canGoBack: boolean
@@ -16,7 +18,14 @@ type BrowserTabInfo = {
   shown: boolean
   shownElsewhere: boolean
 }
-type BrowserTabList = { tabs: BrowserTabInfo[]; activeTabId: string | null }
+// `activeTabId` is the active tab OF THE SCOPE the list was requested with
+// (global active when unscoped); `activeByScope` is the full per-scope map so a
+// window hosting several sessions' panels can resolve each of them.
+type BrowserTabList = {
+  tabs: BrowserTabInfo[]
+  activeTabId: string | null
+  activeByScope?: Record<string, string>
+}
 type BrowserSelection = { text: string; url: string; title: string }
 type BrowserPick = {
   selector: string
@@ -243,32 +252,44 @@ const awog = {
   // panel borrows the agent's Chromium tab into a rect of THIS window. Main
   // resolves the host window from the sender, so a renderer can only ever fill
   // its own window; the rect is clamped on the other side.
+  // `scope` trên mọi method = session engineId của panel đang gọi (undefined =
+  // pool global của popout/tray). Main kiểm scope ↔ tab ownership, nên một panel
+  // session A còn sót cache cũ cũng chỉ chạm được tab của A.
   browser: {
-    attach: (rect: BrowserRect, tabId?: string): Promise<BrowserTabInfo> =>
-      ipcRenderer.invoke('browser:attach', { rect, tabId }),
-    setBounds: (rect: BrowserRect, tabId?: string): Promise<void> =>
-      ipcRenderer.invoke('browser:bounds', { rect, tabId }),
+    attach: (rect: BrowserRect, tabId?: string, scope?: string): Promise<BrowserTabInfo> =>
+      ipcRenderer.invoke('browser:attach', { rect, tabId, scope }),
+    setBounds: (rect: BrowserRect, tabId?: string, scope?: string): Promise<void> =>
+      ipcRenderer.invoke('browser:bounds', { rect, tabId, scope }),
     // Take the view off screen (tab switched away, panel closed, modal opened over
     // it). The page keeps running — this is geometry, not a close.
     detach: (): Promise<void> => ipcRenderer.invoke('browser:detach'),
-    tabs: (): Promise<BrowserTabList> => ipcRenderer.invoke('browser:tabs'),
-    open: (url: string, tabId?: string): Promise<BrowserTabInfo> =>
-      ipcRenderer.invoke('browser:open', { url, tabId }),
+    tabs: (scope?: string): Promise<BrowserTabList> =>
+      ipcRenderer.invoke('browser:tabs', { scope }),
+    open: (url: string, tabId?: string, scope?: string): Promise<BrowserTabInfo> =>
+      ipcRenderer.invoke('browser:open', { url, tabId, scope }),
     // `wait: false` = trả về ngay khi tab đã tạo (đường người dùng bấm link); mặc
     // định chờ trang tải xong, giữ nguyên hành vi cho đường của model.
     newTab: (
       url?: string,
-      opts?: { wait?: boolean },
+      opts?: { wait?: boolean; scope?: string },
     ): Promise<{ tabId: string; url: string; title: string }> =>
-      ipcRenderer.invoke('browser:newTab', { url, wait: opts?.wait !== false }),
-    selectTab: (tabId: string): Promise<BrowserTabInfo> =>
-      ipcRenderer.invoke('browser:selectTab', tabId),
-    closeTab: (tabId: string): Promise<{ closed: string; remaining: number }> =>
-      ipcRenderer.invoke('browser:closeTab', tabId),
-    back: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:back', tabId),
-    forward: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:forward', tabId),
-    reload: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:reload', tabId),
-    popout: (): Promise<void> => ipcRenderer.invoke('browser:popout'),
+      ipcRenderer.invoke('browser:newTab', {
+        url,
+        wait: opts?.wait !== false,
+        scope: opts?.scope,
+      }),
+    selectTab: (tabId: string, scope?: string): Promise<BrowserTabInfo> =>
+      ipcRenderer.invoke('browser:selectTab', { tabId, scope }),
+    closeTab: (tabId: string, scope?: string): Promise<{ closed: string; remaining: number }> =>
+      ipcRenderer.invoke('browser:closeTab', { tabId, scope }),
+    back: (tabId?: string, scope?: string): Promise<void> =>
+      ipcRenderer.invoke('browser:back', { tabId, scope }),
+    forward: (tabId?: string, scope?: string): Promise<void> =>
+      ipcRenderer.invoke('browser:forward', { tabId, scope }),
+    reload: (tabId?: string, scope?: string): Promise<void> =>
+      ipcRenderer.invoke('browser:reload', { tabId, scope }),
+    popout: (scope?: string): Promise<void> =>
+      ipcRenderer.invoke('browser:popout', { scope }),
     // Profile import: read the user's real Chrome/Edge/Brave/Arc profile into the
     // agent's jar. Ids only — main resolves them to paths itself.
     listBrowsers: (): Promise<BrowserImportSource[]> => ipcRenderer.invoke('browser:listBrowsers'),
@@ -288,16 +309,17 @@ const awog = {
     // restart. Confirm in the renderer first: this kills running turns.
     relaunch: (): Promise<void> => ipcRenderer.invoke('browser:relaunch'),
     // ── ADR 0086 phần E — read + point, all user-initiated ────────────────
-    selection: (tabId?: string): Promise<BrowserSelection> =>
-      ipcRenderer.invoke('browser:selection', tabId),
+    selection: (tabId?: string, scope?: string): Promise<BrowserSelection> =>
+      ipcRenderer.invoke('browser:selection', { tabId, scope }),
     // Resolves when the user clicks an element, or null when they cancel.
-    pickElement: (tabId?: string): Promise<BrowserPick | null> =>
-      ipcRenderer.invoke('browser:pickElement', tabId),
-    cancelPick: (tabId?: string): Promise<void> => ipcRenderer.invoke('browser:cancelPick', tabId),
-    pageContext: (tabId?: string): Promise<BrowserPageContext> =>
-      ipcRenderer.invoke('browser:pageContext', tabId),
-    saveScreenshot: (root: string, tabId?: string): Promise<{ path: string }> =>
-      ipcRenderer.invoke('browser:saveScreenshot', { root, tabId }),
+    pickElement: (tabId?: string, scope?: string): Promise<BrowserPick | null> =>
+      ipcRenderer.invoke('browser:pickElement', { tabId, scope }),
+    cancelPick: (tabId?: string, scope?: string): Promise<void> =>
+      ipcRenderer.invoke('browser:cancelPick', { tabId, scope }),
+    pageContext: (tabId?: string, scope?: string): Promise<BrowserPageContext> =>
+      ipcRenderer.invoke('browser:pageContext', { tabId, scope }),
+    saveScreenshot: (root: string, tabId?: string, scope?: string): Promise<{ path: string }> =>
+      ipcRenderer.invoke('browser:saveScreenshot', { root, tabId, scope }),
     sites: (): Promise<BrowserSites> => ipcRenderer.invoke('browser:sites'),
     setSites: (sites: BrowserSites): Promise<void> => ipcRenderer.invoke('browser:setSites', sites),
     // Tab list changes — including the ones the AGENT causes. Returns unsubscribe.

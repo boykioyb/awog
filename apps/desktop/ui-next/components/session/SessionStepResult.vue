@@ -1,13 +1,16 @@
 <template>
-  <span class="sres">
+  <!-- Result chip (proto step-row idiom): bordered micro-pill; "+N" tints
+       success, "−N"/"-N" tint destructive, everything else muted. Splitting on
+       whitespace (kept as tokens) preserves the original spacing. -->
+  <span
+    v-if="parts.length"
+    class="inline-flex shrink-0 items-center rounded-sm border border-border px-1 text-[10px] leading-[15px] text-muted-foreground tabular-nums"
+  >
     <span v-for="(p, i) in parts" :key="i" :class="p.cls">{{ p.s }}</span>
   </span>
 </template>
 
 <script setup lang="ts">
-// Step-header result string (the `.sres` span). Diff counts like "+18 −4" get their
-// +N token tinted green and −N token red; everything else stays faint. Splitting on
-// whitespace (kept as tokens) preserves the original spacing.
 const props = defineProps<{ text?: string }>()
 
 function clsOf(token: string): string {
@@ -26,9 +29,9 @@ const parts = computed(() =>
 
 <style scoped>
 .add {
-  color: var(--add);
+  color: var(--success);
 }
 .del {
-  color: var(--del);
+  color: var(--destructive);
 }
 </style>

@@ -10,10 +10,10 @@
     <p class="ape-process-body">{{ t('infra.editor.process.body') }}</p>
     <div class="ape-process-path">
       <code class="ape-process-code">~/.aws/config</code>
-      <button type="button" class="btn sm" @click="copyConfigPath">
+      <Button type="button" variant="outline" size="sm" @click="copyConfigPath">
         <Icon name="copy" style="width: var(--icon-xs); height: var(--icon-xs)" />
         {{ copied ? t('common.copied') : t('common.copy') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -30,6 +30,7 @@
 // docs/features/aws-profile-manager.md gợi ý — ghi vào openIssues cho pha
 // Tích hợp cân nhắc có nên thêm một IPC mở file ngoài workspace hay không.
 import { onBeforeUnmount, ref } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 

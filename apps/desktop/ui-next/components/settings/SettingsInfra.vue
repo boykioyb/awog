@@ -46,9 +46,15 @@
     </table>
 
     <div class="sirow">
-      <button class="btn sm" type="button" :disabled="isDefaultMatrix || saving" @click="onReset">
+      <Button
+        type="button"
+        :disabled="isDefaultMatrix || saving"
+        variant="outline"
+        size="sm"
+        @click="onReset"
+      >
         {{ t('settingsInfra.matrix.reset') }}
-      </button>
+      </Button>
       <span v-if="isDefaultMatrix" class="sihint">{{ t('settingsInfra.matrix.isDefault') }}</span>
     </div>
 
@@ -58,9 +64,8 @@
     <p class="sihint">{{ t('settingsInfra.prod.hint') }}</p>
 
     <div class="sirow">
-      <input
+      <Input
         v-model="newAccount"
-        class="siinp"
         type="text"
         inputmode="numeric"
         autocomplete="off"
@@ -68,10 +73,16 @@
         :placeholder="t('settingsInfra.prod.placeholder')"
         @keydown.enter="onAddAccount"
       />
-      <button class="btn sm pri" type="button" :disabled="!canAdd || saving" @click="onAddAccount">
+      <Button
+        type="button"
+        :disabled="!canAdd || saving"
+        variant="default"
+        size="sm"
+        @click="onAddAccount"
+      >
         <Icon name="plus" />
         {{ t('settingsInfra.prod.add') }}
-      </button>
+      </Button>
     </div>
 
     <p v-if="accounts.length === 0" class="siempty">{{ t('settingsInfra.prod.empty') }}</p>
@@ -101,21 +112,28 @@
         <span class="chip warn">
           {{ t('settingsInfra.bypass.left', { time: bypassLeftLabel }) }}
         </span>
-        <button class="btn sm danger" type="button" :disabled="saving" @click="setBypass(null)">
-          {{ t('settingsInfra.bypass.stop') }}
-        </button>
-      </template>
-      <template v-else>
-        <button
-          v-for="m in BYPASS_MINUTES"
-          :key="m"
-          class="btn sm"
+        <Button
           type="button"
           :disabled="saving"
+          variant="danger"
+          size="sm"
+          @click="setBypass(null)"
+        >
+          {{ t('settingsInfra.bypass.stop') }}
+        </Button>
+      </template>
+      <template v-else>
+        <Button
+          v-for="m in BYPASS_MINUTES"
+          :key="m"
+          type="button"
+          :disabled="saving"
+          variant="outline"
+          size="sm"
           @click="setBypass(m)"
         >
           {{ t('settingsInfra.bypass.for', { n: m }) }}
-        </button>
+        </Button>
       </template>
     </div>
 
@@ -156,6 +174,8 @@ import {
 } from '~/composables/useInfraPolicySettings'
 import type { InfraAccountKind } from '~/composables/useConfirm'
 import type { InfraCommandClass, InfraMode } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 

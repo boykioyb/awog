@@ -21,15 +21,16 @@
       </span>
       <code v-if="enabled && connected && host" class="dev-host">{{ host }}</code>
       <span style="flex: 1" />
-      <button
-        class="btn pri sm"
+      <Button
         :disabled="!enabled || !connected || pairingBusy"
         :title="t('settings.devices.pairNew')"
+        variant="default"
+        size="sm"
         @click="createPairing"
       >
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('settings.devices.pairNew') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Off banner — informational, not a problem to fix. -->
@@ -81,14 +82,15 @@
       <Icon name="smartphone" style="width: 28px; height: 28px" class="dev-empty-icon" />
       <div class="dev-empty-title">{{ t('settings.devices.empty.title') }}</div>
       <div class="dev-empty-body">{{ t('settings.devices.empty.body') }}</div>
-      <button
-        class="btn pri sm"
+      <Button
         :disabled="!enabled || !connected || pairingBusy"
         :title="t('settings.devices.pairNew')"
+        variant="default"
+        size="sm"
         @click="createPairing"
       >
         {{ t('settings.devices.pairNew') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Device list -->
@@ -133,6 +135,7 @@ import SettingsDeviceAccess from '~/components/settings/SettingsDeviceAccess.vue
 import SettingsDevicePairModal from '~/components/settings/SettingsDevicePairModal.vue'
 import { useRemoteGateway } from '~/composables/useRemoteGateway'
 import { formatRelativeAgo } from '~/utils/relative-time'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const now = useNow()

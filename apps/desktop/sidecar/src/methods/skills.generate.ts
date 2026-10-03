@@ -9,10 +9,10 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { completePi } from '../runtime/complete.js'
+import { extractJson } from '../util/json-extract.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const CurrentSkillSchema = z
   .object({
@@ -28,7 +28,7 @@ const CurrentSkillSchema = z
   .optional()
 
 const Params = z.object({
-  prompt: z.string().min(1).max(8_000),
+  prompt: z.string().min(1).max(32_000),
   accountId: z.string().min(1).max(120).optional(),
   modelId: ModelSchema.optional(),
   // When provided, the model is asked to REVISE the existing skill instead of
@@ -84,14 +84,6 @@ function buildSystemPrompt(currentSkill: unknown): string {
   return `${BASE_SYSTEM_PROMPT}${EDIT_INSTRUCTIONS}\n\nCurrent skill:\n${JSON.stringify(currentSkill, null, 2)}`
 }
 
-function extractJson(raw: string): string {
-  const trimmed = raw.trim()
-  // Tolerate the model wrapping the JSON in a ```json fence even though we
-  // asked it not to.
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-  if (fenced && fenced[1]) return fenced[1].trim()
-  return trimmed
-}
 
 register('skills.generate', async (raw) => {
   const params = Params.parse(raw)

@@ -28,6 +28,11 @@ const AgentSchema = z.object({
   tools: StringArray.optional(),
   // Per-agent MCP server whitelist (ADR 0016 replacement for context).
   mcpServerIds: StringArray.optional(),
+  // Per-agent skill whitelist — filters <available_skills> + SDK `skills`.
+  skillIds: StringArray.optional(),
+  // Repo access whitelist — absolute paths; narrows fs-tool roots + adds a
+  // <repo_access> prompt boundary.
+  repos: z.array(z.string().min(1).max(500)).max(64).optional(),
   // Backwards-compat: silently accept-and-drop `context` from legacy clients
   // (Context Providers feature was deprecated — see ADR 0016).
   context: z.unknown().optional(),
@@ -85,6 +90,8 @@ register('agents.upsert', async (raw) => {
   if (incoming.mcpServerIds && incoming.mcpServerIds.length > 0) {
     agent.mcpServerIds = incoming.mcpServerIds
   }
+  if (incoming.skillIds && incoming.skillIds.length > 0) agent.skillIds = incoming.skillIds
+  if (incoming.repos && incoming.repos.length > 0) agent.repos = incoming.repos
 
   await saveAgent(agent)
   return { agent }

@@ -26,8 +26,17 @@ export function sdkStoreDir(): string {
 // `<id>.jsonl` transcript + `<id>/` subagents dir wherever it lives. Best-effort:
 // never throws (a cleanup failure must not block a session delete/truncate), and
 // `rm(force:true)` no-ops on a missing path.
+// sdkSessionId đi vào path join dưới một home CHUNG với CLI của user — charset
+// lạ (`../`, '/') từ header bị sửa tay sẽ biến cleanup thành xoá-file-tuỳ-ý.
+// Cùng charset với importer (cli-import.ts CLI_ID_RE): uuid=36, headroom 128.
+const SDK_SESSION_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
+
 export async function removeSdkSession(sdkSessionId: string): Promise<void> {
   if (!sdkSessionId) return
+  if (!SDK_SESSION_ID_RE.test(sdkSessionId)) {
+    log.warn('removeSdkSession: refusing malformed sdkSessionId', { sdkSessionId })
+    return
+  }
   const projects = join(sdkStoreDir(), 'projects')
   let dirs: string[]
   try {

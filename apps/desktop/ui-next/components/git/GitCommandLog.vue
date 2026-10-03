@@ -158,7 +158,7 @@ watch(
   gap: 5px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   user-select: none;
 }
@@ -180,10 +180,10 @@ watch(
   cursor: pointer;
 }
 .gclrow:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .gclrow.open {
-  background: var(--bgSubtle);
+  background: var(--muted);
 }
 .gclline {
   display: flex;
@@ -206,10 +206,10 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--text);
+  color: var(--foreground);
 }
 .gclrow.fail .gclcmd {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .gcldur {
   flex: 0 0 auto;
@@ -226,7 +226,7 @@ watch(
   color: var(--textFaint);
 }
 .gclcode.fail {
-  color: var(--danger);
+  color: var(--destructive);
   font-weight: 600;
 }
 /* mono-ok: raw git output */
@@ -235,16 +235,16 @@ watch(
   margin: 4px 0 0 66px;
   padding: 6px 8px;
   border-radius: var(--r-xs);
-  background: var(--bgInput);
+  background: var(--muted);
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   white-space: pre-wrap;
   word-break: break-word;
   overflow-x: auto;
 }
 .gclerr,
 .gclout.err {
-  color: var(--danger);
+  color: var(--destructive);
 }
 </style>

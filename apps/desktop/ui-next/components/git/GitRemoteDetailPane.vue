@@ -3,7 +3,7 @@
     <div v-if="!remote" class="gsecempty">{{ t('git.sidebar.empty') }}</div>
     <div v-else style="max-width: 560px">
       <div class="gdph">
-        <Icon name="conn" style="width: 18px; height: 18px; color: var(--accent)" />
+        <Icon name="conn" class="size-[18px] text-primary" />
         <span class="gdpt">{{ remote.name }}</span>
         <span style="flex: 1" />
         <button
@@ -13,12 +13,12 @@
           :aria-label="t('git.remote.edit')"
           @click="startEdit"
         >
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="edit" class="size-3.5" />
         </button>
       </div>
 
       <!-- Read-only view -->
-      <div v-if="!editing" class="gcard">
+      <div v-if="!editing" class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
         <div class="kvrow">
           <span class="kvk">{{ t('git.remote.fetchUrl') }}</span>
           <span class="kvv mono">{{ remote.fetchUrl }}</span>
@@ -28,50 +28,37 @@
           <span class="kvv mono">{{ remote.pushUrl }}</span>
         </div>
         <div class="gdpactions">
-          <button class="btn sm" :disabled="busy" @click="emit('fetch')">
-            <Icon
-              name="refresh"
-              :class="{ gdpspin: syncOp?.op === 'fetch' }"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+          <Button variant="outline" size="sm" :disabled="busy" @click="emit('fetch')">
+            <Icon name="refresh" :class="{ gdpspin: syncOp?.op === 'fetch' }" class="size-3.5" />
             {{ t('git.ops.fetch') }}
-          </button>
-          <button class="btn sm" :disabled="busy" @click="emit('pull')">
-            <Icon
-              v-if="syncOp?.op === 'pull'"
-              name="refresh"
-              class="gdpspin"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+          </Button>
+          <Button variant="outline" size="sm" :disabled="busy" @click="emit('pull')">
+            <Icon v-if="syncOp?.op === 'pull'" name="refresh" class="gdpspin size-3.5" />
             {{ t('git.ops.pullWord') }}
-          </button>
-          <button class="btn pri sm" :disabled="busy" @click="emit('push')">
-            <Icon
-              v-if="syncOp?.op === 'push'"
-              name="refresh"
-              class="gdpspin"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
+          </Button>
+          <Button size="sm" :disabled="busy" @click="emit('push')">
+            <Icon v-if="syncOp?.op === 'push'" name="refresh" class="gdpspin size-3.5" />
             {{ t('git.ops.pushWord') }}
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="syncOp"
-            class="btn sm gdanger"
+            variant="destructive"
+            size="iconSm"
             :title="t('git.ops.cancel')"
             @click="cancelActive"
           >
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="x" class="size-3.5" />
+          </Button>
         </div>
       </div>
 
       <!-- Edit view -->
-      <div v-else class="gcard">
+      <div v-else class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
         <label class="gdp-field">
           <span class="kvk">{{ t('git.remote.fetchUrl') }}</span>
-          <input
+          <Input
             v-model="fetchDraft"
-            class="gdp-input mono"
+            class="font-mono"
             :placeholder="t('git.remote.urlPlaceholder')"
             @keydown.enter.prevent="onSave"
             @keydown.esc.prevent="cancelEdit"
@@ -79,9 +66,9 @@
         </label>
         <label class="gdp-field">
           <span class="kvk">{{ t('git.remote.pushUrl') }}</span>
-          <input
+          <Input
             v-model="pushDraft"
-            class="gdp-input mono"
+            class="font-mono"
             :placeholder="t('git.remote.urlPlaceholder')"
             @keydown.enter.prevent="onSave"
             @keydown.esc.prevent="cancelEdit"
@@ -89,10 +76,10 @@
         </label>
         <div class="gdpactions">
           <span style="flex: 1" />
-          <button class="btn sm" @click="cancelEdit">{{ t('common.cancel') }}</button>
-          <button class="btn pri sm" :disabled="!canSave" @click="onSave">
+          <Button variant="outline" size="sm" @click="cancelEdit">{{ t('common.cancel') }}</Button>
+          <Button size="sm" :disabled="!canSave" @click="onSave">
             {{ t('common.save') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -103,6 +90,8 @@
 // Remote detail pane — fetch/push URLs + ops, with inline URL editing
 // (`git remote set-url`). Only changed, non-empty URLs are emitted so we never
 // create a redundant separate push-url when fetch === push.
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import type { RemoteInfo } from './git-types'
 
 type SyncOp = { op: 'fetch' | 'pull' | 'push'; phase: string; pct: number | null }
@@ -198,36 +187,18 @@ watch(
   flex: none;
   padding: 4px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   transition: background 0.12s;
 }
 .gdp-edit:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .gdp-field {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 6px 0;
-}
-.gdp-input {
-  flex: 1;
-  min-width: 0;
-  padding: 7px 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-}
-.gdp-input:focus {
-  border-color: var(--accent);
-}
-.gdpactions .btn:disabled {
-  opacity: 0.55;
-  cursor: default;
 }
 /* Spinner for the in-flight fetch/pull/push op (no rotate keyframe in the shared
    prototype.css). Disabled under reduced-motion. */

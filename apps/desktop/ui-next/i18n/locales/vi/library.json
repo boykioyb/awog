@@ -47,5 +47,11 @@
 
   "library.creator.verify.running": "Đang kiểm tra kết nối… (lần đầu có thể tải package)",
   "library.creator.verify.ok": "Đã kết nối · {tools} tool, {resources} resource",
-  "library.creator.verify.fail": "Kết nối thất bại"
+  "library.creator.verify.fail": "Kết nối thất bại",
+
+  "library.bgEdit.generateSave": "Sửa + lưu",
+  "library.bgEdit.hint": "Tạo và lưu luôn — chạy nền, đóng modal được, xong hoặc lỗi sẽ báo toast",
+  "library.bgEdit.start": "Đang sửa {name} bằng AI…",
+  "library.bgEdit.done": "Đã lưu {name}",
+  "library.bgEdit.failed": "Sửa {name} thất bại"
 }

@@ -19,17 +19,25 @@
         :title="t('rules.detail.enableToggle')"
         @click="emit('toggle')"
       />
-      <button class="iconbtn rld-act" :title="t('rules.detail.edit')" @click="emit('edit')">
+      <Button
+        :title="t('rules.detail.edit')"
+        class="rld-act"
+        variant="outline"
+        size="iconMd"
+        @click="emit('edit')"
+      >
         <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!isImported"
-        class="iconbtn rld-act rld-danger"
         :title="t('rules.detail.delete')"
+        class="rld-act rld-danger"
+        variant="outline"
+        size="iconMd"
         @click="emit('delete')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <div class="dscroll">
@@ -63,6 +71,7 @@
 import { computed } from 'vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import type { Rule } from '~/stores/rules'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   rule: Rule

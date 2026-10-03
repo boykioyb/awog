@@ -63,9 +63,9 @@ onBeforeUnmount(() => {
   margin: 1px 0 5px 10px;
   padding: 2px 6px;
   border: none;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   background: transparent;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 12px;
@@ -75,12 +75,12 @@ onBeforeUnmount(() => {
     background 0.12s;
 }
 .loadmore:hover {
-  color: var(--accent);
-  background: var(--bgHover);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .loadmore:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .loadmore .lm-chev {
   width: var(--icon-xs);

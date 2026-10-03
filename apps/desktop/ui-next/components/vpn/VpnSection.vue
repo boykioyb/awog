@@ -4,14 +4,20 @@
       <span class="vpnx-title">{{ t('vpn.section.title') }}</span>
       <span class="vpnx-count">{{ store.profiles.length }}</span>
       <div class="vpnx-actions">
-        <button v-if="canPick" class="btn sm" :title="t('vpn.import.button')" @click="openImport">
+        <Button
+          v-if="canPick"
+          :title="t('vpn.import.button')"
+          variant="outline"
+          size="sm"
+          @click="openImport"
+        >
           <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('vpn.import.button') }}
-        </button>
-        <button class="btn pri sm" :title="t('vpn.new')" @click="openNew">
+        </Button>
+        <Button :title="t('vpn.new')" variant="default" size="sm" @click="openNew">
           <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('vpn.new') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -82,6 +88,7 @@ import VpnLogModal from '~/components/vpn/VpnLogModal.vue'
 import { useConfirm } from '~/composables/useConfirm'
 import { pickFile } from '~/composables/useFolderPicker'
 import { useVpnStore, type VpnImportDraft, type VpnProfile } from '~/stores/vpn'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const store = useVpnStore()

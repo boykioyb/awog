@@ -5,10 +5,10 @@
         <div class="sim-head">
           <Icon name="shield" class="sim-icn" />
           <span class="sim-title">{{ t('ssh.identity.title') }}</span>
-          <button class="btn pri sm sim-new" @click="emit('new')">
+          <Button class="sim-new" variant="default" size="sm" @click="emit('new')">
             <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ t('ssh.identity.new') }}
-          </button>
+          </Button>
           <button
             class="sim-close"
             :title="t('ssh.panel.close')"
@@ -65,6 +65,7 @@
 // new/edit/delete to the same handlers the host card uses.
 import { onBeforeUnmount, onMounted } from 'vue'
 import type { SshIdentity } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ open: boolean; identities: SshIdentity[] }>()
 const emit = defineEmits<{ new: []; edit: [id: string]; delete: [id: string]; close: [] }>()

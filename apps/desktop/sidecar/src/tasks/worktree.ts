@@ -59,6 +59,21 @@
 // bao giờ `-D`). Git tự từ chối xoá branch còn commit chưa nằm trong HEAD, nên
 // đây là guarantee của git chứ không phải phán đoán của AWOG: cô lập một lượt
 // chỉ-đọc không để lại dấu vết nào, còn một lượt có sửa file thì branch còn nguyên.
+//
+// ── Member của một Session Team (docs/features/session-teams.md §4–§5) ──────
+// Một đường owner `session` THỨ HAI sống cạnh đường subagent ở trên: member của
+// một nhóm phiên giữ MỘT worktree + MỘT branch (`<ownerDir>/worktrees/team`,
+// `awog/session/<id>/team`) suốt MEMBERSHIP — cấp lười ở lượt đầu
+// (`ensureSessionWorkspace`), nhả khi rời nhóm/lưu trữ/xoá
+// (`releaseSessionWorkspace`), KHÔNG theo hết lượt như subagent. Khác hành vi
+// ở ba điểm có chủ đích:
+//   • Detached HEAD KHÔNG degrade: worktree chỉ cần một điểm neo, baseRef lúc đó
+//     là SHA (integrate sẽ từ chối vì không có nhánh nào để merge vào).
+//   • Nhả worktree thì GIỮ branch kể cả rỗng — merge/xoá là nút bấm của người
+//     dùng (`sessions.integrateMember`), không phải dọn dẹp tự động.
+//   • `integrateSessionBranch` merge MỘT branch của MỘT member khi người dùng
+//     bấm — cổng của Session Teams; ranh giới "chat không tự merge" ở trên vẫn
+//     nguyên vì đường này chỉ chạy từ một RPC do người dùng gọi.
 
 import { mkdir, readdir, readFile, rm, rmdir, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -72,6 +87,7 @@ import { loadProject } from '../projects/store.js'
 import { log } from '../util/logger.js'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { listTaskIds, loadTask, taskDir } from './store.js'
+import type { SessionWorktree } from '../types/shared.js'
 
 // `git worktree` tồn tại từ 2.5 nhưng `worktree list --porcelain` + `remove` chỉ
 // ổn định từ 2.17/2.20; 2.20 cũng đúng bằng mức Git Manager đang yêu cầu (ADR 0017)
@@ -639,6 +655,11 @@ export async function sweepOrphanWorktrees(): Promise<number> {
     }
     const swept: string[] = []
     for (const entry of entries) {
+      // Checkout `team` của member Session Team sống theo MEMBERSHIP, không theo
+      // lượt chạy — nó không bao giờ là đồ mồ côi của một lượt chết dở. Chỉ
+      // releaseSessionWorkspace (rời nhóm/lưu trữ/xoá) được động vào nó; sweeper
+      // quét đây sẽ xoá oan cây còn sống của member mỗi lần boot.
+      if (owner.kind === 'session' && entry === TEAM_SLUG) continue
       const dir = join(root, entry)
       // eslint-disable-next-line no-await-in-loop
       const rescue = await rescueDirtyCheckout(dir, entry)
@@ -702,5 +723,375 @@ async function repoRootOfOwner(owner: WorkspaceOwner): Promise<string | null> {
     return resolveRepoRoot(project.path)
   } catch {
     return null
+  }
+}
+
+// ─── Session Teams: worktree THEO MEMBERSHIP của member ──────────────────────
+// (docs/features/session-teams.md §4–§5, ADR 0094 — xem thêm đầu file)
+//
+// Slug cố định của checkout + branch: một phiên = một worktree duy nhất cho cả
+// thời gian ở trong nhóm, nên không cần hậu tố phiên bản như node Task.
+const TEAM_SLUG = 'team'
+// Trần diff đưa lên UI / vào context model qua `member_diff` — đủ đọc được một
+// lượt sửa đáng kể mà không ném cả diff khổng lồ vào transcript.
+const MEMBER_DIFF_MAX_CHARS = 8000
+
+// SHA của HEAD — neo dự phòng cho trường hợp repo đang detached: member vẫn
+// được cấp cây riêng (worktree chỉ cần một điểm neo chứ không cần nhánh), nhưng
+// integrate sau đó sẽ báo base-not-checked-out vì không có nhánh đích.
+async function headSha(repoRoot: string): Promise<string | null> {
+  try {
+    const res = await runGit(repoRoot, ['rev-parse', '--verify', 'HEAD'], {
+      throwOnNonZero: false,
+    })
+    const sha = res.stdout.trim()
+    return res.code === 0 && sha.length > 0 ? sha : null
+  } catch {
+    return null
+  }
+}
+
+// Probe xem một thư mục có phải checkout git còn sống không — dùng để nhận ra
+// worktree đã cấp từ trước (idempotent) và phân biệt nó với thư mục rác.
+async function isLiveCheckout(dir: string): Promise<boolean> {
+  try {
+    const res = await runGit(dir, ['rev-parse', '--is-inside-work-tree'], {
+      throwOnNonZero: false,
+    })
+    return res.code === 0 && res.stdout.trim() === 'true'
+  } catch {
+    return false
+  }
+}
+
+// Dựng lại bản ghi worktree của member cho một checkout ĐÃ tồn tại trên đĩa
+// (đường idempotent của ensureSessionWorkspace): đọc lại neo `worktree-base` /
+// `worktree-repo` thay vì tính lại — chúng là sự thật đã ghi lúc cấp.
+async function rememberedSessionWorktree(
+  owner: WorkspaceOwner,
+  dir: string,
+  branch: string,
+  repoRoot: string,
+): Promise<SessionWorktree | null> {
+  const baseRef = await readBaseBranch(owner)
+  if (!baseRef) return null // neo mất → coi như không cấp được, tạo lại cho chắc
+  const repoPath = (await repoRootOfOwner(owner)) ?? repoRoot
+  const info = await stat(dir).catch(() => null)
+  return {
+    repoPath,
+    worktreePath: dir,
+    branch,
+    baseRef,
+    createdAt: (info?.mtime ?? new Date()).toISOString(),
+  }
+}
+
+// Cấp (hoặc trả lại) worktree riêng của một MEMBER trong nhóm. Gọi LƯỜI ở lượt
+// đầu của member (send-message); lead/gốc không bao giờ đi qua đây — caller
+// tự siết điều đó. Mọi đường fail đều trả `null` kèm log warn: member khi đó
+// làm việc trên cây chung của project như một phiên thường, không tệ hơn.
+export async function ensureSessionWorkspace(session: {
+  id: string
+  projectId: string | null
+}): Promise<SessionWorktree | null> {
+  const owner: WorkspaceOwner = { kind: 'session', id: session.id }
+  const fail = (reason: string): null => {
+    log.warn('session member worktree unavailable — member works on the shared tree', {
+      sessionId: session.id,
+      reason,
+    })
+    return null
+  }
+
+  if (!session.projectId) return fail('no-project')
+  const project = await loadProject(session.projectId).catch(() => null)
+  if (!project?.path) return fail('unknown-project')
+  const repoRoot = await resolveRepoRoot(project.path)
+  if (!repoRoot) return fail('not-a-git-repo')
+  if (!(await gitAtLeast(MIN_GIT_VERSION))) return fail(`git-older-than-${MIN_GIT_VERSION}`)
+
+  const dir = join(worktreeRoot(owner), TEAM_SLUG)
+  const branch = `${branchPrefix(owner)}${TEAM_SLUG}`
+
+  // Idempotent: checkout đã tồn tại từ lần cấp trước ⇒ trả lại đúng bản ghi đã
+  // neo (baseRef/repoPath đọc từ file neo, không tính lại). Checkout SỐNG mà
+  // neo mất thì KHÔNG được rm — cây có thể còn việc chưa lưu; neo lại theo HEAD
+  // hiện tại (ước đoán tốt nhất) rồi trả. Chỉ thư mục chết/rác mới bị dọn.
+  if (await pathExists(dir)) {
+    if (await isLiveCheckout(dir)) {
+      let existing = await rememberedSessionWorktree(owner, dir, branch, repoRoot)
+      if (!existing) {
+        const baseNow = (await currentBranch(repoRoot)) ?? (await headSha(repoRoot))
+        if (baseNow) {
+          await rememberAnchor(owner, baseNow, repoRoot)
+          existing = await rememberedSessionWorktree(owner, dir, branch, repoRoot)
+        }
+      }
+      if (existing) return existing
+      // Checkout sống nhưng không neo được gì nữa — giữ nguyên, degrade shared.
+      return fail('live-checkout-no-anchor')
+    }
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+    await clearBaseBranch(owner)
+  }
+
+  // baseRef = tên nhánh đang checkout; HEAD detached thì là SHA — khác
+  // acquireWorkspace (degrade ở detached): member vẫn được cấp vì integrate có
+  // cổng kiểm riêng (base-not-checked-out). Repo chưa có commit ⇒ không neo
+  // được gì ⇒ degrade.
+  const baseRef = (await currentBranch(repoRoot)) ?? (await headSha(repoRoot))
+  if (!baseRef) return fail('no-head')
+
+  try {
+    assertValidBranchName(branch)
+    await mkdir(worktreeRoot(owner), { recursive: true, mode: 0o700 })
+    // Neo baseRef (kể cả khi là SHA) + repo cho sweeper — member nhả theo
+    // membership nên anchor sống lâu hơn một lượt chạy.
+    await rememberAnchor(owner, baseRef, repoRoot)
+    // Serialise với auto-commit + Git Manager trên cùng repo. Branch có thể còn
+    // sót từ lần membership trước (release GIỮ branch) ⇒ gắn lại thay vì `-b`
+    // trùng tên và mất luôn commit đã cứu trên đó.
+    const branchExists =
+      (await runGit(repoRoot, ['branch', '--list', branch], { throwOnNonZero: false }))
+        .stdout.trim().length > 0
+    const addArgs = branchExists
+      ? ['worktree', 'add', dir, branch]
+      : ['worktree', 'add', '-b', branch, dir, 'HEAD']
+    await withWorkspaceLock(
+      repoRoot,
+      async () => {
+        // Metadata `.git/worktrees/*` còn sót từ một lần remove dở sẽ khiến
+        // git tưởng branch đang checkout ở đường cũ ⇒ prune trước cho chắc.
+        await runGit(repoRoot, ['worktree', 'prune'], { throwOnNonZero: false })
+        await runGit(repoRoot, addArgs, { timeoutMs: WORKTREE_TIMEOUT_MS })
+      },
+      { timeoutMs: REPO_LOCK_TIMEOUT_MS },
+    )
+  } catch (err) {
+    // Dọn phần dang dở để lần sau không vướng "directory already exists".
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+    return fail(err instanceof Error ? err.message : String(err))
+  }
+
+  log.info('session member worktree ready', { sessionId: session.id, branch })
+  return {
+    repoPath: repoRoot,
+    worktreePath: dir,
+    branch,
+    baseRef,
+    createdAt: new Date().toISOString(),
+  }
+}
+
+// Nhả worktree của member khi phiên rời nhóm / bị lưu trữ / bị xoá. Không bao
+// giờ throw: cây còn việc chưa lưu thì commit WIP lên chính branch của member
+// trước (lưới F8a), cứu không được thì GIỮ NGUYÊN checkout. Branch KHÔNG bao
+// giờ bị xoá — kể cả rỗng: merge/xoá là nút bấm của người dùng (spec §4).
+export async function releaseSessionWorkspace(sessionId: string): Promise<void> {
+  const owner: WorkspaceOwner = { kind: 'session', id: sessionId }
+  const dir = join(worktreeRoot(owner), TEAM_SLUG)
+  const branch = `${branchPrefix(owner)}${TEAM_SLUG}`
+
+  if (await pathExists(dir)) {
+    const rescue = await rescueDirtyCheckout(dir, branch)
+    if (rescue.kind === 'retained') {
+      log.error('member worktree kept — uncommitted work could not be rescued', {
+        sessionId,
+        dir,
+        branch,
+        detail: rescue.detail,
+      })
+      return // checkout còn nguyên trên đĩa, caller báo UI
+    }
+    if (rescue.kind === 'rescued') {
+      log.warn('member left uncommitted work — committed as WIP on its branch', {
+        sessionId,
+        branch,
+        files: rescue.files,
+      })
+    }
+    const repoRoot = await repoRootOfOwner(owner)
+    try {
+      if (repoRoot) {
+        await withWorkspaceLock(
+          repoRoot,
+          async () => {
+            await runGit(repoRoot, ['worktree', 'remove', '--force', dir], {
+              throwOnNonZero: false,
+              timeoutMs: WORKTREE_TIMEOUT_MS,
+            })
+            await runGit(repoRoot, ['worktree', 'prune'], { throwOnNonZero: false })
+          },
+          { timeoutMs: REPO_LOCK_TIMEOUT_MS },
+        )
+      }
+    } catch (err) {
+      log.warn('member worktree remove failed (sweeper will retry at boot)', {
+        sessionId,
+        dir,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+    // `remove` có thể bỏ lại thư mục — xoá thẳng. An toàn vì tới đây cây đã
+    // sạch hoặc mọi thay đổi đã nằm trong commit WIP trên branch của member.
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+  }
+
+  // Neo + repo file được dọn để một lần re-join sau (có thể trên nhánh khác)
+  // ghi lại đúng base lúc đó — rememberAnchor chỉ ghi base khi file trống.
+  await clearBaseBranch(owner)
+  await rm(repoFile(owner), { force: true }).catch(() => undefined)
+}
+
+export interface MemberDiffResult {
+  // `--shortstat` của git, vd "3 files changed, 10 insertions(+)" — rỗng khi
+  // branch chưa lệch gì so với base.
+  stat: string
+  // Diff thô, cắt ở MEMBER_DIFF_MAX_CHARS (có đánh dấu chỗ cắt).
+  diff: string
+  files: number
+}
+
+// Diff `baseRef...branch` của một member — nguồn chung cho RPC
+// `sessions.memberDiff` (chip "±n files" trên roster) và tool `member_diff`.
+// Ba chấm: diff so với merge-base, nên base nhúc nhích sau lúc tạo worktree
+// không kéo theo thay đổi của người khác. null khi member không có worktree
+// (cây chung → không có gì để diff) hoặc git không trả lời được.
+export async function memberDiff(session: {
+  id: string
+  worktree?: SessionWorktree
+}): Promise<MemberDiffResult | null> {
+  const wt = session.worktree
+  if (!wt) return null
+  const range = `${wt.baseRef}...${wt.branch}`
+  try {
+    const stat = await runGit(wt.repoPath, ['diff', '--shortstat', range], {
+      throwOnNonZero: false,
+    })
+    if (stat.code !== 0) {
+      const detail = sanitizeStderr(stat.stderr || stat.stdout)
+        .trim()
+        .slice(0, DETAIL_MAX_LEN)
+      log.warn('member diff stat failed', { sessionId: session.id, detail })
+      return null
+    }
+    const names = await runGit(wt.repoPath, ['diff', '--name-only', range], {
+      throwOnNonZero: false,
+    })
+    const files =
+      names.code === 0 ? names.stdout.split('\n').filter((l) => l.trim().length > 0).length : 0
+    const full = await runGit(wt.repoPath, ['diff', range], { throwOnNonZero: false })
+    let diff = full.code === 0 ? full.stdout : ''
+    if (diff.length > MEMBER_DIFF_MAX_CHARS) {
+      diff = `${diff.slice(0, MEMBER_DIFF_MAX_CHARS)}\n\n… diff truncated (${diff.length} chars total) — read the files on branch ${wt.branch} for the rest`
+    }
+    return { stat: stat.stdout.trim(), diff, files }
+  } catch (err) {
+    log.warn('member diff failed', {
+      sessionId: session.id,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
+}
+
+export type IntegrateSessionResult =
+  | { merged: true; commit: string }
+  | { merged: false; reason: string }
+
+// Merge branch của MỘT member về baseRef — CHỈ chạy từ RPC `sessions.integrateMember`
+// (nút Merge của NGƯỜI DÙNG). Đây là cổng merge duy nhất của owner `session`:
+// mọi luật an toàn của integrateTaskBranches được giữ nguyên —
+//   • việc chưa commit trong worktree được gom thành commit WIP TRƯỚC (lưới
+//     F8a) — merge không thấy thay đổi nằm trong index/cây làm việc;
+//   • baseRef phải là nhánh repo ĐANG checkout — AWOG không checkout hộ người
+//     dùng (luật F8b);
+//   • conflict ⇒ `merge --abort`, cây của người dùng sạch, branch GIỮ NGUYÊN —
+//     KHÔNG bao giờ xoá (khác integrateTaskBranches xoá sau merge thành công:
+//     ở đây branch là sản phẩm của member, người dùng tự quyết định tiếp).
+export async function integrateSessionBranch(input: {
+  repoPath: string
+  worktreePath: string
+  branch: string
+  baseRef: string
+}): Promise<IntegrateSessionResult> {
+  const { repoPath, worktreePath, branch, baseRef } = input
+
+  const rescue = await rescueDirtyCheckout(worktreePath, branch)
+  if (rescue.kind === 'retained') {
+    return { merged: false, reason: `worktree-dirty: ${rescue.detail}` }
+  }
+  if (rescue.kind === 'rescued') {
+    log.warn('member had uncommitted work — committed as WIP before merging', {
+      branch,
+      files: rescue.files,
+    })
+  }
+
+  // Repo gốc mất (project bị xoá/di chuyển giữa chừng) thì nói thẳng thay vì
+  // báo nhầm "HEAD detached".
+  if (!(await resolveRepoRoot(repoPath))) {
+    return { merged: false, reason: 'not-a-git-repo' }
+  }
+
+  // `git merge` hạ cánh xuống HEAD hiện tại. baseRef là SHA (neo khi detached)
+  // hoặc repo đã chuyển nhánh ⇒ không merge, giải thích để UI nói cho người
+  // dùng checkout lại đúng nhánh.
+  const head = await currentBranch(repoPath)
+  if (head !== baseRef) {
+    const where = head ? `nhánh "${head}"` : 'HEAD detached'
+    return {
+      merged: false,
+      reason:
+        `base-not-checked-out: repo đang ở ${where} nhưng member neo vào "${baseRef}" — ` +
+        `checkout lại "${baseRef}" rồi Merge lần nữa`,
+    }
+  }
+
+  const message = `Merge session branch ${branch}`
+  try {
+    return await withWorkspaceLock(
+      repoPath,
+      async () => {
+        suppressEchoFor(repoPath)
+        const merge = await runGit(repoPath, ['merge', '--no-edit', '-m', message, branch], {
+          throwOnNonZero: false,
+        })
+        if (merge.code !== 0) {
+          // Huỷ merge dở (no-op khi merge chưa kịp bắt đầu).
+          await runGit(repoPath, ['merge', '--abort'], { throwOnNonZero: false })
+          // Cùng sanitizer với đường RPC: stderr thô có thể mang token + path
+          // tuyệt đối, mà reason này đi thẳng lên UI.
+          const detail = sanitizeStderr(merge.stderr || merge.stdout)
+            .trim()
+            .slice(0, DETAIL_MAX_LEN)
+          // "CONFLICT … Automatic merge failed" của git đi ra STDOUT, không phải
+          // stderr — classify trên cả hai luồng nếu không conflict sẽ báo nhầm
+          // merge-failed.
+          const isConflict =
+            mapStderrToCode(merge.stderr) === GitErrorCode.MERGE_CONFLICT ||
+            mapStderrToCode(merge.stdout) === GitErrorCode.MERGE_CONFLICT
+          const reason = isConflict ? 'conflict' : `merge-failed: ${detail}`
+          log.warn('session member branch merge failed — branch kept for manual merge', {
+            branch,
+            reason,
+          })
+          return { merged: false as const, reason }
+        }
+        // "Already up to date" cũng đi qua đây — branch không lệch gì vẫn là
+        // một merge hợp lệ; commit trả về là HEAD sau merge.
+        const headNow = await runGit(repoPath, ['rev-parse', 'HEAD'], { throwOnNonZero: false })
+        const commit = headNow.code === 0 ? headNow.stdout.trim() : ''
+        log.info('session member branch merged', { branch, commit })
+        return { merged: true as const, commit }
+      },
+      { timeoutMs: REPO_LOCK_TIMEOUT_MS },
+    )
+  } catch (err) {
+    const detail = sanitizeStderr(err instanceof Error ? err.message : String(err))
+      .trim()
+      .slice(0, DETAIL_MAX_LEN)
+    log.warn('session member branch merge failed', { branch, detail })
+    return { merged: false, reason: `merge-failed: ${detail}` }
   }
 }

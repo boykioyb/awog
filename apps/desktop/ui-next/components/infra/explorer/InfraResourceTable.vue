@@ -6,16 +6,23 @@
     <div class="ixt-bar">
       <label class="srch">
         <Icon name="search" />
-        <input
-          :value="search"
+        <Input
+          unstyled
+          :model-value="search"
           :placeholder="t('infra.explorer.search.placeholder')"
-          @input="$emit('update:search', ($event.target as HTMLInputElement).value)"
+          @update:model-value="$emit('update:search', $event)"
         />
       </label>
-      <button class="btn sm" type="button" :disabled="loading" @click="$emit('reload')">
+      <Button
+        type="button"
+        :disabled="loading"
+        variant="outline"
+        size="sm"
+        @click="$emit('reload')"
+      >
         <Icon name="refresh" />
         {{ t('infra.explorer.reload') }}
-      </button>
+      </Button>
       <!-- Nhãn này là một phần của hợp đồng: "nạp lúc HH:MM" để không ai đọc số
            cũ như thể nó đang sống. Không có mốc giờ thì không có gì để tin. -->
       <span v-if="loadedAtLabel" class="ixt-when">{{ loadedAtLabel }}</span>
@@ -69,35 +76,38 @@
             <td class="ixt-acts" @click.stop>
               <!-- Nút ghi bị ẨN khi dò quyền nói chắc chắn thiếu (task 3.3); lý do
                    nằm ở tooltip của hàng, không phải một hộp thoại lỗi sau cú bấm. -->
-              <button
+              <Button
                 v-for="a in visibleActions"
                 :key="a.id"
-                class="btn sm"
                 :class="{ danger: a.danger }"
                 type="button"
                 :disabled="actionDenied(a.id)"
                 :title="actionDenied(a.id) ? t('infra.explorer.denied') : t(a.consequence)"
+                variant="outline"
+                size="sm"
                 @click="$emit('action', { action: a, row })"
               >
                 {{ t(a.label) }}
-              </button>
-              <button
+              </Button>
+              <Button
                 v-if="hasConsole"
-                class="btn sm"
                 type="button"
                 :title="t('infra.explorer.console')"
+                variant="outline"
+                size="sm"
                 @click="$emit('console', row)"
               >
                 <Icon name="external" />
-              </button>
-              <button
-                class="btn sm"
+              </Button>
+              <Button
                 type="button"
                 :title="t('infra.explorer.ask')"
+                variant="outline"
+                size="sm"
                 @click="$emit('ask', row)"
               >
                 <Icon name="sparkles" />
-              </button>
+              </Button>
             </td>
           </tr>
           <tr v-if="padBottom" aria-hidden="true" class="ixt-pad">
@@ -108,10 +118,16 @@
     </div>
 
     <div v-if="nextToken" class="ixt-more">
-      <button class="btn sm" type="button" :disabled="loading" @click="$emit('load-more')">
+      <Button
+        type="button"
+        :disabled="loading"
+        variant="outline"
+        size="sm"
+        @click="$emit('load-more')"
+      >
         <Icon name="chev" />
         {{ t('infra.explorer.loadMore') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -120,6 +136,8 @@
 // Bảng ảo hoá chỉ bật khi THẬT SỰ dài (>200 dòng, `virtual` từ controller): dựng
 // cửa sổ cho một bảng 20 dòng chỉ làm mất `Ctrl+F` của trình duyệt mà không được gì.
 import { computed, ref, useTemplateRef } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import type {
   InfraActionDescriptor,
   InfraColumn,

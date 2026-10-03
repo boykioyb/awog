@@ -3,14 +3,15 @@
     <div class="ovl" :class="{ on: open }" @click.self="closeActivity">
       <div class="setmodal actmodal">
         <div class="actmodalhd">
-          <button
-            class="iconbtn"
+          <Button
             style="width: 28px; height: 28px"
             :title="t('common.close')"
+            variant="outline"
+            size="iconMd"
             @click="closeActivity"
           >
             <Icon name="x" />
-          </button>
+          </Button>
         </div>
         <div class="actmodalbody">
           <ActivityView v-if="open" />
@@ -28,6 +29,7 @@
 // close affordance. Mounted by ActivityView is gated on `open` so useActivity
 // (sidecar fetch) only runs while the modal is shown.
 import { onBeforeUnmount, onMounted } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { open, closeActivity } = useActivityModal()

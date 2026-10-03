@@ -5,26 +5,21 @@
       <span class="dt mono" style="font-size: var(--fs-sm)">
         <span class="dtname" :title="path">{{ baseName }}</span>
       </span>
-      <span v-if="mode === 'text'" class="chip cchip">
+      <span v-if="mode === 'text'" class="cchip">
         {{ t('git.conflict.chosenCount', { chosen, total }) }}
       </span>
       <span style="flex: 1" />
       <template v-if="mode === 'text'">
-        <button class="btn sm" type="button" @click="pickAll('ours')">
+        <Button variant="outline" size="sm" type="button" @click="pickAll('ours')">
           {{ t('git.conflict.takeAllOurs') }}
-        </button>
-        <button class="btn sm" type="button" @click="pickAll('theirs')">
+        </Button>
+        <Button variant="outline" size="sm" type="button" @click="pickAll('theirs')">
           {{ t('git.conflict.takeAllTheirs') }}
-        </button>
-        <button
-          class="btn sm pri"
-          type="button"
-          :disabled="!allChosen || isResolving"
-          @click="markResolved"
-        >
-          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </Button>
+        <Button size="sm" type="button" :disabled="!allChosen || isResolving" @click="markResolved">
+          <Icon name="check" class="size-3.5" />
           {{ t('git.conflict.markResolved') }}
-        </button>
+        </Button>
       </template>
     </div>
 
@@ -32,7 +27,9 @@
       <!-- Inline error (desync / gone) — keep resolver open, offer reload (CR-13) -->
       <div v-if="errorKey" class="cerr">
         <span>{{ t(errorKey) }}</span>
-        <button class="btn sm" type="button" @click="load">{{ t('git.conflict.reload') }}</button>
+        <Button variant="outline" size="sm" type="button" @click="load">
+          {{ t('git.conflict.reload') }}
+        </Button>
       </div>
 
       <!-- Text mode: per-block 2-way pick -->
@@ -56,17 +53,22 @@
       <div v-else-if="mode === 'binary'" class="cfb">
         <p class="cfbmsg">{{ t('git.conflict.binary.title') }}</p>
         <div class="cfbactions">
-          <button class="btn" type="button" :disabled="isResolving" @click="resolveBinary('ours')">
+          <Button
+            variant="outline"
+            type="button"
+            :disabled="isResolving"
+            @click="resolveBinary('ours')"
+          >
             {{ t('git.conflict.binary.takeOurs') }}
-          </button>
-          <button
-            class="btn"
+          </Button>
+          <Button
+            variant="outline"
             type="button"
             :disabled="isResolving"
             @click="resolveBinary('theirs')"
           >
             {{ t('git.conflict.binary.takeTheirs') }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -74,15 +76,15 @@
       <div v-else-if="mode === 'encoding'" class="cfb">
         <p class="cfbmsg">{{ t('git.conflict.encoding.title') }}</p>
         <div class="cfbactions">
-          <button class="btn" type="button" @click="openExternal">
+          <Button variant="outline" type="button" @click="openExternal">
             {{ t('git.conflict.encoding.openExternal') }}
-          </button>
-          <button class="btn pri" type="button" @click="markStaged">
+          </Button>
+          <Button type="button" @click="markStaged">
             {{ t('git.conflict.encoding.markStaged') }}
-          </button>
-          <button class="btn" type="button" @click="copyPath">
+          </Button>
+          <Button variant="outline" type="button" @click="copyPath">
             {{ t('git.conflict.encoding.copyPath') }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -90,7 +92,9 @@
       <div v-else-if="mode === 'gone'" class="cfb">
         <p class="cfbmsg">{{ t('git.conflict.error.gone') }}</p>
         <div class="cfbactions">
-          <button class="btn sm" type="button" @click="load">{{ t('git.conflict.reload') }}</button>
+          <Button variant="outline" size="sm" type="button" @click="load">
+            {{ t('git.conflict.reload') }}
+          </Button>
         </div>
       </div>
 
@@ -108,6 +112,7 @@
 // store.loadConflictFile, then renders one of four modes: text (per-block ours/
 // theirs), binary (whole-side pick), encoding fallback (external editor), or gone.
 // All state + handlers live in useConflictResolver(); this SFC is template + bind.
+import Button from '~/components/ui/button/Button.vue'
 import { baseNameOf } from './git-types'
 import { useConflictResolver } from '~/composables/useConflictResolver'
 
@@ -154,10 +159,14 @@ const baseName = computed(() => baseNameOf(props.path))
   height: 100%;
 }
 .cchip {
-  font-size: 12px;
-  line-height: 18px;
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--textDim);
 }
 .cscroll {
   padding: 12px;
@@ -170,9 +179,9 @@ const baseName = computed(() => baseNameOf(props.path))
   padding: 8px 12px;
   margin-bottom: 12px;
   border-radius: var(--r-sm);
-  color: var(--danger);
-  background: var(--dangerBg, var(--bgSubtle));
-  border: 1px solid var(--danger);
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  border: 1px solid color-mix(in oklab, var(--destructive) 40%, transparent);
 }
 .cerr span {
   flex: 1;
@@ -183,7 +192,7 @@ const baseName = computed(() => baseNameOf(props.path))
   border-radius: var(--r-sm);
 }
 .cfbmsg {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   margin-bottom: 12px;
 }
 .cfbactions {

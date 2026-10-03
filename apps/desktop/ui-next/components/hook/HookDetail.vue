@@ -13,11 +13,13 @@
         {{ t('hooks.detail.imported') }}
       </span>
       <span style="flex: 1" />
-      <button
+      <Button
         v-if="!isImported"
-        class="iconbtn hkd-act"
         :title="t('hooks.detail.runOnce')"
         :disabled="running"
+        class="hkd-act"
+        variant="outline"
+        size="iconMd"
         @click="emit('run')"
       >
         <Icon
@@ -25,18 +27,26 @@
           :class="{ spin: running }"
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
-      </button>
-      <button class="iconbtn hkd-act" :title="t('hooks.detail.edit')" @click="emit('edit')">
+      </Button>
+      <Button
+        :title="t('hooks.detail.edit')"
+        class="hkd-act"
+        variant="outline"
+        size="iconMd"
+        @click="emit('edit')"
+      >
         <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!isImported"
-        class="iconbtn hkd-act hkd-danger"
         :title="t('hooks.detail.delete')"
+        class="hkd-act hkd-danger"
+        variant="outline"
+        size="iconMd"
         @click="emit('delete')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <div class="dscroll">
@@ -53,10 +63,10 @@
         <div class="hkd-trust-body">
           <div class="hkd-trust-ttl">{{ t('hooks.trust.title') }}</div>
           <div class="hkd-trust-desc">{{ t('hooks.trust.desc') }}</div>
-          <button class="btn sm hkd-trust-btn" @click="emit('trust')">
+          <Button class="hkd-trust-btn" variant="outline" size="sm" @click="emit('trust')">
             <Icon name="shield" />
             {{ t('hooks.trust.button') }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -138,6 +148,7 @@
 // (ADR 0032 D-8), and the recentRuns audit. Header actions emit to the page.
 import { computed } from 'vue'
 import type { Hook } from '~/stores/hooks'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ hook: Hook; running?: boolean }>()
 

@@ -1,45 +1,54 @@
 <template>
-  <div class="wsinfo">
-    <div v-for="row in infoRows" :key="row.k" class="wsinfo-row">
-      <span class="wsinfo-k">{{ row.k }}</span>
+  <div class="flex flex-col">
+    <div
+      v-for="row in infoRows"
+      :key="row.k"
+      class="flex items-baseline gap-2.5 border-b border-border py-1.5"
+    >
+      <span class="w-24 shrink-0 text-dim">{{ row.k }}</span>
       <a
         v-if="row.href"
-        class="mono wsinfo-v wsinfo-link"
+        class="min-w-0 font-mono text-info no-underline [overflow-wrap:anywhere]"
         :href="row.href"
         target="_blank"
         rel="noopener"
       >
         {{ row.v }}
       </a>
-      <span v-else class="mono wsinfo-v">{{ row.v }}</span>
+      <span v-else class="min-w-0 font-mono [overflow-wrap:anywhere]">{{ row.v }}</span>
     </div>
 
     <!-- Context files: attachments + pinned working-set fed into the model. -->
-    <div class="infoctx">
-      <div class="infoctx-h">
+    <div class="mt-3.5">
+      <div class="mb-1.5 flex items-center gap-1.5 text-sm text-dim">
         {{ t('sessions.info.contextFiles') }}
-        <span v-if="contextFiles.length" class="infoctx-n">{{ contextFiles.length }}</span>
+        <span v-if="contextFiles.length" class="text-sm tabular-nums text-faint">
+          {{ contextFiles.length }}
+        </span>
       </div>
-      <button
+      <Button
         v-for="f in contextFiles"
         :key="f.key"
+        variant="outline"
         type="button"
-        class="infoctx-row"
+        class="h-auto p-0 flex w-full items-center gap-2 border-b border-border px-1 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
         :title="'path' in f ? f.path : f.name"
         @click="openContextFile(f)"
       >
-        <Icon
-          :name="ctxIcon(f.kind)"
-          style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-          :style="{ color: ctxIconColor(f.kind) }"
+        <component
+          :is="ctxIcon(f.kind)"
+          class="size-3 shrink-0"
+          :class="f.kind === 'attachment' ? 'text-dim' : 'text-primary'"
         />
-        <span class="infoctx-name mono">{{ f.name }}</span>
-        <span v-if="f.kind === 'attachment' && f.size != null" class="infoctx-size">
+        <span class="min-w-0 flex-1 truncate font-mono">{{ f.name }}</span>
+        <span v-if="f.kind === 'attachment' && f.size != null" class="shrink-0 text-sm text-faint">
           {{ formatBytes(f.size) }}
         </span>
-        <span class="infoctx-kind">{{ t(`sessions.info.ctxKind.${f.kind}`) }}</span>
-      </button>
-      <p v-if="!contextFiles.length" class="infoctx-empty">
+        <span class="shrink-0 text-sm text-muted-foreground">
+          {{ t(`sessions.info.ctxKind.${f.kind}`) }}
+        </span>
+      </Button>
+      <p v-if="!contextFiles.length" class="py-1 text-faint">
         {{ t('sessions.info.contextFilesEmpty') }}
       </p>
     </div>
@@ -54,10 +63,13 @@
 // the media/links/docs index of the transcript. Split out of SessionWorkspacePanel
 // (which owns the panel chrome only) once the tab grew past a couple of rows, so it
 // matches the other tabs: one component per view.
+import type { Component } from 'vue'
+import { Folder, Pin, ScrollText } from 'lucide-vue-next'
 import type { Session } from '~/composables/useSessionsData'
 import type { SessionContextFile } from '~/composables/useSessionContextFiles'
 import { formatTokenCount } from '~/utils/context-window'
 import { formatBytes } from '~/utils/format-bytes'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ session: Session }>()
 
@@ -66,14 +78,11 @@ const { projectName } = useProjects()
 
 // Context files (working folder + attachments + pinned working-set).
 const { contextFiles, openContextFile } = useSessionContextFiles(() => props.session)
-// Row icon + accent per context kind (folder/pinned = standing context → accent).
-function ctxIcon(kind: SessionContextFile['kind']): string {
-  if (kind === 'folder') return 'folder'
-  if (kind === 'pinned') return 'pin'
-  return 'rules'
-}
-function ctxIconColor(kind: SessionContextFile['kind']): string {
-  return kind === 'attachment' ? 'var(--textDim)' : 'var(--accent)'
+// Row icon per context kind; folder/pinned = standing context → primary tint.
+function ctxIcon(kind: SessionContextFile['kind']): Component {
+  if (kind === 'folder') return Folder
+  if (kind === 'pinned') return Pin
+  return ScrollText
 }
 
 const totalTok = computed(() => {
@@ -125,87 +134,3 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
   return rows
 })
 </script>
-
-<style scoped>
-.wsinfo {
-  display: flex;
-  flex-direction: column;
-}
-.wsinfo-row {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-}
-.wsinfo-k {
-  color: var(--textDim);
-  flex: 0 0 96px;
-}
-.wsinfo-v {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.wsinfo-link {
-  color: var(--blue);
-  text-decoration: none;
-}
-/* Context files section (attachments + pinned working-set). */
-.infoctx {
-  margin-top: 14px;
-}
-.infoctx-h {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  margin-bottom: 6px;
-}
-.infoctx-n {
-  font-variant-numeric: tabular-nums;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.infoctx-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 4px;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-}
-.infoctx-row:hover {
-  background: var(--bgHover);
-}
-.infoctx-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.infoctx-size {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-  flex: 0 0 auto;
-}
-.infoctx-kind {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  flex: 0 0 auto;
-}
-.infoctx-empty {
-  color: var(--textFaint);
-  padding: 4px 0;
-}
-</style>

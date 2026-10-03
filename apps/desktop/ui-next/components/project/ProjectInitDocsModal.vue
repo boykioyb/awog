@@ -32,14 +32,14 @@
       <span v-if="draft !== null" class="pid-target">
         {{ t('projectsInit.target', { path: suggestedPath }) }}
       </span>
-      <button class="btn" :disabled="busy || saving" @click="emit('close')">
+      <Button :disabled="busy || saving" variant="outline" @click="emit('close')">
         {{ t('projectsInit.close') }}
-      </button>
-      <button v-if="draft !== null" class="btn" :disabled="busy || saving" @click="onCopy">
+      </Button>
+      <Button v-if="draft !== null" :disabled="busy || saving" variant="outline" @click="onCopy">
         <Icon :name="copied ? 'check' : 'copy'" />
         {{ copied ? t('projectsInit.copied') : t('projectsInit.copy') }}
-      </button>
-      <button class="btn" :disabled="!project.path || busy || saving" @click="onGenerate">
+      </Button>
+      <Button :disabled="!project.path || busy || saving" variant="outline" @click="onGenerate">
         <Icon name="refresh" :class="{ spin: busy }" />
         {{
           busy
@@ -48,16 +48,16 @@
               ? t('projectsInit.generate')
               : t('projectsInit.regenerate')
         }}
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="draft !== null"
-        class="btn pri"
         :disabled="busy || saving || !draft.trim()"
+        variant="default"
         @click="onSave"
       >
         <Icon name="save" />
         {{ saving ? t('projectsInit.saving') : t('projectsInit.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -77,6 +77,7 @@ import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import type { Project } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
 
 interface InitDocsScan {
   fileCount: number

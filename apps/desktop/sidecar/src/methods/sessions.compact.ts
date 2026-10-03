@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { register } from '../transport/rpc.js'
+import { register, RpcError } from '../transport/rpc.js'
 import { runStream, registerAborter, unregisterAborter } from '../sessions/runner.js'
+import { isCliAttached } from '../sessions/cli-registry.js'
 import { loadSession, compactSession } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
 import { log } from '../util/logger.js'
@@ -35,6 +36,13 @@ register('sessions.compact', async (raw) => {
     // Nothing to compact: a fresh session with no turns yet. The next normal
     // turn seeds history; compaction only makes sense afterwards.
     return { ok: false, reason: 'no-session' }
+  }
+
+  // Compaction viết lại context + xoá resume-handle của phiên — cùng lớp mutator
+  // transcript nên chịu cổng "CLI đang gắn" như truncate/rewind (sendMessage đã
+  // từ chối; compact cũng phải từ chối vì SDK transcript của CLI sẽ lệch).
+  if (isCliAttached(params.sessionId)) {
+    throw new RpcError(-32021, 'A CLI is attached to this session — close it before compacting')
   }
 
   let cwd: string | undefined

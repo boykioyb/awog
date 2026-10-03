@@ -181,6 +181,7 @@
 import { computed } from 'vue'
 import { useHomeDashboard } from '~/composables/useHomeDashboard'
 import { useAccounts } from '~/composables/useAccounts'
+import { isBoardSession } from '~/composables/useSessionsData'
 import type { SessionStatus } from '~/composables/useSessionsData'
 
 const { t } = useI18n()
@@ -232,7 +233,11 @@ const actionLabel = (action: 'reply' | 'review' | 'approve'): string =>
       : t('home.reply')
 
 // Recent sessions: newest first (sessions list is already recency-ordered), cap 6.
-const recentSessions = computed(() => sessions.sessions.slice(0, 6))
+// Phiên "của board" (run member/lead mang teamId, lone-agent origin:'board')
+// ẩn khỏi đây giống danh sách session — chúng sống trong board/Teams.
+const recentSessions = computed(() =>
+  sessions.sessions.filter((s) => !isBoardSession(s)).slice(0, 6),
+)
 
 // Open a session from the recent list — set it active in the shared sessions
 // store (singleton), then route to /sessions which renders `store.active`.

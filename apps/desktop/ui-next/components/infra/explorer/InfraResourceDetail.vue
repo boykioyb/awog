@@ -5,13 +5,13 @@
     <header class="ixd-hd">
       <Icon name="info" />
       <span class="ixd-title">{{ row['name'] || row['id'] }}</span>
-      <button class="btn sm" type="button" @click="$emit('ask', row)">
+      <Button type="button" variant="outline" size="sm" @click="$emit('ask', row)">
         <Icon name="sparkles" />
         {{ t('infra.explorer.ask') }}
-      </button>
-      <button class="btn sm" type="button" @click="$emit('close')">
+      </Button>
+      <Button type="button" variant="outline" size="sm" @click="$emit('close')">
         <Icon name="x" />
-      </button>
+      </Button>
     </header>
 
     <p v-if="loading" class="ixd-state">{{ t('infra.explorer.loading') }}</p>
@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import type { InfraResourceRow } from '~/composables/useInfraResourcesApi'
+import Button from '~/components/ui/button/Button.vue'
 
 defineProps<{
   row: InfraResourceRow | null

@@ -38,17 +38,17 @@ defineProps<{ block: ChapterBlock }>()
   align-items: baseline;
   gap: 8px;
   max-width: 70%;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .chbody .icn {
   align-self: center;
-  color: var(--accent);
+  color: var(--primary);
 }
 .chtitle {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -56,7 +56,7 @@ defineProps<{ block: ChapterBlock }>()
 .chsum {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

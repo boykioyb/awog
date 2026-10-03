@@ -34,13 +34,15 @@
             >
               {{ t('connections.statusBadge.' + deriveStatus(item)) }}
             </span>
-            <button
-              class="iconbtn crow-menu"
+            <Button
               :title="t('connections.menu.more')"
+              class="crow-menu"
+              variant="outline"
+              size="iconMd"
               @click.stop="openRowMenu($event, item)"
             >
               <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+            </Button>
           </div>
           <div class="sub">
             {{ item.tagline || item.provider || sourceTransport(item) }}
@@ -58,10 +60,10 @@
             </div>
           </div>
           <p class="ssh-src-body">{{ t('connections.ssh.body', { n: agentHostCount }) }}</p>
-          <button class="btn pri" @click="goSsh">
+          <Button variant="default" @click="goSsh">
             <Icon name="ssh" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('connections.ssh.manage') }}
-          </button>
+          </Button>
         </div>
         <ConnectionDetail
           v-else
@@ -79,7 +81,7 @@
 
     <!-- per-source action menu (⋯ button + right-click): Edit / Show in folder /
          Delete — Craft SourceMenu parity -->
-    <ContextMenu
+    <AppContextMenu
       :open="!!rowMenu.pos.value"
       :position="rowMenu.pos.value ?? { x: 0, y: 0 }"
       :items="rowMenuItems"
@@ -144,6 +146,7 @@ import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import { computed, onMounted } from 'vue'
 import { useConnectionsPage } from '~/composables/useConnectionsPage'
 import { useSshStore } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
 import {
   deriveStatus,
   sourceTransport,

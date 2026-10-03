@@ -1,4 +1,5 @@
 import { ZodError } from 'zod'
+import { log } from '../util/logger.js'
 
 export type Handler = (params: unknown) => Promise<unknown> | unknown
 
@@ -38,11 +39,23 @@ export async function dispatch(method: string, params: unknown): Promise<unknown
     throw new RpcError(-32601, `Method not found: ${method}`)
   }
   try {
-    return await handler(params)
+    // Wire form "no params" is `params: null` (ui's useSidecar sends null when the
+    // caller omits the arg), but handler schemas express it as `.optional()` —
+    // zod's optional accepts `undefined`, NOT null. Normalize at the boundary so
+    // every method sees "absent"; a top-level `null` is never a meaningful value
+    // (all real nulls live in nested fields like `agent: .nullable()`).
+    return await handler(params ?? undefined)
   } catch (err) {
     if (err instanceof RpcError) throw err
     if (err instanceof ZodError) {
-      throw new RpcError(-32602, 'Invalid params', { issues: err.issues })
+      // Surface WHICH params failed — 'Invalid params' alone is undebuggable
+      // (client banner shows only message; issues stay in `data` for detail).
+      log.warn('rpc invalid params', { method, issues: err.issues })
+      const summary = err.issues
+        .slice(0, 3)
+        .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+        .join(' · ')
+      throw new RpcError(-32602, `Invalid params — ${summary}`, { issues: err.issues })
     }
     const message = err instanceof Error ? err.message : String(err)
     throw new RpcError(-32603, 'Internal error', { message })

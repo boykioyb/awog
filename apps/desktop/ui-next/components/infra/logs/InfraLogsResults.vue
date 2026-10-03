@@ -17,15 +17,16 @@
       <div class="lrs-bar">
         <span class="lrs-count">{{ t('infra.logs.results.rows', { n: rows.length }) }}</span>
         <span class="lrs-gap" />
-        <button
-          class="btn sm"
+        <Button
           type="button"
           :title="t('infra.logs.prefs.hint')"
+          variant="outline"
+          size="sm"
           @click="prefsOpen = true"
         >
           <Icon name="settings" class="lrs-bar-ic" />
           {{ t('infra.logs.prefs.button') }}
-        </button>
+        </Button>
       </div>
 
       <div ref="scrollerRef" class="lrs-tablewrap tblcard" @scroll.passive="onScroll">
@@ -132,6 +133,7 @@ import InfraLogRowModal from '~/components/infra/logs/InfraLogRowModal.vue'
 import InfraLogsPrefsModal from '~/components/infra/logs/InfraLogsPrefsModal.vue'
 import { useLogPrefs } from '~/composables/useLogPrefs'
 import type { AwsInsightsRow } from '~/composables/useAwsLogsApi'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   rows: AwsInsightsRow[]

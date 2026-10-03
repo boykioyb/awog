@@ -7,10 +7,15 @@
       :desc="t('settings.workspace.path.desc')"
     >
       <div class="keyrow">
-        <input :value="workspaceRoot" class="keyinp mono" readonly />
-        <button class="btn sm" :title="t('settings.workspace.path.copy')" @click="onCopy">
+        <Input :value="workspaceRoot" readonly class="mono flex-1" />
+        <Button
+          :title="t('settings.workspace.path.copy')"
+          variant="outline"
+          size="sm"
+          @click="onCopy"
+        >
           <Icon :name="copied ? 'check' : 'copy'" />
-        </button>
+        </Button>
       </div>
     </SettingsField>
 
@@ -61,14 +66,14 @@
       :name="t('settings.workspace.diagnostics.name')"
       :desc="t('settings.workspace.diagnostics.desc')"
     >
-      <button class="btn sm" @click="showLogs = !showLogs">
+      <Button variant="outline" size="sm" @click="showLogs = !showLogs">
         <Icon name="clip" />
         {{
           showLogs
             ? t('settings.workspace.diagnostics.hideLogs')
             : t('settings.workspace.diagnostics.viewLogs')
         }}
-      </button>
+      </Button>
     </SettingsField>
 
     <SettingsLogTail v-if="sidecar.available && showLogs" @close="showLogs = false" />
@@ -77,6 +82,8 @@
 
 <script setup lang="ts">
 import type { LinkOpenMode } from '~/composables/useLinkOpen'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Workspace panel — wires setSecHtml('workspace') to real state + IPC.
 //   - Workspace path: READ-ONLY. The sidecar always uses os.homedir()/.awog as

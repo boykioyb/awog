@@ -36,8 +36,8 @@
               :cx="lx(cm.lane || 0)"
               :cy="cy(i)"
               :r="sel === `c:${cm.h}` ? 5 : 3.6"
-              :fill="cm.lane ? 'var(--violet)' : 'var(--accent)'"
-              stroke="var(--bgPanel)"
+              :fill="cm.lane ? 'var(--violet)' : 'var(--primary)'"
+              stroke="var(--card)"
               stroke-width="1.6"
             />
           </svg>

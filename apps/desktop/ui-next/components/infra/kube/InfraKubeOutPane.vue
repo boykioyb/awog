@@ -83,19 +83,24 @@
               :disabled="out.loading"
               @update:model-value="kube.setSince"
             />
-            <button
+            <Button
               v-if="out.mode !== 'terminal'"
               type="button"
-              class="btn"
               :disabled="out.loading"
               :title="t('infra.kube.refresh')"
+              variant="outline"
               @click="kube.refreshOut()"
             >
               <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
-            <button type="button" class="btn" :title="t('common.close')" @click="kube.closeOut()">
+            </Button>
+            <Button
+              type="button"
+              :title="t('common.close')"
+              variant="outline"
+              @click="kube.closeOut()"
+            >
               <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -106,9 +111,9 @@
             <!-- Dòng lệnh đã chạy: có ích khi cần chép sang terminal để tự làm tiếp. -->
             <div v-if="out.command" class="ikcmd">
               <code>{{ out.command }}</code>
-              <button type="button" class="btn" @click="kube.copyCommand(out.command)">
+              <Button type="button" variant="outline" @click="kube.copyCommand(out.command)">
                 {{ t('infra.kube.blocked.copy') }}
-              </button>
+              </Button>
             </div>
 
             <p v-if="out.error" class="ierr">{{ out.error }}</p>
@@ -126,13 +131,14 @@
             <div v-if="out.text || out.loading" class="iklogbar">
               <div class="srch iklogfind">
                 <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                <input
-                  :value="logQuery"
+                <Input
+                  unstyled
+                  :model-value="logQuery"
                   type="text"
                   spellcheck="false"
                   :placeholder="t('infra.kube.log.filter.ph')"
                   :aria-label="t('infra.kube.log.filter.ph')"
-                  @input="onQuery"
+                  @update:model-value="onQuery"
                 />
                 <button
                   v-if="logQuery"
@@ -172,22 +178,22 @@
                    hiện thì chúng là hai ô trống nằm cạnh một dropdown đã trả lời xong
                    câu hỏi. -->
               <span v-if="rangeMode === 'custom'" class="iklogfrom">
-                <input
+                <Input
                   v-model="fromTime"
                   type="text"
                   spellcheck="false"
-                  class="iktime"
                   placeholder="16:40"
                   :aria-label="t('infra.kube.log.from')"
+                  class="iktime"
                 />
                 <span class="ihint">→</span>
-                <input
+                <Input
                   v-model="toTime"
                   type="text"
                   spellcheck="false"
-                  class="iktime"
                   placeholder="16:50"
                   :aria-label="t('infra.kube.log.to')"
+                  class="iktime"
                 />
               </span>
 
@@ -196,16 +202,16 @@
               <span v-if="filtering" class="ihint iklogcount" role="status">
                 {{ t('infra.kube.log.hits', { shown: matchedCount, total: lineCount }) }}
               </span>
-              <button
+              <Button
                 v-if="logQuery"
                 type="button"
-                class="btn"
                 :aria-pressed="onlyMatches"
+                variant="outline"
                 @click="onlyMatches = !onlyMatches"
               >
                 <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
                 {{ onlyMatches ? t('infra.kube.log.allLines') : t('infra.kube.log.onlyMatches') }}
-              </button>
+              </Button>
             </div>
 
             <!-- Đang nạp: chưa có chữ thì hiện dòng "đang nạp", có chữ cũ (bấm ↻, đổi
@@ -262,12 +268,12 @@
           <!-- Xoá pod nằm CẠNH thứ nói về pod đó (log/mô tả của chính nó) — chỗ duy
                nhất trong màn mà hành vi phá huỷ có đủ ngữ cảnh để người dùng quyết.
                Vẫn qua hộp duyệt hạ tầng: phải gõ lại tên pod mới xoá được. -->
-          <button
+          <Button
             type="button"
-            class="btn gdanger"
             :title="t('infra.kube.act.deletePodWhy')"
             :disabled="!!deleting"
             :aria-busy="deleting === out.pod"
+            variant="danger"
             @click="kube.deletePod(out.pod)"
           >
             <Icon
@@ -276,10 +282,10 @@
               style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ t('infra.kube.act.deletePod') }}
-          </button>
-          <button type="button" class="btn" @click="kube.closeOut()">
+          </Button>
+          <Button type="button" variant="outline" @click="kube.closeOut()">
             {{ t('common.close') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -299,6 +305,8 @@ import {
 import type { LogLine, LogSeverity } from '~/utils/kube-logs'
 import type { InfraKubeController } from '~/composables/useInfraKube'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ kube: InfraKubeController }>()
 const { out, deleting } = props.kube
@@ -353,9 +361,8 @@ const rangeMode = ref<RangeMode>('all')
 const fromTime = ref('')
 const toTime = ref('')
 
-function onQuery(e: Event): void {
-  const el = e.target
-  logQuery.value = el instanceof HTMLInputElement ? el.value : ''
+function onQuery(v: string): void {
+  logQuery.value = v
 }
 
 const allLines = computed<readonly string[]>(() =>

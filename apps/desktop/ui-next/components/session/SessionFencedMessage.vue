@@ -66,7 +66,7 @@ const label = computed(() => {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
@@ -89,15 +89,15 @@ const label = computed(() => {
   margin-left: auto;
   padding: 1px 6px;
   border-radius: var(--r-pill);
-  background: var(--dangerBg);
-  color: var(--danger);
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
 }
 .fmwi {
   width: var(--icon-xs);
   height: var(--icon-xs);
 }
 .fmb {
-  color: var(--text);
+  color: var(--foreground);
   font-size: var(--fs-md);
   line-height: var(--lh-prose);
 }

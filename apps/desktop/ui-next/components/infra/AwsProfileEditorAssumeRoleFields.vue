@@ -6,11 +6,11 @@
       {{ t('infra.editor.assumeRole.roleArn') }}
       <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
     </label>
-    <input
+    <Input
       v-model.trim="model.roleArn"
-      class="ape-input mono"
       spellcheck="false"
       :placeholder="t('infra.editor.assumeRole.roleArnPh')"
+      class="mono"
     />
   </div>
 
@@ -33,11 +33,11 @@
         {{ t('infra.editor.assumeRole.mfaSerial') }}
         <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
       </label>
-      <input
+      <Input
         v-model.trim="model.mfaSerial"
-        class="ape-input mono"
         spellcheck="false"
         :placeholder="t('infra.editor.assumeRole.mfaSerialPh')"
+        class="mono"
       />
     </div>
     <div class="ape-field">
@@ -45,11 +45,11 @@
         {{ t('infra.editor.assumeRole.externalId') }}
         <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
       </label>
-      <input
+      <Input
         v-model.trim="model.externalId"
-        class="ape-input mono"
         spellcheck="false"
         :placeholder="t('infra.editor.assumeRole.externalIdPh')"
+        class="mono"
       />
     </div>
   </div>
@@ -59,12 +59,11 @@
       {{ t('infra.editor.assumeRole.duration') }}
       <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
     </label>
-    <input
+    <Input
       v-model.trim="model.durationSeconds"
       type="number"
       min="900"
       step="1"
-      class="ape-input"
       :placeholder="t('infra.editor.assumeRole.durationPh')"
     />
   </div>
@@ -81,6 +80,7 @@ import { computed } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { AwsProfile } from '~/types'
 import type { AssumeRoleFormState } from '~/utils/aws-profile-form'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   profiles: AwsProfile[]

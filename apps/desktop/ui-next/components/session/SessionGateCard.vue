@@ -2,16 +2,18 @@
   <!-- plan -->
   <div v-if="block.kind === 'plan'" class="gcard" :class="{ gate: planStatus === 'pending' }">
     <div class="gh">
-      <Icon name="rules" />
+      <Icon name="rules" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('sessions.gate.plan') }}
     </div>
     <SessionTextBlock class="planbody" :text="planMarkdown" />
     <div v-if="planStatus === 'pending'" class="cact">
-      <button class="btn sm" @click="onPlanEdit">{{ t('sessions.gate.planEdit') }}</button>
-      <button class="btn pri sm" @click="onPlanRun">
+      <Button variant="outline" size="sm" @click="onPlanEdit">
+        {{ t('sessions.gate.planEdit') }}
+      </Button>
+      <Button size="sm" @click="onPlanRun">
         <Icon name="check" />
         {{ t('sessions.gate.planRun') }}
-      </button>
+      </Button>
     </div>
     <div v-else class="resolved">
       <Icon name="check" />
@@ -25,16 +27,19 @@
 
   <!-- perm -->
   <!-- Lệnh hạ tầng nhuộm ĐỎ thay vì hổ phách khi chạm tài khoản production (ADR 0088
-       §5): hai lớp không cùng lúc, nếu không thì `.gcard.gate` của prototype.css và
-       luật đỏ ở đây tranh nhau đúng một thuộc tính và thắng thua phụ thuộc thứ tự
-       chèn style — thứ không ai đọc code đoán được. -->
+       §5): hai lớp không cùng lúc, nếu không thì `.gcard.gate` và luật đỏ ở đây tranh
+       nhau đúng một thuộc tính và thắng thua phụ thuộc thứ tự chèn style — thứ
+       không ai đọc code đoán được. -->
   <div
     v-else-if="block.kind === 'perm'"
     class="gcard"
     :class="{ gate: gateLit && !isProdInfra, iprod: gateLit && isProdInfra }"
   >
     <div class="gh">
-      <Icon :name="infra ? 'globe' : 'shield'" />
+      <Icon
+        :name="infra ? 'globe' : 'shield'"
+        style="width: var(--icon-sm); height: var(--icon-sm)"
+      />
       {{ infra ? t('infraGate.title') : t('sessions.gate.permission') }}
     </div>
     <!-- Hạ tầng (ADR 0088 §5): hậu quả → dòng lệnh → ngữ cảnh, đúng thứ tự người
@@ -50,7 +55,7 @@
         <span
           v-for="chip in infraChips"
           :key="chip.key"
-          class="chip"
+          class="ichip"
           :class="chip.tone"
           :title="chip.label"
         >
@@ -90,7 +95,7 @@
         </button>
       </p>
     </template>
-    <div v-else>
+    <div v-else class="ptext">
       {{ t('sessions.gate.allowQuestion') }}
       <b>{{ block.tool }}</b>
       {{ t('sessions.gate.on') }}
@@ -111,7 +116,7 @@
            rendered at all; say why instead of leaving a dead button. Lệnh hạ tầng
            không bao giờ nhớ được, và lý do khác hẳn nên câu chữ cũng khác. -->
       <div v-else class="pnote">
-        <Icon name="alert" />
+        <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span>{{ infra ? t('infraGate.noRemember') : noRuleReason }}</span>
       </div>
       <div v-if="canRemember" class="pscope">
@@ -125,14 +130,16 @@
         <span class="prulehint">{{ scopeHint }}</span>
       </div>
       <div class="cact">
-        <button class="btn sm" @click="onDeny">{{ t('sessions.gate.deny') }}</button>
-        <button v-if="canRemember" class="btn sm" @click="onAllowAlways">
+        <Button variant="outline" size="sm" @click="onDeny">
+          {{ t('sessions.gate.deny') }}
+        </Button>
+        <Button v-if="canRemember" variant="outline" size="sm" @click="onAllowAlways">
           {{ t('sessions.gate.allowAlways') }}
-        </button>
-        <button class="btn pri sm" @click="onAllow">
+        </Button>
+        <Button size="sm" @click="onAllow">
           <Icon name="check" />
           {{ t('sessions.gate.allow') }}
-        </button>
+        </Button>
       </div>
     </template>
     <template v-else-if="permStatus === 'allowed'">
@@ -147,7 +154,7 @@
         <span v-if="savedOk && ruleText" class="prulecode">{{ ruleText }}</span>
       </div>
       <div v-if="savedDowngraded" class="pnote">
-        <Icon name="alert" />
+        <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span>{{ t('sessionsPerm.savedDowngraded') }}</span>
       </div>
       <!-- Kết quả lệnh vừa được duyệt, chép từ step của CHÍNH lời gọi này (xem
@@ -159,7 +166,7 @@
           <span>{{ t('sessions.step.output') }}</span>
           <span v-if="permExit" class="poutexit">{{ permExit }}</span>
         </div>
-        <pre class="cvcode plain poutbody">{{ permOutput }}</pre>
+        <pre class="poutbody">{{ permOutput }}</pre>
       </div>
     </template>
     <div v-else class="resolved den">{{ t('sessions.gate.denied') }}</div>
@@ -174,15 +181,15 @@
   <!-- error -->
   <div v-else-if="block.kind === 'error'" class="gcard err">
     <div class="gh">
-      <Icon name="alert" />
+      <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('sessions.gate.error') }}
     </div>
-    <div style="font-size: var(--fs-md); line-height: var(--lh-md)">{{ block.text }}</div>
+    <div class="ptext">{{ block.text }}</div>
     <div class="cact">
-      <button class="btn pri sm" @click="onRetry">
+      <Button size="sm" @click="onRetry">
         <Icon name="refresh" />
         {{ t('sessions.gate.retry') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -228,7 +235,7 @@ const located = computed<boolean>(() => sessionId.value != null && msgIndex.valu
 const planStatus = computed<'pending' | 'approved'>(() =>
   props.block.kind === 'plan' ? (props.block.status ?? 'pending') : 'pending',
 )
-// Render the model's own markdown when present (headers/lists/bold survive);
+// Render the model's own markdown when present (headers/lists/bold/code survive);
 // fall back to the flattened items as a bullet list (legacy steps).
 const planMarkdown = computed<string>(() => {
   if (props.block.kind !== 'plan') return ''
@@ -579,6 +586,102 @@ const onRetry = (): void => {
 </script>
 
 <style scoped>
+/* Gate/status card — card chrome in shadcn tokens: card surface, hairline border,
+   lg radius, medium title row, right-aligned actions. The class names stay the
+   documented hooks (`.gcard`/`.gate`/`.err` are also theme-cute.css restyle
+   targets, whose attribute-scoped rules intentionally still win when active);
+   the scoped rules below re-express them on the canonical var names.
+   `.gate` = awaiting a decision (warning tint); `.iprod` = pending infra command
+   on a PRODUCTION account (destructive tint); `.err` = error card — the three
+   never mix in template. */
+.gcard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.gcard.gate {
+  border-color: rgb(from var(--warning) r g b / 45%);
+  background: rgb(from var(--warning) r g b / 8%);
+}
+.gcard.gate .gh {
+  color: var(--warning);
+}
+.gcard.iprod {
+  border-color: rgb(from var(--destructive) r g b / 45%);
+  background: rgb(from var(--destructive) r g b / 8%);
+}
+.gcard.iprod .gh {
+  color: var(--destructive);
+}
+.gcard.err {
+  border-color: rgb(from var(--destructive) r g b / 45%);
+  background: rgb(from var(--destructive) r g b / 8%);
+}
+.gcard.err .gh {
+  color: var(--destructive);
+}
+.gh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--foreground);
+  margin-bottom: 7px;
+}
+/* Action row — right-aligned (spec idiom). Buttons are ui/Button (shadcn). */
+.cact {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+/* Resolved state ("Allowed"/"Denied"/"Approved") — status-tinted one-liner. */
+.resolved {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--success);
+}
+.resolved :deep(.icn) {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+.resolved.den {
+  color: var(--destructive);
+}
+/* Plain body line inside the card. */
+.ptext {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--foreground);
+}
+/* Steer note — italic aside on a primary rail (proto steer idiom). */
+.steernote {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  line-height: 18px;
+  font-style: italic;
+  color: var(--muted-foreground);
+  border-left: 2px solid var(--ring);
+  padding: 3px 0 3px 10px;
+}
+.steernote :deep(.icn) {
+  color: var(--primary);
+}
+
 /* Khối "sẽ làm gì · kết quả · rủi ro" của thẻ duyệt lệnh hạ tầng. Lưới hai cột để
    nhãn thẳng hàng; ở cửa sổ hẹp nó tự xuống một cột. */
 .pbrief {
@@ -589,25 +692,25 @@ const onRetry = (): void => {
 }
 
 .pbrief-lbl {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
+  font-size: 12px;
+  line-height: 18px;
   color: var(--textDim);
   white-space: nowrap;
 }
 
 .pbrief-txt {
   margin: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--muted-foreground);
 }
 
 .pbrief-txt.warn {
-  color: var(--amber);
+  color: var(--warning);
 }
 
 .pbrief-txt.danger {
-  color: var(--danger);
+  color: var(--destructive);
 }
 
 /* Nhãn "do model" — nhỏ, không tô màu cảnh báo: nó nói NGUỒN của câu chữ, không
@@ -617,8 +720,8 @@ const onRetry = (): void => {
   padding: 0 5px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
+  font-size: 11px;
+  line-height: 16px;
   color: var(--textFaint);
   white-space: nowrap;
 }
@@ -636,8 +739,8 @@ const onRetry = (): void => {
   align-items: baseline;
   gap: 8px;
   margin: 2px 0 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
+  font-size: 12px;
+  line-height: 18px;
   color: var(--textFaint);
 }
 
@@ -645,10 +748,10 @@ const onRetry = (): void => {
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--accent);
+  color: var(--primary);
   cursor: pointer;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-sm);
+  font-size: 12px;
+  line-height: 18px;
   text-decoration: underline;
 }
 
@@ -660,15 +763,9 @@ const onRetry = (): void => {
 }
 
 /* Plan body = the model's markdown rendered as a document (SessionTextBlock).
-   Replaces the old flat <ul> so headers/nested lists/bold/code survive. Breathing
-   room from the approve/edit row (.cact mt:12) and the approved confirmation. */
+   Replaces the old flat <ul> so headers/nested lists/bold/code survive. */
 .planbody {
   margin-bottom: 6px;
-}
-/* Submit stays disabled until every question has an answer. */
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 /* ── Permission rule preview + tier picker (ADR 0080) ────────────────────────
    Both rows sit between the "allow X on Y?" line and the action row, so the rule
@@ -683,13 +780,13 @@ const onRetry = (): void => {
   flex-wrap: wrap;
   gap: 7px;
   margin-top: 9px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted-foreground);
 }
 .prulelbl {
   font-weight: 550;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .prulehint {
   flex: 1 1 100%;
@@ -698,45 +795,43 @@ const onRetry = (): void => {
 /* The verbatim rule string — `Bash(git status)` — the user reads before granting it. */
 .prulecode {
   font-family: var(--code); /* mono-ok: a rule string is code the user can copy */
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  background: var(--bgActive);
+  font-size: 13px;
+  line-height: 18px;
+  background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   padding: 2px 7px;
-  color: var(--text);
+  color: var(--foreground);
   user-select: text;
   word-break: break-all;
 }
+/* Mono inline target — the shell command a permission prompt is asking about. */
+.permcode {
+  font-family: var(--code); /* mono-ok */
+  font-size: 13px;
+  line-height: 18px;
+  background: var(--muted);
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  color: var(--muted-foreground);
+}
 .pnote :deep(.icn) {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  color: var(--amber);
+  color: var(--warning);
   flex: 0 0 auto;
 }
 .psaved {
   margin-top: 7px;
 }
-/* ── Lệnh hạ tầng (ADR 0088 §5) ──────────────────────────────────────────────
-   Thẻ đỏ thay cho thẻ hổ phách khi account là production. Hai lớp loại trừ nhau ở
-   template nên ở đây không phải đua specificity với `.gcard.gate`. */
-.gcard.iprod {
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
-}
-.gcard.iprod .gh {
-  color: var(--danger);
-}
 /* Một câu: lệnh này làm gì với hạ tầng. Đọc trước dòng lệnh, vì phần lớn người
    duyệt không phân loại được `s3api delete-bucket` chỉ bằng cách nhìn. */
 .isent {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--foreground);
 }
 .isent.hot {
   font-weight: 650;
-  color: var(--danger);
+  color: var(--destructive);
 }
 /* Dòng lệnh ĐÚNG NHƯ sắp chạy. XUỐNG DÒNG chứ không cuộn ngang.
    Bản đầu để `white-space: pre` + `overflow-x: auto` với lý do "một lệnh bị bẻ dòng
@@ -751,10 +846,10 @@ const onRetry = (): void => {
   margin-top: 9px;
   padding: 7px 10px;
   font-family: var(--code); /* mono-ok: dòng lệnh người dùng copy vào terminal */
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  background: var(--bgActive);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--foreground);
+  background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   white-space: pre-wrap;
@@ -767,26 +862,34 @@ const onRetry = (): void => {
   gap: 6px;
   margin-top: 9px;
 }
-/* Một `-chdir=` dài hơn cả thẻ thì cắt bằng ellipsis, không đẩy ngang cả hàng —
-   giá trị đầy đủ nằm ở `title`. `inline-block` chứ không `inline-flex` (mặc định
-   của `.chip`) vì text-overflow chỉ ăn trên hộp khối; chip ở đây thuần chữ nên
-   không mất gì. */
-.ichips .chip {
+/* Ngữ cảnh chip — hairline + muted text; `danger`/`warn` nhuộm theo mức hậu quả.
+   Một `-chdir=` dài hơn cả thẻ thì cắt bằng ellipsis, không đẩy ngang cả hàng —
+   giá trị đầy đủ nằm ở `title`. */
+.ichip {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
 }
-.ichips .chip.danger {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
+.ichip.danger {
+  color: var(--destructive);
+  border-color: rgb(from var(--destructive) r g b / 45%);
+  background: rgb(from var(--destructive) r g b / 10%);
   font-weight: 650;
 }
-.ichips .chip.warn {
-  color: var(--amber);
-  border-color: var(--amberBorder);
-  background: var(--amberDim);
+.ichip.warn {
+  color: var(--warning);
+  border-color: rgb(from var(--warning) r g b / 45%);
+  background: rgb(from var(--warning) r g b / 10%);
 }
 /* ── Kết quả của lệnh vừa được duyệt ─────────────────────────────────────────
    Nằm SAU hàng "Đã cho phép" vì đó là thứ tự thời gian thật (duyệt → chạy → kết
@@ -801,26 +904,25 @@ const onRetry = (): void => {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
+  font-size: 11px;
+  line-height: 16px;
   font-weight: 650;
   color: var(--textDim);
 }
 .poutexit {
   font-family: var(--code); /* mono-ok: mã thoát là chữ của máy */
   font-weight: 550;
-  color: var(--danger);
+  color: var(--destructive);
 }
 /* Xuống dòng chứ không cuộn ngang — cùng lý do như `.icmd`: output dài (một dòng
    JSON lỗi AWS) mà để `pre` là phần đuôi biến mất khỏi tầm mắt trên thanh này. */
 .poutbody {
   margin: 0;
   padding: 2px 0 0;
-  border: none;
-  background: transparent;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textMuted);
+  font-family: var(--code); /* mono-ok: raw tool output */
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--muted-foreground);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;

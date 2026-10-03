@@ -26,14 +26,14 @@
 
     <div class="tsr-scroll">
       <div v-if="isCute && !visible.length" class="cempty">
-        <AwogMascot :size="44" style="color: var(--accent)" />
+        <AwogMascot :size="44" style="color: var(--primary)" />
         <span class="cempty-t">{{ t('terminalSnippet.emptyTitle') }}</span>
         <span class="cempty-b">{{ t('terminalSnippet.emptyBody') }}</span>
         <div class="cempty-cta">
-          <button class="btn pri sm" @click="openNew">
+          <Button size="sm" @click="openNew">
             <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('terminalSnippet.new') }}
-          </button>
+          </Button>
         </div>
       </div>
       <div v-else-if="!visible.length" class="tsr-empty">
@@ -191,7 +191,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   flex-direction: column;
   overflow: hidden;
   border-left: 1px solid var(--border);
-  background: var(--bgPanel);
+  background: var(--sidebar);
 }
 /* Hairline as an INSET SHADOW, not a border: a 1px border eats a pixel of the CONTENT
    box under `box-sizing: border-box`, leaving an odd height (30 - 1 = 29) that puts every
@@ -211,7 +211,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   font-size: 12px;
   line-height: 18px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .tsr-count {
   font-size: 12px;
@@ -221,7 +221,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   border-radius: var(--r-xs);
   text-align: center;
   color: var(--textDim);
-  background: var(--bgHover);
+  background: var(--accent-wash);
   font-variant-numeric: tabular-nums;
 }
 .tsr-tools {
@@ -246,8 +246,8 @@ async function del(snippet: TerminalSnippet): Promise<void> {
     color 0.12s;
 }
 .tsr-tool:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .tsr-scroll {
   flex: 1 1 auto;
@@ -266,7 +266,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
 .tsr-empty-t {
   font-size: 1em;
   font-weight: 550;
-  color: var(--text);
+  color: var(--foreground);
 }
 .tsr-empty-b {
   font-size: 1em;
@@ -281,7 +281,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   padding: 8px 9px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
-  background: var(--bgEl);
+  background: var(--card);
 }
 .tsr-row + .tsr-row {
   margin-top: 6px;
@@ -300,7 +300,7 @@ async function del(snippet: TerminalSnippet): Promise<void> {
   gap: 6px;
   font-size: 1em;
   font-weight: 550;
-  color: var(--text);
+  color: var(--foreground);
 }
 .tsr-badge {
   font-size: 12px;
@@ -341,8 +341,8 @@ async function del(snippet: TerminalSnippet): Promise<void> {
     color 0.12s;
 }
 .tsr-act:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .tsr-act:disabled {
   opacity: 0.4;
@@ -350,6 +350,6 @@ async function del(snippet: TerminalSnippet): Promise<void> {
 }
 .tsr-act.del:hover:not(:disabled) {
   background: var(--dangerDim);
-  color: var(--danger);
+  color: var(--destructive);
 }
 </style>

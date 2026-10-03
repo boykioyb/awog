@@ -100,7 +100,7 @@
   "projects.drawer.linkCopied": "Link copied ✓",
   "projects.drawer.startReview": "Start review in a session",
   "projects.drawer.startReviewShort": "Review",
-  "projects.gh.reviewSessionTitle": "Review #{number}",
+  "projects.gh.reviewSessionTitle": "Review",
   "projects.drawer.close": "Close",
   "projects.drawer.fullscreen": "Fullscreen",
   "projects.drawer.exitFullscreen": "Exit fullscreen",

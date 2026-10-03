@@ -42,5 +42,6 @@
   "browser.pip.minimize": "Thu nhỏ",
   "browser.pip.restore": "Mở rộng",
   "browser.pip.close": "Đóng Picture in Picture",
+  "browser.pip.actions": "Thao tác",
   "browser.pip.empty": "Chưa có gì để xem — tab đang trắng."
 }

@@ -77,6 +77,14 @@ export interface EmbeddedBrowserOptions {
   viewport: Readonly<ShallowRef<HTMLElement | null>>
   // Is this panel's Browser tab the visible one right now?
   visible: () => boolean
+  // Scope SỞ HỮU của bề mặt này — "session nào mở browser thì session đó hiện".
+  // Panel workspace của một session truyền `session.engineId`; PiP theo phiên
+  // đang xem; vắng mặt = pool global (cửa sổ popout `/browser` thấy mọi tab).
+  // Đi cùng MỌI bridge call; main (electron/browser.ts) verify scope ↔
+  // ownership, nên đây là luật chạy — lọc danh sách ở `applyList` chỉ là phần
+  // hiển thị. Getter (không phải giá trị tĩnh) vì panel được KeepAlive và scope
+  // của nó có thể đến muộn khi session hydrate.
+  scope?: () => string | undefined
 }
 
 export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
@@ -85,6 +93,10 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     typeof window === 'undefined' ? null : (window.awog?.browser ?? null),
   )
   const available = computed(() => bridge.value !== null)
+
+  // Scope của bề mặt này (session engineId, undefined = pool global). Trả
+  // `undefined` chứ không `null` vì chữ ký bridge dùng `scope?: string`.
+  const myScope = (): string | undefined => options.scope?.() ?? undefined
 
   const tabs = ref<AwogBrowserTab[]>([])
   const activeTabId = ref<string | null>(null)
@@ -198,13 +210,13 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
         // trong placeholder (`takeOver`), và nó tự nhận `owner` trước khi sync.
         if (owner.value !== id && activeTab.value?.shownElsewhere === true) return
         owner.value = id
-        const info = await api.attach(rect, activeTabId.value ?? undefined)
+        const info = await api.attach(rect, activeTabId.value ?? undefined, myScope())
         holding.value = true
         lastRect = rect
         applyOne(info)
       } else if (!sameRect(lastRect, rect)) {
         lastRect = rect
-        await api.setBounds(rect, activeTabId.value ?? undefined)
+        await api.setBounds(rect, activeTabId.value ?? undefined, myScope())
       }
     } catch (err) {
       lastRect = null
@@ -242,6 +254,11 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   }
 
   const applyOne = (info: AwogBrowserTab): void => {
+    // Tab của scope khác thì mặt này không được thấy — attach/select của chính
+    // mình không bao giờ trả về một tab như thế (main chặn), nhưng phòng thủ ở
+    // đây miễn phí.
+    const scope = myScope()
+    if (scope !== undefined && info.scope !== scope) return
     activeTabId.value = info.tabId
     const at = tabs.value.findIndex((t) => t.tabId === info.tabId)
     if (at >= 0) tabs.value[at] = info
@@ -249,15 +266,34 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     if (document.activeElement?.tagName !== 'INPUT') urlDraft.value = info.url
   }
 
+  // Danh sách từ `browser:changed` (và từ `browser:tabs`) là danh sách GLOBAL:
+  // một cửa sổ host nhiều panel session cùng lúc, nên main gửi tất cả kèm
+  // `activeByScope`, và mỗi mặt tự gọt về scope của mình. Giữ `lastList` để một
+  // cú ĐỔI SCOPE (phiên hydrate muộn, hay PiP theo phiên đang xem) tính lại mà
+  // không cần thêm một lượt IPC.
+  let lastList: AwogBrowserTabList | null = null
+
   const applyList = (list: AwogBrowserTabList): void => {
-    tabs.value = list.tabs
+    lastList = list
+    const scope = myScope()
+    const mine = scope === undefined ? list.tabs : list.tabs.filter((t) => t.scope === scope)
+    tabs.value = mine
+    const scopedActive =
+      scope === undefined ? list.activeTabId : (list.activeByScope?.[scope] ?? null)
     // FOLLOW THE AGENT. When a tool call opens a tab or switches tabs, the panel
     // moves with it — that is the whole point of showing the browser next to the
     // transcript. Only while we hold the view: a panel that isn't showing anything
     // must not yank the view over on a background navigation.
-    const followed = holding.value && !!list.activeTabId && list.activeTabId !== activeTabId.value
-    if (list.activeTabId) activeTabId.value = list.activeTabId
-    const active = list.tabs.find((t) => t.tabId === list.activeTabId)
+    const followed = holding.value && !!scopedActive && scopedActive !== activeTabId.value
+    if (scopedActive && mine.some((t) => t.tabId === scopedActive)) {
+      activeTabId.value = scopedActive
+    } else if (!mine.some((t) => t.tabId === activeTabId.value)) {
+      // Con trỏ active của scope trỏ vào tab đã chết (webContents crash) hoặc
+      // scope chưa có con trỏ — rơi về tab đầu của scope thay vì treo ở trạng
+      // thái trống dù còn tab.
+      activeTabId.value = mine[0]?.tabId ?? null
+    }
+    const active = mine.find((t) => t.tabId === activeTabId.value)
     // Don't clobber what the user is typing.
     if (active && document.activeElement?.tagName !== 'INPUT') urlDraft.value = active.url
     // The view can be taken away from us (popout, another window). Drop the claim
@@ -312,7 +348,7 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     }
     selectionInFlight = true
     try {
-      const sel = await api.selection(activeTabId.value ?? undefined)
+      const sel = await api.selection(activeTabId.value ?? undefined, myScope())
       selectionText.value = sel.text.trim()
       selectionFails = 0
     } catch {
@@ -344,16 +380,19 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     guard(async () => {
       const api = bridge.value
       if (!api || !urlDraft.value.trim()) return
-      applyOne(await api.open(urlDraft.value, activeTabId.value ?? undefined))
+      applyOne(await api.open(urlDraft.value, activeTabId.value ?? undefined, myScope()))
       await sync()
     })
 
-  const back = (): Promise<void> => guard(() => bridge.value!.back(activeTabId.value ?? undefined))
+  const back = (): Promise<void> =>
+    guard(() => bridge.value!.back(activeTabId.value ?? undefined, myScope()))
   const forward = (): Promise<void> =>
-    guard(() => bridge.value!.forward(activeTabId.value ?? undefined))
+    guard(() => bridge.value!.forward(activeTabId.value ?? undefined, myScope()))
   const reload = (): Promise<void> =>
-    guard(() => bridge.value!.reload(activeTabId.value ?? undefined))
-  const popout = (): Promise<void> => guard(() => bridge.value!.popout())
+    guard(() => bridge.value!.reload(activeTabId.value ?? undefined, myScope()))
+  // Pop out mang theo scope của mặt này: cửa sổ popout mở ra chỉ thấy tab của
+  // đúng session đã bấm nút (main ghi query `?scope=` vào route `/browser`).
+  const popout = (): Promise<void> => guard(() => bridge.value!.popout(myScope()))
 
   // `wait: false` — mọi lời gọi từ đây đều là NGƯỜI DÙNG bấm (nút "+", chip trang
   // đã ghim), nên phải thấy khung đổi ngay. Chờ `loadURL` xong mới trả về là 208ms
@@ -361,7 +400,7 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   // đúng lúc người ta vừa bấm. Trạng thái tải theo về sau qua event `changed`.
   const newTab = (url?: string): Promise<void> =>
     guard(async () => {
-      const created = await bridge.value!.newTab(url, { wait: false })
+      const created = await bridge.value!.newTab(url, { wait: false, scope: myScope() })
       activeTabId.value = created.tabId
       holding.value = false
       await sync()
@@ -369,7 +408,7 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
 
   const selectTab = (tabId: string): Promise<void> =>
     guard(async () => {
-      applyOne(await bridge.value!.selectTab(tabId))
+      applyOne(await bridge.value!.selectTab(tabId, myScope()))
       // Re-attach: a different tab means a different view in our rect.
       holding.value = false
       await sync()
@@ -377,7 +416,7 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
 
   const closeTab = (tabId: string): Promise<void> =>
     guard(async () => {
-      await bridge.value!.closeTab(tabId)
+      await bridge.value!.closeTab(tabId, myScope())
       holding.value = false
       await sync()
     })
@@ -478,6 +517,17 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     if (el && ro) ro.observe(el)
     void sync()
   })
+  // Scope của mặt này đổi (phiên hydrate muộn; PiP theo phiên đang xem): view đang
+  // gắn thuộc scope CŨ — nhả quyền giữ, gọt lại danh sách theo scope mới, rồi
+  // sync sẽ attach đúng tab mới (hoặc detach khi scope mới chưa có gì).
+  watch(
+    () => options.scope?.() ?? null,
+    () => {
+      holding.value = false
+      if (lastList) applyList(lastList)
+      void sync()
+    },
+  )
   // `empty` cũng là một trigger: tab đang giữ view mà navigate về about:blank
   // thì `applyList` không gọi sync (tab vẫn `shown`), nên watcher này là nơi
   // duy nhất gỡ view ra để nhường chỗ cho empty-state — và ngược lại.

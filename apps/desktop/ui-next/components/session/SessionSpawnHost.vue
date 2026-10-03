@@ -64,11 +64,11 @@
 
           <div v-for="(c, i) in children" :key="c.key" class="spw-child">
             <div class="spw-crow">
-              <input
+              <Input
                 v-model="c.title"
-                class="spw-in"
                 :placeholder="t('sessions.spawn.childTitle')"
                 maxlength="80"
+                class="spw-in"
               />
               <button
                 class="spw-cx spw-genbtn"
@@ -79,11 +79,11 @@
               >
                 <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
               </button>
-              <input
+              <Input
                 v-model="c.role"
-                class="spw-in spw-role"
                 :placeholder="t('sessions.spawn.childRole')"
                 maxlength="60"
+                class="spw-in spw-role"
               />
               <button
                 class="spw-cx"
@@ -100,6 +100,18 @@
               rows="2"
               :placeholder="t('sessions.spawn.childPrompt')"
             />
+            <!-- "Vai có thật" của con (session-teams §3): agent AWOG gắn vào phiên
+                 con lúc spawn. '' = con trần; giá trị là agentKey (source|proj|id)
+                 để phân biệt hai agent trùng id ở hai tầng. -->
+            <div class="spw-crow2 spw-agentrow">
+              <span class="spw-fl">{{ t('sessions.spawn.f.agent') }}</span>
+              <AppSelect
+                :model-value="c.agentKey"
+                :options="agentOpts"
+                width="100%"
+                @update:model-value="(v: string) => (c.agentKey = v)"
+              />
+            </div>
             <div class="spw-crow2">
               <button
                 class="spw-ovr"
@@ -142,14 +154,13 @@
             <input v-model="remember" type="checkbox" />
             <span>{{ t('sessions.spawn.remember') }}</span>
           </label>
-          <div class="spw-note">{{ t('sessions.spawn.autoDeliver') }}</div>
           <div class="spw-actions">
-            <button class="btn" :disabled="busy" @click="close">
+            <Button :disabled="busy" variant="outline" @click="close">
               {{ manual ? t('common.cancel') : t('sessions.spawn.deny') }}
-            </button>
-            <button class="btn pri" :disabled="busy || !canSubmit" @click="approve">
+            </Button>
+            <Button :disabled="busy || !canSubmit" variant="default" @click="approve">
               {{ t('sessions.spawn.approve', { n: children.length }) }}
-            </button>
+            </Button>
           </div>
           <div v-if="!canSubmit" class="spw-err">{{ t('sessions.spawn.invalid') }}</div>
         </div>
@@ -160,18 +171,18 @@
 
 <script setup lang="ts">
 // Popover ĐIỀU PHỐI phiên con — cổng duyệt duy nhất của tool `create_session`
-// (docs/features/session-groups.md). Hai nguồn mở:
+// (docs/features/session-runs.md). Hai nguồn mở:
 //
 //   1. Agent đề xuất: runner park `create_session` + bắn `session.spawn-request`
 //      → store.pendingSpawn → popover này. Duyệt = resolveSpawn; Từ chối/đóng/
 //      Esc = deny (mặc định AN TOÀN — không duyệt thì không có phiên nào được tạo).
 //   2. Người dùng tự mở: menu ⋯ → "Điều phối phiên con…" → useSessionSpawnDialog
-//      → cùng popover → sessions.spawnChildren RPC (không qua model).
+//      → cùng popover → sessions.spawnMembers RPC (không qua model).
 //
 // "Cấu hình chung" áp cho mọi phiên con; mỗi phiên có thể mở "Tuỳ chỉnh riêng" để
 // đè từng field ('' = theo chung/cha — mergeDrafts lấy field của tầng dưới). Bản
 // trộn cuối gửi lên sidecar làm `children[].config`; bản CHUNG gửi làm `config`
-// chỉ để `remember` ghi nhớ lên gốc nhóm (groupSpawnConfig → lần sau model gọi
+// chỉ để `remember` ghi nhớ lên gốc nhóm (spawnConfig → lần sau model gọi
 // create_session chạy thẳng, không hỏi lại — đúng tinh thần "chỉ allow 1 lần").
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { normalizeStyleSlug, RESPONSE_STYLES } from '~/composables/useSessionModelConfig'
@@ -191,8 +202,11 @@ import { useAccounts, type AccountOption } from '~/composables/useAccounts'
 import { useOutputStyles } from '~/composables/useOutputStyles'
 import { useSessionSpawnDialog } from '~/composables/useSessionSpawnDialog'
 import { useSessionsStore } from '~/stores/sessions'
+import { useAgentsStore } from '~/stores/agents'
 import type { ProviderName } from '~/stores/settings'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 defineOptions({ name: 'SessionSpawnHost' })
 
@@ -201,6 +215,7 @@ const MAX_CHILDREN = 12
 
 const { t } = useI18n()
 const store = useSessionsStore()
+const agents = useAgentsStore()
 const dlg = useSessionSpawnDialog()
 const toast = useToast()
 const { accounts, accountById, accountByDisplay, modelsForAccount } = useAccounts()
@@ -235,6 +250,9 @@ type DraftChild = {
   role: string
   prompt: string
   ovr: DraftCfg | null
+  // agentKey của agents store ('' = con trần) — gom đủ source/projectId/id để
+  // approve() bóc lại thành agentId/agentSource/agentProjectId của SpawnChildSpec.
+  agentKey: string
 }
 
 const blankCfg = (): DraftCfg => ({
@@ -259,7 +277,7 @@ const fieldBusy = ref(false)
 // "Cấu hình chung" thu vào chip để ưu tiên yêu cầu + danh sách phiên — chip tóm
 // tắt giá trị hiệu lực (sharedSummary), bấm mới mở lưới select đầy đủ.
 const sharedOpen = ref(false)
-// Gốc nhóm đã có groupSpawnConfig hay chưa — chỉ đường thủ công mới gặp, để bỏ
+// Gốc nhóm đã có spawnConfig hay chưa — chỉ đường thủ công mới gặp, để bỏ
 // chọn "nhớ" khi duyệt thì revoke luôn (xem approve).
 const hadSaved = ref(false)
 const rootClientId = ref<number | null>(null)
@@ -430,9 +448,33 @@ function setField(d: DraftCfg, key: keyof DraftCfg, v: string) {
   if (key === 'accountId') d.model = ''
 }
 
+// ── Agent picker (session-teams §3) ──
+// agentKey của một spec model đề xuất — spec mang 3 field phẳng, draft chỉ cần
+// một khoá; '' khi spec không gắn agent.
+function specAgentKey(c: SpawnChildSpec): string {
+  if (!c.agentId) return ''
+  return agents.agentKey({
+    id: c.agentId,
+    source: c.agentSource ?? 'global',
+    projectId: c.agentProjectId,
+  })
+}
+// Options của picker: '' = không agent; agent project có hậu tố tầng để phân
+// biệt cùng-id ở tầng global (label chỉ là hiển thị — value mang đủ danh tính).
+const agentOpts = computed<AppSelectOption[]>(() => [
+  { value: '', label: t('sessions.spawn.agentNone') },
+  ...agents.agents.map((a) => ({
+    value: agents.agentKey(a),
+    label:
+      a.source === 'project'
+        ? `${a.name || a.id} · ${t('sessions.spawn.agentProject')}`
+        : a.name || a.id,
+  })),
+])
+
 // ── Children ──
 function addChild() {
-  children.value.push({ key: seq++, title: '', role: '', prompt: '', ovr: null })
+  children.value.push({ key: seq++, title: '', role: '', prompt: '', ovr: null, agentKey: '' })
 }
 function toggleOvr(c: DraftChild) {
   c.ovr = c.ovr ? null : blankCfg()
@@ -453,9 +495,17 @@ async function genTeam() {
       mode: 'team',
     })
     if (res?.children?.length) {
-      children.value = res.children
-        .slice(0, MAX_CHILDREN)
-        .map((c) => ({ key: seq++, title: c.title, role: c.role, prompt: c.prompt, ovr: null }))
+      // Sinh lại cả ê-kíp KHÔNG được xoá agent user đã gắn: bảo lưu picker theo
+      // title trùng khớp — con mới trùng tên con cũ coi như cùng một vai.
+      const keepAgent = new Map(children.value.map((c) => [c.title.trim(), c.agentKey]))
+      children.value = res.children.slice(0, MAX_CHILDREN).map((c) => ({
+        key: seq++,
+        title: c.title,
+        role: c.role,
+        prompt: c.prompt,
+        ovr: null,
+        agentKey: keepAgent.get(c.title.trim()) ?? specAgentKey(c),
+      }))
     } else {
       toast.add({ title: t('sessions.spawn.genFailed'), color: 'error' })
     }
@@ -552,21 +602,29 @@ function seed() {
   fieldBusy.value = false
   sharedOpen.value = false
   const s = parent.value
-  // Nhớ gốc nhóm (đường thủ công có thể mở trên gốc đã có groupSpawnConfig).
+  // Nhớ gốc nhóm (đường thủ công có thể mở trên gốc đã có spawnConfig).
   const rootEid = s ? store.groupRootEid(s) : undefined
   const root = rootEid ? store.byEngineId(rootEid) : undefined
   rootClientId.value = root?.id ?? null
-  hadSaved.value = !!root?.groupSpawnConfig
-  shared.value = root?.groupSpawnConfig
-    ? draftFromConfig(root.groupSpawnConfig)
+  hadSaved.value = !!root?.spawnConfig
+  shared.value = root?.spawnConfig
+    ? draftFromConfig(root.spawnConfig)
     : s
       ? draftFromSession(s)
       : blankCfg()
   remember.value = true
   const src = req.value?.children
   children.value = src?.length
-    ? src.map((c) => ({ key: seq++, title: c.title, role: c.role, prompt: c.prompt, ovr: null }))
-    : [{ key: seq++, title: '', role: '', prompt: '', ovr: null }]
+    ? src.map((c) => ({
+        key: seq++,
+        title: c.title,
+        role: c.role,
+        prompt: c.prompt,
+        ovr: null,
+        // Đề xuất của model có thể đã gắn agent (create_session nhận agent*).
+        agentKey: specAgentKey(c),
+      }))
+    : [{ key: seq++, title: '', role: '', prompt: '', ovr: null, agentKey: '' }]
   // Ô "Yêu cầu": ưu tiên `goal` model gửi kèm create_session; không có thì suy
   // ra từ bản đề xuất — một con lấy nguyên prompt (đó chính là yêu cầu), nhiều
   // con ghép "title — role". Đường thủ công không có đề xuất nên bắt đầu trống.
@@ -577,6 +635,8 @@ function seed() {
       ? src[0]!.prompt
       : (src?.map((c) => (c.role ? `${c.title} — ${c.role}` : c.title)).join('; ') ?? ''))
   if (s?.project) void ensureStylesLoaded([s.project])
+  // Picker agent cần danh bạ đã nạp; global + tầng project của phiên cha.
+  if (agents.available) void agents.loadAgents(s?.project ? [s.project] : [])
 }
 
 // Đóng = TỪ CHỐI ở đường duyệt (không duyệt ⇒ không phiên nào được tạo); chỉ đóng
@@ -609,6 +669,14 @@ async function approve() {
         prompt: c.prompt.trim(),
       }
       if (merged) spec.config = merged
+      // "Vai có thật": bóc agentKey ra bộ ba phẳng của SpawnChildSpec — khoá
+      // lạc hậu (agent bị xoá giữa chừng) thì gửi trần, sidecar tự báo lỗi.
+      const agent = c.agentKey ? agents.agentByKey(c.agentKey) : undefined
+      if (agent) {
+        spec.agentId = agent.id
+        spec.agentSource = agent.source
+        if (agent.projectId) spec.agentProjectId = agent.projectId
+      }
       return spec
     })
     // Yêu cầu trong ô brief được chat vào phiên cha khi duyệt THÀNH CÔNG — cha
@@ -638,7 +706,7 @@ async function approve() {
       // Bỏ tick "nhớ" trên nhóm ĐÃ nhớ ⇒ revoke luôn — checkbox phải thành lời
       // hứa thật, không được im lặng giữ config cũ.
       if (!remember.value && hadSaved.value && rootClientId.value != null) {
-        await store.setGroupSpawnConfig(rootClientId.value, null)
+        await store.setSpawnConfig(rootClientId.value, null)
       }
       const res = await store.spawnChildrenFromUi({
         parentId: dlg.parentId.value,
@@ -691,9 +759,10 @@ async function approve() {
   max-height: 86vh;
   display: flex;
   flex-direction: column;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -711,25 +780,25 @@ async function approve() {
 .spw-title {
   font-size: 1em;
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .spw-sub {
   margin-top: 2px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .spw-x {
   border: 0;
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
 }
 .spw-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .spw-body {
   flex: 1;
@@ -744,7 +813,7 @@ async function approve() {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .spw-secrow {
   display: flex;
@@ -764,7 +833,7 @@ async function approve() {
 }
 .spw-fl {
   font-size: var(--fs-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .spw-add {
   display: inline-flex;
@@ -772,16 +841,16 @@ async function approve() {
   gap: 5px;
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--textMuted);
-  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+  border-radius: var(--r-xs); /* rounded-sm */
   padding: 4px 10px;
   font-size: var(--fs-sm);
   cursor: pointer;
   font-family: var(--sans);
 }
 .spw-add:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .spw-add:disabled {
   opacity: 0.45;
@@ -794,7 +863,7 @@ async function approve() {
 }
 .spw-briefhint {
   font-size: var(--fs-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   min-width: 0;
 }
 /* Chip thu gọn "Cấu hình chung" — pill một dòng, bấm mở lưới select bên dưới. */
@@ -805,8 +874,8 @@ async function approve() {
   gap: 6px;
   max-width: 100%;
   border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--textDim);
+  background: var(--muted);
+  color: var(--muted-foreground);
   cursor: pointer;
   font-size: var(--fs-xs);
   padding: 4px 10px;
@@ -814,11 +883,11 @@ async function approve() {
   font-family: var(--sans);
 }
 .spw-chip:hover {
-  color: var(--text);
-  border-color: var(--borderStrong);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .spw-chip-sum {
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -827,8 +896,8 @@ async function approve() {
 .spw-chipgrid {
   padding: 10px;
   border: 1px dashed var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
 }
 .spw-child {
   display: flex;
@@ -836,8 +905,8 @@ async function approve() {
   gap: 6px;
   padding: 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
 }
 .spw-crow {
   display: flex;
@@ -847,16 +916,17 @@ async function approve() {
   flex: 1;
   min-width: 0;
   padding: 7px 10px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--foreground);
   font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
-.spw-in:focus {
-  border-color: var(--accent);
+.spw-in:focus-visible {
+  border-color: var(--input);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .spw-role {
   flex: 0 0 34%;
@@ -865,14 +935,14 @@ async function approve() {
   flex: 0 0 auto;
   border: 0;
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
 }
 .spw-cx:hover {
-  color: var(--danger);
-  background: var(--bgHover);
+  color: var(--destructive);
+  background: rgb(from var(--destructive) r g b / 0.1);
 }
 .spw-cx:disabled {
   opacity: 0.35;
@@ -881,28 +951,37 @@ async function approve() {
 /* Nút sparkle phải sau .spw-cx:hover — cùng specificity, cái sau thắng —
    để hover ra accent thay vì danger (trash mới là danger). */
 .spw-genbtn:hover {
-  color: var(--accent);
+  color: var(--primary);
+  background: var(--accent-wash);
 }
 .spw-crow2 {
   display: flex;
   align-items: center;
   gap: 10px;
 }
+/* Hàng picker agent: label cố định trái, select chiếm phần còn lại. */
+.spw-agentrow {
+  gap: 8px;
+}
+.spw-agentrow .spw-fl {
+  flex: 0 0 auto;
+}
 .spw-ta {
   width: 100%;
   resize: vertical;
   min-height: 40px;
   padding: 7px 10px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
+  background: var(--background);
+  border: 1px solid var(--input);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--foreground);
   font-size: var(--fs-sm);
   font-family: var(--sans);
   outline: none;
 }
-.spw-ta:focus {
-  border-color: var(--accent);
+.spw-ta:focus-visible {
+  border-color: var(--input);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .spw-ovr {
   align-self: flex-start;
@@ -911,16 +990,16 @@ async function approve() {
   gap: 5px;
   border: 0;
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   font-size: var(--fs-xs);
   padding: 2px 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   font-family: var(--sans);
 }
 .spw-ovr:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .spw-ovr:disabled {
   opacity: 0.45;
@@ -948,12 +1027,12 @@ async function approve() {
   align-items: center;
   gap: 8px;
   font-size: var(--fs-sm);
-  color: var(--text);
+  color: var(--foreground);
   cursor: pointer;
 }
 .spw-note {
   font-size: var(--fs-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .spw-actions {
   display: flex;
@@ -966,6 +1045,6 @@ async function approve() {
 }
 .spw-err {
   font-size: var(--fs-xs);
-  color: var(--danger);
+  color: var(--destructive);
 }
 </style>

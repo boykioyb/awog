@@ -4,13 +4,13 @@
        popover lồng trong popover sẽ che mất chính menu chứa nó. -->
   <template v-if="variant === 'inline' && servers.length">
     <div class="pl">{{ t('sessions.config.mcpHint') }}</div>
-    <div v-for="m in servers" :key="m.id" class="mcprow" @click.stop="toggleMcp(m.id)">
+    <div v-for="m in servers" :key="m.id" class="mrow" @click.stop="toggleMcp(m.id)">
       <span
-        class="mcpdot"
-        :style="{ background: m.status === 'connected' ? 'var(--green)' : 'var(--textFaint)' }"
+        class="mdot"
+        :style="{ background: m.status === 'connected' ? 'var(--success)' : 'var(--textFaint)' }"
       />
-      <span class="mcpn">{{ m.name }}</span>
-      <span class="mcpst">{{ m.status }}</span>
+      <span class="mname">{{ m.name }}</span>
+      <span class="mstat">{{ m.status }}</span>
       <span class="tog2 sm" :class="{ off: !onSet.has(m.id) }" />
     </div>
   </template>
@@ -22,9 +22,7 @@
     class="chip sm chipbtn"
     :title="t('sessions.config.mcpHint')"
     style="position: relative"
-    :style="
-      open || customized ? { borderColor: 'var(--accentBorder)', color: 'var(--accent)' } : {}
-    "
+    :style="open || customized ? { borderColor: 'var(--ring)', color: 'var(--primary)' } : {}"
     @click.stop="emit('toggle')"
   >
     <Icon name="conn" style="width: var(--icon-xs); height: var(--icon-xs)" />
@@ -39,13 +37,13 @@
       @click.stop
     >
       <div class="pl">{{ t('sessions.config.mcpHint') }}</div>
-      <div v-for="m in servers" :key="m.id" class="mcprow" @click="toggleMcp(m.id)">
+      <div v-for="m in servers" :key="m.id" class="mrow" @click="toggleMcp(m.id)">
         <span
-          class="mcpdot"
-          :style="{ background: m.status === 'connected' ? 'var(--green)' : 'var(--textFaint)' }"
+          class="mdot"
+          :style="{ background: m.status === 'connected' ? 'var(--success)' : 'var(--textFaint)' }"
         />
-        <span class="mcpn">{{ m.name }}</span>
-        <span class="mcpst">{{ m.status }}</span>
+        <span class="mname">{{ m.name }}</span>
+        <span class="mstat">{{ m.status }}</span>
         <span class="tog2 sm" :class="{ off: !onSet.has(m.id) }" />
       </div>
     </div>
@@ -116,6 +114,7 @@ watch(
   font-size: 12px;
   line-height: 12px;
   color: var(--textFaint);
+  font-variant-numeric: tabular-nums;
 }
 /* Popover opens upward from the composer bar; narrower than the header config pop.
    `white-space: normal` resets the value inherited from the chip: the chip is nowrap,
@@ -128,17 +127,38 @@ watch(
   /* Chip text is the code font; popover content reads as UI text. */
   font-family: var(--sans);
 }
-.mcpdot {
+/* Server row — hairline-separated list row (replaces the legacy global `.mcprow`
+   so the row styling is owned here; `.tog2` stays the shared global switch). */
+.mrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.mrow:first-of-type {
+  border-top: none;
+}
+.mdot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
-/* One long connection name truncates instead of widening the row. */
-.mcppop .mcpn {
+.mname {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--foreground);
+}
+.mstat {
+  margin-left: auto;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--textFaint);
 }
 </style>

@@ -48,6 +48,8 @@ class TrayPopover {
         contextIsolation: true,
         sandbox: true,
         nodeIntegration: false,
+        // SPA UI (tray popover) — cùng lý do main window: tắt spellcheck macOS.
+        spellcheck: false,
       },
     })
     // This window carries the same preload as the main one, so it needs the same

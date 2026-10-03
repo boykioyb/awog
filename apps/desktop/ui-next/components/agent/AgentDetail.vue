@@ -6,23 +6,33 @@
       <span class="tag mono">{{ agent.id }}</span>
       <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
       <span style="flex: 1" />
-      <button class="iconbtn agd-act" :title="t('agents.detail.edit')" @click="emit('edit')">
+      <Button
+        :title="t('agents.detail.edit')"
+        class="agd-act"
+        variant="outline"
+        size="iconMd"
+        @click="emit('edit')"
+      >
         <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="iconbtn agd-act"
+      </Button>
+      <Button
         :title="t('agents.detail.duplicate')"
+        class="agd-act"
+        variant="outline"
+        size="iconMd"
         @click="emit('duplicate')"
       >
         <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="iconbtn agd-act agd-danger"
+      </Button>
+      <Button
         :title="t('agents.detail.delete')"
+        class="agd-act agd-danger"
+        variant="outline"
+        size="iconMd"
         @click="emit('delete')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <div class="dscroll">
@@ -98,6 +108,7 @@ import { computed, type CSSProperties } from 'vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import { agentInitials, agentAvatar, providerDisplayName, modelDisplayName } from './agent-display'
 import type { Agent } from '~/stores/agents'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   agent: Agent

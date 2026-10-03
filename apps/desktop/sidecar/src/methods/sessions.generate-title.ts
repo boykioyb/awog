@@ -34,7 +34,8 @@ Rules:
 - 3 to 6 words, Title Case.
 - Summarize what the user is trying to do — no filler like "Chat about" or "Help with".
 - Match the language of the conversation.
-- Output ONLY the title. No surrounding quotes, no trailing punctuation.`
+- Output ONLY the title. No surrounding quotes, no trailing punctuation.
+- EXCEPTION — the conversation is about one specific GitHub issue/PR (a github.com/<org>/<repo>/(issues|pull)/<n> link in the message, or the "GitHub context" line given): the title MUST be "#<n>_IS: <short desc>" for an issue or "#<n>_PR: <short desc>" for a pull request, with <short desc> still 3-6 words in the conversation's language.`
 
 // Known low-cost models per provider. Absent → fall back to the session model.
 const CHEAP_MODEL: Partial<Record<ProviderName, string>> = {
@@ -47,12 +48,45 @@ function clip(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}…` : s
 }
 
-function normalizeTitle(raw: string): string {
+// ── GitHub issue/PR ref → convention `#<n>_IS:` / `#<n>_PR:` ────────────────
+// Detected deterministically (the model may forget the format; the prefix is a
+// contract other features read back — logtime parses the number off the title).
+const GH_URL_RE = /github\.com\/[\w.-]+\/[\w.-]+\/(issues|pull)\/(\d+)(?=[/?#]|\s|$)/i
+
+type GhRef = { kind: 'issue' | 'pr'; number: number }
+
+function ghRefOf(...texts: Array<string | undefined>): GhRef | null {
+  for (const t of texts) {
+    if (!t) continue
+    const m = GH_URL_RE.exec(t)
+    if (m && m[2]) {
+      return { kind: m[1]?.toLowerCase() === 'pull' ? 'pr' : 'issue', number: Number(m[2]) }
+    }
+  }
+  return null
+}
+
+const ghPrefix = (r: GhRef): string => `#${r.number}_${r.kind === 'pr' ? 'PR' : 'IS'}:`
+
+function normalizeTitle(raw: string, ghRef: GhRef | null): string {
   let s = raw.trim().split('\n')[0]?.trim() ?? ''
   // Strip wrapping quotes the model sometimes adds.
   s = s.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').trim()
   // Drop trailing sentence punctuation.
   s = s.replace(/[.。!?！？]+$/u, '').trim()
+  if (ghRef) {
+    const prefix = ghPrefix(ghRef)
+    // The model may render the same convention loosely ("#123 IS: x", "IS #123:
+    // x", "#123: x") — canonicalize any of those onto the exact prefix.
+    const loose = new RegExp(
+      `^(?:#?${ghRef.number}\\s*[_ ]?\\s*(?:IS|PR)\\s*:|(?:IS|PR)\\s*[_ ]?#?${ghRef.number}\\s*:|#${ghRef.number}\\s*:)\\s*`,
+      'i',
+    )
+    s = s.replace(loose, '')
+    // A leftover bare `#<n>` or "issue #<n>" lead-in also folds into the prefix.
+    s = s.replace(new RegExp(`^(?:issue|pull\\s*request|pr)?\\s*#?${ghRef.number}\\b[:\\s-]*`, 'i'), '')
+    s = `${prefix} ${s}`.trimEnd()
+  }
   return s.length > 60 ? `${s.slice(0, 57)}…` : s
 }
 
@@ -71,9 +105,14 @@ register('sessions.generateTitle', async (raw) => {
   if (!userText) return { ok: false, reason: 'no-message' }
   const firstAgent = session?.messages.find((m) => m.role === 'agent')
 
+  // Issue/PR the session is about — from the message text first, else the
+  // persisted `aboutGhUrl` link a "New session" on a GH row carries.
+  const ghRef = ghRefOf(userText, session?.aboutGhUrl)
+
   const prompt = [
     `User: ${clip(userText, MAX_INPUT)}`,
     firstAgent && firstAgent.text.trim() ? `Assistant: ${clip(firstAgent.text, MAX_INPUT)}` : '',
+    ghRef ? `GitHub context: ${ghRef.kind === 'pr' ? 'pull request' : 'issue'} #${ghRef.number}` : '',
     '',
     'Title:',
   ]
@@ -95,7 +134,7 @@ register('sessions.generateTitle', async (raw) => {
         systemPrompt: TITLE_SYS,
         prompt,
       })
-      const title = normalizeTitle(out)
+      const title = normalizeTitle(out, ghRef)
       if (title) {
         log.info('sessions.generateTitle', { sessionId: params.sessionId, model: modelId })
         return { ok: true, title }

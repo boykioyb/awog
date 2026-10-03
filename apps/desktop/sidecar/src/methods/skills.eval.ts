@@ -9,7 +9,6 @@ import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { listSkills } from '../skills/store.js'
 import { awaitKindMigration } from '../migration/claude-home.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { evalBudget, runSkillEval, MAX_CASES_PER_RUN, SkillEvalCaseSchema } from '../skills/eval.js'
 import { saveEvalRun } from '../skills/eval-store.js'
 import { log } from '../util/logger.js'
@@ -28,7 +27,7 @@ const Params = z.object({
   projectIds: z.array(z.string().min(1).max(64)).max(50).optional(),
   cases: z.array(SkillEvalCaseSchema).min(1).max(MAX_CASES_PER_RUN),
   accountId: z.string().min(1).max(120).optional(),
-  modelId: z.enum(ANTHROPIC_MODELS).optional(),
+  modelId: z.string().min(1).max(200).optional(),
 })
 
 register('skills.eval', async (raw) => {

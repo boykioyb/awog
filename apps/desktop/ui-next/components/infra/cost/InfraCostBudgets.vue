@@ -9,16 +9,17 @@
       <span class="icst-sec-ttl">{{ t('infra.cost.budget.title') }}</span>
       <span class="icst-hint">{{ t('infra.cost.budget.why') }}</span>
       <span class="icst-gap" />
-      <button
-        class="btn sm"
+      <Button
         type="button"
         :disabled="budgetsLoading || !accountId"
         :aria-busy="budgetsLoading"
+        variant="outline"
+        size="sm"
         @click="loadBudgets"
       >
         <Icon name="refresh" class="icst-ic" :class="budgetsLoading ? 'icst-spin' : ''" />
         {{ t('infra.cost.budget.load') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Budgets đòi `--account-id` tường minh. Chưa giải được id thì nói ra và tắt
@@ -44,39 +45,38 @@
     <!-- Đặt ngân sách là lượt GHI duy nhất của tab này: nó đi qua ma trận quyền và
          có thể dừng ở hộp duyệt. Ba ô, không hơn. -->
     <div class="icst-budget-form">
-      <input
+      <Input
         v-model="budgetName"
-        class="icst-inp"
         type="text"
         maxlength="100"
         :placeholder="t('infra.cost.budget.namePlaceholder')"
       />
-      <input
+      <Input
         v-model.number="budgetLimit"
-        class="icst-inp ic-inp-sm"
         type="number"
         min="1"
         step="1"
         :placeholder="t('infra.cost.budget.limitPlaceholder')"
+        class="ic-inp-sm"
       />
-      <input
+      <Input
         v-model="budgetEmails"
-        class="icst-inp"
         type="text"
         autocomplete="off"
         :placeholder="t('infra.cost.budget.emailsPlaceholder')"
         :title="t('infra.cost.budget.emailsWhy')"
       />
-      <button
-        class="btn sm pri"
+      <Button
         type="button"
         :disabled="!canSaveBudget"
         :aria-busy="budgetSaving"
+        variant="default"
+        size="sm"
         @click="onSaveBudget"
       >
         <Icon name="check" class="icst-ic" />
         {{ t('infra.cost.budget.save') }}
-      </button>
+      </Button>
     </div>
     <p class="icst-hint">{{ t('infra.cost.budget.thresholdWhy') }}</p>
   </section>
@@ -86,6 +86,8 @@
 // Lớp bind của tab con "Ngân sách". State + RPC ở `useInfraCost()` (xem InfraCostMonth).
 import { computed, ref } from 'vue'
 import { useInfraCost } from '~/composables/useInfraCost'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 

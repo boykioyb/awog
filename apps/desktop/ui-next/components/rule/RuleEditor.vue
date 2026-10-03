@@ -36,13 +36,13 @@
       <div class="rle-grid">
         <div class="rle-field">
           <label class="rle-label">{{ t('rules.editor.slug') }}</label>
-          <input
-            class="rle-input mono"
-            :value="draft.id"
+          <Input
+            :model-value="draft.id"
             :disabled="isImported"
             placeholder="e.g. security"
             spellcheck="false"
-            @input="onSlugInput"
+            class="mono"
+            @update:model-value="onSlugInput"
           />
           <div class="rle-hint">
             {{ t('rules.editor.slugHint', { slug: draft.id || 'slug' }) }}
@@ -50,9 +50,8 @@
         </div>
         <div class="rle-field">
           <label class="rle-label">{{ t('rules.editor.name') }}</label>
-          <input
+          <Input
             v-model="draft.name"
-            class="rle-input"
             :disabled="isImported"
             :placeholder="t('rules.editor.namePh')"
           />
@@ -71,11 +70,7 @@
 
       <div v-if="!isImported" class="rle-field">
         <label class="rle-label">{{ t('rules.editor.globs') }}</label>
-        <input
-          v-model="globsText"
-          class="rle-input mono"
-          :placeholder="t('rules.editor.globsPh')"
-        />
+        <Input v-model="globsText" :placeholder="t('rules.editor.globsPh')" class="mono" />
         <div class="rle-hint">{{ t('rules.editor.globsHint') }}</div>
       </div>
 
@@ -101,10 +96,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('rules.editor.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -120,6 +115,8 @@ import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { Rule, RuleSource } from '~/stores/rules'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean
@@ -243,9 +240,9 @@ watch(
   },
 )
 
-const onSlugInput = (e: Event) => {
+const onSlugInput = (v: string) => {
   slugTouched = true
-  draft.value.id = slugify((e.target as HTMLInputElement).value)
+  draft.value.id = slugify(v)
 }
 
 const canSave = computed(() => {

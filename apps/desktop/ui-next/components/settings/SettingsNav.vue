@@ -1,24 +1,29 @@
 <template>
   <nav class="setnav">
-    <div
-      v-for="s in sections"
-      :key="s.id"
-      class="setni"
-      :class="{ on: s.id === active }"
-      @click="emit('select', s.id)"
-    >
-      <Icon :name="s.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span>{{ t(s.labelKey) }}</span>
+    <div v-for="g in groups" :key="g.id" class="setgroup">
+      <div class="setgl">{{ t(g.labelKey) }}</div>
+      <div
+        v-for="s in g.items"
+        :key="s.id"
+        class="setni"
+        :class="{ on: s.id === active }"
+        @click="emit('select', s.id)"
+      >
+        <Icon :name="s.icon" class="size-3.5" />
+        <span>{{ t(s.labelKey) }}</span>
+      </div>
     </div>
   </nav>
 </template>
 
 <script setup lang="ts">
-// Settings section list — ports SETSECS + the .setni nav from renderSet().
-import type { SettingsSection, SettingsSectionId } from './sections'
+// Settings section list — nhóm theo SETTINGS_GROUPS (label nhóm kiểu sidebar
+// shadcn: uppercase nhỏ, muted). `.setni`/`.setnav` giữ tên class vì
+// theme-cute.css deep-select vào chúng.
+import type { SettingsGroup, SettingsSectionId } from './sections'
 
 defineProps<{
-  sections: readonly SettingsSection[]
+  groups: readonly SettingsGroup[]
   active: SettingsSectionId
 }>()
 

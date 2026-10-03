@@ -8,16 +8,17 @@
       <span class="icst-sec-ttl">{{ t('infra.cost.waste.title') }}</span>
       <span class="icst-hint">{{ t('infra.cost.waste.regionWhy', { r: region || '—' }) }}</span>
       <span class="icst-gap" />
-      <button
-        class="btn sm pri"
+      <Button
         type="button"
         :disabled="wasteLoading || enabled.size === 0"
         :aria-busy="wasteLoading"
+        variant="default"
+        size="sm"
         @click="scanWaste"
       >
         <Icon name="search" class="icst-ic" :class="wasteLoading ? 'icst-spin' : ''" />
         {{ t('infra.cost.waste.scan') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Bảy công tắc. Hai phép trả tiền mang nhãn riêng và mặc định TẮT — bật chúng
@@ -103,15 +104,16 @@
 
       <!-- ── 7.3 ──────────────────────────────────────────────────── -->
       <div v-if="report.findings.length" class="icst-acts">
-        <button
-          class="btn sm pri"
+        <Button
           type="button"
           :disabled="pickedFindings.length === 0 || building"
+          variant="default"
+          size="sm"
           @click="onCleanup"
         >
           <Icon name="book" class="icst-ic" />
           {{ t('infra.cost.cleanup.build', { n: pickedFindings.length }) }}
-        </button>
+        </Button>
         <span v-if="pickedFindings.length" class="icst-hint">
           {{ t('infra.cost.cleanup.picked', { v: usd(pickedMonthlyUsd) }) }}
         </span>
@@ -130,6 +132,7 @@ import { useInfraMode } from '~/composables/useInfraMode'
 import { useInfraTabOpen } from '~/composables/useInfraTabOpen'
 import { usePlaybookEditor } from '~/composables/usePlaybookEditor'
 import type { WasteFinding } from '~/composables/useInfraCost'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { openGenerated } = usePlaybookEditor()

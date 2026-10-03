@@ -75,6 +75,8 @@ function openFile(f: Finding): void {
 </script>
 
 <style scoped>
+/* Findings card — hairline border + lg radius on transparent surface; severity
+   chips tint destructive / warning. */
 .fnd {
   display: flex;
   flex-direction: column;
@@ -82,7 +84,7 @@ function openFile(f: Finding): void {
   margin: 2px 0;
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--radius);
   background: transparent;
 }
 .fndhead {
@@ -93,25 +95,26 @@ function openFile(f: Finding): void {
 }
 .fndhead .icn {
   flex: 0 0 auto;
-  color: var(--amber);
+  color: var(--warning);
 }
 .fndtitle {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--foreground);
 }
 .fndcount {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 .fndscope {
   flex: 1;
   min-width: 0;
   text-align: right;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
+  font-size: 12px;
+  line-height: 16px;
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -133,19 +136,20 @@ function openFile(f: Finding): void {
   padding: 1px 6px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 .fndsev.blocker {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-  background: var(--dangerBg);
+  color: var(--destructive);
+  border-color: rgb(from var(--destructive) r g b / 45%);
+  background: rgb(from var(--destructive) r g b / 10%);
 }
 .fndsev.major {
-  color: var(--amber);
-  border-color: var(--amberBorder);
-  background: var(--amberDim);
+  color: var(--warning);
+  border-color: rgb(from var(--warning) r g b / 45%);
+  background: rgb(from var(--warning) r g b / 10%);
 }
 .fndmain {
   display: flex;
@@ -155,9 +159,9 @@ function openFile(f: Finding): void {
   flex: 1;
 }
 .fndsum {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--foreground);
 }
 .fndloc {
   align-self: flex-start;
@@ -167,35 +171,35 @@ function openFile(f: Finding): void {
   background: transparent;
   text-align: left;
   font-family: var(--code); /* mono-ok: a file:line the user may paste into an editor */
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
+  font-size: 12px;
+  line-height: 16px;
   color: var(--textDim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .fndloc.link {
-  color: var(--accent);
+  color: var(--primary);
   cursor: pointer;
 }
 .fndloc.link:hover {
   text-decoration: underline;
 }
 .fndfail {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted-foreground);
 }
 .fndverdict {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-prose);
-  color: var(--textDim);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--muted-foreground);
 }
 .fndverdict.unverified {
   font-style: italic;
   opacity: 0.75;
 }
 .fndvlabel {
-  color: var(--text);
+  color: var(--foreground);
 }
 </style>

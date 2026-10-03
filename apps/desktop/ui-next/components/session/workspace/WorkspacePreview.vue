@@ -1,5 +1,5 @@
 <template>
-  <div class="wsprev">
+  <div class="flex h-full min-h-0 flex-col">
     <!-- Unavailable / no-root (browser-dev or unknown project). -->
     <div v-if="!ready" class="empty" style="padding: 30px">
       <div class="et">{{ unavailableMsg }}</div>
@@ -13,13 +13,20 @@
     <template v-else>
       <!-- Artifact picker — one chip per previewable file the session wrote (only when
            there's more than one; a single artifact renders straight away). -->
-      <div v-if="artifacts.length > 1" class="wsprev-tabs">
+      <div
+        v-if="artifacts.length > 1"
+        class="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border p-1.5"
+      >
         <button
           v-for="(a, i) in artifacts"
           :key="a"
           type="button"
-          class="wsprev-tab"
-          :class="{ on: i === selectedIdx }"
+          :class="[
+            'max-w-40 shrink-0 truncate rounded-md px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors',
+            i === selectedIdx
+              ? 'bg-accent text-foreground'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+          ]"
           :title="a"
           @click="selectedIdx = i"
         >
@@ -28,21 +35,28 @@
       </div>
 
       <!-- Path header + (for html/pdf) an "open in browser" action for full fidelity. -->
-      <div class="wsprev-head">
-        <span class="wsprev-path mono" :title="selectedPath">{{ selectedPath }}</span>
-        <button
+      <div class="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3">
+        <span
+          class="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+          :title="selectedPath"
+        >
+          {{ selectedPath }}
+        </span>
+        <Button
           v-if="selectedKind !== 'markdown'"
+          variant="ghost"
           type="button"
-          class="wsprev-act"
+          class="h-auto p-0 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           :title="t('sessions.workspace.preview.openExternal')"
+          :aria-label="t('sessions.workspace.preview.openExternal')"
           @click="openExternal"
         >
-          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Globe class="size-3.5" />
+        </Button>
       </div>
 
       <!-- Body: markdown renders inline + scrolls; html/pdf fill the body edge-to-edge. -->
-      <div class="wsprev-body">
+      <div class="flex min-h-0 flex-1 flex-col">
         <div v-if="loading" class="empty" style="padding: 24px">
           <div class="et">{{ t('sessions.preview.loading') }}</div>
         </div>
@@ -51,13 +65,18 @@
         </div>
         <div v-else-if="tooLarge" class="empty" style="padding: 24px">
           <div class="et">{{ t('sessions.preview.tooLarge') }}</div>
-          <button type="button" class="wsprev-extbtn" @click="openExternal">
+          <Button
+            variant="outline"
+            type="button"
+            class="h-auto p-0 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            @click="openExternal"
+          >
             {{ t('sessions.workspace.preview.openExternal') }}
-          </button>
+          </Button>
         </div>
 
         <!-- Markdown — rendered with the same pipeline as the transcript. -->
-        <div v-else-if="selectedKind === 'markdown'" class="wsprev-md">
+        <div v-else-if="selectedKind === 'markdown'" class="min-h-0 flex-1 overflow-y-auto p-4">
           <div v-if="!content.trim()" class="empty" style="padding: 24px">
             <div class="et">{{ t('sessions.workspace.preview.noContent') }}</div>
           </div>
@@ -70,7 +89,7 @@
              the full-fidelity path. -->
         <iframe
           v-else-if="selectedKind === 'html'"
-          class="wsprev-frame"
+          class="min-h-0 w-full flex-1 border-0 bg-white"
           sandbox="allow-scripts allow-popups allow-forms allow-modals"
           :srcdoc="content"
           :title="selectedPath"
@@ -79,7 +98,7 @@
         <!-- PDF — Chromium's native embedded viewer via a base64 data: URL. -->
         <iframe
           v-else-if="selectedKind === 'pdf' && pdfSrc"
-          class="wsprev-frame"
+          class="min-h-0 w-full flex-1 border-0 bg-white"
           :src="pdfSrc"
           :title="selectedPath"
         />
@@ -96,11 +115,14 @@
 // disk and rendered: markdown via SessionTextBlock (same pipeline as the transcript),
 // HTML in a sandboxed iframe, PDF in Chromium's embedded viewer. Degrades to an
 // empty/disabled state in browser-dev or when the workspace root can't resolve.
+import { Globe } from 'lucide-vue-next'
 import type { Session } from '~/composables/useSessionsData'
 import { useFsApi } from '~/composables/useFsApi'
+import { absFileScope } from '~/composables/useFilePreview'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useSessionTouchedPaths } from '~/composables/useSessionTouchedPaths'
 import { useSidecar } from '~/composables/useSidecar'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ session: Session }>()
 
@@ -158,11 +180,16 @@ async function load(): Promise<void> {
   loadError.value = false
   tooLarge.value = false
   if (!r || !p) return
+  // Artifact path tuyệt đối ngoài workspace (session worktree) → scope về thư
+  // mục cha; ghép vào project root chỉ tạo ra path hợp cất không tồn tại.
+  const scope = p.startsWith('/') && !p.startsWith(r + '/') ? absFileScope(p) : null
+  const rr = scope?.root ?? r
+  const rp = scope?.rel ?? (p.startsWith(r + '/') ? p.slice(r.length + 1) : p)
   const kind = kindOf(p)
   loading.value = true
   try {
     if (kind === 'pdf') {
-      const res = await fs.readFileBase64(r, p)
+      const res = await fs.readFileBase64(rr, rp)
       if (seq !== loadSeq) return
       if (res.truncated || !res.base64) {
         tooLarge.value = true
@@ -170,7 +197,7 @@ async function load(): Promise<void> {
       }
       pdfSrc.value = `data:${res.mimeType};base64,${res.base64}`
     } else {
-      const res = await fs.readFile(r, p)
+      const res = await fs.readFile(rr, rp)
       if (seq !== loadSeq) return
       if (res.isBinary) {
         loadError.value = true
@@ -186,122 +213,16 @@ async function load(): Promise<void> {
 }
 
 async function openExternal(): Promise<void> {
-  if (root.value && selectedPath.value) await sc.openFileExternal(root.value, selectedPath.value)
+  const r = root.value
+  const p = selectedPath.value
+  if (!r || !p) return
+  // Cùng scoping của load(): abs ngoài workspace → root = thư mục cha.
+  const scope = p.startsWith('/') && !p.startsWith(r + '/') ? absFileScope(p) : null
+  const rr = scope?.root ?? r
+  const rp = scope?.rel ?? (p.startsWith(r + '/') ? p.slice(r.length + 1) : p)
+  await sc.openFileExternal(rr, rp)
 }
 
 // Reload when the root resolves or the selected artifact changes.
 watch([root, selectedPath], () => void load(), { immediate: true })
 </script>
-
-<style scoped>
-.wsprev {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-/* Artifact picker — transparent chips with an accent-tinted active state (avoid a
-   solid grey fill, per the segmented-control convention). */
-.wsprev-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 8px;
-  overflow-x: auto;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-}
-.wsprev-tab {
-  flex: 0 0 auto;
-  max-width: 160px;
-  padding: 4px 10px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-}
-.wsprev-tab:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.wsprev-tab.on {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accentDim);
-}
-/* Path header — file path + (html/pdf) open-in-browser action. */
-.wsprev-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-}
-.wsprev-path {
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsprev-act {
-  flex: 0 0 auto;
-  display: inline-flex;
-  padding: 4px;
-  border-radius: var(--r-xs);
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-}
-.wsprev-act:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.wsprev-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-/* Markdown scrolls with reading padding; the iframes fill the body edge-to-edge. */
-.wsprev-md {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 14px 16px;
-}
-.wsprev-frame {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  border: 0;
-  background: #fff;
-}
-/* "Open in browser" button shown alongside the too-large notice (the parent
-   .empty supplies the gap above it). */
-.wsprev-extbtn {
-  padding: 6px 14px;
-  border-radius: var(--r-sm);
-  background: transparent;
-  border: 1px solid var(--accent);
-  color: var(--accent);
-  cursor: pointer;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-}
-.wsprev-extbtn:hover {
-  background: var(--accentDim);
-}
-</style>

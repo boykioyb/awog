@@ -13,26 +13,28 @@
       <span class="icst-sec-ttl">{{ t('infra.cost.month.title') }}</span>
       <span class="icst-hint">{{ t('infra.cost.month.priceWhy') }}</span>
       <span class="icst-gap" />
-      <button
-        class="btn sm pri"
+      <Button
         type="button"
         :disabled="summaryLoading"
         :aria-busy="summaryLoading"
+        variant="default"
+        size="sm"
         @click="loadSummary(false)"
       >
         <Icon name="play" class="icst-ic" />
         {{ t('infra.cost.month.load') }}
-      </button>
-      <button
-        class="btn sm"
+      </Button>
+      <Button
         type="button"
         :disabled="summaryLoading || !summary"
         :title="t('infra.cost.month.reloadWhy')"
+        variant="outline"
+        size="sm"
         @click="loadSummary(true)"
       >
         <Icon name="refresh" class="icst-ic" :class="summaryLoading ? 'icst-spin' : ''" />
         {{ t('infra.cost.month.reload') }}
-      </button>
+      </Button>
     </div>
 
     <p v-if="summaryError" class="ierr">{{ summaryError }}</p>
@@ -109,6 +111,7 @@
 // Lớp bind của tab con "Tháng này". State + RPC ở `useInfraCost()` (singleton cấp
 // module), nên ba tab con cùng đọc một kho — đổi tab không mất số đã tải.
 import { useInfraCost } from '~/composables/useInfraCost'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 

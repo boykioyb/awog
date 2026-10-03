@@ -31,6 +31,21 @@ const navOpen = ref(false)
 const listOpen = ref(false)
 let bound = false
 
+// Nav-rail icon mode, app-wide: NavRail collapses itself and AppTopBar's header
+// toggle (the proto SidebarTrigger) flips it, so the state lives here instead of
+// inside NavRail. Persisted under 'awog-nav-expanded': '1' = the labeled rail,
+// ANYTHING ELSE (including absent) = the collapsed icon rail. The key replaces
+// the old component-local 'awog-nav-collapsed' on purpose — nothing is read from
+// it, which resets every user to the icon rail once for proto parity.
+const NAV_EXPANDED_KEY = 'awog-nav-expanded'
+const navCollapsed = ref(true)
+if (import.meta.client) navCollapsed.value = localStorage.getItem(NAV_EXPANDED_KEY) !== '1'
+
+function toggleNavCollapsed() {
+  navCollapsed.value = !navCollapsed.value
+  if (import.meta.client) localStorage.setItem(NAV_EXPANDED_KEY, navCollapsed.value ? '0' : '1')
+}
+
 function closeDrawers() {
   navOpen.value = false
   listOpen.value = false
@@ -68,9 +83,11 @@ export function useResponsiveShell() {
     compact,
     navOpen,
     listOpen,
+    navCollapsed,
     hasList,
     toggleNav,
     toggleList,
+    toggleNavCollapsed,
     closeDrawers,
     initResponsiveShell,
   }

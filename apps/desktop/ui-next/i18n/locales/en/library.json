@@ -47,5 +47,11 @@
 
   "library.creator.verify.running": "Testing connection… (first run may download the package)",
   "library.creator.verify.ok": "Connected · {tools} tool(s), {resources} resource(s)",
-  "library.creator.verify.fail": "Connection failed"
+  "library.creator.verify.fail": "Connection failed",
+
+  "library.bgEdit.generateSave": "Generate & save",
+  "library.bgEdit.hint": "Generate and save immediately — runs in the background, toasts when done or on error",
+  "library.bgEdit.start": "Editing {name} with AI…",
+  "library.bgEdit.done": "Saved {name}",
+  "library.bgEdit.failed": "AI edit failed — {name}"
 }

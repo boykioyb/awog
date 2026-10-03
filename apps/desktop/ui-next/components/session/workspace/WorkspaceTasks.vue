@@ -1,26 +1,28 @@
 <template>
-  <div class="wstasks">
+  <div class="h-full min-h-0 overflow-y-auto">
     <div v-if="!entries.length" class="empty" style="padding: 30px">
       <div class="et">{{ t('sessions.workspace.tasks.placeholder') }}</div>
     </div>
 
-    <div v-else class="wstasks-list">
-      <button
+    <div v-else class="flex flex-col gap-1.5">
+      <Button
         v-for="entry in entries"
         :key="entry.id"
-        class="wstasks-row"
+        variant="outline"
+        class="h-auto p-0 flex w-full items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-left transition-colors hover:bg-accent"
         @click="openTask(entry.id)"
       >
-        <Icon
-          name="workflows"
-          style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
-        />
-        <div class="wstasks-main">
-          <div class="wstasks-label">{{ entry.title }}</div>
-          <div class="wstasks-target">{{ entry.statusLabel }}</div>
+        <Workflow class="size-3.5 shrink-0 text-muted-foreground" />
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-medium text-foreground">{{ entry.title }}</div>
+          <div class="truncate text-xs text-muted-foreground">{{ entry.statusLabel }}</div>
         </div>
-        <span class="wstasks-dot" :style="{ background: entry.color }" :title="entry.statusLabel" />
-      </button>
+        <span
+          class="size-2 shrink-0 rounded-full"
+          :class="entry.color"
+          :title="entry.statusLabel"
+        />
+      </Button>
     </div>
   </div>
 </template>
@@ -31,12 +33,11 @@
 // the live tasks store on the session's engineId, so status dots update over the
 // store's `task.*` event subscription. Click a row to open the task. An empty
 // session (or one with no engineId) shows the placeholder.
-import { computed, onMounted } from 'vue'
-import Icon from '~/components/Icon.vue'
-import { useI18n } from '~/composables/useI18n'
+import { Workflow } from 'lucide-vue-next'
 import { useTasksStore, type TaskStatus } from '~/stores/tasks'
 import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
 import type { Session } from '~/composables/useSessionsData'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ session: Session }>()
 
@@ -53,11 +54,11 @@ onMounted(() => {
 type Entry = { id: string; title: string; status: TaskStatus; statusLabel: string; color: string }
 
 const colorOf = (status: TaskStatus): string => {
-  if (status === 'running') return 'var(--amber)'
-  if (status === 'failed') return 'var(--danger)'
-  if (status === 'completed') return 'var(--add)'
-  if (status === 'waiting_approval' || status === 'waiting_connection') return 'var(--amber)'
-  return 'var(--textDim)'
+  if (status === 'running') return 'bg-warning'
+  if (status === 'failed') return 'bg-destructive'
+  if (status === 'completed') return 'bg-success'
+  if (status === 'waiting_approval' || status === 'waiting_connection') return 'bg-warning'
+  return 'bg-muted-foreground'
 }
 
 const entries = computed<Entry[]>(() => {
@@ -78,60 +79,3 @@ const entries = computed<Entry[]>(() => {
   return out.sort((a, b) => Number(b.status === 'running') - Number(a.status === 'running'))
 })
 </script>
-
-<style scoped>
-.wstasks {
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-}
-.wstasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.wstasks-row {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-  cursor: pointer;
-  text-align: left;
-  width: 100%;
-  transition:
-    border-color 0.12s ease,
-    background 0.12s ease;
-}
-.wstasks-row:hover {
-  border-color: var(--accentBorder);
-  background: var(--bgHover);
-}
-.wstasks-main {
-  min-width: 0;
-  flex: 1;
-}
-.wstasks-label {
-  font-weight: 500;
-  color: var(--text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wstasks-target {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wstasks-dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-</style>

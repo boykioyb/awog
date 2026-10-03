@@ -35,5 +35,7 @@
   "github.inbox.author": "Opened by {login}",
   "github.inbox.tabHint.all": "Every unread thread on this GitHub account",
   "github.inbox.tabHint.watched": "Only repos of the projects picked in Settings → Git — the ones allowed to toast",
-  "github.inbox.notWatched": "not watched"
+  "github.inbox.notWatched": "not watched",
+  "github.comment.open": "Open comment {id} on GitHub",
+  "github.comment.openFailed": "Could not open GitHub comment {id}"
 }

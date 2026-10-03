@@ -10,7 +10,7 @@
       {{ t('git.detail.tabTree') }}
     </span>
     <span style="flex: 1" />
-    <span class="mono" style="color: var(--accent); font-size: var(--fs-xs)">{{ commit.h }}</span>
+    <span class="mono" style="color: var(--primary); font-size: var(--fs-xs)">{{ commit.h }}</span>
   </div>
 
   <div v-if="tab === 'commit'" class="cdbody">
@@ -37,13 +37,14 @@
         <span class="kvk">{{ t('git.detail.parent') }}</span>
         <span
           v-if="parent"
-          class="chip mono chipbtn"
-          style="color: var(--accent)"
+          class="mono cursor-pointer rounded-sm border border-input bg-transparent px-1.5 py-0.5 text-xs text-primary transition-colors hover:border-ring hover:bg-accent-wash"
           @click="emit('select-commit', parent)"
         >
           {{ parent }}
         </span>
-        <span v-else class="kvv" style="color: var(--textDim)">{{ t('git.detail.root') }}</span>
+        <span v-else class="kvv" style="color: var(--muted-foreground)">
+          {{ t('git.detail.root') }}
+        </span>
       </div>
     </div>
   </div>
@@ -182,7 +183,7 @@ const dir = (f: string) => shortPath(f)[0]
   background: transparent;
 }
 .cddiffempty {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   padding: 8px 4px;

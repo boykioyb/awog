@@ -15,7 +15,9 @@ import { log } from '../util/logger.js'
 import type {
   InfraContext,
   Session,
+  SessionAgentRef,
   SessionCompaction,
+  SessionLlmOverride,
   SessionMessage,
   SessionSummary,
   SpawnSessionConfig,
@@ -127,25 +129,49 @@ export async function setSessionInfra(id: string, infra: InfraContext): Promise<
 // Xếp một phiên vào nhóm dưới phiên cha (kèm vai), hoặc tách khỏi nhóm khi
 // `parentId === null`. Trả về mã lỗi của manager (chu trình / cha lạ / tự làm cha
 // của chính mình) để RPC dịch thành thông báo đúng thay vì một câu "không tìm thấy".
-export async function setSessionGroup(
+export async function setSessionRunMembership(
   id: string,
   parentId: string | null,
   role: string | null,
-): Promise<Awaited<ReturnType<typeof sessionManager.setGroup>>> {
+): Promise<Awaited<ReturnType<typeof sessionManager.setRunMembership>>> {
   await sessionManager.ensureLoaded()
-  return sessionManager.setGroup(id, parentId, role)
+  return sessionManager.setRunMembership(id, parentId, role)
+}
+
+// Gắn / gỡ agent AWOG của một phiên trong nhóm — "vai có thật" của session-teams
+// (docs/features/session-teams.md §3). `agent === null` = gỡ: XOÁ HẲN key trên
+// header, nên đường ghi phải là RPC riêng `sessions.setAgent` — patch kiểu
+// spread của updateSessionMetadata không xoá được key (y hệt setSessionGroup).
+// Trả về false khi id không tồn tại để RPC báo "Session not found".
+export async function setSessionAgent(
+  id: string,
+  agent: SessionAgentRef | null,
+): Promise<boolean> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setSessionAgent(id, agent)
+}
+
+// Override LLM cấp phiên — "đổi account/model khi hết token" (board item →
+// Advanced). `null` = gỡ hẳn key. Y hệt setSessionAgent: RPC riêng vì patch
+// spread của updateMetadata không xoá được key.
+export async function setSessionLlmOverride(
+  id: string,
+  override: SessionLlmOverride | null,
+): Promise<boolean> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setLlmOverride(id, override)
 }
 
 // Ghi nhớ / xoá cấu hình spawn của nhóm trên phiên gốc — "duyệt một lần cho cả
 // workflow" (sessions/spawn-approval.ts). `null` = xoá hẳn key, đúng khuôn
 // setSessionGroup/setSessionInfra. `{}` là marker HỢP LỆ ("đã duyệt, kế thừa
 // toàn bộ cha") — xem session-manager.setGroupSpawn.
-export async function setSessionGroupSpawn(
+export async function setSessionSpawnConfig(
   id: string,
   config: SpawnSessionConfig | null,
 ): Promise<boolean> {
   await sessionManager.ensureLoaded()
-  return sessionManager.setGroupSpawn(id, config)
+  return sessionManager.setSpawnConfig(id, config)
 }
 
 // Ép persist một phiên NGAY (qua persistence-queue), bỏ qua debounce 500ms —

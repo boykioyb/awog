@@ -117,7 +117,9 @@ export function useLinkOpen() {
     // link mở browser luôn, load url là phần sau".
     if (inSession) {
       if (!openViews.value.includes('Browser')) toggleView('Browser')
-      api.newTab(url, { wait: false }).catch(failed)
+      // Tab phải sinh TRONG SCOPE của session đang xem — bỏ trống là nó rơi vào
+      // pool global, và chính view Browser vừa mở sẽ không bao giờ thấy tab này.
+      api.newTab(url, { wait: false, scope: sessions.active?.engineId }).catch(failed)
       return
     }
 

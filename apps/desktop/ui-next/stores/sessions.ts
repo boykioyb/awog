@@ -37,14 +37,16 @@ import type {
   QuestionItem,
   QueuedMessage,
   Session,
+  SessionAgentRef,
   SessionAttachment,
   SessionBookmark,
+  SessionWorktree,
+  SessionLlmOverride,
   SessionStatus,
   SessionUsage,
   SlashCommandRef,
   SpawnChildSpec,
   SpawnSessionConfig,
-  SessionArmRequest,
   SessionSpawnRequest,
   SshApprovalMode,
   StepBlock,
@@ -359,8 +361,8 @@ const isInboxPayload = (raw: unknown): raw is InboxMessagePayload => {
 // không phải do renderer tạo. Mang nguyên một SessionSummary để hàng danh sách hiện
 // ra ngay, không phải gọi lại `sessions.list`.
 //
-// Bắt buộc phát TRƯỚC tin giao việc của phiên đó: `mayAutoDeliver` phải tìm được đích
-// trong store thì mới quyết định tự giao được.
+// Bắt buộc phát TRƯỚC tin giao việc của phiên đó: `withinDeliverCap` phải tìm được
+// đích trong store thì mới quyết định tự giao được.
 type SessionCreatedPayload = { session: SessionSummaryDto }
 const isSessionCreatedPayload = (raw: unknown): raw is SessionCreatedPayload => {
   if (!raw || typeof raw !== 'object') return false
@@ -410,27 +412,6 @@ const isSpawnClosedPayload = (raw: unknown): raw is SpawnClosedPayload => {
   return typeof p.requestId === 'string' && typeof p.sessionId === 'string'
 }
 
-// `session.arm-request`/`session.arm-closed` — tool `arm_group` park chờ một cú
-// duyệt bật tự-giao nhóm (spawn-approval.ts). Cùng khuôn spawn ở trên nhưng
-// payload chỉ mang rootId + câu `reason` của model.
-type ArmRequestPayload = {
-  requestId: string
-  sessionId: string
-  rootId: string
-  reason?: string
-}
-const isArmRequestPayload = (raw: unknown): raw is ArmRequestPayload => {
-  if (!raw || typeof raw !== 'object') return false
-  const p = raw as Record<string, unknown>
-  return (
-    typeof p.requestId === 'string' &&
-    typeof p.sessionId === 'string' &&
-    typeof p.rootId === 'string' &&
-    (p.reason === undefined || typeof p.reason === 'string')
-  )
-}
-const isArmClosedPayload = isSpawnClosedPayload
-
 // Terminal "turn finished" event (sidecar emits it right before returning the
 // sessions.sendMessage result). We only need the ids to clear the streaming
 // indicator; text/stopReason ride along so the byline can settle authoritatively.
@@ -439,6 +420,11 @@ type MessageDonePayload = {
   messageId: string
   text?: string
   stopReason?: string | null
+  // Raw model id that produced the turn (sidecar SessionMessage.modelUsed).
+  // Stamped on the bubble so the byline keeps THIS turn's model even after the
+  // user switches the session model. Absent on the error/abort done-emit and on
+  // budget refusals (nothing ran) — the byline then falls back to s.model.
+  modelUsed?: string
   // Provider error cause on a graceful `error` stop (or the budget-refusal
   // message). Surfaced from this event so the alert shows even when the
   // sendMessage RPC response is dropped/late — see surfaceTurnError.
@@ -489,11 +475,29 @@ type SessionSummaryDto = {
   parentSessionId?: string
   // Cha trong cây NHÓM + vai trong nhóm — mirrors sidecar SessionSummary. Chế độ xem
   // "Nhóm" của danh sách dựng cả cây từ đây, không nạp transcript của từng phiên.
-  groupParentId?: string
-  groupRole?: string
-  groupAutoDeliver?: boolean
+  teamRunId?: string
+  teamRole?: string
+  // Spec đội mà phiên này được materialize ra (teams.run) — mirrors
+  // sidecar SessionSummary.teamId. Trang Teams nhóm các run theo key này.
+  teamId?: string
+  // Tier + project sở hữu spec — mirrors sidecar SessionSummary.teamSource/
+  // teamProjectId (resolve spec bench member trong picker "giao cho").
+  teamSource?: 'global' | 'project'
+  teamProjectId?: string
+  // Nguồn gốc materialize — mirrors sidecar SessionSummary.origin. 'board' =
+  // phiên lone-agent dispatch từ board item — ẩn khỏi danh sách session.
+  origin?: 'board'
   // Cấu hình spawn đã nhớ của nhóm — mirrors sidecar SessionSummary.
-  groupSpawnConfig?: SpawnSessionConfig
+  spawnConfig?: SpawnSessionConfig
+  // Agent gắn vào member/lead + branch worktree riêng của member — mirrors
+  // sidecar SessionSummary.agent/worktree (session-teams). Lên summary
+  // để roster/chip hiện đúng mà không nạp transcript.
+  agent?: SessionAgentRef
+  worktree?: SessionWorktree
+  // Override LLM cấp phiên do người dùng đặt (board item → Advanced) — mirrors
+  // sidecar SessionSummary.llmOverride. Lên summary để editor đọc đúng trạng
+  // thái override của phiên sống mà không nạp transcript.
+  llmOverride?: SessionLlmOverride
   messageCount: number
   lastPreview?: string
   // Resting status derived by the sidecar from the last message (never 'streaming')
@@ -527,6 +531,13 @@ type EngineMessage = {
   // User attachments persisted on the turn (sidecar SessionMessage.attachments).
   // Restored on hydrate so a reload keeps the attachment chips + previews.
   attachments?: EngineAttachment[]
+  // CLI mà tin này được viết trong đó ("Open in CLI" — sessions.syncCli fold tin
+  // CLI-side về JSONL; mirrors sidecar SessionMessage.via). Không có = tin AWOG.
+  via?: 'claude' | 'codex' | 'devin'
+  // Model id thô đã sinh ra lượt agent này (mirrors sidecar SessionMessage.modelUsed
+  // — 'claude-opus-4-8'…). Nạp lên AssistantMessage.modelUsed dạng TÊN HIỂN THỊ để
+  // byline của từng lượt giữ đúng model lúc nó chạy, kể cả khi phiên đã đổi model.
+  modelUsed?: string
   // Per-turn usage snapshot persisted on an agent message (sidecar
   // SessionMessage.usage). Lifted onto Session.usage on hydrate — see
   // usageFromMessages — so the context gauge and the auto-compact trigger both see
@@ -564,10 +575,18 @@ type SessionGetDto = {
   parentSessionId?: string
   forkFromMessageId?: string
   // Nhóm phiên (cây kiểu trang Notion) — mirrors sidecar Session.
-  groupParentId?: string
-  groupRole?: string
-  groupAutoDeliver?: boolean
-  groupSpawnConfig?: SpawnSessionConfig
+  teamRunId?: string
+  teamRole?: string
+  // Spec đội nguồn (teams.run) — mirrors sidecar Session.teamId.
+  teamId?: string
+  teamSource?: 'global' | 'project'
+  teamProjectId?: string
+  // Nguồn gốc materialize — mirrors sidecar Session.origin.
+  origin?: 'board'
+  spawnConfig?: SpawnSessionConfig
+  // Session teams — mirrors sidecar Session.agent/worktree.
+  agent?: SessionAgentRef
+  worktree?: SessionWorktree
   // Ngữ cảnh hạ tầng đã đóng băng (ADR 0088) — mirrors sidecar Session.infra.
   infra?: InfraContext
   // Reading anchors persisted in the session header (ADR 0074). The sidecar already
@@ -1299,6 +1318,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
     if (dto.createdAt) session.createdAt = dto.createdAt
     if (dto.updatedAt) session.updatedAt = dto.updatedAt
+    if (dto.lastPreview) session.lastPreview = dto.lastPreview
     if (dto.settings?.accountId) session.accountId = dto.settings.accountId
     if (dto.settings?.level) session.thinkingLevel = dto.settings.level
     if (dto.settings?.ultracode) session.ultracode = true
@@ -1311,10 +1331,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
     if (dto.infra) session.infra = dto.infra
     if (dto.parentSessionId) session.parentSessionId = dto.parentSessionId
-    if (dto.groupParentId) session.groupParentId = dto.groupParentId
-    if (dto.groupRole) session.groupRole = dto.groupRole
-    if (dto.groupAutoDeliver) session.groupAutoDeliver = true
-    if (dto.groupSpawnConfig) session.groupSpawnConfig = dto.groupSpawnConfig
+    if (dto.teamRunId) session.teamRunId = dto.teamRunId
+    if (dto.teamRole) session.teamRole = dto.teamRole
+    if (dto.teamId) session.teamId = dto.teamId
+    if (dto.teamSource) session.teamSource = dto.teamSource
+    if (dto.teamProjectId) session.teamProjectId = dto.teamProjectId
+    if (dto.origin) session.origin = dto.origin
+    if (dto.spawnConfig) session.spawnConfig = dto.spawnConfig
+    if (dto.agent) session.agent = dto.agent
+    if (dto.worktree) session.worktree = dto.worktree
+    if (dto.llmOverride) session.llmOverride = dto.llmOverride
     return session
   }
 
@@ -1394,11 +1420,18 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Nhóm cũng nằm trong header: cửa sổ khác có thể vừa xếp/tách phiên này.
         // Gán TRỌN (kể cả khi đĩa không có) vì tách nhóm là XOÁ key — "chỉ gán khi
         // có" sẽ giữ lại cha cũ của bản trong bộ nhớ và hoàn tác thao tác vừa rồi.
-        target.groupParentId = full.groupParentId
-        target.groupRole = full.groupRole
-        target.groupAutoDeliver = full.groupAutoDeliver
+        target.teamRunId = full.teamRunId
+        target.teamRole = full.teamRole
+        target.teamId = full.teamId
+        target.teamSource = full.teamSource
+        target.teamProjectId = full.teamProjectId
+        target.origin = full.origin
         // Gán trọn, cùng lý do với ba field trên: "ngừng điều phối" là XOÁ key.
-        target.groupSpawnConfig = full.groupSpawnConfig
+        target.spawnConfig = full.spawnConfig
+        // Agent + worktree của member cũng theo ngữ nghĩa XOÁ key (setAgent
+        // null / releaseSessionWorkspace khi rời nhóm) — gán trọn như trên.
+        target.agent = full.agent
+        target.worktree = full.worktree
         // Đĩa là nguồn sự thật của ngữ cảnh đã ghim: một cửa sổ khác (hoặc popout)
         // có thể vừa đổi nó qua infra.setSessionContext.
         if (full.infra) target.infra = full.infra
@@ -1434,6 +1467,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
+  // Re-read a transcript that changed on disk OUTSIDE this renderer's live stream
+  // ("Open in CLI": sessions.syncCli folds CLI-side messages into the JSONL). Same
+  // trick as reclaimSession: drop `loaded` so ensureLoaded re-fetches instead of
+  // early-returning; msgs stay on screen while the fetch runs (`loading` only
+  // marks an EMPTY transcript). The in-flight set keeps a manual Sync + the
+  // `session.cli-synced` event it fires from fetching twice.
+  const transcriptReloads = new Set<number>()
+  function reloadTranscript(id: number): void {
+    const s = byId(id)
+    if (!s || transcriptReloads.has(id)) return
+    transcriptReloads.add(id)
+    s.loaded = false
+    void ensureLoaded(id).finally(() => transcriptReloads.delete(id))
+  }
+
   // Engine attachment (persisted on a user turn) → ui-next SessionAttachment so a
   // JSONL reload restores the attachment chips + previews. Mirrors the forward map
   // in sendMessage (att → engineAtts): image/PDF `url` (base64) → dataUrl (drives
@@ -1456,19 +1504,32 @@ export const useSessionsStore = defineStore('sessions', () => {
   // address. Every message on disk has an id, so this is a pure read-back — no
   // migration, no JSONL change.
   function engineMessageToSessionMessage(m: EngineMessage): Session['msgs'][number] {
+    // `via` đi nguyên qua cả ba role — tin nhập từ CLI chỉ khác tin thường ở cái
+    // badge "via {cli}", transcript xử lý chúng như mọi tin khác.
+    const via = m.via ? { via: m.via } : {}
     if (m.role === 'user') {
       return {
         role: 'user',
         text: m.text,
         at: m.at ?? '',
         eid: m.id,
+        ...via,
         ...(m.attachments?.length ? { att: m.attachments.map(engineAttToSession) } : {}),
       }
     }
     if (m.role === 'system') {
-      return { role: 'system', text: m.text, at: m.at ?? '', eid: m.id }
+      return { role: 'system', text: m.text, at: m.at ?? '', eid: m.id, ...via }
     }
-    return { role: 'assistant', at: m.at ?? '', eid: m.id, blocks: engineMessageToBlocks(m) }
+    return {
+      role: 'assistant',
+      at: m.at ?? '',
+      eid: m.id,
+      ...via,
+      // Model đã sinh lượt (tên hiển thị) — byline đọc field này thay vì model
+      // hiện tại của phiên, nên đổi model giữa phiên không viết lại nhãn cũ.
+      ...(m.modelUsed ? { modelUsed: modelDisplay(m.modelUsed) } : {}),
+      blocks: engineMessageToBlocks(m),
+    }
   }
 
   // Restore Session.usage from the persisted transcript (sessions.get already ships
@@ -1813,15 +1874,11 @@ export const useSessionsStore = defineStore('sessions', () => {
   // and the account this session would use has crossed its 5-hour usage threshold,
   // refuse to spawn it (returns null) — the single gate for every "+" callsite.
   // Disabled / under threshold → always creates.
-  // `groupParentId` = engineId của phiên CHA khi người dùng chọn "Phiên mới trong nhóm
-  // này". Đi kèm ngay ở nhánh 'create' của upsert (không phải qua `sessions.setGroup`
+  // `teamRunId` = engineId của phiên CHA khi người dùng chọn "Phiên mới trong nhóm
+  // này". Đi kèm ngay ở nhánh 'create' của upsert (không phải qua `sessions.setRunMembership`
   // sau đó) để phiên sinh ra ĐÃ nằm trong nhóm — một lần ghi, không có khoảnh khắc nào
   // nó hiện ra ngoài nhóm rồi nhảy vào.
-  function create(
-    projectId?: string,
-    forcedAccountId?: string,
-    groupParentId?: string,
-  ): number | null {
+  function create(projectId?: string, forcedAccountId?: string, teamRunId?: string): number | null {
     // Resolve the account THIS session would actually use — a project's "Session LLM
     // defaults" win over the global default — and gate quota on THAT account, not the
     // global default. Otherwise a maxed global-default account wrongly blocks a
@@ -1880,7 +1937,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Nhóm phải KHỚP: một phiên trắng đứng ngoài nhóm không dùng lại được cho
         // "phiên mới trong nhóm này" (và ngược lại) — dùng lại là lặng lẽ bỏ qua đúng
         // cái người dùng vừa chọn.
-        (s.groupParentId ?? '') === (groupParentId ?? ''),
+        (s.teamRunId ?? '') === (teamRunId ?? ''),
     )
     if (blank) {
       // On an explicit account retry (quota "switch account"), make sure the reused
@@ -1914,7 +1971,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
     const frozenInfra = frozenInfraFor(session.project || undefined)
     if (frozenInfra) session.infra = frozenInfra
-    if (groupParentId) session.groupParentId = groupParentId
+    if (teamRunId) session.teamRunId = teamRunId
     sessions.value.unshift(session)
     activate(id)
     if (useIpc) {
@@ -2023,14 +2080,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     return id
   }
 
-  function remove(id: number) {
-    const s = byId(id)
-    const wasActive = activeId.value === id
-    const proj = s?.project ?? ''
-    sessions.value = sessions.value.filter((x) => x.id !== id)
-    selectedIds.value.delete(id)
+  // Rụng phiên khỏi state cục bộ (KHÔNG gọi RPC) — remove() dùng cho đường
+  // user-initiated, handler 'session.deleted' dùng khi sidecar tự cascade
+  // (boards.delete xoá item kéo theo phiên assignee của nó).
+  function removeLocal(s: (typeof sessions.value)[number]) {
+    const wasActive = activeId.value === s.id
+    const proj = s.project ?? ''
+    sessions.value = sessions.value.filter((x) => x.id !== s.id)
+    selectedIds.value.delete(s.id)
     // Forget per-tab memory pointing at the deleted session.
-    if (lastActiveByProject.value[proj] === id) {
+    if (lastActiveByProject.value[proj] === s.id) {
       lastActiveByProject.value = { ...lastActiveByProject.value, [proj]: null }
     }
     if (wasActive) {
@@ -2047,7 +2106,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     } else {
       pruneEmptyDefaultTab()
     }
-    if (useIpc && s?.engineId) pushRequest('sessions.delete', { id: s.engineId })
+  }
+
+  function remove(id: number) {
+    const s = byId(id)
+    if (!s) return
+    removeLocal(s)
+    if (useIpc && s.engineId) pushRequest('sessions.delete', { id: s.engineId })
   }
 
   function rename(id: number, title: string) {
@@ -2564,7 +2629,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   // phiên để chặn chu trình (A nằm dưới B rồi lại nhận B làm con). Vẽ trước rồi
   // hoàn tác sẽ cho người dùng thấy một cái cây không hợp lệ dù trong chớp mắt, mà
   // ngay khoảnh khắc đó `useSessionTree` đang đi ngược chuỗi cha.
-  async function setGroupParent(
+  async function setRunMembership(
     id: number,
     parentClientId: number | null,
     role?: string | null,
@@ -2576,20 +2641,26 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Cả hai phiên phải đã nằm trên đĩa: nhóm là quan hệ giữa hai engineId, và một
     // phiên chưa gửi tin nào thì chưa có id nào để trỏ tới.
     if (!s.engineId || (parent && !parent.engineId)) {
-      useToast().add({ title: useI18n().t('sessions.group.notSaved'), color: 'info' })
+      useToast().add({ title: useI18n().t('sessions.team.notSaved'), color: 'info' })
       return false
     }
     const applyLocal = () => {
-      s.groupParentId = parent?.engineId
-      if (parent && role) s.groupRole = role
-      if (!parent) s.groupRole = undefined
+      s.teamRunId = parent?.engineId
+      if (parent && role) s.teamRole = role
+      if (!parent) {
+        s.teamRole = undefined
+        // Rời nhóm = rời membership: agent "vai có thật" + worktree riêng bị
+        // sidecar nhả theo (session-teams) — xoá ngay bản local cùng teamRole.
+        s.agent = undefined
+        s.worktree = undefined
+      }
     }
     if (!useIpc) {
       applyLocal()
       return true
     }
     try {
-      await sc.request('sessions.setGroup', {
+      await sc.request('sessions.setRunMembership', {
         id: s.engineId,
         parentId: parent?.engineId ?? null,
         ...(role !== undefined ? { role } : {}),
@@ -2597,8 +2668,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       applyLocal()
       return true
     } catch (err) {
-      console.warn('[sessions] sessions.setGroup failed', err)
-      useToast().add({ title: useI18n().t('sessions.group.failed'), color: 'error' })
+      console.warn('[sessions] sessions.setRunMembership failed', err)
+      useToast().add({ title: useI18n().t('sessions.team.failed'), color: 'error' })
       return false
     }
   }
@@ -3295,7 +3366,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     return msgs.map((m) => m.block).join('\n\n')
   }
 
-  // Người dùng bấm "Giao cho agent": đưa TẤT CẢ tin đang chờ vào một lượt duy nhất.
+  // Đưa TẤT CẢ tin đang chờ vào một lượt duy nhất — đường giao tay còn lại chỉ
+  // là escape hatch cho tin park vì chạm trần chi phí (xem withinDeliverCap).
   function deliverInbox(engineId: string): void {
     const s = byEngineId(engineId)
     const msgs = pendingInbox.value[engineId]
@@ -3304,28 +3376,25 @@ export const useSessionsStore = defineStore('sessions', () => {
     void sendMessage(s.id, buildInboxPrompt(msgs))
   }
 
-  // ── Tự giao tin TRONG nhóm (hướng A — phiên điều phối phiên) ────────────────
+  // ── Tự giao mọi tin hộp thư ───────────────────────────────────────────────
   //
-  // P1 của session-messaging cố ý KHÔNG tự giao, vì hai lý do: một lượt LLM tiêu tiền
-  // thật, và phiên đích có thể đang chạy dở. Cả hai vẫn đúng — nên cửa này chỉ mở
-  // BÊN TRONG một nhóm do chính người dùng tự tay lập (ranh giới đồng thuận tường
-  // minh), chỉ khi phiên GỐC của nhóm bật công tắc, và vẫn có trần.
-  //
-  // Lý do thứ hai được giải bằng cách TÁI DÙNG hàng đợi có sẵn thay vì chen ngang:
-  // tin vào `s.queue` và `drainQueue` (đã chạy mỗi khi một lượt kết thúc sạch) tự
-  // đẩy nó đi. Nhờ vậy bất biến "một phiên chỉ chạy 1 lượt" không bị đụng tới, và
-  // trường hợp "đích đang bận" không cần watcher riêng nào.
+  // Tin đến (phiên↔phiên, người dùng forward, nguồn ngoài) được TỰ GIAO luôn —
+  // không còn cổng "Giao cho agent" hay cờ arm theo nhóm. Đích đang bận được giải
+  // bằng cách TÁI DÙNG hàng đợi có sẵn thay vì chen ngang: tin vào `s.queue` và
+  // `drainQueue` (đã chạy mỗi khi một lượt kết thúc sạch) tự đẩy nó đi. Nhờ vậy
+  // bất biến "một phiên chỉ chạy 1 lượt" không bị đụng tới, và trường hợp "đích
+  // đang bận" không cần watcher riêng nào. Trần chi phí dưới đây là hàng rào duy
+  // nhất giữa tin inbox và một lượt LLM tốn tiền thật.
 
   // Cửa sổ trượt của trần, CỐ Ý bằng LOOP_WINDOW_MS của sổ cái bên sidecar: hai hàng
   // rào cùng nhìn một khoảng thời gian thì còn giải thích được cho người dùng.
   const AUTO_DELIVER_WINDOW_MS = 30 * 60 * 1000
-  // Số lượt một NHÓM được tự khởi động trong cửa sổ đó. Đây là trần về TIỀN, khác hẳn
-  // trần hop của sidecar (trần đó đo độ dài một chuỗi qua lại). Chạm trần ⇒ tin rơi
-  // về hàng đợi hộp thư và chờ người bấm, KHÔNG bị vứt.
-  // 40 (không phải 20): một workflow đã được duyệt đi qua lại nhiều — một vòng
-  // cha→con→báo-về→giao-tiếp của ê-kíp 4 phiên đã là ~8 lượt; 20 nghẹt ngay vòng
-  // thứ hai của việc dùng THẬT. Trần này chỉ để phanh vòng lặp chạy loạn, không
-  // phải để giới hạn một workflow người dùng đã bật.
+  // Số lượt tự giao một NHÓM được khởi động trong cửa sổ đó (phiên lẻ tự làm
+  // "gốc" của mình). Đây là trần về TIỀN, khác hẳn trần hop của sidecar (trần đó
+  // đo độ dài một chuỗi qua lại). Chạm trần ⇒ tin rơi về hộp thư chờ bấm tay,
+  // KHÔNG bị vứt.
+  // 40: một vòng cha→con→báo-về→giao-tiếp của ê-kíp 4 phiên đã là ~8 lượt; trần
+  // này chỉ để phanh vòng lặp chạy loạn, không phải để giới hạn workflow thật.
   const MAX_AUTO_DELIVERS_PER_GROUP = 40
   // Chỉ trong bộ nhớ, như sổ cái bên sidecar: đây là hàng rào cho một vòng lặp đang
   // quay, không phải lịch sử.
@@ -3336,52 +3405,32 @@ export const useSessionsStore = defineStore('sessions', () => {
   function groupRootEid(s: Session): string | undefined {
     let cur = s
     const seen = new Set<number>()
-    while (cur.groupParentId && !seen.has(cur.id)) {
+    while (cur.teamRunId && !seen.has(cur.id)) {
       seen.add(cur.id)
-      const parent = byEngineId(cur.groupParentId)
+      const parent = byEngineId(cur.teamRunId)
       if (!parent) break
       cur = parent
     }
     return cur.engineId
   }
 
-  // Tin này có được tự giao không? Đúng BỐN điều kiện, thiếu một là về nút bấm tay.
-  // Chỉ WARN cho tin TRONG NHÓM đáng lẽ tự giao nhưng bị chặn — tin thường (người
-  // dùng forward, phiên ngoài nhóm) rơi về chip là hành vi đúng, không phải lỗi.
-  function mayAutoDeliver(fromEngineId: string | null, toEngineId: string): boolean {
-    // 1. Phải đến TỪ một phiên. Nguồn 'external' (CI, lời tự hẹn) có fromSessionId
-    //    null — chúng không thuộc nhóm nào nên không bao giờ tự chạy.
-    if (!fromEngineId) return false
-    const from = byEngineId(fromEngineId)
+  // Phiên đích còn ngân sách tự giao trong cửa sổ không? Dưới trần ⇒ tin tự
+  // chạy; chạm trần ⇒ về hộp thư chờ người bấm (deliverInbox). Trả false cả khi
+  // đích chưa có trong store — park để chip hiện thay vì nuốt tin.
+  function withinDeliverCap(toEngineId: string): boolean {
     const to = byEngineId(toEngineId)
-    if (!from || !to) {
-      console.warn('[inbox] auto-deliver skipped — endpoint not in store', {
-        from: fromEngineId,
-        to: toEngineId,
-        fromFound: !!from,
-        toFound: !!to,
-      })
+    const root = to ? groupRootEid(to) : undefined
+    if (!root) {
+      console.warn('[inbox] auto-deliver skipped — target not in store', { to: toEngineId })
       return false
     }
-    // 2. Cùng một nhóm — ngoài nhóm là đường tay bình thường, không warn.
-    const root = groupRootEid(to)
-    if (!root || groupRootEid(from) !== root) return false
-    // 3. Gốc nhóm đã bật công tắc.
-    if (!byEngineId(root)?.groupAutoDeliver) {
-      console.warn('[inbox] group message parked for manual delivery — group not armed', {
-        root,
-        to: toEngineId,
-      })
-      return false
-    }
-    // 4. Nhóm chưa chạm trần trong cửa sổ.
     const now = Date.now()
     const recent = (autoDeliverLedger.get(root) ?? []).filter(
       (t) => now - t <= AUTO_DELIVER_WINDOW_MS,
     )
     autoDeliverLedger.set(root, recent)
     if (recent.length >= MAX_AUTO_DELIVERS_PER_GROUP) {
-      console.warn('[inbox] group auto-deliver cap reached — message parked for manual delivery', {
+      console.warn('[inbox] auto-deliver cap reached — message parked for manual delivery', {
         root,
         to: toEngineId,
         count: recent.length,
@@ -3401,34 +3450,6 @@ export const useSessionsStore = defineStore('sessions', () => {
     autoDeliverLedger.set(root, [...(autoDeliverLedger.get(root) ?? []), Date.now()])
   }
 
-  // Nhóm vừa được arm ⇒ mọi tin TRONG NHÓM đang nằm chờ bấm tay phải được nhả ra:
-  // arm chính là quyết định "workflow này tự chạy" của người dùng, nên các lời
-  // giao việc/báo cáo park trước đó (ví dụ gửi khi cờ chưa kịp đứng) không được
-  // ở lì trong hộp thư. Chỉ đụng tin phiên↔phiên cùng nhóm — tin người dùng
-  // forward hay nguồn ngoài vẫn chờ bấm tay như thường. Tin chuyển sang queue
-  // mang cờ autoDelivered nên vẫn tính trần đúng lúc turn thật mở.
-  function flushParkedGroupInbox(rootEid: string): void {
-    for (const [engineId, msgs] of Object.entries(pendingInbox.value)) {
-      const target = byEngineId(engineId)
-      if (!target || groupRootEid(target) !== rootEid) continue
-      const inGroup = msgs.filter((m) => {
-        if (m.origin !== 'session' || !m.fromSessionId) return false
-        const from = byEngineId(m.fromSessionId)
-        return !!from && groupRootEid(from) === rootEid
-      })
-      if (!inGroup.length) continue
-      const parked = new Set(inGroup.map((m) => m.id))
-      const rest = msgs.filter((m) => !parked.has(m.id))
-      if (rest.length) pendingInbox.value[engineId] = rest
-      else delete pendingInbox.value[engineId]
-      target.queue = [
-        ...(target.queue ?? []),
-        ...inGroup.map((m) => ({ text: m.block, autoDelivered: true })),
-      ]
-      void drainQueue(target.id)
-    }
-  }
-
   // Xếp một tin đã tới vào hàng đợi của phiên đích và cho nó chạy. Trả về true khi
   // đã nhận — người gọi khi đó KHÔNG xếp tin vào hộp thư chờ người bấm nữa.
   function autoDeliver(engineId: string, msg: PendingInboxMessage): boolean {
@@ -3443,23 +3464,6 @@ export const useSessionsStore = defineStore('sessions', () => {
     // rảnh thì không ai gọi hộ, nên gọi ngay tại đây.
     if (idle) void drainQueue(s.id)
     return true
-  }
-
-  // Bật/tắt tự giao cho NHÓM mà phiên này làm gốc. Cờ nằm trên phiên gốc, nên UI chỉ
-  // nên hiện công tắc ở đó. Ghi qua RPC RIÊNG (không qua update-metadata): patch
-  // spread không phân biệt được "tắt có chủ đích" với "cờ true cũ của cửa sổ chưa
-  // nghe disarm" — còn RPC này emit `session.group-armed` kèm giá trị mới nên mọi
-  // cửa sổ/popout hội tụ ngay. Optimistic + rollback y hệt resolveSpawn.
-  async function toggleGroupAutoDeliver(id: number): Promise<void> {
-    const s = byId(id)
-    if (!s?.engineId || !useIpc) return
-    const next = !s.groupAutoDeliver
-    s.groupAutoDeliver = next
-    const res = await pushRequest<{ ok: boolean }>('sessions.setGroupAutoDeliver', {
-      id: s.engineId,
-      value: next,
-    })
-    if (!res?.ok) s.groupAutoDeliver = !next
   }
 
   function dismissInboxMessage(engineId: string, messageId: string): void {
@@ -3483,10 +3487,9 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Request đang hiện trong popover (bản đầu tiên của hàng đợi).
   const pendingSpawn = computed(() => pendingSpawns.value[0] ?? null)
 
-  // Popover trả lời một request đang park. Cờ nhóm được áp LẠC QUAN trước RPC:
-  // tin giao việc của phiên con có thể tới cùng tick với phản hồi, mà nếu bản
-  // local chưa đứng thì chúng rơi về chip chờ người bấm — đúng thứ popover vừa
-  // duyệt bỏ. RPC thất bại ⇒ hoàn nguyên (sidecar cũng chưa ghi gì).
+  // Popover trả lời một request đang park. Config "nhớ cho nhóm" được áp LẠC
+  // QUAN trước RPC để UI phản ánh ngay; RPC thất bại ⇒ hoàn nguyên (sidecar
+  // cũng chưa ghi gì).
   async function resolveSpawn(input: {
     requestId: string
     approved: boolean
@@ -3497,53 +3500,23 @@ export const useSessionsStore = defineStore('sessions', () => {
   }): Promise<boolean> {
     const req = pendingSpawns.value.find((r) => r.requestId === input.requestId)
     const root = req ? byEngineId(req.rootId) : undefined
-    const prev = root ? { auto: root.groupAutoDeliver, spawn: root.groupSpawnConfig } : null
+    const prev = root ? { spawn: root.spawnConfig } : null
     if (input.approved && root) {
-      root.groupAutoDeliver = true
       // `remember` mà không mang config = "nhớ: kế thừa toàn bộ" — sidecar ghi
       // marker `{}` thay vì không ghi gì, nên local phải đặt `{}` cho khớp.
-      if (input.remember) root.groupSpawnConfig = input.config ?? {}
+      if (input.remember) root.spawnConfig = input.config ?? {}
     }
     const res = await pushRequest<{ resolved: boolean }>('sessions.spawnResolve', input)
     // Rollback cả khi `resolved === false` (request đã tan — abort vừa hạ lượt):
-    // sidecar không arm gì cả nên cờ local không được đứng một mình. Nếu một cửa
-    // sổ khác đã duyệt thật thì event `session.group-armed` sẽ đặt lại cờ sau.
+    // sidecar chưa ghi gì nên config local không được đứng một mình. Nếu một cửa
+    // sổ khác đã duyệt thật thì event `session.spawn-config` sẽ đặt lại sau.
     if (!res || !res.resolved) {
       if (root && prev) {
-        root.groupAutoDeliver = prev.auto
-        root.groupSpawnConfig = prev.spawn
+        root.spawnConfig = prev.spawn
       }
       if (!res) return false
     }
     pendingSpawns.value = pendingSpawns.value.filter((r) => r.requestId !== input.requestId)
-    return res.resolved
-  }
-
-  // ── Popover arm nhóm (session.arm-request — tool `arm_group`) ────────────────
-  // Cùng hàng đợi như pendingSpawns nhưng cho một quyết định nhẹ hơn: bật cờ
-  // `groupAutoDeliver` trên gốc. Model KHÔNG tự arm được — đây là đường thứ ba
-  // giữa "nhờ user bấm công tắc" và "đi qua popover spawn".
-  const pendingArms = ref<SessionArmRequest[]>([])
-  const pendingArm = computed(() => pendingArms.value[0] ?? null)
-
-  // Trả lời một arm-request. Duyệt ⇒ optimistic bật cờ trên gốc trước RPC (tin
-  // nhóm park có thể được flush cùng tick event `group-armed` tới); RPC thất
-  // bại/request đã tan ⇒ hoàn nguyên, event sẽ đặt lại nếu cửa sổ khác duyệt.
-  async function resolveArm(input: {
-    requestId: string
-    approved: boolean
-    message?: string
-  }): Promise<boolean> {
-    const req = pendingArms.value.find((r) => r.requestId === input.requestId)
-    const root = req ? byEngineId(req.rootId) : undefined
-    const prev = root ? root.groupAutoDeliver : null
-    if (input.approved && root) root.groupAutoDeliver = true
-    const res = await pushRequest<{ resolved: boolean }>('sessions.armResolve', input)
-    if (!res || !res.resolved) {
-      if (root) root.groupAutoDeliver = prev ?? undefined
-      if (!res) return false
-    }
-    pendingArms.value = pendingArms.value.filter((r) => r.requestId !== input.requestId)
     return res.resolved
   }
 
@@ -3562,16 +3535,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s?.engineId || !useIpc) return null
     const rootId = groupRootEid(s)
     const root = rootId ? byEngineId(rootId) : undefined
-    const prev = root ? { auto: root.groupAutoDeliver, spawn: root.groupSpawnConfig } : null
+    const prev = root ? { spawn: root.spawnConfig } : null
     if (root) {
-      root.groupAutoDeliver = true
       // Giống resolveSpawn: remember + không config ⇒ marker `{}` (xem trên).
-      if (input.remember) root.groupSpawnConfig = input.config ?? {}
+      if (input.remember) root.spawnConfig = input.config ?? {}
     }
     const res = await pushRequest<{
       created: { id: string; title: string }[]
       failed: { title: string; reason: string }[]
-    }>('sessions.spawnChildren', {
+    }>('sessions.spawnMembers', {
       sessionId: s.engineId,
       children: input.children,
       ...(input.config ? { config: input.config } : {}),
@@ -3579,8 +3551,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     })
     if (!res) {
       if (root && prev) {
-        root.groupAutoDeliver = prev.auto
-        root.groupSpawnConfig = prev.spawn
+        root.spawnConfig = prev.spawn
       }
       return null
     }
@@ -3606,20 +3577,17 @@ export const useSessionsStore = defineStore('sessions', () => {
 
   // Ghi nhớ / thu hồi cấu hình spawn của nhóm (menu ⋯ → "ngừng điều phối").
   // Lạc quan + hoàn nguyên khi RPC lỗi, y hệt hai action trên.
-  async function setGroupSpawnConfig(
-    id: number,
-    config: SpawnSessionConfig | null,
-  ): Promise<boolean> {
+  async function setSpawnConfig(id: number, config: SpawnSessionConfig | null): Promise<boolean> {
     const s = byId(id)
     if (!s?.engineId || !useIpc) return false
-    const prev = s.groupSpawnConfig
-    s.groupSpawnConfig = config ?? undefined
-    const res = await pushRequest<{ ok: boolean }>('sessions.setGroupSpawn', {
+    const prev = s.spawnConfig
+    s.spawnConfig = config ?? undefined
+    const res = await pushRequest<{ ok: boolean }>('sessions.setSpawnConfig', {
       id: s.engineId,
       config,
     })
     if (res?.ok !== true) {
-      s.groupSpawnConfig = prev
+      s.spawnConfig = prev
       return false
     }
     return true
@@ -3764,29 +3732,35 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!useIpc || unlisten) return
     try {
       unlisten = await sc.onEvent((evt) => {
-        // `session.group-armed` phải đứng TRƯỚC cổng sở hữu: cờ `groupAutoDeliver`
-        // nằm trên phiên GỐC, nhưng quyết định tự giao (mayAutoDeliver) do cửa sổ
-        // sở hữu phiên CON đưa ra — nếu gốc đang popout ở cửa sổ khác thì event bị
-        // gate chặn và con vẫn rơi vào chip chờ. Set cờ là idempotent, không phải
-        // live-stream nên không có chuyện apply kép.
-        if (evt.type === 'session.group-armed') {
+        // `session.spawn-config` đứng TRƯỚC cổng sở hữu: `spawnConfig` nằm trên
+        // phiên GỐC của nhóm, mà phiên gốc có thể đang popout ở cửa sổ khác —
+        // event bị gate chặn thì cửa sổ này không bao giờ thấy nhóm đã "nhớ
+        // điều phối". `spawnConfig: null` mang nghĩa XOÁ key ("ngừng điều
+        // phối"), khác với key vắng mặt (không đổi gì).
+        if (evt.type === 'session.spawn-config') {
           const gp = evt.payload as {
             sessionId?: string
-            groupAutoDeliver?: boolean
-            groupSpawnConfig?: SpawnSessionConfig
+            spawnConfig?: SpawnSessionConfig | null
           } | null
           const gs = typeof gp?.sessionId === 'string' ? byEngineId(gp.sessionId) : undefined
-          if (gs && gp?.sessionId) {
-            // Payload mang giá trị tường minh (true khi arm, false khi toggle
-            // tắt qua sessions.setGroupAutoDeliver); vắng mặt coi như arm.
-            gs.groupAutoDeliver = gp.groupAutoDeliver !== false
-            // Config "đã nhớ" đi kèm event (kể cả `{}` = duyệt-mọi-field-kế-thừa)
-            // để cửa sổ khác không phải chờ reload mới thấy nhóm đã được nhớ.
-            if (gp.groupSpawnConfig) gs.groupSpawnConfig = gp.groupSpawnConfig
-            // Arm (không phải disarm): nhả luôn các tin trong nhóm đã park trước
-            // đó — với một ê-kíp được spawn khi cờ chưa kịp đứng, đây là cú hích
-            // cuối để cả workflow chạy thật thay vì nằm chờ bấm tay từng con.
-            if (gs.groupAutoDeliver) flushParkedGroupInbox(gp.sessionId)
+          if (gs && gp && 'spawnConfig' in gp) {
+            if (gp.spawnConfig) gs.spawnConfig = gp.spawnConfig
+            else delete gs.spawnConfig
+          }
+          return
+        }
+        // `session.llm-override` cũng đứng trước cổng sở hữu (cùng lý do
+        // spawn-config): board editor sửa override của một phiên có thể đang
+        // sống/popout ở cửa sổ khác. `null` = xoá hẳn key.
+        if (evt.type === 'session.llm-override') {
+          const gp = evt.payload as {
+            sessionId?: string
+            llmOverride?: SessionLlmOverride | null
+          } | null
+          const gs = typeof gp?.sessionId === 'string' ? byEngineId(gp.sessionId) : undefined
+          if (gs && gp && 'llmOverride' in gp) {
+            if (gp.llmOverride) gs.llmOverride = gp.llmOverride
+            else delete gs.llmOverride
           }
           return
         }
@@ -3898,6 +3872,14 @@ export const useSessionsStore = defineStore('sessions', () => {
         }
         // Một phiên con do tool `create_session` sinh ra. Thêm hàng vào danh sách ngay
         // (không đợi reload) để tin giao việc ngay sau đó tìm được đích của nó.
+        if (evt.type === 'session.deleted') {
+          const p = evt.payload as { id?: unknown } | null
+          if (typeof p?.id === 'string') {
+            const s = byEngineId(p.id)
+            if (s) removeLocal(s)
+          }
+          return
+        }
         if (evt.type === 'session.created') {
           if (!isSessionCreatedPayload(evt.payload)) return
           const dto = evt.payload.session
@@ -3931,34 +3913,12 @@ export const useSessionsStore = defineStore('sessions', () => {
           pendingSpawns.value = pendingSpawns.value.filter((r) => r.requestId !== closed.requestId)
           return
         }
-        // Tool `arm_group` park chờ một cú duyệt bật tự-giao — cổng sở hữu đã
-        // lọc theo payload.sessionId = phiên đang gọi, y hệt spawn-request.
-        if (evt.type === 'session.arm-request') {
-          if (!isArmRequestPayload(evt.payload)) return
-          const p = evt.payload
-          pendingArms.value = [
-            ...pendingArms.value.filter((r) => r.requestId !== p.requestId),
-            {
-              requestId: p.requestId,
-              sessionId: p.sessionId,
-              rootId: p.rootId,
-              ...(typeof p.reason === 'string' ? { reason: p.reason } : {}),
-            },
-          ]
-          return
-        }
-        if (evt.type === 'session.arm-closed') {
-          if (!isArmClosedPayload(evt.payload)) return
-          const closed = evt.payload
-          pendingArms.value = pendingArms.value.filter((r) => r.requestId !== closed.requestId)
-          return
-        }
         if (evt.type === 'session.inbox-message') {
           if (!isInboxPayload(evt.payload)) return
           const p = evt.payload
-          // Mặc định: chỉ xếp hàng + hiện chip, KHÔNG tự khởi động lượt (xem ghi chú
-          // ở pendingInbox). Ngoại lệ DUY NHẤT là tin đi giữa hai phiên trong cùng một
-          // nhóm đã bật tự giao — xem mayAutoDeliver ngay bên dưới.
+          // Mặc định: TỰ GIAO — xếp vào queue của đích và chạy khi nó rảnh (xem
+          // khối ghi chú "Tự giao mọi tin hộp thư"). Chỉ park vào hộp thư khi
+          // nhóm đã chạm trần chi phí — chip là escape hatch duy nhất còn lại.
           const msg: PendingInboxMessage = {
             id: p.messageId,
             // Sidecar cũ (chưa có field) ⇒ suy tối thiểu, và mặc định về 'session'
@@ -3970,10 +3930,7 @@ export const useSessionsStore = defineStore('sessions', () => {
             preview: p.preview,
             block: p.block,
           }
-          // Tự giao khi NGƯỜI DÙNG đã tự tay xếp hai phiên vào cùng một nhóm và bật
-          // công tắc ở phiên gốc (xem mayAutoDeliver). Mọi trường hợp khác giữ nguyên
-          // hành vi P1: chỉ xếp hàng + hiện chip, lượt chỉ chạy khi có người bấm.
-          if (mayAutoDeliver(p.fromSessionId, p.sessionId) && autoDeliver(p.sessionId, msg)) {
+          if (withinDeliverCap(p.sessionId) && autoDeliver(p.sessionId, msg)) {
             const auto = byEngineId(p.sessionId)
             if (auto && activeId.value !== auto.id) auto.unread = true
             return
@@ -4041,6 +3998,9 @@ export const useSessionsStore = defineStore('sessions', () => {
           // per-run deltas intact. The RPC resolve still owns the authoritative
           // parts-based reconcile.
           if (typeof p.text === 'string') reconcileReplyText(m, p.text)
+          // Stamp the model that ran the turn (the done event carries it) so the
+          // byline is pinned even when the sendMessage RPC resolve lands late/never.
+          if (p.modelUsed) m.modelUsed = modelDisplay(p.modelUsed)
           m.streaming = false
           if (m.completedAt == null) m.completedAt = Date.now()
           // Surface a graceful `error` stop (e.g. "Request timed out.") / budget
@@ -4184,7 +4144,15 @@ export const useSessionsStore = defineStore('sessions', () => {
         const id = m.eid ?? `fm-${i}-${seq++}`
         if (m.role === 'user') return { id, role: 'user', text: m.text, at }
         if (m.role === 'system') return { id, role: 'system', text: m.text, at }
-        return { id, role: 'agent', text: assistantText(m.blocks), at }
+        // Carry the per-turn model (display → raw id; unknown names round-trip as
+        // themselves) so a fork's bylines keep the model each turn ran under.
+        return {
+          id,
+          role: 'agent',
+          text: assistantText(m.blocks),
+          at,
+          ...(m.modelUsed ? { modelUsed: modelIdFromDisplay(m.modelUsed) } : {}),
+        }
       })
   }
   // Build the minimal sidecar session payload from the ui-next display fields. The
@@ -4218,18 +4186,14 @@ export const useSessionsStore = defineStore('sessions', () => {
     // omitted only for sessions that never linked a host (undefined). See setAboutSshHost.
     if (s.aboutSshHostId !== undefined) session.aboutSshHostId = s.aboutSshHostId
     if (s.aboutGhUrl) session.aboutGhUrl = s.aboutGhUrl
-    // `groupAutoDeliver` CỐ Ý không gửi: đường ghi duy nhất là RPC
-    // `sessions.setGroupAutoDeliver` (giống `infra`/`groupParentId` ngay bên
-    // dưới) — một bản `true` cũ của cửa sổ chưa nghe disarm đi qua đây sẽ lặng
-    // lẽ hồi sinh cờ vừa được tắt.
     // CHỈ ở 'create': sau đó đường ghi duy nhất là infra.setSessionContext (sidecar
     // cũng bỏ qua field này ở nhánh update-metadata). Gửi kèm mọi lần đổi tên/ghim
     // thì bản `infra` cũ của cửa sổ này sẽ ghi đè lần đổi vừa làm ở cửa sổ kia.
     if (mode === 'create' && s.infra) session.infra = compactInfraContext(s.infra)
     // Cùng lý do với `infra`: CHỈ ở 'create'. Sau đó đường ghi duy nhất là
-    // `sessions.setGroup` (tách nhóm phải xoá hẳn key).
-    if (mode === 'create' && s.groupParentId) session.groupParentId = s.groupParentId
-    if (mode === 'create' && s.groupRole) session.groupRole = s.groupRole
+    // `sessions.setRunMembership` (tách nhóm phải xoá hẳn key).
+    if (mode === 'create' && s.teamRunId) session.teamRunId = s.teamRunId
+    if (mode === 'create' && s.teamRole) session.teamRole = s.teamRole
     if (s.pinnedContext) session.pinnedContext = s.pinnedContext
     if (s.workspaceFolder) session.workspaceFolder = s.workspaceFolder
     if (s.budget) session.budget = s.budget
@@ -4436,6 +4400,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       eid: messageId,
       streaming: true,
       startedAt: Date.now(),
+      // Model the turn was SENT with — pins the byline while streaming so a
+      // mid-turn model switch doesn't relabel the in-flight bubble. Finalize
+      // overwrites it with the authoritative `result.modelUsed`.
+      modelUsed: s.model,
       blocks: [],
     }
     s.msgs.push(placeholder)
@@ -4608,6 +4576,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       // selected 1M model back to the 200k base after the first reply. Only
       // update when the base genuinely differs (a real model substitution).
       const usedDisplay = modelDisplay(result.modelUsed)
+      // Pin THIS turn's model on the message too — the byline reads it so a
+      // later session-model switch never relabels old turns. Skipped on a
+      // budget refusal (the turn never reached a model).
+      if (!refused && result.modelUsed) live.modelUsed = usedDisplay
       const selectedBase = modelIdFromDisplay(s.model).replace(/-1m$/, '')
       if (!refused && usedDisplay && result.modelUsed && result.modelUsed !== selectedBase) {
         s.model = usedDisplay
@@ -5484,14 +5456,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     dismissInbox,
     postToSession,
     listMessagingTargets,
-    // điều phối phiên con (popover spawn — docs/features/session-groups.md)
+    // điều phối phiên con (popover spawn — docs/features/session-runs.md)
     pendingSpawn,
     resolveSpawn,
-    pendingArm,
-    resolveArm,
     spawnChildrenFromUi,
     generateSpawnDraft,
-    setGroupSpawnConfig,
+    setSpawnConfig,
     // project tabs (VSCode-style)
     openProjectTabs,
     activeTab,
@@ -5516,6 +5486,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     // load (IPC)
     hydrate,
     ensureLoaded,
+    reloadTranscript,
     openByEngineId,
     // popout windows (docs/features/session-popout-window.md)
     windowedEngineIds,
@@ -5567,8 +5538,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     isArchived,
     loadArchivedSessions,
     setArchived,
-    setGroupParent,
-    toggleGroupAutoDeliver,
+    setRunMembership,
     groupRootEid,
     // jump-to-message handoff (list column → transcript surface)
     pendingJump,

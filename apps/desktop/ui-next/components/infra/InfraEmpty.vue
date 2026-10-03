@@ -14,15 +14,23 @@
   <div class="iem">
     <p class="iem-ttl">{{ title }}</p>
     <p v-if="hint" class="iem-hint">{{ hint }}</p>
-    <button v-if="action && actionLabel" class="btn sm pri iem-act" type="button" @click="onAction">
+    <Button
+      v-if="action && actionLabel"
+      type="button"
+      class="iem-act"
+      variant="default"
+      size="sm"
+      @click="onAction"
+    >
       {{ actionLabel }}
-    </button>
+    </Button>
   </div>
 </template>
 
 <script setup lang="ts">
 // Ô trống + một cú bấm đưa tới đúng chỗ sửa được nó.
 import { useInfraTabOpen, type InfraTab } from '~/composables/useInfraTabOpen'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   title: string

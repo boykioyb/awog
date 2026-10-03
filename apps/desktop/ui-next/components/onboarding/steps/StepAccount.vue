@@ -26,18 +26,23 @@
         </div>
 
         <label class="oba-label">{{ t('onboarding.account.key') }}</label>
-        <input
+        <Input
           v-model="apiKey"
           type="password"
-          class="keyinp mono"
           :placeholder="t('onboarding.account.keyPlaceholder')"
           autocomplete="off"
+          class="mono flex-1"
           @keydown.enter.prevent="connect"
         />
 
-        <button class="btn pri oba-connect" :disabled="!apiKey.trim() || busy" @click="connect">
+        <Button
+          :disabled="!apiKey.trim() || busy"
+          class="oba-connect"
+          variant="default"
+          @click="connect"
+        >
           {{ busy ? t('onboarding.account.connecting') : t('onboarding.account.connect') }}
-        </button>
+        </Button>
       </div>
 
       <p v-if="error" class="oba-err">{{ t('onboarding.account.error') }}</p>
@@ -52,6 +57,8 @@
 import { computed, ref } from 'vue'
 import { useSettingsStore, type ProviderName } from '~/stores/settings'
 import { useSidecar } from '~/composables/useSidecar'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Account step — self-contained API-key quick-connect (avoids nesting the Settings
 // modal, which would sit below this overlay). OAuth/Codex stay in Settings; this

@@ -66,6 +66,27 @@ const KEY: InjectionKey<FilePreviewApi> = Symbol('filePreview')
 const FILE_EXT =
   /\.(md|markdown|mdx|txt|json|jsonl|ya?ml|toml|ini|conf|cfg|env|lock|ts|tsx|js|jsx|mjs|cjs|vue|svelte|css|scss|sass|less|html?|xml|svg|py|rb|go|rs|java|kt|kts|c|h|cc|cpp|hpp|cs|swift|php|sh|bash|zsh|fish|sql|gradle|csv|png|jpe?g|gif|webp|bmp|ico|pdf)$/i
 
+// Run of path characters ending in `.<ext>` (+ optional `:line(:col)`) — the
+// shape-based FIRST pass for bare paths in plain text (markdown text nodes,
+// terminal lines, user bubbles). Deliberately loose; `filePathOf` then applies
+// the real validation (closed extension list, no scheme, no spaces, no `1.2.3`)
+// and callers gate on filePreview.resolve, so prose like `array.map` never
+// becomes a link. Shared by the terminal link provider + markdown linkifier —
+// keep the two in one place so detection stays identical across surfaces.
+export const PATH_TOKEN_RE = /[\p{L}\p{N}\p{M}\w.@~+\-/]+\.[\p{L}\p{N}]{1,10}(?::\d+){0,2}/gu
+
+// Scope một path TUYỆT ĐỐI về {root: thư mục cha, rel: basename} — fs.* chỉ cần
+// `path` nằm trong `workspaceRoot` (gate assertInsideWorkspace), mà thư mục cha
+// của chính file đã thoả điều đó. Dùng cho file ngoài workspace của phiên:
+// draft trong ~/.awog/session-worktrees, file kéo vào từ đĩa… null khi input
+// không phải abs hoặc trần "/x" (không có dir để scope).
+export function absFileScope(abs: string): { root: string; rel: string } | null {
+  if (!abs.startsWith('/')) return null // filePathOf never emits win32 drive paths
+  const i = abs.lastIndexOf('/')
+  if (i <= 0) return null
+  return { root: abs.slice(0, i), rel: abs.slice(i + 1) }
+}
+
 // Return the cleaned path if `raw` looks like a file path, else null. `raw` is the
 // full text of an inline-code span / link href (atomic in markdown). Keeps a leading
 // `/` (absolute paths must survive) but strips a leading `./` and a `:line(:col)`
@@ -248,7 +269,26 @@ export function provideFilePreview(
       return out
     }
     const rels = new Map<string, string>()
-    for (const p of paths) rels.set(p, relativeToRoot(r, p).replace(/^[/\\]+/, ''))
+    for (const p of paths) {
+      const rel = relativeToRoot(r, p)
+      // Absolute path ngoài workspace giữ nguyên dạng `/…` — verified riêng bên
+      // dưới qua listing thư mục cha (absScope), không qua file index của root.
+      rels.set(p, rel.startsWith('/') ? rel : rel.replace(/^[/\\]+/, ''))
+    }
+
+    // Absolute paths outside the workspace: verify each against its own parent
+    // directory (same scope trick as resolve/open), then drop them from rels so
+    // the workspace passes below never see a leading-slash "relative" path.
+    for (const [written, rel] of rels) {
+      if (!rel.startsWith('/')) continue
+      const scope = absScope(rel)
+      out.set(
+        written,
+        scope && (await dirFileNames(scope.root, '')).has(scope.rel) ? written : null,
+      )
+      rels.delete(written)
+    }
+    if (!rels.size) return out
 
     // Pass 1 — cached listings, capped. A path whose directory is over the cap stays
     // unverified (kept) rather than dropped for a check we never ran.
@@ -326,28 +366,47 @@ export function provideFilePreview(
       .map((c) => relativeToRoot(r, c))
       .filter((c) => GALLERY_IMAGE_EXT.test(c))
     const candidates = mentioned.includes(openedPath) ? mentioned : [openedPath, ...mentioned]
+    // Path tuyệt đối ngoài root (ảnh trong session-worktree…) probe qua thư mục
+    // cha của chính nó — cùng trick absScope của open/verifyPaths — và PreviewRef
+    // emit theo scope-root đó thay vì ghép vào workspace root của phiên.
+    const scopeOf = (c: string): { root: string; rel: string } => {
+      if (!c.startsWith('/')) return { root: r, rel: c }
+      return absScope(c) ?? { root: r, rel: c.replace(/^\/+/, '') }
+    }
     // Cap the directories we're willing to probe, keeping the opened image's own dir first.
-    const dirs: string[] = [dirOf(openedPath)]
-    for (const c of candidates) {
-      const d = dirOf(c)
-      if (!dirs.includes(d) && dirs.length < GALLERY_DIRS_MAX) dirs.push(d)
+    const dirKeys: string[] = []
+    const dirKey = (c: string): string => {
+      const s = scopeOf(c)
+      return `${s.root}::${dirOf(s.rel)}`
+    }
+    for (const c of [openedPath, ...candidates]) {
+      const k = dirKey(c)
+      if (!dirKeys.includes(k) && dirKeys.length < GALLERY_DIRS_MAX) dirKeys.push(k)
     }
     const listings = new Map<string, Set<string>>()
-    await Promise.all(dirs.map(async (d) => listings.set(d, await dirFileNames(r, d))))
+    await Promise.all(
+      dirKeys.map(async (k) => {
+        const sepIdx = k.indexOf('::')
+        listings.set(k, await dirFileNames(k.slice(0, sepIdx), k.slice(sepIdx + 2)))
+      }),
+    )
 
     const paths: string[] = []
     for (const c of candidates) {
       if (paths.includes(c)) continue
-      if (c !== openedPath && !listings.get(dirOf(c))?.has(baseName(c))) continue
+      if (c !== openedPath && !listings.get(dirKey(c))?.has(baseName(c))) continue
       paths.push(c)
     }
     if (paths.length < 2) return []
-    return paths.map((path) => ({
-      name: baseName(path),
-      kind: 'image' as const,
-      workspaceRoot: r,
-      path,
-    }))
+    return paths.map((path) => {
+      const s = scopeOf(path)
+      return {
+        name: baseName(path),
+        kind: 'image' as const,
+        workspaceRoot: s.root,
+        path: s.rel,
+      }
+    })
   }
 
   const open: FilePreviewApi['open'] = async (rawPath) => {
@@ -356,22 +415,46 @@ export function provideFilePreview(
     const r = await ensureRoot()
     // With a root, resolve against the real file tree (handles bare names / wrong
     // base); fall back to the written path — made root-relative when it's an absolute
-    // path inside the workspace, which is the shape a PreviewRef must carry (an
-    // unmatched file, e.g. a build output not in the git index, used to keep its
-    // absolute path and broke "copy path" + the media:// stream URL) — so the modal can
-    // still surface a clear "could not load". Without a root (browser-dev) degrade to a
-    // placeholder.
-    const path = r
-      ? ((await matchPath(r, detected, touchedPaths.value)) ?? relativeToRoot(r, detected))
-      : detected
+    // path inside the workspace, which is the shape a PreviewRef must carry —
+    // so the modal can still surface a clear "could not load" for a genuinely
+    // missing file. Without a root (browser-dev) degrade to a placeholder.
+    let path = detected
+    if (r) {
+      const rel = relativeToRoot(r, detected)
+      if (rel.startsWith('/')) {
+        // Abs ngoài workspace: file tồn tại đúng-chỗ trên đĩa THẮNG index —
+        // một file cùng basename trong project không được che file thật.
+        const scope = absScope(rel)
+        path =
+          scope && (await dirFileNames(scope.root, '')).has(scope.rel)
+            ? rel
+            : ((await matchPath(r, detected, touchedPaths.value)) ?? rel)
+      } else {
+        path = (await matchPath(r, detected, touchedPaths.value)) ?? rel
+      }
+    }
+    let scopeRoot = r
+    // An absolute path that stayed absolute is outside the workspace root —
+    // anchor the preview root to its parent dir so fs.*'s inside-root gate holds
+    // and every modal affordance (content, copy path, reveal, open-externally)
+    // works for it just like a workspace file.
+    if (path.startsWith('/')) {
+      const scope = absScope(path)
+      if (scope) {
+        scopeRoot = scope.root
+        path = scope.rel
+      }
+    }
     const name = baseName(path)
     const item: PreviewRef = { name, kind: previewKindFromPath(name) }
-    if (r) {
-      item.workspaceRoot = r
+    if (scopeRoot) {
+      item.workspaceRoot = scopeRoot
       item.path = path
     }
-    // An image opens with the session's other images as its gallery (see above).
-    const siblings = r && item.kind === 'image' ? await sessionImageSiblings(r, path) : []
+    // An image opens with the session's other images as its gallery (see above) —
+    // only meaningful while the preview still sits inside the session workspace.
+    const siblings =
+      scopeRoot === r && r && item.kind === 'image' ? await sessionImageSiblings(r, path) : []
     openPreview(item, siblings)
   }
   const shorten: FilePreviewApi['shorten'] = (path) => {
@@ -381,15 +464,50 @@ export function provideFilePreview(
     }
     return path
   }
+  // An absolute path outside the workspace (a session-worktree draft under
+  // ~/.awog/session-worktrees, a file dragged in from Desktop, …) can't be keyed
+  // to the workspace file index, but fs.* only needs a root the path sits inside
+  // — its own parent directory qualifies. Returns {root: dir, rel: basename}.
+  const absScope = absFileScope
+  // Literal on-disk check for one workspace-relative path — the matchPath index
+  // comes from `git ls-files`, so generated/gitignored files (`.awog/board-att`,
+  // build output) are invisible to it even though they exist.
+  const onDisk = async (r: string, rel: string): Promise<boolean> =>
+    (await dirFileNames(r, dirOf(rel))).has(baseName(rel))
+
   // Existence check for chip highlighting: only a path that resolves to a real
-  // workspace file returns non-null. No root (browser-dev / no-project session) →
-  // null, so unverifiable references stay plain text rather than fake chips.
+  // file returns non-null. No root (browser-dev / no-project session) → relative
+  // refs return null, absolute paths can still be verified against their own
+  // directory. Unverifiable references stay plain text rather than fake chips.
   const resolve: FilePreviewApi['resolve'] = async (rawPath) => {
     const detected = filePathOf(rawPath)
     if (!detected) return null
     const r = await ensureRoot()
+    if (detected.startsWith('/')) {
+      // Absolute: prefer the workspace resolution when it lands inside the root;
+      // otherwise verify the literal path on disk FIRST — scoped to its parent
+      // dir — since the index can't see outside-root files and a same-named
+      // project file must not shadow the real one the writer pointed at.
+      const rel = r ? relativeToRoot(r, detected) : detected
+      if (rel.startsWith('/')) {
+        const scope = absScope(rel)
+        if (scope && (await dirFileNames(scope.root, '')).has(scope.rel)) return detected
+        // Missing on disk as written — fall back to the index (a hinted/touched
+        // abs path can still resolve) before declaring dead.
+        if (!r) return null
+        return matchPath(r, detected, touchedPaths.value)
+      }
+      const stripped = rel.replace(/^[/\\]+/, '')
+      return (
+        (await matchPath(r!, detected, touchedPaths.value)) ??
+        ((await onDisk(r!, stripped)) ? stripped : null)
+      )
+    }
     if (!r) return null
-    return matchPath(r, detected, touchedPaths.value)
+    return (
+      (await matchPath(r, detected, touchedPaths.value)) ??
+      ((await onDisk(r, detected.replace(/^[/\\]+/, ''))) ? detected : null)
+    )
   }
 
   // ── markdown image inlining (workspace-relative → base64 data URL) ───────────
@@ -447,10 +565,25 @@ export function provideFilePreview(
     return out.length ? out.join('/') : null
   }
   const imageSrc: FilePreviewApi['imageSrc'] = async (rawSrc) => {
-    const r = await ensureRoot()
-    if (!r) return null
     const s = (rawSrc ?? '').trim()
     if (!s || ABSOLUTE_SCHEME.test(s)) return null
+    // Absolute path ngoài workspace (ảnh đính kèm board, screenshot trong
+    // session-worktree…): đọc qua scope thư mục cha — cùng trick của
+    // open()/resolve, không cần root của phiên.
+    if (s.startsWith('/')) {
+      const scope = absScope(s)
+      if (!scope) return null
+      try {
+        const res = await fs.readFileBase64(scope.root, scope.rel)
+        return res.base64 && !res.truncated && res.mimeType.startsWith('image/')
+          ? `data:${res.mimeType};base64,${res.base64}`
+          : null
+      } catch {
+        return null
+      }
+    }
+    const r = await ensureRoot()
+    if (!r) return null
     const rel = normalizeAsset(s)
     if (!rel) return null
     const cached = imageCache.get(rel)
@@ -493,4 +626,11 @@ const NOOP: FilePreviewApi = {
 // Leaf-side API, injected from the nearest provideFilePreview ancestor.
 export function useFilePreview(): FilePreviewApi {
   return inject(KEY, NOOP)
+}
+
+// True khi component đứng dưới một provideFilePreview thật — caller dùng để
+// tránh đăng ký surface tương tác (vd: file-link trong terminal) ở chỗ chỉ có
+// NOOP, nơi link sẽ gạch chân nhưng click câm (GlobalTerminalHost, popout…).
+export function hasFilePreviewHost(): boolean {
+  return inject(KEY, null) != null
 }

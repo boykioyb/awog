@@ -51,11 +51,12 @@
           {{ t('infra.graph.loadedAt', { time: hhmm }) }}
         </span>
 
-        <button
-          class="btn sm"
+        <Button
           type="button"
           :disabled="busy || !activeRootId"
           :aria-busy="resolving"
+          variant="outline"
+          size="sm"
           @click="onReload"
         >
           <Icon
@@ -64,7 +65,7 @@
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
           {{ t('infra.graph.reload') }}
-        </button>
+        </Button>
       </div>
     </header>
 
@@ -82,9 +83,9 @@
       <span v-if="tracePathCount === 0" class="ig-trace-warn">
         {{ t('infra.graph.trace.noMatch') }}
       </span>
-      <button class="btn sm" type="button" @click="traceHighlight.clear()">
+      <Button type="button" variant="outline" size="sm" @click="traceHighlight.clear()">
         {{ t('infra.graph.trace.clear') }}
-      </button>
+      </Button>
     </p>
     <p v-if="hasGraph" class="ig-info">{{ trafficNote }}</p>
     <p v-if="truncated" class="ig-warn">
@@ -133,10 +134,10 @@
         <div v-if="!hasGraph && !resolving" class="ig-overlay">
           <template v-if="graphError">
             <p class="ig-overlay-err">{{ graphError }}</p>
-            <button class="btn sm" type="button" @click="onRetry">
+            <Button type="button" variant="outline" size="sm" @click="onRetry">
               <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.graph.retry') }}
-            </button>
+            </Button>
           </template>
           <InfraGraphRoots
             v-else
@@ -198,6 +199,7 @@ import InfraGraphRoots from '~/components/infra/graph/InfraGraphRoots.vue'
 import { useInfraGraph, GRAPH_DEPTHS, GRAPH_MAX_DEPTH } from '~/composables/useInfraGraph'
 import { useInfraTraceHighlight } from '~/composables/useInfraTraceHighlight'
 import type { InfraGraphNode as GraphNodeEntity } from '~/composables/useInfraGraphApi'
+import Button from '~/components/ui/button/Button.vue'
 
 // Minh chứng phiên để ghi nhật ký hạ tầng — bỏ trống ở bề mặt `/infra`.
 const props = defineProps<{ sessionId?: string; messageId?: string }>()

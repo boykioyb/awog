@@ -115,10 +115,15 @@ function isoWeek(date: string): number {
 }
 
 // Rút SỐ ISSUE từ tiêu đề khi phiên không mang link `/issues/` (aboutGhUrl). CHỈ nhận
-// tín hiệu rõ ràng — "#123" hoặc "issue 123" — KHÔNG bắt số trần ("590" không tự thành
-// issue) và KHÔNG bắt "PR 123"/"pull 123" (PR không auto-link được). Deterministic, và
+// tín hiệu rõ ràng — "#123", "issue 123", hoặc quy ước "#123_IS:" (gh-ref.ts) —
+// KHÔNG bắt số trần ("590" không tự thành issue) và KHÔNG bắt "PR 123"/"pull 123"/
+// "#123_PR:" (PR không auto-link được — worklog chỉ nhận issue). Deterministic, và
 // người dùng vẫn thấy chip issue để gỡ nếu sai trước khi đẩy.
 function detectIssueFromTitle(title: string): number | undefined {
+  // Quy ước mới khớp trước: `#123_IS:` là issue chắc chắn; `#123_PR:`/`_PR_` là PR —
+  // trả undefined ngay để nhánh `#123` generic phía dưới không bắt nhầm số PR.
+  const conv = /#(\d{1,7})_(IS|PR)\b/i.exec(title)
+  if (conv) return conv[2]?.toUpperCase() === 'IS' ? Number(conv[1]) : undefined
   // "PR #12" / "pull request #12" ⇒ bỏ qua (đằng trước số là dấu hiệu PR).
   if (/\b(pr|pull\s*request)\b[^0-9]{0,6}#?\d+/i.test(title)) return undefined
   const m = /(?:#|\bissue\s+#?)(\d{1,7})\b/i.exec(title)

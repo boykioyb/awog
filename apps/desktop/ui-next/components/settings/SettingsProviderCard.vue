@@ -34,27 +34,27 @@
     </div>
 
     <!-- ChatGPT subscription (OpenAI Codex OAuth) -->
-    <button v-if="codex" class="btn pri pcardcta" type="button" @click="codexOpen = true">
+    <Button v-if="codex" type="button" class="pcardcta" variant="default" @click="codexOpen = true">
       <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('settingsModels.openai.signIn') }}
-    </button>
+    </Button>
     <div v-if="codex && !accounts.length" class="fd pcardhint">
       {{ t('settingsModels.openai.signInHint') }}
     </div>
 
     <!-- Add-key form -->
     <div v-if="formOpen" class="pcardform">
-      <input
+      <Input
         v-model="keyLabel"
-        class="keyinp"
         :placeholder="t('settingsModels.form.labelOptional')"
+        class="flex-1"
       />
       <div class="keyrow">
-        <input
+        <Input
           v-model="keyValue"
-          class="keyinp mono"
           :type="reveal ? 'text' : 'password'"
           :placeholder="keyPlaceholder"
+          class="mono flex-1"
           @keydown.enter="onAdd"
         />
         <span
@@ -64,21 +64,29 @@
         >
           👁
         </span>
-        <button
-          class="btn sm pri"
+        <Button
           type="button"
           :disabled="!keyValue.trim() || busy"
+          variant="default"
+          size="sm"
           @click="onAdd"
         >
           {{ t('settingsModels.form.addKey') }}
-        </button>
+        </Button>
       </div>
       <div v-if="error" class="pcarderror">{{ error }}</div>
     </div>
-    <button v-else class="btn sm pcardadd" type="button" @click="formOpen = true">
+    <Button
+      v-else
+      type="button"
+      class="pcardadd"
+      variant="outline"
+      size="sm"
+      @click="formOpen = true"
+    >
       <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ addKeyLabel }}
-    </button>
+    </Button>
 
     <SettingsCodexDialog
       v-if="codex"
@@ -104,6 +112,8 @@ import SettingsAccountRow, {
 import SettingsAccountEditDialog from '~/components/settings/SettingsAccountEditDialog.vue'
 import SettingsCodexDialog from '~/components/settings/SettingsCodexDialog.vue'
 import { useSettingsStore, type ProviderAccount, type ProviderName } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // OpenAI / Google provider card: account list + add-API-key form, plus an
 // optional ChatGPT (Codex OAuth) sign-in for OpenAI. Ported from the legacy

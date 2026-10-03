@@ -148,6 +148,9 @@ function onStop(shellId: string): void {
 </script>
 
 <style scoped>
+/* Status chips — proto chip idiom on shadcn tokens: muted fill + hairline border +
+   rounded-md, semantic tint on the status edge/glyph only (running → primary,
+   ok → success, fail → destructive). */
 .bgsh {
   display: flex;
   flex-wrap: wrap;
@@ -160,21 +163,25 @@ function onStop(shellId: string): void {
   gap: 6px;
   max-width: 320px;
   padding: 3px 8px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--muted);
   font-size: 12px;
   line-height: 16px;
-  color: var(--text);
+  color: var(--foreground);
 }
 .bgsh-chip.is-running {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
 }
 .bgsh-chip.is-fail {
-  border-color: color-mix(in srgb, var(--amber) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
 }
 .bgsh-sum {
   font-weight: 600;
+  background: transparent;
+}
+.bgsh-sum:hover {
+  background: var(--accent-wash);
 }
 .bgsh-chev {
   opacity: 0.55;
@@ -187,7 +194,7 @@ function onStop(shellId: string): void {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--primary);
   animation: bgsh-pulse 1.4s ease-in-out infinite;
 }
 .bgsh-cmd {
@@ -197,16 +204,16 @@ function onStop(shellId: string): void {
   text-overflow: ellipsis;
 }
 .bgsh-hint {
-  opacity: 0.6;
+  color: var(--muted-foreground);
   white-space: nowrap;
 }
 /* Direct child only: the status glyph. The action buttons below carry their own
    color and must not be tinted by the chip's status. */
 .bgsh-chip.is-ok > .icn {
-  color: var(--green, var(--add));
+  color: var(--success);
 }
 .bgsh-chip.is-fail > .icn {
-  color: var(--amber);
+  color: var(--destructive);
 }
 .bgsh-act {
   display: inline-flex;
@@ -214,16 +221,17 @@ function onStop(shellId: string): void {
   justify-content: center;
   padding: 1px;
   border-radius: var(--r-xs);
-  color: var(--text);
-  opacity: 0.55;
-  transition: opacity 0.12s var(--ease, ease);
+  color: var(--muted-foreground);
+  transition:
+    color 0.12s var(--ease, ease),
+    background 0.12s var(--ease, ease);
 }
 .bgsh-act:hover {
-  opacity: 1;
-  color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .bgsh-stop:hover {
-  color: var(--danger);
+  color: var(--destructive);
 }
 @keyframes bgsh-pulse {
   0%,

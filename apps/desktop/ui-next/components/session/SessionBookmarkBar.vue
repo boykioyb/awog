@@ -139,7 +139,7 @@ const onJump = (row: BookmarkRow) => {
   margin: 10px 14px 0;
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
-  background: var(--bgEl);
+  background: var(--card);
 }
 .bmb-head {
   display: flex;
@@ -153,7 +153,7 @@ const onJump = (row: BookmarkRow) => {
   align-items: center;
   gap: 7px;
   flex: 0 0 auto;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 1em;
   font-weight: 600;
   user-select: none;
@@ -161,12 +161,12 @@ const onJump = (row: BookmarkRow) => {
 .bmb-ic {
   width: var(--icon-sm);
   height: var(--icon-sm);
-  color: var(--accent);
+  color: var(--primary);
 }
 .bmb-chev {
   width: var(--icon-xs);
   height: var(--icon-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   transform: rotate(-90deg);
   transition: transform 0.15s var(--ease, ease);
 }
@@ -178,13 +178,13 @@ const onJump = (row: BookmarkRow) => {
   min-width: 0;
   text-align: left;
   font-size: 1em;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .bmb-peek:hover:not(:disabled) {
-  color: var(--text);
+  color: var(--foreground);
 }
 /* Badge, not body text: fixed 12px so it stays a compact pill at any base font size. */
 .bmb-n {
@@ -193,8 +193,8 @@ const onJump = (row: BookmarkRow) => {
   min-width: 18px;
   padding: 2px 5px;
   border-radius: var(--r-xs);
-  background: var(--accentDim, var(--bgHover));
-  color: var(--accent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
   font-family: var(--code, monospace);
   font-size: 12px;
   line-height: 12px;
@@ -214,7 +214,7 @@ const onJump = (row: BookmarkRow) => {
   min-width: 0;
 }
 .bmb-row:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .bmb-jump {
   display: flex;
@@ -224,7 +224,7 @@ const onJump = (row: BookmarkRow) => {
   min-width: 0;
   padding: 4px 0;
   text-align: left;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 1em;
 }
 .bmb-ex {
@@ -236,7 +236,7 @@ const onJump = (row: BookmarkRow) => {
 }
 .bmb-when {
   flex: 0 0 auto;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 12px;
   font-family: var(--code, monospace);
@@ -260,14 +260,14 @@ const onJump = (row: BookmarkRow) => {
   flex: 0 0 auto;
   padding: 6px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   transition:
     color 0.12s var(--ease, ease),
     background 0.12s var(--ease, ease);
 }
 .bmb-act.dgr:hover {
-  background: var(--dangerBg, var(--bgHover));
-  color: var(--danger);
+  background: color-mix(in srgb, var(--destructive) 14%, transparent);
+  color: var(--destructive);
 }
 
 /* ── Biến thể chip: popover neo vào chip trong hàng ngữ cảnh ────────────── */

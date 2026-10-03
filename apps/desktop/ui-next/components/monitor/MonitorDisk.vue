@@ -22,10 +22,15 @@
           </span>
           <!-- Lối vào để trả lời "chỗ trống đi đâu". Không có nút này thì tab Đĩa
                chỉ có danh mục rác soạn sẵn, và mọi thứ ngoài danh mục đó vô hình. -->
-          <button class="btn mondiskbrowse" :title="v.mount" @click="emit('open', v.mount)">
+          <Button
+            :title="v.mount"
+            class="mondiskbrowse"
+            variant="outline"
+            @click="emit('open', v.mount)"
+          >
             <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('disk.browse') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -33,10 +38,10 @@
     <!-- Lối tắt tới những thư mục hay chiếm chỗ nhất, ngoài danh mục rác. -->
     <div class="mondiskroots">
       <span class="fd">{{ t('disk.roots.label') }}</span>
-      <button v-for="r in roots" :key="r.path" class="btn" @click="emit('open', r.path)">
+      <Button v-for="r in roots" :key="r.path" variant="outline" @click="emit('open', r.path)">
         <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ r.name }}
-      </button>
+      </Button>
     </div>
 
     <!-- Gợi ý dọn -->
@@ -44,12 +49,17 @@
       <div class="monsech">
         <span class="monsect">{{ t('disk.clean.title') }}</span>
         <span class="fd">{{ countLabel }}</span>
-        <button class="btn monscanbtn" :disabled="measuring > 0" @click="emit('measure')">
+        <Button
+          :disabled="measuring > 0"
+          class="monscanbtn"
+          variant="outline"
+          @click="emit('measure')"
+        >
           <!-- Thước, không phải khung quét: `scan` là bốn góc ngắm — nó đọc ra
                "quét mã QR", còn việc ở đây là ĐO dung lượng. -->
           <Icon name="ruler" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ buttonLabel }}
-        </button>
+        </Button>
       </div>
       <!-- Chỉ cộng mục "an toàn": gộp cả mục cần cân nhắc vào một con số "dọn được"
            là mời người dùng xoá thứ họ sẽ tiếc. -->
@@ -96,45 +106,60 @@
                 <!-- Quét sâu phải là một NÚT. Trước đó lối vào duy nhất là bấm vào
                    chữ tên mục — không có gì báo hiệu nó bấm được, nên coi như không
                    tồn tại với người chưa biết. -->
-                <button class="iconbtn" :title="t('disk.tree.open')" @click="emit('open', x.path)">
+                <Button
+                  :title="t('disk.tree.open')"
+                  variant="outline"
+                  size="iconMd"
+                  @click="emit('open', x.path)"
+                >
                   <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                </button>
+                </Button>
                 <!-- Hiện trong Finder + Sao chép đường dẫn: hai việc người dùng
                      làm ngay sau khi thấy một mục to, trước cả khi quyết định xoá.
                      Cũng có trong menu chuột phải (dùng chung với tab Files của
                      Sessions), nhưng menu ẩn thì không ai đoán ra nó có. -->
-                <button
-                  class="iconbtn"
+                <Button
                   :title="t('disk.reveal.action')"
+                  variant="outline"
+                  size="iconMd"
                   @click="emit('reveal', x.path)"
                 >
                   <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                </button>
-                <button
-                  class="iconbtn"
+                </Button>
+                <Button
                   :title="t('disk.copyPath.action')"
+                  variant="outline"
+                  size="iconMd"
                   @click="emit('copy-path', x.path)"
                 >
                   <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                </button>
+                </Button>
                 <!-- Cùng luật với drawer: đọc phủ cả đĩa, XOÁ chỉ trong nhà. Một
                      project nằm ở ổ ngoài vẫn sinh ra dòng `node_modules` ở đây,
                      và nút xoá của nó sẽ luôn bị Electron main từ chối. -->
-                <button
+                <Button
                   v-if="canTrash(x.path)"
-                  class="iconbtn mondisktrash"
                   :title="t('disk.trash.action')"
+                  class="mondisktrash"
+                  variant="outline"
+                  size="iconMd"
                   @click="emit('trash', x.path, x.label, sizes[x.path] ?? undefined)"
                 >
                   <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                </button>
-                <!-- Mang luôn class `iconbtn` để LẤY ĐÚNG khổ nút: `.iconbtn` là
-                     32px ở theme awog nhưng 30px ở theme cute, nên ghim con số ở
-                     đây là lệch hàng ở một trong hai theme. Nó là `<span>` nên
-                     không bấm được; viền/bóng bị khử bên dưới. -->
-                <span v-else class="iconbtn mondisknotrash" :title="t('disk.trash.outsideHome')">
+                </Button>
+                <!-- Giữ chỗ đúng khổ nút nhờ `size="iconMd"` — nút thật và
+                     placeholder cùng một ladder --ctrl-h-sm ở mọi theme. Render
+                     là `<span>` nên không bấm được. -->
+                <Button
+                  v-else
+                  :title="t('disk.trash.outsideHome')"
+                  class="mondisknotrash"
+                  as="span"
+                  variant="outline"
+                  size="iconMd"
+                >
                   <Icon name="info" style="width: var(--icon-sm); height: var(--icon-sm)" />
-                </span>
+                </Button>
               </div>
             </td>
           </tr>
@@ -162,10 +187,14 @@
             <div class="mondiskcleancmd" :title="a.command">{{ a.command }}</div>
             <div class="mondiskhint">{{ a.hint }}</div>
           </div>
-          <button class="btn" :disabled="cleanupRunning !== ''" @click="emit('cleanup', a.id)">
+          <Button
+            :disabled="cleanupRunning !== ''"
+            variant="outline"
+            @click="emit('cleanup', a.id)"
+          >
             <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ cleanupRunning === a.id ? t('disk.cleanup.running') : t('disk.cleanup.run') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -176,6 +205,7 @@
 import { computed } from 'vue'
 import { formatMem, levelColor, type UsageLevel } from '~/composables/useMonitorManager'
 import type { CleanupAction, DiskVolume, JunkTarget, SizeState } from '~/composables/useDiskManager'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   volumes: DiskVolume[]

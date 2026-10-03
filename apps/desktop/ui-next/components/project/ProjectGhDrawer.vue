@@ -17,8 +17,7 @@
         <span style="flex: 1" />
         <!-- Language picker — collapses the orig/vi/en/ja tabs into one dropdown so
              the header toolbar stays roomy on a narrow drawer. -->
-        <button
-          class="iconbtn"
+        <Button
           type="button"
           :title="t('projects.drawer.language')"
           :aria-label="t('projects.drawer.language')"
@@ -34,44 +33,47 @@
               ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
               : {}),
           }"
+          variant="outline"
+          size="iconMd"
           @click.stop="toggleLangMenu"
         >
           <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('projects.drawer.viewLang.' + viewLang) }}</span>
           <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           :title="isFull ? t('projects.drawer.exitFullscreen') : t('projects.drawer.fullscreen')"
           :aria-label="
             isFull ? t('projects.drawer.exitFullscreen') : t('projects.drawer.fullscreen')
           "
           style="width: 28px; height: 28px"
+          variant="outline"
+          size="iconMd"
           @click="isFull = !isFull"
         >
           <Icon
             :name="isFull ? 'minimize' : 'maximize'"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
+        </Button>
         <!-- Always available, thread or not: a detail that failed to arrive is
              exactly the one the user wants to retry. -->
-        <button
-          class="iconbtn"
+        <Button
           type="button"
           :title="t('projects.drawer.refresh')"
           :aria-label="t('projects.drawer.refresh')"
           :disabled="loading"
           style="width: 28px; height: 28px"
+          variant="outline"
+          size="iconMd"
           @click="emit('refresh')"
         >
           <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        </Button>
         <!-- PR only: hand the review off to a session in this project. The prompt
              comes from Settings → Git (PR review prompt). -->
-        <button
+        <Button
           v-if="kind === 'pr' && thread"
-          class="iconbtn"
           type="button"
           :title="t('projects.drawer.startReview')"
           :aria-label="t('projects.drawer.startReview')"
@@ -89,26 +91,29 @@
             color: 'var(--accent)',
             borderColor: 'var(--accentBorder)',
           }"
+          variant="outline"
+          size="iconMd"
           @click="emit('start-review')"
         >
           <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('projects.drawer.startReviewShort') }}</span>
-        </button>
-        <a
+        </Button>
+        <Button
           v-if="thread?.url"
-          class="iconbtn"
           :href="thread.url"
           target="_blank"
           rel="noopener"
           :title="t('projects.drawer.openOnGithub')"
           :aria-label="t('projects.drawer.openOnGithub')"
           style="width: 28px; height: 28px"
+          as="a"
+          variant="outline"
+          size="iconMd"
         >
           <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </a>
-        <button
+        </Button>
+        <Button
           v-if="thread?.url"
-          class="iconbtn"
           type="button"
           :title="linkCopied ? t('projects.drawer.linkCopied') : t('projects.drawer.copyLink')"
           :aria-label="t('projects.drawer.copyLink')"
@@ -117,21 +122,24 @@
             height: '28px',
             ...(linkCopied ? { color: 'var(--green)' } : {}),
           }"
+          variant="outline"
+          size="iconMd"
           @click="copyLink"
         >
           <Icon
             :name="linkCopied ? 'check' : 'copy'"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           :title="t('projects.drawer.close')"
           style="width: 28px; height: 28px"
+          variant="outline"
+          size="iconMd"
           @click="emit('close')"
         >
           <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        </Button>
       </div>
 
       <!-- GitHub-style tab bar (underline indicator + icon + count badge). Issue →
@@ -387,7 +395,7 @@
     </div>
 
     <!-- View-language dropdown (orig / vi / en / ja), anchored under the trigger. -->
-    <ContextMenu
+    <AppContextMenu
       :open="langMenu.pos.value !== null"
       :position="langMenu.pos.value ?? { x: 0, y: 0 }"
       :items="langMenuItems"
@@ -396,7 +404,7 @@
     />
 
     <!-- PR file context menu (copy path / name). -->
-    <ContextMenu
+    <AppContextMenu
       :open="ghMenu.pos.value !== null"
       :position="ghMenu.pos.value ?? { x: 0, y: 0 }"
       :items="ghMenuItems"
@@ -441,6 +449,7 @@ import type {
 } from '~/composables/useProjectGh'
 import type { TranslateLang } from '~/composables/useSelectionTranslate'
 import { ghLabelStyle } from '~/utils/gh-label'
+import Button from '~/components/ui/button/Button.vue'
 
 const { isDark } = useTheme()
 
@@ -743,7 +752,7 @@ function relativeWhen(iso: string): string {
   flex-wrap: wrap;
   row-gap: 6px;
 }
-.ghdwhd > .iconbtn {
+.ghdwhd > button {
   flex: 0 0 auto;
 }
 

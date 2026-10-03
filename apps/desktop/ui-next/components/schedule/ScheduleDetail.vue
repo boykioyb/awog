@@ -15,19 +15,33 @@
         :title="schedule.enabled ? t('schedules.disable') : t('schedules.enable')"
         @click="emit('toggle')"
       />
-      <button class="iconbtn scd-act" :title="t('schedules.runNow')" @click="emit('run')">
+      <Button
+        :title="t('schedules.runNow')"
+        class="scd-act"
+        variant="outline"
+        size="iconMd"
+        @click="emit('run')"
+      >
         <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button class="iconbtn scd-act" :title="t('schedules.edit')" @click="emit('edit')">
+      </Button>
+      <Button
+        :title="t('schedules.edit')"
+        class="scd-act"
+        variant="outline"
+        size="iconMd"
+        @click="emit('edit')"
+      >
         <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="iconbtn scd-act scd-danger"
+      </Button>
+      <Button
         :title="t('schedules.delete')"
+        class="scd-act scd-danger"
+        variant="outline"
+        size="iconMd"
         @click="emit('delete')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <div class="dscroll">
@@ -63,14 +77,15 @@
         <span class="tag scd-run-tg">{{ t('schedules.trigger.' + run.trigger) }}</span>
         <span v-if="run.catchUp" class="tag acc">{{ t('schedules.catchUp') }}</span>
         <span style="flex: 1" />
-        <button
+        <Button
           v-if="run.sessionId"
-          class="btn sm"
           :title="t('schedules.openSession.hint')"
+          variant="outline"
+          size="sm"
           @click="emit('open-session', run.sessionId)"
         >
           {{ t('schedules.openSession') }}
-        </button>
+        </Button>
         <span v-if="run.message" class="scd-run-msg" :title="run.message">{{ run.message }}</span>
       </div>
     </div>
@@ -84,6 +99,7 @@ import { computed } from 'vue'
 import type { Schedule, ScheduleRunStatus } from '~/stores/schedules'
 import { useProjects } from '~/composables/useProjects'
 import { describeTrigger, formatWhen } from './schedule-format'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ schedule: Schedule }>()
 const emit = defineEmits<{

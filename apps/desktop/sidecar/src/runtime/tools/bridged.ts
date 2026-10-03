@@ -23,6 +23,7 @@ import { BROWSER_MCP_SERVER, BROWSER_TOOL_NAME } from './browser-tool.js'
 import { DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES } from './dev-server-tool.js'
 import { CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES } from './code-index-tool.js'
 import { SESSION_MESSAGING_MCP_SERVER, SESSION_MESSAGING_TOOL_NAMES } from './session-tools.js'
+import { TEAM_MCP_SERVER, TEAM_TOOL_NAMES } from './board-tools.js'
 import { INFRA_MCP_SERVER, INFRA_TOOL_NAMES } from './infra-tools.js'
 import { INFRA_APP_TOOL_NAMES } from './infra-app-tools.js'
 import { LOGTIME_MCP_SERVER, LOGTIME_TOOL_NAMES } from './logtime-tools.js'
@@ -40,6 +41,11 @@ const BRIDGED_SERVERS: readonly (readonly [string, readonly string[]])[] = [
   [DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES],
   [CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES],
   [SESSION_MESSAGING_MCP_SERVER, SESSION_MESSAGING_TOOL_NAMES],
+  // Tool ê-kíp (board team_item_* + channel team_say/team_note/channel_read +
+  // member_diff) — một server vì chúng chia sẻ đúng một biên tin cậy "trong
+  // nhóm hay không", nhưng RIÊNG với awogsessions: tắt nhắn-liên-phiên không
+  // được phép vô tình khoá board/channel của ê-kíp.
+  [TEAM_MCP_SERVER, TEAM_TOOL_NAMES],
   // MỘT entry cho server hạ tầng, gộp cả hai họ: `infra-tools` (chạy lệnh trên tài
   // khoản AWS) và `infra-app-tools` (chạm tài nguyên phía AWOG của các màn đó). Hai
   // entry cùng khoá server sẽ tuỳ tầng tiêu thụ mà cái sau đè cái trước.

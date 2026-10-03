@@ -17,12 +17,12 @@
           </span>
           <span class="iksec-sub">{{ pathsLabel }}</span>
           <div class="ikm-actions">
-            <button
+            <Button
               type="button"
-              class="btn"
               :disabled="contextsLoading"
               :aria-busy="contextsLoading"
               :title="t('infra.kube.refresh')"
+              variant="outline"
               @click="kube.loadContexts(true)"
             >
               <Icon
@@ -30,15 +30,15 @@
                 :class="{ ikspin: contextsLoading }"
                 style="width: var(--icon-sm); height: var(--icon-sm)"
               />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              class="btn"
               :title="t('common.close')"
+              variant="outline"
               @click="kube.closeClusters()"
             >
               <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -80,14 +80,14 @@
                 <td class="ct-act">
                   <!-- Khoá khi bảng chính đang nạp: chọn cluster giữa chừng là
                        cùng cảnh race với ô chọn trên thanh ngữ cảnh. -->
-                  <button
+                  <Button
                     type="button"
-                    class="btn"
                     :disabled="ctx.name === pinnedCluster || workloadBusy"
+                    variant="outline"
                     @click="kube.setCluster(ctx.name)"
                   >
                     {{ t('infra.kube.use') }}
-                  </button>
+                  </Button>
                 </td>
               </tr>
             </tbody>
@@ -106,11 +106,11 @@
               </span>
               <!-- Khoá khi đang ghi kubeconfig: gập khối giữa chừng không huỷ được
                    lệnh, chỉ làm người dùng mất dấu nó. -->
-              <button
+              <Button
                 type="button"
-                class="btn"
                 :disabled="adding"
                 :aria-expanded="addOpen"
+                variant="outline"
                 @click="addOpen ? kube.closeAdd() : kube.openAdd()"
               >
                 <Icon
@@ -118,7 +118,7 @@
                   style="width: var(--icon-sm); height: var(--icon-sm)"
                 />
                 {{ addOpen ? t('infra.kube.add.collapse') : t('infra.kube.add.open') }}
-              </button>
+              </Button>
             </div>
 
             <template v-if="addOpen">
@@ -145,11 +145,11 @@
                     @update:model-value="kube.setRegion"
                   />
                 </div>
-                <button
+                <Button
                   type="button"
-                  class="btn"
                   :disabled="clustersLoading || adding"
                   :aria-busy="clustersLoading"
+                  variant="outline"
                   @click="kube.findClusters()"
                 >
                   <Icon
@@ -158,7 +158,7 @@
                     style="width: var(--icon-sm); height: var(--icon-sm)"
                   />
                   {{ clustersLoading ? t('infra.kube.add.finding') : t('infra.kube.add.find') }}
-                </button>
+                </Button>
               </div>
 
               <p v-if="clustersError" class="ierr">{{ clustersError }}</p>
@@ -166,11 +166,11 @@
               <div v-if="clusters.length" class="iklist">
                 <div v-for="name in clusters" :key="name" class="ikrow">
                   <span class="ikrow-name">{{ name }}</span>
-                  <button
+                  <Button
                     type="button"
-                    class="btn pri"
                     :disabled="adding"
                     :aria-busy="adding"
+                    variant="default"
                     @click="kube.addCluster(name)"
                   >
                     <Icon
@@ -179,7 +179,7 @@
                       style="width: var(--icon-sm); height: var(--icon-sm)"
                     />
                     {{ adding ? t('infra.kube.add.adding') : t('infra.kube.add.run') }}
-                  </button>
+                  </Button>
                 </div>
               </div>
               <p v-else-if="!clustersLoading && !clustersError" class="ihint">
@@ -193,9 +193,13 @@
                 <p class="iwarn">{{ addBlocked.reason }}</p>
                 <div class="ikcmd">
                   <code>{{ addBlocked.command }}</code>
-                  <button type="button" class="btn" @click="kube.copyCommand(addBlocked.command)">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    @click="kube.copyCommand(addBlocked.command)"
+                  >
                     {{ t('infra.kube.blocked.copy') }}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -213,6 +217,7 @@
 // composables/useInfraKube.ts). Ở đây chỉ bind và dịch.
 import type { InfraKubeController } from '~/composables/useInfraKube'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ kube: InfraKubeController }>()
 // Bóc ref ra binding top-level để template tự unwrap (ref lồng trong object không

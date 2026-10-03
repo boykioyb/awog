@@ -10,10 +10,10 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
-import { completePi } from '../runtime/complete.js'
+import { completePi, isModelRefusal } from '../runtime/complete.js'
+import { extractJson } from '../util/json-extract.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const AvailableAgentSchema = z.object({
   id: z.string().min(1).max(120),
@@ -36,7 +36,7 @@ const AvailableSkillSchema = z.object({
 })
 
 const Params = z.object({
-  prompt: z.string().min(1).max(8_000),
+  prompt: z.string().min(1).max(32_000),
   accountId: z.string().min(1).max(120).optional(),
   modelId: ModelSchema.optional(),
   availableAgents: z.array(AvailableAgentSchema).max(200).default([]),
@@ -121,13 +121,6 @@ Rules:
 - Output the raw JSON object only — no code fence.`
 }
 
-function extractJson(raw: string): string {
-  const trimmed = raw.trim()
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-  if (fenced && fenced[1]) return fenced[1].trim()
-  return trimmed
-}
-
 register('workflows.generate', async (raw) => {
   const params = Params.parse(raw)
 
@@ -139,12 +132,30 @@ register('workflows.generate', async (raw) => {
   })
 
   // Pure-text generation through the Pi runtime (no tools).
-  const collected = await completePi({
-    accountId: params.accountId,
-    modelId,
-    systemPrompt: buildSystemPrompt(params.availableAgents, params.availableSkills),
-    prompt: params.prompt,
-  })
+  let collected: string
+  try {
+    collected = await completePi({
+      accountId: params.accountId,
+      modelId,
+      systemPrompt: buildSystemPrompt(params.availableAgents, params.availableSkills),
+      prompt: params.prompt,
+    })
+  } catch (err) {
+    // Cùng nhánh agents.generate: provider có thể chặn request vì danh sách
+    // skill của user chứa id "nhạy cảm" (pentest/RE…). Retry một lần không
+    // kèm skills — prompt tự in "(no skills available)" nên nodes trả
+    // skillId rỗng thay vì fail cả lượt dựng DAG.
+    if (!isModelRefusal(err) || params.availableSkills.length === 0) throw err
+    log.warn('workflows.generate refused with skills list — retrying without', {
+      skills: params.availableSkills.length,
+    })
+    collected = await completePi({
+      accountId: params.accountId,
+      modelId,
+      systemPrompt: buildSystemPrompt(params.availableAgents, []),
+      prompt: params.prompt,
+    })
+  }
 
   if (!collected.trim()) throw new RpcError(-32021, 'Empty response from model')
 
@@ -160,6 +171,23 @@ register('workflows.generate', async (raw) => {
   if (!result.success) {
     log.warn('workflows.generate schema mismatch', { issues: result.error.issues })
     throw new RpcError(-32021, `Model output failed schema: ${result.error.issues[0]?.message}`)
+  }
+
+  // Chối skillId không có trong roster đã gửi (model vẫn có thể bịa — đặc biệt
+  // ở nhánh retry không thấy danh sách) để node không trỏ tới skill "ma".
+  if (params.availableSkills.length) {
+    const valid = new Set(params.availableSkills.map((s) => s.id))
+    for (const node of result.data.nodes) {
+      if (node.skillId && !valid.has(node.skillId)) {
+        log.warn('workflows.generate dropped unknown skillId', {
+          node: node.id,
+          skillId: node.skillId,
+        })
+        node.skillId = ''
+      }
+    }
+  } else {
+    for (const node of result.data.nodes) node.skillId = ''
   }
 
   return { workflow: result.data }

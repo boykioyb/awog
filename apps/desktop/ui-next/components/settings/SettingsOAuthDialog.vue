@@ -13,11 +13,12 @@
           <span class="oabadge on">1</span>
           <div class="oatext">{{ t('settingsModels.oauth.step1') }}</div>
         </div>
-        <button
-          class="btn pri oaopen"
+        <Button
           type="button"
           :class="{ done: phase === 'waiting-code' }"
           :disabled="phase === 'opening' || phase === 'waiting-code' || phase === 'confirming'"
+          class="oaopen"
+          variant="default"
           @click="onOpenLogin"
         >
           <Icon
@@ -25,7 +26,7 @@
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
           <span>{{ openButtonLabel }}</span>
-        </button>
+        </Button>
       </section>
 
       <!-- Step 2 -->
@@ -56,12 +57,12 @@
           spellcheck="false"
           :disabled="phase === 'confirming'"
         />
-        <input
+        <Input
           v-model="label"
           type="text"
-          class="keyinp"
           :placeholder="t('settingsModels.oauth.labelPlaceholder')"
           :disabled="phase === 'confirming'"
+          class="flex-1"
         />
       </section>
 
@@ -69,12 +70,18 @@
     </div>
 
     <template #footer>
-      <button class="btn sm" type="button" :disabled="phase === 'confirming'" @click="onCancel">
+      <Button
+        type="button"
+        :disabled="phase === 'confirming'"
+        variant="outline"
+        size="sm"
+        @click="onCancel"
+      >
         {{ t('settingsModels.form.cancel') }}
-      </button>
-      <button class="btn sm pri" type="button" :disabled="!canConfirm" @click="onConfirm">
+      </Button>
+      <Button type="button" :disabled="!canConfirm" variant="default" size="sm" @click="onConfirm">
         {{ t('settingsModels.oauth.confirm') }}
-      </button>
+      </Button>
     </template>
   </SettingsModelDialog>
 </template>
@@ -83,6 +90,8 @@
 import SettingsModelDialog from '~/components/settings/SettingsModelDialog.vue'
 import { useSettingsStore, type ProviderAccount } from '~/stores/settings'
 import { SidecarError, SidecarUnavailableError, useSidecar } from '~/composables/useSidecar'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Anthropic OAuth (subscription) connect dialog. Flow: startOAuth →
 // openExternal(authUrl) → user pastes one-time code → completeOAuth. The user may

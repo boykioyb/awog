@@ -1,7 +1,7 @@
 <template>
   <div class="gcard" :class="{ gate: !answered && !cancelled }">
     <div class="gh">
-      <Icon name="alert" />
+      <Icon name="alert" class="size-4 shrink-0" />
       {{ items.length > 1 ? t('sessions.gate.questionMulti') : t('sessions.gate.question') }}
     </div>
     <div v-if="block.title" class="qtitle">{{ block.title }}</div>
@@ -12,7 +12,7 @@
       <div v-for="(it, qi) in items" :key="qi" class="qitem">
         <div class="qp">{{ it.prompt }}</div>
         <div v-if="it.answer" class="resolved">
-          <Icon name="check" />
+          <Icon name="check" class="size-4 shrink-0" />
           {{ t('sessions.gate.chose', { answer: it.answer }) }}
         </div>
         <div v-else class="resolved den">{{ t('sessions.gate.noAnswer') }}</div>
@@ -43,11 +43,7 @@
             :class="{ on: qi === active, done: isAnswered(f) }"
             @click="active = qi"
           >
-            <Icon
-              v-if="isAnswered(f)"
-              name="check"
-              style="width: var(--icon-xs); height: var(--icon-xs)"
-            />
+            <Icon v-if="isAnswered(f)" name="check" class="size-3 shrink-0" />
             {{ f.item.header || t('sessions.gate.qtab', { n: qi + 1 }) }}
           </button>
         </div>
@@ -59,9 +55,9 @@
 
             <!-- text: một ô nhập tự do, không có lựa chọn nào -->
             <div v-if="f.item.kind === 'text'" class="qopts">
-              <textarea
+              <Textarea
                 v-model="f.text"
-                class="qtext"
+                class="min-h-20 resize-y"
                 :placeholder="f.item.placeholder || t('sessions.gate.textPlaceholder')"
                 :maxlength="TEXT_MAX"
                 @keydown.enter.meta="onEnter"
@@ -103,11 +99,7 @@
                   @click="toggle(f, o.label)"
                 >
                   <span class="qcbox">
-                    <Icon
-                      v-if="f.sel.includes(o.label)"
-                      name="check"
-                      style="width: var(--icon-xs); height: var(--icon-xs)"
-                    />
+                    <Icon v-if="f.sel.includes(o.label)" name="check" class="size-3" />
                   </span>
                   <span class="qchktext">
                     {{ o.label }}
@@ -128,9 +120,8 @@
                 </button>
               </template>
               <!-- "Other": free-text answer, luôn có (như Claude Code). -->
-              <input
+              <Input
                 v-model="f.other"
-                class="qother"
                 :placeholder="t('sessions.gate.otherPlaceholder')"
                 @keydown.enter="onEnter"
               />
@@ -142,9 +133,8 @@
            ngoài mọi lựa chọn, model đọc được nguyên văn. -->
         <div class="qresp">
           <label class="qresplbl">{{ t('sessions.gate.responseLabel') }}</label>
-          <input
+          <Input
             v-model="response"
-            class="qother"
             :placeholder="t('sessions.gate.responsePlaceholder')"
             :maxlength="TEXT_MAX"
           />
@@ -153,17 +143,21 @@
 
       <div class="cact qact">
         <!-- Bỏ lượt hỏi: không trả lời câu nào, nói thẳng cho model là "bạn quyết". -->
-        <button class="qghost" @click="onDecide">{{ t('sessions.gate.decideForMe') }}</button>
+        <Button variant="ghost" size="sm" class="qghost" type="button" @click="onDecide">
+          {{ t('sessions.gate.decideForMe') }}
+        </Button>
         <span class="qspacer" />
         <!-- Xin thêm một vòng câu hỏi: gửi kèm phần đã trả lời (nếu có). -->
-        <button class="btn sm" @click="onFollowUp">{{ t('sessions.gate.askFollowUp') }}</button>
-        <button v-if="!isLast" class="btn pri sm" :disabled="!activeAnswered" @click="active++">
+        <Button variant="outline" size="sm" @click="onFollowUp">
+          {{ t('sessions.gate.askFollowUp') }}
+        </Button>
+        <Button v-if="!isLast" size="sm" :disabled="!activeAnswered" @click="active++">
           {{ t('sessions.gate.next') }}
-        </button>
-        <button v-else class="btn pri sm" :disabled="!canSubmit" @click="onSubmit">
+        </Button>
+        <Button v-else size="sm" :disabled="!canSubmit" @click="onSubmit">
           <Icon name="check" />
           {{ t('sessions.gate.submit') }}
-        </button>
+        </Button>
       </div>
     </template>
   </div>
@@ -296,35 +290,166 @@ const onDecide = (): void => {
 </script>
 
 <style scoped>
+/* Question card — card chrome on canonical tokens. The class names stay the
+   documented hooks: `.gcard`/`.gate`/`.qopt`/`.qchk`/`.qtab` are theme-cute.css
+   restyle targets AND the drawer's `:deep()` selectors look for them; the rules
+   below re-express them on shadcn var names (cute's attribute-scoped rules still
+   win when that theme family is active). Font sizes ride the fs/lh token scale
+   so Appearance font-size scaling applies here too. */
+.gcard {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: var(--shadow-sm);
+}
+.gcard.gate {
+  border-color: rgb(from var(--warning) r g b / 45%);
+  background: rgb(from var(--warning) r g b / 6%);
+}
+.gcard.gate .gh {
+  color: var(--warning);
+}
+.gh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  font-weight: 500;
+  color: var(--foreground);
+  margin-bottom: 6px;
+}
+/* Resolved/cancelled one-liner (session question record). */
+.resolved {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  color: var(--success);
+}
+.resolved.den {
+  color: var(--destructive);
+}
 /* Tiêu đề của cả lời gọi (`title`), trên mọi câu hỏi. */
 .qtitle {
   margin: 2px 0 10px;
   font-size: var(--fs-lg);
   line-height: var(--lh-lg);
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
+}
+/* Câu hỏi — prose line. */
+.qp {
+  font-size: var(--fs-md);
+  line-height: var(--lh-prose);
+  margin-bottom: 10px;
+  color: var(--foreground);
 }
 /* Dòng gợi ý dưới câu hỏi (`description`). */
 .qhint {
-  margin: -4px 0 8px;
+  margin: -4px 0 10px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
-/* Selected single-select option mirrors the multi-select .qchk.on accent. */
+.qitem + .qitem {
+  margin-top: 14px;
+}
+.qopts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Single-choice option — outline row on the card surface; .on = primary edge +
+   wash (proto selected-row idiom). */
+.qopt {
+  text-align: left;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  padding: 9px 12px;
+  border: 1px solid var(--input);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.qopt:hover {
+  border-color: var(--ring);
+  background: var(--accent-wash);
+}
 .qopt.on {
-  border-color: var(--accent);
+  border-color: var(--primary);
+  background: rgb(from var(--primary) r g b / 8%);
+}
+.qopt b {
+  display: block;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 400;
+  color: var(--muted-foreground);
+  margin-top: 2px;
+}
+/* Multi-choice row — checkbox box + label; .on mirrors .qopt.on. */
+.qchk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  padding: 9px 12px;
+  border: 1px solid var(--input);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+.qchk:hover {
+  border-color: var(--ring);
+}
+.qchk.on {
+  border-color: var(--primary);
+  background: rgb(from var(--primary) r g b / 8%);
+}
+/* Checkbox — shadcn checkbox look: input edge; checked = solid primary + white tick. */
+.qchk .qcbox {
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-xs);
+  border: 1px solid var(--input);
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: transparent;
+}
+.qchk.on .qcbox {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .qchktext {
   display: block;
 }
 .qchktext b {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 400;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .qchk.has-desc {
   align-items: flex-start;
@@ -332,33 +457,13 @@ const onDecide = (): void => {
 .qchk.has-desc .qcbox {
   margin-top: 2px;
 }
-.qitem + .qitem {
-  margin-top: 14px;
-}
-/* Câu hỏi 'text': ô nhiều dòng + bộ đếm ký tự (cap là của AWOG, schema không có). */
-.qtext {
-  width: 100%;
-  min-height: 5rem;
-  resize: vertical;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput, transparent);
-  color: var(--text);
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  font-family: inherit;
-}
-.qtext:focus {
-  outline: none;
-  border-color: var(--accent);
-}
+/* Câu hỏi 'text': bộ đếm ký tự (cap là của AWOG, schema không có). */
 .qcount {
-  margin-top: 4px;
+  margin-top: 2px;
   text-align: right;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 /* Câu hỏi 'number': thanh trượt + số hiện tại. */
@@ -370,7 +475,7 @@ const onDecide = (): void => {
 .qslider {
   flex: 1;
   min-width: 0;
-  accent-color: var(--accent);
+  accent-color: var(--primary);
 }
 .qnumval {
   min-width: 4.5rem;
@@ -378,7 +483,7 @@ const onDecide = (): void => {
   font-size: var(--fs-lg);
   line-height: var(--lh-lg);
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
 }
 .qnumval b {
@@ -386,7 +491,7 @@ const onDecide = (): void => {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 400;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .qnumends {
   display: flex;
@@ -394,7 +499,7 @@ const onDecide = (): void => {
   margin-top: 2px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 /* Ô ghi chú tự do cho cả lời gọi (`response`). */
@@ -403,10 +508,10 @@ const onDecide = (): void => {
 }
 .qresplbl {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 6px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 /* Hàng nút: "bạn quyết đi" đứng riêng bên trái (lối thoát, không phải hành động
    chính), hai nút kết thúc dồn về phải. */
@@ -414,65 +519,68 @@ const onDecide = (): void => {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 4px;
 }
 .qspacer {
   flex: 1;
 }
 .qghost {
-  padding: 5px 2px;
-  border: none;
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  cursor: pointer;
+  color: var(--muted-foreground);
 }
 .qghost:hover {
-  color: var(--text);
-  text-decoration: underline;
+  color: var(--foreground);
 }
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-/* Tab strip — one tab per question. */
+/* Tab strip — shadcn Tabs idiom: muted track + raised active item. */
 .qtabs {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 11px;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 12px;
+  border-radius: var(--r-btn);
+  background: var(--muted);
 }
 .qtab {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
-  padding: 6px 11px;
-  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .qtab:hover {
-  border-color: var(--accent);
-  color: var(--text);
+  color: var(--foreground);
 }
 .qtab.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--shadow-sm);
 }
 .qtab.done :deep(.icn) {
-  color: var(--accent);
+  color: var(--primary);
 }
 /* Chữ người dùng viết thêm, hiện lại ở bản ghi read-only. */
 .qwrote {
   margin-top: 10px;
   font-size: var(--fs-sm);
   line-height: var(--lh-prose);
-  color: var(--textDim);
+  color: var(--muted-foreground);
+}
+@media (prefers-reduced-motion: reduce) {
+  .qopt,
+  .qchk,
+  .qtab {
+    transition: none;
+  }
 }
 </style>

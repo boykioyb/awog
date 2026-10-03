@@ -12,6 +12,8 @@
   "sessions.composer.steerDone": "Đã chèn vào lượt đang chạy",
   "sessions.composer.queue": "Xếp hàng",
   "sessions.composer.queueHint": "Gửi như một lượt mới sau lượt này",
+  "sessions.composer.attachTitle": "Đính kèm",
+  "sessions.composer.insert": "Chèn",
   "sessions.composer.slashCommands": "Lệnh",
   "sessions.composer.slashHint": "có sẵn · lệnh · skill",
   "sessions.composer.mentionTitle": "Nhắc đến",

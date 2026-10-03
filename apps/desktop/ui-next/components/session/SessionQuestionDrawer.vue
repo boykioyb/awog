@@ -145,10 +145,12 @@ const onDismiss = (): void => {
   margin: 0 var(--padX) 8px;
   /* Đây là lề TRONG duy nhất của cả thẻ: thân câu hỏi bỏ khung của nó (`.qdrw-body`
      bên dưới) nên không còn lớp đệm thứ hai nào nữa. 12px là đệm của một cái chip,
-     không phải của một tấm thẻ bo `--r-card` — chữ dính mép. */
+     không phải của một tấm thẻ bo xl — chữ dính mép. */
   padding: 12px 15px 14px;
-  background: var(--bgCard, var(--bg));
-  border: 1px solid var(--accentBorder, var(--border));
+  /* Bề mặt nổi của ngăn kéo: `--card` (alias --bgEl) + viền `--ring` (alias
+     --accentBorder) — cùng ngôn ngữ popover, khác biệt bằng bóng đổ phía trên. */
+  background: var(--card);
+  border: 1px solid var(--ring, var(--border));
   border-radius: var(--r-card);
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
   /* Trồi lên TỪ ô soạn: <Collapse> lo chiều cao, dòng này lo cảm giác. Gốc biến đổi
@@ -193,39 +195,43 @@ const onDismiss = (): void => {
 }
 .qdrw-chev {
   flex: none;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   transition: transform 0.18s ease;
 }
 .qdrw-chev.up {
   transform: rotate(-180deg);
 }
 .qdrw-head:hover .qdrw-chev {
-  color: var(--text);
+  color: var(--foreground);
 }
 .qdrw-title {
   flex: none;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .qdrw-hint {
   flex: 1;
   min-width: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .qdrw-x {
   flex: none;
-  color: var(--textDim);
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
 }
 .qdrw-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 /* <Collapse> của phần thân: nó vừa phải co theo cột, vừa phải gập được. */
 .qdrw-fold {

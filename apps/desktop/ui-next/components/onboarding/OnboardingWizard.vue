@@ -34,10 +34,10 @@
               />
             </div>
             <div class="ob-nav">
-              <button v-if="stepIndex > 0" class="btn" @click="back">
+              <Button v-if="stepIndex > 0" variant="outline" @click="back">
                 {{ t('onboarding.back') }}
-              </button>
-              <button v-if="!isLast" class="btn pri" @click="advance">{{ nextLabel }}</button>
+              </Button>
+              <Button v-if="!isLast" variant="default" @click="advance">{{ nextLabel }}</Button>
             </div>
           </footer>
         </div>
@@ -53,6 +53,7 @@ import StepAccount from '~/components/onboarding/steps/StepAccount.vue'
 import StepAppearance from '~/components/onboarding/steps/StepAppearance.vue'
 import StepProject from '~/components/onboarding/steps/StepProject.vue'
 import StepFinish from '~/components/onboarding/steps/StepFinish.vue'
+import Button from '~/components/ui/button/Button.vue'
 
 // First-run setup wizard host (§9 global, mounted once in the layout). Owns the
 // chrome (header / progress dots / back-next); each step renders its own content

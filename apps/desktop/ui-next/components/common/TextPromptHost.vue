@@ -3,19 +3,18 @@
     <div v-if="state.open" class="tph-ovl" @click.self="settle(null)">
       <div class="tph-card" role="dialog" aria-modal="true">
         <div class="tph-title">{{ state.title }}</div>
-        <input
+        <Input
           ref="input"
           v-model="draft"
-          class="tph-input"
           :placeholder="state.placeholder"
           @keydown.enter.prevent="submit"
           @keydown.esc.prevent="settle(null)"
         />
         <div class="tph-foot">
-          <button class="btn" @click="settle(null)">{{ t('common.cancel') }}</button>
-          <button class="btn pri" :disabled="!draft.trim()" @click="submit">
+          <Button variant="outline" @click="settle(null)">{{ t('common.cancel') }}</Button>
+          <Button :disabled="!draft.trim()" variant="default" @click="submit">
             {{ state.submitLabel || t('common.confirm') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -29,6 +28,8 @@
 // pattern. Holds a local `draft` synced from the singleton on open, autofocuses
 // + selects the field, and settles the pending promise on submit / cancel / Esc.
 import { nextTick, ref, useTemplateRef, watch } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { state, settle } = useTextPrompt()
 const { t } = useI18n()
@@ -76,29 +77,30 @@ watch(
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-lg);
 }
 .tph-title {
   font-size: 1em;
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .tph-input {
   width: 100%;
   padding: 9px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  background: var(--muted);
+  border: 1px solid var(--input);
+  border-radius: var(--r-sm); /* rounded-md */
   outline: none;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 1em;
   font-family: var(--sans);
 }
-.tph-input:focus {
-  border-color: var(--accent);
+.tph-input:focus-visible {
+  border-color: var(--input);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .tph-foot {
   display: flex;

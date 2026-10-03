@@ -115,7 +115,14 @@ export function applyNavigationGuards(win: BrowserWindow): void {
     if (/^https?:\/\//i.test(url)) {
       e.preventDefault()
       void shell.openExternal(url)
+      return
     }
+    // Deny-by-default: mọi điều hướng khung chính không nằm trong hai nhánh cho
+    // phép phía trên (internal same-path, http(s) ra trình duyệt) đều bị chặn —
+    // `file:`, `javascript:`, custom schemes lạ, … trước đây đi xuyên trong
+    // im lặng vì handler chỉ preventDefault ở hai nhánh đó.
+    e.preventDefault()
+    log.warn('blocked navigation to disallowed scheme', { url })
   })
 }
 
@@ -197,6 +204,9 @@ export function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // Dev-tool app — không cần spellcheck của macOS (NSSpellServer còn log
+      // timeout noise mỗi lần gõ textarea; chữ kỹ thuật chỉ bị gạch đỏ nhiễu).
+      spellcheck: false,
     },
   })
 

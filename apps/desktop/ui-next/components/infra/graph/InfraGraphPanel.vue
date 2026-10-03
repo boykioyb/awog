@@ -48,22 +48,24 @@
            (`logGroup` vắng mặt = không suy được); mời người dùng sang màn Logs với
            một tên nhóm đoán bừa sẽ mở ra một màn trống, và cái trống đó đọc như
            "chặng này không ghi gì". -->
-      <button
+      <Button
         v-if="node.logGroup"
-        class="btn sm"
         type="button"
         :title="node.logGroup.value"
+        variant="outline"
+        size="sm"
         @click="emit('open-logs', node.logGroup)"
       >
         <Icon name="table" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('infra.graph.panel.openLogs') }}
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="node.expandable"
-        class="btn sm"
         type="button"
         :disabled="expanding"
         :aria-busy="expanding"
+        variant="outline"
+        size="sm"
         @click="emit('expand', node.id)"
       >
         <Icon
@@ -72,7 +74,7 @@
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
         {{ expanding ? t('infra.graph.node.expanding') : t('infra.graph.node.expand') }}
-      </button>
+      </Button>
       <p v-else class="igp-empty">{{ t('infra.graph.node.noExpand') }}</p>
     </footer>
   </aside>
@@ -82,6 +84,7 @@
 import { computed } from 'vue'
 import { graphServiceIcon } from '~/composables/useInfraGraph'
 import type { InfraGraphNode } from '~/composables/useInfraGraphApi'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   node: InfraGraphNode

@@ -119,10 +119,10 @@ function useSuggestion(prompt: string) {
   place-items: center;
   width: 54px;
   height: 54px;
-  border-radius: var(--r-panel);
-  color: var(--accent);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
+  border-radius: var(--r-card);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
 }
 .swh {
   font-size: 1.5em;
@@ -130,12 +130,12 @@ function useSuggestion(prompt: string) {
      the display step instead. */
   line-height: var(--lh-2xl);
   font-weight: 700;
-  color: var(--text);
+  color: var(--foreground);
   letter-spacing: -0.01em;
 }
 .swsub {
   max-width: 420px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   line-height: var(--lh-prose);
 }
 .swctx {
@@ -149,13 +149,14 @@ function useSuggestion(prompt: string) {
   gap: 5px;
   padding: 3px 9px;
   border-radius: var(--r-sm);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-  background: var(--bgSubtle);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+  background: var(--muted);
   border: 1px solid var(--border);
 }
-/* Starter cards: a 2-col grid; hover/focus tint via color only (no layout shift). */
+/* Starter cards: a 2-col grid; hover = accent-wash trung tính (shadcn ghost-card),
+   focus = ring. */
 .swsug {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -169,20 +170,19 @@ function useSuggestion(prompt: string) {
   gap: 11px;
   padding: 13px 14px;
   text-align: left;
-  border-radius: var(--r-btn);
+  border-radius: var(--radius);
   border: 1px solid var(--border);
-  background: var(--bgEl);
+  background: var(--card);
   cursor: pointer;
   transition:
     border-color 0.14s ease,
     background 0.14s ease;
 }
 .swcard:hover {
-  border-color: var(--accentBorder);
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .swcard:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 .swcardic {
@@ -192,8 +192,8 @@ function useSuggestion(prompt: string) {
   width: 28px;
   height: 28px;
   border-radius: var(--r-sm);
-  color: var(--accent);
-  background: var(--accentDim);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 .swcardtx {
   display: flex;
@@ -203,11 +203,11 @@ function useSuggestion(prompt: string) {
 }
 .swcardl {
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .swcardd {
-  font-size: 0.9231em;
-  color: var(--textDim);
+  font-size: var(--fs-sm);
+  color: var(--muted-foreground);
   line-height: var(--lh-sm);
 }
 .swhints {
@@ -215,8 +215,8 @@ function useSuggestion(prompt: string) {
   flex-wrap: wrap;
   justify-content: center;
   gap: 14px;
-  font-size: 12px;
-  line-height: 18px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   color: var(--textFaint);
 }
 .swhint {
@@ -225,12 +225,12 @@ function useSuggestion(prompt: string) {
   gap: 6px;
 }
 .swhint kbd {
-  font-size: 11px;
-  line-height: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   padding: 3px 6px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
-  background: var(--bgSubtle);
+  color: var(--muted-foreground);
+  background: var(--muted);
   border: 1px solid var(--border);
 }
 @media (max-width: 560px) {

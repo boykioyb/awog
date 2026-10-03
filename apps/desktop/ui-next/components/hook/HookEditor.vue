@@ -35,7 +35,7 @@
 
       <div v-if="!isImported" class="hke-field">
         <label class="hke-label">{{ t('hooks.editor.name') }}</label>
-        <input v-model="draft.name" class="hke-input" :placeholder="t('hooks.editor.namePh')" />
+        <Input v-model="draft.name" :placeholder="t('hooks.editor.namePh')" />
       </div>
 
       <div v-if="!isImported" class="hke-field">
@@ -71,10 +71,15 @@
       <div class="hke-field">
         <div class="hke-cmdhead">
           <label class="hke-label">{{ t('hooks.editor.command') }}</label>
-          <button class="btn sm" :title="t('hooks.editor.editLlm')" @click="emit('edit-config')">
+          <Button
+            :title="t('hooks.editor.editLlm')"
+            variant="outline"
+            size="sm"
+            @click="emit('edit-config')"
+          >
             <Icon name="sparkles" />
             {{ t('hooks.editor.editLlm') }}
-          </button>
+          </Button>
         </div>
         <textarea
           v-model="draft.command"
@@ -92,14 +97,15 @@
           <label class="hke-label mono">
             {{ t('hooks.editor.script', { path: script.path }) }}
           </label>
-          <button
-            class="btn sm"
+          <Button
             :title="t('hooks.editor.scriptEditLlm')"
+            variant="outline"
+            size="sm"
             @click="emit('edit-script')"
           >
             <Icon name="sparkles" />
             {{ t('hooks.editor.scriptEditLlm') }}
-          </button>
+          </Button>
         </div>
         <div class="hke-mono">
           <MonacoViewer
@@ -115,11 +121,11 @@
       <div class="hke-grid">
         <div v-if="!isImported" class="hke-field">
           <label class="hke-label">{{ t('hooks.editor.cwd') }}</label>
-          <input v-model="draft.cwd" class="hke-input mono" placeholder="${workspace}" />
+          <Input v-model="draft.cwd" placeholder="${workspace}" class="mono" />
         </div>
         <div class="hke-field">
           <label class="hke-label">{{ t('hooks.editor.timeout') }}</label>
-          <input v-model.number="draft.timeoutMs" type="number" class="hke-input mono" />
+          <Input v-model.number="draft.timeoutMs" type="number" class="mono" />
         </div>
       </div>
 
@@ -138,10 +144,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave || saving" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave || saving" variant="default" @click="onSave">
         {{ saving ? t('hooks.editor.saving') : t('hooks.editor.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -158,6 +164,8 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import LibraryKvEditor, { type KvEntry } from '~/components/library/LibraryKvEditor.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import {
   useHooksStore,
   type Hook,

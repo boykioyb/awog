@@ -10,7 +10,7 @@
 //   ~/.awog/templates/<id>/commands/<ns>/<id>.md
 //
 // create() copies entities OUT of their home; install() copies them INTO the
-// target project's matching tier — `.claude` for agents/skills/commands, `.awog`
+// target project's matching tier — `.claude` for skills/commands, `.awog`
 // for hooks/rules (ADR 0070). Both are plain file copies (faithful — preserves
 // colocated siblings + exact format). Security (ADR 0036 D-7): imported hooks
 // land untrusted (no .trust.json), secret values are never copied.
@@ -105,10 +105,11 @@ export function isInside(child: string, root: string): boolean {
   return c === r || c.startsWith(r + sep)
 }
 
-// Which home a kind lives in. agents/skills/commands are SHARED with the Claude
-// Code CLI under `.claude`; hooks/rules stay AWOG-owned under `.awog` (ADR 0070).
+// Which home a kind lives in. skills/commands are SHARED with the Claude Code
+// CLI under `.claude` (ADR 0070); agents are AWOG-native under `.awog` again —
+// the Agents system does not share the `.claude` roster.
 function isSharedKind(kind: ConfigKind): boolean {
-  return kind === 'agent' || kind === 'skill' || kind === 'command'
+  return kind === 'skill' || kind === 'command'
 }
 
 // The home root a kind's entities live under, for one scope.

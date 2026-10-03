@@ -8,7 +8,7 @@
     <div class="sne">
       <div class="sne-field">
         <label class="sne-label">{{ t('ssh.snippet.name') }}</label>
-        <input v-model="name" class="sne-input" :placeholder="t('ssh.snippet.namePh')" />
+        <Input v-model="name" :placeholder="t('ssh.snippet.namePh')" />
       </div>
 
       <div class="sne-field">
@@ -27,10 +27,10 @@
 
     <template #footer>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('ssh.snippet.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -42,6 +42,8 @@
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { SshSnippet } from '~/stores/sshSnippets'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ open: boolean; snippet: SshSnippet | null }>()
 

@@ -98,12 +98,13 @@ interface DirSpec {
   depth?: number
 }
 
-// agents/skills/commands live in the SHARED `.claude` home (ADR 0070) so an edit
-// made in the Claude Code CLI shows up in AWOG without an import; the rest are
-// AWOG-owned and stay under `.awog`.
+// skills/commands live in the SHARED `.claude` home (ADR 0070) so an edit made
+// in the Claude Code CLI shows up in AWOG without an import; agents are
+// AWOG-owned again under `.awog` (Agents is an AWOG-native system), as is the
+// rest.
 function userDirs(): DirSpec[] {
   return [
-    { kind: 'agents', dir: join(claudeHome(), 'agents') },
+    { kind: 'agents', dir: join(awogHome(), 'agents') },
     { kind: 'skills', dir: join(claudeHome(), 'skills') },
     { kind: 'commands', dir: join(claudeHome(), 'commands') },
     { kind: 'sources', dir: join(awogHome(), 'sources') },
@@ -155,7 +156,7 @@ function awsDirs(): DirSpec[] {
 
 function projectDirs(projectPath: string): DirSpec[] {
   return [
-    { kind: 'agents', dir: join(projectClaudeDir(projectPath), 'agents') },
+    { kind: 'agents', dir: join(projectPath, '.awog', 'agents') },
     { kind: 'skills', dir: join(projectClaudeDir(projectPath), 'skills') },
     { kind: 'commands', dir: join(projectClaudeDir(projectPath), 'commands') },
     { kind: 'hooks', dir: join(projectPath, '.awog', 'hooks') },

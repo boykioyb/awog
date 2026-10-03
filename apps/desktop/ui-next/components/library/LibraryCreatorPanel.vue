@@ -9,10 +9,17 @@
           />
           <span class="lcp-title">{{ title }}</span>
           <span class="lcp-sub">{{ subtitle }}</span>
+          <AiModelPicker width="180px" />
           <span style="flex: 1" />
-          <button class="iconbtn lcp-x" :title="t('common.close')" @click="onClose">
+          <Button
+            :title="t('common.close')"
+            class="lcp-x"
+            variant="outline"
+            size="iconMd"
+            @click="onClose"
+          >
             <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
         </div>
 
         <div ref="logRef" class="lcp-log">
@@ -67,7 +74,7 @@
 
         <div class="lcp-foot">
           <div class="lcp-box">
-            <LibraryScopePicker v-model="scope" :projects="projects" />
+            <LibraryScopePicker v-if="!hideScope" v-model="scope" :projects="projects" />
             <textarea
               ref="taRef"
               v-model="promptText"
@@ -119,9 +126,11 @@ import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import CreatorStepRow from '~/components/library/CreatorStepRow.vue'
 import SessionMarkdownHtml from '~/components/session/SessionMarkdownHtml.vue'
 import MermaidView from '~/components/common/MermaidView.vue'
+import AiModelPicker from '~/components/common/AiModelPicker.vue'
 import { usePromptCreator } from '~/composables/usePromptCreator'
 import { useMarkdown } from '~/composables/useMarkdown'
 import type { CreatorAccountKind, ProviderName } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -140,6 +149,9 @@ const props = withDefaults(
     // Initial scope picker value when the panel opens (e.g. a projectId from the
     // per-group "+" button). Defaults to 'global'.
     initialScope?: string
+    // Entities with no tier choice (agents are global-only roles) hide the scope
+    // picker entirely — scope stays pinned at initialScope.
+    hideScope?: boolean
     // Extra params merged into every author RPC call (e.g. a source-edit context).
     // Passed straight through to usePromptCreator. Optional.
     extraParams?: Record<string, unknown>
@@ -151,6 +163,7 @@ const props = withDefaults(
     placeholder: '',
     iteratePlaceholder: '',
     initialScope: 'global',
+    hideScope: false,
     extraParams: undefined,
   },
 )

@@ -13,13 +13,12 @@ import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { stepFromToolResult, stepFromToolUse } from '../sessions/step-mapper.js'
 import { loadProject } from '../projects/store.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { claudeHome, projectClaudeDir } from '../util/path.js'
 import { authorPi } from '../runtime/complete.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const ChatMessage = z.object({
   role: z.enum(['user', 'agent']),

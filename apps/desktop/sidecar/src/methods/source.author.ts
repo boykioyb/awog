@@ -17,7 +17,6 @@ import { basename, dirname } from 'node:path'
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { stepFromToolResult, stepFromToolUse } from '../sessions/step-mapper.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { awogHome } from '../util/path.js'
@@ -40,7 +39,7 @@ function slugFromWritePath(filePath: unknown): string | null {
   return SOURCE_SLUG_RE.test(slug) ? slug : null
 }
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const ChatMessage = z.object({
   role: z.enum(['user', 'agent']),

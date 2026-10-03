@@ -67,13 +67,17 @@ function sessionDirFromId(engineId: string): string {
 type RequestPayload = { method: string; params?: unknown }
 type PathPayload = { root: string; path: string }
 type PreviewWindowPayload = { root: string; path: string; name: string }
-type BrowserViewPayload = { tabId?: string; rect: Rect }
+type BrowserViewPayload = { tabId?: string; rect: Rect; scope?: string }
+// Tab-actions the renderer triggers (select/close/back/forward/reload + the
+// phần-E reads): the tab it means, and the owning scope so main can verify the
+// pair — a stale KeepAlive panel can only ever act on ITS session's tabs.
+type BrowserTabPayload = { tabId?: string; scope?: string }
 type ImportPayload = {
   browserId?: string
   profileDir?: string
   parts?: { cookies?: boolean; localStorage?: boolean; indexedDb?: boolean }
 }
-type BrowserOpenPayload = { url: string; tabId?: string }
+type BrowserOpenPayload = { url: string; tabId?: string; scope?: string }
 type SessionWindowPayload = { engineId: string; title?: string }
 type PickFolderOpts = { title?: string; defaultPath?: string }
 type FileFilter = { name: string; extensions: string[] }
@@ -402,11 +406,26 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 // network/screenshot) stays on the sidecar's host-request channel, where the nonce
 // fence and the redactor are. The renderer gets navigation and geometry only, so
 // page content still has exactly one door into the app.
+//
+// `scope` trên payload: một cửa sổ host NHIỀU panel session cùng lúc (KeepAlive),
+// nên không thể gắn scope vào window — nó phải đi theo từng lời gọi. Main check
+// scope ↔ ownership trong `browser.tab()`, nên payload scope của panel session A
+// không thể gọi được tab của session B — đó là phần "theo session" nằm ở main,
+// lọc danh sách tab phía renderer chỉ là phần HIỂN THỊ của nó.
 function registerBrowserViewIpc(): void {
   const senderWindow = (e: Electron.IpcMainInvokeEvent): BrowserWindow => {
     const win = BrowserWindow.fromWebContents(e.sender)
     if (!win) throw new Error('browser view: no window for sender')
     return win
+  }
+  const optTab = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined)
+  const optScope = (p: unknown): string | undefined =>
+    p && typeof p === 'object'
+      ? optTab((p as { scope?: unknown }).scope)
+      : undefined
+  const asString = (p: unknown, key: string): string | null => {
+    const v = p && typeof p === 'object' ? (p as Record<string, unknown>)[key] : undefined
+    return typeof v === 'string' && v ? v : null
   }
 
   // Tab list + per-tab url/title/loading/nav state, pushed on every change the
@@ -423,19 +442,21 @@ function registerBrowserViewIpc(): void {
   ipcMain.handle(
     'browser:attach',
     async (e, payload: BrowserViewPayload): Promise<TabInfo> =>
-      browser.attachTo(senderWindow(e), payload?.tabId, payload?.rect),
+      browser.attachTo(senderWindow(e), payload?.tabId, payload?.rect, optScope(payload)),
   )
   ipcMain.handle('browser:bounds', async (e, payload: BrowserViewPayload): Promise<void> => {
-    browser.setViewBounds(senderWindow(e), payload?.tabId, payload?.rect)
+    browser.setViewBounds(senderWindow(e), payload?.tabId, payload?.rect, optScope(payload))
   })
   ipcMain.handle('browser:detach', async (e): Promise<void> => {
     browser.detachFrom(senderWindow(e))
   })
-  ipcMain.handle('browser:tabs', async (e) => browser.listTabs(senderWindow(e)))
+  ipcMain.handle('browser:tabs', async (e, payload?: { scope?: string }) =>
+    browser.listTabs(senderWindow(e), optScope(payload)),
+  )
   ipcMain.handle(
     'browser:open',
     async (_e, payload: BrowserOpenPayload): Promise<TabInfo> =>
-      browser.openFromUser(String(payload?.url ?? ''), payload?.tabId),
+      browser.openFromUser(String(payload?.url ?? ''), payload?.tabId, optScope(payload)),
   )
   // `wait: false` = mở tab rồi trả về ngay (đường người dùng bấm link); mặc định
   // vẫn chờ tải xong để đường của model không đổi hành vi.
@@ -445,26 +466,30 @@ function registerBrowserViewIpc(): void {
       typeof payload === 'object' && payload !== null && 'wait' in payload
         ? (payload as { wait?: unknown }).wait !== false
         : true
-    return browser.newTab(url, wait)
+    return browser.newTab(url, wait, optScope(payload))
   })
   ipcMain.handle(
     'browser:selectTab',
-    async (_e, tabId: string): Promise<TabInfo> => browser.selectTab(String(tabId)),
+    async (_e, payload: BrowserTabPayload): Promise<TabInfo> =>
+      browser.selectTab(optTab(payload?.tabId) ?? '', optScope(payload)),
   )
-  ipcMain.handle('browser:closeTab', async (_e, tabId: string) => browser.closeTab(String(tabId)))
-  ipcMain.handle('browser:back', async (_e, tabId?: string) => {
-    browser.goBack(typeof tabId === 'string' ? tabId : undefined)
+  ipcMain.handle('browser:closeTab', async (_e, payload: BrowserTabPayload) =>
+    browser.closeTab(optTab(payload?.tabId) ?? '', optScope(payload)),
+  )
+  ipcMain.handle('browser:back', async (_e, payload?: BrowserTabPayload) => {
+    browser.goBack(optTab(payload?.tabId), optScope(payload))
   })
-  ipcMain.handle('browser:forward', async (_e, tabId?: string) => {
-    browser.goForward(typeof tabId === 'string' ? tabId : undefined)
+  ipcMain.handle('browser:forward', async (_e, payload?: BrowserTabPayload) => {
+    browser.goForward(optTab(payload?.tabId), optScope(payload))
   })
-  ipcMain.handle('browser:reload', async (_e, tabId?: string) => {
-    browser.reload(typeof tabId === 'string' ? tabId : undefined)
+  ipcMain.handle('browser:reload', async (_e, payload?: BrowserTabPayload) => {
+    browser.reload(optTab(payload?.tabId), optScope(payload))
   })
   // "Open it in its own window" — the panel hands the tab to the popout, which is
-  // the same window the tray item toggles.
-  ipcMain.handle('browser:popout', async (): Promise<void> => {
-    browser.show()
+  // the same window the tray item toggles. `scope` khoá cửa sổ popout về đúng
+  // session: popout từ panel của session A thì cửa sổ chỉ thấy tab của A.
+  ipcMain.handle('browser:popout', async (_e, payload?: BrowserTabPayload): Promise<void> => {
+    browser.show(optScope(payload))
   })
 
   // ── Profile import (ADR 0086 phần B) ──────────────────────────────────────
@@ -504,32 +529,30 @@ function registerBrowserViewIpc(): void {
   // text lands in the user's own UI (a translation popover, the composer), never
   // straight into a prompt. Anything that does reach a prompt gets there because
   // the user pressed send, which is the same trust path as typing it.
-  const optTab = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined)
-  const asString = (p: unknown, key: string): string | null => {
-    const v = p && typeof p === 'object' ? (p as Record<string, unknown>)[key] : undefined
-    return typeof v === 'string' && v ? v : null
-  }
 
-  ipcMain.handle('browser:selection', async (_e, tabId?: string) =>
-    browser.readSelection(optTab(tabId)),
+  ipcMain.handle('browser:selection', async (_e, payload?: BrowserTabPayload) =>
+    browser.readSelection(optTab(payload?.tabId), optScope(payload)),
   )
-  ipcMain.handle('browser:pickElement', async (_e, tabId?: string) =>
-    browser.pickElement(optTab(tabId)),
+  ipcMain.handle('browser:pickElement', async (_e, payload?: BrowserTabPayload) =>
+    browser.pickElement(optTab(payload?.tabId), optScope(payload)),
   )
-  ipcMain.handle('browser:cancelPick', async (_e, tabId?: string) => {
-    browser.cancelPick(optTab(tabId))
+  ipcMain.handle('browser:cancelPick', async (_e, payload?: BrowserTabPayload) => {
+    browser.cancelPick(optTab(payload?.tabId), optScope(payload))
   })
-  ipcMain.handle('browser:pageContext', async (_e, tabId?: string) =>
-    browser.pageContext(optTab(tabId)),
+  ipcMain.handle('browser:pageContext', async (_e, payload?: BrowserTabPayload) =>
+    browser.pageContext(optTab(payload?.tabId), optScope(payload)),
   )
   // The screenshot path is built from the renderer's workspace root, so it goes
   // through the same resolver every other write-into-workspace op uses.
   ipcMain.handle(
     'browser:saveScreenshot',
-    async (_e, payload: { root?: string; tabId?: string }): Promise<{ path: string }> => {
+    async (
+      _e,
+      payload: { root?: string; tabId?: string; scope?: string },
+    ): Promise<{ path: string }> => {
       const root = String(payload?.root ?? '')
       if (!root) throw new Error('saveScreenshot needs a workspace root')
-      return browser.saveScreenshot(root, optTab(payload?.tabId))
+      return browser.saveScreenshot(root, optTab(payload?.tabId), optScope(payload))
     },
   )
   ipcMain.handle('browser:sites', async () => browser.sites())

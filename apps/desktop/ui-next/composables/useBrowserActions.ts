@@ -106,7 +106,7 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
     const api = bridge.value
     if (!api) return
     try {
-      const sel = await api.selection(input.tabId() ?? undefined)
+      const sel = await api.selection(input.tabId() ?? undefined, input.tab()?.scope)
       const text = sel.text.trim()
       if (!text) return
       // Nguồn 'browser': kết quả render trong chrome (BrowserTranslateStrip),
@@ -221,8 +221,10 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
     if (id === 'pin') onTogglePin()
     else if (id === 'copy') void onCopyUrl()
     else if (id === 'translate' && actionsRect.value) void onTranslate(actionsRect.value)
-    else if (id === 'quote') void browserCtx.quoteSelectionToChat()
-    else if (id === 'pick') void browserCtx.pickToChat()
+    else if (id === 'quote')
+      void browserCtx.quoteSelectionToChat(input.tabId() ?? undefined, input.tab()?.scope)
+    else if (id === 'pick')
+      void browserCtx.pickToChat(input.tabId() ?? undefined, input.tab()?.scope)
     else if (id === 'expand') emit('toggle-expand')
     else if (id === 'pip') useBrowserPip().openPip()
     else if (id === 'popout') emit('popout')

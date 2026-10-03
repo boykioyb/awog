@@ -2,16 +2,16 @@
   <div class="libli wfli" :class="{ on: selected }" @click="emit('select')">
     <div class="lrow">
       <Icon name="workflows" class="wfli-icn" />
-      <input
+      <Input
         v-if="renaming"
         ref="inputEl"
+        :model-value="renameValue"
         class="wfli-rename mono"
-        :value="renameValue"
         @click.stop
-        @input="emit('update:renameValue', ($event.target as HTMLInputElement).value)"
         @keydown.enter="emit('commit-rename')"
         @keydown.escape="emit('cancel-rename')"
         @blur="emit('commit-rename')"
+        @update:model-value="emit('update:renameValue', $event)"
       />
       <span v-else class="ttl" @dblclick.stop="emit('start-rename')">{{ workflow.name }}</span>
       <button class="wfli-del" :title="t('common.delete')" @click.stop="emit('delete')">
@@ -35,6 +35,7 @@
 // the rename + delete state (this row is pure markup + event bubbles).
 import { computed, nextTick, ref, watch } from 'vue'
 import type { Workflow } from '~/stores/workflows'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   workflow: Workflow

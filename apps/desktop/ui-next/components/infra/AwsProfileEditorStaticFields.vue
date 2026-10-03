@@ -19,9 +19,8 @@
         {{ t('infra.editor.static.accessKeyId') }}
         <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
       </label>
-      <input
+      <Input
         v-model.trim="model.accessKeyId"
-        class="ape-input mono"
         spellcheck="false"
         autocomplete="off"
         :placeholder="
@@ -29,6 +28,7 @@
             ? t('infra.editor.static.accessKeyIdPhKeep')
             : t('infra.editor.static.accessKeyIdPh')
         "
+        class="mono"
       />
       <div v-if="accessKeyFormatWarn" class="ape-warn">
         {{ t('infra.editor.static.accessKeyFormatWarn') }}
@@ -41,27 +41,28 @@
         <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
       </label>
       <div class="ape-secret-row">
-        <input
+        <Input
           v-model.trim="model.secretAccessKey"
           :type="showSecret ? 'text' : 'password'"
-          class="ape-input mono"
           spellcheck="false"
           autocomplete="off"
           :placeholder="
             isExisting ? t('infra.editor.static.secretPhKeep') : t('infra.editor.static.secretPh')
           "
+          class="mono"
         />
-        <button
+        <Button
           type="button"
-          class="iconbtn"
           :title="showSecret ? t('infra.editor.hideSecret') : t('infra.editor.showSecret')"
+          variant="outline"
+          size="iconMd"
           @click="showSecret = !showSecret"
         >
           <Icon
             :name="showSecret ? 'eye-off' : 'eye'"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -71,10 +72,9 @@
         <span class="ape-optional">{{ t('infra.editor.optional') }}</span>
       </label>
       <div class="ape-secret-row">
-        <input
+        <Input
           v-model.trim="model.sessionToken"
           :type="showToken ? 'text' : 'password'"
-          class="ape-input mono"
           spellcheck="false"
           autocomplete="off"
           :placeholder="
@@ -82,18 +82,20 @@
               ? t('infra.editor.static.sessionTokenPhKeep')
               : t('infra.editor.static.sessionTokenPh')
           "
+          class="mono"
         />
-        <button
+        <Button
           type="button"
-          class="iconbtn"
           :title="showToken ? t('infra.editor.hideSecret') : t('infra.editor.showSecret')"
+          variant="outline"
+          size="iconMd"
           @click="showToken = !showToken"
         >
           <Icon
             :name="showToken ? 'eye-off' : 'eye'"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -128,6 +130,8 @@ import { computed, ref } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import AwsRegionField from '~/components/infra/AwsRegionField.vue'
 import type { StaticFormState } from '~/utils/aws-profile-form'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 withDefaults(
   defineProps<{

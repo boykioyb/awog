@@ -8,7 +8,7 @@
     <div class="sef">
       <div class="sef-field">
         <label class="sef-label">{{ t('schedules.form.name') }}</label>
-        <input v-model="name" class="sef-input" :placeholder="t('schedules.form.namePh')" />
+        <Input v-model="name" :placeholder="t('schedules.form.namePh')" />
       </div>
 
       <!-- ── Loại việc ── -->
@@ -35,11 +35,7 @@
         </div>
         <div class="sef-field">
           <label class="sef-label">{{ t('schedules.form.sessionTitle') }}</label>
-          <input
-            v-model="sessionTitle"
-            class="sef-input"
-            :placeholder="t('schedules.form.sessionTitlePh')"
-          />
+          <Input v-model="sessionTitle" :placeholder="t('schedules.form.sessionTitlePh')" />
         </div>
         <div class="sef-field">
           <label class="sef-label">{{ t('schedules.form.project') }}</label>
@@ -67,7 +63,7 @@
         </div>
         <div class="sef-field">
           <label class="sef-label">{{ t('schedules.form.taskTitle') }}</label>
-          <input v-model="taskTitle" class="sef-input" />
+          <Input v-model="taskTitle" />
         </div>
         <div class="sef-field">
           <label class="sef-label">{{ t('schedules.form.description') }}</label>
@@ -94,14 +90,14 @@
       <div v-if="triggerKind === 'interval'" class="sef-field">
         <label class="sef-label">{{ t('schedules.form.every') }}</label>
         <div class="sef-row">
-          <input v-model.number="intervalN" type="number" min="1" class="sef-input sef-num" />
+          <Input v-model.number="intervalN" type="number" min="1" class="sef-num" />
           <AppSelect v-model="intervalUnit" :options="unitOptions" width="130px" />
         </div>
       </div>
 
       <div v-else class="sef-field">
         <label class="sef-label">{{ t('schedules.form.time') }}</label>
-        <input v-model="time" class="sef-input sef-num" placeholder="09:00" />
+        <Input v-model="time" placeholder="09:00" class="sef-num" />
       </div>
 
       <div v-if="triggerKind === 'weekly'" class="sef-field">
@@ -129,8 +125,10 @@
     </div>
 
     <template #footer>
-      <button class="btn sm" @click="emit('cancel')">{{ t('schedules.form.cancel') }}</button>
-      <button class="btn sm pri" @click="onSave">{{ t('schedules.form.save') }}</button>
+      <Button variant="outline" size="sm" @click="emit('cancel')">
+        {{ t('schedules.form.cancel') }}
+      </Button>
+      <Button variant="default" size="sm" @click="onSave">{{ t('schedules.form.save') }}</Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -148,6 +146,8 @@ import AppSelect from '~/components/common/AppSelect.vue'
 import { useProjects } from '~/composables/useProjects'
 import { useSettingsStore } from '~/stores/settings'
 import { useWorkflowsStore } from '~/stores/workflows'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import type {
   Schedule,
   ScheduleInput,

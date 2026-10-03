@@ -123,20 +123,24 @@ useEscToClose(
 </script>
 
 <style scoped>
+/* Band "trên-modal": bôi đen text trong board item (`.wsed-ovl` 160), peek full
+   (`.apeek.full` 400), lượt-fullscreen (`.ftovl` 470) hay preview (`.pvovl`
+   480) đều phải nổi popover lên trên — vượt 480. */
 .sttbackdrop {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: 490;
 }
 .sttpop {
   position: fixed;
-  z-index: 301;
+  z-index: 491;
   display: flex;
   flex-direction: column;
   max-height: 44vh;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-md);
   overflow: hidden;
 }
@@ -146,58 +150,56 @@ useEscToClose(
   gap: 8px;
   padding: 8px 10px;
   border-bottom: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .stttitle {
   font-size: 12px;
   line-height: 18px;
   font-weight: 500;
-  color: var(--text);
+  color: var(--foreground);
 }
 .sttlangs {
   display: flex;
   gap: 3px;
   margin-left: auto;
 }
+/* Lang pills — rounded-full muted chips, active rides the accent wash. */
 .sttlang {
-  padding: 2px 7px;
+  padding: 2px 9px;
   font-size: 12px;
   font-family: var(--code, ui-monospace, monospace);
   line-height: 18px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--textDim);
+  border-radius: var(--r-pill); /* rounded-full */
+  border: 0;
+  background: var(--muted);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     color 0.12s,
-    border-color 0.12s,
     background 0.12s;
 }
 .sttlang:hover {
-  color: var(--text);
-  border-color: var(--borderStrong);
+  color: var(--foreground);
 }
 .sttlang.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .sttx {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 3px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     color 0.12s,
     background 0.12s;
 }
 .sttx:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .sttbody {
   padding: 10px 12px;
@@ -206,7 +208,7 @@ useEscToClose(
 .sttresult {
   font-size: 1em;
   line-height: var(--lh-md);
-  color: var(--text);
+  color: var(--foreground);
   word-break: break-word;
   user-select: text;
 }
@@ -221,7 +223,7 @@ useEscToClose(
   font-style: italic;
 }
 .sttmd :deep(a) {
-  color: var(--accent);
+  color: var(--primary);
   text-decoration: underline;
 }
 .sttmd :deep(ul),
@@ -249,15 +251,15 @@ useEscToClose(
 .sttmd :deep(code) {
   font-family: var(--code, ui-monospace, monospace);
   font-size: 0.92em;
-  background: var(--bgHover);
+  background: var(--muted);
   padding: 1px 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
 }
 .sttmd :deep(pre) {
   margin: 0 0 8px;
   padding: 8px 10px;
-  background: var(--bgHover);
-  border-radius: var(--r-xs);
+  background: var(--muted);
+  border-radius: var(--r-xs); /* rounded-sm */
   overflow-x: auto;
 }
 .sttmd :deep(pre code) {
@@ -271,8 +273,8 @@ useEscToClose(
 .sttcode {
   margin: 0;
   padding: 8px 10px;
-  background: var(--bgHover);
-  border-radius: var(--r-xs);
+  background: var(--muted);
+  border-radius: var(--r-xs); /* rounded-sm */
   overflow-x: auto;
   font-family: var(--code, ui-monospace, monospace);
   font-size: 0.92em;
@@ -285,13 +287,13 @@ useEscToClose(
   color: var(--textDim);
 }
 .sttstatus.err {
-  color: var(--danger, var(--text));
+  color: var(--destructive);
 }
 .sttspin {
   width: 13px;
   height: 13px;
   border: 2px solid var(--border);
-  border-top-color: var(--accent);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: sttspin 0.7s linear infinite;
 }
@@ -312,17 +314,19 @@ useEscToClose(
   gap: 5px;
   padding: 4px 9px;
   font-size: 1em;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     color 0.12s,
-    border-color 0.12s;
+    border-color 0.12s,
+    background 0.12s;
 }
 .sttbtn:hover {
-  color: var(--accent);
-  border-color: var(--accentBorder);
+  color: var(--accent-foreground);
+  border-color: var(--border);
+  background: var(--accent-wash);
 }
 </style>

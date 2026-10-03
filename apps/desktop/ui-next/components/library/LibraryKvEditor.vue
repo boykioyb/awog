@@ -3,30 +3,32 @@
     <div v-if="label" class="lkv-label">{{ label }}</div>
     <div class="lkv-rows">
       <div v-for="(entry, i) in modelValue" :key="i" class="lkv-row">
-        <input
-          class="lkv-input lkv-key"
-          :value="entry.key"
+        <Input
+          :model-value="entry.key"
           :placeholder="t('library.kv.key')"
           spellcheck="false"
-          @input="updateKey(i, ($event.target as HTMLInputElement).value)"
+          class="lkv-key"
+          @update:model-value="updateKey(i, $event)"
         />
-        <input
-          class="lkv-input lkv-val"
+        <Input
           :type="isSecretRow(entry.value) ? 'password' : 'text'"
-          :value="isSecretRow(entry.value) ? secretMaskFor(entry.value) : entry.value"
+          :model-value="isSecretRow(entry.value) ? secretMaskFor(entry.value) : entry.value"
           :disabled="isSecretRow(entry.value)"
           :placeholder="t('library.kv.value')"
           spellcheck="false"
-          @input="updateVal(i, ($event.target as HTMLInputElement).value)"
+          class="lkv-val"
+          @update:model-value="updateVal(i, $event)"
         />
-        <button
+        <Button
           v-if="secretMode"
-          class="iconbtn lkv-btn"
           :class="{ on: isSecretRow(entry.value) }"
           :disabled="secretBusy === i || !entry.key.trim() || !entry.value.trim()"
           :title="
             isSecretRow(entry.value) ? t('library.kv.secretStored') : t('library.kv.secretMove')
           "
+          class="lkv-btn"
+          variant="outline"
+          size="iconMd"
           @click="toggleSecret(i)"
         >
           <Icon
@@ -34,15 +36,21 @@
             :class="{ spin: secretBusy === i }"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
-        <button class="iconbtn lkv-btn" :title="t('library.kv.remove')" @click="remove(i)">
+        </Button>
+        <Button
+          :title="t('library.kv.remove')"
+          class="lkv-btn"
+          variant="outline"
+          size="iconMd"
+          @click="remove(i)"
+        >
           <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        </Button>
       </div>
-      <button class="btn sm" @click="add">
+      <Button variant="outline" size="sm" @click="add">
         <Icon name="plus" />
         {{ t('library.kv.add') }}
-      </button>
+      </Button>
       <div v-if="secretError" class="lkv-err">{{ secretError }}</div>
     </div>
   </div>
@@ -57,6 +65,8 @@
 // in prototype CSS.
 import { ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 export type KvEntry = { key: string; value: string }
 // `sourceId` is the source's STABLE id (keychain account prefix), NOT the slug —

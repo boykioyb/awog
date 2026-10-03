@@ -11,12 +11,12 @@
     <div class="wsb-top">
       <div class="wsb-search">
         <Icon name="search" :size="13" />
-        <input
-          :value="query"
-          class="wsb-input"
+        <Input
+          unstyled
+          :model-value="query"
           :placeholder="t('wiki.searchPlaceholder')"
-          @input="emit('update:query', ($event.target as HTMLInputElement).value)"
           @keydown.enter="emit('search')"
+          @update:model-value="emit('update:query', $event)"
         />
         <button
           v-if="query"
@@ -27,19 +27,37 @@
           <Icon name="x" :size="12" />
         </button>
       </div>
+      <!-- Lọc theo tier: toàn bộ / global / từng project — cây và kết quả
+           search đều bám filter này (useWikiManager.matchTier). -->
+      <AppSelect
+        :model-value="tierFilter"
+        :options="tierOptions"
+        width="100%"
+        @update:model-value="(v) => emit('update:tierFilter', v)"
+      />
       <div class="wsb-actions">
-        <button class="btn sm" :title="t('wiki.newPage')" @click="emit('new-page')">
+        <Button :title="t('wiki.newPage')" variant="outline" size="sm" @click="emit('new-page')">
           <Icon name="plus" :size="13" />
           {{ t('wiki.newPage') }}
-        </button>
-        <button class="btn sm" :title="t('wiki.newSpace.hint')" @click="emit('new-space')">
+        </Button>
+        <Button
+          :title="t('wiki.newSpace.hint')"
+          variant="outline"
+          size="sm"
+          @click="emit('new-space')"
+        >
           <Icon name="folder" :size="13" />
           {{ t('wiki.newSpace.action') }}
-        </button>
-        <button class="btn sm" :title="t('wiki.import.files')" @click="emit('import-files')">
+        </Button>
+        <Button
+          :title="t('wiki.import.files')"
+          variant="outline"
+          size="sm"
+          @click="emit('import-files')"
+        >
           <Icon name="download" :size="13" />
           {{ t('wiki.import.short') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -74,8 +92,12 @@
 // Presentational only — every action is emitted up to the page controller
 // (useWikiManager), which owns the state (nuxt-vue rule: thin components).
 import WikiTreeNodes from '~/components/wiki/WikiTreeNodes.vue'
+import AppSelect from '~/components/common/AppSelect.vue'
+import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { WikiTreeNode } from '~/composables/useWikiManager'
 import type { WikiPage } from '~/stores/wiki'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   tree: WikiTreeNode[]
@@ -85,6 +107,9 @@ const props = defineProps<{
   contextPageCount: number
   indexChars: number
   width: number
+  // '' = mọi wiki · 'global' · 'project:<id>' — filter của cây + search.
+  tierFilter: string
+  tierOptions: AppSelectOption[]
 }>()
 
 const emit = defineEmits<{
@@ -93,6 +118,7 @@ const emit = defineEmits<{
   'context-page': [event: MouseEvent, page: WikiPage]
   'new-child': [node: WikiTreeNode]
   'update:query': [value: string]
+  'update:tierFilter': [value: string]
   search: []
   'clear-search': []
   'new-page': []

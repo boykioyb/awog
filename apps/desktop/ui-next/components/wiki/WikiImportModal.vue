@@ -24,11 +24,7 @@
 
       <label v-if="space === NEW_SPACE" class="wim-field">
         <span class="sech">{{ t('wiki.importModal.newSpaceName') }}</span>
-        <input
-          v-model="newSpaceName"
-          class="wim-input"
-          :placeholder="t('wiki.newSpace.placeholder')"
-        />
+        <Input v-model="newSpaceName" :placeholder="t('wiki.newSpace.placeholder')" />
       </label>
 
       <p class="wim-dest" :style="{ color: 'var(--textFaint)' }">
@@ -37,14 +33,24 @@
       </p>
 
       <div class="wim-actions">
-        <button class="btn sm" :disabled="!canImport" @click="emit('pick-files', target)">
+        <Button
+          :disabled="!canImport"
+          variant="outline"
+          size="sm"
+          @click="emit('pick-files', target)"
+        >
           <Icon name="file" :size="13" />
           {{ t('wiki.import.files') }}
-        </button>
-        <button class="btn sm" :disabled="!canImport" @click="emit('pick-folder', target)">
+        </Button>
+        <Button
+          :disabled="!canImport"
+          variant="outline"
+          size="sm"
+          @click="emit('pick-folder', target)"
+        >
           <Icon name="folder" :size="13" />
           {{ t('wiki.import.folder') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -58,6 +64,8 @@
 // whole class of "I imported it, where did it go".
 import AppSelect from '~/components/common/AppSelect.vue'
 import type { WikiSource } from '~/stores/wiki'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 export interface WikiImportTarget {
   source: WikiSource

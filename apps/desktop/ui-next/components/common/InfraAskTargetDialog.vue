@@ -33,7 +33,9 @@
           </button>
         </div>
         <footer class="ixa-ft">
-          <button class="btn" type="button" @click="closeChooser">{{ t('common.cancel') }}</button>
+          <Button type="button" variant="outline" @click="closeChooser">
+            {{ t('common.cancel') }}
+          </Button>
         </footer>
       </div>
     </div>
@@ -43,6 +45,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { chooser, closeChooser, deliver, hasActiveSession } = useInfraAskAgent()
@@ -68,9 +71,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: min(520px, calc(100vw - 32px));
   margin-top: 6vh;
   padding: 14px 16px 12px;
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  background: var(--bgEl);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); /* rounded-lg */
+  background: var(--card);
   box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
@@ -81,11 +84,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--textMuted);
+  color: var(--primary);
 }
 
 .ixa-ttl {
-  color: var(--text);
+  color: var(--foreground);
   font-weight: 650;
   font-size: var(--fs-md);
   line-height: var(--lh-md);
@@ -93,7 +96,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 .ixa-src {
   margin: 0;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
@@ -104,9 +107,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   overflow: auto;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--textMuted);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-family: var(--sans);
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
@@ -127,15 +130,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 3px;
   padding: 10px 11px;
   border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  background: var(--bgPanel);
-  color: var(--textMuted);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
+  color: var(--muted-foreground);
   text-align: left;
   cursor: pointer;
 }
 
 .ixa-opt:hover:not(:disabled) {
-  border-color: var(--accentBorder);
+  border-color: var(--ring);
+  background: var(--accent-wash);
+}
+
+.ixa-opt:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 
 .ixa-opt:disabled {
@@ -143,7 +152,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 .ixa-opt-ttl {
-  color: var(--text);
+  color: var(--foreground);
   font-weight: 550;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);

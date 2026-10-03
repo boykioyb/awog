@@ -8,24 +8,28 @@
       <span class="dt mono" style="font-size: var(--fs-sm)">
         <span class="dtname" :title="file ?? ''">{{ baseName }}</span>
       </span>
-      <span v-if="additions > 0" class="chip" style="color: var(--add)">+{{ additions }}</span>
-      <span v-if="deletions > 0" class="chip" style="color: var(--del)">−{{ deletions }}</span>
-      <span style="flex: 1" />
+      <span v-if="additions > 0" class="rounded-sm px-1 font-mono text-xs leading-4 text-success">
+        +{{ additions }}
+      </span>
       <span
+        v-if="deletions > 0"
+        class="rounded-sm px-1 font-mono text-xs leading-4 text-destructive"
+      >
+        −{{ deletions }}
+      </span>
+      <span style="flex: 1" />
+      <button
         v-if="!isImage"
         class="gtoggle"
         :title="t('git.diff.toggleMode')"
         @click="emit('toggle-diff-mode')"
       >
         {{ diffMode === 'split' ? t('git.diff.split') : t('git.diff.unified') }}
-      </span>
-      <button class="btn sm" @click="onPrimary">
-        <Icon
-          :name="staged ? 'rewind' : 'check'"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-        {{ staged ? t('git.diff.unstageFile') : t('git.diff.stageFile') }}
       </button>
+      <Button variant="outline" size="sm" class="shrink-0" @click="onPrimary">
+        <Icon :name="staged ? 'rewind' : 'check'" class="size-3.5" />
+        {{ staged ? t('git.diff.unstageFile') : t('git.diff.stageFile') }}
+      </Button>
     </div>
 
     <!-- Image preview: an image row has a binary git diff (no hunks); show the
@@ -69,6 +73,7 @@
 // Diff content is rendered as plain text colored only by line type (add/del/context);
 // it is intentionally NOT syntax-tokenized — per-token colors fought the add/del
 // background and looked noisy ("loạn màu"), especially on prose / non-JS files.
+import Button from '~/components/ui/button/Button.vue'
 import type { DiffLine, DiffMode, DiffRow } from './git-types'
 import { baseNameOf } from './git-types'
 
@@ -176,8 +181,7 @@ const splitRight = computed<DiffRow[]>(() => {
 }
 /* Header actions keep their size; the filename yields the space instead of them
    getting squeezed or overlapped. */
-.gtoggle,
-.btn {
+.gtoggle {
   flex: 0 0 auto;
 }
 

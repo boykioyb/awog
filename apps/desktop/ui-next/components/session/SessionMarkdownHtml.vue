@@ -27,6 +27,9 @@ const { t } = useI18n()
 const root = useTemplateRef<HTMLElement>('root')
 // Opens / shortens workspace file references in the markdown (from SessionDetail).
 const filePreview = useFilePreview()
+// Opens a bare "comment <id>" GitHub reference in the browser — null when no
+// ancestor declared which repo to resolve against (then refs stay plain text).
+const openGhComment = useGhCommentLink()
 // Shared PreviewModal store — used for images that already carry a loadable src
 // (data:/http:), which have no workspace file for filePreview to resolve.
 const { open: openPreview } = usePreview()
@@ -176,7 +179,48 @@ function linkifyFilePaths(el: HTMLElement) {
     const path = filePathOf(code.textContent ?? '')
     if (path) candidates.push({ code: code as HTMLElement, path })
   }
-  if (!candidates.length && !links.length) return
+  // Bare tokens in prose — comments/agent text often carries raw file paths and
+  // GitHub comment refs with no backticks or link around them ("draft:
+  // /Users/k/…/480-reply.md", "comment 5949627309"). Same shape-then-verify
+  // strategy as inline-code chips: file paths only wrap when they resolve to a
+  // real file; gh refs resolve lazily on click (gh.commentUrl).
+  type TextMatch = { index: number; raw: string } & (
+    | { kind: 'path'; path: string }
+    | { kind: 'gh'; id: string }
+  )
+  const textRefs: { node: Text; matches: TextMatch[] }[] = []
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  for (let tn = walker.nextNode() as Text | null; tn; tn = walker.nextNode() as Text | null) {
+    if (tn.parentElement?.closest('a, code, pre, button, script, style')) continue
+    const text = tn.data
+    if (!/[.\d]/.test(text)) continue // a path carries a dot, a gh ref digits
+    const matches: TextMatch[] = []
+    for (const m of text.matchAll(PATH_TOKEN_RE)) {
+      const idx = m.index ?? 0
+      // `://` scheme tail (http://x/f.png) — the token only grabs what follows
+      // the `:`; a label like "file:" shares the shape, accepted collateral.
+      if (text[idx - 1] === ':') continue
+      const path = filePathOf(m[0])
+      if (path) matches.push({ index: idx, raw: m[0], kind: 'path', path })
+    }
+    if (openGhComment) {
+      for (const m of text.matchAll(GH_COMMENT_RE)) {
+        const idx = m.index ?? 0
+        const raw = m[0]
+        const id = m[1]!
+        // Overlap with a path match (e.g. `comment1234.md`) → the file wins.
+        if (matches.some((p) => idx < p.index + p.raw.length && idx + raw.length > p.index))
+          continue
+        matches.push({ index: idx, raw, kind: 'gh', id })
+      }
+    }
+    if (matches.length)
+      textRefs.push({ node: tn, matches: matches.sort((a, b) => a.index - b.index) })
+  }
+  const textFlat = textRefs.flatMap((r) =>
+    r.matches.map((m) => ({ node: r.node, index: m.index, raw: m.raw, m })),
+  )
+  if (!candidates.length && !links.length && !textFlat.length) return
   const token = renderToken
   // Refine links: swap the tooltip to the resolved real path so display == destination.
   // A link stays clickable regardless (an unresolved href still opens → clear "could not
@@ -211,6 +255,61 @@ function linkifyFilePaths(el: HTMLElement) {
         if (k === 'Enter' || k === ' ') openAt(real)(e)
       })
     })
+  })
+  // Verified prose tokens → wrap each match in a link. File paths must resolve
+  // to a real file (fake chips are worse than plain text); gh comment refs are
+  // shape-only and resolve on click. Matches in one text node are split
+  // RIGHT-TO-LEFT so earlier match offsets stay valid.
+  const resolveMatch = (m: (typeof textFlat)[number]['m']): Promise<string | null> =>
+    m.kind === 'path' ? filePreview.resolve(m.path) : Promise.resolve(openGhComment ? m.id : null)
+  void Promise.all(textFlat.map((e) => resolveMatch(e.m))).then((resolved) => {
+    if (token !== renderToken) return // subtree replaced while resolving
+    const perNode = new Map<
+      Text,
+      { index: number; raw: string; m: (typeof textFlat)[number]['m']; real: string }[]
+    >()
+    textFlat.forEach((e, i) => {
+      const real = resolved[i]
+      if (!real) return // unresolved path / no gh opener → leave as plain text
+      const list = perNode.get(e.node) ?? []
+      list.push({ index: e.index, raw: e.raw, m: e.m, real })
+      perNode.set(e.node, list)
+    })
+    for (const [node, list] of perNode) {
+      for (const e of list.sort((a, b) => b.index - a.index)) {
+        const target = node.splitText(e.index)
+        target.splitText(e.raw.length)
+        const a = document.createElement('a')
+        a.textContent = e.raw
+        a.setAttribute('role', 'button')
+        a.setAttribute('tabindex', '0')
+        const mm = e.m // const — narrowing must survive into the listeners below
+        if (mm.kind === 'path') {
+          a.className = 'filelink'
+          a.title = t('sessions.preview.openFile', { path: e.real })
+          a.addEventListener('click', openAt(e.real))
+          a.addEventListener('keydown', (ev) => {
+            const k = (ev as KeyboardEvent).key
+            if (k === 'Enter' || k === ' ') openAt(e.real)(ev)
+          })
+        } else {
+          a.className = 'ghlink'
+          a.title = t('github.comment.open', { id: mm.id })
+          a.addEventListener('click', (ev) => {
+            ev.preventDefault()
+            openGhComment?.(mm.id)
+          })
+          a.addEventListener('keydown', (ev) => {
+            const k = (ev as KeyboardEvent).key
+            if (k === 'Enter' || k === ' ') {
+              ev.preventDefault()
+              openGhComment?.(mm.id)
+            }
+          })
+        }
+        target.replaceWith(a)
+      }
+    }
   })
 }
 
@@ -398,10 +497,10 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 .mdinline :deep(code) {
   /* mono-ok: inline code in the markdown render */
   font-family: var(--code);
-  background: var(--bgInput);
+  background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
-  padding: 0 4px;
+  padding: 1px 5px;
   font-size: 0.92em;
   /* Long unbreakable tokens (file paths, URLs) must wrap inside the bubble instead
      of spilling past its right edge when the message column is narrow (e.g. with the
@@ -411,21 +510,33 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   overflow-wrap: anywhere;
 }
 /* Inline-code / link that resolves to a workspace file → clickable preview chip.
-   Accent tint (not a grey fill) marks it as actionable, per the chip convention. */
+   Primary tint (not a grey fill) marks it as actionable, per the chip convention. */
 .mdinline :deep(code.filelink),
 .mdinline :deep(a.filelink) {
   cursor: pointer;
-  color: var(--accent);
-  border-color: var(--accentBorder);
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
   text-decoration: none;
 }
 .mdinline :deep(code.filelink:hover),
 .mdinline :deep(a.filelink:hover),
 .mdinline :deep(code.filelink:focus-visible),
 .mdinline :deep(a.filelink:focus-visible) {
-  background: var(--accentDim);
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: var(--primary);
   outline: none;
+}
+/* Bare GitHub comment ref ("comment 5949627309") in prose — same primary color
+   as file links, dotted underline marks it as an external jump. */
+.mdinline :deep(a.ghlink) {
+  cursor: pointer;
+  color: var(--primary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.mdinline :deep(a.ghlink:hover) {
+  text-decoration-style: solid;
 }
 /* Non-scrolling wrapper around a code block's <pre> (added by addCodeBlockControls). The
    controls row anchors to THIS (a sibling of <pre>), so it stays pinned to the visible
@@ -444,9 +555,9 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 .mdinline :deep(pre) {
   margin: 0;
   padding: 10px 12px;
-  background: var(--bgInput);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--radius);
   overflow-x: auto;
   line-height: var(--lh-sm);
 }
@@ -488,7 +599,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   vertical-align: middle;
 }
 .mdinline :deep(a) {
-  color: var(--accent);
+  color: var(--primary);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -496,7 +607,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   margin: 0 0 10px;
   padding: 2px 0 2px 12px;
   border-left: 3px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .mdinline :deep(h1),
 .mdinline :deep(h2),
@@ -542,19 +653,22 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   vertical-align: top;
 }
 .mdinline :deep(th) {
-  background: var(--bgInput);
+  background: var(--muted);
   font-weight: 600;
 }
 .mdinline :deep(tbody tr:nth-child(even)) {
-  background: color-mix(in srgb, var(--bgInput) 45%, transparent);
+  background: color-mix(in srgb, var(--muted) 45%, transparent);
 }
+/* Radius --r-btn (= --radius shadcn, 10px) khớp proto/`.mdbody img`; hairline border
+   đã có sẵn. Dưới theme Cute, rule `body[cute] .mdinline img` (theme-cute.css) vẫn
+   override về --r-sm theo ngôn ngữ riêng của nó. */
 .mdinline :deep(img) {
   max-width: 100%;
   height: auto;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-btn);
   border: 1px solid var(--border);
 }
-/* Resolved image → click opens the full-window PreviewModal. zoom-in cursor + an accent
+/* Resolved image → click opens the full-window PreviewModal. zoom-in cursor + a primary
    border on hover/focus is the whole affordance (no overlay chrome over the picture). */
 .mdinline :deep(img.imgopen) {
   cursor: zoom-in;
@@ -562,7 +676,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 }
 .mdinline :deep(img.imgopen:hover),
 .mdinline :deep(img.imgopen:focus-visible) {
-  border-color: var(--accent);
+  border-color: var(--primary);
   outline: none;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -575,7 +689,7 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 .mdinline :deep(img.imgloading) {
   min-width: 120px;
   min-height: 72px;
-  background: var(--bgInput);
+  background: var(--muted);
 }
 /* Fallback for an image that couldn't be resolved/read — a compact dashed chip with the
    alt/filename instead of the browser's broken-image icon. */
@@ -586,7 +700,44 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
   padding: 3px 10px;
   border: 1px dashed var(--border);
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: 0.92em;
+}
+
+/* Code-block chrome (useCodeBlockAttacher gắn .codetools lên .codeblock — node
+   trong subtree imperative, nên :deep). Spec: controls ghost + header row mờ.
+   Global app-shell vẫn là chip nền --bg + viền; trong transcript siết về ghost:
+   trong suốt, hover = accent-wash, giữ nguyên opacity gate (hover/focus).
+   ⚠ `body:not([data-theme-family='cute'])` là gate bắt buộc: Cute tô block code
+   TỐI (--codeBg) và skin chrome theo --termText — nếu rule này thắng specificity
+   (scoped deep thắng attr-selector của theme), chip ngôn ngữ muted-foreground sẽ
+   chìm trên nền tối. Không đụng chrome của Cute. */
+body:not([data-theme-family='cute']) .mdinline :deep(.codecopy),
+body:not([data-theme-family='cute']) .mdinline :deep(.codewrap),
+body:not([data-theme-family='cute']) .mdinline :deep(.codeexpand) {
+  background: transparent;
+  border-color: transparent;
+}
+body:not([data-theme-family='cute']) .mdinline :deep(.codecopy:hover),
+body:not([data-theme-family='cute']) .mdinline :deep(.codewrap:hover),
+body:not([data-theme-family='cute']) .mdinline :deep(.codeexpand:hover) {
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+/* Nút Run giữ tint primary — hành động duy nhất trong thanh có hệ quả ra ngoài.
+   Không cần gate: emerald đọc được trên cả nền tối của Cute. */
+.mdinline :deep(.coderun) {
+  color: var(--primary);
+}
+.mdinline :deep(.coderun:hover) {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+  color: var(--primary);
+}
+/* Chip ngôn ngữ: header-row text-xs muted, không cần nền/viền riêng trên card. */
+body:not([data-theme-family='cute']) .mdinline :deep(.codelang) {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted-foreground);
 }
 </style>

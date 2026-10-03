@@ -5,6 +5,8 @@
   "nav.group.system": "System",
   "nav.home": "Home",
   "nav.sessions": "Sessions",
+  "nav.board": "Board",
+  "nav.teams": "Teams",
   "nav.tasks": "Tasks",
   "nav.workflows": "Workflows",
   "nav.schedules": "Schedules",

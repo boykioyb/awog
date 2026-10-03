@@ -1,7 +1,7 @@
 // Chế độ xem "Nhóm" của danh sách phiên: một CÂY kiểu trang Notion, phiên con nằm
 // dưới phiên cha, tên nhóm chính là tiêu đề phiên cha.
 //
-// Quan hệ cha–con đọc từ `Session.groupParentId` (engineId của phiên cha) — KHÁC
+// Quan hệ cha–con đọc từ `Session.teamRunId` (engineId của phiên cha) — KHÁC
 // `parentSessionId`, cái đó là fork lineage và đã có cây riêng ở useSessionForkTree.
 //
 // Cây được LÀM PHẲNG thành một mảng có `depth` thay vì dùng component đệ quy: hàng
@@ -60,7 +60,7 @@ function buildRows(sessions: Session[], collapsedIds: Set<string>): SessionTreeR
   const childrenOf = new Map<string, Session[]>()
   const roots: Session[] = []
   for (const s of sessions) {
-    const parentEid = s.groupParentId
+    const parentEid = s.teamRunId
     if (parentEid && byEid.has(parentEid) && parentEid !== s.engineId) {
       const bucket = childrenOf.get(parentEid)
       if (bucket) bucket.push(s)

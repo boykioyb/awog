@@ -7,14 +7,11 @@
     <div v-if="isOpen" class="ovl on gitovl" @click.self="close">
       <div class="gitmodal">
         <div class="gitmodal-head">
-          <Icon
-            name="git"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
-          />
+          <Icon name="git" class="size-3.5 text-primary" />
           <span class="gitmodal-title">{{ t('sessions.workspace.gitModal.title') }}</span>
           <span style="flex: 1" />
           <button class="gitmodal-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="x" class="size-3.5" />
           </button>
         </div>
         <div class="gitmodal-body">
@@ -58,9 +55,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   height: 88vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn); /* rounded-lg */
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
@@ -71,7 +69,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--bgEl);
 }
 .gitmodal-title {
   font-weight: 600;
@@ -79,15 +76,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .gitmodal-x {
   background: transparent;
   border: none;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   display: inline-flex;
 }
 .gitmodal-x:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 /* The Git Manager fills the remaining space; its own .gcols handles overflow.
    Mirror the full /git page wrapper (.page + inline flex-direction:column) exactly

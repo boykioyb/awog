@@ -63,33 +63,33 @@
       </span>
       <span style="flex: 1" />
       <template v-if="step === 'source'">
-        <button class="btn" type="button" @click="onClose">{{ t('common.cancel') }}</button>
-        <button
-          class="btn pri"
+        <Button type="button" variant="outline" @click="onClose">{{ t('common.cancel') }}</Button>
+        <Button
           type="button"
           :disabled="!canPreview || previewing"
+          variant="default"
           @click="onPreview"
         >
           {{
             previewing ? t('infra.import.file.previewing') : t('infra.import.file.previewAction')
           }}
-        </button>
+        </Button>
       </template>
       <template v-else-if="step === 'preview'">
-        <button class="btn" type="button" :disabled="applying" @click="step = 'source'">
+        <Button type="button" :disabled="applying" variant="outline" @click="step = 'source'">
           {{ t('common.back') }}
-        </button>
-        <button
-          class="btn pri"
+        </Button>
+        <Button
           type="button"
           :disabled="!selectedCount || applying || hasInvalidRow"
+          variant="default"
           @click="onApply"
         >
           {{ applying ? t('infra.import.file.applying') : t('infra.import.file.apply') }}
-        </button>
+        </Button>
       </template>
       <template v-else>
-        <button class="btn pri" type="button" @click="onDone">{{ t('common.close') }}</button>
+        <Button type="button" variant="default" @click="onDone">{{ t('common.close') }}</Button>
       </template>
     </template>
   </LibraryEntityModal>
@@ -117,6 +117,7 @@ import type {
 } from '~/composables/useAwsProfilesApi'
 import type { AwsProfile } from '~/types'
 import { AWS_PROFILE_NAME_RE } from '~/utils/aws-profile-view'
+import Button from '~/components/ui/button/Button.vue'
 
 // `profiles` không dùng trực tiếp ở đây — sidecar đã tính sẵn `entry.conflict`
 // so với `~/.aws` hiện tại. Giữ prop vì hợp đồng của trang (pages/infra.vue)

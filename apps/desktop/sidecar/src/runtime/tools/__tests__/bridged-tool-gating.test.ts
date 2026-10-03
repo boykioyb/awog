@@ -299,10 +299,12 @@ describe('list_sessions + send_session_message bắc cầu qua awogsessions', ()
   })
 
   it('chính sách chỉ có MỘT bản cho cả hai runtime', () => {
-    // Hai câu quan trọng nhất: danh bạ là nhãn KHÔNG tin được, và gửi tin thì
-    // KHÔNG khởi động lượt nào ở phiên đích (nên đừng ngồi chờ trả lời).
+    // Ba câu quan trọng nhất: danh bạ là nhãn KHÔNG tin được; tin GỬI ĐI tự
+    // khởi động lượt ở phiên đích khi nó rảnh (xếp hàng khi nó bận) — và không
+    // có hồi âm nào quay lại trong chính lượt gọi (đừng ngồi chờ trả lời).
     expect(SESSION_MESSAGING_TEXT.listDescription).toContain('untrusted labels')
-    expect(SESSION_MESSAGING_TEXT.sendDescription).toContain('no reply to wait for')
+    expect(SESSION_MESSAGING_TEXT.sendDescription).toContain('AUTO-STARTS')
+    expect(SESSION_MESSAGING_TEXT.sendDescription).toContain('No reply comes back')
     expect(SESSION_MESSAGING_TEXT.message).toContain('characters')
   })
 })

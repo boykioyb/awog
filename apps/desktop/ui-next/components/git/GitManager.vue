@@ -189,7 +189,7 @@
       </div>
     </div>
 
-    <ContextMenu
+    <AppContextMenu
       :open="menu !== null"
       :position="menu ?? { x: 0, y: 0 }"
       :items="menuItems"

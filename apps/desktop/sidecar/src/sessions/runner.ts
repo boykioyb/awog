@@ -211,6 +211,16 @@ export interface RunNonStreamArgs {
   // Claude Code subagent `tools` field from the active agent. When set,
   // restricts the runtime toolset to this whitelist.
   allowedTools?: string[]
+  // Per-agent skill whitelist (Agent.skillIds). Claude SDK path: forwarded to
+  // the SDK `skills` option so the CLI's Skill tool matches the filtered
+  // <available_skills> catalogue. Pi/Codex paths ignore it — there the
+  // catalogue IS the only skills surface (already filtered upstream).
+  skills?: string[]
+  // Agent repo-access roots (Agent.repos → resolveAgentFsRoots). Pi/Codex: the
+  // fs tools gate paths against this union instead of cwd alone. Claude SDK:
+  // ignored — the CLI can't narrow below cwd; the <repo_access> prompt block
+  // carries the boundary there.
+  fsRoots?: string[]
   // When set, `pendingText` is a slash command (e.g. '/compact') handled by the
   // runtime instead of a normal turn.
   slashCommand?: 'compact'
@@ -521,7 +531,9 @@ export async function runStream(
 // credential store rather than from the session settings, which never carry it.
 // A lookup failure answers "no custom endpoint" and lets the normal path raise
 // the real credential error, instead of silently rerouting the turn.
-async function hasCustomEndpoint(settings: SessionSettings): Promise<boolean> {
+// Exported for sessions.open-cli — its native-CLI check makes the same
+// provider→runtime routing decision.
+export async function hasCustomEndpoint(settings: SessionSettings): Promise<boolean> {
   try {
     const { resolveAccount } = await import('../credentials/credential-resolver.js')
     const account = await resolveAccount('openai', settings.accountId)

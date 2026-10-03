@@ -12,6 +12,7 @@ import {
   REMOTE_ALLOWLIST,
   RemoteRejected,
   eventSessionId,
+  isCliGroupKey,
   isEventForwardable,
   isMethodAllowed,
   requiresUnattended,
@@ -438,6 +439,9 @@ class RemoteGateway {
     if (!state.deviceId) return
     const sessionId = typeof frame.sessionId === 'string' ? frame.sessionId : ''
     if (!sessionId) return
+    // `cli:<sessionId>` topics are the sidecar's internal grouping for "Open in
+    // CLI" PTYs — never a subscription target from a remote device.
+    if (isCliGroupKey(sessionId)) return
     if (add) state.subs.add(sessionId)
     else state.subs.delete(sessionId)
   }
@@ -584,7 +588,10 @@ class RemoteGateway {
   private fanoutEvent(type: string, payload: unknown): void {
     if (this.conns.size === 0 || !isEventForwardable(type)) return
     const sessionId = eventSessionId(payload)
-    if (!sessionId) return
+    // CLI-attached terminal events are keyed under `cli:<sessionId>` — drop
+    // them before any subscription check so remote devices never see the
+    // agent CLI's PTY traffic at all.
+    if (!sessionId || isCliGroupKey(sessionId)) return
     const frame = { type: 'event', event: { type, payload } }
     for (const [ws, state] of this.conns) {
       if (state.deviceId && state.subs.has(sessionId)) this.send(ws, frame)

@@ -104,8 +104,8 @@
         <span style="color: var(--textMuted)">{{ t('settings.appearance.preview.muted') }}</span>
       </div>
       <div class="apv-row">
-        <button class="btn pri">{{ t('settings.appearance.preview.primary') }}</button>
-        <button class="btn">{{ t('settings.appearance.preview.secondary') }}</button>
+        <Button variant="default">{{ t('settings.appearance.preview.primary') }}</Button>
+        <Button variant="outline">{{ t('settings.appearance.preview.secondary') }}</Button>
         <a class="apv-link">Link</a>
       </div>
       <pre class="codeblk apv-code">const sum = (a, b) =&gt; a + b</pre>
@@ -118,6 +118,7 @@ import { computed, onMounted } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import type { FontWeight, SansFamily, SurfaceDepth, ThemeFamily } from '~/stores/settings'
 import { useAppearanceDom } from '~/composables/useAppearanceDom'
+import Button from '~/components/ui/button/Button.vue'
 
 // Appearance panel — ports setSecHtml('appearance') and wires it to real state.
 // Mode/accent/font-size + locale live in useTheme()/useI18n(); theme family, sans

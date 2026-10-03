@@ -21,26 +21,34 @@
           <span class="ixb-dot" :class="tone" />
           <span class="ixb-ttl">{{ session?.title || t('infra.bubble.title') }}</span>
           <!-- "Danh sách" ↔ "Hội thoại": hai mặt của cùng một khung. -->
-          <button
-            class="btn sm"
+          <Button
             type="button"
             :title="pane === 'chat' ? t('infra.bubble.sessions') : t('infra.bubble.chat')"
+            variant="outline"
+            size="sm"
             @click="setPane(pane === 'chat' ? 'list' : 'chat')"
           >
             <Icon :name="pane === 'chat' ? 'listul' : 'message'" />
-          </button>
+          </Button>
           <!-- "Mở full" điều hướng về PHIÊN (yêu cầu người dùng), không phải /infra. -->
-          <button class="btn sm" type="button" :title="t('infra.bubble.expand')" @click="expand">
+          <Button
+            type="button"
+            :title="t('infra.bubble.expand')"
+            variant="outline"
+            size="sm"
+            @click="expand"
+          >
             <Icon name="maximize" />
-          </button>
-          <button
-            class="btn sm"
+          </Button>
+          <Button
             type="button"
             :title="t('infra.bubble.close')"
+            variant="outline"
+            size="sm"
             @click="closeBubble"
           >
             <Icon name="x" />
-          </button>
+          </Button>
         </header>
 
         <!-- Thư mục tương tác là `awog-infra` — "infra riêng", không phải repo
@@ -73,13 +81,13 @@
               :disabled="busy"
               @keydown.enter.exact.prevent="send"
             />
-            <button v-if="busy" class="btn sm" type="button" @click="stop">
+            <Button v-if="busy" type="button" variant="outline" size="sm" @click="stop">
               <Icon name="stop" />
               {{ t('infra.bubble.stop') }}
-            </button>
-            <button v-else class="btn pri sm" type="submit" :disabled="!draft.trim()">
+            </Button>
+            <Button v-else type="submit" :disabled="!draft.trim()" variant="default" size="sm">
               <Icon name="send" />
-            </button>
+            </Button>
           </form>
         </template>
       </section>
@@ -97,6 +105,7 @@ import InfraBubbleTranscript from '~/components/infra/bubble/InfraBubbleTranscri
 import { useInfraBubble } from '~/composables/useInfraBubble'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useSessionsStore } from '~/stores/sessions'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const {

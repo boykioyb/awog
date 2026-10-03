@@ -76,15 +76,15 @@
                là trạng thái riêng, khác hẳn `''` (gộp mọi stream). -->
           <template v-else-if="activeStream === null">
             <div class="lgs-mainbar">
-              <button
-                class="btn"
+              <Button
                 type="button"
                 :disabled="streamsLoading"
+                variant="outline"
                 @click="onTail(tailGroup)"
               >
                 <Icon :name="streamsLoading ? 'clock' : 'refresh'" class="lgs-ic" />
                 {{ streamsLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
-              </button>
+              </Button>
               <span class="lgs-mainbar-group" :title="tailGroup">{{ tailGroup }}</span>
             </div>
 
@@ -110,14 +110,19 @@
           <Teleport v-else to="body" :disabled="!tailFull">
             <div class="lgs-tail" :class="{ full: tailFull }">
               <div class="lgs-mainbar">
-                <button v-if="!tailFull" class="btn" type="button" @click="backToStreams">
+                <Button v-if="!tailFull" type="button" variant="outline" @click="backToStreams">
                   <Icon name="chev-left" class="lgs-ic" />
                   {{ t('infra.logs.streams.back') }}
-                </button>
-                <button class="btn" type="button" :disabled="tailLoading" @click="refreshTail">
+                </Button>
+                <Button
+                  type="button"
+                  :disabled="tailLoading"
+                  variant="outline"
+                  @click="refreshTail"
+                >
                   <Icon :name="tailLoading ? 'clock' : 'refresh'" class="lgs-ic" />
                   {{ tailLoading ? t('infra.logs.tail.loading') : t('infra.logs.tail.refresh') }}
-                </button>
+                </Button>
                 <!-- Đang đọc CÁI GÌ: nhóm rồi tới stream. Thiếu vế sau thì hai bảng
                      của hai stream khác nhau trông y hệt nhau. Ở toàn màn hình thì
                      càng cần: cột trái mang ngữ cảnh đã bị ẩn đi. -->
@@ -136,16 +141,17 @@
                 <span v-if="tailNextToken" class="lgs-trunc">
                   {{ t('infra.logs.tail.hasMore') }}
                 </span>
-                <button
-                  class="btn sm"
+                <Button
                   type="button"
                   :title="
                     tailFull ? t('infra.logs.tail.exitFullTitle') : t('infra.logs.tail.fullTitle')
                   "
+                  variant="outline"
+                  size="sm"
                   @click="tailFull = !tailFull"
                 >
                   <Icon :name="tailFull ? 'fullscreen-exit' : 'fullscreen'" class="lgs-ic" />
-                </button>
+                </Button>
               </div>
 
               <div v-if="tailError" class="lgs-error">
@@ -224,46 +230,46 @@
 
           <div class="itoolbar lgs-runbar">
             <div class="itoolgrp">
-              <button
-                class="btn pri"
+              <Button
                 type="button"
                 :disabled="!canRun"
                 aria-keyshortcuts="Meta+Enter Control+Enter"
+                variant="default"
                 @click="onRun"
               >
                 <Icon :name="running ? 'clock' : 'play'" class="lgs-ic" />
                 {{ running ? t('infra.logs.run.running') : t('infra.logs.run.go') }}
-              </button>
-              <button
+              </Button>
+              <Button
                 v-if="running"
-                class="btn"
                 type="button"
                 aria-keyshortcuts="Meta+. Control+."
+                variant="outline"
                 @click="onCancel"
               >
                 <Icon name="stop" class="lgs-ic" />
                 {{ t('infra.logs.run.cancel') }}
-              </button>
+              </Button>
             </div>
 
             <div class="itoolgrp">
-              <button class="btn" type="button" :disabled="saving" @click="onSave">
+              <Button type="button" :disabled="saving" variant="outline" @click="onSave">
                 <Icon name="save" class="lgs-ic" />
                 {{ t('infra.logs.run.save') }}
-              </button>
-              <button class="btn" type="button" @click="onCopyQuery">
+              </Button>
+              <Button type="button" variant="outline" @click="onCopyQuery">
                 <Icon name="copy" class="lgs-ic" />
                 {{ t('infra.logs.run.copyQuery') }}
-              </button>
-              <button
-                class="btn"
+              </Button>
+              <Button
                 type="button"
                 :title="t('infra.logs.window.sendToMonitoringHint')"
+                variant="outline"
                 @click="onSendToMonitoring"
               >
                 <Icon name="forward" class="lgs-ic" />
                 {{ t('infra.logs.window.sendToMonitoring') }}
-              </button>
+              </Button>
             </div>
 
             <div class="itoolgrp iend lgs-meta-grp">
@@ -292,15 +298,16 @@
                 <template v-else>{{ t('infra.logs.run.noEstimate') }}</template>
               </span>
 
-              <button
-                class="btn sm"
+              <Button
                 type="button"
                 :disabled="picked.length === 0"
+                variant="outline"
+                size="sm"
                 @click="refreshEstimate"
               >
                 <Icon name="refresh" class="lgs-ic" />
                 {{ t('infra.logs.run.reestimate') }}
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -386,6 +393,7 @@ import { useInfraTrace } from '~/composables/useInfraTrace'
 import { useInfraTraceHighlight } from '~/composables/useInfraTraceHighlight'
 import { useInfraWindowSync } from '~/composables/useInfraWindowSync'
 import type { LogsSeed } from '~/composables/useInfraLogs'
+import Button from '~/components/ui/button/Button.vue'
 
 // `seed` cho phép màn khác (Tổng quan) mở tab này với một câu lệnh đã điền sẵn —
 // điền câu lệnh KHÔNG phải chạy. Câu Insights ⇒ mở luôn chế độ nâng cao.

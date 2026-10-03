@@ -7,14 +7,15 @@
     <div class="flex flex-wrap items-center justify-end gap-2">
       <SettingsSeg v-model="provider" :options="PROVIDER_OPTIONS" />
       <AppSelect v-model="modelId" :options="modelOptions" />
-      <button
-        class="btn pri sm"
+      <Button
         type="button"
         :disabled="applying || projectCount === 0"
+        variant="default"
+        size="sm"
         @click="applyToAll"
       >
         {{ t('settingsDefaults.projectModel.apply', { n: projectCount }) }}
-      </button>
+      </Button>
     </div>
   </SettingsField>
 </template>
@@ -31,6 +32,7 @@ import {
   modelsForProvider,
 } from '~/composables/useSessionsData'
 import type { ProviderName } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()

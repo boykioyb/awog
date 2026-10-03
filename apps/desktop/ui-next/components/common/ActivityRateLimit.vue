@@ -76,9 +76,9 @@ function formatResetsIn(ms?: number): string {
 }
 
 function rlColor(u: number): string {
-  if (u >= 1) return 'var(--danger)'
-  if (u >= 0.9) return 'var(--amber)'
-  return 'var(--accent)'
+  if (u >= 1) return 'var(--destructive)'
+  if (u >= 0.9) return 'var(--warning)'
+  return 'var(--primary)'
 }
 
 const rows = computed(() =>
@@ -102,9 +102,9 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   flex-direction: column;
   gap: 10px;
   padding: 15px;
-  background: var(--bgEl);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--r-card);
+  border-radius: var(--radius); /* rounded-lg */
 }
 .arlhd {
   display: flex;
@@ -114,7 +114,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 .arlnm {
   font-size: 1em;
   font-weight: 550;
-  color: var(--text);
+  color: var(--foreground);
 }
 .arlref {
   display: grid;
@@ -122,14 +122,14 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
   width: 26px;
   height: 26px;
   border: 0;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .arlref:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .arlref:disabled {
   opacity: 0.5;
@@ -146,10 +146,10 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 .arlhint {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .arlhint.err {
-  color: var(--amber);
+  color: var(--warning);
 }
 .arlbars {
   display: flex;
@@ -170,17 +170,17 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 .arllbl {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .arlpct {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .arlbar {
   height: 6px;
   border-radius: var(--r-pill);
-  background: var(--bgInput);
+  background: var(--muted);
   overflow: hidden;
 }
 .arlbar i {
@@ -192,7 +192,7 @@ const hidden = computed(() => !loading.value && !error.value && rows.value.lengt
 .arlreset {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 
 @media (prefers-reduced-motion: reduce) {

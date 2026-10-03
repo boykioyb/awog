@@ -82,6 +82,8 @@ import { buildCodeIndexSdkServer } from './code-index-sdk-server.js'
 import { CODE_INDEX_MCP_SERVER } from '../tools/code-index-tool.js'
 import { buildSessionMessagingSdkServer } from './session-messaging-sdk-server.js'
 import { SESSION_MESSAGING_MCP_SERVER } from '../tools/session-tools.js'
+import { buildTeamSdkServer } from './team-sdk-server.js'
+import { TEAM_MCP_SERVER } from '../tools/board-tools.js'
 import { SURFACE_MCP_SERVER } from '../tools/surface-tools.js'
 import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
 import { listHosts } from '../../ssh/store.js'
@@ -641,7 +643,11 @@ export async function runStreamClaude(
   // Wiki tools (ADR 0073 D-7): same handlers as the Pi path, bridged as an
   // in-process SDK MCP server so a wiki lookup works identically on both runtimes.
   const ctxCfg = args.contextConfig
-  const wikiAvailable = ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId))
+  // wikiAutoWrite bật ⇒ cụm wiki tool luôn hiện kể cả khi wiki rỗng — nếu không,
+  // agent không thể tạo trang đầu tiên (gà–trứng). Cùng gate với Pi path.
+  const wikiAutoWrite = ctxCfg?.wikiAutoWrite === true
+  const wikiAvailable =
+    ctxCfg?.wikiEnabled !== false && (wikiAutoWrite || (await hasWikiContext(args.projectId)))
   // Memory tools (ADR 0073 D-11): writes are opt-in, read appears only when a fact
   // has detail past its one-liner. Same gating as the Pi path.
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
@@ -673,7 +679,7 @@ export async function runStreamClaude(
     // Wiki lookup → mcp__awogwiki__wiki_search / mcp__awogwiki__wiki_read.
     ...(wikiAvailable
       ? {
-          awogwiki: buildWikiToolsSdkServer(args.projectId, ctxCfg?.wikiAutoWrite === true),
+          awogwiki: buildWikiToolsSdkServer(args.projectId, wikiAutoWrite),
         }
       : {}),
     // Logtime → mcp__awoglogtime__logtime_day / _projects / _add / _remove.
@@ -698,7 +704,12 @@ export async function runStreamClaude(
     [SURFACE_MCP_SERVER]: buildSurfaceToolsSdkServer(args.sessionId, args.cwd ?? process.cwd()),
     // Embedded browser (ADR 0043) → mcp__awogbrowser__browser_tool. Same handler as
     // the Pi AgentTool, so browsing does not disappear on an Anthropic account.
-    [BROWSER_MCP_SERVER]: buildBrowserToolSdkServer(args.cwd ?? process.cwd()),
+    // `args.sessionId` là scope sở hữu tab — tab của lượt này chỉ panel của
+    // phiên đó mới thấy (browser per-session).
+    [BROWSER_MCP_SERVER]: buildBrowserToolSdkServer(
+      args.cwd ?? process.cwd(),
+      args.sessionId,
+    ),
     // Terminal của NGƯỜI DÙNG (ADR 0019) → mcp__awogterm__read_terminal. Cùng
     // handler với AgentTool của Pi, nên khử bí mật + hàng rào nonce là một bản
     // duy nhất. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat — đúng điều
@@ -717,6 +728,14 @@ export async function runStreamClaude(
       args.sessionId,
       args.abortController?.signal,
     ),
+    // Tool ê-kíp (Session Teams) → mcp__awogteam__team_item_* / team_say /
+    // team_note / channel_read / member_diff. Chỉ có mặt khi phiên NẰM TRONG
+    // NHÓM — `buildTeamSdkServer` trả null cho phiên lẻ, đúng điều kiện
+    // createBoardTools/createChannelTools trả [] bên nhánh Pi.
+    ...(() => {
+      const team = buildTeamSdkServer(args.sessionId)
+      return team ? { [TEAM_MCP_SERVER]: team } : {}
+    })(),
     // Dev server của dự án (docs/features/dev-server.md) → mcp__awogdev__dev_server.
     // KHÔNG vô điều kiện: nhánh Pi gate nó bằng `filter.backgroundExec`, tức
     // `!inPlanMode` — nó nói về chính những background shell mà plan mode cấm tạo,
@@ -893,7 +912,9 @@ export async function runStreamClaude(
     // Skill: nói TƯỜNG MINH là bật hết. Bỏ trống không phải "tắt" (doc của SDK), mà
     // AWOG đang tự bơm catalogue `<available_skills>` vào prompt — hai bên phải khớp,
     // kẻo model đọc tên skill trong catalogue rồi gọi một tool từ chối nó.
-    skills: 'all',
+    // Agent.skillIds whitelist (khi agent khai báo) thu hẹp ĐÚNG danh sách này —
+    // catalogue đã lọc theo cùng skillIds ở buildBulkLoad nên hai bên vẫn khớp.
+    skills: args.skills && args.skills.length > 0 ? args.skills : 'all',
     // QUESTION_ENV chỉ đi cùng gate: nó bật schema mở rộng của AskUserQuestion, mà
     // tool đó chỉ tồn tại khi có `canUseTool` (ask-user-question.ts).
     env: {

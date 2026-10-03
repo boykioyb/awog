@@ -1,55 +1,61 @@
 <template>
   <div class="gbar">
     <!-- Project picker -->
-    <span
-      class="chip chipbtn"
+    <Button
+      variant="outline"
+      size="sm"
+      class="gbar-pick"
       :title="t('git.header.selectProject')"
       @click.stop="toggle('project', $event)"
     >
       <Icon
         name="projects"
-        style="width: var(--icon-xs); height: var(--icon-xs)"
+        class="size-3.5"
         :style="currentProject?.color ? { color: currentProject.color } : undefined"
       />
       <span class="gtrunc gchiplbl gchiplbl--project">
         {{ currentProject?.name ?? t('git.header.noProject') }}
       </span>
-      <span v-if="(currentProject?.dirty ?? 0) > 0" class="gbadge" :style="dirtyStyle">
+      <span
+        v-if="(currentProject?.dirty ?? 0) > 0"
+        class="rounded-sm bg-warning/15 px-1 font-mono text-[10px] leading-4 text-warning"
+      >
         {{ currentProject?.dirty }}
       </span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </span>
+      <Icon name="chev" class="size-3.5" />
+    </Button>
 
     <span v-if="!notARepo" class="gsep" />
 
     <!-- Repo picker — only when project holds more than one repo -->
     <template v-if="repos.length > 1 && !notARepo">
-      <span
-        class="chip chipbtn"
+      <Button
+        variant="outline"
+        size="sm"
+        class="gbar-pick"
         :title="t('git.header.selectRepo')"
         @click.stop="toggle('repo', $event)"
       >
-        <Icon
-          name="fork"
-          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
-        />
-        <span class="gtrunc mono" style="max-width: 160px">{{ repo }}</span>
-        <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </span>
+        <Icon name="fork" class="size-3.5 text-muted-foreground" />
+        <span class="gtrunc font-mono" style="max-width: 160px">{{ repo }}</span>
+        <Icon name="chev" class="size-3.5" />
+      </Button>
       <span class="gsep" />
     </template>
 
     <!-- Branch picker -->
-    <span
+    <Button
       v-if="!notARepo"
-      class="chip chipbtn"
+      variant="outline"
+      size="sm"
+      class="gbar-pick"
       :title="t('git.header.switchBranch')"
       @click.stop="toggle('branch', $event)"
     >
-      <Icon name="branch" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="gtrunc mono gchiplbl gchiplbl--branch">{{ branch }}</span>
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </span>
+      <Icon name="branch" class="size-3.5" />
+      <span class="gtrunc gchiplbl gchiplbl--branch font-mono">{{ branch }}</span>
+      <Icon name="chev" class="size-3.5" />
+    </Button>
 
     <span class="gspacer" />
 
@@ -59,52 +65,48 @@
            spinner + progress and gains an attached cancel (✕) — grouped in .gop and
            edge-joined so "Push ✕" reads as one control, not a detached box. -->
       <span class="gop">
-        <button class="btn sm" :disabled="busy" @click="emit('fetch')">
+        <Button variant="outline" size="sm" :disabled="busy" @click="emit('fetch')">
           <span v-if="syncOp?.op === 'fetch'" class="gspin-ring" />
-          <Icon v-else name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon v-else name="refresh" class="size-3.5" />
           {{ syncOp?.op === 'fetch' ? syncLabel : t('git.ops.fetch') }}
-        </button>
+        </Button>
         <button
           v-if="syncOp?.op === 'fetch'"
           class="gopx"
           :title="t('git.ops.cancel')"
           @click="emit('cancel', 'fetch')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="x" class="size-3.5" />
         </button>
       </span>
       <span class="gop">
-        <button class="btn sm" :disabled="busy" @click="emit('pull')">
+        <Button variant="outline" size="sm" :disabled="busy" @click="emit('pull')">
           <span v-if="syncOp?.op === 'pull'" class="gspin-ring" />
           {{ syncOp?.op === 'pull' ? syncLabel : t('git.ops.pullWord') }}
-          <span v-if="!syncOp && behind" class="mono" style="font-size: var(--fs-xs)">
-            ↓{{ behind }}
-          </span>
-        </button>
+          <span v-if="!syncOp && behind" class="font-mono text-xs tabular-nums">↓{{ behind }}</span>
+        </Button>
         <button
           v-if="syncOp?.op === 'pull'"
           class="gopx"
           :title="t('git.ops.cancel')"
           @click="emit('cancel', 'pull')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="x" class="size-3.5" />
         </button>
       </span>
       <span class="gop">
-        <button class="btn sm gpush" :disabled="busy" @click="emit('push')">
+        <Button variant="outline" size="sm" class="gpush" :disabled="busy" @click="emit('push')">
           <span v-if="syncOp?.op === 'push'" class="gspin-ring" />
           {{ syncOp?.op === 'push' ? syncLabel : t('git.ops.pushWord') }}
-          <span v-if="!syncOp && ahead" class="mono" style="font-size: var(--fs-xs)">
-            ↑{{ ahead }}
-          </span>
-        </button>
+          <span v-if="!syncOp && ahead" class="font-mono text-xs tabular-nums">↑{{ ahead }}</span>
+        </Button>
         <button
           v-if="syncOp?.op === 'push'"
           class="gopx"
           :title="t('git.ops.cancel')"
           @click="emit('cancel', 'push')"
         >
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="x" class="size-3.5" />
         </button>
       </span>
 
@@ -112,124 +114,133 @@
 
       <!-- gh account used for fetch/pull/push (set in Project → Overview). Click
            opens the project so the account can be changed. -->
-      <button
-        class="chip chipbtn"
+      <Button
+        variant="outline"
+        size="sm"
+        class="gbar-pick"
         :title="t('git.header.ghAccountTitle')"
         @click.stop="emit('open-account')"
       >
-        <Icon
-          name="git"
-          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
-        />
+        <Icon name="git" class="size-3.5 text-muted-foreground" />
         <span class="gtrunc gchiplbl gchiplbl--account">
           {{ ghAccount || t('git.header.ghAccountDefault') }}
         </span>
-      </button>
+      </Button>
 
-      <button class="btn sm gicon" :title="t('git.header.identity')" @click="emit('open-identity')">
-        <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      <Button
+        variant="outline"
+        size="sm"
+        class="w-8 px-0"
+        :title="t('git.header.identity')"
+        :aria-label="t('git.header.identity')"
+        @click="emit('open-identity')"
+      >
+        <Icon name="settings" class="size-3.5" />
+      </Button>
     </template>
 
-    <!-- Dropdowns (fixed-positioned so they escape the header's overflow) -->
+    <!-- Dropdowns (fixed-positioned so they escape the header's overflow) —
+         reskinned to the shadcn popover shape; mechanics unchanged. -->
     <div
       v-if="open === 'project'"
-      class="smenu"
+      class="gmenu"
       :style="{ ...menuStyle, width: '340px', padding: '0' }"
       @click.stop
     >
-      <div class="gbranchfilter">
-        <Icon
-          name="search"
-          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
-        />
-        <input
+      <div class="gmenu-filter">
+        <Icon name="search" class="size-3.5 shrink-0 text-muted-foreground" />
+        <Input
           ref="projectSearch"
           v-model="projectQuery"
+          unstyled
           :placeholder="t('git.header.filterProjects')"
           @keydown.enter.prevent="pickFirstProject"
           @keydown.esc.prevent="open = null"
         />
       </div>
-      <div class="gbranchlist">
+      <div class="gmenu-list">
         <div
           v-for="p in filteredProjects"
           :key="p.id"
-          class="mi"
-          style="align-items: flex-start"
+          class="gmi items-start"
           @click="pickProject(p.id)"
         >
           <Icon
             name="projects"
-            style="width: var(--icon-xs); height: var(--icon-xs); margin-top: 2px"
+            class="mt-0.5 size-3.5 shrink-0"
             :style="p.color ? { color: p.color } : undefined"
           />
-          <span style="flex: 1; min-width: 0">
-            <span style="display: flex; align-items: center; gap: 6px">
-              <span class="gtrunc" style="flex: 1">{{ p.name }}</span>
-              <span v-if="(p.dirty ?? 0) > 0" class="gbadge" :style="dirtyStyle">
+          <span class="min-w-0 flex-1">
+            <span class="flex items-center gap-1.5">
+              <span class="gtrunc flex-1">{{ p.name }}</span>
+              <span
+                v-if="(p.dirty ?? 0) > 0"
+                class="rounded-sm bg-warning/15 px-1 font-mono text-[10px] leading-4 text-warning"
+              >
                 {{ p.dirty }}
               </span>
             </span>
-            <span
-              class="mono"
-              style="
-                display: block;
-                font-size: var(--fs-xs);
-                color: var(--textDim);
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-              "
-            >
+            <span class="block truncate font-mono text-xs text-muted-foreground">
               {{ p.path }}
             </span>
           </span>
-          <span v-if="p.id === currentProjectId" class="ck">✓</span>
+          <Icon
+            v-if="p.id === currentProjectId"
+            name="check"
+            class="size-3.5 shrink-0 self-center text-primary"
+          />
         </div>
-        <div v-if="!filteredProjects.length" class="gsecempty">
+        <div
+          v-if="!filteredProjects.length"
+          class="px-2 py-6 text-center text-sm text-muted-foreground"
+        >
           {{ projectQuery ? t('git.sidebar.noMatch') : t('git.sidebar.empty') }}
         </div>
       </div>
     </div>
 
-    <div v-if="open === 'repo'" class="smenu" :style="menuStyle" @click.stop>
-      <div v-for="r in repos" :key="r" class="mi" @click="pickRepo(r)">
-        <Icon
-          name="fork"
-          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
-        />
-        <span class="gtrunc mono" style="flex: 1">{{ r }}</span>
-        <span v-if="r === repo" class="ck">✓</span>
+    <div v-if="open === 'repo'" class="gmenu" :style="menuStyle" @click.stop>
+      <div v-for="r in repos" :key="r" class="gmi" @click="pickRepo(r)">
+        <Icon name="fork" class="size-3.5 shrink-0 text-muted-foreground" />
+        <span class="gtrunc flex-1 font-mono">{{ r }}</span>
+        <Icon v-if="r === repo" name="check" class="size-3.5 shrink-0 text-primary" />
       </div>
     </div>
 
     <div
       v-if="open === 'branch'"
-      class="smenu"
+      class="gmenu"
       :style="{ ...menuStyle, width: '260px', padding: '0' }"
       @click.stop
     >
-      <div class="gbranchfilter">
-        <Icon
-          name="search"
-          style="width: var(--icon-xs); height: var(--icon-xs); color: var(--textDim)"
-        />
-        <input v-model="branchQuery" :placeholder="t('git.header.filterBranches')" />
+      <div class="gmenu-filter">
+        <Icon name="search" class="size-3.5 shrink-0 text-muted-foreground" />
+        <Input v-model="branchQuery" unstyled :placeholder="t('git.header.filterBranches')" />
       </div>
-      <div class="gbranchlist">
-        <div v-for="b in filteredBranches" :key="b.name" class="mi" @click="onSwitchBranch(b.name)">
+      <div class="gmenu-list">
+        <div
+          v-for="b in filteredBranches"
+          :key="b.name"
+          class="gmi"
+          @click="onSwitchBranch(b.name)"
+        >
           <Icon
             name="branch"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-            :style="b.current ? { color: 'var(--accent)' } : undefined"
+            class="size-3.5 shrink-0"
+            :style="b.current ? { color: 'var(--primary)' } : undefined"
           />
-          <span class="gtrunc mono" :style="b.current ? 'flex:1;color:var(--accent)' : 'flex:1'">
+          <span
+            class="gtrunc flex-1 font-mono"
+            :style="b.current ? 'color:var(--primary)' : undefined"
+          >
             {{ b.name }}
           </span>
-          <span v-if="b.current" class="ck">✓</span>
+          <Icon v-if="b.current" name="check" class="size-3.5 shrink-0 text-primary" />
         </div>
-        <div v-if="!filteredBranches.length" class="gsecempty">
+        <div
+          v-if="!filteredBranches.length"
+          class="px-2 py-6 text-center text-sm text-muted-foreground"
+        >
           {{ branchQuery ? t('git.sidebar.noMatch') : t('git.sidebar.empty') }}
         </div>
       </div>
@@ -243,7 +254,9 @@
 // header at the top of the main pane, not a full-width bar). Dropdowns are
 // fixed-positioned (anchored to their trigger) so the header's overflow-x:auto
 // doesn't clip them.
+import Button from '~/components/ui/button/Button.vue'
 import type { BranchInfo, ProjectInfo } from './git-types'
+import Input from '~/components/ui/input/Input.vue'
 
 // In-flight remote-sync op (mirrors the git store's `syncOp`). Drives the busy
 // state + live progress on the fetch/pull/push buttons.
@@ -284,12 +297,6 @@ const branchQuery = ref('')
 const projectQuery = ref('')
 const menuStyle = ref<Record<string, string>>({})
 const projectSearch = useTemplateRef<HTMLInputElement>('projectSearch')
-
-const dirtyStyle = {
-  color: 'var(--amber)',
-  background: 'var(--amberDim)',
-  borderColor: 'var(--amberBorder)',
-}
 
 // Any remote-sync op in flight → disable all three buttons; the active one shows
 // a spinner + localized progress label.
@@ -365,47 +372,22 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 </script>
 
 <style scoped>
-/* Merge/rebase banner instruction — danger tone while conflicts remain, muted
-   once resolved. No hex: colors from prototype.css theme vars. */
-.gconflicthint {
-  color: var(--danger);
-  margin-right: 6px;
-  white-space: nowrap;
-}
-.gconflicthint.ready {
-  color: var(--textDim);
-}
-
-/* ── Toolbar controls share one height + radius so the row reads as a single
-   system. Before, pickers (.chip, 3px padding) sat next to ops (.btn.sm, 5px
-   padding) at visibly different heights ("cái to cái nhỏ"). ── */
-.gbar .btn,
-.gbar .chip {
-  height: 28px;
-  border-radius: var(--r-xs);
-}
-.gbar .btn.sm {
-  padding: 0 11px;
-}
-.gbar .chip {
-  padding: 0 10px;
-}
-/* Icon-only toolbar buttons (identity settings) → square + centered. */
-.gbar .gicon {
-  width: 28px;
-  padding: 0;
-  justify-content: center;
+/* Picker buttons (project/repo/branch/account) — outline buttons whose labels
+   may ellipsize; the caps live in app-shell.css's container-query block (they
+   must beat any inline max-width, so they can't move into the template). */
+.gbar-pick {
+  gap: 6px;
 }
 
 /* ── Op + cancel = one joined segment. The ✕ used to be a separate bordered
-   button set off by the row's 9px gap, so it floated detached beside Push. Each
-   op is now grouped with its cancel and their edges are butted so "Push ✕" reads
-   as one control. The 9px row gap still separates Fetch / Pull / Push groups. ── */
+   button set off by the row's gap, so it floated detached beside Push. Each op
+   is now grouped with its cancel and their edges are butted so "Push ✕" reads
+   as one control. The row gap still separates Fetch / Pull / Push groups. ── */
 .gop {
   display: inline-flex;
   align-items: stretch;
 }
-.gop:has(> .gopx) > .btn {
+.gop:has(> .gopx) > :deep(button) {
   border-top-right-radius: 0;
   border-bottom-right-radius: 0;
 }
@@ -413,25 +395,23 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   display: grid;
   place-items: center;
   width: 26px;
-  height: 28px;
+  height: 32px;
   margin-left: -1px;
-  border: 1px solid var(--border);
-  border-radius: 0 var(--r-xs) var(--r-xs) 0;
+  border: 1px solid var(--input);
+  border-radius: 0 var(--radius) var(--radius) 0;
   background: transparent;
-  color: var(--danger);
+  color: var(--destructive);
   cursor: pointer;
   transition:
     background 0.12s,
     border-color 0.12s;
 }
 .gopx:hover {
-  background: var(--dangerBg);
-  border-color: var(--dangerBorder);
+  background: color-mix(in oklab, var(--destructive) 10%, transparent);
 }
 
-/* In-flight fetch/pull/push spinner. A clean CSS arc (3/4 ring in the button's own
-   currentColor) reads as a proper loading spinner — the old rotating "refresh"
-   glyph looked wobbly/loose. Only transform animates (GPU, no reflow). */
+/* In-flight fetch/pull/push spinner — vòng cung arc quanh, theo idiom proto
+   (ring quay quanh icon tĩnh, không quay glyph). */
 .gspin-ring {
   flex: 0 0 auto;
   width: 13px;
@@ -452,5 +432,60 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   .gspin-ring {
     animation: none;
   }
+}
+
+/* Filterable picker dropdowns — shadcn popover shape (popover bg, lg radius,
+   hairline, md shadow). Fixed-positioned by the trigger's rect (see toggle()). */
+.gmenu {
+  position: fixed;
+  z-index: 180;
+  min-width: 168px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn); /* rounded-lg */
+  box-shadow: var(--shadow-md);
+}
+.gmenu-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.gmenu-filter input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--foreground);
+}
+.gmenu-filter input::placeholder {
+  color: var(--muted-foreground);
+}
+.gmenu-list {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 4px;
+}
+.gmi {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm); /* rounded-md */
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--popover-foreground);
+  cursor: pointer;
+}
+.gmi:hover {
+  background: var(--accent-wash);
 }
 </style>

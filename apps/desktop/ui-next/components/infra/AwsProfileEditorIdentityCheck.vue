@@ -17,7 +17,9 @@
       </div>
       <div v-else class="ape-identity-err">
         <span>{{ errorMessage }}</span>
-        <button type="button" class="btn sm" @click="emit('retry')">{{ t('common.retry') }}</button>
+        <Button type="button" variant="outline" size="sm" @click="emit('retry')">
+          {{ t('common.retry') }}
+        </Button>
       </div>
     </template>
   </div>
@@ -30,6 +32,7 @@
 // xuống qua props, `retry` yêu cầu cha chạy lại).
 import { computed } from 'vue'
 import type { AwsIdentityCheckResult } from '~/composables/useAwsProfilesApi'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   checking: boolean

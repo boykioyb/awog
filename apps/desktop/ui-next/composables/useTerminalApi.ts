@@ -32,6 +32,22 @@ export interface TerminalTabKind {
   transport?: TerminalTransport
 }
 
+// Agent CLI mà khung chat của một phiên có thể đổi chỗ sang ("Open in CLI"). CLI
+// NATIVE của phiên (claude cho anthropic, codex cho openai) tiếp tục transcript
+// của chính phiên; 'devin' mở một phiên RIÊNG trong cùng workspace (engine trả
+// `linked: false`). Bỏ trống `cli` khi gọi openCli → engine tự chọn native.
+export type CliKind = 'claude' | 'codex' | 'devin'
+
+// Kết quả sessions.openCli. `linked` = CLI nối tiếp transcript của phiên này
+// (cli native); `alreadyOpen` = một PTY CLI còn sống đã được gắn lại thay vì
+// spawn thêm một cái thứ hai.
+export type OpenCliResult = {
+  terminalId: string
+  cli: CliKind
+  linked: boolean
+  alreadyOpen?: boolean
+}
+
 export function useTerminalApi() {
   const sidecar = useSidecar()
   return {
@@ -50,6 +66,23 @@ export function useTerminalApi() {
     list: (sessionId?: string) =>
       sidecar.request<{ terminals: TerminalSessionRef[] }>('terminal.list', {
         ...(sessionId !== undefined ? { sessionId } : {}),
+      }),
+    // Gắn một agent CLI thật vào workspace của phiên (PTY, gom dưới khoá
+    // `cli:<engineId>`). `sessionId` là ENGINE id; `cli` bỏ trống → CLI native
+    // của phiên. Lỗi engine: phiên đang bận, runtime không hỗ trợ, codex thiếu
+    // thread, thiếu binary devin.
+    openCli: (engineSessionId: string, cli: CliKind | undefined, cols: number, rows: number) =>
+      sidecar.request<OpenCliResult>('sessions.openCli', {
+        sessionId: engineSessionId,
+        ...(cli !== undefined ? { cli } : {}),
+        cols,
+        rows,
+      }),
+    // Gấp các tin mới phía CLI vào transcript AWOG (hàng nhập về mang
+    // `via: <cli>`). Engine cũng bắn `session.cli-synced` sau khi nhập.
+    syncCli: (engineSessionId: string) =>
+      sidecar.request<{ imported: number }>('sessions.syncCli', {
+        sessionId: engineSessionId,
       }),
   }
 }

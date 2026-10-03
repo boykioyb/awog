@@ -40,37 +40,37 @@
            "Nạp lại"/"Mở ở Nhật ký" rơi xuống hàng dưới, tách nút chính khỏi hai
            nút anh em của nó (ảnh người dùng 2026-09-16). -->
       <div class="itoolgrp">
-        <button
+        <Button
           type="button"
-          class="btn pri"
           :disabled="loading || !windowValid || !target"
           :aria-busy="loading"
           :title="target ? '' : t('infra.monitoring.target.required')"
+          variant="default"
           @click="load(false)"
         >
           <Icon name="play" class="im-ic" />
           {{ t('infra.monitoring.load') }}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          class="btn"
           :disabled="loading || !loadedAt"
           :title="t('infra.monitoring.reloadHint')"
+          variant="outline"
           @click="reload()"
         >
           <Icon name="refresh" class="im-ic" :class="loading ? 'im-spin' : ''" />
           {{ t('infra.monitoring.reload') }}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          class="btn"
           :disabled="!loadedAt"
           :title="t('infra.monitoring.window.sendToLogsHint')"
+          variant="outline"
           @click="sendToLogs()"
         >
           <Icon name="forward" class="im-ic" />
           {{ t('infra.monitoring.window.sendToLogs') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -227,6 +227,7 @@ import InfraResourcePicker from '~/components/infra/metrics/InfraResourcePicker.
 import InfraLogErrors from '~/components/infra/metrics/InfraLogErrors.vue'
 import InfraTimeRange from '~/components/infra/InfraTimeRange.vue'
 import InfraEmpty from '~/components/infra/InfraEmpty.vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const {
   context,

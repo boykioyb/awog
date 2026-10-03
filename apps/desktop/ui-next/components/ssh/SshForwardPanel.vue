@@ -43,38 +43,32 @@
     <div class="ssh-fp-add">
       <div class="ssh-fp-add-row">
         <AppSelect v-model="draft.type" :options="typeOptions" class="ssh-fp-type-sel" />
-        <input
+        <Input
           v-model.number="draft.bindPort"
           type="number"
-          class="ssh-fp-input"
           :placeholder="t('ssh.fwd.bindPort')"
           min="0"
           max="65535"
         />
         <template v-if="draft.type !== 'dynamic'">
           <span class="ssh-fp-arrow mono">{{ draft.type === 'local' ? '→' : '←' }}</span>
-          <input
-            v-model="draft.destHost"
-            type="text"
-            class="ssh-fp-input"
-            :placeholder="t('ssh.fwd.destHost')"
-          />
-          <input
+          <Input v-model="draft.destHost" type="text" :placeholder="t('ssh.fwd.destHost')" />
+          <Input
             v-model.number="draft.destPort"
             type="number"
-            class="ssh-fp-input ssh-fp-input-sm"
             :placeholder="t('ssh.fwd.destPort')"
             min="1"
             max="65535"
+            class="ssh-fp-input-sm"
           />
         </template>
       </div>
       <div class="ssh-fp-add-actions">
         <span class="ssh-fp-hint">{{ t('ssh.fwd.bindHint') }}</span>
-        <button class="btn pri sm" :disabled="!canAdd || adding" @click="add">
+        <Button :disabled="!canAdd || adding" variant="default" size="sm" @click="add">
           <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ t('ssh.fwd.add') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -88,6 +82,8 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useSshApi, type SshForwardInfo } from '~/composables/useSshApi'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import type { PortForward } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ connId: string }>()
 const emit = defineEmits<{ close: [] }>()

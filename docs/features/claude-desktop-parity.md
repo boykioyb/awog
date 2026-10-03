@@ -241,7 +241,9 @@ nên nó phải nói đúng tool là gì. `schedule_wakeup` đi nhờ `awogsurfa
 phiên, cùng họ). `read_terminal` có server riêng vì nó là NGUỒN ĐỌC dữ liệu L1 — gộp chung thì một
 luật viết cho `mcp__awogsurfaces__*` vô tình phủ luôn nó. Tương tự `awogdev` (đọc log + dừng tiến
 trình) và `awogsessions` (đọc danh bạ phiên khác + ghi vào hộp thư phiên khác) — biên tin cậy khác
-hẳn nhóm surface.
+hẳn nhóm surface. `awogteam` cũng tách riêng với cùng lý do: board/kênh/diff của ê-kíp chia sẻ một
+biên tin cậy "trong nhóm hay không" (chỉ phiên nằm trong nhóm mới có server), và một cú tắt cho
+`awogsessions` không được phép vô tình khoá luôn chúng.
 
 **Hỏng sẵn lộ ra vì test đòi hai runtime giống nhau** (test đòi cùng nhãn ⇒ hoá ra nhãn chưa đúng ở
 runtime NÀO): 7 tool AWOG-native chưa từng có nhãn transcript nên hiện tên thô; `dev_server`/

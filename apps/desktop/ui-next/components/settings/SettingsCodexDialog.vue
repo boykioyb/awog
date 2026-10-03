@@ -15,10 +15,10 @@
       <!-- URL ready: the browser was opened; wait for the loopback callback -->
       <template v-else-if="phase === 'waiting'">
         <div class="cxtext">{{ t('settingsModels.codex.opened') }}</div>
-        <button v-if="authUrl" class="btn pri cxreopen" type="button" @click="onOpen">
+        <Button v-if="authUrl" type="button" class="cxreopen" variant="default" @click="onOpen">
           <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span>{{ t('settingsModels.codex.reopen') }}</span>
-        </button>
+        </Button>
         <div class="cxrow cxwaiting">
           <span class="cxspin" />
           <span>{{ t('settingsModels.codex.waiting') }}</span>
@@ -29,9 +29,9 @@
     </div>
 
     <template #footer>
-      <button class="btn sm" type="button" @click="onCancel">
+      <Button type="button" variant="outline" size="sm" @click="onCancel">
         {{ t('settingsModels.form.cancel') }}
-      </button>
+      </Button>
     </template>
   </SettingsModelDialog>
 </template>
@@ -39,6 +39,7 @@
 <script setup lang="ts">
 import SettingsModelDialog from '~/components/settings/SettingsModelDialog.vue'
 import { useSettingsStore, type ProviderAccount } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
 import {
   SidecarError,
   SidecarUnavailableError,

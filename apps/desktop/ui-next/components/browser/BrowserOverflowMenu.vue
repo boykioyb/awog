@@ -1,6 +1,6 @@
 <template>
   <span class="bom">
-    <ContextMenu
+    <AppContextMenu
       :open="open"
       :position="position"
       :items="items"
@@ -35,8 +35,10 @@ const props = withDefaults(
     // Root tuyệt đối của workspace: đích ghi ảnh chụp. null ⇒ món đó tắt.
     root?: string | null
     tabId?: string | null
+    // Scope của tab đang xem (session sở hữu nó) — main kiểm ownership khi chụp.
+    scope?: string
   }>(),
-  { root: null, tabId: null },
+  { root: null, tabId: null, scope: undefined },
 )
 
 const emit = defineEmits<{ close: [] }>()
@@ -84,7 +86,7 @@ const onScreenshot = async (): Promise<void> => {
   const root = props.root
   if (!api || !root) return
   try {
-    const res = await api.saveScreenshot(root, props.tabId ?? undefined)
+    const res = await api.saveScreenshot(root, props.tabId ?? undefined, props.scope)
     // Đường dẫn tuyệt đối dài hơn cả cái toast, nên hiện phần TRONG workspace như
     // mọi chỗ khác của app (Files/Diff), và cho bấm để mở trong Finder.
     const rel = res.path.startsWith(root)

@@ -152,11 +152,11 @@ watch(
   gap: 9px;
   width: 100%;
   padding: 8px 8px 8px 11px;
-  border-radius: var(--r-btn);
-  background: var(--bgEl);
+  border-radius: var(--radius); /* rounded-lg */
+  background: var(--popover);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
-  color: var(--text);
+  color: var(--popover-foreground);
   cursor: pointer;
   text-align: left;
   transition:
@@ -166,7 +166,7 @@ watch(
 }
 .mdchip:hover {
   transform: translateY(-1px);
-  border-color: var(--borderStrong);
+  border-color: var(--input);
   box-shadow: var(--shadow-md);
 }
 .mddot {
@@ -174,21 +174,21 @@ watch(
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--textDim);
+  background: var(--muted-foreground);
 }
 .mddot.running {
-  background: var(--accent);
+  background: var(--primary);
   animation: mdpulse 1.4s ease-in-out infinite;
 }
 .mddot.attention {
-  background: var(--amber);
+  background: var(--warning);
   animation: mdpulse 1.4s ease-in-out infinite;
 }
 .mddot.done {
-  background: var(--green);
+  background: var(--success);
 }
 .mddot.error {
-  background: var(--danger);
+  background: var(--destructive);
 }
 @keyframes mdpulse {
   0%,
@@ -203,7 +203,7 @@ watch(
   flex: 0 0 auto;
   width: var(--icon-md);
   height: var(--icon-md);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .mdtext {
   display: flex;
@@ -221,7 +221,7 @@ watch(
 .mdsub {
   font-size: 12px;
   line-height: 18px;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -232,12 +232,12 @@ watch(
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--muted-foreground);
 }
 .mdx:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .mdxi {
   width: var(--icon-sm);

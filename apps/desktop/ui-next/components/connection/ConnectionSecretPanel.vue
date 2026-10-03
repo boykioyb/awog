@@ -12,32 +12,32 @@
     <div class="csp-rows">
       <div v-for="s in secrets" :key="s.key" class="csp-row">
         <label class="csp-label mono" :for="`csp-${s.key}`">{{ s.field || s.key }}</label>
-        <input
+        <Input
           :id="`csp-${s.key}`"
           v-model="values[s.key]"
           type="password"
-          class="csp-input mono"
           :placeholder="t('connections.secret.placeholder', { key: s.key })"
           spellcheck="false"
           autocomplete="off"
           :disabled="saving"
+          class="mono"
           @keydown.enter.prevent="onSave"
         />
       </div>
     </div>
 
     <div class="csp-actions">
-      <button class="btn sm" :disabled="saving" @click="emit('skip')">
+      <Button :disabled="saving" variant="outline" size="sm" @click="emit('skip')">
         {{ t('connections.secret.later') }}
-      </button>
-      <button class="btn sm pri" :disabled="saving || !hasAny" @click="onSave">
+      </Button>
+      <Button :disabled="saving || !hasAny" variant="default" size="sm" @click="onSave">
         <Icon
           :name="saving ? 'refresh' : 'check'"
           :class="{ spin: saving }"
           style="width: var(--icon-xs); height: var(--icon-xs)"
         />
         {{ saving ? t('connections.secret.saving') : t('connections.secret.save') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -51,6 +51,8 @@
 // never read back.
 import { computed, ref, watch } from 'vue'
 import type { SourcePendingSecret } from '~/stores/connections'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = withDefaults(
   defineProps<{

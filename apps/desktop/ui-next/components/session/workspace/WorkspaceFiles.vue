@@ -1,39 +1,59 @@
 <template>
-  <div class="wsfiles">
+  <div class="flex h-full min-h-0 flex-col">
     <!-- Toolbar (real-data mode only): create/collapse/reload for the whole tree.
          Right-click a row still exposes the full per-target menu. -->
-    <div v-if="ready" class="wsfiles-tb">
-      <span class="wsfiles-tb-name mono" :title="root ?? ''">{{ rootLabel }}</span>
-      <div class="wsfiles-tb-actions">
-        <button class="wpib" :title="t('files.ctx.newFile')" @click="createAtRoot('file')">
-          <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button class="wpib" :title="t('files.ctx.newFolder')" @click="createAtRoot('dir')">
-          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="wpib"
+    <div v-if="ready" class="flex h-8 shrink-0 items-center gap-1 border-b border-border px-2">
+      <span
+        class="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+        :title="root ?? ''"
+      >
+        {{ rootLabel }}
+      </span>
+      <div class="flex shrink-0 items-center gap-0.5">
+        <Button
+          variant="ghost"
+          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          :title="t('files.ctx.newFile')"
+          :aria-label="t('files.ctx.newFile')"
+          @click="createAtRoot('file')"
+        >
+          <FilePlus class="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          :title="t('files.ctx.newFolder')"
+          :aria-label="t('files.ctx.newFolder')"
+          @click="createAtRoot('dir')"
+        >
+          <FolderPlus class="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           :title="t('sessions.workspace.files.collapseAll')"
+          :aria-label="t('sessions.workspace.files.collapseAll')"
           @click="collapseAll"
         >
-          <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="wpib"
-          :class="{ spin: treeLoading }"
+          <FoldVertical class="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
           :disabled="treeLoading"
           :title="t('sessions.workspace.files.reload')"
+          :aria-label="t('sessions.workspace.files.reload')"
           @click="reloadTree"
         >
-          <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <RotateCw class="size-3.5" :class="{ 'animate-spin': treeLoading }" />
+        </Button>
       </div>
     </div>
 
     <!-- Not ready → say why. A session with no project has no root to walk, so the
          tree stays empty: never stand in a sample tree, which would look like the
          user's own files. -->
-    <div v-if="!ready" class="wsfiles-fallback">
+    <div v-if="!ready" class="min-h-0 flex-1 overflow-y-auto">
       <div class="empty" style="padding: 30px">
         <div class="et">
           {{ available ? t('sessions.workspace.noProject') : t('sessions.workspace.unavailable') }}
@@ -43,7 +63,7 @@
 
     <!-- File tree. Clicking a file opens the SHARED PreviewModal (same as attachment
          preview) via usePreview — there is exactly ONE file-preview surface. -->
-    <div v-else class="ftree2">
+    <div v-else class="min-h-0 flex-1 overflow-y-auto pb-2 font-mono text-xs">
       <SessionFileTree :nodes="rootNodes" :ctrl="ctrl" />
       <div v-if="!rootNodes.length && !treeLoading" class="empty" style="padding: 24px">
         <div class="et">{{ t('sessions.workspace.files.empty') }}</div>
@@ -51,7 +71,7 @@
     </div>
 
     <!-- Shared file context menu (right-click a tree row). -->
-    <ContextMenu
+    <AppContextMenu
       :open="fileMenu.menu.value !== null"
       :position="fileMenu.menu.value ?? { x: 0, y: 0 }"
       :items="fileMenu.items.value"
@@ -66,6 +86,7 @@
 // the shared PreviewModal (usePreview) — the SAME modal used for attachment preview,
 // so there's a single file-preview surface (the modal reads content via fs.readFile
 // when given workspaceRoot + path). No engine / no project → an empty state, never a sample tree.
+import { FilePlus, FoldVertical, FolderPlus, RotateCw } from 'lucide-vue-next'
 import type { Session, TreeNode } from '~/composables/useSessionsData'
 import type { FileTreeController } from '~/components/session/SessionFileTree.vue'
 import { useSidecar } from '~/composables/useSidecar'
@@ -74,6 +95,7 @@ import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useFileContextMenu } from '~/composables/useFileContextMenu'
 import { useFsApi } from '~/composables/useFsApi'
 import { useTextPrompt } from '~/composables/useTextPrompt'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ session: Session }>()
 
@@ -249,61 +271,3 @@ onMounted(() => {
   if (root.value) void loadDir('')
 })
 </script>
-
-<style scoped>
-.wsfiles {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-/* Slim action bar above the tree — mirrors the panel-header button style (.wpib). */
-.wsfiles-tb {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 6px 4px 10px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.wsfiles-tb-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
-}
-.wsfiles-tb-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-}
-.wsfiles-tb .wpib:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-.wsfiles-tb .wpib.spin > .icn {
-  animation: wsfiles-spin 0.8s linear infinite;
-}
-@keyframes wsfiles-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-.wsfiles-fallback {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-/* The tree fills the panel body and scrolls on its own (the file list overflows). */
-.wsfiles > .ftree2 {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  padding-bottom: 8px;
-}
-</style>

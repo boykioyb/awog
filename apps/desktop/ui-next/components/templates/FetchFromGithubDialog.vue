@@ -9,11 +9,11 @@
     <div class="tpd">
       <div class="tpd-field">
         <label class="tpd-label">{{ t('templates.fetchDialog.url') }}</label>
-        <input
+        <Input
           v-model="url"
-          class="tpd-input mono"
           :placeholder="t('templates.fetchDialog.urlPh')"
           spellcheck="false"
+          class="mono"
           @keydown.enter="onFetch"
         />
         <div class="tpd-hint">{{ t('templates.fetchDialog.hint') }}</div>
@@ -28,10 +28,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canFetch || fetching" @click="onFetch">
+      <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canFetch || fetching" variant="default" @click="onFetch">
         {{ fetching ? t('templates.fetchDialog.fetching') : t('templates.fetchDialog.confirm') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -44,6 +44,8 @@
 import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useTemplatesStore, type TemplateFetchResult } from '~/stores/templates'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: []; fetched: [TemplateFetchResult] }>()

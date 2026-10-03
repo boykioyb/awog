@@ -1,69 +1,99 @@
 <template>
   <div
-    class="wpanel"
+    class="wpanel flex h-full flex-col overflow-hidden bg-sidebar"
     :class="{ bottom: dock === 'bottom', left: dock === 'left' }"
     :style="panelStyle"
   >
-    <div class="wphead" style="position: relative">
-      <div class="wptabs2" @contextmenu.prevent="toggleDockMenu">
-        <!-- Tab không active chỉ còn ICON (§3.5): panel rộng 322px — tụt xuống 240px
-             khi kéo hẹp — và nhãn lặp lại của ba, bốn tab ăn gần hết bề ngang. Tên
-             đầy đủ nằm ở `title`, và `×` chỉ xuất hiện trên tab đang mở hoặc khi rê
-             chuột, nên không có tab nào phải nhường chỗ cho một nút đóng nó không
-             dùng tới. -->
-        <div
-          v-for="tab in tabs"
-          :key="tab"
-          class="wptab2"
-          :class="{ on: tab === active }"
-          :title="tab"
-          @click="emit('set-active', tab)"
-        >
-          <Icon :name="wpIcon(tab)" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          <span v-if="tab === active">{{ tab }}</span>
-          <span class="x" @click.stop="emit('close-tab', tab)">×</span>
-        </div>
-      </div>
+    <!-- Tab strip — proto §3.5 idiom on ui/tabs: inactive tabs are icon-only
+         (the label lives in `title`), `×` shows on the active or hovered tab
+         via opacity (the slot is always reserved, so the strip never jumps),
+         `+` re-adds a closed view, right-click opens the dock picker. -->
+    <Tabs :model-value="active ?? ''" @update:model-value="onTabPick">
       <div
-        v-if="dockMenuOpen"
-        class="smenu"
-        style="position: absolute; top: 108%; left: 8px; z-index: 50"
-        @click.stop
+        class="relative flex items-center gap-0.5 border-b border-border px-1.5"
+        @contextmenu.prevent="toggleDockMenu"
       >
-        <div
-          v-for="opt in DOCK_OPTS"
-          :key="opt.side"
-          class="mi"
-          :class="{ on: opt.side === dock }"
-          @click="pickDock(opt.side)"
+        <TabsList
+          class="wpanel-tabs h-9 min-w-0 flex-1 justify-start gap-0 overflow-x-auto rounded-none bg-transparent p-0"
         >
-          <Icon :name="opt.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t(opt.label) }}
-        </div>
-      </div>
-      <span style="position: relative">
-        <button class="wpaddb" :title="t('sessions.workspace.openView')" @click.stop="toggleAdd">
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <div
-          v-if="addOpen"
-          class="smenu"
-          style="position: absolute; top: 130%; right: 0; z-index: 50"
-          @click.stop
-        >
-          <div v-for="v in addableViews" :key="v" class="mi" @click="addView(v)">
-            <Icon :name="wpIcon(v)" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ v }}
+          <TabsTrigger
+            v-for="tab in tabs"
+            :key="tab"
+            :value="tab"
+            :title="tab"
+            class="group/wtab h-9 shrink-0 gap-1 rounded-none border-b-2 border-transparent px-2 text-xs font-normal text-muted-foreground data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground data-[state=active]:shadow-none"
+          >
+            <component :is="viewIcon(tab)" class="size-3.5" />
+            <!-- active tab keeps its label; inactive ones are icon-only -->
+            <span v-if="tab === active">{{ tab }}</span>
+            <span
+              role="button"
+              tabindex="-1"
+              :aria-label="t('common.close')"
+              :class="[
+                'flex size-3.5 items-center justify-center rounded-sm transition-opacity hover:bg-accent-foreground/15',
+                tab === active ? 'opacity-100' : 'opacity-0 group-hover/wtab:opacity-100',
+              ]"
+              @click.stop.prevent="emit('close-tab', tab)"
+              @pointerdown.stop.prevent
+            >
+              <X class="size-2.5" />
+            </span>
+          </TabsTrigger>
+        </TabsList>
+
+        <!-- `+` re-add a closed view (hand-rolled `.smenu`, NOT a reka popover:
+             `.smenu` is in the embedded-browser OVERLAYS registry, so the menu
+             stays visible when it hangs over the native Chromium viewport —
+             a teleported dropdown without that marker would paint UNDER it). -->
+        <div class="relative shrink-0">
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="size-6"
+            :title="t('sessions.workspace.openView')"
+            :aria-label="t('sessions.workspace.openView')"
+            @click.stop="toggleAdd"
+          >
+            <Plus />
+          </Button>
+          <div v-if="addOpen" class="smenu wpanel-menu" @click.stop>
+            <div v-for="v in addableViews" :key="v" class="mi" @click="addView(v)">
+              <component :is="viewIcon(v)" class="size-3.5" />
+              {{ v }}
+            </div>
           </div>
         </div>
-      </span>
-      <!-- Chrome cố định còn HAI nút (session-ui-refactor §3.5): thêm khung và đóng
-           panel. Đổi vị trí dock là thao tác tần suất thấp — nó chuyển sang chuột
-           phải trên tab strip, thay vì chiếm một nút thường trực ở MỌI dock. -->
-      <button class="wpib on" :title="t('sessions.workspace.closePanel')" @click="emit('close')">
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-    </div>
+        <!-- Panel chrome: close. Dock-side switching is the low-frequency action —
+             it lives on the strip's right-click menu instead of a permanent button. -->
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="size-6 shrink-0"
+          :title="t('sessions.workspace.closePanel')"
+          :aria-label="t('sessions.workspace.closePanel')"
+          @click="emit('close')"
+        >
+          <X />
+        </Button>
+
+        <!-- Dock picker — right-click on the strip. Same `.smenu` reasoning. -->
+        <div v-if="dockMenuOpen" class="smenu wpanel-dockmenu" @click.stop>
+          <div class="smenu-label">{{ t('sessions.workspace.dock.change') }}</div>
+          <div
+            v-for="opt in DOCK_OPTS"
+            :key="opt.side"
+            class="mi"
+            :class="{ on: opt.side === dock }"
+            @click="pickDock(opt.side)"
+          >
+            <component :is="opt.icon" class="size-3.5" />
+            {{ t(opt.label) }}
+            <Check v-if="opt.side === dock" class="ck size-3.5" />
+          </div>
+        </div>
+      </div>
+    </Tabs>
 
     <div class="wpbody" :class="{ flush: isFlushTab }">
       <!-- Diff -->
@@ -79,7 +109,7 @@
       <WorkspaceTasks v-else-if="active === 'Tasks'" :session="session" />
 
       <!-- Group — bảng trạng thái các phiên con của phiên này. -->
-      <WorkspaceGroup v-else-if="active === 'Group'" :session="session" />
+      <WorkspaceTeam v-else-if="active === 'Team'" :session="session" />
 
       <!-- Preview — renders the markdown artifacts this session produced. -->
       <WorkspacePreview v-else-if="active === 'Preview'" :session="session" />
@@ -107,6 +137,7 @@
         v-if="browserMounted && tabs.includes('Browser')"
         v-show="active === 'Browser'"
         :active="active === 'Browser'"
+        :session="session"
       />
 
       <!-- Info — metadata rows, context files, media/links/docs. -->
@@ -118,12 +149,8 @@
       </div>
     </div>
 
-    <div v-if="addOpen" style="position: fixed; inset: 0; z-index: 40" @click="addOpen = false" />
-    <div
-      v-if="dockMenuOpen"
-      style="position: fixed; inset: 0; z-index: 40"
-      @click="dockMenuOpen = false"
-    />
+    <div v-if="addOpen" class="fixed inset-0 z-40" @click="addOpen = false" />
+    <div v-if="dockMenuOpen" class="fixed inset-0 z-40" @click="dockMenuOpen = false" />
   </div>
 </template>
 
@@ -134,6 +161,26 @@
 // renders the views routed to one side and emits intents back. Tab bodies are
 // wired to real engine data via dedicated tab components (Diff/Files/Terminal/
 // Plan/Tasks) which degrade gracefully to an empty state outside the Electron shell.
+import type { Component } from 'vue'
+import {
+  Check,
+  Eye,
+  Files,
+  Folder,
+  GitBranch,
+  Globe,
+  Info,
+  ListChecks,
+  ListTodo,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  Plus,
+  SquareTerminal,
+  Users,
+  X,
+  Zap,
+} from 'lucide-vue-next'
 import type { Session } from '~/composables/useSessionsData'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import type { WorkspaceDockSide } from '~/stores/settings'
@@ -163,7 +210,22 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-const { wpIcon } = useSessionsData()
+
+// View → lucide glyph (the tab strip is icon-first). Same names the old sprite
+// map carried (useSessionsData.WPVIEWS), expressed in the shadcn icon set.
+const VIEW_ICONS: Record<string, Component> = {
+  Preview: Eye,
+  Browser: Globe,
+  Diff: GitBranch,
+  Terminal: SquareTerminal,
+  Files: Files,
+  Tasks: ListTodo,
+  Team: Users,
+  Plan: ListChecks,
+  Cost: Zap,
+  Info: Info,
+}
+const viewIcon = (tab: string): Component => VIEW_ICONS[tab] ?? Folder
 
 // Resolve the project's absolute root + readiness for the (session-agnostic)
 // Terminal widget — it now takes a cwd + grouping key, not a Session.
@@ -204,7 +266,7 @@ const HANDLED_TABS = new Set([
   'Browser',
   'Plan',
   'Tasks',
-  'Group',
+  'Team',
   'Info',
   'Preview',
   'Cost',
@@ -224,9 +286,9 @@ function addView(view: string) {
 // Dock-position picker — pick where this panel's active view sits (left / right /
 // bottom). Clearer than a single cycling button, and the only way to reach left.
 const DOCK_OPTS = [
-  { side: 'left', icon: 'dock-left', label: 'sessions.workspace.dock.left' },
-  { side: 'right', icon: 'dock-right', label: 'sessions.workspace.dock.right' },
-  { side: 'bottom', icon: 'dock-bottom', label: 'sessions.workspace.dock.bottom' },
+  { side: 'left', icon: PanelLeft, label: 'sessions.workspace.dock.left' },
+  { side: 'right', icon: PanelRight, label: 'sessions.workspace.dock.right' },
+  { side: 'bottom', icon: PanelBottom, label: 'sessions.workspace.dock.bottom' },
 ] as const
 const dockMenuOpen = ref(false)
 // Mở bằng CHUỘT PHẢI trên tab strip (§3.5): đổi vị trí dock là thao tác tần suất
@@ -239,6 +301,12 @@ function pickDock(side: WorkspaceDockSide) {
   if (props.active && side !== props.dock) emit('move-dock', props.active, side)
   dockMenuOpen.value = false
 }
+
+// Reka Tabs updates its model on trigger click/arrow-key nav — forward the intent
+// to the parent, which owns the active tab per dock side.
+function onTabPick(v: string | number) {
+  emit('set-active', String(v))
+}
 </script>
 
 <style scoped>
@@ -248,39 +316,52 @@ function pickDock(side: WorkspaceDockSide) {
   padding: 0;
   overflow: hidden;
 }
-/* Bottom dock: full-width row under the chat — the divider sits on top, not left
-   (the prototype's .wpanel uses border-left for the right-dock layout). */
+/* Docked-edge hairline — NONE on the panel itself. Every dock renders a `.rszwp`
+   drag handle flush against the panel, and the handle's ::after already paints
+   the divider; the global `.wpanel{border-left}` (+ the flips below) stacked a
+   second line right beside it. One hairline per edge, owned by the handle. */
+.wpanel {
+  border-left: none;
+}
 .wpanel.bottom {
   border-left: none;
-  border-top: 1px solid var(--border);
+  border-top: none;
 }
-/* Left dock: the divider sits on the right edge (toward the chat). */
 .wpanel.left {
   border-left: none;
-  border-right: 1px solid var(--border);
+  border-right: none;
 }
-.wpib:disabled {
-  opacity: 0.4;
-  cursor: default;
+/* `position:fixed` comes from the global `.smenu`; these are anchored to the
+   strip instead. */
+.wpanel-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+}
+.wpanel-dockmenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 8px;
+  z-index: 50;
+}
+/* Menu section label — same voice as a shadcn DropdownMenuLabel. */
+.smenu-label {
+  padding: 4px 8px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--muted-foreground);
 }
 /* Mark the current dock position in the picker. */
 .smenu .mi.on {
   color: var(--text);
-  background: var(--bgActive);
+  background: var(--accent-wash);
 }
-
-/* `×` chỉ trên tab đang mở hoặc khi rê chuột — tab chỉ-icon không phải nhường chỗ
-   cho một nút đóng nó không dùng tới. `visibility` chứ không phải `display`: chỗ
-   của nút được giữ nguyên nên hàng tab không nhảy khi rê chuột qua. */
-.wptab2 .x {
-  visibility: hidden;
+/* Thin horizontal scrollbar on the tab strip (was `.wptabs2` in app-shell.css). */
+.wpanel-tabs::-webkit-scrollbar {
+  height: 5px;
 }
-.wptab2.on .x,
-.wptab2:hover .x {
-  visibility: visible;
-}
-/* Tab chỉ-icon: bỏ khoảng trống của nhãn đã biến mất. */
-.wptab2:not(.on):not(:hover) {
-  padding-right: 8px;
+.wpanel-tabs::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
 }
 </style>

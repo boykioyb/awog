@@ -34,7 +34,7 @@
             :aria-label="t('sessions.workspace.terminal.closeTab')"
             @click.stop="closeTab(tab.id)"
           >
-            <X :size="12" />
+            <X class="size-3" />
           </span>
         </button>
         <button
@@ -43,7 +43,7 @@
           :aria-label="t('sessions.workspace.terminal.newTab')"
           @click.stop="onAddClick"
         >
-          <Plus :size="14" />
+          <Plus class="size-3.5" />
         </button>
         <!-- VSCode-style split button: splits the active pane to the right. The tab
              context menu still offers split-down + rename/duplicate. -->
@@ -53,7 +53,7 @@
           :aria-label="t('sessions.workspace.terminal.splitRight')"
           @click="splitActive"
         >
-          <Icon name="dock-right" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <PanelRight class="size-3.5" />
         </button>
       </div>
 
@@ -68,7 +68,7 @@
       </div>
     </template>
 
-    <ContextMenu
+    <AppContextMenu
       :open="!!menu.pos.value"
       :position="menu.pos.value ?? { x: 0, y: 0 }"
       :items="menuItems"
@@ -78,7 +78,7 @@
 
     <!-- New-tab dropdown (only when the host supplies `newTabMenu`, e.g. the global
          dock's "New shell" + SSH hosts). Otherwise "+" just adds a default tab. -->
-    <ContextMenu
+    <AppContextMenu
       :open="!!addMenu.pos.value"
       :position="addMenu.pos.value ?? { x: 0, y: 0 }"
       :items="addMenuItems"
@@ -113,7 +113,7 @@
 // bridge / cwd is absent.
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal, type ITheme } from '@xterm/xterm'
-import { Plus, X } from 'lucide-vue-next'
+import { PanelRight, Plus, X } from 'lucide-vue-next'
 import { useTerminalAppearanceStore } from '~/stores/terminalAppearance'
 import { useSidecar, type SidecarEvent, type UnlistenFn } from '~/composables/useSidecar'
 import {
@@ -123,6 +123,9 @@ import {
 } from '~/composables/useTerminalApi'
 import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { useTextPrompt } from '~/composables/useTextPrompt'
+import { useFilePreview, hasFilePreviewHost } from '~/composables/useFilePreview'
+import { registerTerminalFileLinks } from '~/composables/useTerminalFileLinks'
+import { enableTerminalWebgl } from '~/utils/xterm-webgl'
 import WorkspaceTerminalNode, {
   TERM_CTX,
   collectPaneIds,
@@ -174,6 +177,10 @@ const { t } = useI18n()
 const sc = useSidecar()
 const api = useTerminalApi()
 const { prompt } = useTextPrompt()
+const filePreview = useFilePreview()
+// Dock global (GlobalTerminalHost) không có provideFilePreview → filePreview là
+// NOOP; không đăng ký linkify ở đó (link gạch chân mà click câm thì tệ hơn).
+const canLinkFiles = hasFilePreviewHost()
 
 // The local-PTY backend. `create` maps the cwd + grouping key onto terminal.create
 // and normalizes its `terminalId` to the transport's `id`. A single stable object
@@ -507,6 +514,14 @@ const initPane = async (pane: Pane): Promise<void> => {
   instance.loadAddon(pane.fit)
   instance.open(container)
   pane.term = instance
+  enableTerminalWebgl(instance)
+
+  // Bấm path trong output → PreviewModal. Chỉ pane LOCAL: output của SSH remote
+  // nói về filesystem của máy kia, file index của workspace không resolve được.
+  // Provider sống cùng instance — `term.dispose()` dọn luôn.
+  if (canLinkFiles && transportOf(pane) === localTransport) {
+    registerTerminalFileLinks(instance, (path) => filePreview.open(path))
+  }
 
   // Input → PTY. Registered ONCE per xterm instance (its `term.dispose()` drops it
   // on close). It reads `pane.terminalId` lazily, so it keeps working after a
@@ -581,6 +596,9 @@ const syncTab = (tabId: string): void => {
   const tab = tabById(tabId)
   if (!tab) return
   forEachPane(tab, syncSize)
+  // Full repaint on reveal — the WebGL canvas can stay black after a display:none
+  // cycle if it only waits for the next output.
+  forEachPane(tab, (pane) => pane.term?.refresh(0, pane.term.rows - 1))
   activePaneOf(tab)?.term?.focus()
 }
 
@@ -1044,19 +1062,22 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* Class hooks stay (`theme-cute.css` re-skins `.wsterm*`; the stage/pane geometry
+   is behavioral). Only the values moved onto the shadcn alias tokens. */
 .wsterm {
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--bg);
+  background: var(--background);
 }
 .wsterm-tabs {
   display: flex;
   align-items: center;
   gap: 3px;
   flex: 0 0 auto;
-  padding: 4px 6px;
+  height: 32px;
+  padding: 0 6px;
   overflow-x: auto;
   border-bottom: 1px solid var(--border);
 }
@@ -1065,14 +1086,14 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  padding: 5px 8px;
+  height: 24px;
+  padding: 0 8px;
   border: none;
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--textDim);
-  font-size: 1em;
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
   font-weight: 500;
-  line-height: 14px;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -1080,12 +1101,14 @@ onBeforeUnmount(() => {
     color 0.12s;
 }
 .wsterm-tab:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
+/* Active tab = the wash + a 1px primary underline (echoes the panel's tab strip). */
 .wsterm-tab.active {
-  background: var(--bgActive);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
+  box-shadow: inset 0 -1px 0 var(--primary);
 }
 .wsterm-tab-label {
   display: inline-block;
@@ -1097,11 +1120,11 @@ onBeforeUnmount(() => {
   width: 16px;
   height: 16px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .wsterm-tab-close:hover {
-  background: var(--dangerBg, var(--bgHover));
-  color: var(--danger, var(--text));
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
 }
 .wsterm-tab-add {
   display: inline-flex;
@@ -1109,12 +1132,13 @@ onBeforeUnmount(() => {
   justify-content: center;
   /* Stretch to the tab's height so the hover fill is a pill of the SAME box as a
      tab (not a short, loose rect). Radius + spacing match the tabs too. */
-  align-self: stretch;
+  align-self: center;
+  height: 24px;
   width: 24px;
   flex: 0 0 auto;
   border: none;
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   border-radius: var(--r-xs);
   cursor: pointer;
   transition:
@@ -1122,8 +1146,8 @@ onBeforeUnmount(() => {
     color 0.12s;
 }
 .wsterm-tab-add:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .wsterm-stage {
   position: relative;
@@ -1147,7 +1171,7 @@ onBeforeUnmount(() => {
      of padding pushed the scroll track away from the panel edge, where the mouse
      lands when you throw it right. */
   padding: 6px 2px 12px 10px;
-  background: var(--wsterm-bg, var(--bg));
+  background: var(--wsterm-bg, var(--background));
 }
 /* While a pane is being dragged or a splitter resized, suppress selection across the
    whole widget (the grabbing/resize cursor itself is set on <body>). */

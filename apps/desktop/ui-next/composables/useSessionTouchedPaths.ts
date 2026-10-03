@@ -20,7 +20,15 @@ export const WRITE_LABELS = new Set(['Write', 'Edit', 'Edit (multi)', 'Edit note
 // path. Strips the resolved root prefix when the target is absolute under it.
 export function workspaceRelative(target: string, root: string | null): string {
   let p = target.trim().replace(/\\/g, '/')
-  if (p.startsWith('/') && root && p.startsWith(root)) p = p.slice(root.length)
+  if (p.startsWith('/')) {
+    // Path tuyệt đối: bên TRONG workspace thì cắt prefix root → tương đối; ngoài
+    // workspace (draft trong session-worktree, file kéo vào) thì GIỮ NGUYÊN
+    // tuyệt đối — strip '/' đầu ở đây từng biến nó thành path tương đối giả
+    // ("Users/kyro/.awog/…") mà matchPath rồi neo vào workspace root, sinh ra
+    // đường dẫn ghép "<root>/Users/kyro/…".
+    if (root && (p === root || p.startsWith(root + '/'))) p = p.slice(root.length)
+    else return p
+  }
   return p.replace(/^\.\//, '').replace(/^\/+/, '')
 }
 

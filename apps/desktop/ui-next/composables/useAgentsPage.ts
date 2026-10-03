@@ -5,6 +5,7 @@ import { useSidecar } from '~/composables/useSidecar'
 import { useConnectionsStore } from '~/stores/connections'
 import { useSettingsStore } from '~/stores/settings'
 import { useAgentsStore, type Agent } from '~/stores/agents'
+import { useSkillsStore } from '~/stores/skills'
 
 // Page-controller for /agents — owns all selection, CRUD, creator, body-edit,
 // and delete state so pages/agents.vue stays a thin template. Mirrors the
@@ -16,6 +17,7 @@ export function useAgentsPage() {
   const store = useAgentsStore()
   const settings = useSettingsStore()
   const connections = useConnectionsStore()
+  const skillsStore = useSkillsStore()
   const sc = useSidecar()
   const { projects } = useProjects()
   const toast = useToast()
@@ -32,6 +34,11 @@ export function useAgentsPage() {
 
   // Connections (MCP servers) for the editor whitelist picker — id/name only.
   const mcpServers = computed(() => connections.servers)
+  // Skills for the whitelist pickers — GLOBAL tier only. Agents are global
+  // roles now, so a whitelist built from project skills would silently no-op
+  // in sessions of other projects (and the row list repeats the same id once
+  // per project, which reads as duplication).
+  const skills = computed(() => skillsStore.skills.filter((s) => s.source === 'global'))
 
   // --- selection -----------------------------------------------------------
   const selectedKey = ref<string | null>(null)
@@ -56,9 +63,13 @@ export function useAgentsPage() {
     const before = store.agents.length
     try {
       const ids = projectList.value.map((p) => p.id)
-      // Agents + connections in parallel — the editor's MCP picker needs the
-      // connection set in sync.
-      await Promise.all([store.loadAgents(ids), connections.loadServers()])
+      // Agents + connections + skills in parallel — the editor's whitelist
+      // pickers need the connection set and skill catalogue in sync.
+      await Promise.all([
+        store.loadAgents(ids),
+        connections.loadServers(),
+        skillsStore.loadSkills(ids),
+      ])
       if (!opts.silent) {
         const delta = store.agents.length - before
         if (!sc.available)
@@ -93,12 +104,10 @@ export function useAgentsPage() {
   }
 
   // --- create (chat-driven) ------------------------------------------------
+  // Agents are global roles — the creator writes to ~/.awog/agents; no scope
+  // picker, no per-project target.
   const creatorOpen = ref(false)
-  // Initial scope for the creator's tier picker — 'global' or a projectId, set by
-  // the per-group "+" so creating inside a project group preselects that tier.
-  const creatorScope = ref('global')
-  const openCreator = (scope: string = 'global') => {
-    creatorScope.value = scope
+  const openCreator = () => {
     creatorOpen.value = true
   }
   const onCreatorTurn = () => {
@@ -196,7 +205,7 @@ export function useAgentsPage() {
   const deleteDescription = computed(() => {
     const a = pendingDelete.value
     if (!a) return ''
-    const where = a.source === 'global' ? '~/.claude/agents/' : '.claude/agents/'
+    const where = a.source === 'global' ? '~/.awog/agents/' : '.awog/agents/'
     return `This will permanently delete the agent "${a.name}" from ${where}${a.id}.md. Sessions referencing it will fall back to their default system prompt.`
   })
   const confirmDelete = async () => {
@@ -227,6 +236,7 @@ export function useAgentsPage() {
     account,
     accountId,
     mcpServers,
+    skills,
     // selection
     selectedAgent,
     selectAgent,
@@ -235,7 +245,6 @@ export function useAgentsPage() {
     refresh,
     // create
     creatorOpen,
-    creatorScope,
     openCreator,
     openCreateForm,
     onCreatorTurn,

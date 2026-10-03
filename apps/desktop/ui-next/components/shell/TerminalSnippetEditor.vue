@@ -8,7 +8,7 @@
     <div class="tse">
       <div class="tse-field">
         <label class="tse-label">{{ t('terminalSnippet.name') }}</label>
-        <input v-model="name" class="tse-input" :placeholder="t('terminalSnippet.namePh')" />
+        <Input v-model="name" :placeholder="t('terminalSnippet.namePh')" />
       </div>
 
       <div class="tse-field">
@@ -33,10 +33,10 @@
 
     <template #footer>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" @click="onSave">
         {{ t('terminalSnippet.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -50,6 +50,8 @@ import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { TerminalSnippet } from '~/stores/terminalSnippets'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean
@@ -123,16 +125,19 @@ const onSave = (): void => {
 .tse-label {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  font-weight: 600;
-  color: var(--text);
+  font-weight: 500;
+  color: var(--foreground);
 }
+/* shadcn input idiom: transparent field on the card surface, the stronger --input
+   hairline does the framing, and focus is a --ring (accent-border) outline, not a
+   colour swap of the border itself. */
 .tse-input {
   width: 100%;
   padding: 7px 10px;
   border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--input);
+  color: var(--foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-family: var(--sans);
@@ -142,7 +147,8 @@ const onSave = (): void => {
   font-family: var(--code);
 }
 .tse-input:focus {
-  border-color: var(--accent);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .tse-ta {
   resize: vertical;

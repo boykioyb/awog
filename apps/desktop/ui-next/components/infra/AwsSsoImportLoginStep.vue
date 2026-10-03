@@ -24,13 +24,13 @@
 
     <div class="asl-field">
       <label class="asl-label">{{ t('infra.import.sso.login.sessionName') }}</label>
-      <input
+      <Input
         v-model="sessionName"
-        class="asl-input mono"
         :class="{ 'asl-invalid': showRequired && !sessionName.trim() }"
         :placeholder="t('infra.import.sso.login.sessionNamePh')"
         spellcheck="false"
         :disabled="loggingIn"
+        class="mono"
       />
       <div v-if="showRequired && !sessionName.trim()" class="asl-req">
         {{ t('infra.import.sso.login.required') }}
@@ -38,13 +38,13 @@
     </div>
     <div class="asl-field">
       <label class="asl-label">{{ t('infra.import.sso.login.startUrl') }}</label>
-      <input
+      <Input
         v-model="startUrl"
-        class="asl-input mono"
         :class="{ 'asl-invalid': showRequired && !startUrl.trim() }"
         :placeholder="t('infra.import.sso.login.startUrlPh')"
         spellcheck="false"
         :disabled="loggingIn"
+        class="mono"
       />
       <div v-if="showRequired && !startUrl.trim()" class="asl-req">
         {{ t('infra.import.sso.login.required') }}
@@ -52,13 +52,13 @@
     </div>
     <div class="asl-field">
       <label class="asl-label">{{ t('infra.import.sso.login.region') }}</label>
-      <input
+      <Input
         v-model="ssoRegion"
-        class="asl-input mono"
         :class="{ 'asl-invalid': showRequired && !ssoRegion.trim() }"
         :placeholder="t('infra.import.sso.login.regionPh')"
         spellcheck="false"
         :disabled="loggingIn"
+        class="mono"
       />
       <div v-if="showRequired && !ssoRegion.trim()" class="asl-req">
         {{ t('infra.import.sso.login.required') }}
@@ -93,6 +93,7 @@ import { useAwsProfilesApi } from '~/composables/useAwsProfilesApi'
 import type { AwsSsoSource } from '~/composables/useAwsProfilesApi'
 import { AWS_PROFILE_NAME_RE } from '~/utils/aws-profile-view'
 import type { AwsProfile } from '~/types'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = withDefaults(
   defineProps<{

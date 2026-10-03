@@ -5,9 +5,15 @@
   <div class="mondrwscrim" @click="emit('close')" />
   <aside class="mondrw" role="dialog" :aria-label="t('disk.tree.title')">
     <div class="mondrwhd">
-      <button class="iconbtn" :disabled="!canGoUp" :title="t('disk.tree.up')" @click="emit('up')">
+      <Button
+        :disabled="!canGoUp"
+        :title="t('disk.tree.up')"
+        variant="outline"
+        size="iconMd"
+        @click="emit('up')"
+      >
         <Icon name="chev-left" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
       <div class="mondrwttl">
         <div class="mondrwt">{{ t('disk.tree.title') }}</div>
         <!-- Breadcrumb, không phải một dòng đường dẫn chết: drawer chỉ hiện MỘT
@@ -32,34 +38,47 @@
       <!-- Hai việc làm với CHÍNH thư mục đang mở. Không gắn vào từng hàng: hàng
            đã là lưới 3 cột chật, thêm hai nút nữa là tên folder không còn chỗ.
            Từng hàng có menu chuột phải (dùng chung với tab Files của Sessions). -->
-      <button class="iconbtn" :title="t('disk.reveal.action')" @click="emit('reveal', path)">
+      <Button
+        :title="t('disk.reveal.action')"
+        variant="outline"
+        size="iconMd"
+        @click="emit('reveal', path)"
+      >
         <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button class="iconbtn" :title="t('disk.copyPath.action')" @click="emit('copy-path', path)">
+      </Button>
+      <Button
+        :title="t('disk.copyPath.action')"
+        variant="outline"
+        size="iconMd"
+        @click="emit('copy-path', path)"
+      >
         <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
       <!-- Xoá CHÍNH thư mục đang mở. Chỉ hiện khi nó nằm trong phạm vi xoá. -->
-      <button
+      <Button
         v-if="canTrash(path)"
-        class="iconbtn mondrwtrash"
         :title="t('disk.tree.trashCurrent')"
+        class="mondrwtrash"
+        variant="outline"
+        size="iconMd"
         @click="emit('trash-current')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
       <!-- Quét lại là THỦ CÔNG: lần xuống rồi quay lại dùng kết quả đã có, vì mỗi
            lượt quét là một loạt tiến trình `du` cày đĩa. -->
-      <button
-        class="iconbtn"
+      <Button
         :disabled="loading"
         :title="t('disk.tree.rescan')"
+        variant="outline"
+        size="iconMd"
         @click="emit('rescan')"
       >
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button class="iconbtn" :title="t('common.close')" @click="emit('close')">
+      </Button>
+      <Button :title="t('common.close')" variant="outline" size="iconMd" @click="emit('close')">
         <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <!-- Tiến độ THẬT: tổng số mục biết ngay từ `readdir`, rồi mỗi mục đo xong là
@@ -135,32 +154,40 @@
           <!-- Hiện trong Finder + Sao chép đường dẫn có ở MỌI hàng: chúng là thao
                tác ĐỌC, mà phạm vi đọc phủ cả đĩa. Trước đó chỉ có ở header nên
                muốn mở một thư mục con trong Finder thì phải lần xuống nó đã. -->
-          <button class="iconbtn" :title="t('disk.reveal.action')" @click="emit('reveal', e.path)">
+          <Button
+            :title="t('disk.reveal.action')"
+            variant="outline"
+            size="iconMd"
+            @click="emit('reveal', e.path)"
+          >
             <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
-            class="iconbtn"
+          </Button>
+          <Button
             :title="t('disk.copyPath.action')"
+            variant="outline"
+            size="iconMd"
             @click="emit('copy-path', e.path)"
           >
             <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
           <!-- Đọc phủ cả đĩa, XOÁ thì chỉ trong thư mục nhà (Electron main cưỡng
                chế). Ngoài phạm vi đó thì ẩn nút — mời bấm một thứ chắc chắn bị từ
                chối là tệ hơn không mời. -->
-          <button
+          <Button
             v-if="canTrash(e.path)"
-            class="iconbtn mondrwtrash"
             :title="t('disk.trash.action')"
+            class="mondrwtrash"
+            variant="outline"
+            size="iconMd"
             @click="emit('trash', e.path, e.name, e.sizeKb)"
           >
             <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
           <!-- Ô giữ chỗ VÔ HÌNH, và chỉ khi danh sách này CÓ ít nhất một hàng xoá
                được. Nó giữ hai nút kia thẳng cột giữa hàng-xoá-được và
                hàng-không; còn ở thư mục ngoài nhà (không hàng nào xoá được) thì
                không ai render nó, nên không có dải trắng chết ở mép phải. -->
-          <span v-else-if="anyTrashable" class="iconbtn mondrwslot" aria-hidden="true" />
+          <span v-else-if="anyTrashable" class="mondrwslot" aria-hidden="true" />
         </div>
       </div>
     </div>
@@ -171,6 +198,7 @@
 import { computed, onMounted, onUnmounted } from 'vue'
 import { formatMem } from '~/composables/useMonitorManager'
 import type { TreeEntry } from '~/composables/useDiskManager'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   path: string
@@ -448,10 +476,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKey))
   padding: 4px 6px;
   border-radius: var(--r-sm);
 }
-/* Vô hình nhưng vẫn chiếm chỗ — và chiếm ĐÚNG khổ nút nhờ mang class `iconbtn`
-   (32px ở theme awog, 30px ở cute). */
+/* Vô hình nhưng vẫn chiếm chỗ — và chiếm ĐÚNG khổ nút icon nhỏ (32px) để hai
+   nút thật thẳng cột giữa hàng-xoá-được và hàng-không. */
 .mondrwslot {
   visibility: hidden;
+  width: var(--ctrl-h-sm);
+  height: var(--ctrl-h-sm);
+  flex: 0 0 auto;
 }
 .mondrwacts {
   display: flex;

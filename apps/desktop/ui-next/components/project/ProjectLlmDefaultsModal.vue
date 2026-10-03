@@ -109,21 +109,21 @@
     </div>
 
     <template #footer>
-      <button
+      <Button
         v-if="ctrl.hasCustomDefaults.value"
-        class="btn"
         style="margin-right: auto; color: var(--danger)"
         :disabled="ctrl.saving.value"
+        variant="outline"
         @click="onReset"
       >
         {{ t('projects.llm.reset') }}
-      </button>
-      <button class="btn" :disabled="ctrl.saving.value" @click="emit('cancel')">
+      </Button>
+      <Button :disabled="ctrl.saving.value" variant="outline" @click="emit('cancel')">
         {{ t('common.cancel') }}
-      </button>
-      <button class="btn pri" :disabled="ctrl.saving.value" @click="onSave">
+      </Button>
+      <Button :disabled="ctrl.saving.value" variant="default" @click="onSave">
         {{ ctrl.saving.value ? t('projects.llm.saving') : t('projects.llm.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -137,6 +137,7 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useProjectLlmDefaults } from '~/composables/useProjectLlmDefaults'
 import type { Project, ProviderName } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ open: boolean; project: Project | null }>()
 const emit = defineEmits<{ saved: [project: Project]; cancel: [] }>()

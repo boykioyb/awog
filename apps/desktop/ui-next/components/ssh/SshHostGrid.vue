@@ -4,21 +4,32 @@
     <div class="sshx-hosts-top">
       <div class="srch sshx-search">
         <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <input
+        <Input
           v-model="q"
+          unstyled
           :placeholder="t('ssh.hosts.searchPh')"
           :aria-label="t('ssh.hosts.searchPh')"
           @keydown.enter="connectFirst"
         />
       </div>
-      <button class="btn sshx-import" :title="t('ssh.import.title')" @click="emit('import')">
+      <Button
+        :title="t('ssh.import.title')"
+        class="sshx-import"
+        variant="outline"
+        @click="emit('import')"
+      >
         <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.import.button') }}
-      </button>
-      <button class="btn pri sshx-newhost" :title="t('ssh.hosts.newHost')" @click="emit('new')">
+      </Button>
+      <Button
+        :title="t('ssh.hosts.newHost')"
+        class="sshx-newhost"
+        variant="default"
+        @click="emit('new')"
+      >
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.hosts.newHost') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Tag filter chips (only when any host has tags) -->
@@ -96,6 +107,8 @@
 import { computed, ref } from 'vue'
 import SshEmptyState from '~/components/ssh/SshEmptyState.vue'
 import { hostAccent, type SshHost } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ hosts: SshHost[] }>()
 

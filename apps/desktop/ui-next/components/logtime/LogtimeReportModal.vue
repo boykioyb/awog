@@ -56,13 +56,13 @@
         <div class="ltrp-foot">
           <span class="ltrp-hint">{{ t('logtime.report.hint') }}</span>
           <span class="ltrp-sp" />
-          <button class="btn" type="button" @click="reportOpen = false">
+          <Button type="button" variant="outline" @click="reportOpen = false">
             {{ t('common.close') }}
-          </button>
-          <button class="btn pri" type="button" @click="copyReport">
+          </Button>
+          <Button type="button" variant="default" @click="copyReport">
             <Icon name="copy" />
             {{ t('logtime.report.copy') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -78,6 +78,7 @@
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
 import type { ReportExclusion } from '~/utils/logtime-report'
+import Button from '~/components/ui/button/Button.vue'
 
 // Bảng tra TƯỜNG MINH chứ không nối chuỗi `'logtime.report.reason.' + reason`:
 // thêm một lý do mới vào `ReportExclusion` mà quên nhãn thì record này thiếu khoá

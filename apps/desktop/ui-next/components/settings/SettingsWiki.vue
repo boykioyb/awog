@@ -24,10 +24,10 @@
     </SettingsField>
 
     <SettingsField :name="t('settings.wiki.open.name')" :desc="t('settings.wiki.open.desc')">
-      <button class="btn sm" @click="goWiki">
+      <Button variant="outline" size="sm" @click="goWiki">
         <Icon name="book" :size="13" />
         {{ t('settings.wiki.open.action') }}
-      </button>
+      </Button>
     </SettingsField>
   </div>
 </template>
@@ -41,6 +41,7 @@ import { computed, onMounted } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import { useWikiStore } from '~/stores/wiki'
 import { useSettingsModal } from '~/composables/useSettingsModal'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()

@@ -1,5 +1,5 @@
-// `list_sessions` + `send_session_message` + `create_session` + `group_status`
-// + `arm_group` trên nhánh Claude SDK.
+// `list_sessions` + `send_session_message` + `create_session` + `team_status`
+// trên nhánh Claude SDK.
 //
 // Một in-process SDK MCP server tên `awogsessions` → `mcp__awogsessions__list_sessions`
 // và `mcp__awogsessions__send_session_message`. Handler là ĐÚNG hàm nhánh Pi gọi
@@ -76,8 +76,8 @@ export function buildSessionMessagingSdkServer(
           }
         },
       ),
-      tool('group_status', SESSION_MESSAGING_TEXT.statusDescription, {}, async () => {
-        const r = await run.groupStatus()
+      tool('team_status', SESSION_MESSAGING_TEXT.statusDescription, {}, async () => {
+        const r = await run.teamStatus()
         return { content: [{ type: 'text' as const, text: r.text }] }
       }),
       tool(
@@ -124,24 +124,6 @@ export function buildSessionMessagingSdkServer(
                 },
               ]
           const r = await run.createSession(specs, args.goal)
-          return {
-            content: [{ type: 'text' as const, text: r.text }],
-            ...(r.isError ? { isError: true } : {}),
-          }
-        },
-      ),
-      tool(
-        'arm_group',
-        SESSION_MESSAGING_TEXT.armDescription,
-        {
-          reason: z
-            .string()
-            .max(MAX_TEXT_LEN / 10)
-            .optional()
-            .describe(SESSION_MESSAGING_TEXT.armReason),
-        },
-        async (args) => {
-          const r = await run.armGroup(args.reason)
           return {
             content: [{ type: 'text' as const, text: r.text }],
             ...(r.isError ? { isError: true } : {}),

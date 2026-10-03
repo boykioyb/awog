@@ -25,10 +25,10 @@
       <div v-if="!expired" class="pair-countdown">
         {{ t('settings.devices.expiresIn', { time: countdownLabel }) }}
       </div>
-      <button v-else class="btn pri sm pair-regen" @click="emit('regenerate')">
+      <Button v-else class="pair-regen" variant="default" size="sm" @click="emit('regenerate')">
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('settings.devices.regenerate') }}
-      </button>
+      </Button>
 
       <div class="pair-fallback">
         <span class="pair-fallback-label">{{ t('settings.devices.codeFallback') }}</span>
@@ -48,6 +48,7 @@ import QRCode from 'qrcode'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { AwogPairingInfo } from '~/types/awog-bridge'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   pairing: AwogPairingInfo | null

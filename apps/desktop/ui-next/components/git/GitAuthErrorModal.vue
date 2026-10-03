@@ -1,42 +1,51 @@
 <template>
-  <Teleport to="body">
-    <div v-if="error" class="gpm-ovl" @click.self="emit('close')">
-      <div class="gpm-card gae" role="dialog" aria-modal="true">
-        <div class="gae-head">
-          <Icon name="shield" class="gae-headicn" />
-          <div class="gae-headtext">
-            <div class="gpm-title">{{ t('git.auth.title') }}</div>
-            <div class="gae-lead">{{ t('git.auth.lead', { op: error.op }) }}</div>
-          </div>
-        </div>
+  <Dialog :open="!!error" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle class="flex items-center gap-2">
+          <Icon name="shield" class="size-4 shrink-0 text-destructive" />
+          {{ t('git.auth.title') }}
+        </DialogTitle>
+        <DialogDescription v-if="error">
+          {{ t('git.auth.lead', { op: error.op }) }}
+        </DialogDescription>
+      </DialogHeader>
 
-        <p class="gae-hint">{{ hintCopy }}</p>
+      <p class="text-sm text-muted-foreground">{{ hintCopy }}</p>
 
-        <!-- Suggested fix command (copy → paste in a terminal) -->
-        <div class="gae-cmd">
-          <span class="gae-prompt">$</span>
-          <code class="gae-cmdtext mono">{{ fixCommand }}</code>
-          <button class="gae-copy" :title="t('git.auth.copyCommand')" @click="copyCommand">
-            <Icon
-              :name="copied ? 'check' : 'copy'"
-              style="width: var(--icon-sm); height: var(--icon-sm)"
-            />
-          </button>
-        </div>
-
-        <!-- Raw (sanitized) git stderr, for the curious / for filing bugs -->
-        <pre v-if="error.message" class="gae-err mono">{{ error.message }}</pre>
-
-        <div class="gpm-foot">
-          <button class="btn" @click="emit('close')">{{ t('common.close') }}</button>
-          <button class="btn pri" @click="openGithub">
-            <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ error.hint === 'ssh-key' ? t('git.auth.openSshKeys') : t('git.auth.openTokens') }}
-          </button>
-        </div>
+      <!-- Suggested fix command (copy → paste in a terminal) -->
+      <div class="flex items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2">
+        <span class="shrink-0 select-none font-mono text-muted-foreground">$</span>
+        <code class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-sm">
+          {{ fixCommand }}
+        </code>
+        <Button
+          variant="ghost"
+          class="h-auto p-0 shrink-0 rounded-sm p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          :title="t('git.auth.copyCommand')"
+          :aria-label="t('git.auth.copyCommand')"
+          @click="copyCommand"
+        >
+          <Icon :name="copied ? 'check' : 'copy'" class="size-3.5" />
+        </Button>
       </div>
-    </div>
-  </Teleport>
+
+      <!-- Raw (sanitized) git stderr, for the curious / for filing bugs -->
+      <pre
+        v-if="error?.message"
+        class="m-0 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md border border-input bg-transparent p-3 font-mono text-xs text-muted-foreground"
+        >{{ error.message }}</pre
+      >
+
+      <DialogFooter>
+        <Button variant="outline" @click="emit('close')">{{ t('common.close') }}</Button>
+        <Button @click="openGithub">
+          <Icon name="globe" class="size-3.5" />
+          {{ error?.hint === 'ssh-key' ? t('git.auth.openSshKeys') : t('git.auth.openTokens') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -45,6 +54,14 @@
 // vs HTTPS token) which drives actionable copy + a one-click fix command + a
 // link to the right GitHub settings page. Mirrors production
 // apps/desktop/ui/components/git/GitAuthErrorModal.vue (ported to prototype styling).
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogDescription from '~/components/ui/dialog/DialogDescription.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import Button from '~/components/ui/button/Button.vue'
+
 type GitAuthHint = 'ssh-key' | 'https-token' | 'unknown'
 
 const props = defineProps<{
@@ -106,115 +123,3 @@ onBeforeUnmount(() => {
   if (copyTimer) clearTimeout(copyTimer)
 })
 </script>
-
-<style scoped>
-/* Overlay + card mirror the other git modals (.gpm-*). Auth-specific rows below. */
-.gpm-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.gpm-card {
-  width: 460px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.gpm-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.gae-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
-}
-.gae-headicn {
-  width: var(--icon-lg);
-  height: var(--icon-lg);
-  flex: none;
-  margin-top: 1px;
-  color: var(--danger);
-}
-.gae-headtext {
-  min-width: 0;
-}
-.gae-lead {
-  margin-top: 3px;
-  font-size: 1em;
-  color: var(--textMuted);
-}
-.gae-hint {
-  font-size: 1em;
-  line-height: var(--lh-md);
-  color: var(--textDim);
-}
-.gae-cmd {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 11px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-}
-.gae-prompt {
-  flex: none;
-  color: var(--textFaint);
-  font-family: var(--mono);
-  user-select: none;
-}
-.gae-cmdtext {
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  white-space: nowrap;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.gae-copy {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  padding: 4px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.gae-copy:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.gae-err {
-  max-height: 128px;
-  overflow: auto;
-  margin: 0;
-  padding: 9px 11px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.gpm-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 2px;
-}
-</style>

@@ -17,10 +17,10 @@ import { loadProject } from '../projects/store.js'
 import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
-import { claudeHome, projectClaudeDir } from '../util/path.js'
+import { awogHome } from '../util/path.js'
 import { authorPi } from '../runtime/complete.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const ChatMessage = z.object({
   role: z.enum(['user', 'agent']),
@@ -63,11 +63,21 @@ description: One-sentence summary shown in the agent picker. Required.
 model: claude-sonnet-5           # optional. One of: ${ANTHROPIC_MODELS.join(', ')}
 role: BA                          # optional, short tag — AWOG extension
 mcpServerIds: []                  # optional, AWOG extension — per-agent MCP whitelist (leave [] unless user mentions specific MCP servers)
+skillIds: []                      # optional, AWOG extension — per-agent skill whitelist (leave [] unless user names specific skills)
+repos: []                         # optional, AWOG extension — absolute repo paths the agent may touch (leave [] unless user names repos)
 ---
 
-You are a <role>. <Persona instructions in second person, 3-8 sentences>.
-Cover: voice/tone, output style, anti-patterns to avoid, edge cases the user
-mentioned. Be concrete.
+You are <name> — <one-line mission>.
+
+<A SENIOR-GRADE working spec in Markdown — numbered ## sections, typically
+100-400 lines. Cover: scope (owned end-to-end + explicit non-scope), goals
+and non-goals, responsibilities broken into sub-procedures/checklists,
+domain deep-dives the role demands, the numbered working method per task,
+a decision-principle ladder (correctness > reliability > security > cost…),
+the deliverable format its finished work must follow, boundaries (never-do,
+when to stop and escalate), and the collaboration protocol (in a team:
+take work from inbox handoffs, report via team_say). Concrete and
+operational — no generic assistant boilerplate.>
 
 Workflow:
 1. Read the user's request. If genuinely vague, ASK ONE concise clarifying question (which role/persona? which task focus?). Do not interrogate.
@@ -83,7 +93,8 @@ Hard rules:
 - Frontmatter MUST include name and description.
 - Body MUST be the system prompt itself (plain Markdown), not a description of the system prompt. No JSON wrapper, no code fences around the whole file.
 - Default model is claude-sonnet-5 unless the user asks otherwise.
-- Keep mcpServerIds as an empty array unless the user explicitly mentions MCP servers — those are managed via the editor picker.`
+- Keep mcpServerIds as an empty array unless the user explicitly mentions MCP servers — those are managed via the editor picker.
+- Keep skillIds and repos empty unless the user explicitly names skills or repositories — they are managed via the editor pickers.`
 }
 
 // Resolve the chosen scope into the single agents dir to write into + the cwd
@@ -91,11 +102,11 @@ Hard rules:
 // projectId so the UI surfaces a clear error instead of a silent global write.
 async function resolveTarget(scope: string): Promise<{ agentsDir: string; cwd: string }> {
   if (scope === 'global') {
-    return { agentsDir: join(claudeHome(), 'agents'), cwd: claudeHome() }
+    return { agentsDir: join(awogHome(), 'agents'), cwd: awogHome() }
   }
   const project = await loadProject(scope)
   if (!project) throw new Error(`Unknown project: ${scope}`)
-  return { agentsDir: join(projectClaudeDir(project.path), 'agents'), cwd: project.path }
+  return { agentsDir: join(project.path, '.awog', 'agents'), cwd: project.path }
 }
 
 register('agents.author', async (raw) => {

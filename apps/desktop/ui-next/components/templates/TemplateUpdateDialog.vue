@@ -57,12 +57,12 @@
     </div>
 
     <template #footer>
-      <button class="btn" :disabled="applying" @click="emit('close')">
+      <Button :disabled="applying" variant="outline" @click="emit('close')">
         {{ t('common.cancel') }}
-      </button>
-      <button class="btn pri" :disabled="applying || !changed.length" @click="onApply">
+      </Button>
+      <Button :disabled="applying || !changed.length" variant="default" @click="onApply">
         {{ applying ? t('templatesUpdate.applying') : t('templatesUpdate.apply') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -78,6 +78,7 @@
 import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
+import Button from '~/components/ui/button/Button.vue'
 import {
   useTemplatesStore,
   type ConflictChoice,

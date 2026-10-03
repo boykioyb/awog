@@ -310,13 +310,22 @@ export interface BrowserActionInput {
 
 // Lõi dùng chung cho cả Pi AgentTool lẫn cầu SDK MCP: mọi hàng rào (SSRF, fence
 // nonce, redact) nằm ở đây nên không runtime nào đi đường vòng được.
+//
+// `scope` = chủ sở hữu tab theo thiết kế per-session: session engineId cho
+// chat, `task:<taskId>:<nodeId>` cho workflow node. Do TOOL WRAPPER gắn khi tạo
+// tool — model chỉ nói action + tabId; main (electron/browser.ts) kiểm scope ↔
+// ownership nên tab của phiên khác "không tồn tại" với caller này, kể cả khi
+// nó đoán được đúng tabId.
 export async function runBrowserAction(
   cwd: string,
   params: BrowserActionInput,
+  scope?: string,
 ): Promise<AgentToolResult<BrowserDetails>> {
   const action = params.action
   const tabId = typeof params.tabId === 'string' ? params.tabId : undefined
-  const tabArg = tabId ? { tabId } : {}
+  // `tabArg` đi cùng MỌI hostRequest: tabId là thứ model chọn, scope là thứ
+  // wrapper gắn — main cần cả hai để verify ownership.
+  const tabArg = { ...(tabId ? { tabId } : {}), ...(scope ? { scope } : {}) }
   switch (action) {
     case 'navigate': {
       const url = requireString(params.url, action, 'url')
@@ -530,7 +539,7 @@ export async function runBrowserAction(
       )
     }
     case 'tabs': {
-      const res = (await hostRequest('browser.tabs', {})) as {
+      const res = (await hostRequest('browser.tabs', { ...tabArg })) as {
         tabs: { tabId: string; url: string; title: string; active: boolean; loading: boolean }[]
         activeTabId: string | null
       }
@@ -553,7 +562,10 @@ export async function runBrowserAction(
     case 'tab_new': {
       const url = typeof params.url === 'string' ? params.url : undefined
       if (url) await assertSafeUrl(url) // same SSRF gate as navigate
-      const res = (await hostRequest('browser.tabNew', url ? { url } : {})) as {
+      const res = (await hostRequest('browser.tabNew', {
+        ...(url ? { url } : {}),
+        ...tabArg,
+      })) as {
         tabId: string
         url: string
         title: string
@@ -570,7 +582,7 @@ export async function runBrowserAction(
     }
     case 'tab_select': {
       const target = requireString(params.tabId, action, 'tabId')
-      const res = (await hostRequest('browser.tabSelect', { tabId: target })) as {
+      const res = (await hostRequest('browser.tabSelect', { tabId: target, ...tabArg })) as {
         tabId: string
         url: string
         title: string
@@ -582,7 +594,7 @@ export async function runBrowserAction(
     }
     case 'tab_close': {
       const target = requireString(params.tabId, action, 'tabId')
-      const res = (await hostRequest('browser.tabClose', { tabId: target })) as {
+      const res = (await hostRequest('browser.tabClose', { tabId: target, ...tabArg })) as {
         closed: string
         remaining: number
       }
@@ -594,13 +606,17 @@ export async function runBrowserAction(
 }
 
 // Pi AgentTool. `cwd` = workspace root của lượt hiện tại — nơi duy nhất screenshot
-// được phép ghi xuống (invariant #2).
-export function createBrowserTool(cwd: string): AgentTool<typeof BrowserParams, BrowserDetails> {
+// được phép ghi xuống (invariant #2). `scope` = chủ tab của lượt này (session
+// engineId / `task:…`); bỏ trống nghĩa là pool global — giữ nguyên hành vi cũ.
+export function createBrowserTool(
+  cwd: string,
+  scope?: string,
+): AgentTool<typeof BrowserParams, BrowserDetails> {
   return {
     name: BROWSER_TOOL_NAME,
     label: 'Browser',
     description: BROWSER_TOOL_DESCRIPTION,
     parameters: BrowserParams,
-    execute: (_id, params) => runBrowserAction(cwd, params),
+    execute: (_id, params) => runBrowserAction(cwd, params, scope),
   }
 }

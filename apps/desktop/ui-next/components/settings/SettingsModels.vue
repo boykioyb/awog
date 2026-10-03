@@ -33,10 +33,10 @@
 
         <!-- Empty state: prominent CTA -->
         <template v-if="anthropicAccounts.length === 0">
-          <button class="btn pri pcardcta" type="button" @click="oauthOpen = true">
+          <Button type="button" class="pcardcta" variant="default" @click="oauthOpen = true">
             <Icon name="agents" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('settingsModels.anthropic.signIn') }}
-          </button>
+          </Button>
           <div class="fd pcardhint">{{ t('settingsModels.anthropic.signInHint') }}</div>
         </template>
 
@@ -58,10 +58,16 @@
               @reauth="onReauth(acc.id)"
             />
           </div>
-          <button class="btn sm pcardadd" type="button" @click="oauthOpen = true">
+          <Button
+            type="button"
+            class="pcardadd"
+            variant="outline"
+            size="sm"
+            @click="oauthOpen = true"
+          >
             <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('settingsModels.account.addAnother') }}
-          </button>
+          </Button>
         </template>
 
         <!-- Advanced — API key -->
@@ -77,17 +83,17 @@
           </button>
           <div v-if="advancedOpen" class="smadvbody">
             <div class="fd">{{ t('settingsModels.anthropic.advancedHint') }}</div>
-            <input
+            <Input
               v-model="apiKeyLabel"
-              class="keyinp"
               :placeholder="t('settingsModels.form.labelOptional')"
+              class="flex-1"
             />
             <div class="keyrow">
-              <input
+              <Input
                 v-model="apiKeyValue"
-                class="keyinp mono"
                 :type="apiKeyReveal ? 'text' : 'password'"
                 placeholder="sk-ant-…"
+                class="mono flex-1"
                 @keydown.enter="onAddApiKey"
               />
               <span
@@ -99,14 +105,15 @@
               >
                 👁
               </span>
-              <button
-                class="btn sm pri"
+              <Button
                 type="button"
                 :disabled="!apiKeyValue.trim() || apiKeyBusy"
+                variant="default"
+                size="sm"
                 @click="onAddApiKey"
               >
                 {{ t('settingsModels.form.addKey') }}
-              </button>
+              </Button>
             </div>
             <div v-if="apiKeyError" class="pcarderror">{{ apiKeyError }}</div>
           </div>
@@ -165,15 +172,31 @@
           />
           <div v-if="customError" class="pcarderror">{{ customError }}</div>
         </div>
-        <button v-else class="btn sm pcardadd" type="button" @click="customFormOpen = true">
+        <Button
+          v-else
+          type="button"
+          class="pcardadd"
+          variant="outline"
+          size="sm"
+          @click="customFormOpen = true"
+        >
           <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('settingsModels.custom.add') }}
-        </button>
+        </Button>
       </div>
     </div>
 
-    <!-- ── Models tab: per-provider catalog + fetch + toggle ────────────────── -->
-    <SettingsProviderModels v-show="activeTab === 'models'" />
+    <!-- ── Models tab: AI authoring default + per-provider catalog ─────────── -->
+    <div v-show="activeTab === 'models'" class="smgroup">
+      <div class="smauthor">
+        <div class="smauthorinfo">
+          <div class="smauthort">{{ t('settings.aiAuthoring.title') }}</div>
+          <div class="smauthord">{{ t('settings.aiAuthoring.desc') }}</div>
+        </div>
+        <AiModelPicker />
+      </div>
+      <SettingsProviderModels />
+    </div>
 
     <SettingsOAuthDialog
       :open="oauthOpen"
@@ -208,8 +231,11 @@ import SettingsAccountEditDialog from '~/components/settings/SettingsAccountEdit
 import SettingsOAuthDialog from '~/components/settings/SettingsOAuthDialog.vue'
 import SettingsProviderCard from '~/components/settings/SettingsProviderCard.vue'
 import SettingsProviderModels from '~/components/settings/SettingsProviderModels.vue'
+import AiModelPicker from '~/components/common/AiModelPicker.vue'
 import SettingsSeg from '~/components/settings/SettingsSeg.vue'
 import { useSettingsStore, type ProviderAccount } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const EMPTY_CUSTOM: CustomProviderInput = {
   label: '',
@@ -411,6 +437,30 @@ const onOauthConnected = (account: ProviderAccount) => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+/* AI-authoring model row — compact card strip trên đầu tab Models. */
+.smauthor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  background: var(--bgEl);
+}
+.smauthorinfo {
+  flex: 1;
+  min-width: 0;
+}
+.smauthort {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.smauthord {
+  font-size: 11.5px;
+  color: var(--textDim);
+  margin-top: 2px;
 }
 
 /* Card surface (shared visual with SettingsProviderCard) */

@@ -83,13 +83,13 @@
           <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </button>
       </template>
-      <input
+      <Input
         v-else
         ref="pathInput"
         v-model="pathDraft"
-        class="ssh-sf-pathinput mono"
         spellcheck="false"
         :placeholder="t('ssh.sftp.pathPh')"
+        class="mono"
         @keydown.enter="commitPath"
         @keydown.esc="editingPath = false"
         @blur="editingPath = false"
@@ -190,7 +190,7 @@
       </template>
     </div>
 
-    <ContextMenu
+    <AppContextMenu
       :open="!!ctx.pos.value"
       :position="ctx.pos.value ?? { x: 0, y: 0 }"
       :items="ctx.items.value"
@@ -227,7 +227,6 @@
 // compress/extract/chmod/chown/…) and bulk actions. All state + IPC lives in the
 // useSftpBrowser controller; the right-click menu is built by useSftpContextMenu.
 import { computed, onMounted, ref, toRef } from 'vue'
-import ContextMenu from '~/components/common/ContextMenu.vue'
 import SftpChmodModal from '~/components/ssh/SftpChmodModal.vue'
 import SftpChownModal from '~/components/ssh/SftpChownModal.vue'
 import SftpColumnsMenu from '~/components/ssh/SftpColumnsMenu.vue'
@@ -240,6 +239,7 @@ import {
 } from '~/composables/useSftpBrowser'
 import { useSftpContextMenu } from '~/composables/useSftpContextMenu'
 import type { SftpEntry } from '~/composables/useSshApi'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ connId: string }>()
 const emit = defineEmits<{ close: [] }>()

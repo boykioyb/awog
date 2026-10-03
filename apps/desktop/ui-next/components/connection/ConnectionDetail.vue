@@ -15,11 +15,13 @@
         </div>
       </div>
       <div class="cnd-actions">
-        <button
+        <Button
           v-if="isOAuthSource"
-          class="iconbtn cnd-act"
           :disabled="oauthPending"
           :title="oauthTitle"
+          class="cnd-act"
+          variant="outline"
+          size="iconMd"
           @click="onConnectOAuth"
         >
           <Icon
@@ -27,19 +29,23 @@
             :class="{ spin: oauthPending }"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="source.type === 'api'"
-          class="iconbtn cnd-act"
           :title="t('connections.detail.setCredential')"
+          class="cnd-act"
+          variant="outline"
+          size="iconMd"
           @click="emit('edit')"
         >
           <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn cnd-act"
+        </Button>
+        <Button
           :disabled="testing"
           :title="t('connections.detail.test')"
+          class="cnd-act"
+          variant="outline"
+          size="iconMd"
           @click="onTest"
         >
           <Icon
@@ -47,25 +53,35 @@
             :class="{ spin: testing }"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="canReveal"
-          class="iconbtn cnd-act"
           :title="t('connections.detail.showInFolder')"
+          class="cnd-act"
+          variant="outline"
+          size="iconMd"
           @click="emit('reveal')"
         >
           <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button class="iconbtn cnd-act" :title="t('connections.detail.edit')" @click="emit('edit')">
+        </Button>
+        <Button
+          :title="t('connections.detail.edit')"
+          class="cnd-act"
+          variant="outline"
+          size="iconMd"
+          @click="emit('edit')"
+        >
           <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn cnd-act cnd-danger"
+        </Button>
+        <Button
           :title="t('connections.detail.delete')"
+          class="cnd-act cnd-danger"
+          variant="outline"
+          size="iconMd"
           @click="emit('delete')"
         >
           <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -79,13 +95,15 @@
           <div class="cnd-banner-title">{{ t('connections.detail.oauthWaitingTitle') }}</div>
           <div class="cnd-banner-sum">{{ t('connections.detail.oauthWaiting') }}</div>
         </div>
-        <button
-          class="iconbtn cnd-act cnd-danger"
+        <Button
           :title="t('connections.detail.oauthCancel')"
+          class="cnd-act cnd-danger"
+          variant="outline"
+          size="iconMd"
           @click="onCancelOAuth"
         >
           <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        </Button>
       </div>
 
       <!-- transient test-result banner -->
@@ -284,13 +302,15 @@
       <!-- ── Permissions ────────────────────────────────────────────────── -->
       <template v-else-if="activeTab === 'permissions'">
         <div v-if="!permsEditing" class="cnd-tab-actions">
-          <button
-            class="iconbtn cnd-sech-edit"
+          <Button
             :title="t('connections.perms.edit')"
+            class="cnd-sech-edit"
+            variant="outline"
+            size="iconMd"
             @click="startPermsEdit"
           >
             <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          </button>
+          </Button>
         </div>
 
         <!-- permissions: edit (structured, line-based) -->
@@ -344,17 +364,17 @@
             </div>
           </div>
           <div class="cnd-edit-actions">
-            <button class="btn sm" :disabled="permsSaving" @click="cancelPermsEdit">
+            <Button :disabled="permsSaving" variant="outline" size="sm" @click="cancelPermsEdit">
               {{ t('common.cancel') }}
-            </button>
-            <button class="btn sm pri" :disabled="permsSaving" @click="savePermsEdit">
+            </Button>
+            <Button :disabled="permsSaving" variant="default" size="sm" @click="savePermsEdit">
               <Icon
                 :name="permsSaving ? 'refresh' : 'check'"
                 :class="{ spin: permsSaving }"
                 style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ permsSaving ? t('connections.edit.saving') : t('common.save') }}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -416,17 +436,17 @@
             </div>
           </div>
           <div class="cnd-edit-actions">
-            <button class="btn sm" :disabled="guideSaving" @click="cancelGuideEdit">
+            <Button :disabled="guideSaving" variant="outline" size="sm" @click="cancelGuideEdit">
               {{ t('common.cancel') }}
-            </button>
-            <button class="btn sm pri" :disabled="guideSaving" @click="saveGuideEdit">
+            </Button>
+            <Button :disabled="guideSaving" variant="default" size="sm" @click="saveGuideEdit">
               <Icon
                 :name="guideSaving ? 'refresh' : 'check'"
                 :class="{ spin: guideSaving }"
                 style="width: var(--icon-xs); height: var(--icon-xs)"
               />
               {{ guideSaving ? t('connections.edit.saving') : t('common.save') }}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -466,6 +486,7 @@ import SourceStatusDot from '~/components/connection/SourceStatusDot.vue'
 import { useConnectionDetail } from '~/composables/useConnectionDetail'
 import { useSidecar } from '~/composables/useSidecar'
 import type { Source, SourceOAuthResult, SourceTestOutcome } from '~/stores/connections'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   source: Source

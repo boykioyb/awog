@@ -72,23 +72,12 @@
           v-if="!minimized"
           type="button"
           class="bpip-btn"
-          :title="t('browser.pip.toPanel')"
-          :aria-label="t('browser.pip.toPanel')"
+          :title="t('browser.pip.actions')"
+          :aria-label="t('browser.pip.actions')"
           @pointerdown.stop
-          @click="returnToPanel"
+          @click.stop="openMenu"
         >
-          <Icon name="panel" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          v-if="!minimized"
-          type="button"
-          class="bpip-btn"
-          :title="t('sessions.workspace.browser.popout')"
-          :aria-label="t('sessions.workspace.browser.popout')"
-          @pointerdown.stop
-          @click="toPopout"
-        >
-          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <button
           type="button"
@@ -147,6 +136,15 @@
         @pointerdown="(ev) => onResizeStart(ev, 'se')"
         @keydown="onResizeKeydown"
       />
+      <!-- ⋮ menu — reload (view trắng/kẹt tự cứu được) + trả về panel + popout,
+           fixed-position theo nút nên không lệ thuộc overflow của card. -->
+      <AppContextMenu
+        :open="menuOpen"
+        :position="menuPos"
+        :items="menuItems"
+        @close="menuOpen = false"
+        @select="onMenuSelect"
+      />
     </div>
   </Teleport>
 </template>
@@ -159,6 +157,8 @@
 // mở ⇒ `takeOver` giật view về card (panel/popout tự chuyển "elsewhere"), đóng ⇒
 // v-if gỡ viewport el → sync → `detach()` → panel nhận lại không reload.
 import BrowserElsewhere from '~/components/browser/BrowserElsewhere.vue'
+import type { MenuItem } from '~/composables/useContextMenu'
+import { useSessionsStore } from '~/stores/sessions'
 
 const { t } = useI18n()
 const {
@@ -173,14 +173,19 @@ const {
   toggleMinimize,
 } = useBrowserPip()
 const workspace = useWorkspacePanel()
+const sessions = useSessionsStore()
 
 const viewportEl = useTemplateRef<HTMLElement>('viewportEl')
-const { available, activeTab, error, empty, elsewhere, holding, popout, takeOver } =
+const { available, activeTab, error, empty, elsewhere, holding, popout, reload, takeOver } =
   useEmbeddedBrowser({
     viewport: viewportEl,
     // Card chỉ giữ view khi mở VÀ không thu nhỏ — v-if gỡ viewport el khỏi DOM
     // là đủ để sync nhả view về holder (trang chạy nền, không reload).
     visible: () => open.value && !minimized.value,
+    // Card theo phiên ĐANG XEM (khác panel — panel có scope cố định của session
+    // chủ): đổi session là đổi scope, watcher của composable detach tab phiên cũ
+    // rồi re-sync cho phiên mới.
+    scope: () => sessions.active?.engineId,
   })
 
 // Mở card (hoặc bung ra sau khi thu nhỏ) = CHỦ ĐỘNG giật view về đây (khác với
@@ -278,6 +283,32 @@ const returnToPanel = (): void => {
 const toPopout = (): void => {
   void popout()
   closePip()
+}
+
+// ── ⋮ menu ─────────────────────────────────────────────────────────────────
+// Gom các action phụ khỏi thanh tiêu đề cho gọn (trước đây mỗi cái một nút).
+// `reload` là đường tự cứu khi view native trắng/kẹt — panel đã có nút này trên
+// chrome, PiP thiếu nên view lỗi chỉ còn cách đóng/mở lại card.
+const menuOpen = ref(false)
+const menuPos = ref({ x: 0, y: 0 })
+
+const openMenu = (ev: MouseEvent): void => {
+  const r = (ev.currentTarget as HTMLElement).getBoundingClientRect()
+  // Căn mép phải menu theo nút; ContextMenu tự kẹp trong viewport.
+  menuPos.value = { x: r.right - 200, y: r.bottom + 4 }
+  menuOpen.value = true
+}
+
+const menuItems = computed<MenuItem[]>(() => [
+  { id: 'reload', label: t('common.reload'), icon: 'refresh' },
+  { id: 'panel', label: t('browser.pip.toPanel'), icon: 'panel' },
+  { id: 'popout', label: t('sessions.workspace.browser.popout'), icon: 'external' },
+])
+
+const onMenuSelect = (id: string): void => {
+  if (id === 'reload') void reload()
+  else if (id === 'panel') returnToPanel()
+  else if (id === 'popout') toPopout()
 }
 
 // ── Drag / resize ──────────────────────────────────────────────────────────

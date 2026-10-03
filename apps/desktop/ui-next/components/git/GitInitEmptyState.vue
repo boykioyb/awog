@@ -2,7 +2,7 @@
   <div class="ginit">
     <div class="ginit-card">
       <div class="ginit-icon">
-        <Icon name="git" style="width: 26px; height: 26px; color: var(--accent)" />
+        <Icon name="git" class="size-6 text-primary" />
       </div>
 
       <div class="ginit-title">{{ t('git.init.title') }}</div>
@@ -15,18 +15,14 @@
            Prefilled from the global config; saved to ~/.gitconfig on init. -->
       <div class="ginit-sec">
         <div class="ginit-sec-head">
-          <Icon
-            name="globe"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
-          />
+          <Icon name="globe" class="size-3.5 text-muted-foreground" />
           <span class="ginit-sec-title">{{ t('git.init.identityTitle') }}</span>
         </div>
         <p class="ginit-hint">{{ t('git.init.identityHint') }}</p>
         <label class="ginit-field">
           <span class="ginit-label">{{ t('git.identity.name') }}</span>
-          <input
+          <Input
             v-model="name"
-            class="ginit-input"
             :placeholder="t('git.identity.namePlaceholder')"
             :disabled="busy"
             @keydown.enter.prevent="onInit"
@@ -34,9 +30,9 @@
         </label>
         <label class="ginit-field">
           <span class="ginit-label">{{ t('git.identity.email') }}</span>
-          <input
+          <Input
             v-model="email"
-            class="ginit-input mono"
+            class="font-mono"
             :placeholder="t('git.identity.emailPlaceholder')"
             :disabled="busy"
             @keydown.enter.prevent="onInit"
@@ -45,10 +41,10 @@
       </div>
 
       <div class="ginit-actions">
-        <button class="btn pri" :disabled="busy" @click="onInit">
-          <Icon v-if="!busy" name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Button :disabled="busy" @click="onInit">
+          <Icon v-if="!busy" name="plus" class="size-3.5" />
           {{ busy ? t('git.init.initializing') : t('git.init.button') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -59,6 +55,8 @@
 // has no .git. Offers `git init` plus an inline commit-identity form (name/email)
 // so a fresh repo can commit immediately. Identity is written to the global config
 // (~/.gitconfig) — git config --global doesn't need a repo, so it can run pre-init.
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import { useGitStore } from '~/stores/git'
 
 const { t } = useI18n()
@@ -117,9 +115,11 @@ async function onInit() {
   align-items: stretch;
   gap: 10px;
   padding: 24px;
-  background: var(--bgEl);
+  background: var(--card);
+  color: var(--card-foreground);
   border: 1px solid var(--border);
   border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
 }
 .ginit-icon {
   align-self: center;
@@ -129,27 +129,27 @@ async function onInit() {
   width: 52px;
   height: 52px;
   border-radius: var(--r-card);
-  background: var(--bgInput);
+  background: var(--muted);
   border: 1px solid var(--border);
   margin-bottom: 2px;
 }
 .ginit-title {
   text-align: center;
-  font-size: 1em;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
   font-weight: 600;
-  color: var(--text);
 }
 .ginit-path {
   text-align: center;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
 }
 .ginit-desc {
   text-align: center;
-  font-size: 1em;
+  font-size: var(--fs-md);
   line-height: var(--lh-md);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   margin: 2px 0 8px;
 }
 .ginit-sec {
@@ -157,7 +157,7 @@ async function onInit() {
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: var(--bgInput);
+  background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
 }
@@ -167,13 +167,14 @@ async function onInit() {
   gap: 7px;
 }
 .ginit-sec-title {
-  font-size: 1em;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 600;
-  color: var(--text);
 }
 .ginit-hint {
-  font-size: 1em;
-  color: var(--textDim);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--muted-foreground);
   margin: -2px 0 2px;
 }
 .ginit-field {
@@ -184,38 +185,14 @@ async function onInit() {
 .ginit-label {
   flex: none;
   width: 48px;
-  font-size: 1em;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   font-weight: 500;
-  color: var(--textDim);
-}
-.ginit-input {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 11px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-  font-family: var(--sans);
-}
-.ginit-input.mono {
-  font-family: var(--mono);
-}
-.ginit-input:focus {
-  border-color: var(--accent);
-}
-.ginit-input:disabled {
-  opacity: 0.55;
+  color: var(--muted-foreground);
 }
 .ginit-actions {
   display: flex;
   justify-content: center;
   margin-top: 4px;
-}
-.ginit-actions .btn:disabled {
-  opacity: 0.55;
-  cursor: default;
 }
 </style>

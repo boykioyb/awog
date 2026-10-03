@@ -32,14 +32,14 @@
     <div class="memhead">
       <div class="sech">{{ t('settings.memory.list.heading') }}</div>
       <div class="memhead-actions">
-        <button class="btn sm" @click="startCreate">
+        <Button variant="outline" size="sm" @click="startCreate">
           <Icon name="plus" :size="13" />
           {{ t('settings.memory.list.add') }}
-        </button>
-        <button v-if="memory.facts.length > 0" class="btn sm danger" @click="onClearAll">
+        </Button>
+        <Button v-if="memory.facts.length > 0" variant="danger" size="sm" @click="onClearAll">
           <Icon name="trash" :size="13" />
           {{ t('settings.memory.list.clear') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -81,7 +81,7 @@
       <div class="memfields">
         <label class="memfield">
           <span class="sech">{{ t('settings.memory.editor.name') }}</span>
-          <input v-model="draft.name" class="keyinp" />
+          <Input v-model="draft.name" class="flex-1" />
         </label>
         <label class="memfield">
           <span class="sech">{{ t('settings.memory.editor.type') }}</span>
@@ -90,10 +90,10 @@
       </div>
       <label class="memfield">
         <span class="sech">{{ t('settings.memory.editor.description') }}</span>
-        <input
+        <Input
           v-model="draft.description"
-          class="keyinp"
           :placeholder="t('settings.memory.editor.descriptionHint')"
+          class="flex-1"
         />
       </label>
       <label class="memfield">
@@ -101,10 +101,10 @@
         <textarea v-model="draft.body" class="keyinp membody resize-y min-h-[6rem]" />
       </label>
       <div class="memeditor-actions">
-        <button class="btn sm" @click="draft = null">{{ t('common.cancel') }}</button>
-        <button class="btn sm pri" :disabled="!canSave" @click="onSave">
+        <Button variant="outline" size="sm" @click="draft = null">{{ t('common.cancel') }}</Button>
+        <Button :disabled="!canSave" variant="default" size="sm" @click="onSave">
           {{ t('common.save') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -125,6 +125,8 @@ import {
   type MemoryType,
 } from '~/stores/memory'
 import { useConfirm } from '~/composables/useConfirm'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()

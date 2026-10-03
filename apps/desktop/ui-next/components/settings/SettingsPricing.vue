@@ -13,14 +13,14 @@
         <template v-else>{{ t('settings.pricing.neverFetched') }}</template>
       </span>
       <span style="flex: 1" />
-      <button class="btn sm" type="button" :disabled="fetching" @click="onFetch">
+      <Button type="button" :disabled="fetching" variant="outline" size="sm" @click="onFetch">
         <Icon
           name="refresh"
           :class="{ spin: fetching }"
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
         {{ t('settings.pricing.fetch') }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="error" class="pcarderror">{{ error }}</div>
@@ -56,43 +56,43 @@
               </div>
             </td>
             <td class="tr">
-              <input
-                class="sprinp mono"
+              <Input
                 type="number"
                 min="0"
                 step="0.01"
-                :value="effectivePrice(m).input"
-                @input="onInput(m, 'input', $event)"
+                :model-value="effectivePrice(m).input"
+                class="mono"
+                @update:model-value="onInput(m, 'input', $event)"
               />
             </td>
             <td class="tr">
-              <input
-                class="sprinp mono"
+              <Input
                 type="number"
                 min="0"
                 step="0.01"
-                :value="effectivePrice(m).output"
-                @input="onInput(m, 'output', $event)"
+                :model-value="effectivePrice(m).output"
+                class="mono"
+                @update:model-value="onInput(m, 'output', $event)"
               />
             </td>
             <td class="tr">
-              <input
-                class="sprinp mono"
+              <Input
                 type="number"
                 min="0"
                 step="0.01"
-                :value="effectivePrice(m).cacheRead"
-                @input="onInput(m, 'cacheRead', $event)"
+                :model-value="effectivePrice(m).cacheRead"
+                class="mono"
+                @update:model-value="onInput(m, 'cacheRead', $event)"
               />
             </td>
             <td class="tr">
-              <input
-                class="sprinp mono"
+              <Input
                 type="number"
                 min="0"
                 step="0.01"
-                :value="effectivePrice(m).cacheWrite"
-                @input="onInput(m, 'cacheWrite', $event)"
+                :model-value="effectivePrice(m).cacheWrite"
+                class="mono"
+                @update:model-value="onInput(m, 'cacheWrite', $event)"
               />
             </td>
             <td class="tr">
@@ -117,9 +117,9 @@
       <span v-if="dirty" class="fd" style="color: var(--amber)">
         {{ t('settings.pricing.unsaved') }}
       </span>
-      <button class="btn pri sm" type="button" :disabled="!dirty || loading" @click="save">
+      <Button type="button" :disabled="!dirty || loading" variant="default" size="sm" @click="save">
         {{ t('settings.pricing.save') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -133,6 +133,8 @@
 // for choice fields, not numeric entry).
 import { computed, onMounted } from 'vue'
 import { useModelPricing, type ModelPrice, type PriceFields } from '~/composables/useModelPricing'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const {
@@ -158,9 +160,8 @@ const fetchedLabel = computed(() =>
   fetchedAt.value ? new Date(fetchedAt.value).toLocaleString() : '',
 )
 
-function onInput(model: ModelPrice, field: keyof PriceFields, e: Event): void {
-  const value = Number((e.target as HTMLInputElement).value)
-  setField(model, field, value)
+function onInput(model: ModelPrice, field: keyof PriceFields, v: string): void {
+  setField(model, field, Number(v))
 }
 
 function onFetch(): void {

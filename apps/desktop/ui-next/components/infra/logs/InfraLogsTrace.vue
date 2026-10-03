@@ -8,13 +8,13 @@
              Bản đầu gắn `class="inp"` — một class KHÔNG tồn tại ở đâu trong repo,
              nên ô này render bằng mặc định trần của trình duyệt. -->
         <div class="ltr-field">
-          <input
+          <Input
             v-model="traceId"
-            class="ltr-id"
             type="text"
             spellcheck="false"
             :placeholder="t('infra.trace.idPh')"
             :aria-label="t('infra.trace.idLabel')"
+            class="ltr-id"
             @keydown.enter.prevent="emit('run')"
           />
           <span v-if="kindLabel" class="ltr-kind">{{ kindLabel }}</span>
@@ -22,14 +22,14 @@
       </div>
 
       <div class="itoolgrp">
-        <button class="btn pri" type="button" :disabled="!canRun" @click="emit('run')">
+        <Button type="button" :disabled="!canRun" variant="default" @click="emit('run')">
           <Icon :name="running ? 'clock' : 'branch'" class="ltr-ic" />
           {{ running ? t('infra.trace.running') : t('infra.trace.go') }}
-        </button>
-        <button v-if="running" class="btn" type="button" @click="emit('cancel')">
+        </Button>
+        <Button v-if="running" type="button" variant="outline" @click="emit('cancel')">
           <Icon name="stop" class="ltr-ic" />
           {{ t('infra.trace.cancel') }}
-        </button>
+        </Button>
       </div>
 
       <div class="itoolgrp iend">
@@ -59,16 +59,17 @@
               : t('infra.trace.basisStored')
           }}
         </span>
-        <button
+        <Button
           v-if="trace && trace.hops.length > 0"
-          class="btn sm"
           type="button"
           :title="t('infra.trace.onGraphHint')"
+          variant="outline"
+          size="sm"
           @click="emit('show-on-graph')"
         >
           <Icon name="branch" class="ltr-ic" />
           {{ t('infra.trace.onGraph') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -164,6 +165,8 @@
 // nhãn cho cả hai là mời người đọc kết luận sai về chỗ hệ thống chậm — đúng thứ màn
 // này sinh ra để trả lời.
 import type { AwsTrace, AwsTraceIdKind } from '~/composables/useAwsLogsApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   trace: AwsTrace | null

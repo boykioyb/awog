@@ -46,9 +46,9 @@
         </div>
 
         <footer class="irp-ft">
-          <button class="btn" type="button" @click="closeReportPublish">
+          <Button type="button" variant="outline" @click="closeReportPublish">
             {{ t('common.cancel') }}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>
@@ -63,6 +63,7 @@ import { onMounted } from 'vue'
 import { useInfraReportPublish } from '~/composables/useInfraReportPublish'
 import { useShareExport } from '~/composables/useShareExport'
 import { useSidecar } from '~/composables/useSidecar'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const sidecar = useSidecar()

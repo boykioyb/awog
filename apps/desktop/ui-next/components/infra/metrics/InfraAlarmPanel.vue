@@ -32,13 +32,13 @@
           })
         }}
       </label>
-      <input
+      <Input
         id="iap-threshold"
-        class="iin"
         type="number"
         step="any"
-        :value="draft.threshold"
-        @input="setNumber('threshold', $event)"
+        :model-value="draft.threshold"
+        class="flex-1"
+        @update:model-value="setNumber('threshold', $event)"
       />
       <!-- Kéo trên biểu đồ và gõ ở đây sửa CÙNG một trường; nói ra để không ai đi tìm
            một ô ngưỡng thứ hai ở nơi khác. -->
@@ -57,14 +57,14 @@
 
     <div class="ifield">
       <label class="ilbl" for="iap-eval">{{ t('infra.monitoring.alarm.evaluationPeriods') }}</label>
-      <input
+      <Input
         id="iap-eval"
-        class="iin"
         type="number"
         min="1"
         step="1"
-        :value="draft.evaluationPeriods"
-        @input="setNumber('evaluationPeriods', $event)"
+        :model-value="draft.evaluationPeriods"
+        class="flex-1"
+        @update:model-value="setNumber('evaluationPeriods', $event)"
       />
     </div>
 
@@ -80,14 +80,14 @@
 
     <div class="ifield">
       <label class="ilbl" for="iap-name">{{ t('infra.monitoring.alarm.name') }}</label>
-      <input
+      <Input
         id="iap-name"
-        class="iin"
         type="text"
         autocomplete="off"
         spellcheck="false"
-        :value="draft.name"
-        @input="setText('name', $event)"
+        :model-value="draft.name"
+        class="flex-1"
+        @update:model-value="setText('name', $event)"
       />
     </div>
 
@@ -104,33 +104,33 @@
 
     <div class="ifield">
       <label class="ilbl" for="iap-actions">{{ t('infra.monitoring.alarm.actions') }}</label>
-      <input
+      <Input
         id="iap-actions"
-        class="iin"
         type="text"
         autocomplete="off"
         spellcheck="false"
-        :value="draft.alarmActions"
-        @input="setText('alarmActions', $event)"
+        :model-value="draft.alarmActions"
+        class="flex-1"
+        @update:model-value="setText('alarmActions', $event)"
       />
       <p class="ihint">{{ t('infra.monitoring.alarm.actionsHint') }}</p>
     </div>
 
     <div class="iap-foot">
-      <button
+      <Button
         type="button"
-        class="btn pri"
         :disabled="saving"
         :aria-busy="saving"
+        variant="default"
         @click="emit('save')"
       >
         <Icon v-if="!saving" name="save" class="iap-ic" />
         <Icon v-else name="refresh" class="iap-ic iap-spin" />
         {{ t('infra.monitoring.alarm.save') }}
-      </button>
-      <button type="button" class="btn" :disabled="saving" @click="emit('close')">
+      </Button>
+      <Button type="button" :disabled="saving" variant="outline" @click="emit('close')">
         {{ t('infra.monitoring.alarm.cancel') }}
-      </button>
+      </Button>
     </div>
   </aside>
 </template>
@@ -151,6 +151,8 @@ import type {
   TreatMissingData,
 } from '~/composables/useInfraMetrics'
 import { formatMetricValue } from '~/composables/useInfraMetrics'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Không gán vào biến: template đọc thẳng `draft` / `saving`. Gán `const props =` mà
 // không dùng là một biến thừa (và eslint bắt đúng).
@@ -183,14 +185,14 @@ function set<K extends keyof AlarmDraft>(key: K, value: AlarmDraft[K]): void {
   emit('patch', { [key]: value } as Partial<AlarmDraft>)
 }
 
-function setText(key: 'name' | 'alarmDescription' | 'alarmActions', e: Event): void {
-  set(key, (e.target as HTMLInputElement | HTMLTextAreaElement).value)
+function setText(key: 'name' | 'alarmDescription' | 'alarmActions', e: Event | string): void {
+  set(key, typeof e === 'string' ? e : (e.target as HTMLInputElement | HTMLTextAreaElement).value)
 }
 
 /** Ô số rỗng ⇒ `Number('')` = 0, và một ngưỡng 0 tự hiện ra là "người dùng vừa đặt
  *  0" — nên chỉ ghi khi thật sự đọc được một số. */
-function setNumber(key: 'threshold' | 'evaluationPeriods', e: Event): void {
-  const n = Number((e.target as HTMLInputElement).value)
+function setNumber(key: 'threshold' | 'evaluationPeriods', v: string): void {
+  const n = Number(v)
   if (Number.isFinite(n)) set(key, n)
 }
 </script>

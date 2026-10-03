@@ -25,13 +25,13 @@
                thay vì đổi tên (đo trên máy người dùng 2026-09-14: `console` +
                `hoatq.dev`, cùng một `login_session`). Đổi tên giờ làm ở màn Sửa —
                form `login` đã cho sửa tên (AwsProfileEditorLoginFields.vue). -->
-          <input
+          <Input
             v-model.trim="name"
-            class="acl-input mono"
             spellcheck="false"
             autocomplete="off"
             :readonly="isRelogin"
             :disabled="busy"
+            class="mono"
           />
           <div v-if="isRelogin" class="acl-hint">
             {{ t('infra.login.reloginNameLocked', { name: name }) }}
@@ -45,10 +45,9 @@
           <!-- Region ngoài danh sách ngắn ở trên: vẫn phải tới được, nhưng chỉ
                hiện ô gõ tay khi thật sự chọn "Region khác…" — người dùng phổ
                thông không phải nhìn thấy một ô trống để tự đoán. -->
-          <input
+          <Input
             v-if="regionPick === OTHER_REGION"
             v-model.trim="otherRegion"
-            class="acl-input"
             spellcheck="false"
             autocomplete="off"
             :placeholder="t('infra.login.regionPh')"
@@ -78,18 +77,18 @@
         <div class="acl-url-title">{{ t('infra.login.url.title') }}</div>
         <code class="acl-url-value">{{ loginUrl }}</code>
         <div class="acl-url-acts">
-          <button class="btn pri" type="button" :disabled="openingPrivate" @click="onOpenPrivate">
+          <Button type="button" :disabled="openingPrivate" variant="default" @click="onOpenPrivate">
             <Icon name="eye-off" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('infra.login.url.private') }}
-          </button>
-          <button class="btn" type="button" @click="onCopyUrl">
+          </Button>
+          <Button type="button" variant="outline" @click="onCopyUrl">
             <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ copied ? t('infra.login.url.copied') : t('infra.login.url.copy') }}
-          </button>
-          <button class="btn" type="button" @click="onReopenUrl">
+          </Button>
+          <Button type="button" variant="outline" @click="onReopenUrl">
             <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('infra.login.url.reopen') }}
-          </button>
+          </Button>
         </div>
         <p class="acl-url-hint">{{ t('infra.login.url.hint') }}</p>
       </div>
@@ -123,16 +122,16 @@
 
     <template #footer>
       <span style="flex: 1" />
-      <button v-if="done" class="btn pri" type="button" @click="onDone">
+      <Button v-if="done" type="button" variant="default" @click="onDone">
         {{ t('common.close') }}
-      </button>
+      </Button>
       <template v-else>
-        <button class="btn" type="button" @click="onClose">
+        <Button type="button" variant="outline" @click="onClose">
           {{ busy ? t('infra.login.cancel') : t('common.cancel') }}
-        </button>
-        <button class="btn pri" type="button" :disabled="!canSubmit" @click="onSubmit">
+        </Button>
+        <Button type="button" :disabled="!canSubmit" variant="default" @click="onSubmit">
           {{ busy ? t('infra.login.working') : t('infra.login.action') }}
-        </button>
+        </Button>
       </template>
     </template>
   </LibraryEntityModal>
@@ -155,6 +154,8 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import { useAwsProfilesApi, type AwsConsoleLoginUrlEvent } from '~/composables/useAwsProfilesApi'
 import { AWS_PROFILE_NAME_RE } from '~/utils/aws-profile-view'
 import type { AwsProfile } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean

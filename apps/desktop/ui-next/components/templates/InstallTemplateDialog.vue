@@ -36,10 +36,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canInstall || installing" @click="onInstall">
+      <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canInstall || installing" variant="default" @click="onInstall">
         {{ t('templates.installDialog.confirm') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -53,6 +53,7 @@ import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useTemplatesStore } from '~/stores/templates'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

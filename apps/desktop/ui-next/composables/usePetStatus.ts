@@ -2,7 +2,11 @@ import { computed, onScopeDispose, watch } from 'vue'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useSettingsStore } from '~/stores/settings'
-import type { AssistantBlock, SessionMessage } from '~/composables/useSessionsData'
+import {
+  isBoardSession,
+  type AssistantBlock,
+  type SessionMessage,
+} from '~/composables/useSessionsData'
 import type { AwogPetCommand, AwogPetItem, AwogPetStatus } from '~/types/awog-bridge'
 import { bucketOfState, effectiveQuipLines } from '~/utils/pet-quips'
 
@@ -142,7 +146,9 @@ export function usePetStatus() {
       for (const s of sessions.sessions) {
         if (out.length >= MAX_ITEMS) return
         // No engineId = a never-hydrated row; clicking it could not resolve.
-        if (!s.engineId || !match(s)) continue
+        // Phiên board ẩn khỏi list — click vào cũng dẫn tới một phiên "vô hình"
+        // trên màn Sessions, nên pet không đưa chúng lên.
+        if (!s.engineId || isBoardSession(s) || !match(s)) continue
         out.push({
           kind: 'session',
           id: s.engineId,

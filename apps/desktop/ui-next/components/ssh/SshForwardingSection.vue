@@ -3,15 +3,17 @@
     <div class="sshx-fw-top">
       <span class="sshx-fw-title">{{ t('ssh.nav.forwarding') }}</span>
       <span class="sshx-fw-count">{{ forwards.length }}</span>
-      <button
-        class="btn pri sm sshx-fw-add"
+      <Button
         :disabled="!hasLiveConn"
         :title="hasLiveConn ? t('ssh.fwd.add') : t('ssh.fwd.noConnection')"
+        class="sshx-fw-add"
+        variant="default"
+        size="sm"
         @click="openAdd"
       >
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.fwd.add') }}
-      </button>
+      </Button>
       <button
         class="sshx-fw-refresh"
         :title="t('ssh.sftp.refresh')"
@@ -28,38 +30,34 @@
       <div class="sshx-fw-frow">
         <AppSelect v-model="draft.connId" :options="connOptions" class="sshx-fw-conn" />
         <AppSelect v-model="draft.type" :options="typeOptions" class="sshx-fw-typesel" />
-        <input
+        <Input
           v-model.number="draft.bindPort"
           type="number"
           min="0"
           max="65535"
-          class="sshx-fw-input"
           :placeholder="t('ssh.fwd.bindPort')"
         />
         <template v-if="draft.type !== 'dynamic'">
           <span class="sshx-fw-arrow mono">{{ draft.type === 'local' ? '→' : '←' }}</span>
-          <input
-            v-model="draft.destHost"
-            type="text"
-            class="sshx-fw-input"
-            :placeholder="t('ssh.fwd.destHost')"
-          />
-          <input
+          <Input v-model="draft.destHost" type="text" :placeholder="t('ssh.fwd.destHost')" />
+          <Input
             v-model.number="draft.destPort"
             type="number"
             min="1"
             max="65535"
-            class="sshx-fw-input sshx-fw-input-sm"
             :placeholder="t('ssh.fwd.destPort')"
+            class="sshx-fw-input-sm"
           />
         </template>
       </div>
       <div class="sshx-fw-fact">
         <span class="sshx-fw-hint">{{ t('ssh.fwd.bindHint') }}</span>
-        <button class="btn sm" @click="adding = false">{{ t('common.cancel') }}</button>
-        <button class="btn pri sm" :disabled="!canAdd || starting" @click="add">
+        <Button variant="outline" size="sm" @click="adding = false">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button :disabled="!canAdd || starting" variant="default" size="sm" @click="add">
           {{ t('ssh.fwd.add') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -109,6 +107,8 @@ import SshEmptyState from '~/components/ssh/SshEmptyState.vue'
 import { useSshApi, type SshForwardInfo } from '~/composables/useSshApi'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
 import { useSshStore, type PortForward } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const api = useSshApi()

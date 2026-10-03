@@ -10,9 +10,15 @@
           <span class="wfpc-title">{{ t('workflow.creator.headline') }}</span>
           <span class="wfpc-sub">{{ t('workflow.creator.subheadline') }}</span>
           <span style="flex: 1" />
-          <button class="iconbtn wfpc-x" :title="t('common.close')" @click="emit('close')">
+          <Button
+            :title="t('common.close')"
+            class="wfpc-x"
+            variant="outline"
+            size="iconMd"
+            @click="emit('close')"
+          >
             <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
         </div>
 
         <div class="wfpc-body">
@@ -80,26 +86,38 @@
         <div class="wfpc-foot">
           <span class="wfpc-foothint">{{ t('workflow.creator.sendHint') }}</span>
           <span style="flex: 1" />
-          <button v-if="draft" class="btn sm" :disabled="isGenerating" @click="onGenerate">
+          <Button
+            v-if="draft"
+            :disabled="isGenerating"
+            variant="outline"
+            size="sm"
+            @click="onGenerate"
+          >
             <Icon
               name="refresh"
               :class="{ spin: isGenerating }"
               style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ t('workflow.creator.regenerate') }}
-          </button>
-          <button v-if="!draft" class="btn pri sm" :disabled="!canGenerate" @click="onGenerate">
+          </Button>
+          <Button
+            v-if="!draft"
+            :disabled="!canGenerate"
+            variant="default"
+            size="sm"
+            @click="onGenerate"
+          >
             <Icon
               :name="isGenerating ? 'refresh' : 'sparkles'"
               :class="{ spin: isGenerating }"
               style="width: var(--icon-sm); height: var(--icon-sm)"
             />
             {{ isGenerating ? t('workflow.creator.generating') : t('workflow.creator.generate') }}
-          </button>
-          <button v-if="draft" class="btn pri sm" @click="onCreate">
+          </Button>
+          <Button v-if="draft" variant="default" size="sm" @click="onCreate">
             <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('workflow.creator.create') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -116,6 +134,7 @@
 import { computed, ref, watch } from 'vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import type { WorkflowAgent, WorkflowDraft, WorkflowSkill } from '~/composables/useWorkflowGen'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

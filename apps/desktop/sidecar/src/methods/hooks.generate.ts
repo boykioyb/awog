@@ -5,11 +5,11 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { completePi } from '../runtime/complete.js'
 import { HOOK_EVENTS } from '../hooks/schema.js'
+import { extractJson } from '../util/json-extract.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const CurrentHookSchema = z
   .object({
@@ -25,7 +25,7 @@ const CurrentHookSchema = z
   .optional()
 
 const Params = z.object({
-  prompt: z.string().min(1).max(8_000),
+  prompt: z.string().min(1).max(32_000),
   accountId: z.string().min(1).max(120).optional(),
   modelId: ModelSchema.optional(),
   currentHook: CurrentHookSchema,
@@ -70,11 +70,6 @@ function buildSystemPrompt(currentHook: unknown): string {
   return `${BASE_SYSTEM_PROMPT}${EDIT_INSTRUCTIONS}\n\nCurrent hook:\n${JSON.stringify(currentHook, null, 2)}`
 }
 
-function extractJson(raw: string): string {
-  const trimmed = raw.trim()
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
-  return fenced && fenced[1] ? fenced[1].trim() : trimmed
-}
 
 register('hooks.generate', async (raw) => {
   const params = Params.parse(raw)

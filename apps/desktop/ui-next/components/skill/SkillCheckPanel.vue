@@ -16,10 +16,10 @@
           }}
         </span>
         <span style="flex: 1" />
-        <button class="btn sm" :disabled="doctorBusy" @click="runDoctor">
+        <Button :disabled="doctorBusy" variant="outline" size="sm" @click="runDoctor">
           <Icon name="refresh" />
           {{ t('skillsEval.doctor.rerun') }}
-        </button>
+        </Button>
       </div>
       <div class="skc-muted">{{ t('skillsEval.doctor.hint') }}</div>
 
@@ -65,39 +65,40 @@
           >
             {{ t(`skillsEval.eval.expect.${c.expect}`) }}
           </button>
-          <input
+          <Input
             v-model="c.prompt"
-            class="skc-input"
             :placeholder="t('skillsEval.eval.promptPh')"
             :disabled="evalBusy"
           />
           <span v-if="verdict(c.id)" class="skc-verdict" :class="verdict(c.id)?.tone">
             {{ verdict(c.id)?.label }}
           </span>
-          <button
-            class="iconbtn skc-del"
+          <Button
             :title="t('skillsEval.eval.removeCase')"
+            class="skc-del"
+            variant="outline"
+            size="iconMd"
             @click="removeCase(c.id)"
           >
             <Icon name="x" />
-          </button>
+          </Button>
         </div>
       </div>
 
       <div class="skc-actions">
-        <button class="btn sm" @click="addCase('activate')">
+        <Button variant="outline" size="sm" @click="addCase('activate')">
           <Icon name="plus" />
           {{ t('skillsEval.eval.addActivate') }}
-        </button>
-        <button class="btn sm" @click="addCase('skip')">
+        </Button>
+        <Button variant="outline" size="sm" @click="addCase('skip')">
           <Icon name="plus" />
           {{ t('skillsEval.eval.addSkip') }}
-        </button>
+        </Button>
         <span style="flex: 1" />
-        <button class="btn pri sm" :disabled="!canRunEval" @click="runEval">
+        <Button :disabled="!canRunEval" variant="default" size="sm" @click="runEval">
           <Icon name="play" />
           {{ evalBusy ? t('skillsEval.eval.running') : t('skillsEval.eval.run') }}
-        </button>
+        </Button>
       </div>
       <div v-if="!canRunEval && !evalBusy" class="skc-muted">
         {{ t('skillsEval.eval.needCases') }}
@@ -148,6 +149,8 @@
 // State + IPC nằm ở composables/useSkillEval.ts; component chỉ dựng câu chữ.
 import { computed, onMounted } from 'vue'
 import { useSkillEval, type SkillEvalRun, type SkillTierSource } from '~/composables/useSkillEval'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   skill: { id: string; source: SkillTierSource; projectId?: string }

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
+import { isCliAttached } from '../sessions/cli-registry.js'
 import {
   runStream,
   registerAborter,
@@ -12,6 +13,9 @@ import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.j
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { buildLinkedSshHostBlock } from '../sessions/linked-ssh-host.js'
 import { buildSessionChecklistBlock } from '../sessions/todo-context.js'
+import { buildTeamBlock } from '../sessions/team-context.js'
+import { ensureSessionWorkspace } from '../tasks/worktree.js'
+import { rollbackInProgressItems } from '../boards/store.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import { loadProject } from '../projects/store.js'
@@ -33,6 +37,7 @@ import {
   buildLocalSourcesNote,
 } from '../sources/gate.js'
 import { loadAgent, listAgents } from '../agents/store.js'
+import { repoAccessBlock, resolveAgentFsRoots } from '../agents/repo-access.js'
 import { listSkills } from '../skills/store.js'
 import { buildWikiIndex } from '../wiki/inject.js'
 import { buildMemoryIndex } from '../memory/inject.js'
@@ -50,10 +55,12 @@ import type {
   McpServersConfig,
 } from '../runtime/permission-types.js'
 import type {
+  Agent,
   ApiSource,
   ContextConfig,
   ContextItemSize,
   LocalSource,
+  Session,
   SessionAttachment,
   SessionMessage,
   SessionMessagePart,
@@ -502,6 +509,9 @@ async function buildBulkLoad(
   cwd: string | undefined,
   // Wiki / memory switches from Settings, travelling with the turn (ADR 0073 D-12).
   contextConfig: ContextConfig | undefined,
+  // Bound agent's skill whitelist — filters the <available_skills> catalogue so
+  // an agent sees only the skills it was granted (undefined = all skills).
+  agentSkillIds: string[] | undefined,
 ): Promise<BulkLoadResult> {
   const result: BulkLoadResult = {
     memoryFilesChars: 0,
@@ -567,8 +577,14 @@ async function buildBulkLoad(
   if (contextConfig?.skillsCatalogEnabled !== false) {
     try {
       const { skills } = await listSkills(projectIds)
-      if (skills.length > 0) {
-        const lines = skills.map((s) => {
+      // Per-agent whitelist: an agent scoped to a few skills should not see (or
+      // be able to invoke) the rest of the catalogue.
+      const usable =
+        agentSkillIds && agentSkillIds.length > 0
+          ? skills.filter((s) => agentSkillIds.includes(s.id))
+          : skills
+      if (usable.length > 0) {
+        const lines = usable.map((s) => {
           const line = compactLine(s.name, s.description)
           result.skillsList.push({ label: s.name, chars: line.length })
           return line
@@ -636,9 +652,92 @@ async function buildBulkLoad(
 register('sessions.sendMessage', async (raw) => {
   const params = Params.parse(raw)
 
+  // Cổng gắn CLI ("Open in CLI"): khi một CLI agent thật (claude/codex) còn sống
+  // trong PTY trên phiên này, từ chối lượt stream — một `claude --resume
+  // <sdkSessionId>` tương tác cộng một lượt in-app sẽ fork transcript ~/.claude
+  // DÙNG CHUNG (CLI lặng lẽ tạo bản sao khi session id đã gắn ở nơi khác). Người
+  // dùng làm việc hoặc ở CLI hoặc ở chat, không bao giờ cả hai. Phải ném TRƯỚC
+  // khi bất kỳ message nào được persist bên dưới.
+  if (isCliAttached(params.sessionId)) {
+    throw new RpcError(
+      -32021,
+      'This session is attached to a CLI — switch back to the CLI or close it before sending here.',
+    )
+  }
+
   // Normalise attachments once (exactOptionalPropertyTypes). Reused for both the
   // persisted user message and the runtime image-content rebuild.
   const attachments = params.attachments?.map(toSessionAttachment)
+
+  // ─── Session Teams ──────────────────────────────────────────────────────────
+  // Đọc header phiên MỘT lần sớm: teamRunId / agent / worktree /
+  // projectId điều khiển bốn điểm nhóm của lượt — override cwd bằng worktree
+  // riêng của member, bind agent, inject <team>, và rollback board khi
+  // fail. Best-effort trọn vẹn: phiên chưa persist (lượt đầu) hay đọc lỗi ⇒
+  // null và lượt chạy như một phiên lẻ — dữ liệu nhóm là phần CỘNG THÊM, không
+  // bao giờ là điều kiện để chat.
+  let groupSession: Session | null = null
+  try {
+    groupSession = await loadSession(params.sessionId)
+  } catch (err) {
+    log.warn('failed to load session header for group fields', {
+      sessionId: params.sessionId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+
+  // agent — "vai có thật" của member/lead (session-teams §3): resolve phía
+  // sidecar mỗi lượt. `params.agent` (người dùng chỉ tay) THẮNG — khi nó có mặt,
+  // boundAgent giữ null và không overlay gì. `source` vắng ⇒ dò global trước
+  // rồi project của chính ref (fallback: project của phiên) — cùng cách tra của
+  // loadAgentFlexibly trong tasks/agent-context.ts.
+  let boundAgent: Agent | null = null
+  if (!params.agent && groupSession?.agent) {
+    const ref = groupSession.agent
+    const refProjectId = ref.projectId ?? groupSession.projectId ?? params.projectId
+    try {
+      boundAgent = ref.source
+        ? await loadAgent(ref.id, ref.source, ref.projectId)
+        : (await loadAgent(ref.id, 'global')) ??
+          // 'project' mà không có projectId ném "requires a projectId" — chỉ dò
+          // khi thật sự có project để tra.
+          (refProjectId ? await loadAgent(ref.id, 'project', refProjectId) : null)
+      if (!boundAgent) {
+        log.warn('agent ref did not resolve to an agent file', {
+          sessionId: params.sessionId,
+          agentId: ref.id,
+        })
+      }
+    } catch (err) {
+      log.warn('failed to resolve agent for turn', {
+        sessionId: params.sessionId,
+        agentId: ref.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Settings HIỆU DỤNG của lượt: payload của UI, rồi agent áp
+  // provider/model/account lên (spec §3). Tính MỘT lần ở đây thay cho ba chỗ
+  // `toSessionSettings(params.settings)` rời bên dưới — cổng steering và đường
+  // đọc resume-handle đều phải nhìn provider SAU khi bind, không phải của payload.
+  const sessionSettings = toSessionSettings(params.settings)
+  if (boundAgent) {
+    if (boundAgent.provider) sessionSettings.provider = boundAgent.provider
+    if (boundAgent.model) sessionSettings.modelId = boundAgent.model
+    if (boundAgent.accountId) sessionSettings.accountId = boundAgent.accountId
+  }
+  // llmOverride của phiên áp SAU pin của agent spec — nó là override trực tiếp
+  // của NGƯỜI DÙNG ở board item (Advanced) / "đổi account khi hết token", mới
+  // hơn và có chủ đích hơn mọi tầng dưới nó.
+  const llmOv = groupSession?.llmOverride
+  if (llmOv) {
+    if (llmOv.provider) sessionSettings.provider = llmOv.provider
+    if (llmOv.modelId) sessionSettings.modelId = llmOv.modelId
+    if (llmOv.accountId) sessionSettings.accountId = llmOv.accountId
+    if (llmOv.level) sessionSettings.level = llmOv.level
+    if (llmOv.mode) sessionSettings.mode = llmOv.mode
+  }
 
   // Resume context (ADR 0029): the runtime has no opaque session id — it rebuilds
   // the model context from `history` every turn. The reference `ui` snapshots its
@@ -685,7 +784,7 @@ register('sessions.sendMessage', async (raw) => {
       })
     }
   } else {
-    const provider = toSessionSettings(params.settings).provider
+    const provider = sessionSettings.provider
     if (provider === 'anthropic' || provider === 'openai') {
       try {
         const loaded = await loadSession(params.sessionId)
@@ -729,7 +828,8 @@ register('sessions.sendMessage', async (raw) => {
       return {
         messageId: params.messageId,
         text: '',
-        modelUsed: params.settings.modelId,
+        // Model HIỆU DỤNG của lượt (sau overlay agent), không phải payload.
+        modelUsed: sessionSettings.modelId,
         usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_creation_tokens: 0 },
         stopReason: 'budget-exceeded',
         errorMessage,
@@ -744,6 +844,21 @@ register('sessions.sendMessage', async (raw) => {
   // MaxListenersExceededWarning (see runtime/turn-signal.ts).
   liftTurnSignalListenerCap(abortController.signal)
   registerAborter(params.sessionId, params.messageId, abortController)
+  // TOCTOU đối ngẫu với cổng ở đầu hàm: sessions.openCli kiểm "turn in flight"
+  // trước spawn — nhưng spawn có thể resolve xong đúng trong khe giữa hai nhịp
+  // của lượt này. Khi aborter đã đăng ký, activeSessionIds() của phiên thắng ở
+  // cổng openCli; chỉ còn cửa link được gắn xong TRƯỚC registerAborter (link
+  // set trước, turn vào sau → cổng đầu hàm bắt) — hoặc race cực ngắn ngay tại
+  // đây. Kiểm lại MỘT lần sau khi đăng ký: thấy attached thì gỡ aborter +
+  // abort signal rồi ném, trước khi persist bất kỳ message nào bên dưới.
+  if (isCliAttached(params.sessionId)) {
+    unregisterAborter(params.messageId)
+    abortController.abort()
+    throw new RpcError(
+      -32021,
+      'This session is attached to a CLI — switch back to the CLI or close it before sending here.',
+    )
+  }
   // Open the steer channel ONLY for runtimes that actually consume it. The Pi
   // runtime polls getSteeringMessages at each turn boundary; the Claude SDK
   // runtime (anthropic) runs a single-prompt query with NO steering hook, so
@@ -751,7 +866,7 @@ register('sessions.sendMessage', async (raw) => {
   // steer is silently discarded at turn end (the UI loses the message). Gating it
   // → sessions.steer returns { ok: false } on that path so the UI falls back to
   // queueing the text as a follow-up turn instead of dropping it.
-  const supportsSteering = toSessionSettings(params.settings).provider !== 'anthropic'
+  const supportsSteering = sessionSettings.provider !== 'anthropic'
   if (supportsSteering) beginSteerTurn(params.messageId)
 
   // Resolve cwd from project, if linked. Best-effort: missing project → no
@@ -788,6 +903,43 @@ register('sessions.sendMessage', async (raw) => {
     }
   }
 
+  // Session Teams §4 — worktree riêng của MEMBER thắng mọi cwd phía trên
+  // (worktree.worktreePath > workspacePath > project.path): member làm
+  // việc trên branch riêng; lead (không teamRunId) KHÔNG BAO GIỜ vào đây —
+  // nó giữ cây chính của project đúng vai "đọc diff, điều phối".
+  // Thiết lập LƯỜI ở lượt đầu của member: chưa neo `worktree` ⇒
+  // ensureSessionWorkspace tạo worktree + branch từ HEAD rồi ghi lên header.
+  // MỌI đường fail (không project / không phải git repo / lệnh git lỗi) đều trả
+  // null hoặc bị nuốt thành warn ⇒ member vẫn làm trên cây chung, lượt chat
+  // không bao giờ chết vì worktree.
+  if (groupSession?.teamRunId) {
+    let worktree = groupSession.worktree
+    if (!worktree) {
+      try {
+        worktree =
+          (await ensureSessionWorkspace({
+            id: groupSession.id,
+            projectId: groupSession.projectId ?? params.projectId ?? null,
+          })) ?? undefined
+        if (worktree) {
+          // SessionMetadataPatch chưa khai 'worktree' (field do gói
+          // worktree sở hữu) — nhưng updateMetadata là spread-patch nên key vẫn
+          // ghi đúng lên header; ép qua Partial<Session> để typecheck sạch mà
+          // không sửa type của file kia.
+          const patch: Partial<Session> = { worktree: worktree }
+          await updateSessionMetadata(params.sessionId, patch)
+          groupSession = { ...groupSession, worktree: worktree }
+        }
+      } catch (err) {
+        log.warn('member worktree setup failed — staying on shared tree', {
+          sessionId: params.sessionId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+    if (worktree?.worktreePath) cwd = worktree.worktreePath
+  }
+
   // Resolve the active agent (if any). When found:
   //   - `agent.systemPrompt` REPLACES `params.systemPrompt` (ADR 0015)
   //   - `agent.tools` (Claude Code subagent whitelist) → runtime allowedTools
@@ -796,6 +948,9 @@ register('sessions.sendMessage', async (raw) => {
   let resolvedSystemPrompt = params.systemPrompt
   let resolvedAllowedTools: string[] | undefined
   let resolvedAgentMcpIds: string[] | undefined
+  // The agent whose config overlays this turn — explicit params.agent wins over
+  // the session's bound agent. Drives skillIds/repos further down as well.
+  let overlayAgent: Agent | null = null
   if (params.agent) {
     try {
       const agent = await loadAgent(
@@ -803,6 +958,7 @@ register('sessions.sendMessage', async (raw) => {
         params.agent.source,
         params.agent.projectId,
       )
+      overlayAgent = agent
       if (agent?.systemPrompt) resolvedSystemPrompt = agent.systemPrompt
       if (agent?.tools && agent.tools.length > 0) resolvedAllowedTools = agent.tools
       if (agent?.mcpServerIds && agent.mcpServerIds.length > 0) {
@@ -815,6 +971,42 @@ register('sessions.sendMessage', async (raw) => {
       })
     }
   }
+
+  // agent (Session Teams §3) áp khi `params.agent` VẮNG — người dùng chỉ
+  // tay luôn thắng binding của nhóm. Đi đúng overlay của params.agent, TRỪ
+  // systemPrompt: prompt của "vai" được PREPEND trước prompt của phiên chứ
+  // không thay thế nó — member vẫn cần bối cảnh phiên, agent chỉ định hình thức
+  // làm việc (provider/model/account đã gập vào sessionSettings ở trên).
+  if (!params.agent && boundAgent) {
+    overlayAgent = boundAgent
+    if (boundAgent.systemPrompt) {
+      resolvedSystemPrompt = params.systemPrompt
+        ? `${boundAgent.systemPrompt}\n\n${params.systemPrompt}`
+        : boundAgent.systemPrompt
+    }
+    if (boundAgent.tools && boundAgent.tools.length > 0) {
+      resolvedAllowedTools = boundAgent.tools
+    }
+    if (boundAgent.mcpServerIds && boundAgent.mcpServerIds.length > 0) {
+      resolvedAgentMcpIds = boundAgent.mcpServerIds
+    }
+  }
+
+  // Repo-access whitelist (Agent.repos): append the boundary to the resolved
+  // prompt on EVERY runtime; the Pi/Codex toolsets also narrow their fs-tool
+  // roots via `fsRoots` below (the Claude SDK CLI can't narrow under cwd, so
+  // there the boundary text is the enforcement).
+  if (overlayAgent?.repos && overlayAgent.repos.length > 0) {
+    const block = repoAccessBlock(overlayAgent.repos)
+    resolvedSystemPrompt = resolvedSystemPrompt
+      ? `${resolvedSystemPrompt}\n\n${block}`
+      : block
+  }
+  // Effective fs roots for the same whitelist (undefined = unrestricted cwd).
+  const agentFsRoots =
+    cwd && overlayAgent?.repos && overlayAgent.repos.length > 0
+      ? resolveAgentFsRoots(cwd, overlayAgent.repos)
+      : undefined
 
   // Build the resolved MCP server map for the runtime. ADR 0029 §4: the runtime
   // bridges these to in-process Pi tools. Source of truth is the `sources` store
@@ -972,7 +1164,12 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // skills). Folded into systemPromptAppend so the model sees the catalogue; the
   // per-section char sizes ride along to the runtime for the usage-panel
   // breakdown. Best-effort — buildBulkLoad never throws.
-  const bulkLoad = await buildBulkLoad(params.projectId, cwd, params.contextConfig)
+  const bulkLoad = await buildBulkLoad(
+    params.projectId,
+    cwd,
+    params.contextConfig,
+    overlayAgent?.skillIds,
+  )
   if (bulkLoad.block) {
     systemPromptAppend = systemPromptAppend
       ? `${systemPromptAppend}\n\n${bulkLoad.block}`
@@ -1007,7 +1204,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // nó được đóng băng lúc tạo phiên, và một renderer cũ gửi lên bản cũ sẽ đổi tài
   // khoản mà lệnh chạy vào — đúng thứ "ngữ cảnh được chỉ định" sinh ra để chặn.
   let sessionInfra: SessionSettings['infra']
-  // Phiên CON của một nhóm điều phối (groupParentId) không được park câu hỏi
+  // Phiên CON của một nhóm điều phối (teamRunId) không được park câu hỏi
   // lên người dùng — một thẻ hỏi bỏ quên trong phiên con chặn cả workflow.
   // Nó tự quyết (tool trả "no interactive user — proceed") hoặc leo lên phiên
   // cha qua send_session_message. Nguồn dữ liệu: cùng lượt loadSession ở trên.
@@ -1017,7 +1214,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     sessionChecklist = buildSessionChecklistBlock(withTodos?.todos)
     if (withTodos?.todos?.length) sessionTodos = withTodos.todos
     if (withTodos?.infra) sessionInfra = withTodos.infra
-    isGroupChild = !!withTodos?.groupParentId
+    isGroupChild = !!withTodos?.teamRunId
   } catch {
     /* best-effort: never block the turn on the checklist block */
   }
@@ -1032,6 +1229,24 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         ? `${systemPromptAppend}\n\n${linkedSshHost}`
         : linkedSshHost
     }
+  }
+
+  // Session Teams §2 — block <team> (protocol/roster/board/channel tail) cho
+  // phiên NẰM TRONG NHÓM, dựng từ dữ liệu trên đĩa (listSessionSummaries +
+  // board + channel) chứ không tin payload. Phiên lẻ ⇒ null, không tốn token.
+  // Best-effort: một lỗi dựng block không được giết lượt chat.
+  try {
+    const teamBlock = await buildTeamBlock(params.sessionId)
+    if (teamBlock) {
+      systemPromptAppend = systemPromptAppend
+        ? `${systemPromptAppend}\n\n${teamBlock}`
+        : teamBlock
+    }
+  } catch (err) {
+    log.warn('failed to build team context block', {
+      sessionId: params.sessionId,
+      err: err instanceof Error ? err.message : String(err),
+    })
   }
 
   // Pinned context (session working-set): prepend so it leads the appended context
@@ -1259,7 +1474,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     // Cost-attribution account (ADR 0054). Persist ONLY the id the turn ran on
     // (from the resolved run settings) — never a token/secret. Absent ⇒ the
     // Activity rollup falls back to the session's current accountId.
-    if (params.settings.accountId !== undefined) message.accountId = params.settings.accountId
+    // `sessionSettings` (không phải params.settings): agent của member có
+    // thể đã đè accountId — phải ghi đúng account lượt ĐÃ chạy.
+    if (sessionSettings.accountId !== undefined) message.accountId = sessionSettings.accountId
     if (opts.result) {
       message.modelUsed = opts.result.modelUsed
       const costUsd = computeTurnCostUsd(opts.result.modelUsed, opts.result.usage)
@@ -1300,6 +1517,31 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       await appendMessage(params.sessionId, message)
     } catch (err) {
       log.warn('failed to persist agent message', {
+        sessionId: params.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Session Teams §1.2 — lượt của một MEMBER fail (stopReason error/cancel) ⇒
+  // mọi board item đang `in_progress` của nó lùi về `todo` + một system comment
+  // (một trong hai chỗ hệ thống tự sửa status — chỗ kia là merge thành công).
+  // Cổng `teamRunId`: lead và phiên lẻ không cuốn gì. Best-effort trọn vẹn
+  // — rollback không bao giờ được đánh mất lỗi GỐC của lượt.
+  const rollbackMemberBoardItems = async (): Promise<void> => {
+    const projectId = groupSession?.projectId ?? params.projectId
+    if (!projectId || !groupSession?.teamRunId) return
+    try {
+      const count = await rollbackInProgressItems(projectId, params.sessionId)
+      if (count > 0) {
+        log.info('rolled back member board items after failed turn', {
+          sessionId: params.sessionId,
+          projectId,
+          count,
+        })
+      }
+    } catch (err) {
+      log.warn('board rollback after failed member turn failed', {
         sessionId: params.sessionId,
         err: err instanceof Error ? err.message : String(err),
       })
@@ -1362,8 +1604,8 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         // treats history as read-only SessionMessage[].
         history: historyForRun,
         settings: sessionInfra
-          ? { ...toSessionSettings(params.settings), infra: sessionInfra }
-          : toSessionSettings(params.settings),
+          ? { ...sessionSettings, infra: sessionInfra }
+          : sessionSettings,
         ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
         ...(cwd ? { cwd } : {}),
         ...(params.projectId ? { projectId: params.projectId } : {}),
@@ -1404,6 +1646,14 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
           memoryList: bulkLoad.memoryList,
         },
         ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
+        // Per-agent skill whitelist → SDK `skills` option (claude-sdk path); the
+        // Pi/Codex catalogue is already filtered inside buildBulkLoad.
+        ...(overlayAgent?.skillIds && overlayAgent.skillIds.length > 0
+          ? { skills: overlayAgent.skillIds }
+          : {}),
+        // Agent repo-access whitelist → fs-tool roots (Pi/Codex). Resolved
+        // against this session's cwd so member worktrees stay covered.
+        ...(agentFsRoots ? { fsRoots: agentFsRoots } : {}),
         // Compaction checkpoint: explicit payload (reference `ui`) or folded from the
         // persisted session (`ui-next` / auto-compact) — see compactionForRun above.
         ...(compactionForRun ? { compaction: compactionForRun } : {}),
@@ -1489,6 +1739,13 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     )
     // Success → persist the authoritative final reply (full text + usage + steps).
     await persistAgent({ result })
+    // Graceful fail cũng gỡ việc khỏi board của member (spec §1.2): Pi nuốt một
+    // abort giữa-stream thành stopReason 'aborted' THAY VÌ ném, và provider lỗi
+    // giữa chừng về 'error' — cả hai đều đi qua nhánh "thành công" này chứ không
+    // qua catch bên dưới.
+    if (result.stopReason === 'error' || result.stopReason === 'aborted') {
+      await rollbackMemberBoardItems()
+    }
     // Persist the (possibly rotated) Claude SDK session id so the next turn
     // resumes this SDK session (ADR 0058, Anthropic path). Only when it changed.
     if (result.sdkSessionId && result.sdkSessionId !== sdkSessionId) {
@@ -1526,6 +1783,9 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     const isCancel = err instanceof RpcError && err.code === -32023
     const errMsg = err instanceof Error ? err.message : String(err)
     await persistAgent(isCancel ? {} : { error: errMsg })
+    // Member của nhóm mà lượt chết (cancel hoặc throw) ⇒ item in_progress của nó
+    // về todo — best-effort, rollbackMemberBoardItems tự nuốt lỗi nội bộ.
+    await rollbackMemberBoardItems()
     // Terminal event on the RELIABLE stream so the UI finalizes — and surfaces the
     // error alert — even if the RPC reject below is dropped or lands late. Cancel →
     // 'aborted' (no alert); any other thrown error → 'error' with the cause + retry.

@@ -19,17 +19,18 @@
            `@click.stop` bắt buộc: `ContextMenu` đóng bằng listener click trên
            `document`, nên mở bằng click trái mà không chặn nổi bọt thì nó đóng ngay
            trong cùng một nhịp. -->
-      <button
+      <Button
         ref="newBtn"
-        class="btn sm"
         type="button"
         :title="t('playbooks.toolbar.newWhy')"
+        variant="outline"
+        size="sm"
         @click.stop="openNewMenu"
       >
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('playbooks.toolbar.new') }}
         <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+      </Button>
 
       <!-- Một con số, không chia theo trạng thái: playbook KHÔNG có status — status
            thuộc LƯỢT CHẠY (`PlaybookRun`), mà một playbook có thể có nhiều lượt với
@@ -40,11 +41,12 @@
       </span>
 
       <div class="itoolgrp iend">
-        <button
-          class="btn sm"
+        <Button
           type="button"
           :disabled="loading"
           :title="t('playbooks.toolbar.refresh')"
+          variant="outline"
+          size="sm"
           @click="load"
         >
           <Icon
@@ -53,7 +55,7 @@
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
           {{ t('playbooks.toolbar.refresh') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -93,7 +95,7 @@
       </div>
     </div>
 
-    <ContextMenu
+    <AppContextMenu
       :open="newMenuPos !== null"
       :position="newMenuPos ?? { x: 0, y: 0 }"
       :items="newMenuItems"
@@ -118,6 +120,7 @@ import { usePlaybookEditor } from '~/composables/usePlaybookEditor'
 import { usePlaybooksManager } from '~/composables/usePlaybooksManager'
 import { useShareExport } from '~/composables/useShareExport'
 import type { MenuItem, MenuPos } from '~/composables/useContextMenu'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { request: requestTab } = useInfraTabOpen()

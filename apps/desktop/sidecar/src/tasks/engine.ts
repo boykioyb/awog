@@ -527,6 +527,9 @@ export async function discussPhase(
         ...(agentCtx.systemPrompt ? { systemPrompt: agentCtx.systemPrompt } : {}),
         // No tools — discussion must not touch the repo.
         disabledTools: ['Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Bash'],
+        // Vẫn cùng scope browser của node: thảo luận về artifact của node nên
+        // tab browser_tool mở ở đây (nếu có) thuộc đúng node đó.
+        browserScope: `task:${taskId}:${nodeId}`,
       },
       {},
     )

@@ -117,13 +117,13 @@ const hoverText = computed(() => {
    lets hover deepen the SAME tint instead of replacing it with grey, which would
    have made a hovered unread row look less unread than its neighbours. */
 .ntf-row:not(.read) {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
 }
 .ntf-row:not(.read):hover {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
 }
 .ntf-row.read:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .ntf-row-dot {
   width: 6px;
@@ -133,7 +133,7 @@ const hoverText = computed(() => {
   background: transparent;
 }
 .ntf-row-dot.on {
-  background: var(--accent);
+  background: var(--primary);
 }
 .ntf-row-ic {
   width: var(--icon-sm);
@@ -142,7 +142,7 @@ const hoverText = computed(() => {
   color: var(--textDim);
 }
 .ntf-row-ic.act {
-  color: var(--accent);
+  color: var(--primary);
 }
 .ntf-row-body {
   min-width: 0;
@@ -169,7 +169,7 @@ const hoverText = computed(() => {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
   overflow: hidden;
-  color: var(--text);
+  color: var(--foreground);
   /* Unread is the default state here (most rows), so weight is what separates a
      row that still wants something from one already handled. */
   font-weight: 600;
@@ -201,7 +201,7 @@ const hoverText = computed(() => {
 .ntf-row-author {
   flex: 0 1 auto;
   min-width: 0;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -214,7 +214,7 @@ const hoverText = computed(() => {
   white-space: nowrap;
 }
 .ntf-row-reason.act {
-  color: var(--accent);
+  color: var(--primary);
 }
 .ntf-row-time {
   flex: 0 0 auto;
@@ -243,17 +243,17 @@ const hoverText = computed(() => {
   white-space: nowrap;
 }
 .ntf-row-act:hover {
-  border-color: var(--borderStrong);
-  background: var(--bgActive);
-  color: var(--text);
+  border-color: var(--input);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .ntf-row-act.read:hover {
-  border-color: var(--green);
-  color: var(--green);
+  border-color: var(--success);
+  color: var(--success);
 }
 .ntf-row-act:focus-visible,
 .ntf-row-main:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: 1px;
 }
 </style>

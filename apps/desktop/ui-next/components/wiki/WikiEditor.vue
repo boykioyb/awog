@@ -3,41 +3,35 @@
     <header class="we-head" :style="{ borderBottom: '1px solid var(--border)' }">
       <span class="we-path" :style="{ color: 'var(--textFaint)' }">{{ path }}</span>
       <div class="we-actions">
-        <button class="btn sm" :disabled="saving" @click="emit('cancel')">
+        <Button :disabled="saving" variant="outline" size="sm" @click="emit('cancel')">
           {{ t('common.cancel') }}
-        </button>
-        <button class="btn sm pri" :disabled="saving || !dirty" @click="emit('save')">
+        </Button>
+        <Button :disabled="saving || !dirty" variant="default" size="sm" @click="emit('save')">
           <Icon name="save" :size="13" />
           {{ saving ? t('common.saving') : t('common.save') }}
-        </button>
+        </Button>
       </div>
     </header>
 
     <div class="we-meta">
       <label class="we-field">
         <span class="sech">{{ t('wiki.editor.title') }}</span>
-        <input
-          :value="draft.title"
-          class="we-input"
-          @input="update('title', ($event.target as HTMLInputElement).value)"
-        />
+        <Input :model-value="draft.title" @update:model-value="update('title', $event)" />
       </label>
       <label class="we-field">
         <span class="sech">{{ t('wiki.editor.description') }}</span>
-        <input
-          :value="draft.description"
-          class="we-input"
+        <Input
+          :model-value="draft.description"
           :placeholder="derivedDescription || t('wiki.editor.descriptionHint')"
-          @input="update('description', ($event.target as HTMLInputElement).value)"
+          @update:model-value="update('description', $event)"
         />
       </label>
       <label class="we-field short">
         <span class="sech">{{ t('wiki.editor.tags') }}</span>
-        <input
-          :value="draft.tags"
-          class="we-input"
+        <Input
+          :model-value="draft.tags"
           placeholder="architecture, ipc"
-          @input="update('tags', ($event.target as HTMLInputElement).value)"
+          @update:model-value="update('tags', $event)"
         />
       </label>
       <label class="we-toggle" :title="t('wiki.editor.contextHint')">
@@ -77,6 +71,8 @@
 // same-named workspace file never share an undo stack.
 import { defineAsyncComponent, onMounted, ref, watch } from 'vue'
 import type { MonacoEditorHandle } from '~/components/editor/types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Monaco is loaded only when the user actually edits. A static import would put the
 // editor AND its five `?worker` bundles into the /wiki page graph, so merely READING

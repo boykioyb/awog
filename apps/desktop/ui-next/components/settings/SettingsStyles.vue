@@ -9,10 +9,10 @@
 
     <div class="styhead">
       <div class="sech">{{ t('settingsStyles.mine.heading') }}</div>
-      <button class="btn sm" @click="startCreate()">
+      <Button variant="outline" size="sm" @click="startCreate()">
         <Icon name="plus" />
         {{ t('settingsStyles.mine.add') }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="lastError" class="styerr" :style="{ color: 'var(--danger)' }">{{ lastError }}</div>
@@ -60,11 +60,11 @@
       <div class="styfields">
         <label class="styfield">
           <span class="sech">{{ t('settingsStyles.editor.id') }}</span>
-          <input v-model="draft.id" class="keyinp" :disabled="draft.mode === 'update'" />
+          <Input v-model="draft.id" :disabled="draft.mode === 'update'" class="flex-1" />
         </label>
         <label class="styfield">
           <span class="sech">{{ t('settingsStyles.editor.name') }}</span>
-          <input v-model="draft.name" class="keyinp" />
+          <Input v-model="draft.name" class="flex-1" />
         </label>
       </div>
       <label v-if="draft.mode === 'create'" class="styfield">
@@ -73,10 +73,10 @@
       </label>
       <label class="styfield">
         <span class="sech">{{ t('settingsStyles.editor.description') }}</span>
-        <input
+        <Input
           v-model="draft.description"
-          class="keyinp"
           :placeholder="t('settingsStyles.editor.descriptionHint')"
+          class="flex-1"
         />
       </label>
       <label class="styfield">
@@ -92,10 +92,10 @@
         <span v-else-if="idTaken" :style="{ color: 'var(--textDim)' }">
           {{ t('settingsStyles.editor.overrideNote') }}
         </span>
-        <button class="btn sm" @click="draft = null">{{ t('common.cancel') }}</button>
-        <button class="btn sm pri" :disabled="!canSave" @click="onSave">
+        <Button variant="outline" size="sm" @click="draft = null">{{ t('common.cancel') }}</Button>
+        <Button :disabled="!canSave" variant="default" size="sm" @click="onSave">
           {{ t('common.save') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -147,6 +147,8 @@ import AppSelect from '~/components/common/AppSelect.vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useConfirm } from '~/composables/useConfirm'
 import { outputStyleKey, useOutputStyles, type OutputStyle } from '~/composables/useOutputStyles'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()

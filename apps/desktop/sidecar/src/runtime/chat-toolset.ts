@@ -29,7 +29,20 @@ import { createInfraTools } from './tools/infra-tools.js'
 import { createInfraAppTools } from './tools/infra-app-tools.js'
 import { createSshTools } from './tools/ssh-tools.js'
 import type { BeforeToolCall } from './permission.js'
+import { sessionManager } from '../sessions/session-manager.js'
 import { log } from '../util/logger.js'
+
+// Gốc nhóm của một phiên (cây 2 cấp quanh `teamRunId`): cha của phiên khi nó
+// là member, chính nó khi nó là LEAD có ít nhất một con, null khi phiên lẻ.
+// Đồng bộ qua summaries đang warm — toolset được build lại mỗi lượt nên đây phải
+// là đường rẻ (không đọc đĩa).
+function runRootOf(sessionId: string): string | null {
+  const all = sessionManager.getSessions()
+  const me = all.find((s) => s.id === sessionId)
+  if (!me) return null
+  if (me.teamRunId) return me.teamRunId
+  return all.some((s) => s.teamRunId === sessionId) ? sessionId : null
+}
 
 export interface ChatToolsetOptions {
   inPlanMode: boolean
@@ -56,9 +69,13 @@ export async function buildChatToolset(
   const todoSessionId = args.sessionId
   // Wiki (ADR 0073): offer wiki_search/wiki_read only when the wiki actually has a
   // page the LLM may see AND Settings has not turned the wiki off. No wiki → no
-  // tool schema → no token cost.
+  // tool schema → no token cost. NGOẠI LỆ: wikiAutoWrite bật thì cụm tool luôn
+  // hiện — wiki trống mà không có wiki_write thì agent không bao giờ tạo được
+  // trang đầu tiên (gà–trứng).
   const ctxCfg = args.contextConfig
-  const wikiAvailable = ctxCfg?.wikiEnabled !== false && (await hasWikiContext(args.projectId))
+  const wikiAutoWrite = ctxCfg?.wikiAutoWrite === true
+  const wikiAvailable =
+    ctxCfg?.wikiEnabled !== false && (wikiAutoWrite || (await hasWikiContext(args.projectId)))
   // Memory (ADR 0073 part B): the WRITE tools are opt-in (Settings, default off);
   // memory_read appears only when some fact carries detail past its one-liner.
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
@@ -75,6 +92,9 @@ export async function buildChatToolset(
     {
       ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
       ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+      // Agent repo-access whitelist (Agent.repos): narrows fs-tool roots. Bash
+      // is not re-rooted — see agents/repo-access.ts for the semantics.
+      ...(args.fsRoots ? { allowedRoots: args.fsRoots } : {}),
       // Read-before-write registry keyed by session (read-registry.ts): a file
       // Read in turn 1 stays writable in turn 5, even though the toolset itself
       // is rebuilt every turn.
@@ -92,7 +112,7 @@ export async function buildChatToolset(
               ...(args.projectId ? { projectId: args.projectId } : {}),
               // Agent wiki editing (Settings → Wiki, default off). Still gated per
               // call by permission.ts.
-              canWrite: ctxCfg?.wikiAutoWrite === true,
+              canWrite: wikiAutoWrite,
             },
           }
         : {}),
@@ -127,14 +147,21 @@ export async function buildChatToolset(
         : {}),
       // "This turn belongs to a chat session" — plan mode included. Carries the
       // read-only terminal tool, which background exec's gate would wrongly drop.
+      // `runId`: gốc nhóm chứa phiên này (Session Teams) — cha khi phiên là
+      // con, chính nó khi nó có con; null = phiên lẻ ⇒ các tool nhóm
+      // (member_diff, team_item_*, team_say) không xuất hiện trong schema.
       ...(args.sessionId
         ? {
             chatSession: {
               sessionId: args.sessionId,
               ...(args.abortController ? { signal: args.abortController.signal } : {}),
+              runId: runRootOf(args.sessionId),
             },
           }
         : {}),
+      // Browser per-session: mọi tab `browser_tool` mở thuộc về phiên này và chỉ
+      // panel của nó thấy — main verify scope ↔ ownership (electron/browser.ts).
+      ...(args.sessionId ? { browserScope: args.sessionId } : {}),
       // Editable checklist: persist every TodoWrite as the session's current
       // checklist so a user edit in the UI has something authoritative to write to
       // and the next turn re-injects it (sessions/todo-context.ts). Sessions only.
@@ -203,6 +230,8 @@ export async function buildChatToolset(
       // Chat subagents reuse the parent permission gate: in 'ask' mode their
       // writes/exec still prompt the user (depth-1 subagent, same session).
       beforeToolCall: opts.beforeToolCall,
+      // Subagent chia sẻ browser với phiên cha — nó "là" lượt đó.
+      ...(args.sessionId ? { browserScope: args.sessionId } : {}),
       // Inherit the session's co-author setting for subagent-made commits.
       ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
       // ADR 0083: chat (and only chat) may run a subagent in the background —

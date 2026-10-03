@@ -17,19 +17,22 @@
 
     <div class="smcatbar">
       <span class="fd smcatmeta">{{ metaText }}</span>
-      <button
+      <Button
         v-if="customized"
-        class="btn sm"
         type="button"
         :title="t('settingsModels.catalog.resetTitle')"
+        variant="outline"
+        size="sm"
         @click="onReset"
       >
         {{ t('settingsModels.catalog.reset') }}
-      </button>
-      <button
-        class="btn sm pri smcatfetch"
+      </Button>
+      <Button
         type="button"
         :disabled="!available || loading"
+        class="smcatfetch"
+        variant="default"
+        size="sm"
         @click="onFetch"
       >
         <Icon
@@ -38,7 +41,7 @@
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
         {{ loading ? t('settingsModels.catalog.fetching') : t('settingsModels.catalog.fetch') }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="!hasAccount" class="fd smcathint">
@@ -75,6 +78,7 @@ import { PROVIDERS } from '~/components/agent/agent-display'
 import { useProviderModels, type ModelSource } from '~/composables/useProviderModels'
 import { useSettingsStore, type ProviderName } from '~/stores/settings'
 import { useSidecar } from '~/composables/useSidecar'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()

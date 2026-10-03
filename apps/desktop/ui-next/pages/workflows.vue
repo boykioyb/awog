@@ -5,9 +5,9 @@
       <div class="list wflist">
         <div class="wflist-hd">
           <div class="wflist-title">{{ t('workflow.header') }}</div>
-          <button class="iconbtn" :title="t('workflow.new')" @click="openCreator">
+          <Button :title="t('workflow.new')" variant="outline" size="iconMd" @click="openCreator">
             <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
         </div>
         <div class="wflist-scope">
           <AppSelect v-model="scopeFilter" :options="scopeOptions" width="100%" />
@@ -105,6 +105,7 @@ import WorkflowListItem from '~/components/workflow/WorkflowListItem.vue'
 import WorkflowPalette from '~/components/workflow/WorkflowPalette.vue'
 import WorkflowPromptCreator from '~/components/workflow/WorkflowPromptCreator.vue'
 import { useWorkflowsPage } from '~/composables/useWorkflowsPage'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 

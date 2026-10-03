@@ -566,11 +566,12 @@ function parseIdentity(stdout: string): Identity | null {
 /* Biến thể "account production" sống ở đây chứ không trong app-shell.css: chỉ
    chip hạ tầng AWS mới có khái niệm tài khoản đánh dấu production. Phần CSS còn
    lại của chip (`.iwrap`, `.ipop`, `.ifield`, `.iact`, …) đã được nâng lên
-   `assets/css/app-shell.css` để ba chip hạ tầng dùng chung một bản. */
+   `assets/css/app-shell.css` để ba chip hạ tầng dùng chung một bản — file đó
+   ngoài phạm vi wave 1, nên ở đây chỉ đổi tint sang tên var chuẩn. */
 .ctxchip.danger {
-  border-color: var(--dangerBorder);
-  color: var(--danger);
-  background: var(--dangerDim);
+  border-color: rgb(from var(--destructive) r g b / 45%);
+  color: var(--destructive);
+  background: rgb(from var(--destructive) r g b / 10%);
 }
 .ctxchip.danger .ctxchip-lbl,
 .ctxchip.danger .ctxchip-sub {

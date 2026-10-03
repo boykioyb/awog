@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { useSettingsStore } from '~/stores/settings'
 
 // Rules store — dual-path live (instruction .md, 2-tier, ADR 0033). Markdown
 // instruction files auto-injected into the system prompt of Sessions + Tasks,
@@ -181,7 +182,13 @@ export const useRulesStore = defineStore('rules', () => {
     accountId: string,
     currentRule?: { name: string; description: string; body: string },
   ): Promise<RuleDraft> {
-    const params: Record<string, unknown> = { prompt, accountId }
+    // Model+account theo núm AI authoring — xem skills.ts generateSkill.
+    const llm = useSettingsStore().resolveAuthoringLlm()
+    const params: Record<string, unknown> = {
+      prompt,
+      accountId: llm.accountId ?? accountId,
+      modelId: llm.modelId,
+    }
     if (currentRule) params.currentRule = currentRule
     const res = await sc.request<RuleGenerateResponse>('rules.generate', params)
     return res.rule

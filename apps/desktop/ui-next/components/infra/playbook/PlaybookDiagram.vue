@@ -99,26 +99,26 @@
           <span class="pbd-state-hint">
             {{ graphMessage || t('playbooks.diagram.impact.unavailable.hint') }}
           </span>
-          <button class="btn sm" type="button" @click="emit('openGraph')">
+          <Button type="button" variant="outline" size="sm" @click="emit('openGraph')">
             <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('playbooks.diagram.impact.gotoGraph') }}
-          </button>
+          </Button>
         </template>
 
         <template v-else-if="graphState === 'error'">
           <span class="pbd-state-txt">{{ graphMessage }}</span>
-          <button class="btn sm" type="button" @click="emit('resolveImpact')">
+          <Button type="button" variant="outline" size="sm" @click="emit('resolveImpact')">
             {{ t('playbooks.list.retry') }}
-          </button>
+          </Button>
         </template>
 
         <template v-else>
           <span class="pbd-state-txt">{{ t('playbooks.diagram.impact.hint') }}</span>
           <span class="pbd-state-hint">{{ t('playbooks.diagram.impact.buildHint') }}</span>
-          <button class="btn sm" type="button" @click="emit('resolveImpact')">
+          <Button type="button" variant="outline" size="sm" @click="emit('resolveImpact')">
             <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('playbooks.diagram.impact.action') }}
-          </button>
+          </Button>
         </template>
       </div>
     </div>
@@ -151,6 +151,7 @@
 import { useI18n } from '~/composables/useI18n'
 import type { PlaybookDiagramColumn, PlaybookGraphState } from '~/composables/usePlaybooksManager'
 import type { InfraGraph } from '~/composables/useInfraGraphApi'
+import Button from '~/components/ui/button/Button.vue'
 
 defineProps<{
   columns: PlaybookDiagramColumn[]

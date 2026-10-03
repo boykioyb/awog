@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { useSettingsStore } from '~/stores/settings'
 
 // Commands store — dual-path live slash-command library (2-tier per-file
 // Markdown, ADR 0034/0035). When the Electron bridge is available `loadCommands()`
@@ -211,7 +212,13 @@ export const useCommandsStore = defineStore('commands', () => {
     accountId: string,
     current?: { name: string; description: string; argumentHint?: string; body: string },
   ): Promise<{ name: string; description: string; argumentHint: string; body: string }> {
-    const params: Record<string, unknown> = { prompt, accountId }
+    // Model+account theo núm AI authoring — xem skills.ts generateSkill.
+    const llm = useSettingsStore().resolveAuthoringLlm()
+    const params: Record<string, unknown> = {
+      prompt,
+      accountId: llm.accountId ?? accountId,
+      modelId: llm.modelId,
+    }
     if (current) params.currentCommand = current
     const res = await sc.request<CommandGenerateResponse>('commands.generate', params)
     return {

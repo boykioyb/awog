@@ -29,7 +29,8 @@
             <span class="sb-proj">{{ projName }}</span>
           </button>
           <span class="sb-div" />
-          <!-- MỘT chip cấu hình: model · account · effort · style (§3.4). -->
+          <!-- Chip cấu hình set-once: account · style. Model + effort là per-turn
+               nên nằm trong composer footer (proto), không lặp lại ở đây. -->
           <StatusConfig :session="active" />
         </div>
         <span class="sb-div" />
@@ -111,7 +112,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   /* Drawn as an inset shadow, not a border: a border comes out of the content box and
      left 25px inside a 26px bar, centring 20px children at 3.5. */
   box-shadow: inset 0 1px 0 var(--border);
-  background: var(--bgPanel);
+  background: var(--sidebar);
   color: var(--textDim);
   /* Sit above page content + the in-session workspace panel (≤81) so the upward
      popovers/tooltips are never clipped; modals (100+) still win. */
@@ -197,11 +198,11 @@ const projName = computed(() => (active.value ? projectName(active.value.project
     background 0.12s;
 }
 .statusbar :deep(.sb-item:hover) {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
+  background: var(--accent-wash);
 }
 .statusbar :deep(.sb-item:focus-visible) {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 /* Nút CHỈ-ICON ở mép phải (Files · Browser · Terminal).
@@ -215,9 +216,10 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   padding: 0 5px;
 }
 /* Active workspace toggle (the view is open) — accent-tinted like the prototype's
-   "on" chips, no solid gray fill. */
+   "on" chips, no solid gray fill. --accentDim/--primary = the AWOG brand tint
+   (a toggle-on state, not list selection — those use --accent-wash). */
 .sb-item.sb-on {
-  color: var(--accent);
+  color: var(--primary);
   background: var(--accentDim);
 }
 /* Dirty-count badge on the branch chip. */
@@ -227,7 +229,7 @@ const projName = computed(() => (active.value ? projectName(active.value.project
   padding: 0 4px;
   border-radius: var(--r-pill);
   background: var(--accentDim);
-  color: var(--accent);
+  color: var(--primary);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
   line-height: 18px;

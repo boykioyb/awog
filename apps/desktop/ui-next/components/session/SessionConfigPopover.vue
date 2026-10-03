@@ -25,9 +25,8 @@
           <div class="budgetfields">
             <label class="budgetfield">
               <span>{{ t('sessions.budget.softLimit') }}</span>
-              <input
+              <Input
                 v-model="softLimitInput"
-                class="budgetinput"
                 type="number"
                 min="0"
                 step="0.5"
@@ -37,9 +36,8 @@
             </label>
             <label class="budgetfield">
               <span>{{ t('sessions.budget.hardLimit') }}</span>
-              <input
+              <Input
                 v-model="hardLimitInput"
-                class="budgetinput"
                 type="number"
                 min="0"
                 step="0.5"
@@ -51,9 +49,8 @@
           <div class="budgetfields">
             <label class="budgetfield">
               <span>{{ t('sessions.budget.maxToolCalls') }}</span>
-              <input
+              <Input
                 v-model="maxToolCallsInput"
-                class="budgetinput"
                 type="number"
                 min="0"
                 step="1"
@@ -63,9 +60,8 @@
             </label>
             <label class="budgetfield">
               <span>{{ t('sessions.budget.maxMinutes') }}</span>
-              <input
+              <Input
                 v-model="maxMinutesInput"
-                class="budgetinput"
                 type="number"
                 min="0"
                 step="1"
@@ -82,7 +78,7 @@
       <template v-else>
         <div class="toolsrch">
           <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <input v-model="toolQ" :placeholder="t('sessions.config.toolSearch')" />
+          <Input v-model="toolQ" unstyled :placeholder="t('sessions.config.toolSearch')" />
           <span class="tc tnum" style="font-size: var(--fs-xs); color: var(--textFaint)">
             {{ onCount }}/{{ total }}
           </span>
@@ -116,7 +112,9 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ALL_TOOLS, TOOL_GROUPS, toolNamesFor } from '~/utils/tool-catalog'
 import type { Session } from '~/composables/useSessionsData'
+import Input from '~/components/ui/input/Input.vue'
 
 // Session config — tabbed popover (General / Tools). General keeps the budget caps
 // (account / model / thinking / style live on the status-bar chips); the Tools tab
@@ -175,88 +173,12 @@ function commitMaxMinutes() {
 
 // Built-in tools of the runtime toolset (the toggleable ones). MCP servers are
 // whitelisted from the composer chip — the denylist here is built-ins only.
-// Not every name exists on both runtimes: `WebSearch` is real only on the Claude
-// SDK path (the Pi path has no search backend and deliberately does not advertise
-// one — see sidecar runtime/tools/index.ts), and turning off a tool the current
-// runtime doesn't have is simply a no-op.
-// Nhánh Claude SDK bắc 4 bề mặt qua MCP nên ở đó chúng mang tên
-// `mcp__awogsurfaces__<tool>`, và `disabledTools` được truyền THẲNG thành
-// `disallowedTools`. Tắt bằng tên trần thôi thì chỉ tắt ở nhánh Pi — công tắc
-// trông như đã tắt trong khi model vẫn gọi được. Ghi cả hai dạng tên.
-const SURFACE_TOOLS = [
-  'mark_chapter',
-  'send_user_file',
-  'suggest_task',
-  'suggest_followups',
-  'report_findings',
-]
-// Tool ĐI QUA server `awogsurfaces` trên nhánh Claude SDK, tức ở đó mang tên
-// `mcp__awogsurfaces__<tool>`. Tách khỏi `SURFACE_TOOLS` vì hai danh sách trả lời
-// hai câu hỏi khác nhau: cái trên là "hiện trong nhóm Surfaces", cái này là "cần
-// alias tên bắc cầu". `schedule_wakeup` đi nhờ server đó (sidecar
-// claude-sdk/surface-sdk-server.ts) nhưng thuộc nhóm Agent — nó không đặt gì vào
-// transcript, nó hẹn giờ.
-//
-// Khai ở ĐÂY, trước `TOOL_GROUPS`, vì cùng lý do TDZ ghi ở chú thích dưới.
-//
-// Bảng tool → SERVER bắc cầu, chứ không phải một danh sách với tiền tố cứng: từ
-// khi `read_terminal` đi qua `awogterm`, giả định "mọi thứ bắc cầu đều nằm dưới
-// awogsurfaces" không còn đúng. Tắt bằng tên trần thôi thì công tắc trông như đã
-// tắt trong khi model vẫn gọi được ở nhánh Claude SDK.
-const BRIDGE_SERVER_OF: Record<string, string> = {
-  ...Object.fromEntries(SURFACE_TOOLS.map((tl) => [tl, 'awogsurfaces'])),
-  schedule_wakeup: 'awogsurfaces',
-  read_terminal: 'awogterm',
-  browser_tool: 'awogbrowser',
-  dev_server: 'awogdev',
-  code_index: 'awogcode',
-  list_sessions: 'awogsessions',
-  send_session_message: 'awogsessions',
-}
-// KHAI TRƯỚC `TOOL_GROUPS`: đó là một `const` cấp module, chạy NGAY lúc nạp file,
-// nên nó đọc `SURFACE_TOOLS` trong cùng lượt đánh giá. Khai sau sẽ ném TDZ — đúng
-// lỗi vừa vá ở `TopBarNotifications.vue`, chỉ khác là ở cấp module thay vì setup.
-
-const TOOL_GROUPS: [string, string[]][] = [
-  // code_index tra mã theo SYMBOL (định nghĩa / tham chiếu / blast radius) — cùng
-  // họ đọc mã với Grep/Glob, nên nó ở đây chứ không ở Exec.
-  ['File', ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'NotebookEdit', 'code_index']],
-  // read_terminal reads the tail of a PTY the USER typed in — off here means the
-  // model cannot see the user's terminals at all.
-  // dev_server nói về chính những background shell ở nhóm này: list/logs/stop, cộng
-  // một `start` chỉ trả về lệnh để model chạy qua Bash.
-  ['Exec', ['Bash', 'BashOutput', 'KillShell', 'monitor', 'read_terminal', 'dev_server']],
-  // `Artifact` là tool built-in CHỈ có trên nhánh Claude SDK (provider anthropic);
-  // ở nhánh Pi tắt nó là no-op, giống `WebSearch` ghi ở trên. Xếp vào Web vì đây là
-  // nhóm chạm mạng — nhưng nó là tool DUY NHẤT ở đây đẩy nội dung RA: publish một
-  // trang có URL chia sẻ được, lưu bền dưới tài khoản Claude của người dùng. Ai
-  // không muốn nội dung rời máy thì đây là công tắc, và nó tắt thật (`disabledTools`
-  // → `disallowedTools`, đã đo: tool biến khỏi toolset).
-  ['Web', ['WebFetch', 'WebSearch', 'browser_tool', 'Artifact']],
-  // list_sessions / send_session_message = kênh nhắn sang phiên KHÁC. Tắt ở đây là
-  // model không nhìn thấy danh bạ phiên và không đặt được tin vào hộp thư phiên nào.
-  [
-    'Agent',
-    [
-      'Task',
-      'TodoWrite',
-      'ExitPlanMode',
-      'schedule_wakeup',
-      'list_sessions',
-      'send_session_message',
-    ],
-  ],
-  // Model-initiated surfaces: chapters, file cards, task suggestions, follow-ups.
-  // Off here means the model can still answer, it just cannot put cards in the
-  // transcript — useful for anyone who finds them noisy.
-  ['Surfaces', SURFACE_TOOLS],
-]
-const ALL_TOOLS = TOOL_GROUPS.flatMap(([, tools]) => tools)
-
-const TOOL_ALIASES: Record<string, string[]> = Object.fromEntries(
-  Object.entries(BRIDGE_SERVER_OF).map(([tl, server]) => [tl, [`mcp__${server}__${tl}`]]),
-)
-const namesFor = (tl: string): string[] => [tl, ...(TOOL_ALIASES[tl] ?? [])]
+// Catalog sống ở ~/utils/tool-catalog (dùng chung với picker Whitelist tool của
+// agent). Not every name exists on both runtimes: `WebSearch` is real only on
+// the Claude SDK path (the Pi path has no search backend and deliberately does
+// not advertise one), and turning off a tool the current runtime doesn't have
+// is simply a no-op. `disabledTools` được truyền THẲNG thành `disallowedTools`;
+// tắt bằng tên trần chỉ tắt nhánh Pi nên toolNamesFor ghi cả alias bắc cầu.
 
 const cfgTab = ref<'General' | 'Tools'>('General')
 const toolQ = ref('')
@@ -269,7 +191,7 @@ const toolsOn = computed(() => {
 })
 function toggleTool(tl: string) {
   const disabled = new Set(props.session.disabledTools ?? [])
-  const names = namesFor(tl)
+  const names = toolNamesFor(tl)
   if (disabled.has(tl)) for (const n of names) disabled.delete(n)
   else for (const n of names) disabled.add(n)
   store.setDisabledTools(props.session.id, [...disabled])
@@ -285,16 +207,41 @@ const filteredGroups = computed<[string, string[]][]>(() => {
 </script>
 
 <style scoped>
+/* Popover chrome — popover surface + hairline border + --radius + mid shadow. */
+.cfgpop {
+  background: var(--popover);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+/* Tab strip — muted labels, neutral accent-wash on the active tab. */
+.poptabs {
+  gap: 2px;
+}
+.poptabs span {
+  border-radius: var(--r-xs);
+  color: var(--muted-foreground);
+}
+.poptabs span:hover {
+  color: var(--foreground);
+}
+.poptabs span.on {
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
+}
 .plnowrap {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
+.pl {
+  color: var(--muted-foreground);
+}
 .budgetcost {
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 .budgetfields {
@@ -308,21 +255,60 @@ const filteredGroups = computed<[string, string[]][]>(() => {
   flex: 1;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
+/* Inputs — the shadcn field look: transparent fill, --input border, rounded-md,
+   1px --ring halo on focus. */
 .budgetinput {
   width: 100%;
-  background: var(--bgInput, var(--bgActive));
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
+  background: transparent;
+  border: 1px solid var(--input);
+  border-radius: var(--r-sm);
   padding: 5px 8px;
-  color: var(--text);
+  color: var(--foreground);
   font-variant-numeric: tabular-nums;
+}
+.budgetinput:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .budgethint {
   margin-top: 6px;
   font-size: 12px;
   line-height: 18px;
   color: var(--textFaint);
+}
+/* Tools tab — search field matches the budget inputs. */
+.toolsrch {
+  background: transparent;
+  border-color: var(--input);
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
+}
+.toolsrch input::placeholder {
+  color: var(--muted-foreground);
+}
+.tgrph {
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+.tgrph .tc {
+  color: var(--textFaint);
+}
+/* Tool toggles — outlined chips, neutral wash hover, primary tint when ON.
+   Nested under .opts so scoped rules beat the global `.pop .o` (equal
+   specificity otherwise). */
+.opts .o {
+  border-radius: var(--r-xs);
+  color: var(--muted-foreground);
+}
+.opts .o:hover {
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
+}
+.opts .o.on {
+  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 </style>

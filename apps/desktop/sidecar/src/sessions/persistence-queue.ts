@@ -62,13 +62,25 @@ type HeaderMetadataSignature = {
   infra: SessionHeader['infra']
   // Gom nhóm phiên: cũng là metadata do RPC `sessions.setGroup` sửa, nên thiếu ở đây
   // thì một lần xếp/tách nhóm ở cửa sổ khác bị lần ghi thân bài kế tiếp ghi đè.
-  groupParentId: string | undefined
-  groupRole: string | undefined
-  groupAutoDeliver: boolean | undefined
-  // Cấu hình spawn đã nhớ của nhóm (`sessions.setGroupSpawn`) — cùng lý do với
+  teamRunId: string | undefined
+  teamRole: string | undefined
+  teamId: string | undefined
+  teamSource: SessionHeader['teamSource']
+  teamProjectId: SessionHeader['teamProjectId']
+  // Nguồn gốc materialize ('board' — phiên lone-agent dispatch từ board) — chỉ
+  // ghi lúc tạo, cùng lý do với bộ link team: thiếu nó ở chữ ký thì một lần
+  // sửa header ngoài tiến trình bị ghi đè âm thầm.
+  origin: SessionHeader['origin']
+  // Cấu hình spawn đã nhớ của nhóm (`sessions.setSpawnConfig`) — cùng lý do với
   // bộ ba trên: thiếu nó ở chữ ký thì một lần "ngừng điều phối" ở cửa sổ khác bị
   // lần ghi thân bài kế tiếp lặng lẽ ghi đè.
-  groupSpawnConfig: SessionHeader['groupSpawnConfig']
+  spawnConfig: SessionHeader['spawnConfig']
+  // Agent bound (`sessions.setAgent`) + worktree riêng của member
+  // (tasks/worktree.ts) — session-teams §1.1. Cùng nhóm lý do: thiếu chúng thì
+  // một lần bind/gỡ agent hoặc ensure/release worktree ở tiến trình khác bị lần
+  // ghi thân bài kế tiếp lặng lẽ ghi đè/hồi sinh.
+  agent: SessionHeader['agent']
+  worktree: SessionHeader['worktree']
 }
 
 function headerMetadataSignature(header: SessionHeader): string {
@@ -86,10 +98,15 @@ function headerMetadataSignature(header: SessionHeader): string {
     todos: header.todos,
     bookmarks: header.bookmarks,
     infra: header.infra,
-    groupParentId: header.groupParentId,
-    groupRole: header.groupRole,
-    groupAutoDeliver: header.groupAutoDeliver,
-    groupSpawnConfig: header.groupSpawnConfig,
+    teamRunId: header.teamRunId,
+    teamRole: header.teamRole,
+    teamId: header.teamId,
+    teamSource: header.teamSource,
+    teamProjectId: header.teamProjectId,
+    origin: header.origin,
+    spawnConfig: header.spawnConfig,
+    agent: header.agent,
+    worktree: header.worktree,
   }
   return JSON.stringify(sig)
 }
@@ -123,29 +140,60 @@ function mergeHeaderWithExternalMetadata(
   // Cặp nhóm lấy TRỌN theo đĩa, cùng lý do với archived/infra: tách khỏi nhóm là
   // XOÁ HẲN key (session-manager setGroup), nên "chỉ copy khi đĩa có" sẽ giữ lại
   // cha cũ của bản local và hoàn tác đúng thao tác vừa làm bên ngoài.
-  // `groupSpawnConfig` cũng lấy TRỌN theo đĩa: "ngừng điều phối" là XOÁ HẲN key
+  // `spawnConfig` cũng lấy TRỌN theo đĩa: "ngừng điều phối" là XOÁ HẲN key
   // (session-manager setGroupSpawn), không phải ghi một giá trị falsy. Nó đi
   // RIÊNG khỏi cặp parentId/role vì field này sống trên phiên GỐC của nhóm —
-  // phiên mà `groupParentId` luôn vắng mặt, nên gộp vào `diskGroup` sẽ đánh
+  // phiên mà `teamRunId` luôn vắng mặt, nên gộp vào `diskGroup` sẽ đánh
   // mất nó ngay trên đúng phiên mang nó.
   const {
-    groupParentId: _localGroup,
-    groupRole: _localRole,
-    groupSpawnConfig: _localSpawn,
+    teamRunId: _localGroup,
+    teamRole: _localRole,
+    teamId: _localTeamId,
+    teamSource: _localTeamSource,
+    teamProjectId: _localTeamPid,
+    origin: _localOrigin,
+    spawnConfig: _localSpawn,
+    agent: _localAgent,
+    worktree: _localWorktree,
     ...restNoGroup
   } = restNoInfra
-  const diskGroup: Pick<SessionHeader, 'groupParentId' | 'groupRole'> = disk.groupParentId
+  const diskGroup: Pick<SessionHeader, 'teamRunId' | 'teamRole'> = disk.teamRunId
     ? {
-        groupParentId: disk.groupParentId,
-        ...(disk.groupRole !== undefined ? { groupRole: disk.groupRole } : {}),
+        teamRunId: disk.teamRunId,
+        ...(disk.teamRole !== undefined ? { teamRole: disk.teamRole } : {}),
       }
     : {}
-  const diskSpawn: Pick<SessionHeader, 'groupSpawnConfig'> =
-    disk.groupSpawnConfig !== undefined ? { groupSpawnConfig: disk.groupSpawnConfig } : {}
+  // Link về team SPEC (teamId + tier/project sở hữu) + nguồn gốc materialize
+  // KHÔNG được gate theo teamRunId: phiên GỐC của run (lead) cũng mang teamId
+  // và KHÔNG bao giờ có teamRunId — gom chúng vào diskGroup sẽ đánh mất link
+  // spec của chính lead mỗi lần merge ngoại bộ. `origin` ('board') tương tự —
+  // nó sống trên phiên lone-agent vốn không thuộc run nào.
+  const diskTeamSpec: Pick<SessionHeader, 'teamId' | 'teamSource' | 'teamProjectId'> =
+    disk.teamId !== undefined
+      ? {
+          teamId: disk.teamId,
+          ...(disk.teamSource !== undefined ? { teamSource: disk.teamSource } : {}),
+          ...(disk.teamProjectId !== undefined ? { teamProjectId: disk.teamProjectId } : {}),
+        }
+      : {}
+  const diskOrigin: Pick<SessionHeader, 'origin'> =
+    disk.origin !== undefined ? { origin: disk.origin } : {}
+  const diskSpawn: Pick<SessionHeader, 'spawnConfig'> =
+    disk.spawnConfig !== undefined ? { spawnConfig: disk.spawnConfig } : {}
+  // `agent` lấy TRỌN theo đĩa, cùng lý do với bộ nhóm + spawnConfig:
+  // gỡ agent là XOÁ HẲN key (session-manager setGroupAgent). Nó đi RIÊNG khỏi
+  // cặp parentId/role vì field này còn sống trên phiên GỐC (lead được bind qua
+  // sessions.setAgent trên gốc) — nơi `teamRunId` luôn vắng mặt, nên
+  // gộp vào `diskGroup` sẽ đánh mất binding của lead ngay trên phiên mang nó.
+  const diskAgent: Pick<SessionHeader, 'agent'> =
+    disk.agent !== undefined ? { agent: disk.agent } : {}
   return {
     ...restNoGroup,
     ...diskGroup,
+    ...diskTeamSpec,
+    ...diskOrigin,
     ...diskSpawn,
+    ...diskAgent,
     title: disk.title,
     projectId: disk.projectId,
     ...diskArchived,
@@ -156,15 +204,15 @@ function mergeHeaderWithExternalMetadata(
     ...(disk.aboutTaskId !== undefined ? { aboutTaskId: disk.aboutTaskId } : {}),
     ...(disk.aboutSshHostId !== undefined ? { aboutSshHostId: disk.aboutSshHostId } : {}),
     ...(disk.aboutGhUrl !== undefined ? { aboutGhUrl: disk.aboutGhUrl } : {}),
-    // `groupAutoDeliver`: đường ghi DUY NHẤT sau tạo phiên là RPC riêng
-    // (`sessions.setGroupAutoDeliver` + arm phía spawn) qua updateSessionMetadata
-    // — generic upsert của renderer cố ý KHÔNG mang field này nữa. Vì vậy `local`
-    // có mặt = một lần ghi sidecar có chủ đích ⇒ local thắng cả hai chiều; vắng
-    // mặt ⇒ giữ của đĩa (đồng bộ metadata từ renderer không xoá được cờ).
-    ...(local.groupAutoDeliver !== undefined
-      ? { groupAutoDeliver: local.groupAutoDeliver }
-      : disk.groupAutoDeliver !== undefined
-        ? { groupAutoDeliver: disk.groupAutoDeliver }
+    // `worktree`: chỉ SIDECAR ghi field
+    // này (ensureSessionWorkspace/releaseSessionWorkspace trong
+    // tasks/worktree.ts), generic upsert của renderer không mang nó — nên local
+    // có mặt = một lần ghi có chủ đích (worktree vừa được cấp) ⇒ local thắng;
+    // vắng mặt ⇒ giữ của đĩa.
+    ...(local.worktree !== undefined
+      ? { worktree: local.worktree }
+      : disk.worktree !== undefined
+        ? { worktree: disk.worktree }
         : {}),
     // todos/bookmarks luôn được ghi thành MẢNG (rỗng khi xoá hết) chứ không bị xoá
     // key, nên "copy khi đĩa có" đã diễn tả đủ cả hướng dựng lẫn hướng xoá.

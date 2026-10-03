@@ -11,24 +11,26 @@
             {{ t('common.raw') }}
           </span>
         </div>
-        <button
+        <Button
           v-if="content"
-          class="btn sm"
           :title="copied ? t('library.md.copied') : t('common.copy')"
+          variant="outline"
+          size="sm"
           @click="onCopy"
         >
           <Icon :name="copied ? 'check' : 'copy'" />
           {{ copied ? t('library.md.copied') : t('common.copy') }}
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="allowEdit"
-          class="btn sm"
           :title="editTitle || t('library.md.edit')"
+          variant="outline"
+          size="sm"
           @click="onEdit"
         >
           <Icon name="sparkles" />
           {{ editLabel || t('library.md.edit') }}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -63,6 +65,7 @@ import MermaidView from '~/components/common/MermaidView.vue'
 import { useCodeBlockControls } from '~/composables/useCodeBlockControls'
 import { useMarkdown } from '~/composables/useMarkdown'
 import { useMdFileLink } from '~/composables/useMdFileLink'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

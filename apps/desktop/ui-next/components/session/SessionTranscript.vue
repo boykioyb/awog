@@ -28,33 +28,44 @@
       <SessionTranscriptSkeleton v-if="loading && !messages.length" />
       <SessionWelcome v-else-if="!messages.length" />
       <template v-else>
-        <!-- Only the most recent turns mount on open — a long session's history is
-             heavy to render (markdown + highlight + mermaid per message), so mounting
-             all of it made switching sessions janky. Older turns reveal on demand as
-             the user scrolls up (auto sentinel), or all at once via jump-to-top. -->
-        <LoadMoreSentinel
-          v-if="hiddenCount > 0"
-          class="loadolder"
-          :remaining="hiddenCount"
-          auto
-          @load="loadOlder"
-        />
-        <!-- No `appear`: opening a session shows its history instantly; only turns
-             that arrive afterwards (user send / assistant reply) fade + rise in. -->
-        <TransitionGroup tag="div" name="mi" class="milist">
-          <SessionMessageItem
-            v-for="row in visible"
-            :key="row.i"
-            :message="row.m"
-            :msg-index="row.i"
-            :fallback-when="fallbackWhen"
+        <!-- Centered message column (ProtoTranscript: mx-auto max-w-[860px] px-5
+             py-4 gap-5). `.msgs` stays the scrollport with the shared --padX
+             gutter; the column caps at 860px. All windowing logic is unchanged —
+             same sentinel, same TransitionGroup, same keys. -->
+        <div class="msgcol">
+          <!-- Only the most recent turns mount on open — a long session's history is
+               heavy to render (markdown + highlight + mermaid per message), so mounting
+               all of it made switching sessions janky. Older turns reveal on demand as
+               the user scrolls up (auto sentinel), or all at once via jump-to-top. -->
+          <LoadMoreSentinel
+            v-if="hiddenCount > 0"
+            class="loadolder"
+            :remaining="hiddenCount"
+            auto
+            @load="loadOlder"
           />
-        </TransitionGroup>
-        <!-- Session-level "working" indicator (craft ProcessingIndicator parity):
-             cycling status word + elapsed, shown below the in-flight turn while the
-             model is actively generating (hidden when parked on a question/permission
-             gate — SessionMessageItem shows "Waiting…" for that). -->
-        <SessionProcessingIndicator v-if="working" :started-at="workingStartedAt" />
+          <!-- No `appear`: opening a session shows its history instantly; only turns
+               that arrive afterwards (user send / assistant reply) fade + rise in. -->
+          <TransitionGroup tag="div" name="mi" class="milist">
+            <SessionMessageItem
+              v-for="row in visible"
+              :key="row.i"
+              :message="row.m"
+              :msg-index="row.i"
+              :fallback-when="fallbackWhen"
+              :readonly="readonly"
+            />
+          </TransitionGroup>
+          <!-- Session-level "working" indicator (craft ProcessingIndicator parity):
+               cycling status word + elapsed, shown below the in-flight turn while the
+               model is actively generating (hidden when parked on a question/permission
+               gate — SessionMessageItem shows "Waiting…" for that). -->
+          <SessionProcessingIndicator
+            v-if="working"
+            :started-at="workingStartedAt"
+            class="msgind"
+          />
+        </div>
       </template>
     </div>
     <!-- Jump-to-top / jump-to-bottom: each shows only when there's somewhere to go
@@ -103,6 +114,10 @@ const props = defineProps<{
   // bottom. Set while the find bar is open (searching mid-run must not yank the
   // viewport away from the match the user is looking at).
   suppressAutoScroll?: boolean
+  // Bề mặt chỉ-đọc (board thread render comment thành message) — forward xuống
+  // SessionMessageItem: giấu SessionMsgActions vì chúng tác động lên transcript
+  // của phiên trong scope, không phải các message được truyền vào.
+  readonly?: boolean
 }>()
 const { t } = useI18n()
 
@@ -347,7 +362,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
-/* Floating collapse-all / expand-all toggle, top-right of the transcript. */
+/* Floating collapse-all / expand-all toggle, top-right of the transcript — một
+   chip popover mờ trên nội dung; "on" = toàn bộ step đang mở → wash sáng lên
+   (idiom `bg-accent text-accent-foreground` của proto). */
 .foldbtn {
   position: absolute;
   top: 10px;
@@ -358,9 +375,9 @@ onUnmounted(() => {
   width: 28px;
   height: 28px;
   border-radius: var(--r-sm);
-  background: var(--bgEl);
+  background: var(--popover);
   border: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   opacity: 0.72;
@@ -372,20 +389,25 @@ onUnmounted(() => {
 }
 .foldbtn:hover {
   opacity: 1;
-  background: var(--bgHover);
-  border-color: var(--borderStrong);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+.foldbtn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .foldbtn.on {
-  color: var(--accent);
-  border-color: var(--accent);
+  opacity: 1;
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 @media (prefers-reduced-motion: reduce) {
   .foldbtn {
     transition: none;
   }
 }
-/* Floating jump controls, stacked at the transcript's bottom-right. */
+/* Floating jump controls, stacked at the transcript's bottom-right — pill tròn,
+   hover = accent-wash trung tính (giống ghost button). */
 .scrolljump {
   position: absolute;
   right: 16px;
@@ -400,16 +422,20 @@ onUnmounted(() => {
   place-items: center;
   width: 32px;
   height: 32px;
-  border-radius: 50%;
-  background: var(--bgEl);
+  border-radius: var(--r-pill);
+  background: var(--popover);
   border: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
 }
 .sjbtn:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+.sjbtn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .sjbtn .up {
   transform: rotate(180deg);
@@ -418,6 +444,7 @@ onUnmounted(() => {
   transition:
     border-color 0.12s ease,
     color 0.12s ease,
+    background 0.12s ease,
     transform 0.1s ease;
 }
 .sjbtn:active {
@@ -431,16 +458,29 @@ onUnmounted(() => {
   margin-top: 8px;
 }
 
-/* New-turn enter: a freshly appended message fades + rises into place. The inner
-   wrapper carries the prototype's flex column rhythm (gap matches .msgs). */
+/* Cột message căn giữa theo proto (`mx-auto max-w-[860px] px-5 py-4 gap-5`):
+   `.msgs` giữ scrollport + gutter `--padX` chung của cột chat, `.msgcol` chỉ giới
+   hạn bề rộng nội dung. Scroll/windowing đọc `.msgs` — wrapper này là flex item
+   duy nhất của nó nên scrollHeight/scrollTop không đổi. */
+.msgcol {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+/* Chỉ số "đang soạn" neo sát mép trái cột — header message giờ là hàng riêng,
+   body tràn full width nên không còn cột avatar để thụt vào (proto `pl-9` bỏ). */
+.msgind {
+  margin-left: 0;
+}
+/* New-turn enter: a freshly appended message fades + rises into place. Gap giữa
+   hai message = 20px (proto `gap-5` trên cột). */
 .milist {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  /* Trải hết cột chat. Từng có trần `78ch` căn giữa (§3.3) — bỏ 2026-09-12 sau khi
-     dùng thật: nó làm transcript thụt vào giữa trong khi composer vẫn trải hết cột,
-     nên hai khối lệch nhau cả trăm pixel. Cả hai cùng lấy mép `.msgs` / `.composer`
-     (đều đệm `--padX`) thì thẳng hàng theo cấu trúc, không phải canh bằng số. */
+  gap: 20px;
   width: 100%;
 }
 .mi-enter-active {

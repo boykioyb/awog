@@ -83,47 +83,52 @@
       </span>
       <span style="flex: 1" />
       <template v-if="step === 'login'">
-        <button class="btn" type="button" :disabled="loggingIn" @click="onClose">
+        <Button type="button" :disabled="loggingIn" variant="outline" @click="onClose">
           {{ t('common.cancel') }}
-        </button>
-        <button v-if="loggingIn" class="btn" type="button" @click="cancelLogin">
+        </Button>
+        <Button v-if="loggingIn" type="button" variant="outline" @click="cancelLogin">
           {{ t('infra.import.sso.login.cancel') }}
-        </button>
+        </Button>
         <!-- CỐ Ý không `:disabled="!canLogin"`: nút chính mờ mà không nói vì sao
              là ngõ cụt với người không rành — bấm vào "không có gì xảy ra".
              Cho bấm, rồi chỉ đúng ô còn thiếu (loginAttempted → show-required ở
              AwsSsoImportLoginStep) cộng một toast. -->
-        <button v-else class="btn pri" type="button" :disabled="loggingIn" @click="onLogin">
+        <Button v-else type="button" :disabled="loggingIn" variant="default" @click="onLogin">
           {{
             useExistingSession
               ? t('infra.import.sso.login.continueWithSession')
               : t('infra.import.sso.login.action')
           }}
-        </button>
+        </Button>
       </template>
       <template v-else-if="step === 'accounts'">
-        <button class="btn" type="button" :disabled="listing" @click="step = 'login'">
+        <Button type="button" :disabled="listing" variant="outline" @click="step = 'login'">
           {{ t('common.back') }}
-        </button>
-        <button class="btn" type="button" :disabled="listing" @click="onList">
+        </Button>
+        <Button type="button" :disabled="listing" variant="outline" @click="onList">
           {{ t('infra.import.sso.accounts.refresh') }}
-        </button>
-        <button class="btn pri" type="button" :disabled="!selectedKeys.size" @click="toNaming">
+        </Button>
+        <Button type="button" :disabled="!selectedKeys.size" variant="default" @click="toNaming">
           {{ t('infra.import.sso.accounts.next') }}
-        </button>
+        </Button>
       </template>
       <template v-else-if="step === 'naming'">
-        <button class="btn" type="button" :disabled="creating" @click="step = 'accounts'">
+        <Button type="button" :disabled="creating" variant="outline" @click="step = 'accounts'">
           {{ t('common.back') }}
-        </button>
-        <button class="btn pri" type="button" :disabled="!canCreate || creating" @click="onCreate">
+        </Button>
+        <Button
+          type="button"
+          :disabled="!canCreate || creating"
+          variant="default"
+          @click="onCreate"
+        >
           {{
             creating ? t('infra.import.sso.naming.creating') : t('infra.import.sso.naming.action')
           }}
-        </button>
+        </Button>
       </template>
       <template v-else>
-        <button class="btn pri" type="button" @click="onDone">{{ t('common.close') }}</button>
+        <Button type="button" variant="default" @click="onDone">{{ t('common.close') }}</Button>
       </template>
     </template>
   </LibraryEntityModal>
@@ -150,6 +155,7 @@ import type {
 } from '~/composables/useAwsProfilesApi'
 import type { AwsProfile } from '~/types'
 import { AWS_PROFILE_NAME_RE } from '~/utils/aws-profile-view'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

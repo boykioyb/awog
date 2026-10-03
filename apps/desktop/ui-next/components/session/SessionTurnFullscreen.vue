@@ -150,6 +150,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   align-items: stretch;
   padding: 0;
   cursor: default;
+  /* `.ovl` mặc định z-100 — lượt-fullscreen mở được từ trong board item
+     (`.wsed-ovl` 160) và peek full (`.apeek.full` 400), phải nổi trên cả hai;
+     vẫn dưới preview 480 vì preview mở được TỪ đây (link/ảnh trong lượt). */
+  z-index: 470;
 }
 .ftcard {
   position: relative;
@@ -157,7 +161,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--bgEl);
+  background: var(--background);
   overflow: hidden;
 }
 .fthead {
@@ -168,7 +172,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
      this overlay covers (app-shell.css publishes both strips). */
   padding: 10px calc(14px + var(--titlebar-inset-end)) 10px calc(14px + var(--titlebar-inset-start));
   border-bottom: 1px solid var(--border);
-  color: var(--text);
+  color: var(--foreground);
 }
 .ftname {
   font-weight: 600;
@@ -181,17 +185,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
   flex: 0 0 auto;
 }
 .ftdot {
   display: inline-block;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
+  border-radius: var(--r-pill);
+  background: var(--primary);
   opacity: 0.5;
 }
 .ftx {
@@ -199,12 +203,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   place-items: center;
   padding: 4px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .ftx:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+.ftx:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .ftbody {
   flex: 1;
@@ -228,19 +236,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   gap: 9px;
   margin: 4px 0;
   padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--dangerDim, rgba(239, 68, 68, 0.12));
-  border: 1px solid var(--dangerBorder, rgba(239, 68, 68, 0.35));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
 }
 .merr-ic {
   width: var(--icon-md);
   height: var(--icon-md);
   flex: 0 0 auto;
   margin-top: 1px;
-  color: var(--danger);
+  color: var(--destructive);
 }
 .merr-msg {
-  color: var(--text);
+  color: var(--foreground);
   line-height: var(--lh-md);
   overflow-wrap: anywhere;
   min-width: 0;

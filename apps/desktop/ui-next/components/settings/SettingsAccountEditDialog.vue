@@ -21,18 +21,18 @@
     <form v-else class="aed" @submit.prevent="onSave">
       <label class="aedfield">
         <span class="fd">{{ t('settingsModels.form.label') }}</span>
-        <input v-model="label" class="keyinp" :placeholder="t('settingsModels.form.label')" />
+        <Input v-model="label" :placeholder="t('settingsModels.form.label')" class="flex-1" />
       </label>
 
       <!-- Built-in API-key only: rotate the key (OAuth tokens are managed). -->
       <label v-if="kind === 'builtin-key'" class="aedfield">
         <span class="fd">{{ t('settingsModels.edit.keyLabel') }}</span>
         <div class="keyrow">
-          <input
+          <Input
             v-model="apiKey"
-            class="keyinp mono"
             :type="reveal ? 'text' : 'password'"
             :placeholder="t('settingsModels.edit.keyReplacePlaceholder')"
+            class="mono flex-1"
           />
           <span
             class="keyeye"
@@ -62,12 +62,18 @@
     </form>
 
     <template v-if="kind !== 'custom'" #footer>
-      <button class="btn sm" type="button" @click="onCancel">
+      <Button type="button" variant="outline" size="sm" @click="onCancel">
         {{ t('settingsModels.form.cancel') }}
-      </button>
-      <button class="btn sm pri" type="button" :disabled="!canSave || busy" @click="onSave">
+      </Button>
+      <Button
+        type="button"
+        :disabled="!canSave || busy"
+        variant="default"
+        size="sm"
+        @click="onSave"
+      >
         {{ t('settingsModels.form.save') }}
-      </button>
+      </Button>
     </template>
   </SettingsModelDialog>
 </template>
@@ -79,6 +85,8 @@ import CustomProviderForm, {
 import ModelListEditor from '~/components/settings/ModelListEditor.vue'
 import SettingsModelDialog from '~/components/settings/SettingsModelDialog.vue'
 import { useSettingsStore, type ProviderAccount, type ProviderName } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Edit dialog (kind = oauth | builtin-key | custom). Since models belong to the
 // PROVIDER now (curate in Settings → "Available models"), built-in accounts no

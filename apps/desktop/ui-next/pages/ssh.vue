@@ -13,7 +13,7 @@
     />
 
     <!-- per-host action menu (⋯ button + right-click): Connect / Edit / Delete -->
-    <ContextMenu
+    <AppContextMenu
       :open="!!rowMenu.pos.value"
       :position="rowMenu.pos.value ?? { x: 0, y: 0 }"
       :items="rowMenuItems"

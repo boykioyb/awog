@@ -49,10 +49,10 @@
         <div class="sfpp-dest mono">{{ displayPath }}</div>
 
         <div class="sfpp-foot">
-          <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-          <button class="btn pri" @click="emit('confirm', pcwd)">
+          <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+          <Button variant="default" @click="emit('confirm', pcwd)">
             {{ t('ssh.sftp.picker.select') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -65,6 +65,7 @@
 // the chosen folder path. Reuses ssh.sftp.list.
 import { computed, ref, watch } from 'vue'
 import { useSshApi, type SftpEntry } from '~/composables/useSshApi'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

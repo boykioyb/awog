@@ -45,6 +45,7 @@ import { resolveCredential } from '../../credentials/credential-resolver.js'
 import { recordCodexUsageFromHeaders } from '../../providers/openai/usage.js'
 import { confirmOverageOrStop } from '../overage-guard.js'
 import { resolveAgentContext, type ResolvedAgentContext } from '../../tasks/agent-context.js'
+import { resolveAgentFsRoots } from '../../agents/repo-access.js'
 import { log } from '../../util/logger.js'
 import type { Agent, SessionMessage, SessionSettings } from '../../types/shared.js'
 import type { ApiSourcesConfig, McpServersConfig } from '../permission-types.js'
@@ -214,6 +215,10 @@ export interface TaskToolDeps {
   // subagent reaches every api tool its parent could — same guarantee as
   // parentMcpServers.
   parentApiSources?: ApiSourcesConfig
+  // Browser scope của lượt CHA (session engineId hoặc `task:<id>:<node>`) — một
+  // subagent "là" lượt đó, nên tab nó mở thuộc cùng một scope: cha thấy được
+  // trang subagent để lại, và ngược lại không thể là hai phiếng khác nhau.
+  browserScope?: string
   // Permission gate for the subagent's tool calls. Chat reuses the parent gate
   // (so writes still prompt); tasks pass an always-allow gate (bypass).
   beforeToolCall: BeforeToolCall
@@ -410,12 +415,18 @@ async function prepareSubagent(
   // Subagent toolset: built-in + the merged MCP + api tools, filtered by the
   // agent's allowedTools and the session denylist. NO Task tool (depth = 1) and
   // NO plan.
+  // Repo-access whitelist: resolve against THIS subagent's cwd (its own
+  // worktree when leased) so the fs tools narrow to the granted repos.
+  const subFsRoots = agentCtx.repos
+    ? resolveAgentFsRoots(opts.cwd, agentCtx.repos)
+    : undefined
   const { tools, failures: mcpFailures, mcpCatalog } = await createRuntimeToolDefinitions(
     opts.cwd,
     mcpServers,
     apiSources,
     {
       ...(agentCtx.allowedTools ? { allowedTools: agentCtx.allowedTools } : {}),
+      ...(subFsRoots ? { allowedRoots: subFsRoots } : {}),
       ...(deps.disabledTools ? { disabledTools: deps.disabledTools } : {}),
       ...(bypassIds.length > 0 ? { bypassAllowlistMcpServerIds: bypassIds } : {}),
       // Per-source Explore scoping (ADR 0060 P4) for the subagent's OWN
@@ -424,6 +435,8 @@ async function prepareSubagent(
       // agent whitelist too, see bypassIds above).
       ...(agentCtx.sourceToolPatterns ? { sourceToolPatterns: agentCtx.sourceToolPatterns } : {}),
       ...(agentCtx.sourceApiEndpoints ? { sourceApiEndpoints: agentCtx.sourceApiEndpoints } : {}),
+      // Subagent chia sẻ browser của lượt cha (cùng một "ai đang làm việc").
+      ...(deps.browserScope ? { browserScope: deps.browserScope } : {}),
     },
     setupSignal,
   )

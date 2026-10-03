@@ -4,8 +4,10 @@
          toolbar, because the strip stays visible when the list is hidden — a button
          inside the list could only ever collapse it. Hidden in compact mode, where the
          list is already an off-canvas drawer toggled from the top bar. -->
-    <button
+    <Button
       v-if="!compact"
+      variant="ghost"
+      size="iconSm"
       class="stab-btn"
       :class="{ on: listCollapsed }"
       :aria-label="listCollapsed ? t('sessions.list.expand') : t('sessions.list.collapse')"
@@ -15,7 +17,7 @@
       @click.stop="toggleList"
     >
       <Icon name="dock-left" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
+    </Button>
     <div ref="tablistEl" class="stabs-scroll" role="tablist" :aria-label="t('sessions.tabs.label')">
       <div
         v-for="(tab, i) in tabs"
@@ -68,40 +70,44 @@
           @click.stop="closeTab(tab.id)"
           @keydown.stop
         >
-          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Icon name="x" style="width: 10px; height: 10px" />
         </button>
       </div>
     </div>
 
-    <button
+    <Button
+      variant="ghost"
+      size="iconSm"
       class="stab-btn"
       :aria-label="t('sessions.tabs.addProject')"
       :title="t('sessions.tabs.addProject')"
       @click.stop="toggleAdd"
     >
       <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
-    <button
+    </Button>
+    <Button
       v-if="tabs.length > 1"
+      variant="ghost"
+      size="iconSm"
       class="stab-btn"
       :aria-label="t('sessions.tabs.overflow')"
       :title="t('sessions.tabs.overflow')"
       @click.stop="toggleOverflow"
     >
       <Icon name="chev" style="width: var(--icon-sm); height: var(--icon-sm)" />
-    </button>
+    </Button>
 
     <!-- "+" project picker: projects not already open as a tab. A sticky search input
          filters by name (substring, case-insensitive); Enter opens the highlighted
          (first) match, Esc closes + clears. -->
     <div v-if="addMenu" class="smenu stabs-drop" @click.stop>
-      <input
+      <Input
         ref="addSearchEl"
         v-model="addQuery"
-        class="stabs-search"
         type="text"
         :placeholder="t('sessions.tabs.searchPlaceholder')"
         :aria-label="t('sessions.tabs.searchPlaceholder')"
+        class="stabs-search"
         @keydown.enter.prevent="pickFirstMatch"
         @keydown.esc.prevent="closeMenus"
       />
@@ -283,6 +289,9 @@ import {
   useProjectColors,
 } from '~/composables/useProjectColors'
 import { placeMenu } from '~/utils/context-menu'
+import { isBoardSession } from '~/composables/useSessionsData'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const { tabs, openableProjects, projectPath, setActiveTab, closeTab } = useSessionTabs()
@@ -601,8 +610,10 @@ function pSelectAll() {
   pctx.value = null
   if (id == null) return
   store.setSelectMode(true)
+  // Chỉ chọn các phiên đang HIỆN trong list — phiên "của board" (teamId /
+  // origin:'board') bị ẩn nên thao tác hàng loạt cũng bỏ qua chúng.
   store.sessions
-    .filter((s) => s.project === id)
+    .filter((s) => s.project === id && !isBoardSession(s))
     .forEach((s) => {
       if (!store.selectedIds.has(s.id)) store.toggleSelect(s.id)
     })
@@ -626,7 +637,10 @@ async function pDeleteAll() {
   const id = pctx.value?.id
   pctx.value = null
   if (id == null) return
-  const ids = store.sessions.filter((s) => s.project === id).map((s) => s.id)
+  // Xoá hàng loạt theo project bỏ qua phiên "của board" — xoá member của run
+  // để assigneeSessionId của board item dangle. Chúng ẩn khỏi list nên thao
+  // tác trên list cũng không chạm tới chúng.
+  const ids = store.sessions.filter((s) => s.project === id && !isBoardSession(s)).map((s) => s.id)
   if (!ids.length) return
   const ok = await confirm({
     title: t('sessions.delete.manyTitle', { n: ids.length }),
@@ -640,24 +654,24 @@ async function pDeleteAll() {
 .stabs {
   position: relative;
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  padding: 0 8px;
-  /* 39, not 38: the 1px rule below comes out of the content box, so an even bar would
-     leave 37px inside and centre a 28px tab at 4.5. The active tab fills its full height
-     with an accent background, so the box-shadow trick used on the other bars would be
-     painted over — growing the bar is the one fix that survives it. */
-  min-height: 39px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bgPanel);
+  /* proto `px-2 py-1.5` over a 32px (h-8) tab lane lands the strip on 44px even —
+     the hairline stays an INSET shadow (the .top/.dh trick): a real border would
+     eat 1px of the content box and centre the 28px tabs on a half pixel. The
+     proto strip is TRANSPARENT (page background) — the muted/40 wash is gone. */
+  padding: 6px 8px;
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 .stabs-scroll {
   display: flex;
-  align-items: stretch;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
   flex: 1;
   min-width: 0;
+  /* proto TabsList `h-8` — a 32px lane the 28px (h-7) tabs centre inside. */
+  height: 32px;
   overflow-x: auto;
   scrollbar-width: none;
   /* No native touch/pen pan on the strip — the reorder drag owns the horizontal
@@ -667,40 +681,42 @@ async function pDeleteAll() {
 .stabs-scroll::-webkit-scrollbar {
   display: none;
 }
-/* One tab: flat by default, accent underline + brighter text when active. */
+/* One tab: proto pill — h-7, rounded-md, xs type. Flat by default; the active tab
+   is a NEUTRAL wash (bg-accent = --accent-wash), not the old accentDim + underline. */
 .stab {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   flex: 0 0 auto;
+  height: 28px;
   max-width: 200px;
-  padding: 0 9px;
+  padding: 0 10px;
   cursor: pointer;
-  color: var(--textDim);
-  border-bottom: 2px solid transparent;
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
   user-select: none;
   touch-action: none;
 }
-/* Hover only on inactive tabs — the active tab keeps its accent tint (no gray
-   fill swap on hover). */
+/* Hover only on inactive tabs — the active tab keeps its wash (no fill swap). */
 .stab:hover:not(.on) {
-  background: var(--bgHover);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent-wash) 55%, transparent);
+  color: var(--foreground);
 }
-/* Active tab: accent-tint fill (NOT a gray surface) + accent underline + brighter
-   text, so it reads clearly as the open project. */
+/* Active tab: the flat accent-wash surface + brighter text — the shadcn
+   `data-[state=active]:bg-accent` idiom. */
 .stab.on {
-  color: var(--text);
-  background: var(--accentDim);
-  border-bottom-color: var(--accent);
+  color: var(--foreground);
+  background: var(--accent-wash);
 }
 /* Keyboard focus ring (a11y) — never removed; the click :hover/:active states are
-   separate. Inset so it reads inside the strip's bottom border. */
+   separate. --ring is the standard shadcn focus var (alias of --accentBorder). */
 .stab:focus-visible,
-.stab-btn:focus-visible,
 .stab-x:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
   border-radius: var(--r-xs);
 }
@@ -717,7 +733,7 @@ async function pDeleteAll() {
   bottom: 4px;
   width: 2px;
   border-radius: var(--r-xs);
-  background: var(--accent);
+  background: var(--primary);
   z-index: 1;
 }
 .stab.drop-before::before {
@@ -775,7 +791,7 @@ async function pDeleteAll() {
   background: conic-gradient(
     from 0deg,
     transparent 0 66%,
-    var(--stab-color, var(--accent)) 84%,
+    var(--stab-color, var(--primary)) 84%,
     transparent 100%
   );
   animation: stab-run-spin 1.5s linear infinite;
@@ -788,24 +804,24 @@ async function pDeleteAll() {
 /* Running background wash, in the project's colour. Skipped on the ACTIVE tab, which
    keeps its own accent fill — the beam alone carries "running" there. */
 .stab.running:not(.on) {
-  background: color-mix(in srgb, var(--stab-color, var(--accent)) 11%, transparent);
-  border-color: color-mix(in srgb, var(--stab-color, var(--accent)) 30%, transparent);
+  background: color-mix(in srgb, var(--stab-color, var(--primary)) 11%, transparent);
+  border-color: color-mix(in srgb, var(--stab-color, var(--primary)) 30%, transparent);
 }
 /* "A result is waiting" — whole-chip amber, so it reads without hunting for a badge.
    Gated off the active tab: you are looking at it, so nothing there is unread. */
 .stab.done-unread:not(.on):not(.running) {
-  background: color-mix(in srgb, var(--amber) 12%, transparent);
-  border-color: color-mix(in srgb, var(--amber) 34%, transparent);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 34%, transparent);
 }
 .stab.done-unread:not(.on):not(.running) .stab-nm {
-  color: var(--amber);
+  color: var(--warning);
   font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {
   /* Keep a full ring so "running" is still stated, just without the chase. */
   .stab-run::after {
     animation: none;
-    background: var(--stab-color, var(--accent));
+    background: var(--stab-color, var(--primary));
     opacity: 0.55;
   }
 }
@@ -832,55 +848,65 @@ async function pDeleteAll() {
   font-size: 12px;
   line-height: 12px;
   font-variant-numeric: tabular-nums;
-  background: var(--amberDim);
-  color: var(--amber);
-  border: 1px solid var(--amberBorder);
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 36%, transparent);
 }
 .stab-x {
   display: grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  /* proto `ml-0.5 size-3.5` — a 14px hit box nudged 2px off the label. */
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
   padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
   border-radius: var(--r-xs);
-  color: var(--textFaint);
+  color: var(--muted-foreground);
+  /* No layout jump: the button always exists, visibility fades in on hover /
+     active tab (proto `opacity-0 group-hover:opacity-100`). */
   opacity: 0;
   transition: opacity 0.12s;
 }
 .stab:hover .stab-x,
-.stab.on .stab-x {
+.stab.on .stab-x,
+.stab:focus-within .stab-x {
   opacity: 1;
 }
 .stab-x:hover {
-  color: var(--text);
-  background: var(--bgActive);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent-foreground) 10%, transparent);
 }
-/* "+" / overflow buttons sit flush at the right of the strip. */
+/* "+" / overflow / list-toggle buttons — ui <Button variant="ghost" size="iconSm">
+   (h-7 w-7, accent-wash hover); `.stab-btn` only pins flex + the lit "on" tint. */
 .stab-btn {
-  display: grid;
-  place-items: center;
-  width: 28px;
   flex: 0 0 auto;
-  align-self: center;
-  height: 28px;
-  border: 0;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  background: transparent;
-  cursor: pointer;
 }
-.stab-btn:hover {
-  color: var(--text);
-  background: var(--bgHover);
+/* Proto's `<Separator class="mx-1 h-4">` between the list toggle and the tab lane —
+   the strip's own gap-1 gives 4px, so widen the slot to ~17px and centre a 1px
+   hairline there. Only when the toggle renders (compact mode has none, and then
+   .stabs-scroll is first-child so this never matches anything else). */
+.stabs > .stab-btn:first-child {
+  position: relative;
+  margin-right: 13px;
 }
-/* List collapsed → the toggle reads as "on" (accent tint, not a gray fill), so the
-   missing column is explained by a lit button rather than looking like a broken layout. */
+.stabs > .stab-btn:first-child::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+}
+/* List collapsed → the toggle reads as "on" (primary tint — a lit button explains
+   the missing column better than looking like a broken layout). */
 .stab-btn.on {
-  color: var(--accent);
-  background: var(--accentDim);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 /* Dropdowns under the strip (add picker / overflow). Mirrors SessionList's inline
    `.smenu` dropdowns: absolutely placed, above the page body. */
@@ -905,12 +931,14 @@ async function pDeleteAll() {
   padding: 7px 10px;
   border: 0;
   border-bottom: 1px solid var(--border);
-  background: var(--bgPanel);
-  color: var(--text);
+  background: var(--popover);
+  color: var(--foreground);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   outline: none;
 }
 .stabs-search::placeholder {
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .stabs-droplist {
   padding: 2px 0;
@@ -928,9 +956,9 @@ async function pDeleteAll() {
 }
 /* Secondary path line, only shown to disambiguate same-named projects (OQ 1.a). */
 .stabs-path {
-  color: var(--textFaint);
-  font-size: 12px;
-  line-height: 18px;
+  color: var(--muted-foreground);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -938,7 +966,7 @@ async function pDeleteAll() {
 }
 .stabs-empty {
   padding: 8px 12px;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 /* Context menu chrome (copied from SessionList — the project actions moved here). */
 .ctxbackdrop {
@@ -962,9 +990,9 @@ async function pDeleteAll() {
 .ctxcolorlbl {
   display: block;
   margin-bottom: 6px;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textDim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
 }
 .ctxsw {
   display: flex;
@@ -978,7 +1006,7 @@ async function pDeleteAll() {
   height: 17px;
   border-radius: var(--r-pill);
   cursor: pointer;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   box-shadow: 0 0 0 1px var(--border);
   transition:
     transform 0.1s,
@@ -989,8 +1017,8 @@ async function pDeleteAll() {
 }
 .ctxsw .swatch.on {
   box-shadow:
-    0 0 0 2px var(--bgPanel),
-    0 0 0 4px var(--accent);
+    0 0 0 2px var(--popover),
+    0 0 0 4px var(--primary);
 }
 .ctxsw .swatch.clear {
   background: transparent;
@@ -1000,7 +1028,7 @@ async function pDeleteAll() {
 .ctxsw .swatch.custom {
   position: relative;
   overflow: hidden;
-  color: var(--text);
+  color: var(--foreground);
   background: conic-gradient(
     from 0deg,
     #f87171,
@@ -1026,10 +1054,10 @@ async function pDeleteAll() {
   cursor: pointer;
 }
 .ctxmenu .mi.danger {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .ctxmenu .mi.danger:hover {
-  background: var(--dangerDim, color-mix(in srgb, var(--danger) 14%, transparent));
+  background: color-mix(in srgb, var(--destructive) 14%, transparent);
 }
 @media (prefers-reduced-motion: reduce) {
   .stab-x,

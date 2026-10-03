@@ -13,7 +13,7 @@
 import { completeSimple, streamSimple } from '@earendil-works/pi-ai/compat'
 import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
 import { runAgentLoop, type AgentEvent, type AgentMessage } from '@earendil-works/pi-agent-core'
-import { resolveCredential } from '../credentials/credential-resolver.js'
+import { resolveCredential, providerOfAccount } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { RpcError } from '../transport/rpc.js'
@@ -46,6 +46,16 @@ function mapErr(err: unknown, what: string): RpcError {
   return new RpcError(-32021, `${what} failed: ${message}`)
 }
 
+// Lỗi từ chối do content-policy phía provider (vd Anthropic chặn "violative
+// cyber content" → `model error: …`). Các one-shot nhét catalog do người dùng
+// sở hữu (danh sách skill id — pentest/RE tooling của user chẳng hạn) có thể
+// bắt lỗi này và retry bỏ block bị gắn cờ thay vì fail cả request: catalog chỉ
+// là phần gợi ý, không phải payload chính.
+export function isModelRefusal(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err)
+  return /violative|usage policy|refusals-and-fallback/i.test(msg)
+}
+
 // The minimal {provider, accountId, modelId} ref both helpers resolve from.
 interface RunRef {
   provider?: ProviderName | undefined
@@ -55,9 +65,9 @@ interface RunRef {
 
 // Build the SessionSettings resolveModel needs from the helper args. level/mode
 // are irrelevant for a non-thinking text turn but the type requires them.
-function toSettings(args: RunRef): SessionSettings {
+function toSettings(args: RunRef, provider: ProviderName): SessionSettings {
   return {
-    provider: args.provider ?? 'anthropic',
+    provider,
     modelId: normalizeModelId(args.modelId),
     level: 'low',
     mode: 'execute',
@@ -72,8 +82,13 @@ async function resolveForRun(args: RunRef): Promise<{
   model: ReturnType<typeof resolveModel>['model']
   getApiKey: ReturnType<typeof resolveModel>['getApiKey']
 }> {
-  const { account } = await resolveCredential(args.provider ?? 'anthropic', args.accountId)
-  const settings = toSettings(args)
+  // Provider = caller-specified, else inferred from the account's owning bucket
+  // (account ids are globally unique) — callers that send only accountId (the
+  // *.author/*.generate one-shots) stay correct on non-Anthropic accounts;
+  // without it they resolved credentials under a hardcoded 'anthropic'.
+  const provider = args.provider ?? (await providerOfAccount(args.accountId)) ?? 'anthropic'
+  const { account } = await resolveCredential(provider, args.accountId)
+  const settings = toSettings(args, provider)
   // resolveModel validates the id per provider (catalog lookup) and trusts
   // user-supplied ids for custom endpoints (account.baseURL).
   const { model, getApiKey } = resolveModel(settings, account)

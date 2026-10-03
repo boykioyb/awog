@@ -1,10 +1,12 @@
 // Agent persistence. Each agent is a single `<id>.md` file with YAML
 // frontmatter + markdown body, format-compatible with Claude Code SDK
-// subagents. Home is `.claude` — SHARED with the Claude Code CLI — in two tiers
-// (ADR 0070, superseding the `.awog` home of ADR 0035):
+// subagents. Home is `.awog` — AWOG-OWNED (product decision: the Agents system
+// is AWOG-native and does NOT load the shared Claude Code roster; superseding
+// the shared `.claude` home of ADR 0070 for this kind only — skills/commands
+// stay shared):
 //
-//   global  → ~/.claude/agents/<id>.md              (applies everywhere)
-//   project → {project.path}/.claude/agents/<id>.md (that project only)
+//   global  → ~/.awog/agents/<id>.md              (applies everywhere)
+//   project → {project.path}/.awog/agents/<id>.md (that project only)
 //
 // systemPrompt = markdown body. Frontmatter required: name, description.
 // Frontmatter optional: model, role.
@@ -22,7 +24,7 @@ import {
   stat,
 } from 'node:fs/promises'
 import { join } from 'node:path'
-import { claudeHome, projectClaudeDir, sanitizeChild } from '../util/path.js'
+import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
 import { parseFrontmatter, serializeFrontmatter } from '../skills/frontmatter.js'
 import { loadProject } from '../projects/store.js'
@@ -31,7 +33,7 @@ import type { Agent, AgentSource } from '../types/shared.js'
 const AGENTS_DIR_NAME = sanitizeChild('agents')
 
 function userAgentsDir(): string {
-  return join(claudeHome(), AGENTS_DIR_NAME)
+  return join(awogHome(), AGENTS_DIR_NAME)
 }
 
 async function resolveAgentsDir(
@@ -47,7 +49,7 @@ async function resolveAgentsDir(
   if (!project) {
     throw new Error(`Project not found: ${projectId}`)
   }
-  return join(projectClaudeDir(project.path), AGENTS_DIR_NAME)
+  return join(project.path, '.awog', AGENTS_DIR_NAME)
 }
 
 function agentFile(dir: string, id: string): string {
@@ -106,6 +108,14 @@ function buildAgent(
   // Per-agent MCP whitelist — ADR 0016. Empty/undefined → inherit session.
   const mcpServerIds = toStringArray(data.mcpServerIds)
   if (mcpServerIds.length > 0) agent.mcpServerIds = mcpServerIds
+  // Per-agent skill whitelist — filters <available_skills> and the Claude SDK
+  // `skills` option so the catalogue and the Skill tool stay consistent.
+  const skillIds = toStringArray(data.skillIds)
+  if (skillIds.length > 0) agent.skillIds = skillIds
+  // Repo access whitelist — absolute paths the agent's fs tools are rooted at
+  // (plus a <repo_access> prompt boundary on every runtime).
+  const repos = toStringArray(data.repos)
+  if (repos.length > 0) agent.repos = repos
   // `tools` is a Claude Code subagent standard field. Accept both flow form
   // (`tools: [Read, Grep]`) and comma-separated string (`tools: "Read, Grep"`)
   // which the docs show. Only attach when non-empty so the SDK toolset stays
@@ -229,7 +239,7 @@ export async function listProjectAgents(
 ): Promise<{ agents: Agent[]; reports: AgentScanReport[] }> {
   const project = await loadProject(projectId)
   if (!project) return { agents: [], reports: [] }
-  const dir = join(projectClaudeDir(project.path), AGENTS_DIR_NAME)
+  const dir = join(project.path, '.awog', AGENTS_DIR_NAME)
   const agents = await listFromDir(dir, 'project', projectId)
   return { agents, reports: [{ dir, source: 'project', found: agents.length }] }
 }
@@ -270,6 +280,24 @@ export async function loadAgent(
   }
 }
 
+// Raw on-disk content của một agent — export (`agents.export`) cần bytes gốc,
+// không phải bản build lại từ `Agent`. Folder layout thắng giống scanner.
+export async function readAgentRaw(
+  id: string,
+  source: AgentSource,
+  projectId?: string,
+): Promise<string | null> {
+  const dir = await resolveAgentsDir(source, projectId)
+  for (const file of [join(dir, sanitizeChild(id), 'AGENT.md'), agentFile(dir, id)]) {
+    try {
+      return await readFile(file, 'utf8')
+    } catch (err) {
+      if (!isMissing(err)) throw err
+    }
+  }
+  return null
+}
+
 // If a folder layout already exists for this id, return its path. Otherwise
 // undefined → caller should default to single-file `<id>.md`. Probing both is
 // important so an existing `<id>/AGENT.md` doesn't get shadowed by a sibling
@@ -304,6 +332,8 @@ export async function saveAgent(agent: Agent): Promise<void> {
     role: agent.role,
     tools: agent.tools,
     mcpServerIds: agent.mcpServerIds,
+    skillIds: agent.skillIds,
+    repos: agent.repos,
   }
   // Preserve the user's chosen layout: if `<id>/AGENT.md` already exists, write
   // back to it (preserves colocated sibling files like agent-memory/). New

@@ -8,10 +8,10 @@
     </div>
 
     <template v-if="available">
-      <button class="btn obp-pick" :disabled="busy" @click="onPick">
+      <Button :disabled="busy" class="obp-pick" variant="outline" @click="onPick">
         <Icon name="folder" />
         {{ busy ? t('onboarding.project.picking') : t('onboarding.project.pick') }}
-      </button>
+      </Button>
       <p v-if="error" class="obp-err">{{ t('onboarding.project.error') }}</p>
       <p class="obp-hint">{{ t('onboarding.project.skipHint') }}</p>
     </template>
@@ -25,6 +25,7 @@ import { ref } from 'vue'
 import { useProjectsStore } from '~/stores/projects'
 import { useSidecar } from '~/composables/useSidecar'
 import { pickFolder } from '~/composables/useFolderPicker'
+import Button from '~/components/ui/button/Button.vue'
 
 // First-project step — the real "where do I work" choice in AWOG (the config home
 // is fixed). Pick a folder → inspect for sensible prefill → linkProject, reusing

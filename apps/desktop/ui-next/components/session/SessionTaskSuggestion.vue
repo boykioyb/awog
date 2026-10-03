@@ -74,50 +74,54 @@ function start(): void {
 </script>
 
 <style scoped>
+/* Suggestion chip — hairline border row, warning icon (an offer, not an error),
+   ghost action button + quiet ×. */
 .sugg {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: transparent;
+  border-radius: var(--radius);
+  background: var(--card);
 }
 .sugg .icn {
   flex: 0 0 auto;
-  color: var(--amber);
+  color: var(--warning);
 }
 .suggmain {
   flex: 1;
   min-width: 0;
 }
 .suggtitle {
-  font-size: var(--fs-md);
-  line-height: var(--lh-md);
-  color: var(--text);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--foreground);
 }
 .suggtldr {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--muted-foreground);
 }
 .suggbtn {
   flex: 0 0 auto;
   padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
+  border: 1px solid var(--input);
+  border-radius: var(--r-sm);
   background: transparent;
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.12s ease,
     border-color 0.12s ease;
 }
 .suggbtn:hover {
-  background: var(--bgHover);
-  border-color: var(--borderStrong);
+  background: var(--accent-wash);
+  border-color: var(--input);
 }
 .suggx {
   flex: 0 0 auto;
@@ -128,15 +132,19 @@ function start(): void {
   border: 0;
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
 }
 .suggx:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 @media (prefers-reduced-motion: reduce) {
-  .suggbtn {
+  .suggbtn,
+  .suggx {
     transition: none;
   }
 }

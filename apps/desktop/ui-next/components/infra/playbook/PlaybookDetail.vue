@@ -17,9 +17,9 @@
       <p class="pb-dstate-txt">{{ t('playbooks.detail.error.title') }}</p>
       <p class="pb-dstate-hint">{{ error }}</p>
       <p class="pb-dstate-hint">{{ t('playbooks.detail.error.hint') }}</p>
-      <button class="btn sm" type="button" @click="emit('retry')">
+      <Button type="button" variant="outline" size="sm" @click="emit('retry')">
         {{ t('playbooks.list.retry') }}
-      </button>
+      </Button>
     </div>
 
     <div v-else-if="!playbook" class="pb-dstate">
@@ -61,25 +61,27 @@
 
              Bản dựng sẵn chỉ được NHÂN BẢN: nó nằm trong mã, `-save`/`-delete` đều
              từ chối nó, nên hiện nút Sửa ở đó là mời người dùng đâm vào một lỗi. -->
-        <button
+        <Button
           v-if="writable"
-          class="pb-hbtn"
+          variant="ghost"
+          class="h-auto p-0 pb-hbtn"
           type="button"
           :disabled="view.busy"
           :title="t('playbooks.action.edit')"
           @click="emit('edit')"
         >
           <Icon name="edit" class="pb-hic" />
-        </button>
-        <button
-          class="pb-hbtn"
+        </Button>
+        <Button
+          variant="ghost"
+          class="h-auto p-0 pb-hbtn"
           type="button"
           :disabled="view.busy"
           :title="t('playbooks.action.duplicate')"
           @click="emit('duplicate')"
         >
           <Icon name="copy" class="pb-hic" />
-        </button>
+        </Button>
         <button
           v-if="writable"
           class="pb-hbtn danger"
@@ -129,12 +131,11 @@
               {{ v.label || v.name }}
               <span v-if="v.required" class="pb-var-star">*</span>
             </span>
-            <input
-              class="pb-var-inp"
+            <Input
               type="text"
-              :value="view.values[v.name] ?? ''"
+              :model-value="view.values[v.name] ?? ''"
               :placeholder="v.default ?? ''"
-              @input="onVar(v.name, $event)"
+              @update:model-value="onVar(v.name, $event)"
             />
           </label>
         </div>
@@ -142,83 +143,95 @@
 
       <!-- Hành động. Nút bị TẮT luôn kèm lý do ngay dưới (luật 3 + luật 4). -->
       <div class="pb-acts">
-        <button
-          class="btn sm"
+        <Button
           type="button"
           :disabled="view.busy || view.requiredMissing.length > 0"
+          variant="outline"
+          size="sm"
           @click="emit('preflight')"
         >
           <Icon name="inspect" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.action.preflight') }}
-        </button>
+        </Button>
 
-        <button
-          class="btn sm"
+        <Button
           type="button"
           :disabled="view.busy || !view.canSubmit || view.requiredMissing.length > 0"
           :title="
             view.canSubmit ? '' : t('playbooks.action.submitBlocked', { n: view.rollback.missing })
           "
+          variant="outline"
+          size="sm"
           @click="emit('submit')"
         >
           <Icon name="send" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.action.submit') }}
-        </button>
+        </Button>
 
         <!-- Duyệt chỉ có MỘT chiều: hợp đồng không có RPC từ chối, nên UI không mời
              một việc không làm được. -->
-        <button
+        <Button
           v-if="view.canApprove"
-          class="btn sm pri"
           type="button"
           :disabled="view.busy"
+          variant="default"
+          size="sm"
           @click="emit('approve')"
         >
           <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.action.approve') }}
-        </button>
+        </Button>
 
-        <button
-          class="btn sm"
+        <Button
           type="button"
           :disabled="view.busy || !view.canRun"
+          variant="outline"
+          size="sm"
           @click="emit('run')"
         >
           <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ view.busy ? t('playbooks.action.working') : t('playbooks.action.run') }}
-        </button>
+        </Button>
 
-        <button
-          class="btn sm"
+        <Button
           type="button"
           :disabled="view.busy || !view.canRollback"
+          variant="outline"
+          size="sm"
           @click="emit('rollback')"
         >
           <Icon name="revert" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.action.rollback') }}
-        </button>
+        </Button>
 
         <!-- Chia sẻ playbook (6.7). Nút chỉ MỞ hộp xuất: bản xuất do sidecar dựng
              từ chính file playbook trên đĩa, nên client không có bản thứ hai để
              lệch. Mẫu "để duyệt" BỊ BUỘC che — sidecar cưỡng chế, không phải một
              công tắc người dùng tắt được. -->
-        <button class="btn sm" type="button" :disabled="view.busy" @click="emit('share')">
+        <Button
+          type="button"
+          :disabled="view.busy"
+          variant="outline"
+          size="sm"
+          @click="emit('share')"
+        >
           <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.action.share') }}
-        </button>
+        </Button>
 
         <!-- Mẫu thứ ba — "báo cáo sau khi chạy" — chỉ có nghĩa khi ĐÃ có lượt chạy:
              nó kể lại việc đã xảy ra, không phải việc sẽ làm. -->
-        <button
+        <Button
           v-if="view.run"
-          class="btn sm"
           type="button"
           :disabled="view.busy"
+          variant="outline"
+          size="sm"
           @click="emit('shareRun')"
         >
           <Icon name="book" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('playbooks.action.shareRun') }}
-        </button>
+        </Button>
       </div>
 
       <p v-if="view.rollback.missing > 0" class="pb-block">
@@ -264,6 +277,8 @@ import { useI18n } from '~/composables/useI18n'
 import { computed } from 'vue'
 import type { PlaybookDetailView } from '~/composables/usePlaybooksManager'
 import type { Playbook } from '~/composables/usePlaybooksApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   playbook: Playbook | null
@@ -309,8 +324,8 @@ const rollbackLabel = computed(() =>
 )
 
 /** `v-model` trên prop là mutate prop — emit giá trị lên manager thay vì sửa tại chỗ. */
-function onVar(name: string, e: Event): void {
-  emit('setVariable', name, (e.target as HTMLInputElement).value)
+function onVar(name: string, v: string): void {
+  emit('setVariable', name, v)
 }
 </script>
 

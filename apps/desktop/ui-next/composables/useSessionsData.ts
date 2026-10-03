@@ -8,6 +8,7 @@
 
 import type { ProviderName } from '~/stores/settings'
 import type { InfraCommandClass, InfraContext, TodoStatus } from '~/types'
+import type { CliKind } from '~/composables/useTerminalApi'
 import {
   providerModelsShown,
   providerModelDisplayName,
@@ -487,24 +488,46 @@ export type UserMessage = {
   att?: SessionAttachment[] | null
   quotes?: Followup[] | null
   command?: SlashCommandRef | null
+  // CLI mà tin này được viết trong đó rồi fold về transcript AWOG (Open in CLI —
+  // sessions.syncCli). UI chỉ đọc để vẽ badge "via {cli}"; khai trên cả ba role
+  // để template đọc `message.via` mà không phải narrow union trước.
+  via?: CliKind
 }
 export type AssistantMessage = {
   role: 'assistant'
   blocks: AssistantBlock[]
   at?: string
+  // Tên hiển thị của model ĐÃ SINH ra lượt này (không phải model đang chọn của
+  // phiên). Nạp từ `modelUsed` trên record JSONL + kết quả sendMessage, nên đổi
+  // model giữa phiên không viết lại byline của các lượt cũ. Vắng mặt trên tin
+  // persist trước khi field này có — byline rơi về `session.model` như cũ.
+  modelUsed?: string
   // Engine messageId for the in-flight/finalized assistant turn (IPC path). Used
   // to target session.chunk/session.step events at the right placeholder bubble.
   eid?: string
+  // Nhãn byline HIỂN THỊ thay cho resolve theo scope (agent/provider·model) —
+  // chỉ bề mặt tổng hợp đa tác giả set (board thread render comment thành
+  // message: `author` = title của session đã viết). KHÔNG persist.
+  author?: string
   // True while this turn is still streaming (placeholder). Cleared on finalize.
   streaming?: boolean
   // Epoch ms: turn start / finish — drives the live "Streaming… {elapsed}" ticker
   // and the elapsed shown on a completed turn (mirrors the old flow).
   startedAt?: number
   completedAt?: number
+  // See UserMessage.via.
+  via?: CliKind
 }
 // `eid`: same durable anchor as on the other two roles. Absent on the locally
 // pushed "engine unavailable" notice — that one never reaches the transcript file.
-export type SystemMessage = { role: 'system'; text: string; at?: string; eid?: string }
+export type SystemMessage = {
+  role: 'system'
+  text: string
+  at?: string
+  eid?: string
+  // See UserMessage.via.
+  via?: CliKind
+}
 export type SessionMessage = UserMessage | AssistantMessage | SystemMessage
 
 export type GitMeta = {
@@ -620,8 +643,8 @@ export type QueuedMessage = {
   att?: SessionAttachment[]
   command?: SlashCommandRef
   quotes?: Followup[]
-  // Tin đến từ đường tự giao của nhóm (autoDeliver) — đánh dấu để sổ trần
-  // auto-deliver chỉ ghi khi item này THỰC SỰ mở turn (placeholder push trong
+  // Tin đến từ đường hộp thư liên phiên (auto-deliver) — đánh dấu để sổ trần
+  // chi phí chỉ ghi khi item này THỰC SỰ mở turn (placeholder push trong
   // runEngineTurn), chứ không tính lúc nó chỉ nằm chờ phiên đang bận.
   autoDelivered?: boolean
 }
@@ -653,7 +676,7 @@ export type SshApprovalMode = 'prompt' | 'session' | 'auto'
 // the sidecar SessionBookmark; deliberately no excerpt (derived at render time).
 export type SessionBookmark = { id: string; at: string }
 
-// ── Điều phối phiên con (popover spawn — docs/features/session-groups.md) ────
+// ── Điều phối phiên con (popover spawn — docs/features/session-runs.md) ────
 // Mirrors sidecar SpawnSessionConfig (types/shared.ts): tập con có chủ đích của
 // SessionSettings — CHỈ những field popover cho sửa. Engine-mode strings
 // ('ask'…), KHÔNG phải display ('Ask'…) — payload này đi thẳng qua RPC.
@@ -668,6 +691,41 @@ export type SpawnSessionConfig = {
   responseStyleNoMarkdown?: boolean
 }
 
+// ── Session teams — agent + worktree của member (docs/features/session-teams.md) ──
+// Mirrors sidecar SessionAgentRef (types/shared.ts): tham chiếu một agent AWOG
+// (AGENT.md), phân biệt tầng global/project bằng `source` + `projectId` — cùng
+// một id 'reviewer' có thể tồn tại ở cả hai tầng.
+export type SessionAgentRef = {
+  id: string
+  source?: 'global' | 'project'
+  projectId?: string
+}
+
+// Override LLM cấp phiên do người dùng đặt tay — mirrors sidecar
+// SessionLlmOverride (types/shared.ts). Tập con có chủ đích của
+// SessionSettings: "chạy bằng gì/ai/nấc nào".
+export type SessionLlmOverride = {
+  provider?: ProviderName
+  modelId?: string
+  accountId?: string
+  level?: ThinkingLevel
+  mode?: 'ask' | 'accept-edits' | 'plan' | 'execute'
+}
+
+// Worktree/branch RIÊNG của một member trong nhóm, sống THEO MEMBERSHIP (nhả khi
+// rời nhóm / lưu trữ / xoá). Mirrors sidecar SessionWorktree.
+export type SessionWorktree = {
+  // Đường tuyệt đối tới repo gốc (= project.path của member).
+  repoPath: string
+  // Đường tuyệt đối tới checkout riêng (~/.awog/session-worktrees/<id>/worktrees/team).
+  worktreePath: string
+  // Branch của member, dạng `awog/session/<sessionId>/team`.
+  branch: string
+  // Ref gốc lúc tạo worktree — điểm neo cho member_diff và integrate.
+  baseRef: string
+  createdAt: string
+}
+
 // Một phiên con được đề xuất/duyệt trong popover. `config` = đè riêng của phiên
 // đó lên cấu hình chung của lô (đã trộn xong trước khi gửi RPC).
 export type SpawnChildSpec = {
@@ -675,6 +733,12 @@ export type SpawnChildSpec = {
   role: string
   prompt: string
   config?: SpawnSessionConfig
+  // Agent AWOG gắn vào phiên con — "vai có thật" (session-teams §3), khác `role`
+  // chỉ là nhãn hiển thị. Bộ ba tách phẳng theo khuôn WorkflowNode
+  // (agentId/agentSource/agentProjectId); vắng mặt = con trần, không agent.
+  agentId?: string
+  agentSource?: 'global' | 'project'
+  agentProjectId?: string
 }
 
 // Một `session.spawn-request` đang chờ người dùng trong popover. `sessionId` =
@@ -686,16 +750,6 @@ export type SessionSpawnRequest = {
   rootId: string
   children: SpawnChildSpec[]
   goal?: string
-}
-
-// Một `session.arm-request` đang chờ người dùng — tool `arm_group` của model
-// xin bật `groupAutoDeliver` trên `rootId`. `reason` là câu giải thích của
-// model, hiện trong popover.
-export type SessionArmRequest = {
-  requestId: string
-  sessionId: string
-  rootId: string
-  reason?: string
 }
 
 // Hard cap on bookmarks per session. Mirrors MAX_BOOKMARKS in
@@ -724,6 +778,9 @@ export type Session = {
   updatedAt?: string
   unread?: boolean
   pinned?: boolean
+  // Preview tin cuối từ summary (sidecar SessionSummary.lastPreview) — "agent
+  // đang làm gì" cho list/peek mà không cần nạp transcript.
+  lastPreview?: string
   mode?: string
   git?: GitMeta
   todos?: Todo[]
@@ -765,16 +822,38 @@ export type Session = {
   // ── Nhóm phiên (cây kiểu trang Notion) ────────────────────────────────────
   // engineId của phiên CHA trong cây nhóm, và vai của phiên này trong nhóm đó.
   // KHÁC `parentSessionId` (fork lineage) — xem ghi chú ở types/shared.ts. Ghi qua
-  // `sessions.setGroup`, KHÔNG qua sessions.upsert (tách nhóm phải xoá hẳn key).
-  groupParentId?: string
-  groupRole?: string
-  // Tự giao tin trong nhóm. Chỉ có nghĩa trên phiên GỐC của nhóm — nó là công tắc của
-  // cả nhóm. Mặc định TẮT; xem ghi chú ở types/shared.ts.
-  groupAutoDeliver?: boolean
+  // `sessions.setRunMembership`, KHÔNG qua sessions.upsert (tách nhóm phải xoá hẳn key).
+  teamRunId?: string
+  teamRole?: string
+  // Team spec (squads) mà phiên này được materialize ra — mirrors sidecar
+  // Session.teamId. Trang Teams gom các run đang sống theo key này; một spec →
+  // nhiều run, tan run không mất spec.
+  teamId?: string
+  // Tier + project sở hữu của team spec — mirrors sidecar Session.teamSource/
+  // teamProjectId. Cần trên session để resolve spec chính xác (một id có thể
+  // tồn tại ở cả global lẫn project tier — khoá là `source|projectId|id`).
+  teamSource?: 'global' | 'project'
+  teamProjectId?: string
+  // Nguồn gốc materialize — mirrors sidecar Session.origin. 'board' = phiên
+  // lone-agent do dispatch từ một board item tạo; danh sách session ẩn các
+  // phiên "của board" (chúng sống trong board/Teams UI).
+  origin?: 'board'
   // Cấu hình spawn đã nhớ của nhóm — chỉ có nghĩa trên phiên GỐC (mirrors sidecar
-  // Session.groupSpawnConfig). Ghi/xoá qua `sessions.setGroupSpawn`, KHÔNG qua
+  // Session.spawnConfig). Ghi/xoá qua `sessions.setSpawnConfig`, KHÔNG qua
   // sessions.upsert ("ngừng điều phối" phải xoá hẳn key).
-  groupSpawnConfig?: SpawnSessionConfig
+  spawnConfig?: SpawnSessionConfig
+  // Override LLM cấp phiên do người dùng đặt tay — mirrors sidecar
+  // Session.llmOverride. Thắng cả pin provider/model/account của agent spec
+  // ở lượt chạy. Ghi/xoá qua `sessions.setLlmOverride` (null = xoá hẳn key).
+  llmOverride?: SessionLlmOverride
+  // ── Session teams (docs/features/session-teams.md) ────────────────────────
+  // Agent AWOG gắn vào phiên này VỚI TƯ CÁCH member/lead của nhóm — bản "vai có
+  // thật" của `teamRole`, resolve phía sidecar mỗi lượt. Ghi qua
+  // `sessions.setAgent` / trường agent của spawn spec; `null` ở RPC là XOÁ
+  // HẲN key (y hệt teamRunId).
+  agent?: SessionAgentRef
+  // Worktree/branch riêng của member — mirrors sidecar Session.worktree.
+  worktree?: SessionWorktree
   // ── Engine-bridge fields (IPC path only; unset without a bridge) ──────────
   // Sidecar session id (string). The numeric `id` stays the stable client key
   // for Vue lists; `engineId` is what the RPCs use. Set when hydrated from
@@ -831,6 +910,18 @@ export type TreeFile = { f: string; st?: 'M' | 'A' }
 export type TreeDir = { d: string; ch?: TreeNode[] }
 export type TreeNode = TreeFile | TreeDir
 
+// Phiên "xuất phát từ board" — việc ê-kíp chứ không phải chat của người dùng:
+//   • `teamId` — mọi phiên của một run do team spec materialize (lead LẪN
+//     member: member thừa hưởng teamId của gốc qua spawnChildSession);
+//   • `origin === 'board'` — phiên lone-agent do một board item dispatch
+//     (materializeRef 'agent:…').
+// Danh sách session ẩn chúng — vòng đời của chúng sống trong board item /
+// trang Teams (peek, thread, roster). Phiên ad-hoc gom tay (chỉ teamRunId,
+// không teamId) và "chat với agent" từ trang Agents vẫn hiện bình thường.
+export function isBoardSession(s: Pick<Session, 'teamId' | 'origin'>): boolean {
+  return !!s.teamId || s.origin === 'board'
+}
+
 const providerOf = (account: string): Provider =>
   (account.split(' · ')[1] as Provider | undefined) ?? 'Anthropic'
 const modelsFor = (account: string): string[] => modelsForProvider(providerOf(account))
@@ -865,9 +956,10 @@ export const modelsForProvider = (provider: Provider): string[] =>
 // options sub-group WITHIN a tab.
 const GROUPBY: [string, string][] = [
   // 'tree' KHÔNG gom theo một thuộc tính như ba cái dưới — nó xếp phiên thành CÂY
-  // theo `groupParentId` (xem useSessionTree). Đặt chung vào đây vì với người dùng
+  // theo `teamRunId` (xem useSessionTree). Đặt chung vào đây vì với người dùng
   // nó là một lựa chọn của cùng cái menu "Gom theo".
-  ['tree', 'Nhóm'],
+  ['tree', 'Team'],
+  ['agent', 'Agent'],
   ['provider', 'Connection'],
   ['model', 'Model'],
   ['unread', 'Unread'],
@@ -888,12 +980,12 @@ const WPVIEWS: [string, string, string][] = [
   ['Terminal', 'commands', '^`'],
   ['Files', 'folder', '⇧⌘F'],
   ['Tasks', 'tasks', ''],
-  // Bảng trạng thái các phiên CON (docs/features/session-groups.md). Chỉ có nghĩa với
+  // Bảng trạng thái các phiên CON (docs/features/session-runs.md). Chỉ có nghĩa với
   // phiên làm cha của một nhóm; với phiên lẻ nó hiện empty state.
   //
   // ⚠ Bảng này CHỈ cấp icon + phím tắt. View chỉ MỞ ĐƯỢC khi có tên trong `ALL_VIEWS`
   // của SessionDetail.vue — hai danh sách tách rời, và quên cái kia thì view tàng hình.
-  ['Group', 'sessions', ''],
+  ['Team', 'sessions', ''],
   ['Plan', 'rules', ''],
   ['Cost', 'zap', ''],
   ['Info', 'alert', ''],
@@ -901,7 +993,7 @@ const WPVIEWS: [string, string, string][] = [
 const wpIcon = (t: string): string => WPVIEWS.find((v) => v[0] === t)?.[1] || 'folder'
 
 // Status → dot color + Vietnamese label (SD / SLBL in the prototype).
-const STATUS_COLOR: Record<SessionStatus, string> = {
+export const STATUS_COLOR: Record<SessionStatus, string> = {
   idle: 'var(--textFaint)',
   streaming: 'var(--accent)',
   awaiting: 'var(--amber)',

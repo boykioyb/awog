@@ -103,6 +103,9 @@ export function openSessionWindow(params: SessionWindowParams): void {
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // Như main window — SPA có chat input/textarea, spellcheck macOS chỉ gây
+      // log NSSpellServer timeout + gạch đỏ trên text kỹ thuật.
+      spellcheck: false,
     },
   })
   if (step) {

@@ -22,15 +22,17 @@
     </ul>
 
     <div class="obf-cta">
-      <button class="btn pri" @click="onTour">
+      <Button variant="default" @click="onTour">
         <Icon name="sparkles" />
         {{ t('onboarding.finish.tour') }}
-      </button>
-      <button class="btn" @click="onSession">
+      </Button>
+      <Button variant="outline" @click="onSession">
         <Icon name="message" />
         {{ t('onboarding.finish.session') }}
-      </button>
-      <button class="btn obf-close" @click="onClose">{{ t('onboarding.finish.close') }}</button>
+      </Button>
+      <Button class="obf-close" variant="outline" @click="onClose">
+        {{ t('onboarding.finish.close') }}
+      </Button>
     </div>
   </div>
 </template>
@@ -40,6 +42,7 @@ import { computed } from 'vue'
 import { useSettingsStore, type ProviderName } from '~/stores/settings'
 import { useProjectsStore } from '~/stores/projects'
 import { useSessionsStore } from '~/stores/sessions'
+import Button from '~/components/ui/button/Button.vue'
 
 // Finish step — recaps what got set up and offers the three exits. Each exit marks
 // onboarding complete first; "Show me around" then kicks off the spotlight tour.

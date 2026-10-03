@@ -14,10 +14,10 @@
           {{ t('settings.storage.summary', { s: scan.sessions.length, p: scan.projects.length }) }}
         </span>
         <span style="flex: 1" />
-        <button class="btn sm" :disabled="loading" @click="refresh">
+        <Button :disabled="loading" variant="outline" size="sm" @click="refresh">
           <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ t('settings.storage.refresh') }}
-        </button>
+        </Button>
       </div>
 
       <div class="stobar">
@@ -46,9 +46,14 @@
       >
         <div class="storow">
           <AppSelect v-model="olderThanDays" :options="dayOptions" style="width: 132px" />
-          <button class="btn sm danger" :disabled="busy || !scan.snapshotBytes" @click="onPrune">
+          <Button
+            :disabled="busy || !scan.snapshotBytes"
+            variant="danger"
+            size="sm"
+            @click="onPrune"
+          >
             {{ t('settings.storage.cleanup.snapshots.action') }}
-          </button>
+          </Button>
         </div>
       </SettingsField>
 
@@ -61,9 +66,14 @@
             {{ t('settings.storage.cleanup.orphans.count', { n: scan.orphanCount }) }}
             · {{ fmt(scan.orphanBytes) }}
           </span>
-          <button class="btn sm danger" :disabled="busy || !scan.orphanCount" @click="onOrphans">
+          <Button
+            :disabled="busy || !scan.orphanCount"
+            variant="danger"
+            size="sm"
+            @click="onOrphans"
+          >
             {{ t('settings.storage.cleanup.orphans.action') }}
-          </button>
+          </Button>
         </div>
       </SettingsField>
 
@@ -93,14 +103,15 @@
           <span class="stonm" :title="s.title">{{ s.title }}</span>
           <span class="stoct">{{ projectName(s.projectId) }}</span>
           <span class="stosz tnum">{{ fmt(s.totalBytes) }}</span>
-          <button
-            class="btn sm danger"
+          <Button
             :disabled="busy"
             :title="t('settings.storage.deleteSession')"
+            variant="danger"
+            size="sm"
             @click="onDeleteSession(s)"
           >
             <Icon name="trash" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          </button>
+          </Button>
         </div>
       </div>
     </template>
@@ -119,6 +130,7 @@
 // snapshots were 70% of it and stray *.bak debris another 26%, while the
 // conversations themselves were 6%.
 import type { StorageScan, StorageSessionUsage } from '~/composables/useStorageApi'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()

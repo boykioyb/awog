@@ -119,18 +119,18 @@ const EXEC_TOOLS = new Set(['Bash'])
 // một lượt LLM sẽ chạy (và tính tiền) ở một bề mặt khác. Nó đi qua cầu MCP trên nhánh
 // Claude SDK nên phải khớp CẢ tên trần lẫn tên đã bắc cầu
 // (`mcp__awogsessions__create_session`) — xem `isSpawnTool` ngay dưới.
-const SPAWN_TOOLS = new Set(['RunWorkflow', 'create_session', 'arm_group'])
+const SPAWN_TOOLS = new Set(['RunWorkflow', 'create_session'])
 function isSpawnTool(name: string): boolean {
   if (SPAWN_TOOLS.has(name)) return true
   return [...SPAWN_TOOLS].some((n) => name.endsWith(`__${n}`))
 }
-// `create_session` và `arm_group` RIÊNG (khớp cả tên bắc cầu
-// `mcp__awogsessions__create_session`): cổng duyệt của chúng là POPOVER park
+// `create_session` RIÊNG (khớp cả tên bắc cầu
+// `mcp__awogsessions__create_session`): cổng duyệt của nó là POPOVER park
 // trong thân tool (spawn-approval.ts), không phải thẻ quyền chung — hỏi hai
-// lần liên tiếp là lỗi UX. Chúng VẪN nằm trong SPAWN_TOOLS phía trên nên chặn
+// lần liên tiếp là lỗi UX. Nó VẪN nằm trong SPAWN_TOOLS phía trên nên chặn
 // cứng plan mode và luật DENY không đổi; chỉ cú `promptViaUi` cuối được nhường
 // (xem đoạn ngay trước `promptViaUi` ở dưới).
-const POPOVER_GATED_TOOLS = ['create_session', 'arm_group'] as const
+const POPOVER_GATED_TOOLS = ['create_session'] as const
 function isPopoverGatedTool(name: string): boolean {
   return POPOVER_GATED_TOOLS.some((n) => name === n || name.endsWith(`__${n}`))
 }
@@ -1594,11 +1594,10 @@ export function makeBeforeToolCall(
       return undefined
     }
 
-    // `create_session`/`arm_group` không qua thẻ quyền chung: cổng duyệt của
-    // chúng là popover park trong THÂN tool (spawn-approval.ts) — một cái để
-    // sửa danh sách/cấu hình phiên con, một cái để duyệt bật tự-giao nhóm. Đặt
-    // ở đây — SAU luật DENY và sau chặn cứng plan mode — nên hai rào chắn đó
-    // vẫn nguyên; thứ duy nhất bị nhường là thẻ hỏi có/không trống.
+    // `create_session` không qua thẻ quyền chung: cổng duyệt của nó là popover
+    // park trong THÂN tool (spawn-approval.ts) để sửa danh sách/cấu hình phiên
+    // con. Đặt ở đây — SAU luật DENY và sau chặn cứng plan mode — nên hai rào
+    // chắn đó vẫn nguyên; thứ duy nhất bị nhường là thẻ hỏi có/không trống.
     if (isPopoverGatedTool(toolName)) return undefined
 
     // ask (and accept-edits for Bash): defer to the UI permission prompt.

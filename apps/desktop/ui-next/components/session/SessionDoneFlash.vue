@@ -60,10 +60,11 @@ onBeforeUnmount(clearTimer)
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  background: var(--accentSoft, var(--accentDim));
-  color: var(--accent);
-  border: 1px solid var(--accentBorder);
-  border-radius: var(--r-sm);
+  /* Chip ăn mừng: primary tint (--accentSoft không tồn tại trong bridge — mix tay). */
+  background: color-mix(in srgb, var(--primary) 12%, var(--popover));
+  color: var(--primary);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  border-radius: var(--r-pill);
   box-shadow: var(--shadow-sm);
   font-weight: 600;
   pointer-events: none;

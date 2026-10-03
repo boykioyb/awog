@@ -29,10 +29,10 @@
       {{ t('infra.editor.login.sameSession', { names: sameSession.join(', ') }) }}
     </p>
 
-    <button type="button" class="btn sm apl-btn" @click="emit('relogin')">
+    <Button type="button" class="apl-btn" variant="outline" size="sm" @click="emit('relogin')">
       <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
       {{ t('infra.editor.login.relogin') }}
-    </button>
+    </Button>
   </div>
 
   <AwsRegionField
@@ -64,6 +64,7 @@ import { computed } from 'vue'
 import AwsRegionField from '~/components/infra/AwsRegionField.vue'
 import { accountIdOfLoginSession, otherProfilesWithSameSession } from '~/utils/aws-profile-view'
 import type { AwsProfile } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

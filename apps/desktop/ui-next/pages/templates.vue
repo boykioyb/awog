@@ -3,22 +3,22 @@
     <div class="tpl-bar">
       <span class="tpl-bar-title">{{ t('templates.title') }}</span>
       <span style="flex: 1" />
-      <button class="btn sm" :disabled="refreshing" @click="refresh()">
+      <Button :disabled="refreshing" variant="outline" size="sm" @click="refresh()">
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.refresh') }}
-      </button>
-      <button class="btn sm" @click="openDiscoverDialog">
+      </Button>
+      <Button variant="outline" size="sm" @click="openDiscoverDialog">
         <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templatesDiscover.open') }}
-      </button>
-      <button class="btn sm" @click="openFetchDialog">
+      </Button>
+      <Button variant="outline" size="sm" @click="openFetchDialog">
         <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.fetchGithub') }}
-      </button>
-      <button class="btn pri sm" @click="openSaveDialog">
+      </Button>
+      <Button variant="default" size="sm" @click="openSaveDialog">
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.new') }}
-      </button>
+      </Button>
     </div>
 
     <LibraryView
@@ -109,6 +109,7 @@ import TemplateDetail from '~/components/templates/TemplateDetail.vue'
 import TemplateDiscoverDialog from '~/components/templates/TemplateDiscoverDialog.vue'
 import TemplateUpdateDialog from '~/components/templates/TemplateUpdateDialog.vue'
 import { useTemplatesPage } from '~/composables/useTemplatesPage'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 

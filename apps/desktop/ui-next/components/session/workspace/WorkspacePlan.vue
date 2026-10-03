@@ -1,22 +1,28 @@
 <template>
-  <div class="wsplan">
+  <div class="h-full min-h-0 overflow-y-auto">
     <div v-if="!plan && !total" class="empty" style="padding: 30px">
       <div class="et">{{ t('sessions.workspace.plan.empty') }}</div>
     </div>
 
-    <div v-else class="wsplan-body">
+    <div v-else class="flex flex-col gap-3">
       <template v-if="plan">
-        <div class="wsplan-head">
-          <span class="wsplan-title">{{ plan.title }}</span>
-          <span class="wsplan-badge" :style="badgeStyle">{{ statusLabel }}</span>
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-foreground">{{ plan.title }}</span>
+          <Badge :variant="badgeVariant">{{ statusLabel }}</Badge>
         </div>
         <SessionTextBlock :text="planMarkdown" />
       </template>
 
-      <div v-if="total" class="wsplan-section" :class="{ sep: !!plan }">
-        <div class="wsplan-head">
-          <span class="wsplan-title">{{ t('sessions.workspace.plan.checklist') }}</span>
-          <span class="wsplan-count">{{ doneCount }}/{{ total }}</span>
+      <div
+        v-if="total"
+        class="flex flex-col gap-2"
+        :class="{ 'border-t border-border pt-3': !!plan }"
+      >
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-foreground">
+            {{ t('sessions.workspace.plan.checklist') }}
+          </span>
+          <span class="ml-auto text-xs tabular-nums text-dim">{{ doneCount }}/{{ total }}</span>
         </div>
         <SessionTodoList :todos="todos" editable @cycle="cycleTodo" />
       </div>
@@ -69,54 +75,7 @@ const statusLabel = computed(() =>
     : t('sessions.workspace.plan.pending'),
 )
 
-const badgeStyle = computed(() =>
-  plan.value?.status === 'approved'
-    ? { background: 'var(--bgInput)', color: 'var(--add)' }
-    : { background: 'var(--bgInput)', color: 'var(--amber)' },
+const badgeVariant = computed<'success' | 'warning'>(() =>
+  plan.value?.status === 'approved' ? 'success' : 'warning',
 )
 </script>
-
-<style scoped>
-.wsplan {
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-}
-.wsplan-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.wsplan-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wsplan-title {
-  font-weight: 550;
-  color: var(--text);
-}
-.wsplan-badge {
-  font-size: 12px;
-  line-height: 12px;
-  padding: 3px 7px;
-  border-radius: var(--r-xs);
-}
-.wsplan-section {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-/* Only rule off from the plan document above when there actually is one. */
-.wsplan-section.sep {
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-.wsplan-count {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 12px;
-  color: var(--textDim);
-}
-</style>

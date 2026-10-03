@@ -7,7 +7,7 @@
     :aria-label="t('common.preview.showToolbar')"
     @click="collapsed = false"
   >
-    <SlidersHorizontal :size="16" />
+    <SlidersHorizontal :size="14" />
   </button>
 
   <div v-else ref="barRef" class="pvbar" :class="{ dragging }" :style="barStyle">
@@ -18,7 +18,7 @@
       :aria-label="t('common.preview.dragMove')"
       @pointerdown="startDrag"
     >
-      <GripVertical :size="16" />
+      <GripVertical :size="14" />
     </button>
     <span class="pvsep" />
 
@@ -34,7 +34,7 @@
           :aria-label="t('common.preview.prevImage')"
           @click="stepImage(-1)"
         >
-          <ChevronLeft :size="16" />
+          <ChevronLeft :size="14" />
         </button>
         <span class="pvz">{{ galleryLabel }}</span>
         <button
@@ -43,7 +43,7 @@
           :aria-label="t('common.preview.nextImage')"
           @click="stepImage(1)"
         >
-          <ChevronRight :size="16" />
+          <ChevronRight :size="14" />
         </button>
         <span class="pvsep" />
       </template>
@@ -53,7 +53,7 @@
         :aria-label="t('common.zoomOut')"
         @click="zoomBy(-0.2)"
       >
-        <ZoomOut :size="16" />
+        <ZoomOut :size="14" />
       </button>
       <span class="pvz">{{ Math.round(scale * 100) }}%</span>
       <button
@@ -62,7 +62,7 @@
         :aria-label="t('common.zoomIn')"
         @click="zoomBy(0.2)"
       >
-        <ZoomIn :size="16" />
+        <ZoomIn :size="14" />
       </button>
       <!-- fit ≠ 100%: the CSS already contains an oversized image at scale 1, so fit is
            what scales a SMALL image up to fill the frame (and re-centers either way). -->
@@ -72,7 +72,7 @@
         :aria-label="t('common.fit')"
         @click="fitImage()"
       >
-        <Scan :size="16" />
+        <Scan :size="14" />
       </button>
       <button
         class="pvtb"
@@ -80,7 +80,7 @@
         :aria-label="t('common.zoomReset')"
         @click="resetView()"
       >
-        <Maximize2 :size="16" />
+        <Maximize2 :size="14" />
       </button>
       <span class="pvsep" />
       <button
@@ -89,7 +89,7 @@
         :aria-label="t('common.rotateLeft')"
         @click="rotate -= 90"
       >
-        <RotateCcw :size="16" />
+        <RotateCcw :size="14" />
       </button>
       <button
         class="pvtb"
@@ -97,7 +97,7 @@
         :aria-label="t('common.rotateRight')"
         @click="rotate += 90"
       >
-        <RotateCw :size="16" />
+        <RotateCw :size="14" />
       </button>
       <span class="pvsep" />
       <button
@@ -106,7 +106,7 @@
         :aria-label="t('common.flipH')"
         @click="flipH = !flipH"
       >
-        <FlipHorizontal2 :size="16" />
+        <FlipHorizontal2 :size="14" />
       </button>
       <button
         class="pvtb"
@@ -114,41 +114,21 @@
         :aria-label="t('common.flipV')"
         @click="flipV = !flipV"
       >
-        <FlipVertical2 :size="16" />
+        <FlipVertical2 :size="14" />
       </button>
     </template>
 
-    <!-- markdown: render/raw + copy + reading width -->
+    <!-- markdown: reading-width stepper only — render/raw lives in the header's
+         segmented control and copy in the header copy button (proto layout). -->
     <template v-else-if="item?.kind === 'markdown'">
-      <button
-        class="pvtb"
-        :class="{ on: view === 'render' }"
-        :title="t('common.render')"
-        @click="view = 'render'"
-      >
-        <Icon name="rules" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="pvtb"
-        :class="{ on: view === 'raw' }"
-        :title="t('common.raw')"
-        @click="view = 'raw'"
-      >
-        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <span class="pvsep" />
-      <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
-        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
       <template v-if="view === 'render'">
-        <span class="pvsep" />
         <button
           class="pvtb"
           :title="t('common.widthNarrower')"
           :aria-label="t('common.widthNarrower')"
           @click="stepWidth(-1)"
         >
-          <FoldHorizontal :size="16" />
+          <FoldHorizontal :size="14" />
         </button>
         <span class="pvz">{{ widthLabel }}</span>
         <button
@@ -157,51 +137,9 @@
           :aria-label="t('common.widthWider')"
           @click="stepWidth(1)"
         >
-          <UnfoldHorizontal :size="16" />
+          <UnfoldHorizontal :size="14" />
         </button>
       </template>
-    </template>
-
-    <!-- html: render/raw toggle + copy (reload is shared, below) -->
-    <template v-else-if="item?.kind === 'html'">
-      <button
-        class="pvtb"
-        :class="{ on: view === 'render' }"
-        :title="t('common.render')"
-        @click="view = 'render'"
-      >
-        <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="pvtb"
-        :class="{ on: view === 'raw' }"
-        :title="t('common.raw')"
-        @click="view = 'raw'"
-      >
-        <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <span class="pvsep" />
-      <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
-        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-    </template>
-
-    <!-- text: copy -->
-    <template v-else-if="item?.kind === 'text'">
-      <button class="pvtb" :title="t('common.copy')" @click="copyContent()">
-        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-    </template>
-
-    <!-- docx: copy the extracted text · xlsx: copy the active sheet as TSV -->
-    <template v-else-if="item?.kind === 'doc' || item?.kind === 'sheet'">
-      <button
-        class="pvtb"
-        :title="t(item.kind === 'sheet' ? 'common.preview.copySheet' : 'common.preview.copyText')"
-        @click="copyContent()"
-      >
-        <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
     </template>
 
     <!-- theme picker — only when the Monaco viewer is showing (code / raw markdown) -->
@@ -278,7 +216,7 @@
       <span class="pvsep" />
       <div class="pvdd">
         <button class="pvtb" :title="t('common.preview.actions')" @click="toggle('menu')">
-          <Icon name="dots" style="width: var(--icon-md); height: var(--icon-md)" />
+          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
         <div v-if="open === 'menu'" class="pvmenu up right" @click.stop>
           <button v-if="canAddToChat" class="pvmi" @click="run(addToChat)">
@@ -326,7 +264,7 @@
       :aria-label="t('common.preview.hideToolbar')"
       @click="collapse()"
     >
-      <EyeOff :size="16" />
+      <EyeOff :size="14" />
     </button>
 
     <!-- click-away backdrop for whichever dropdown is open -->
@@ -384,7 +322,6 @@ const {
   canStepImages,
   galleryLabel,
   stepImage,
-  copyContent,
   canReload,
   reload,
   startEdit,
@@ -563,7 +500,7 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
 </script>
 
 <style scoped>
-/* Floating control bar — horizontally centered near the bottom of the window. */
+/* Floating control bar — docked at the card's bottom-right corner (draggable). */
 .pvbar {
   position: absolute;
   /* Corner home — same corner as the collapsed icon (.pvbardock), so hide/show happens in
@@ -573,11 +510,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 10px;
-  background: var(--bgEl);
+  gap: 4px;
+  padding: 5px 8px;
+  background: var(--popover);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-md);
   user-select: none;
 }
@@ -600,51 +537,49 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   z-index: 5;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  color: var(--textDim);
-  background: var(--bgEl);
+  color: var(--muted-foreground);
+  background: var(--popover);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
   cursor: pointer;
 }
 .pvbardock:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
-/* Icon button — sized to match the workspace-panel buttons (.wpib, 28px) so the
-   preview controls read as the same family as the rest of the app's chrome. */
+/* Icon button — ghost iconSm (h-7, rounded-md, 14px glyph), the same family the
+   proto toolbars (ProtoMermaid) and the workspace panel use. */
 .pvtb {
   display: grid;
   grid-auto-flow: column;
   place-items: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 28px;
   height: 28px;
   padding: 0 7px;
-  border-radius: var(--r-sm);
-  color: var(--textDim);
+  border-radius: var(--r-sm); /* rounded-md */
+  color: var(--muted-foreground);
   cursor: pointer;
-  font-size: 1em;
-  line-height: 14px;
 }
 .pvtb.wide {
-  padding: 0 10px;
+  padding: 0 8px;
 }
 .pvtb:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .pvtb.on {
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .pvz {
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
   min-width: 40px;
   text-align: center;
 }
@@ -654,12 +589,12 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
 }
 .pvsep {
   width: 1px;
-  height: 20px;
+  height: 16px;
   background: var(--border);
-  margin: 0 3px;
+  margin: 0 2px;
 }
 
-/* dropdown (theme picker / actions) */
+/* dropdown (theme picker / actions) — shadcn popover menu. */
 .pvdd {
   position: relative;
   display: flex;
@@ -670,10 +605,11 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   min-width: 188px;
   max-height: 60vh;
   overflow-y: auto;
-  padding: 5px;
-  background: var(--bgEl);
+  padding: 4px;
+  background: var(--popover);
+  color: var(--popover-foreground);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--r-sm); /* rounded-md */
   box-shadow: var(--shadow-md);
 }
 .pvmenu.up {
@@ -682,10 +618,14 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
 .pvmenu.right {
   right: 0;
 }
+/* Group header — uppercase micro-label. */
 .pvmhd {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
   padding: 6px 8px 3px;
 }
 .pvmi {
@@ -693,34 +633,40 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 9px;
-  border-radius: var(--r-xs);
-  color: var(--text);
+  min-height: 28px; /* h-7 */
+  padding: 0 8px;
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--popover-foreground);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   cursor: pointer;
   white-space: nowrap;
   text-align: left;
 }
 .pvmi:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .pvmi.on {
-  color: var(--accent);
+  color: var(--primary);
 }
 .pvmi.danger {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .pvmi.danger:hover {
-  background: var(--dangerBg);
+  background: rgb(from var(--destructive) r g b / 0.1);
+  color: var(--destructive);
 }
 .pvmidot {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
 }
+/* shadcn separator: h-px, my-1, edge-to-edge against the p-1 menu pad. */
 .pvmsep {
   height: 1px;
   background: var(--border);
-  margin: 4px 2px;
+  margin: 4px -4px;
 }
 .pvddback {
   position: fixed;
@@ -737,16 +683,16 @@ onBeforeUnmount(() => window.removeEventListener('resize', clampToContainer))
   transform: translateX(-50%);
   white-space: nowrap;
   padding: 5px 11px;
-  border-radius: var(--r-sm);
-  font-size: 12px;
-  line-height: 18px;
-  background: var(--bgActive);
-  color: var(--text);
+  border-radius: var(--r-sm); /* rounded-md */
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  background: var(--popover);
+  color: var(--popover-foreground);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
 }
 .pvmsg.err {
-  color: var(--danger);
-  border-color: var(--danger);
+  color: var(--destructive);
+  border-color: rgb(from var(--destructive) r g b / 0.42);
 }
 </style>

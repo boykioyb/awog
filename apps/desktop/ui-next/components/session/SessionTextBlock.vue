@@ -288,13 +288,14 @@ onBeforeUnmount(() => {
     opacity: 0.65;
   }
 }
-/* Streaming placeholder for an as-yet-incomplete mermaid fence — a plain code card. */
+/* Streaming placeholder for an as-yet-incomplete mermaid/widget fence — a plain
+   code card (muted surface + hairline border, như code block của proto). */
 .mmdstream {
   margin: 0;
   padding: 10px 12px;
-  background: var(--bgInput);
+  background: var(--muted);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--radius);
   overflow-x: auto;
   /* mono-ok: raw mermaid source while the fence is still streaming */
   font-family: var(--code);

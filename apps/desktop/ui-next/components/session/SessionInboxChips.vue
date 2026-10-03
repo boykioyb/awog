@@ -1,9 +1,9 @@
 <template>
-  <!-- Hộp thư của phiên. Ba nguồn cùng đổ về đây, cùng một hình dạng: phiên khác
-       nhắn sang (#17), cập nhật CI của một PR đang theo dõi (#19), và lời nhắc do
-       chính agent tự hẹn (#14). Sidecar KHÔNG bao giờ tự khởi động lượt cho chúng —
-       nó chỉ xếp hàng; lượt chỉ bắt đầu khi người dùng bấm ở đây. Không có
-       component này thì cả ba tính năng giao tin vào chỗ không ai mở được. -->
+  <!-- Hộp thư của phiên — escape hatch của đường TỰ GIAO. Mọi tin đến (phiên khác
+       nhắn sang, cập nhật CI, lời nhắc agent tự hẹn) được tự xếp vào queue và chạy;
+       card này chỉ hiện cho những tin bị park vì nhóm chạm trần chi phí an toàn
+       (xem withinDeliverCap trong stores/sessions.ts). Nút giao là đường thủ công
+       duy nhất còn lại. -->
   <div v-if="msgs.length" class="inbx">
     <div class="inbx-hd">
       <Icon name="bell" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -35,16 +35,16 @@
 
     <div class="inbx-foot">
       <span class="inbx-wait">
-        {{ canDeliver ? t('sessionsInbox.deliverHint') : t('sessionsInbox.waiting') }}
+        {{ canDeliver ? t('sessionsInbox.capped') : t('sessionsInbox.waiting') }}
       </span>
-      <button
-        class="btn sm pri"
+      <Button
+        size="sm"
         :disabled="!canDeliver"
         :title="t('sessionsInbox.deliverHint')"
         @click="store.deliverInbox(engineId)"
       >
         {{ t('sessionsInbox.deliver') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -52,9 +52,10 @@
 <script setup lang="ts">
 // Chip hộp thư, đặt ngay trên composer cạnh chip việc nền.
 //
-// Vì sao "giao" là một nút chứ không tự động: một lượt tiêu tiền của người dùng,
-// phiên đích có thể đang chạy dở (bất biến "1 lượt / 1 phiên"), và người vắng mặt
-// vài giờ có thể đã cần thứ khác. Cùng lý do với card wake của job nền.
+// Tin hộp thư được TỰ GIAO — card này là escape hatch cho tin bị park khi nhóm
+// chạm trần chi phí tự giao (MAX_AUTO_DELIVERS_PER_GROUP/30 phút). Nút "giao" là
+// giao THỦ CÔNG khi phiên đang rảnh; đang bận thì tin cứ chờ tới khi trần mở lại
+// hoặc phiên rảnh để bấm.
 import { computed } from 'vue'
 import { useSessionsStore, type InboxOrigin } from '~/stores/sessions'
 import type { Session } from '~/composables/useSessionsData'
@@ -99,11 +100,15 @@ function orgLabel(m: { origin: InboxOrigin; fromTitle: string }): string {
 </script>
 
 <style scoped>
+/* Card hộp thư — shadcn popover/card idiom: card surface + hairline border +
+   --radius + --shadow-sm, muted meta text, ghost dismiss buttons. */
 .inbx {
   margin: 6px 12px 0;
   padding: 8px 10px;
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -114,9 +119,11 @@ function orgLabel(m: { origin: InboxOrigin; fromTitle: string }): string {
   gap: 6px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
+  color: var(--muted-foreground);
 }
 .inbx-title {
   font-weight: 600;
+  color: var(--foreground);
 }
 .inbx-row {
   display: flex;
@@ -127,20 +134,20 @@ function orgLabel(m: { origin: InboxOrigin; fromTitle: string }): string {
 .inbx-org {
   flex: none;
   padding: 1px 6px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
-  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, var(--border));
+  color: var(--primary);
   border-radius: var(--r-xs);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
 /* Nguồn ngoài tô amber: người lạ viết ra, đáng ngờ nhất trong ba loại. */
 .inbx-org.is-external {
-  border-color: color-mix(in srgb, var(--amber) 45%, var(--border));
-  color: var(--amber);
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
+  color: var(--warning);
 }
 .inbx-prev {
   flex: 1;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -165,14 +172,21 @@ function orgLabel(m: { origin: InboxOrigin; fromTitle: string }): string {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
+/* Nút bỏ qua — ghost icon: muted, accent-wash hover, foreground khi hover. */
 .inbx-x {
   flex: none;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   padding: 1.5px;
   border-radius: var(--r-xs);
   background: transparent;
   border: 0;
   cursor: pointer;
-  transition: color 0.12s var(--ease, ease);
+  transition:
+    color 0.12s var(--ease, ease),
+    background 0.12s var(--ease, ease);
+}
+.inbx-x:hover {
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 </style>

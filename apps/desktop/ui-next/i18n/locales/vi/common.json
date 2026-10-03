@@ -16,6 +16,7 @@
   "common.copyMarkdown": "Copy MD",
   "common.copied": "Đã sao chép",
   "common.wrapLines": "Xuống dòng khi câu dài",
+  "common.resize": "Kéo để chỉnh chiều cao",
   "common.time.justNow": "vừa xong",
   "common.time.minutesAgo": "{n} phút trước",
   "common.time.hoursAgo": "{n} giờ trước",
@@ -59,6 +60,9 @@
   "common.preview.group.light": "Sáng",
   "common.preview.minimize": "Thu nhỏ ra góc",
   "common.preview.openInWindow": "Mở ở cửa sổ riêng",
+  "common.preview.modalWidth": "Độ rộng cửa sổ xem trước: {w}",
+  "common.preview.collapseOutline": "Thu gọn mục lục",
+  "common.preview.expandOutline": "Mở mục lục",
   "common.preview.prevImage": "Ảnh trước (←)",
   "common.preview.nextImage": "Ảnh sau (→)",
   "common.preview.dragMove": "Kéo để di chuyển",
@@ -118,5 +122,11 @@
   "link.openInApp": "Mở trong AWOG",
   "link.openExternal": "Mở bằng browser của tôi",
   "link.remember": "Luôn dùng cách này",
-  "link.openFailed": "Không mở được trong AWOG: {message}"
+  "link.openFailed": "Không mở được trong AWOG: {message}",
+  "collection.create.blank": "Tạo tay",
+  "collection.create.ai": "Tạo bằng AI",
+  "common.discard": "Huỷ thay đổi",
+  "common.remove": "Xoá",
+  "common.time.never": "Chưa hoạt động",
+  "common.openSettings": "Mở cài đặt"
 }

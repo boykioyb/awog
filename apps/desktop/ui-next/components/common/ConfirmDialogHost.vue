@@ -63,11 +63,10 @@
           <label class="icd-type-lbl" for="icd-type-input">
             {{ t('infra.confirm.typeToConfirm', { name: typeWord }) }}
           </label>
-          <input
+          <Input
             id="icd-type-input"
             ref="typeInput"
             v-model="typed"
-            class="icd-input"
             autocomplete="off"
             spellcheck="false"
             :placeholder="typeWord"
@@ -78,30 +77,30 @@
         <!-- 5 — footer per variant -->
         <div class="icd-foot">
           <template v-if="isBlocked">
-            <button class="btn" @click="copyCommand">
+            <Button variant="outline" @click="copyCommand">
               <Icon name="copy" />
               {{ copied ? t('common.copied') : t('infra.confirm.copyCommand') }}
-            </button>
-            <button ref="primaryBtn" class="btn pri" @click="settle(false)">
+            </Button>
+            <Button ref="primaryBtn" variant="default" @click="settle(false)">
               {{ t('common.close') }}
-            </button>
+            </Button>
           </template>
           <template v-else-if="isRead">
-            <button ref="primaryBtn" class="btn pri" @click="settle(true)">
+            <Button ref="primaryBtn" variant="default" @click="settle(true)">
               {{ t('infra.confirm.run') }}
-            </button>
+            </Button>
           </template>
           <template v-else>
-            <button class="btn" @click="settle(false)">{{ t('common.cancel') }}</button>
-            <button
+            <Button variant="outline" @click="settle(false)">{{ t('common.cancel') }}</Button>
+            <Button
               ref="primaryBtn"
-              class="btn"
               :class="isDanger ? 'icd-dgr-btn' : 'pri'"
               :disabled="!canConfirm"
+              variant="outline"
               @click="onPrimary"
             >
               {{ t('common.confirm') }}
-            </button>
+            </Button>
           </template>
         </div>
       </div>
@@ -120,6 +119,8 @@
 //   destructive → retype the name first  blocked     → copy the command, no run
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from 'vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { state, settle } = useConfirm()
 const { t } = useI18n()
@@ -220,7 +221,9 @@ onBeforeUnmount(() => {
 .icd-ovl {
   align-items: center;
   padding-top: 0;
-  z-index: 200;
+  /* Confirm là lớp trên cùng: chạm tới được cả khi đang mở preview (480), zoom
+     ảnh (540) hay action-menu (570) — vượt hết band "trên-modal". */
+  z-index: 580;
 }
 .icd-card {
   width: 480px;
@@ -229,18 +232,18 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   padding: 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-lg);
 }
 /* Production: the whole box is outlined red, not just a word inside it. */
 .icd-card.prod {
-  border-color: var(--dangerBorder);
+  border-color: var(--destructive);
   /* Ring + elevation: the 1px danger outline is a STATE marker, not depth, so it
      stays hardcoded and keeps its place in the list; only the shadow half migrates. */
   box-shadow:
-    0 0 0 1px var(--dangerBorder),
+    0 0 0 1px var(--destructive),
     var(--shadow-lg);
 }
 .icd-head {
@@ -252,22 +255,22 @@ onBeforeUnmount(() => {
   width: var(--icon-md);
   height: var(--icon-md);
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--primary);
 }
 .icd-icn.dgr {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .icd-title {
   font-size: var(--fs-lg);
   line-height: var(--lh-lg);
   font-weight: 650;
-  color: var(--text);
+  color: var(--foreground);
 }
 .icd-conseq {
   margin: 0;
   font-size: var(--fs-md);
   line-height: var(--lh-prose);
-  color: var(--text);
+  color: var(--foreground);
 }
 .icd-chips {
   display: flex;
@@ -280,16 +283,16 @@ onBeforeUnmount(() => {
   gap: 5px;
   padding: 3px 8px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-  color: var(--textMuted);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
 .icd-chip.dgr {
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
-  color: var(--danger);
+  border-color: rgb(from var(--destructive) r g b / 0.42);
+  background: rgb(from var(--destructive) r g b / 0.1);
+  color: var(--destructive);
   font-weight: 650;
 }
 .icd-chip-k {
@@ -303,18 +306,18 @@ onBeforeUnmount(() => {
 .icd-blocked {
   margin: 0;
   padding: 8px 10px;
-  border: 1px solid var(--dangerBorder);
-  border-radius: var(--r-sm);
-  background: var(--dangerDim);
-  color: var(--danger);
+  border: 1px solid rgb(from var(--destructive) r g b / 0.42);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: rgb(from var(--destructive) r g b / 0.1);
+  color: var(--destructive);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 600;
 }
 .icd-tech {
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
 }
 .icd-tech-sum {
   display: flex;
@@ -323,7 +326,7 @@ onBeforeUnmount(() => {
   padding: 7px 10px;
   cursor: pointer;
   list-style: none;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
@@ -346,7 +349,7 @@ onBeforeUnmount(() => {
   font-family: var(--code);
   font-size: var(--fs-sm);
   line-height: var(--lh-md);
-  color: var(--text);
+  color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-all;
   user-select: text;
@@ -359,22 +362,23 @@ onBeforeUnmount(() => {
 .icd-type-lbl {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .icd-input {
   width: 100%;
   padding: 8px 11px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  background: var(--muted);
+  border: 1px solid var(--input);
+  border-radius: var(--r-sm); /* rounded-md */
   outline: none;
-  color: var(--text);
+  color: var(--foreground);
   font-size: var(--fs-md);
   line-height: var(--lh-md);
   font-family: var(--sans);
 }
+/* Retype-to-confirm keeps the DANGER focus — the field is part of the gate. */
 .icd-input:focus {
-  border-color: var(--danger);
+  border-color: var(--destructive);
 }
 .icd-foot {
   display: flex;
@@ -386,8 +390,8 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 .icd-dgr-btn {
-  background: var(--danger);
-  color: var(--bg);
+  background: var(--destructive);
+  color: var(--destructive-foreground);
   border-color: transparent;
   font-weight: 650;
 }

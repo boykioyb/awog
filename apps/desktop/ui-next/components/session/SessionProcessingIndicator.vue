@@ -124,7 +124,7 @@ const elapsedLabel = computed(() => {
   gap: 8px;
   padding: 4px 12px;
   margin-top: 2px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .procspin {
   display: grid;

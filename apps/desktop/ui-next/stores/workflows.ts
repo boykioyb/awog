@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import { useSettingsStore } from '~/stores/settings'
 
 // Workflows store — dual-path live (2-tier DAG, ADR 0024). When the Electron
 // bridge is available `loadWorkflows()` scans the global tier (~/.awog/workflows)
@@ -226,7 +227,13 @@ export const useWorkflowsStore = defineStore('workflows', () => {
     availableAgents: { id: string; name: string; role: string; scope: 'project' | 'global' }[]
     availableSkills: { id: string; name: string; scope: 'project' | 'global' }[]
   }): Promise<GeneratedWorkflow> {
-    const res = await sc.request<GenerateResponse>('workflows.generate', params)
+    // Model+account theo núm AI authoring — xem skills.ts generateSkill.
+    const llm = useSettingsStore().resolveAuthoringLlm()
+    const res = await sc.request<GenerateResponse>('workflows.generate', {
+      ...params,
+      accountId: llm.accountId ?? params.accountId,
+      modelId: llm.modelId,
+    })
     return res.workflow
   }
 

@@ -33,6 +33,10 @@ export type AwogBrowserTab = {
   // to <img :src> only, never innerHTML. Optional because a pre-favicon preload
   // may not send the field.
   favicon?: string
+  // Chủ sở hữu tab (engineId của phiên, hoặc `task:<id>:<node>` cho node của
+  // workflow); vắng = pool global. `scope` của mặt đang xem phải === field này
+  // thì tab mới thuộc về mặt đó — main enforce, renderer chỉ lọc để hiển thị.
+  scope?: string
   active: boolean
   loading: boolean
   canGoBack: boolean
@@ -43,7 +47,15 @@ export type AwogBrowserTab = {
   // On screen somewhere else — the popout window, or another app window.
   shownElsewhere: boolean
 }
-export type AwogBrowserTabList = { tabs: AwogBrowserTab[]; activeTabId: string | null }
+// `activeTabId` là active của scope mà lời gọi `tabs(scope)` mang theo (global
+// khi không scope); `activeByScope` là map đầy đủ per-scope — một cửa sổ chứa
+// nhiều panel của nhiều phiên (KeepAlive) nhận cùng MỘT bản broadcast
+// `browser:changed`, nên mỗi panel tự tra active của riêng nó từ map này.
+export type AwogBrowserTabList = {
+  tabs: AwogBrowserTab[]
+  activeTabId: string | null
+  activeByScope?: Record<string, string>
+}
 
 // ADR 0086 phần E — reading and pointing at the page the user is looking at.
 // Everything here is USER-initiated (a click in the chrome), which is why it may
@@ -277,24 +289,29 @@ export interface AwogBridge {
   // Embedded browser (ADR 0086). The workspace panel's "Browser" view borrows the
   // agent's Chromium tab into a rect of this window; main resolves the host window
   // from the IPC sender, so a renderer can only fill its OWN window.
+  // `scope` trên mọi method = engineId của phiên sở hữu bề mặt đang gọi
+  // (vắng = pool global của popout/tray). Main kiểm scope ↔ ownership, nên một
+  // panel không bao giờ gọi được tab của phiên khác.
   browser: {
-    attach(rect: AwogBrowserRect, tabId?: string): Promise<AwogBrowserTab>
-    setBounds(rect: AwogBrowserRect, tabId?: string): Promise<void>
+    attach(rect: AwogBrowserRect, tabId?: string, scope?: string): Promise<AwogBrowserTab>
+    setBounds(rect: AwogBrowserRect, tabId?: string, scope?: string): Promise<void>
     detach(): Promise<void>
-    tabs(): Promise<AwogBrowserTabList>
-    open(url: string, tabId?: string): Promise<AwogBrowserTab>
+    tabs(scope?: string): Promise<AwogBrowserTabList>
+    open(url: string, tabId?: string, scope?: string): Promise<AwogBrowserTab>
     // `wait: false` trả về ngay khi tab đã tạo + điều hướng đã bắt đầu (đường
     // người dùng bấm link, để UI không đứng chờ trang tải). Mặc định chờ tải xong.
+    // `scope` gắn chủ sở hữu cho tab mới — phiên nào mở thì phiên đó thấy.
     newTab(
       url?: string,
-      opts?: { wait?: boolean },
+      opts?: { wait?: boolean; scope?: string },
     ): Promise<{ tabId: string; url: string; title: string }>
-    selectTab(tabId: string): Promise<AwogBrowserTab>
-    closeTab(tabId: string): Promise<{ closed: string; remaining: number }>
-    back(tabId?: string): Promise<void>
-    forward(tabId?: string): Promise<void>
-    reload(tabId?: string): Promise<void>
-    popout(): Promise<void>
+    selectTab(tabId: string, scope?: string): Promise<AwogBrowserTab>
+    closeTab(tabId: string, scope?: string): Promise<{ closed: string; remaining: number }>
+    back(tabId?: string, scope?: string): Promise<void>
+    forward(tabId?: string, scope?: string): Promise<void>
+    reload(tabId?: string, scope?: string): Promise<void>
+    // `scope` khoá cửa sổ popout về đúng session đang pop out (vắng = pool global).
+    popout(scope?: string): Promise<void>
     onChanged(handler: (list: AwogBrowserTabList) => void): () => void
     // Installed Chromium browsers + their profiles. Ids only travel over IPC;
     // main resolves them to paths itself (invariant #2).
@@ -311,17 +328,17 @@ export interface AwogBridge {
 
     // ── phần E: read + point (all user-initiated) ─────────────────────────
     // Text the user highlighted IN the page — feeds Translate and "quote to chat".
-    selection(tabId?: string): Promise<AwogBrowserSelection>
+    selection(tabId?: string, scope?: string): Promise<AwogBrowserSelection>
     // Arm the element picker: the page highlights on hover, and the promise
     // resolves with the element the user clicks — or null if they cancel (Esc) or
     // navigate away. At most one picker at a time.
-    pickElement(tabId?: string): Promise<AwogBrowserPick | null>
-    cancelPick(tabId?: string): Promise<void>
+    pickElement(tabId?: string, scope?: string): Promise<AwogBrowserPick | null>
+    cancelPick(tabId?: string, scope?: string): Promise<void>
     // The page as chat context (`@page`): url + title + visible text, capped.
-    pageContext(tabId?: string): Promise<AwogBrowserPageContext>
+    pageContext(tabId?: string, scope?: string): Promise<AwogBrowserPageContext>
     // Save a PNG of the page into the workspace. `root` is the workspace root the
     // renderer resolved; main re-validates the write stays inside it (invariant #2).
-    saveScreenshot(root: string, tabId?: string): Promise<{ path: string }>
+    saveScreenshot(root: string, tabId?: string, scope?: string): Promise<{ path: string }>
     // Host policy (⋮ → Manage allowed sites).
     sites(): Promise<AwogBrowserSites>
     setSites(sites: AwogBrowserSites): Promise<void>

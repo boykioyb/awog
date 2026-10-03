@@ -29,18 +29,18 @@ phiên A (model)                    sidecar                         phiên B (re
 Hai lý do, không bỏ được cái nào:
 
 1. **Bất biến một-lượt.** Repo giữ "một phiên chỉ chạy 1 lượt tại một thời điểm" (xem `sessions/runner.ts` + ghi chú `project_session_single_turn_invariant`); chen một lượt vào giữa lượt đang chạy chính là con đường tới lỗi dual-finalize đã từng xảy ra. Nên tin **xếp hàng**, không bao giờ chen ngang.
-2. **Tiền của người dùng.** Một lượt LLM tốn tiền thật. Tin tới lúc phiên đích đang rảnh vẫn **không** tự khởi động lượt — nó hiện thành chip, người dùng bấm mới giao.
+2. **Tiền của người dùng.** Một lượt LLM tốn tiền thật, nên tự giao đi kèm **trần chi phí theo nhóm** (40 lượt / 30 phút, đếm trên lượt thật sự mở — xem `withinDeliverCap` trong `stores/sessions.ts`). Chạm trần thì tin park vào hộp thư chờ giao tay — trần là hàng rào duy nhất giữa tin inbox và một lượt có phí.
 
-Cả hai rơi vào cùng một cơ chế: sidecar chỉ **dựng sẵn khối văn bản** và phát event; renderer giữ hàng đợi và quyết định lúc giao. Đây đúng khuôn "reactive wake" của [ADR 0066](../decisions/0066-session-background-exec-and-wake.md) P2 — sidecar không có primitive "bắt đầu một lượt", phiên do renderer lái.
+Cả hai rơi vào cùng một cơ chế: sidecar chỉ **dựng sẵn khối văn bản** và phát event; renderer giữ hàng đợi và tự giao tin vào nó. Đây đúng khuôn "reactive wake" của [ADR 0066](../decisions/0066-session-background-exec-and-wake.md) P2 — sidecar không có primitive "bắt đầu một lượt", phiên do renderer lái.
 
-**Tự động giao (opt-in, mặc định TẮT)** là bước sau: nó cần một công tắc trong Settings (`stores/settings.ts` không thuộc quyền sửa của gói này) và mở đúng cánh cửa "đốt tiền sau lưng" mà P1 cố tình đóng. P1 = **thủ công**.
+**Tự giao là mặc định cho mọi tin hộp thư** (không còn cổng "Giao cho agent" hay cờ arm theo nhóm): tin xếp vào `s.queue` của đích và `drainQueue` đẩy nó khi phiên rảnh — chính là cơ chế làm orchestration tự chạy mà không cần thêm watcher nào.
 
 ### Bốn trạng thái của phiên đích
 
 | Trạng thái đích | Hành vi |
 |---|---|
-| Đang chạy một lượt | Tin nằm trong hàng đợi; `canDeliverInbox()` trả `false` ⇒ nút giao khoá, chip ghi "đang đợi lượt hiện tại". |
-| Đang rảnh | Chip + nút "Giao cho agent". Bấm ⇒ một lượt duy nhất mang **tất cả** tin đang chờ. |
+| Đang chạy một lượt | Tin xếp vào `s.queue` của đích; `drainQueue` tự đẩy nó khi lượt hiện tại kết thúc sạch. |
+| Đang rảnh | Tin tự giao ⇒ `drainQueue` mở một lượt mới ngay, trừ khi nhóm đã chạm trần chi phí (park vào hộp thư, nút giao tay là escape hatch). |
 | Không tồn tại / đã lưu trữ | `postSessionMessage()` **ném lỗi** ngay: `unknown-target` / `archived-target`. Model nhận đúng câu giải thích, không nuốt lỗi thành "đã gửi". |
 | Idle và nguội quá 24h | Ngoài danh bạ ⇒ tin **của model** bị từ chối (`unreachable-target`); người dùng vẫn gửi được. Xem [Đích phải nằm trong danh bạ](#đích-phải-nằm-trong-danh-bạ). |
 

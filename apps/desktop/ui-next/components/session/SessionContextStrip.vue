@@ -163,13 +163,17 @@ function toggle(k: 'ssh') {
   min-width: 0;
 }
 /* Popover của chip SSH. `bottom` không dùng được: strip nằm ở ĐẦU cột chat nên menu
-   mở XUỐNG. */
+   mở XUỐNG. Skin popover chuẩn (`.pop` global vẫn viền borderStrong — siết về
+   hairline --border + bg-popover). */
 .ctxpop {
   position: absolute;
   top: 128%;
   left: 0;
   z-index: 50;
   min-width: 232px;
+  background: var(--popover);
+  border-color: var(--border);
+  border-radius: var(--radius);
 }
 .ctxpop .pl {
   margin-bottom: 6px;
@@ -178,19 +182,20 @@ function toggle(k: 'ssh') {
   margin: 8px 0 0;
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
-  color: var(--amber);
+  color: var(--warning);
 }
+/* Hàng hành động trong popover — cùng nhịp menu item: padding gọn, hover wash. */
 .ctxpop-act {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   margin-top: 9px;
-  padding: 7px 9px;
+  padding: 6px 8px;
   border: 0;
   background: transparent;
   border-radius: var(--r-xs);
-  color: var(--text);
+  color: var(--popover-foreground);
   font-family: inherit;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
@@ -198,10 +203,14 @@ function toggle(k: 'ssh') {
   text-align: left;
 }
 .ctxpop-act:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
+}
+.ctxpop-act:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .ctxpop-act .icn {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   flex: 0 0 auto;
 }
 .ctxpop-chev {

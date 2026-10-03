@@ -12,9 +12,8 @@
             {{ t('ssh.editor.name') }}
             <span class="sse-req" aria-hidden="true">*</span>
           </label>
-          <input
+          <Input
             v-model="name"
-            class="sse-input"
             :class="{ 'has-err': touched.name && nameError }"
             :placeholder="t('ssh.editor.namePh')"
             :aria-invalid="touched.name && !!nameError"
@@ -25,12 +24,12 @@
         <div class="sse-field">
           <label class="sse-label">{{ t('ssh.editor.folder') }}</label>
           <AppSelect v-model="folderSelect" :options="folderOptions" width="100%" />
-          <input
+          <Input
             v-if="folderMode === 'new'"
             v-model="folder"
-            class="sse-input mono"
             :placeholder="t('ssh.editor.folderPh')"
             spellcheck="false"
+            class="mono"
           />
         </div>
       </div>
@@ -41,13 +40,13 @@
             {{ t('ssh.editor.host') }}
             <span class="sse-req" aria-hidden="true">*</span>
           </label>
-          <input
+          <Input
             v-model="hostName"
-            class="sse-input mono"
             :class="{ 'has-err': touched.host && hostError }"
             :placeholder="t('ssh.editor.hostPh')"
             spellcheck="false"
             :aria-invalid="touched.host && !!hostError"
+            class="mono"
             @blur="touched.host = true"
           />
           <div v-if="touched.host && hostError" class="sse-err">{{ hostError }}</div>
@@ -57,14 +56,14 @@
             {{ t('ssh.editor.port') }}
             <span class="sse-req" aria-hidden="true">*</span>
           </label>
-          <input
+          <Input
             v-model.number="port"
             type="number"
             min="1"
             max="65535"
-            class="sse-input mono"
             :class="{ 'has-err': touched.port && portError }"
             :aria-invalid="touched.port && !!portError"
+            class="mono"
             @blur="touched.port = true"
           />
           <div v-if="touched.port && portError" class="sse-err">{{ portError }}</div>
@@ -76,13 +75,13 @@
           {{ t('ssh.editor.user') }}
           <span class="sse-req" aria-hidden="true">*</span>
         </label>
-        <input
+        <Input
           v-model="user"
-          class="sse-input mono"
           :class="{ 'has-err': touched.user && userError }"
           :placeholder="t('ssh.editor.userPh')"
           spellcheck="false"
           :aria-invalid="touched.user && !!userError"
+          class="mono"
           @blur="touched.user = true"
         />
         <div v-if="touched.user && userError" class="sse-err">{{ userError }}</div>
@@ -113,13 +112,13 @@
           <span class="sse-secret-title">{{ t('ssh.editor.password') }}</span>
         </div>
         <div class="sse-pw">
-          <input
+          <Input
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
-            class="sse-input mono has-eye"
             :placeholder="t('ssh.editor.passwordPh')"
             spellcheck="false"
             autocomplete="off"
+            class="mono has-eye"
           />
           <button
             type="button"
@@ -157,12 +156,7 @@
 
       <div class="sse-field">
         <label class="sse-label">{{ t('ssh.editor.tags') }}</label>
-        <input
-          v-model="tagsText"
-          class="sse-input"
-          :placeholder="t('ssh.editor.tagsPh')"
-          spellcheck="false"
-        />
+        <Input v-model="tagsText" :placeholder="t('ssh.editor.tagsPh')" spellcheck="false" />
         <div class="sse-hint">{{ t('ssh.editor.tagsHint') }}</div>
       </div>
 
@@ -183,10 +177,10 @@
 
     <template #footer>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('ssh.editor.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -203,6 +197,8 @@ import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useSshStore, type SshAuthMethod, type SshHost, type SshIdentity } from '~/stores/ssh'
 import { useVpnStore } from '~/stores/vpn'
 import type { SshHostSecret } from '~/composables/useSshPage'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean

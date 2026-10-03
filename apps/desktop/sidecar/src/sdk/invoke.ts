@@ -34,6 +34,11 @@ export interface InvokeArgs {
   // Project workspace root → the runtime tools' fs root so Read/Write/Bash act
   // against the user's repo.
   cwd?: string
+  // Agent repo-access roots (Agent.repos → resolveAgentFsRoots). Pi path: the
+  // fs tools gate paths against this union instead of cwd alone. Claude SDK
+  // path ignores it (the <repo_access> boundary already rides in
+  // systemPromptAppend — the CLI can't narrow under cwd).
+  fsRoots?: string[]
   abortController?: AbortController
   // Agent tiers in scope for the Task subagent menu (ADR 0030): the task's
   // project + the node agent's project. Empty/undefined → user tiers only.
@@ -41,6 +46,10 @@ export interface InvokeArgs {
   // Task source connection (mcpServerId) unioned into a subagent's MCP set, same
   // as the node's own agent (ADR 0025). undefined for manual sources.
   connectionId?: string
+  // Chủ sở hữu tab cho `browser_tool` của lượt invoke này (browser per-session):
+  // node-runner truyền `task:<taskId>:<nodeId>`. Vắng = pool global — chỉ đúng
+  // cho các đường invoke không thuộc session/task nào.
+  browserScope?: string
   // Git `commitCoAuthor` setting (snapshotted on the task). Controls the AWOG
   // co-author trailer on model-made commits: Claude SDK path sets the SDK's native
   // `attribution`; Pi path appends CO_AUTHOR_INSTRUCTION. Omitted → on (default).

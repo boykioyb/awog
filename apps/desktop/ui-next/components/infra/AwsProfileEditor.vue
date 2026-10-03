@@ -48,12 +48,12 @@
             {{ t('infra.editor.name') }}
             <span class="ape-req" aria-hidden="true">*</span>
           </label>
-          <input
+          <Input
             v-model.trim="name"
-            class="ape-input mono"
             spellcheck="false"
             autocomplete="off"
             :placeholder="t('infra.editor.namePh')"
+            class="mono"
           />
           <div v-if="name.trim() && !nameValid" class="ape-error">
             {{ t('infra.editor.nameInvalid') }}
@@ -145,31 +145,31 @@
       </span>
       <span style="flex: 1" />
       <template v-if="isProcessProfile || savedProfile">
-        <button class="btn pri" type="button" @click="onRequestClose">
+        <Button type="button" variant="default" @click="onRequestClose">
           {{ t('common.close') }}
-        </button>
+        </Button>
       </template>
       <template v-else>
-        <button class="btn" type="button" :disabled="saving" @click="onRequestClose">
+        <Button type="button" :disabled="saving" variant="outline" @click="onRequestClose">
           {{ t('common.cancel') }}
-        </button>
+        </Button>
         <!-- Kiểm tra TRƯỚC khi ghi: khoá vừa gõ đi thẳng tới
              `sts get-caller-identity` qua env (xem infra.identity-check), nên
              gõ nhầm một ký tự lộ ra ngay chứ không nằm im trong ~/.aws. -->
-        <button
-          class="btn"
+        <Button
           type="button"
           :disabled="!canVerify || saving || identityChecking"
+          variant="outline"
           @click="onVerify"
         >
           <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{
             identityChecking ? t('infra.editor.verify.running') : t('infra.editor.verify.action')
           }}
-        </button>
-        <button class="btn pri" type="button" :disabled="!canSave || saving" @click="onSave">
+        </Button>
+        <Button type="button" :disabled="!canSave || saving" variant="default" @click="onSave">
           {{ saving ? t('infra.editor.saving') : t('common.save') }}
-        </button>
+        </Button>
       </template>
     </template>
   </LibraryEntityModal>
@@ -208,6 +208,8 @@ import type {
   AwsProfileWriteKind,
 } from '~/composables/useAwsProfilesApi'
 import type { AwsProfile } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = withDefaults(
   defineProps<{

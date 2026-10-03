@@ -4,11 +4,11 @@
 
     <div class="asn-field">
       <label class="asn-label">{{ t('infra.import.sso.naming.region') }}</label>
-      <input
+      <Input
         v-model="region"
-        class="asn-input mono"
         :placeholder="t('infra.import.sso.naming.regionPh')"
         spellcheck="false"
+        class="mono"
       />
     </div>
 
@@ -26,12 +26,12 @@
       </div>
       <div v-for="row in rows" :key="rowKey(row)" class="asn-row">
         <div class="asn-row-main">
-          <input
-            class="asn-name-input mono"
+          <Input
             :class="{ 'has-err': !!rowError(row) }"
-            :value="row.name"
+            :model-value="row.name"
             spellcheck="false"
-            @input="emit('set-name', rowKey(row), ($event.target as HTMLInputElement).value)"
+            class="mono"
+            @update:model-value="emit('set-name', rowKey(row), $event)"
           />
           <span class="asn-acc mono" :title="`${row.accountName} · ${row.accountId}`">
             {{ row.accountName }} · {{ row.accountId }}
@@ -52,6 +52,7 @@
 // được từng dòng.
 import { computed } from 'vue'
 import { AWS_PROFILE_NAME_RE } from '~/utils/aws-profile-view'
+import Input from '~/components/ui/input/Input.vue'
 
 export type NamingRow = {
   accountId: string

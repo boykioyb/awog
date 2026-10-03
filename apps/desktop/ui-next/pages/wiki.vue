@@ -14,6 +14,9 @@
       :context-page-count="store.contextPageCount"
       :index-chars="store.indexChars"
       :width="sidebarWidth"
+      :tier-filter="tierFilter"
+      :tier-options="tierOptions"
+      @update:tier-filter="(v) => (tierFilter = v)"
       @resize="setSidebarWidth"
       @open="open"
       @toggle-space="toggleSpace"
@@ -32,7 +35,7 @@
       <div v-if="hits.length > 0 || (query.trim() !== '' && !searching)" class="wk-hits">
         <div class="wk-hitshead">
           <span class="sech">{{ t('wiki.search.results', { n: hits.length }) }}</span>
-          <button class="btn sm" @click="clearSearch">{{ t('common.clear') }}</button>
+          <Button variant="outline" size="sm" @click="clearSearch">{{ t('common.clear') }}</Button>
         </div>
         <div v-if="hits.length === 0" class="wk-empty" :style="{ color: 'var(--textFaint)' }">
           {{ t('wiki.search.none', { q: query }) }}
@@ -89,18 +92,18 @@
             {{ t('wiki.empty.body') }}
           </p>
           <div class="wk-blankcta">
-            <button class="btn pri" @click="onImportFiles">
+            <Button variant="default" @click="onImportFiles">
               <Icon name="download" :size="13" />
               {{ t('wiki.import.files') }}
-            </button>
-            <button class="btn" @click="onImportFolder">
+            </Button>
+            <Button variant="outline" @click="onImportFolder">
               <Icon name="folder" :size="13" />
               {{ t('wiki.import.folder') }}
-            </button>
-            <button class="btn" @click="onNewPage">
+            </Button>
+            <Button variant="outline" @click="onNewPage">
               <Icon name="plus" :size="13" />
               {{ t('wiki.newPage') }}
-            </button>
+            </Button>
           </div>
         </template>
         <template v-else>
@@ -124,7 +127,7 @@
       @pick-folder="onPickFolder"
     />
 
-    <ContextMenu
+    <AppContextMenu
       :open="menu.pos.value !== null"
       :position="menu.pos.value ?? { x: 0, y: 0 }"
       :items="menuItems"
@@ -139,7 +142,6 @@
 // context source. Thin template: all state + handlers live in useWikiManager
 // (nuxt-vue page-controller rule); this file wires it to the three panes and the
 // import/create/delete confirmations.
-import ContextMenu from '~/components/common/ContextMenu.vue'
 import WikiEditor from '~/components/wiki/WikiEditor.vue'
 import WikiImportModal, { type WikiImportTarget } from '~/components/wiki/WikiImportModal.vue'
 import WikiReader from '~/components/wiki/WikiReader.vue'
@@ -150,6 +152,7 @@ import { useContextMenu } from '~/composables/useContextMenu'
 import { useTextPrompt } from '~/composables/useTextPrompt'
 import type { MenuItem } from '~/composables/useContextMenu'
 import type { WikiPage, WikiSearchHit } from '~/stores/wiki'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
@@ -184,6 +187,8 @@ const {
   hits,
   searching,
   runSearch,
+  tierFilter,
+  tierOptions,
   importTarget,
   lastImport,
   importFilesViaDialog,

@@ -42,7 +42,11 @@
           :class="{ on: conflictSelPath === x.f }"
           @click="emit('select-conflict', x.f)"
         >
-          <span class="gsti" style="color: var(--danger)" :title="t('git.fileStatus.conflicted')">
+          <span
+            class="gsti"
+            style="color: var(--destructive)"
+            :title="t('git.fileStatus.conflicted')"
+          >
             !
           </span>
           <span class="gnm2">
@@ -165,10 +169,10 @@ const emit = defineEmits<{
    themselves reuse the shared `.gsti` status glyph (alert, danger) so the icon
    set is consistent across every zone. No hex — all via theme vars. */
 .gconflicthd {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .gconflicthd .gstatlbl,
 .gconflicthd .gstatct {
-  color: var(--danger);
+  color: var(--destructive);
 }
 </style>

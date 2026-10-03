@@ -24,6 +24,17 @@ export class SidecarUnavailableError extends Error {
   }
 }
 
+// Rút message THẬT từ một lỗi RPC: sidecar wrap mọi throw không-mong-đợi thành
+// -32603 'Internal error' và giấu lý do gốc trong `data.message` — String(err)
+// chỉ cho "SidecarError: Internal error" vô dụng. Dùng cho toast/description.
+export function sidecarErrorText(err: unknown): string {
+  if (err instanceof SidecarError && err.data && typeof err.data === 'object') {
+    const msg = (err.data as { message?: unknown }).message
+    if (typeof msg === 'string' && msg) return msg
+  }
+  return err instanceof Error ? err.message : String(err)
+}
+
 export type SidecarEvent = { type: string; payload: unknown }
 export type SidecarEventHandler = (event: SidecarEvent) => void
 export type UnlistenFn = () => void

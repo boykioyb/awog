@@ -16,9 +16,10 @@
              đang có từ khoá — kể cả khi tìm ra 0 kết quả, để còn sửa/xoá từ khoá. -->
         <div v-if="taskQuery || taskOptions.length > 0" class="ltt-search">
           <Icon name="search" />
-          <input
+          <Input
             ref="searchRef"
             v-model="taskQuery"
+            unstyled
             :placeholder="t('logtime.task.search')"
             @keydown.esc="taskQuery = ''"
           />
@@ -60,6 +61,7 @@
 import { nextTick, watch, useTemplateRef } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const { taskOpen, taskLoading, taskOptions, taskQuery, searchTasks, pickTask } = useLogtimeManager()

@@ -1,5 +1,5 @@
 <template>
-  <aside class="side" :class="{ collapsed: collapsed && !compact }" data-tour="nav-rail">
+  <aside class="side" :class="{ collapsed: navCollapsed && !compact }" data-tour="nav-rail">
     <div class="brand">
       <span class="logo">
         <AwogMascot v-if="isCute" :size="16" />
@@ -20,6 +20,7 @@
           :to="item.to"
           class="ni"
           :class="{ on: isActive(item.to) }"
+          :title="navCollapsed && !compact ? t(item.label) : undefined"
           :data-tour="item.to === '/sessions' ? 'nav-sessions' : undefined"
         >
           <Icon :name="item.icon" />
@@ -31,15 +32,19 @@
     </nav>
 
     <div class="sfoot">
-      <button
+      <Button
+        variant="ghost"
+        size="iconSm"
         class="footbtn"
         :class="{ on: activityOpen }"
         :title="t('nav.activity')"
         @click="openActivity()"
       >
         <Icon name="act" style="width: var(--icon-md); height: var(--icon-md)" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
         class="footbtn"
         :class="{ on: settingsOpen }"
         :title="t('nav.settings')"
@@ -47,8 +52,10 @@
         @click="openSettings()"
       >
         <Icon name="settings" style="width: var(--icon-md); height: var(--icon-md)" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
         class="footbtn wn-btn"
         :title="t('topbar.whatsNew')"
         data-tour="whatsnew-btn"
@@ -56,8 +63,10 @@
       >
         <Icon name="tag" style="width: var(--icon-md); height: var(--icon-md)" />
         <span v-if="hasUnseen" class="wn-dot" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="iconSm"
         class="footbtn"
         :title="isDark ? t('topbar.toLight') : t('topbar.toDark')"
         @click="toggleTheme"
@@ -66,17 +75,25 @@
           :name="isDark ? 'moon' : 'sun'"
           style="width: var(--icon-md); height: var(--icon-md)"
         />
-      </button>
-      <button v-if="!compact" class="navtgl" :title="t('nav.collapse')" @click="toggleCollapsed">
+      </Button>
+      <Button
+        v-if="!compact"
+        variant="ghost"
+        size="iconSm"
+        class="navtgl"
+        :title="t('nav.collapse')"
+        @click="toggleNavCollapsed"
+      >
         <Icon name="chev" />
-      </button>
+      </Button>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { isBoardSession } from '~/composables/useSessionsData'
 
 type NavBadge = { kind: 'run' | 'wait'; n: number }
 type NavItem = { to: string; icon: string; label: string; badge?: NavBadge; dot?: boolean }
@@ -86,8 +103,13 @@ const sessions = useSessionsStore()
 // Sessions needing the user's attention: unread, or paused on a gate (awaiting a
 // question / permission answer). Drives the live "wait" badge on the Sessions nav
 // item — replaces the old static seed. 0 → no badge.
+// Phiên board (member team / lone-agent do board item dispatch) ẩn khỏi list —
+// unread/awaiting của chúng thuộc về board/Teams chứ không phải màn Sessions,
+// nên không được đếm vào badge này (badge "1" mà list không thấy gì = báo ảo).
 const sessionsAttention = computed(
-  () => sessions.sessions.filter((s) => s.unread || s.status === 'awaiting').length,
+  () =>
+    sessions.sessions.filter((s) => !isBoardSession(s) && (s.unread || s.status === 'awaiting'))
+      .length,
 )
 
 // Grouping mirrors awog-prototype.html; `label`/`title` are i18n keys (resolved
@@ -107,6 +129,9 @@ const groups = computed<NavGroup[]>(() => [
           ? { badge: { kind: 'wait', n: sessionsAttention.value } as NavBadge }
           : {}),
       },
+      { to: '/board', icon: 'board', label: 'nav.board' },
+      { to: '/teams', icon: 'agents', label: 'nav.teams' },
+      { to: '/agents', icon: 'brain', label: 'nav.agents' },
       { to: '/schedules', icon: 'clock', label: 'nav.schedules' },
       { to: '/logtime', icon: 'table', label: 'nav.logtime' },
     ],
@@ -137,17 +162,12 @@ const { open: settingsOpen, openSettings } = useSettingsModal()
 const { open: activityOpen, openActivity } = useActivityModal()
 const { isDark, toggleTheme } = useTheme()
 const { hasUnseen, openPanel } = useWhatsNew()
-const { compact } = useResponsiveShell()
+// Icon-mode collapse is app-wide state (shared with the header toggle) and is
+// persisted by useResponsiveShell under 'awog-nav-expanded' — see it for why the
+// old 'awog-nav-collapsed' key is deliberately ignored.
+const { compact, navCollapsed, toggleNavCollapsed } = useResponsiveShell()
 const { isCute } = useThemeFamily()
 const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
-
-const COLLAPSE_KEY = 'awog-nav-collapsed'
-const collapsed = ref(false)
-if (import.meta.client) collapsed.value = localStorage.getItem(COLLAPSE_KEY) === '1'
-function toggleCollapsed() {
-  collapsed.value = !collapsed.value
-  localStorage.setItem(COLLAPSE_KEY, collapsed.value ? '1' : '0')
-}
 </script>
 
 <style scoped>
@@ -159,6 +179,11 @@ function toggleCollapsed() {
    at the bottom, and the list in between scrolls. */
 .side {
   overflow: hidden;
+  /* Canonical sidebar surface (bridge: --sidebar → --bgPanel, --sidebar-border →
+     --border). The global `.side` rule already lands the same values; this pins
+     the rail on the standard var names. */
+  background: var(--sidebar);
+  border-right: 1px solid var(--sidebar-border);
 }
 .navscroll {
   flex: 1 1 auto;
@@ -166,37 +191,39 @@ function toggleCollapsed() {
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* Nav selection: the shadcn idiom is a NEUTRAL wash (bg-accent = --accent-wash,
+   AWOG's --bgHover), not an emerald fill/border — spec §4 + NavRail surface note.
+   The prototype's .ni.on accentDim/border/inset-bar trio is dropped here; the Cute
+   family re-themes it via its own higher-specificity accentSoft pill. */
+.ni.on {
+  background: var(--accent-wash);
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--accent-foreground);
+}
 /* The footer is the rail's last row — its own hairline is enough; nothing above it
    should look like it scrolled underneath. */
 .sfoot {
   flex: 0 0 auto;
 }
 
-/* Footer utility buttons (Settings + What's New + theme toggle) — sized like
-   .navtgl but without the chevron rotation. The collapse button keeps
-   margin-left:auto, so these sit at the left and the collapse toggle stays
-   pinned right. */
+/* Footer utility buttons (Settings + What's New + theme toggle) — ghost iconSm
+   Buttons (28px); geometry + hover/focus come from the primitive, scoped rules
+   keep only the dot anchor, the resting dim icon, and the on-state. The collapse
+   button keeps margin-left:auto (global .navtgl), so these sit at the left and
+   the collapse toggle stays pinned right. */
 .footbtn {
   position: relative;
-  width: 26px;
-  height: 26px;
-  border: 0;
-  border-radius: var(--r-xs);
-  display: grid;
-  place-items: center;
   color: var(--textDim);
-  background: transparent;
-  cursor: pointer;
   flex: 0 0 auto;
 }
 .footbtn:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
 }
-/* Active (e.g. Settings modal open) — accent like the nav items' .on state. */
+/* Active (e.g. Settings modal open) — same neutral wash as the nav items' .on. */
 .footbtn.on {
-  color: var(--accent);
-  background: var(--accentDim);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .wn-dot {
   position: absolute;
@@ -205,8 +232,8 @@ function toggleCollapsed() {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 1px solid var(--bgEl);
+  background: var(--primary);
+  border: 1px solid var(--card);
 }
 /* Collapsed rail is too narrow for a row — stack the footer buttons. */
 .side.collapsed .sfoot {

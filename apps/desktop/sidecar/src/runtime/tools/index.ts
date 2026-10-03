@@ -35,6 +35,9 @@ import { createMonitorTool } from './monitor-tool.js'
 import { createDevServerTool } from './dev-server-tool.js'
 import { createReadTerminalTool } from './read-terminal-tool.js'
 import { createSessionMessagingTools } from './session-tools.js'
+import { createBoardTools } from './board-tools.js'
+import { createMemberTools } from './member-tools.js'
+import { createChannelTools } from './channel-tools.js'
 import { createWakeupTool } from './wakeup-tool.js'
 import { createMcpToolDefinitions, type McpLoadFailure, type McpToolAllowed } from './mcp-tools.js'
 import { createExitPlanModeTool } from './plan-tool.js'
@@ -65,6 +68,11 @@ export interface ToolFilter {
   allowedTools?: string[]
   // Session-scoped denylist. Tools whose name is in this list are removed.
   disabledTools?: string[]
+  // Agent repo-access whitelist (Agent.repos → agents/repo-access.ts). When
+  // set + non-empty, file tools gate paths against the UNION of these roots
+  // (roots[0] is the relative base) instead of cwd alone. Undefined = legacy
+  // cwd-only behaviour. Bash is deliberately not re-rooted (see repo-access).
+  allowedRoots?: string[]
   // Include the ExitPlanMode tool. Only the chat runtime sets this (when the
   // session is in plan mode) so the model can present a plan; tasks never plan.
   includePlanTool?: boolean
@@ -106,7 +114,19 @@ export interface ToolFilter {
   // from `backgroundExec`, which is deliberately off in plan mode because Bash is
   // blocked there. A read-only tool like `read_terminal` should still be reachable
   // while planning — that is exactly when "what did the user just run?" matters.
-  chatSession?: { sessionId: string; signal?: AbortSignal }
+  chatSession?: {
+    sessionId: string
+    signal?: AbortSignal
+    // Id của phiên GỐC trong nhóm chứa phiên này (Session Teams) — null/vắng =
+    // phiên lẻ ⇒ các tool nhóm (member_diff) vắng mặt khỏi schema.
+    runId?: string | null
+  }
+  // Chủ sở hữu tab cho `browser_tool` (browser per-session): session engineId
+  // cho lượt chat (kể cả subagent — nó thừa kế scope của cha), `task:<id>:<node>`
+  // cho workflow node. Gắn lên MỌI hostRequest browser.*; main verify
+  // scope ↔ tab ownership nên tab của phiên khác "không tồn tại" với lượt này.
+  // Vắng = pool global (hành vi cũ — các đường không có session).
+  browserScope?: string
   // Wiki tools (ADR 0073). Set ONLY when the wiki actually has a page the LLM may
   // see, so a user who never made a wiki pays zero tokens for its tool schemas.
   // `projectId` scopes the project-tier wiki for the turn.
@@ -212,10 +232,10 @@ export function createAwogToolDefinitions(
   // Write/Edit/MultiEdit (which gate on it).
   const reads = getReadRegistry(filter.readRegistryKey)
   const all: AgentTool[] = [
-    createReadTool(cwd, reads),
-    createWriteTool(cwd, reads),
-    createEditTool(cwd, reads),
-    createMultiEditTool(cwd, reads),
+    createReadTool(cwd, reads, filter.allowedRoots),
+    createWriteTool(cwd, reads, filter.allowedRoots),
+    createEditTool(cwd, reads, filter.allowedRoots),
+    createMultiEditTool(cwd, reads, filter.allowedRoots),
     createBashTool(cwd, filter.backgroundExec, filter.bashInfra),
     // BashOutput + KillShell + monitor: poll / stop / WAIT ON a background shell
     // (ADR 0066). Sessions only (paired with Bash's run_in_background), and only
@@ -256,11 +276,27 @@ export function createAwogToolDefinitions(
           ...(filter.chatSession.signal ? { signal: filter.chatSession.signal } : {}),
         })
       : []),
+    // Board work-item của team phiên (docs/features/session-teams.md §7). Cùng
+    // cổng `chatSession` như nhóm tool trên, CỘNG "phiên nằm trong nhóm":
+    // createBoardTools resolve đồng bộ từ sessionManager và trả [] cho phiên lẻ,
+    // nên phiên thường không trả một token schema nào cho 5 tool team_item_*.
+    ...(filter.chatSession ? createBoardTools({ sessionId: filter.chatSession.sessionId }) : []),
     // schedule_wakeup: agent tự hẹn quay lại phiên này sau N giây (gói #14). Cùng
     // điều kiện `chatSession` và cùng lý do như hai tool trên: tới giờ nó chỉ ĐẶT
     // một lời nhắc vào hộp thư cho NGƯỜI DÙNG bấm giao, mà task/subagent không có
     // người đó. Không chạy lượt nào, không tiêu tiền trong lúc chờ.
     ...(filter.chatSession ? [createWakeupTool({ sessionId: filter.chatSession.sessionId })] : []),
+    // team_say / team_note / channel_read (Session Teams §7): kênh CHUNG của nhóm
+    // — broadcast cả ê-kíp, khác hộp thư 1-1 của hai tool phía trên. Cùng cổng
+    // `chatSession`; `runId` vắng/undefined thì factory tự resolve ĐỒNG BỘ
+    // từ bản đồ ấm của session-manager (bản đồ ấm vì toolset chỉ dựng trong lượt
+    // của chính phiên), còn phiên lẻ ⇒ factory trả [] — không tốn token schema.
+    ...(filter.chatSession
+      ? createChannelTools({
+          sessionId: filter.chatSession.sessionId,
+          runId: filter.chatSession.runId,
+        })
+      : []),
     // Model-initiated transcript surfaces (mark_chapter / send_user_file /
     // suggest_task / suggest_followups). Chat sessions only, for the same reason
     // as read_terminal: they address a user who is reading the transcript, and a
@@ -268,8 +304,16 @@ export function createAwogToolDefinitions(
     ...(filter.chatSession
       ? createSurfaceTools(cwd, { sessionId: filter.chatSession.sessionId })
       : []),
-    createGrepTool(cwd),
-    createGlobTool(cwd),
+    // member_diff (Session Teams): review diff trên branch riêng của member —
+    // chỉ có mặt khi phiên NẰM TRONG NHÓM (chat-toolset truyền runId).
+    ...(filter.chatSession
+      ? createMemberTools({
+          sessionId: filter.chatSession.sessionId,
+          runId: filter.chatSession.runId ?? null,
+        })
+      : []),
+    createGrepTool(cwd, filter.allowedRoots),
+    createGlobTool(cwd, filter.allowedRoots),
     // Chỉ mục symbol + đồ thị import (docs/features/code-index.md). Trả lời
     // "ai gọi cái này" / "sửa file này thì vỡ gì" — thứ Grep không làm được vì
     // nó khớp CHUỖI chứ không khớp symbol, và không lần được `./x.js` → `x.ts`,
@@ -292,7 +336,8 @@ export function createAwogToolDefinitions(
     // Real fetch over the SSRF-guarded HTTP path (ADR 0042).
     createWebFetchTool(),
     // Embedded-Chromium browser, driven via the reverse host channel (ADR 0043).
-    createBrowserTool(cwd),
+    // `filter.browserScope` gắn chủ sở hữu tab lên mọi hostRequest — per-session.
+    createBrowserTool(cwd, filter.browserScope),
     // AskUserQuestion: interactive in chat (askUser set), graceful no-op
     // elsewhere. Always present so the model can use it and a stray OAuth call
     // never errors out.

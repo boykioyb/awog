@@ -1,6 +1,7 @@
 import { z } from 'zod'
-import { register } from '../transport/rpc.js'
+import { register, RpcError } from '../transport/rpc.js'
 import { truncateSession, loadSession } from '../sessions/store.js'
+import { isCliAttached } from '../sessions/cli-registry.js'
 import { removeSdkSession } from '../runtime/claude-sdk/store.js'
 
 // Drop every message after `keepThroughId` from a session's transcript (the
@@ -15,6 +16,11 @@ const Params = z.object({
 
 register('sessions.truncate', async (raw) => {
   const params = Params.parse(raw)
+  // Mutator transcript: một CLI đang gắn resume cùng shared transcript — cắt
+  // lịch sử dưới chân nó sẽ làm resume handle của CLI lệch/fork.
+  if (isCliAttached(params.sessionId)) {
+    throw new RpcError(-32021, 'A CLI is attached to this session — close it before truncating')
+  }
   // A real truncation invalidates the Claude SDK resume handle (the fold clears
   // sdkSessionId; the SDK store still holds the removed turns), so remove the now
   // -orphan SDK transcript (ADR 0058). Guard on the id actually matching so a

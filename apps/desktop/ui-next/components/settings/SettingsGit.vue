@@ -30,10 +30,10 @@
       :name="t('settings.git.template.name')"
       :desc="t('settings.git.template.desc')"
     >
-      <input
+      <Input
         v-model="autoCommitMessageTemplate"
-        class="keyinp mono"
         :placeholder="t('settings.git.template.placeholder')"
+        class="mono flex-1"
       />
       <div class="fd" style="margin-top: 2px">{{ t('settings.git.template.tokens') }}</div>
     </SettingsField>
@@ -132,14 +132,20 @@
            to see gh auth / project-mapping problems. Channel + toast placement
            live in Settings → Notifications. -->
       <div class="ghnp-check">
-        <button class="btn sm" type="button" :disabled="checking" @click="onCheckNotifications">
+        <Button
+          type="button"
+          :disabled="checking"
+          variant="outline"
+          size="sm"
+          @click="onCheckNotifications"
+        >
           <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{
             checking
               ? t('settings.git.ghNotifyCheck.running')
               : t('settings.git.ghNotifyCheck.action')
           }}
-        </button>
+        </Button>
         <span v-if="checkText" class="fd">{{ checkText }}</span>
       </div>
     </SettingsField>
@@ -156,9 +162,9 @@
         style="resize: vertical; min-height: 16rem"
       />
       <div style="margin-top: 6px; display: flex; justify-content: flex-end">
-        <button class="btn sm" type="button" @click="resetCommitRule">
+        <Button type="button" variant="outline" size="sm" @click="resetCommitRule">
           {{ t('settings.git.commitRule.reset') }}
-        </button>
+        </Button>
       </div>
     </SettingsField>
   </div>
@@ -175,6 +181,8 @@ import { checkGhNotifications, type GhNotifyCheck } from '~/composables/useGhNot
 import type { GhAccount } from '~/composables/useProjectGh'
 import { useProjectsStore } from '~/stores/projects'
 import type { AutoCommitScope, DirtyTaskPolicy } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const settings = useSettingsStore()

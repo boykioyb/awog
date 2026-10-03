@@ -94,6 +94,17 @@ export function useBrowserContext() {
   const { t } = useI18n()
   const store = useSessionsStore()
 
+  // Trình duyệt THEO PHIÊN: ba đường đọc phía dưới phải lấy tab của đúng session
+  // mà khối context sắp chèn vào — không phải tab của một session khác đang lỡ
+  // là active global. `engineId` vắng (phiên chưa hydrate) ⇒ pool global.
+  const sessionScope = (): string | undefined => store.active?.engineId
+
+  // `tabId` tường minh = "đọc đúng tab NÀY": scope đi kèm chỉ là dấu ownership
+  // của chính tab đó (main kiểm khớp), không suy ra từ session. Không có tabId
+  // thì resolve theo scope — mặc định scope của session đang đứng composer.
+  const resolveScope = (tabId: string | undefined, scope: string | undefined) =>
+    tabId === undefined ? (scope ?? sessionScope()) : scope
+
   const say = (key: string, kind: 'info' | 'error' = 'info', params?: Record<string, string>) =>
     useToast().add({ title: t(`sessions.browserCtx.${key}`, params), color: kind })
 
@@ -116,14 +127,17 @@ export function useBrowserContext() {
 
   // Người dùng click một element trong trang → chèn selector + text ngắn + url.
   // `pickElement` resolve `null` khi họ huỷ (Esc / điều hướng): im lặng, đó là ý họ.
-  async function pickToChat(): Promise<void> {
+  async function pickToChat(tabId?: string, scope?: string): Promise<void> {
     const api = bridgeOf()
     if (!api) {
       say('unavailable')
       return
     }
     try {
-      const picked: AwogBrowserPick | null = await api.pickElement()
+      const picked: AwogBrowserPick | null = await api.pickElement(
+        tabId,
+        resolveScope(tabId, scope),
+      )
       if (!picked) return
       // `html` của element không đi vào draft: hợp đồng là selector + text ngắn + url,
       // và outerHTML là phần L1 to nhất mà model gần như không cần để trỏ lại element.
@@ -140,14 +154,14 @@ export function useBrowserContext() {
   }
 
   // Đoạn text đang bôi đen trong trang, kèm nguồn (url + title).
-  async function quoteSelectionToChat(): Promise<void> {
+  async function quoteSelectionToChat(tabId?: string, scope?: string): Promise<void> {
     const api = bridgeOf()
     if (!api) {
       say('unavailable')
       return
     }
     try {
-      const sel: AwogBrowserSelection = await api.selection()
+      const sel: AwogBrowserSelection = await api.selection(tabId, resolveScope(tabId, scope))
       const text = sel.text.trim()
       if (!text) {
         // Không chèn gì (hợp đồng: rỗng → no-op), nhưng vẫn nói vì sao — người dùng
@@ -168,14 +182,14 @@ export function useBrowserContext() {
   }
 
   // Trang hiện tại làm context (`@page` và nút "Đính trang này").
-  async function attachPage(): Promise<void> {
+  async function attachPage(tabId?: string, scope?: string): Promise<void> {
     const api = bridgeOf()
     if (!api) {
       say('unavailable')
       return
     }
     try {
-      const ctx: AwogBrowserPageContext = await api.pageContext()
+      const ctx: AwogBrowserPageContext = await api.pageContext(tabId, resolveScope(tabId, scope))
       if (!hasRealPage(ctx.url)) {
         say('noPage')
         return
@@ -212,7 +226,9 @@ export async function openBrowserTab(url: string): Promise<void> {
   const target = normalizeUrl(url)
   try {
     // Không url → chỉ mở panel (người dùng gõ `/browser` để xem trình duyệt).
-    if (target) await api.newTab(target)
+    // Tab mới thuộc scope của session mà composer đang đứng trong — nếu không nó
+    // rơi vào pool global và chính panel của session sẽ không thấy nó.
+    if (target) await api.newTab(target, { scope: useSessionsStore().active?.engineId })
     const panel = useWorkspacePanel()
     // `toggleView` là toggle thật: gọi khi view đang mở sẽ ĐÓNG nó.
     if (!panel.openViews.value.includes('Browser')) panel.toggleView('Browser')

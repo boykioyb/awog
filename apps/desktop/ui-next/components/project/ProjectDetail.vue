@@ -19,54 +19,60 @@
       <!-- Management actions are hidden in compact (quick-view) mode — the modal is
            for peeking at info + issues/PRs, not editing. -->
       <template v-if="!compact">
-        <button
-          class="iconbtn"
+        <Button
           style="width: 28px; height: 28px"
           :title="t('projects.detail.edit')"
+          variant="outline"
+          size="iconMd"
           @click="emit('edit')"
         >
           <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           style="width: 28px; height: 28px"
           :title="t('projectsInit.action')"
+          variant="outline"
+          size="iconMd"
           @click="initDocsOpen = true"
         >
           <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           style="width: 28px; height: 28px"
           :title="t('projects.detail.saveAsTemplate')"
+          variant="outline"
+          size="iconMd"
           @click="emit('save-template')"
         >
           <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           style="width: 28px; height: 28px"
           :title="t('projects.detail.installTemplate')"
+          variant="outline"
+          size="iconMd"
           @click="emit('install-template')"
         >
           <Icon name="templates" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="iconbtn"
+        </Button>
+        <Button
           style="width: 28px; height: 28px"
           :title="t('projects.detail.openWorkspace')"
+          variant="outline"
+          size="iconMd"
           @click="emit('open-workspace')"
         >
           <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="btn pri sm"
+        </Button>
+        <Button
           :title="t('projects.detail.openCode')"
+          variant="default"
+          size="sm"
           @click="emit('open-code')"
         >
           <Icon name="commands" />
           {{ t('projects.detail.openCode') }}
-        </button>
+        </Button>
       </template>
     </div>
 
@@ -149,6 +155,7 @@ import { useProjectRepos } from '~/composables/useProjectRepos'
 import { prefetchGhList } from '~/composables/useProjectGh'
 import type { ProjectDeepLink } from '~/composables/useProjectModal'
 import type { Project } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
 
 // `compact` (quick-view modal): hide management chrome (header actions + Overview's
 // destructive / config-import controls) so the panel is view-only.

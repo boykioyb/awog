@@ -1,8 +1,10 @@
 <template>
-  <div class="tog" :class="{ off: !model }" @click="model = !model" />
+  <Switch v-model:checked="model" />
 </template>
 
 <script setup lang="ts">
-// Toggle switch — ports tog(on). Controlled via v-model.
+// Toggle switch — shadcn Switch (Reka SwitchRoot). Giữ API v-model như bản .tog cũ.
+import Switch from '~/components/ui/switch/Switch.vue'
+
 const model = defineModel<boolean>({ required: true })
 </script>

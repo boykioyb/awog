@@ -46,20 +46,27 @@ const ROWS: SkRow[] = [
   align-items: flex-end;
 }
 /* Shimmer: a soft band swept across via background-position (paint-only — no
-   reflow). bgHover base + bgActive band gives a gentle sweep in dark and light. */
+   reflow). Wash base + a lighter band trộn từ foreground = đúng nhịp "pulse" của
+   proto, đọc được trong cả hai theme (accent-wash = --bgHover cũ). */
 .skbar {
   height: 11px;
   border-radius: var(--r-xs);
-  background: linear-gradient(90deg, var(--bgHover) 25%, var(--bgActive) 50%, var(--bgHover) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--accent-wash) 25%,
+    color-mix(in srgb, var(--accent-wash) 55%, var(--foreground) 10%) 50%,
+    var(--accent-wash) 75%
+  );
   background-size: 200% 100%;
   animation: sk-shimmer 1.5s ease-in-out infinite;
 }
-/* User row → a single rounded bubble block, with the same bottom-right tail as the
-   real user bubble (.mu), so it clearly reads as an outgoing message. */
+/* User row → a single rounded bubble block, matching the real user bubble's
+   top-right tail (.mu `rounded-2xl rounded-tr-md`), so it clearly reads as an
+   outgoing message. */
 .skmsg.u .skbar {
   height: 40px;
-  border-radius: var(--r-panel);
-  border-bottom-right-radius: var(--r-xs);
+  border-radius: 1rem;
+  border-top-right-radius: var(--r-sm);
 }
 @keyframes sk-shimmer {
   0% {
@@ -72,7 +79,7 @@ const ROWS: SkRow[] = [
 @media (prefers-reduced-motion: reduce) {
   .skbar {
     animation: none;
-    background: var(--bgHover);
+    background: var(--accent-wash);
   }
 }
 </style>

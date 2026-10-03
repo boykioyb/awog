@@ -34,6 +34,7 @@
 | 26 | [desktop-pet](./desktop-pet.md) | P1 implemented (ui-next + electron) — pet nổi trên mọi cửa sổ + mini-HUD, opt-in ở Settings → Appearance |
 | 27 | [wiki](./wiki.md) | v1 implemented ([ADR 0073](../decisions/0073-wiki-as-llm-context-source.md)) — trang wiki trong app: đọc/soạn/import `.md`, đồng thời là nguồn context cho LLM (tool `wiki_search`/`wiki_read` trên 2 runtime) |
 | 28 | [ai-memory](./ai-memory.md) | v1 implemented ([ADR 0073](../decisions/0073-wiki-as-llm-context-source.md) phần B) — fact dài hạn, agent ghi (opt-in, mặc định TẮT) + quản lý ở Settings → Bộ nhớ |
+| 29 | [session-teams](./session-teams.md) | Đang triển khai MVP ([ADR 0094](../decisions/0094-session-teams.md)) — nhóm phiên thành code team: agent thật per member, worktree/branch riêng, board theo project + review loop, channel nhóm; supersede phần điều phối của session-runs |
 
 ## Template
 

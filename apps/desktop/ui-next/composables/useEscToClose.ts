@@ -19,7 +19,10 @@ export function useEscToClose(
 ) {
   const { preventDefault = true } = options
   const onKey = (e: KeyboardEvent) => {
-    if (e.key !== 'Escape' || !toValue(isOpen)) return
+    // `e.defaultPrevented` = một lớp TRÊN đã tiêu thụ phím này (PreviewModal đăng
+    // ký listener từ boot nên luôn chạy trước) — Esc chỉ đóng một lớp/nhấn, không
+    // xuyên qua. Cùng convention với useSessionFind.
+    if (e.key !== 'Escape' || e.defaultPrevented || !toValue(isOpen)) return
     if (preventDefault) e.preventDefault()
     onClose()
   }

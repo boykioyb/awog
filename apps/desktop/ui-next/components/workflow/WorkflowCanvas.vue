@@ -4,10 +4,10 @@
       <span class="chip">{{ scopeLabel }}</span>
       <span class="chip">{{ t('workflow.toolbar.dag', { n: workflow.nodes.length }) }}</span>
       <span style="flex: 1" />
-      <button class="btn pri sm" :disabled="!workflow.nodes.length" @click="$emit('run')">
+      <Button :disabled="!workflow.nodes.length" variant="default" size="sm" @click="$emit('run')">
         <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('workflow.toolbar.run') }}
-      </button>
+      </Button>
     </div>
 
     <VueFlow
@@ -67,6 +67,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { computed, markRaw, useTemplateRef } from 'vue'
 import WorkflowNode from '~/components/workflow/WorkflowNode.vue'
 import type { WorkflowAgent, WorkflowSkill } from '~/composables/useWorkflowGen'
+import Button from '~/components/ui/button/Button.vue'
 import type {
   Workflow as WorkflowEntity,
   WorkflowEdge,

@@ -216,7 +216,7 @@ export function isImagePath(p: string): boolean {
 }
 
 export function statusColor(st: string): string {
-  return st === 'A' ? 'var(--add)' : st === 'D' ? 'var(--del)' : 'var(--mod)'
+  return st === 'A' ? 'var(--success)' : st === 'D' ? 'var(--destructive)' : 'var(--warning)'
 }
 
 // Visual for one working-tree status char: the porcelain letter + theme color +
@@ -231,24 +231,24 @@ export type StatusVisual = { letter: string; color: string; key: string }
 export function statusVisual(st: string): StatusVisual {
   switch (st) {
     case 'A':
-      return { letter: 'A', color: 'var(--add)', key: 'added' }
+      return { letter: 'A', color: 'var(--success)', key: 'added' }
     case '?':
-      return { letter: 'U', color: 'var(--add)', key: 'untracked' }
+      return { letter: 'U', color: 'var(--success)', key: 'untracked' }
     case 'C':
-      return { letter: 'C', color: 'var(--add)', key: 'copied' }
+      return { letter: 'C', color: 'var(--success)', key: 'copied' }
     case 'D':
-      return { letter: 'D', color: 'var(--del)', key: 'deleted' }
+      return { letter: 'D', color: 'var(--destructive)', key: 'deleted' }
     case 'R':
-      return { letter: 'R', color: 'var(--mod)', key: 'renamed' }
+      return { letter: 'R', color: 'var(--warning)', key: 'renamed' }
     case 'T':
-      return { letter: 'T', color: 'var(--mod)', key: 'typeChanged' }
+      return { letter: 'T', color: 'var(--warning)', key: 'typeChanged' }
     case 'U':
-      return { letter: '!', color: 'var(--danger)', key: 'conflicted' }
+      return { letter: '!', color: 'var(--destructive)', key: 'conflicted' }
     case 'I':
-      return { letter: 'I', color: 'var(--textDim)', key: 'ignored' }
+      return { letter: 'I', color: 'var(--muted-foreground)', key: 'ignored' }
     case 'M':
     default:
-      return { letter: 'M', color: 'var(--mod)', key: 'modified' }
+      return { letter: 'M', color: 'var(--warning)', key: 'modified' }
   }
 }
 

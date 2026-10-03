@@ -2,52 +2,50 @@
 //
 //   sessions.spawnResolve   — trả lời một `session.spawn-request` đang park:
 //                             duyệt (kèm danh sách/cấu hình đã sửa) hay từ chối.
-//   sessions.setGroupSpawn  — ghi nhớ / xoá cấu hình spawn trên gốc nhóm
+//   sessions.setSpawnConfig  — ghi nhớ / xoá cấu hình spawn trên gốc nhóm
 //                             ("nhớ cho cả nhóm" ⇄ "ngừng điều phối").
-//   sessions.spawnChildren  — đường THỦ CÔNG: menu ⋯ của một phiên mở cùng một
+//   sessions.spawnMembers  — đường THỦ CÔNG: menu ⋯ của một phiên mở cùng một
 //                             popover, không qua tool `create_session` của model.
 //
-// Một lần DUYỆT đồng nghĩa hai ghi trên phiên GỐC của nhóm:
-//   1. `groupAutoDeliver: true`  — workflow được duyệt thì phải TỰ CHẠY, nếu
-//      không phiên con lại rơi về chip "Give to agent" mà tính năng này sinh ra
-//      để xoá. Trần 40 tin/30 phút của auto-deliver vẫn áp ở renderer.
-//   2. `groupSpawnConfig` khi `remember` — lần `create_session` sau của nhóm này
-//      bỏ qua popover, đẻ thẳng theo cấu hình đã nhớ (xem spawn.ts/groupRootOf).
+// Duyệt kèm `remember` ghi `spawnConfig` lên phiên GỐC của nhóm — lần
+// `create_session` sau của nhóm này bỏ qua popover, đẻ thẳng theo cấu hình đã
+// nhớ (xem spawn.ts/runRootOf). Ghi TRƯỚC khi request héo và emit
+// `session.spawn-config` để mọi cửa sổ/popout hội tụ.
 //
-// Cả hai đều được ghi TRƯỚC khi request héo: runner spawn → `session.created` →
-// `session.inbox-message` tới renderer SAU khi cờ đã nằm trên đĩa + trong store,
-// nên không có cửa sổ nào tin tới trước khi nhóm được phép tự giao.
+// Tin giao việc của phiên con tự giao+chạy theo cơ chế auto-deliver chung của
+// renderer — không còn cờ hay cổng duyệt riêng cho việc đó.
 
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
-import {
-  peekArmRequest,
-  peekSpawnRequest,
-  resolveArmRequest,
-  resolveSpawnRequest,
-} from '../sessions/spawn-approval.js'
+import { peekSpawnRequest, resolveSpawnRequest } from '../sessions/spawn-approval.js'
 import {
   MAX_CHILDREN,
   MAX_ROLE_LEN,
   MAX_SPAWNS_PER_TURN,
   MAX_TITLE_LEN,
   SpawnError,
-  armGroupAutoDeliver,
-  groupRootOf,
-  spawnChildrenSessions,
+  runRootOf,
+  spawnMemberSessions,
+  // SpawnChildSpec của spawn.ts — bản có thêm tuple bind-agent của session-teams
+  // (shared.ts thuộc track khác của feature này nên tuple chưa lên được đó).
+  type SpawnChildSpec,
 } from '../sessions/spawn.js'
 import { MAX_TEXT_LEN, oneLineLabel } from '../sessions/inbox.js'
 import {
-  flushSession,
+  findSpecMember,
+  loadMemberLlmOverride,
+  loadRunTeam,
+  materializeMember,
+} from '../sessions/team-members.js'
+import {
   listSessionSummaries,
   loadSession,
-  setSessionGroupSpawn,
-  updateSessionMetadata,
+  setSessionSpawnConfig,
 } from '../sessions/store.js'
 import { emit } from '../transport/stdio.js'
 import { completePi } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
-import type { ProviderName, SpawnChildSpec, SpawnSessionConfig } from '../types/shared.js'
+import type { ProviderName, SpawnSessionConfig } from '../types/shared.js'
 
 // Payload là L1 (IPC từ UI): id phiên đi vào sink đường dẫn nên bị siết đúng
 // charset như `sessions.setGroup` / `sessions.delete`.
@@ -74,11 +72,16 @@ const ChildSpecSchema = z.object({
   role: z.string().max(MAX_ROLE_LEN).default(''),
   prompt: z.string().min(1).max(MAX_TEXT_LEN),
   config: SpawnConfigSchema.optional(),
+  // Tuple bind agent (session-teams §3) — optional hết nên payload popover của
+  // client cũ (chưa có picker agent) vẫn parse nguyên vẹn. Vắng = không bind.
+  agentId: z.string().min(1).max(200).optional(),
+  agentSource: z.enum(['global', 'project']).optional(),
+  agentProjectId: z.string().min(1).max(200).optional(),
 })
 
 // exactOptionalPropertyTypes: dựng lại object chỉ với key thật sự có mặt —
 // object rỗng hoàn toàn trả undefined: caller phải phân biệt "không gửi config"
-// với "config rỗng". Riêng đường remember, `armGroupWorkflow` cố ý đổi rỗng →
+// với "config rỗng". Riêng đường remember, `rememberSpawnConfig` cố ý đổi rỗng →
 // `{}` (marker "đã duyệt điều phối, kế thừa hết") — xem comment tại đó.
 function toSpawnConfig(
   parsed: z.infer<typeof SpawnConfigSchema> | undefined,
@@ -99,30 +102,37 @@ function toSpawnConfig(
 }
 
 // Chuẩn hoá children do zod parse: `config?: T | undefined` của zod không gán
-// được vào `config?: T` (exactOptionalPropertyTypes) — key phải VẮNG hẳn.
+// được vào `config?: T` (exactOptionalPropertyTypes) — key phải VẮNG hẳn. Tuple
+// agent đi cùng luật: chỉ gắn key thật sự có mặt trên payload.
 function toChildSpecs(
   parsed: z.infer<typeof ChildSpecSchema>[],
 ): SpawnChildSpec[] {
   return parsed.map((c) => {
-    const { config, ...rest } = c
+    const { config, agentId, agentSource, agentProjectId, ...rest } = c
+    const spec: SpawnChildSpec = { ...rest }
     const cfg = toSpawnConfig(config)
-    return cfg ? { ...rest, config: cfg } : rest
+    if (cfg) spec.config = cfg
+    if (agentId !== undefined) spec.agentId = agentId
+    if (agentSource !== undefined) spec.agentSource = agentSource
+    if (agentProjectId !== undefined) spec.agentProjectId = agentProjectId
+    return spec
   })
 }
 
-// Bật "workflow tự chạy" cho nhóm của `rootId`: tự giao tin + (tuỳ chọn) nhớ
-// cấu hình spawn. Gọi TRƯỚC khi resolve/spawn — xem khối comment đầu file.
-// `remember` mà config rỗng (mọi field kế thừa) vẫn ghi `{}` — marker "đã duyệt
-// rồi đừng hỏi nữa": groupRootOf chỉ bỏ qua popover khi `groupSpawnConfig` tồn
-// tại, và config thiếu hẳn sẽ làm lời hứa "allow 1 lần" thất hứa lần sau.
-// `setGroupSpawn` của session-manager coi `{}` là ghi, chỉ `null` mới là xoá.
-async function armGroupWorkflow(rootId: string, remember: boolean, config?: SpawnSessionConfig): Promise<void> {
-  const saved = remember ? (config ?? {}) : undefined
-  if (saved) await setSessionGroupSpawn(rootId, saved)
-  // Emit SAU khi config đã nằm trên đĩa để payload group-armed mang theo nó —
-  // renderer khác (kể cả popout) nhận đủ trạng thái một lần, không phải chờ
-  // reload mới thấy nhóm đã "nhớ".
-  await armGroupAutoDeliver(rootId, saved)
+// Ghi nhớ cấu hình spawn lên gốc nhóm khi `remember`. `remember` mà config rỗng
+// (mọi field kế thừa) vẫn ghi `{}` — marker "đã duyệt rồi đừng hỏi nữa":
+// runRootOf chỉ bỏ qua popover khi `spawnConfig` tồn tại, và config thiếu hẳn
+// sẽ làm lời hứa "allow 1 lần" thất hứa lần sau. `setGroupSpawn` của
+// session-manager coi `{}` là ghi, chỉ `null` mới là xoá.
+// Emit SAU khi config đã nằm trên đĩa — renderer khác (kể cả popout) nhận đủ
+// trạng thái một lần, không phải chờ reload mới thấy nhóm đã "nhớ".
+async function rememberSpawnConfig(
+  rootId: string,
+  config?: SpawnSessionConfig,
+): Promise<void> {
+  const saved = config ?? {}
+  await setSessionSpawnConfig(rootId, saved)
+  emit('session.spawn-config', { sessionId: rootId, spawnConfig: saved })
 }
 
 // ─── sessions.spawnResolve ────────────────────────────────────────────────────
@@ -149,7 +159,7 @@ register('sessions.spawnResolve', async (raw) => {
   }
   if (params.approved) {
     const config = toSpawnConfig(params.config)
-    await armGroupWorkflow(parked.rootId, params.remember === true, config)
+    if (params.remember === true) await rememberSpawnConfig(parked.rootId, config)
     resolveSpawnRequest(params.requestId, {
       approved: true,
       ...(params.children ? { children: toChildSpecs(params.children) } : {}),
@@ -165,38 +175,7 @@ register('sessions.spawnResolve', async (raw) => {
   return { resolved: true }
 })
 
-// ─── sessions.armResolve ─────────────────────────────────────────────────────
-// Trả lời một `session.arm-request` đang park (tool `arm_group` của model —
-// spawn-approval.ts). Chỉ mang một quyết định duyệt/không kèm lời từ chối tự
-// do; không có children/config như spawnResolve vì request chỉ xin BẬT cờ
-// `groupAutoDeliver` trên gốc nhóm.
-// Duyệt ⇒ ghi cờ TRƯỚC khi request héo — cùng luật thứ tự với cổng spawn:
-// `session.group-armed` tới renderer → flush tin park trong nhóm, rồi tool mới
-// tiếp tục và trả kết quả "đã bật" cho model.
-
-const ArmResolveParams = z.object({
-  requestId: z.string().regex(/^arm-[a-f0-9]+$/),
-  approved: z.boolean(),
-  message: z.string().max(500).optional(),
-})
-
-register('sessions.armResolve', async (raw) => {
-  const params = ArmResolveParams.parse(raw)
-  const parked = peekArmRequest(params.requestId)
-  if (!parked) return { resolved: false }
-  if (params.approved) {
-    await armGroupAutoDeliver(parked.rootId)
-    resolveArmRequest(params.requestId, { approved: true })
-  } else {
-    resolveArmRequest(params.requestId, {
-      approved: false,
-      ...(params.message ? { message: params.message } : {}),
-    })
-  }
-  return { resolved: true }
-})
-
-// ─── sessions.setGroupSpawn ───────────────────────────────────────────────────
+// ─── sessions.setSpawnConfig ───────────────────────────────────────────────────
 // Ghi nhớ/xoá cấu hình spawn trên phiên GỐC. `config: null` = "ngừng điều phối"
 // (xoá hẳn key — vì vậy phải là RPC riêng, patch spread không xoá được key).
 
@@ -205,51 +184,25 @@ const SetGroupSpawnParams = z.object({
   config: SpawnConfigSchema.nullable(),
 })
 
-register('sessions.setGroupSpawn', async (raw) => {
+register('sessions.setSpawnConfig', async (raw) => {
   const params = SetGroupSpawnParams.parse(raw)
   // Config sống trên GỐC nhóm — caller gửi id của một phiên CON thì phải leo lên
-  // gốc, nếu không key được ghi nơi groupRootOf không bao giờ tra.
-  const root = groupRootOf(await listSessionSummaries(), params.id)
+  // gốc, nếu không key được ghi nơi runRootOf không bao giờ tra.
+  const root = runRootOf(await listSessionSummaries(), params.id)
   if (!root) throw new RpcError(-32004, 'Session not found')
-  const ok = await setSessionGroupSpawn(root.id, toSpawnConfig(params.config ?? undefined) ?? null)
+  const saved = toSpawnConfig(params.config ?? undefined) ?? null
+  const ok = await setSessionSpawnConfig(root.id, saved)
   if (!ok) throw new RpcError(-32004, 'Session not found')
+  // Emit để cửa sổ khác (kể cả popout) hội tụ — `null` mang nghĩa XOÁ key,
+  // renderer phân biệt với key vắng mặt (không đổi) bằng `'spawnConfig' in p`.
+  emit('session.spawn-config', { sessionId: root.id, spawnConfig: saved })
   return { ok: true }
 })
 
-// ─── sessions.setGroupAutoDeliver ────────────────────────────────────────────
-// Công tắc tự-giao của nhóm — viết TRÊN GỐC, giống setGroupSpawn. Đường ghi duy
-// nhất sau khi tạo phiên: field này CỐ Ý không đi `sessions.upsert` nữa — patch
-// spread của update-metadata không phân biệt được "cờ tắt có chủ đích" với "cờ
-// true cũ của một cửa sổ chưa nghe disarm" (persistence-queue lấy theo đĩa khi
-// local vắng mặt, nên để upsert mang nó sẽ hồi sinh cờ sau toggle-off). RPC riêng
-// emit `session.group-armed` kèm giá trị mới để MỌI cửa sổ/popout hội tụ — kể
-// cả chiều tắt.
-
-const SetGroupAutoDeliverParams = z.object({
-  id: z.string().min(1).regex(SESSION_ID_RE),
-  value: z.boolean(),
-})
-
-register('sessions.setGroupAutoDeliver', async (raw) => {
-  const params = SetGroupAutoDeliverParams.parse(raw)
-  const root = groupRootOf(await listSessionSummaries(), params.id)
-  if (!root) throw new RpcError(-32004, 'Session not found')
-  await updateSessionMetadata(root.id, { groupAutoDeliver: params.value })
-  // Flush ngay như các ghi rời rạc khác (setGroup/setGroupSpawn): thoát app trong
-  // cửa sổ debounce 500ms mà mất cờ này thì nhóm vừa arm lại hỏi popover, hoặc
-  // nhóm vừa disarm lại tự chạy sau reload.
-  await flushSession(root.id)
-  emit('session.group-armed', {
-    sessionId: root.id,
-    groupAutoDeliver: params.value,
-  })
-  return { ok: true }
-})
-
-// ─── sessions.spawnChildren ───────────────────────────────────────────────────
+// ─── sessions.spawnMembers ───────────────────────────────────────────────────
 // Đường thủ công từ menu ⋯ của một phiên: người dùng TỰ đề xuất ê-kíp trong
 // popover thay vì model gọi `create_session`. Đã đi qua popover = đã được duyệt,
-// nên nhóm được arm (auto-deliver + remember tuỳ chọn) rồi đẻ ngay.
+// nên đẻ ngay (remember tuỳ chọn thì ghi config lên gốc trước).
 
 const SpawnChildrenParams = z.object({
   sessionId: z.string().min(1).regex(SESSION_ID_RE),
@@ -260,22 +213,18 @@ const SpawnChildrenParams = z.object({
   remember: z.boolean().optional(),
 })
 
-register('sessions.spawnChildren', async (raw) => {
+register('sessions.spawnMembers', async (raw) => {
   const params = SpawnChildrenParams.parse(raw)
-  const root = groupRootOf(await listSessionSummaries(), params.sessionId)
+  const root = runRootOf(await listSessionSummaries(), params.sessionId)
   if (!root) throw new RpcError(-32004, 'Session not found')
   const config = toSpawnConfig(params.config)
-  await armGroupWorkflow(root.id, params.remember === true, config)
-  // KHÔNG throw khi lô hỏng: arm đã ghi đĩa trước đó, throw sẽ làm renderer
-  // rollback cờ local trong khi disk vẫn armed — hai bên lệch nhau tới khi
-  // reload. SpawnError (cha mất, chạm trần con) cũng xếp vào `failed` để UI báo
-  // theo từng con bằng toast sẵn có.
+  if (params.remember === true) await rememberSpawnConfig(root.id, config)
+  // KHÔNG throw khi lô hỏng: SpawnError (cha mất, chạm trần con) xếp vào
+  // `failed` để UI báo theo từng con bằng toast sẵn có.
   try {
-    return await spawnChildrenSessions(params.sessionId, toChildSpecs(params.children))
+    return await spawnMemberSessions(params.sessionId, toChildSpecs(params.children))
   } catch (err) {
-    // Dù lỗi gì thì arm ĐÃ ghi đĩa — rethrow làm renderer rollback cờ local
-    // trong khi disk vẫn armed (hai bên lệch nhau tới reload). Trả `failed` để
-    // UI báo bằng toast; lỗi lạ (không phải SpawnError) vẫn được log lại.
+    // Lỗi lạ (không phải SpawnError) vẫn được log lại trước khi nuốt.
     if (!(err instanceof SpawnError)) {
       log.warn('spawnChildren failed unexpectedly', { err: String(err) })
     }
@@ -286,6 +235,85 @@ register('sessions.spawnChildren', async (raw) => {
   }
 })
 
+// ─── sessions.materializeMember ───────────────────────────────────────────────
+// Đường NGƯỜI DÙNG của dispatch-lười (đối xứng `assignee_member` mà lead dùng
+// trong team_item_*): picker "giao cho" của board liệt kê cả member spec chưa
+// có phiên ("bench") dưới khoá `member:<runId>|<title>`; khi item đi vào cột
+// sống, renderer gọi RPC này → phiên của member đó materialize đúng một cái.
+// `itemTitle`/`itemId` (khi có) làm tin đầu inbox THÀNH lời giao việc thật —
+// giống prompt mà resolveMemberAssignee của board-tools dựng. Member đã sống
+// ⇒ materializeMember tái dùng phiên, RPC trả sessionId của nó.
+
+register('sessions.materializeMember', async (raw) => {
+  const params = z
+    .object({
+      // Phiên GỐC của run (lead) — spec team resolve từ teamId của nó.
+      rootId: z.string().min(1).regex(SESSION_ID_RE),
+      // Title hoặc agent id của member trong spec — cùng miền findSpecMember.
+      member: z.string().min(1).max(MAX_TITLE_LEN),
+      itemTitle: z.string().max(200).optional(),
+      itemId: z.string().max(64).optional(),
+      // Override LLM của người dùng gửi THẲNG (editor truyền khi dispatch ngay —
+      // item có thể chưa kịp ghi assigneeConfig). Vắng ⇒ tra lại trên item.
+      llmOverride: z
+        .object({
+          provider: z.enum(['anthropic', 'openai', 'google']).optional(),
+          modelId: z.string().min(1).max(200).optional(),
+          accountId: z.string().min(1).max(64).optional(),
+          level: z.enum(['low', 'medium', 'high', 'extra-high', 'max']).optional(),
+          mode: z.enum(['ask', 'accept-edits', 'plan', 'execute']).optional(),
+        })
+        .optional(),
+    })
+    .parse(raw)
+  const summaries = await listSessionSummaries()
+  const root = summaries.find((s) => s.id === params.rootId)
+  if (!root || root.archived) {
+    throw new RpcError(-32004, 'Team run root session not found — it may have been deleted.')
+  }
+  const team = await loadRunTeam(root)
+  if (!team) {
+    throw new RpcError(-32004, 'This run is not tied to a team spec — its members cannot be materialized.')
+  }
+  const member = findSpecMember(team, params.member)
+  if (!member) {
+    const roster = team.members.map((m) => `"${m.title}"`).join(', ')
+    throw new RpcError(
+      -32602,
+      `No member "${params.member}" in team "${team.name}". Members: ${roster || '(none)'}.`,
+    )
+  }
+  const prompt = params.itemTitle
+    ? `You are "${member.title}" — a member of the "${team.name}" session team. ` +
+      `The user assigned "${params.itemTitle}"${params.itemId ? ` (${params.itemId})` : ''} on the project board to you — ` +
+      'call team_item_get for the full brief and thread, acknowledge with team_item_comment, then move it to in_progress when you start. ' +
+      "Narrate progress on the item thread — the board is the team's shared view of your work."
+    : `You are "${member.title}" — a member of the "${team.name}" session team. ` +
+      'The user just spawned your session for this run — a board item is being assigned to you; watch your inbox and the project board.'
+  const res = await materializeMember({
+    runId: root.id,
+    team,
+    member,
+    summaries,
+    dispatchPrompt: prompt,
+    // Override LLM của người dùng: param gửi thẳng thắng (editor dispatch vừa
+    // ghi assigneeConfig xong, hoặc item chưa ghi kịp); vắng ⇒ tra lại trên
+    // item theo `member:<title>` — phủ đường applyStatus kéo-cột.
+    ...(params.llmOverride
+      ? { llmOverride: params.llmOverride }
+      : root.projectId
+        ? {
+            llmOverride: await loadMemberLlmOverride(
+              root.projectId,
+              params.itemId,
+              member.title,
+            ),
+          }
+        : {}),
+  })
+  return { sessionId: res.sessionId, spawned: res.spawned }
+})
+
 // ─── sessions.spawnDraft ──────────────────────────────────────────────────────
 // Sinh DRAFT bằng AI cho popover điều phối — nút "Tạo bằng AI" (cả ê-kíp) và các
 // nút sparkle trên ô title/role/prompt của từng con. One-shot qua `completePi`
@@ -293,7 +321,7 @@ register('sessions.spawnChildren', async (raw) => {
 // (CHEAP_MODEL) rồi mới tới model phiên khi bản rẻ không chạy được.
 //
 // Kết quả chỉ là DRAFT — chúng đổ vào các ô input của popover để người dùng sửa
-// tiếp, KHÔNG tự tạo phiên. Đường tạo vẫn đi qua approve → spawnChildrenSessions.
+// tiếp, KHÔNG tự tạo phiên. Đường tạo vẫn đi qua approve → spawnMemberSessions.
 
 const MAX_BRIEF_LEN = 4000
 
@@ -324,13 +352,13 @@ const TEAM_SYS = `You draft a team of child sessions for an orchestration tool. 
 Output ONLY a JSON array — no prose, no markdown fence:
 [{"title": "…", "role": "…", "prompt": "…"}]
 Rules:
-- title: max 80 characters, names the work (not the role).
+- title: max 80 characters, names the work (not the role). When the request centers on one specific GitHub issue/PR (a github.com/<org>/<repo>/(issues|pull)/<n> link or an explicit "#<n>" reference), title = "#<n>_IS: <short desc>" for an issue, "#<n>_PR: <short desc>" for a pull request.
 - role: 1-3 words naming the function in the team (e.g. "Reviewer", "Backend dev"); "" is allowed.
 - prompt: the FULL first assignment for that session — it starts with zero shared context, so state the goal, constraints and relevant file paths in full.
 - Match the language of the request.`
 
 const FIELD_SYS: Record<'title' | 'role' | 'prompt', string> = {
-  title: `You write a short session title for a child session in an orchestration team. Max 80 characters, names the work (not the role), Title Case, match the language of the request. Output ONLY the title — no quotes, no trailing punctuation.`,
+  title: `You write a short session title for a child session in an orchestration team. Max 80 characters, names the work (not the role), Title Case, match the language of the request. When the request centers on one specific GitHub issue/PR (a github.com/<org>/<repo>/(issues|pull)/<n> link or an explicit "#<n>" reference), the title MUST be "#<n>_IS: <short desc>" for an issue or "#<n>_PR: <short desc>" for a pull request. Output ONLY the title — no quotes, no trailing punctuation.`,
   role: `You write a very short role label for a child session in an orchestration team (e.g. "Reviewer", "Backend dev"). Max 60 characters, match the language of the request. Output ONLY the role label.`,
   prompt: `You write the first assignment handed to a child session in an orchestration team. The session starts with ZERO shared context, so state the goal, constraints and relevant file paths in full, as plain prose. Match the language of the request. Output ONLY the assignment text.`,
 }

@@ -1,41 +1,65 @@
 <template>
   <Teleport to="body">
     <div v-if="open" class="ovl on" @click.self="close">
-      <div class="wbi-card" role="dialog" aria-modal="true">
-        <div class="wbi-head">
-          <Icon name="download" class="icn" />
-          <span class="wbi-title">{{ t('sessions.workspace.browser.import.title') }}</span>
-          <button class="wbi-x" :title="t('common.close')" @click="close">
-            <Icon name="x" class="icn" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+      <div
+        class="flex max-h-[86vh] w-[min(560px,92vw)] flex-col gap-3.5 overflow-y-auto rounded-xl border border-border bg-popover p-4"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="flex items-center gap-2">
+          <Download class="size-4 text-muted-foreground" />
+          <span class="flex-1 text-base text-foreground">
+            {{ t('sessions.workspace.browser.import.title') }}
+          </span>
+          <Button
+            variant="ghost"
+            class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            :title="t('common.close')"
+            :aria-label="t('common.close')"
+            @click="close"
+          >
+            <X class="size-3.5" />
+          </Button>
         </div>
 
         <!-- What this hands over. Stated before the pickers, not after: importing a
              whole profile gives the agent every session in it. -->
-        <div class="wbi-warn">
-          <Icon name="shield" class="icn" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <div
+          class="flex gap-2.5 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-foreground"
+        >
+          <ShieldCheck class="mt-0.5 size-4 shrink-0 text-destructive" />
           <div>
             <p>{{ t('sessions.workspace.browser.import.warn') }}</p>
-            <p class="wbi-warn-dim">{{ t('sessions.workspace.browser.import.excluded') }}</p>
+            <p class="mt-1.5 text-muted-foreground">
+              {{ t('sessions.workspace.browser.import.excluded') }}
+            </p>
             <!-- Not politeness: Local Storage / IndexedDB are LevelDB stores, and
                  copying one mid-write yields a torn store that loads empty. -->
-            <p class="wbi-warn-dim">{{ t('sessions.workspace.browser.import.quitHint') }}</p>
+            <p class="mt-1.5 text-muted-foreground">
+              {{ t('sessions.workspace.browser.import.quitHint') }}
+            </p>
           </div>
         </div>
 
-        <div v-if="loading" class="wbi-row">{{ t('common.loading') }}</div>
-        <div v-else-if="!sources.length" class="wbi-row">
+        <div v-if="loading" class="text-sm text-muted-foreground">
+          {{ t('common.loading') }}
+        </div>
+        <div v-else-if="!sources.length" class="text-sm text-muted-foreground">
           {{ t('sessions.workspace.browser.import.noBrowsers') }}
         </div>
 
         <template v-else>
-          <label class="wbi-row">
-            <span class="wbi-label">{{ t('sessions.workspace.browser.import.browser') }}</span>
+          <label class="flex flex-col gap-1.5 text-sm">
+            <span class="text-xs font-medium text-muted-foreground">
+              {{ t('sessions.workspace.browser.import.browser') }}
+            </span>
             <AppSelect v-model="browserId" :options="browserOptions" width="100%" />
           </label>
 
-          <label class="wbi-row">
-            <span class="wbi-label">{{ t('sessions.workspace.browser.import.profile') }}</span>
+          <label class="flex flex-col gap-1.5 text-sm">
+            <span class="text-xs font-medium text-muted-foreground">
+              {{ t('sessions.workspace.browser.import.profile') }}
+            </span>
             <AppSelect
               v-model="profileDir"
               :options="profileOptions"
@@ -44,16 +68,25 @@
             />
           </label>
 
-          <div class="wbi-row wbi-parts">
-            <span class="wbi-label">{{ t('sessions.workspace.browser.import.parts') }}</span>
+          <div class="flex flex-col gap-2 text-sm">
+            <span class="text-xs font-medium text-muted-foreground">
+              {{ t('sessions.workspace.browser.import.parts') }}
+            </span>
             <!-- Nhãn "cần khởi động lại" đứng NGAY cạnh hai phần gây ra nó, chứ
                  không chỉ hiện trong báo cáo sau khi nhập: cookie vào ngay, còn
                  Local Storage/IndexedDB là store LevelDB nên phải chờ boot. Người
                  dùng chọn được cái giá đó trước khi trả, thay vì biết sau. -->
-            <label v-for="part in PARTS" :key="part" class="wbi-check">
+            <label
+              v-for="part in PARTS"
+              :key="part"
+              class="flex cursor-pointer items-center gap-2 text-foreground"
+            >
               <input v-model="parts[part]" type="checkbox" />
               <span>{{ t(`sessions.workspace.browser.import.part.${part}`) }}</span>
-              <span v-if="part !== 'cookies'" class="wbi-tag">
+              <span
+                v-if="part !== 'cookies'"
+                class="rounded-sm border border-border px-1.5 py-0.5 text-xs text-faint"
+              >
                 {{ t('sessions.workspace.browser.import.needsRestartTag') }}
               </span>
             </label>
@@ -62,11 +95,14 @@
           <!-- Result. Every bucket is shown, including the ones that failed: a
                half-imported jar looks exactly like a working one until the agent
                hits a login wall. -->
-          <div v-if="report" class="wbi-report">
-            <div class="wbi-report-head">
+          <div
+            v-if="report"
+            class="flex flex-col gap-2 rounded-lg border border-border bg-muted p-3 text-sm text-foreground"
+          >
+            <div class="text-foreground">
               {{ t('sessions.workspace.browser.import.done', { profile: report.profile }) }}
             </div>
-            <ul>
+            <ul class="m-0 flex flex-col gap-0.5 pl-4">
               <li v-if="report.cookies">
                 {{
                   t('sessions.workspace.browser.import.cookieLine', {
@@ -75,17 +111,17 @@
                   })
                 }}
               </li>
-              <li v-if="report.cookies?.appBound" class="wbi-bad">
+              <li v-if="report.cookies?.appBound" class="text-warning">
                 {{
                   t('sessions.workspace.browser.import.appBound', {
                     count: report.cookies.appBound,
                   })
                 }}
               </li>
-              <li v-if="report.cookies?.keyUnavailable" class="wbi-bad">
+              <li v-if="report.cookies?.keyUnavailable" class="text-warning">
                 {{ t('sessions.workspace.browser.import.noKey') }}
               </li>
-              <li v-if="skippedOther" class="wbi-dim">
+              <li v-if="skippedOther" class="text-muted-foreground">
                 {{ t('sessions.workspace.browser.import.skipped', { count: skippedOther }) }}
               </li>
               <li v-if="report.localStorage?.staged">
@@ -105,27 +141,47 @@
                 }}
               </li>
             </ul>
-            <button v-if="report.needsRestart" class="btn pri" @click="restart">
+            <Button
+              v-if="report.needsRestart"
+              variant="default"
+              class="h-auto p-0 w-fit rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              @click="restart"
+            >
               {{ t('sessions.workspace.browser.import.restart') }}
-            </button>
+            </Button>
           </div>
 
-          <div v-if="error" class="wbi-error">{{ error }}</div>
+          <div v-if="error" class="text-sm text-destructive">{{ error }}</div>
         </template>
 
-        <div class="wbi-foot">
-          <button class="wbi-clear" @click="clearAll">
+        <div class="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            class="h-auto p-0 px-0 text-xs text-muted-foreground underline transition-colors hover:text-destructive"
+            @click="clearAll"
+          >
             {{ t('sessions.workspace.browser.import.clear') }}
-          </button>
-          <span style="flex: 1" />
-          <button class="btn" @click="close">{{ t('common.close') }}</button>
-          <button class="btn pri" :disabled="!canImport" @click="runImport">
+          </Button>
+          <span class="flex-1" />
+          <Button
+            variant="outline"
+            class="h-auto p-0 rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            @click="close"
+          >
+            {{ t('common.close') }}
+          </Button>
+          <Button
+            variant="default"
+            class="h-auto p-0 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+            :disabled="!canImport"
+            @click="runImport"
+          >
             {{
               busy
                 ? t('sessions.workspace.browser.import.running')
                 : t('sessions.workspace.browser.import.run')
             }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -144,9 +200,11 @@
 // signed browser binary), and a jar that imported 0 of 4000 cookies behaves like a
 // fresh profile. So every bucket is rendered — imported, app-bound, no-key,
 // skipped — instead of a green checkmark.
+import { Download, ShieldCheck, X } from 'lucide-vue-next'
 import type { AwogBrowserImportReport, AwogBrowserImportSource } from '~/types/awog-bridge'
 import { formatBytes } from '~/utils/format-bytes'
 import { useConfirm } from '~/composables/useConfirm'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -259,136 +317,3 @@ const clearAll = async (): Promise<void> => {
   }
 }
 </script>
-
-<style scoped>
-.wbi-card {
-  width: min(560px, 92vw);
-  max-height: 86vh;
-  overflow-y: auto;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.wbi-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wbi-title {
-  flex: 1;
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  color: var(--text);
-}
-.wbi-x {
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  padding: 4px;
-  border-radius: var(--r-sm);
-}
-.wbi-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.wbi-warn {
-  display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--dangerBg);
-  border: 1px solid var(--danger);
-  color: var(--text);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wbi-warn-dim {
-  margin-top: 6px;
-  color: var(--textDim);
-}
-.wbi-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-}
-.wbi-label {
-  color: var(--textDim);
-}
-.wbi-parts {
-  gap: 8px;
-}
-.wbi-check {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text);
-  cursor: pointer;
-}
-.wbi-tag {
-  padding: 1px 7px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.wbi-report {
-  padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.wbi-report ul {
-  margin: 0;
-  padding-left: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.wbi-report-head {
-  color: var(--text);
-}
-.wbi-bad {
-  color: var(--amber);
-}
-.wbi-dim {
-  color: var(--textDim);
-}
-.wbi-error {
-  color: var(--danger);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wbi-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.wbi-clear {
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  text-decoration: underline;
-  padding: 0;
-}
-.wbi-clear:hover {
-  color: var(--danger);
-}
-</style>

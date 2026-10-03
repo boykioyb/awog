@@ -47,9 +47,9 @@
     </SettingsField>
 
     <SettingsField :name="t('settings.pet.reset.name')" :desc="t('settings.pet.reset.desc')">
-      <button class="btn" :disabled="!store.pet.pos" @click="store.updatePet({ pos: null })">
+      <Button :disabled="!store.pet.pos" variant="outline" @click="store.updatePet({ pos: null })">
         {{ t('settings.pet.reset.action') }}
-      </button>
+      </Button>
     </SettingsField>
 
     <!-- Line editor. One textarea per bucket, chosen by the segmented control, rather
@@ -65,9 +65,9 @@
     />
     <div class="petlines-foot">
       <span>{{ t('settings.pet.lines.desc') }}</span>
-      <button class="btn" :disabled="!isEdited" @click="resetBucket">
+      <Button :disabled="!isEdited" variant="outline" @click="resetBucket">
         {{ t('settings.pet.lines.reset') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -78,6 +78,7 @@ import { PET_REMINDER_CHOICES, PET_SCALES, PET_SPRITES, useSettingsStore } from 
 import type { PetScale } from '~/stores/settings'
 import { PET_QUIP_BUCKETS, defaultQuipLines } from '~/utils/pet-quips'
 import type { PetQuipBucket } from '~/utils/pet-quips'
+import Button from '~/components/ui/button/Button.vue'
 
 // Desktop pet panel (docs/features/desktop-pet.md). Its own settings section rather
 // than a block inside Appearance: the pet is a surface of its own (a window on the

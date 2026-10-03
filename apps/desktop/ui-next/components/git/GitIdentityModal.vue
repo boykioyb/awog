@@ -1,115 +1,98 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="gid-ovl" @click.self="close">
-      <div class="gid-card" role="dialog" aria-modal="true">
-        <div class="gid-head">
-          <Icon
-            name="settings"
-            style="width: var(--icon-md); height: var(--icon-md); color: var(--textDim)"
-          />
-          <div class="gid-titles">
-            <div class="gid-title">{{ t('git.identity.title') }}</div>
-            <div class="gid-sub">{{ t('git.identity.subtitle') }}</div>
-          </div>
-          <button class="gid-x" :title="t('common.close')" @click="close">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+  <Dialog :open="open" @update:open="(v) => !v && close()">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>{{ t('git.identity.title') }}</DialogTitle>
+        <DialogDescription>{{ t('git.identity.subtitle') }}</DialogDescription>
+      </DialogHeader>
+
+      <div v-if="loading" class="py-6 text-center text-sm text-muted-foreground">
+        {{ t('git.identity.loading') }}
+      </div>
+
+      <div v-else class="grid gap-4">
+        <!-- Effective identity recorded on commits (local overrides global) -->
+        <div
+          class="flex items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm"
+          :class="hasEffective ? 'text-muted-foreground' : 'text-warning'"
+        >
+          <Icon name="commit" class="size-3.5 shrink-0" />
+          <span v-if="hasEffective" class="truncate font-mono">
+            {{ t('git.identity.effective') }}: {{ effectiveName }} &lt;{{ effectiveEmail }}&gt;
+          </span>
+          <span v-else>{{ t('git.identity.none') }}</span>
         </div>
 
-        <div v-if="loading" class="gid-loading">{{ t('git.identity.loading') }}</div>
-
-        <template v-else>
-          <!-- Effective identity recorded on commits (local overrides global) -->
-          <div class="gid-eff" :style="hasEffective ? undefined : { color: 'var(--amber)' }">
-            <Icon name="commit" style="width: var(--icon-sm); height: var(--icon-sm); flex: none" />
-            <span v-if="hasEffective" class="mono gtrunc">
-              {{ t('git.identity.effective') }}: {{ effectiveName }} &lt;{{ effectiveEmail }}&gt;
-            </span>
-            <span v-else>{{ t('git.identity.none') }}</span>
+        <!-- Global scope -->
+        <section class="grid gap-2">
+          <div class="flex items-center gap-1.5">
+            <Icon name="globe" class="size-3.5 text-muted-foreground" />
+            <span class="text-sm font-semibold">{{ t('git.identity.globalTitle') }}</span>
           </div>
+          <p class="text-sm text-muted-foreground">{{ t('git.identity.globalHint') }}</p>
+          <label class="grid grid-cols-[52px_1fr] items-center gap-3">
+            <span class="text-sm font-medium text-muted-foreground">
+              {{ t('git.identity.name') }}
+            </span>
+            <Input v-model="gName" :placeholder="t('git.identity.namePlaceholder')" />
+          </label>
+          <label class="grid grid-cols-[52px_1fr] items-center gap-3">
+            <span class="text-sm font-medium text-muted-foreground">
+              {{ t('git.identity.email') }}
+            </span>
+            <Input
+              v-model="gEmail"
+              class="font-mono"
+              :placeholder="t('git.identity.emailPlaceholder')"
+            />
+          </label>
+        </section>
 
-          <!-- Global scope -->
-          <section class="gid-sec">
-            <div class="gid-sec-head">
-              <Icon
-                name="globe"
-                style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
-              />
-              <span class="gid-sec-title">{{ t('git.identity.globalTitle') }}</span>
-            </div>
-            <p class="gid-hint">{{ t('git.identity.globalHint') }}</p>
-            <label class="gid-field">
-              <span class="gid-label">{{ t('git.identity.name') }}</span>
-              <input
-                v-model="gName"
-                class="gid-input"
-                :placeholder="t('git.identity.namePlaceholder')"
-                @keydown.esc.prevent="close"
-              />
-            </label>
-            <label class="gid-field">
-              <span class="gid-label">{{ t('git.identity.email') }}</span>
-              <input
-                v-model="gEmail"
-                class="gid-input mono"
-                :placeholder="t('git.identity.emailPlaceholder')"
-                @keydown.esc.prevent="close"
-              />
-            </label>
-          </section>
-
-          <!-- Project (repo-local) scope -->
-          <section class="gid-sec">
-            <div class="gid-sec-head">
-              <Icon
-                name="projects"
-                style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
-              />
-              <span class="gid-sec-title gtrunc">
-                {{ t('git.identity.projectTitle') }}
-                <span v-if="projectName" class="gid-proj">· {{ projectName }}</span>
+        <!-- Project (repo-local) scope -->
+        <section class="grid gap-2">
+          <div class="flex items-center gap-1.5">
+            <Icon name="projects" class="size-3.5 text-muted-foreground" />
+            <span class="truncate text-sm font-semibold">
+              {{ t('git.identity.projectTitle') }}
+              <span v-if="projectName" class="font-medium text-muted-foreground">
+                · {{ projectName }}
               </span>
-            </div>
-            <p class="gid-hint">
-              {{ t('git.identity.projectHint', { project: projectName || '—' }) }}
-            </p>
-            <label class="gid-field">
-              <span class="gid-label">{{ t('git.identity.name') }}</span>
-              <input
-                v-model="pName"
-                class="gid-input"
-                :placeholder="gName || t('git.identity.inheritEmpty')"
-                @keydown.esc.prevent="close"
-              />
-            </label>
-            <label class="gid-field">
-              <span class="gid-label">{{ t('git.identity.email') }}</span>
-              <input
-                v-model="pEmail"
-                class="gid-input mono"
-                :placeholder="gEmail || t('git.identity.inheritEmpty')"
-                @keydown.esc.prevent="close"
-              />
-            </label>
-          </section>
-
-          <div class="gid-foot">
-            <span v-if="error" class="gid-msg" :style="{ color: 'var(--danger)' }">
-              {{ error }}
             </span>
-            <span v-else-if="savedFlash" class="gid-msg" :style="{ color: 'var(--green)' }">
-              ✓ {{ t('git.identity.saved') }}
-            </span>
-            <span style="flex: 1" />
-            <button class="btn" @click="close">{{ t('common.cancel') }}</button>
-            <button class="btn pri" :disabled="!canSave" @click="onSave">
-              {{ saving ? '…' : t('git.identity.save') }}
-            </button>
           </div>
-        </template>
+          <p class="text-sm text-muted-foreground">
+            {{ t('git.identity.projectHint', { project: projectName || '—' }) }}
+          </p>
+          <label class="grid grid-cols-[52px_1fr] items-center gap-3">
+            <span class="text-sm font-medium text-muted-foreground">
+              {{ t('git.identity.name') }}
+            </span>
+            <Input v-model="pName" :placeholder="gName || t('git.identity.inheritEmpty')" />
+          </label>
+          <label class="grid grid-cols-[52px_1fr] items-center gap-3">
+            <span class="text-sm font-medium text-muted-foreground">
+              {{ t('git.identity.email') }}
+            </span>
+            <Input
+              v-model="pEmail"
+              class="font-mono"
+              :placeholder="gEmail || t('git.identity.inheritEmpty')"
+            />
+          </label>
+        </section>
       </div>
-    </div>
-  </Teleport>
+
+      <DialogFooter class="items-center">
+        <span v-if="error" class="mr-auto text-sm text-destructive">{{ error }}</span>
+        <span v-else-if="savedFlash" class="mr-auto text-sm text-success">
+          ✓ {{ t('git.identity.saved') }}
+        </span>
+        <Button variant="outline" @click="close">{{ t('common.cancel') }}</Button>
+        <Button :disabled="!canSave" @click="onSave">
+          {{ saving ? '…' : t('git.identity.save') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -120,6 +103,14 @@
 // fields changed; clearing a project field unsets the local override (inherit).
 import type { GitIdentity } from '~/composables/useGitApi'
 import { useGitStore } from '~/stores/git'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogDescription from '~/components/ui/dialog/DialogDescription.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -230,143 +221,3 @@ watch(
   },
 )
 </script>
-
-<style scoped>
-.gid-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-  padding: 24px;
-}
-.gid-card {
-  width: 440px;
-  max-width: 94vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.gid-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-.gid-titles {
-  flex: 1;
-  min-width: 0;
-}
-.gid-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.gid-sub {
-  font-size: 1em;
-  color: var(--textDim);
-  margin-top: 2px;
-}
-.gid-x {
-  flex: none;
-  padding: 4px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  transition: background 0.12s;
-}
-.gid-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-.gid-loading {
-  padding: 24px 0;
-  text-align: center;
-  color: var(--textDim);
-}
-.gid-eff {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  font-size: 1em;
-}
-.gid-sec {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.gid-sec-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
-.gid-sec-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.gid-proj {
-  font-weight: 500;
-  color: var(--textDim);
-}
-.gid-hint {
-  font-size: 1em;
-  color: var(--textDim);
-  margin: -2px 0 2px;
-}
-.gid-field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.gid-label {
-  flex: none;
-  width: 52px;
-  font-size: 1em;
-  font-weight: 500;
-  color: var(--textDim);
-}
-.gid-input {
-  flex: 1;
-  min-width: 0;
-  padding: 8px 11px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-  font-family: var(--sans);
-}
-.gid-input.mono {
-  font-family: var(--mono);
-}
-.gid-input:focus {
-  border-color: var(--accent);
-}
-.gid-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-}
-.gid-msg {
-  font-size: 1em;
-}
-.gid-foot .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-</style>

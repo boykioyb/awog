@@ -40,10 +40,12 @@
           </span>
         </div>
         <div v-if="expanded" class="perm-actions">
-          <button class="btn deny" @click="emit('decide', 'deny')">{{ t('pet.perm.deny') }}</button>
-          <button class="btn allow" @click="emit('decide', 'allow')">
+          <Button class="deny" variant="outline" @click="emit('decide', 'deny')">
+            {{ t('pet.perm.deny') }}
+          </Button>
+          <Button class="allow" variant="outline" @click="emit('decide', 'allow')">
             {{ t('pet.perm.allow') }}
-          </button>
+          </Button>
         </div>
         <div v-else class="perm-hint">{{ t('pet.perm.hint') }}</div>
       </div>
@@ -54,6 +56,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { AwogPetItem, AwogPetModel } from '~/types/awog-bridge'
+import Button from '~/components/ui/button/Button.vue'
 
 // Mini-HUD next to the pet (docs/features/desktop-pet.md): at most three rows of
 // what needs the user, plus the parked permission. Deliberately NOT a second tray

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { useSettingsStore } from '~/stores/settings'
 
 // Skills store — dual-path live (SKILL.md 5-tier, ADR 0013). When the Electron
 // bridge is available `loadSkills()` scans the user/global tier + every passed
@@ -173,7 +174,14 @@ export const useSkillsStore = defineStore('skills', () => {
     accountId: string,
     currentSkill?: Partial<Skill>,
   ): Promise<Skill> {
-    const params: Record<string, unknown> = { prompt, accountId }
+    // Model+account theo núm AI authoring (Settings → Models): bộ ba resolver
+    // nhất quán provider↔model↔account — accountId tham số chỉ là fallback.
+    const llm = useSettingsStore().resolveAuthoringLlm()
+    const params: Record<string, unknown> = {
+      prompt,
+      accountId: llm.accountId ?? accountId,
+      modelId: llm.modelId,
+    }
     if (currentSkill) params.currentSkill = currentSkill
     const res = await sc.request<SkillUpsertResponse>('skills.generate', params)
     return res.skill

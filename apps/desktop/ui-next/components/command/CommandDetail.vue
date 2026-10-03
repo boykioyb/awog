@@ -11,25 +11,35 @@
         {{ t('commands.detail.imported') }}
       </span>
       <span style="flex: 1" />
-      <button class="iconbtn cmd-act" :title="t('commands.detail.edit')" @click="emit('edit')">
+      <Button
+        :title="t('commands.detail.edit')"
+        class="cmd-act"
+        variant="outline"
+        size="iconMd"
+        @click="emit('edit')"
+      >
         <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!isImported"
-        class="iconbtn cmd-act"
         :title="t('commands.detail.duplicate')"
+        class="cmd-act"
+        variant="outline"
+        size="iconMd"
         @click="emit('duplicate')"
       >
         <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!isImported"
-        class="iconbtn cmd-act cmd-danger"
         :title="t('commands.detail.delete')"
+        class="cmd-act cmd-danger"
+        variant="outline"
+        size="iconMd"
         @click="emit('delete')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <div class="dscroll">
@@ -89,6 +99,7 @@
 import { computed } from 'vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import type { Command } from '~/stores/commands'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   command: Command

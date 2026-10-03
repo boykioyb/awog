@@ -13,10 +13,10 @@
          và cho thử lại, thay vì để người dùng nhìn một khoảng trắng rồi tự đoán. -->
     <div v-else-if="!kinds.length" class="rpt-state">
       <p class="rpt-state-txt">{{ t('infra.report.empty') }}</p>
-      <button class="btn sm" type="button" @click="reload">
+      <Button type="button" variant="outline" size="sm" @click="reload">
         <Icon name="refresh" class="rpt-ic" />
         {{ t('infra.report.retry') }}
-      </button>
+      </Button>
     </div>
 
     <ul v-else class="rpt-list">
@@ -37,25 +37,27 @@
         </p>
 
         <div class="rpt-acts">
-          <button
-            class="btn sm pri"
+          <Button
             type="button"
             :title="t('infra.report.action.askHint')"
+            variant="default"
+            size="sm"
             @click="onAsk(info)"
           >
             <Icon name="sparkles" class="rpt-ic" />
             {{ t('infra.report.action.ask') }}
-          </button>
-          <button
-            class="btn sm"
+          </Button>
+          <Button
             type="button"
             :disabled="!info.schedule"
             :title="t('infra.report.action.scheduleHint')"
+            variant="outline"
+            size="sm"
             @click="scheduleReport(info.kind)"
           >
             <Icon name="clock" class="rpt-ic" />
             {{ t('infra.report.action.schedule') }}
-          </button>
+          </Button>
         </div>
       </li>
     </ul>
@@ -78,6 +80,7 @@ import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import { useShareExport } from '~/composables/useShareExport'
 import { useSidecar } from '~/composables/useSidecar'
 import type { ReportKindInfo } from '~/composables/useShareExport'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const sidecar = useSidecar()

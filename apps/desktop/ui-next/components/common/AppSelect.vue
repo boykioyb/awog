@@ -18,8 +18,20 @@
          overflow-clipping / scroll ancestor (e.g. a modal body). -->
     <Teleport to="body">
       <div v-if="open" ref="menuRef" class="aselmenu" role="listbox" :style="menuStyle">
+        <div v-if="searchable" class="aselsearch" @mousedown.stop>
+          <Icon name="search" class="aselsearchic" />
+          <input
+            ref="searchRef"
+            v-model="search"
+            class="aselsearchin"
+            :placeholder="searchPlaceholder || 'Search…'"
+            @keydown.esc.stop="open = false"
+            @keydown.enter.prevent="selectFirst"
+          />
+        </div>
+        <div v-if="searchable && !filtered.length" class="aselnone">{{ emptyLabel }}</div>
         <button
-          v-for="opt in options"
+          v-for="opt in filtered"
           :key="opt.value"
           type="button"
           class="aselopt"
@@ -55,8 +67,19 @@ const props = withDefaults(
     placeholder?: string
     width?: string
     disabled?: boolean
+    // Ô tìm kiếm trong menu (combobox) — cho danh sách dài như project/repo.
+    searchable?: boolean
+    searchPlaceholder?: string
+    emptyLabel?: string
   }>(),
-  { placeholder: '', width: 'auto', disabled: false },
+  {
+    placeholder: '',
+    width: 'auto',
+    disabled: false,
+    searchable: false,
+    searchPlaceholder: '',
+    emptyLabel: 'No matches',
+  },
 )
 
 const model = defineModel<string>({ required: true })
@@ -65,7 +88,21 @@ const open = ref(false)
 const rootRef = useTemplateRef<HTMLElement>('rootRef')
 const triggerRef = useTemplateRef<HTMLElement>('triggerRef')
 const menuRef = useTemplateRef<HTMLElement>('menuRef')
+const searchRef = useTemplateRef<HTMLInputElement>('searchRef')
 const menuStyle = ref<Record<string, string>>({})
+const search = ref('')
+
+// Searchable: lọc theo label không phân biệt hoa-thường; giữ thứ tự options.
+const filtered = computed(() => {
+  if (!props.searchable || !search.value.trim()) return props.options
+  const q = search.value.trim().toLowerCase()
+  return props.options.filter((o) => o.label.toLowerCase().includes(q))
+})
+
+function selectFirst() {
+  const first = filtered.value.find((o) => !o.disabled)
+  if (first) select(first)
+}
 
 const selectedLabel = computed(
   () => props.options.find((o) => o.value === model.value)?.label ?? '',
@@ -131,6 +168,7 @@ function onReposition() {
 // menu's real height.
 watch(open, async (isOpen) => {
   if (isOpen) {
+    search.value = ''
     updatePosition()
     window.addEventListener('mousedown', onWindowDown)
     window.addEventListener('keydown', onKey)
@@ -138,6 +176,8 @@ watch(open, async (isOpen) => {
     window.addEventListener('scroll', onReposition, true)
     await nextTick()
     updatePosition()
+    // Combobox: đưa caret vào ô tìm kiếm ngay khi mở.
+    if (props.searchable) searchRef.value?.focus()
   } else {
     window.removeEventListener('mousedown', onWindowDown)
     window.removeEventListener('keydown', onKey)
@@ -163,31 +203,37 @@ onBeforeUnmount(() => {
      overflowing the row. Harmless when standalone. */
   min-width: 0;
 }
+/* shadcn SelectTrigger: h-9 px-3 border-input, transparent bg, shadow-sm,
+   focus-visible ring — cao BẰNG Input/Button default nên đặt cạnh nhau phẳng. */
 .aseltrigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  border-radius: var(--r-sm);
-  padding: 7px 10px;
+  height: var(--ctrl-h); /* token control chung — bằng Input/Button default */
+  border: 1px solid var(--input);
+  background: transparent;
+  border-radius: var(--r-sm); /* rounded-md */
+  padding: 0 12px; /* px-3 */
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--text);
+  color: var(--foreground);
   cursor: pointer;
   font-family: var(--sans);
+  box-shadow: var(--shadow-sm);
 }
-.aseltrigger:hover {
-  border-color: var(--borderStrong);
+.aseltrigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .aseltrigger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
 .aseltrigger:disabled:hover {
-  border-color: var(--border);
+  border-color: var(--input);
+  background: transparent;
 }
 .aselval {
   /* min-width:0 lets this flex child shrink below its content width so the
@@ -199,13 +245,13 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 .aselval.ph {
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .aselchev {
   width: var(--icon-sm);
   height: var(--icon-sm);
   flex: 0 0 auto;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   transition: transform 0.15s;
 }
 .aselchev.open {
@@ -222,10 +268,11 @@ onBeforeUnmount(() => {
   z-index: 160;
   max-height: 280px;
   overflow-y: auto;
-  background: var(--bgEl);
+  background: var(--popover);
+  color: var(--popover-foreground);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 4px;
+  border-radius: var(--r-sm); /* rounded-md */
+  padding: 4px; /* p-1 */
   /* `--shadow-lg`, không phải `--shadow-md` như `.smenu`/`.pop`: theo chính comment
      z-index ở trên, menu này còn phải nổi TRÊN modal đang chứa nó (git sub-modal
      = 150), mà modal dùng `--shadow-lg`. Lấy `--shadow-md` thì nó chìm vào modal.
@@ -234,19 +281,62 @@ onBeforeUnmount(() => {
      đổi `.smenu`/`.pop` sang ramp. */
   box-shadow: var(--shadow-lg);
 }
+/* Ô tìm kiếm trong menu (searchable) — sticky trên đầu để luôn nhìn thấy khi
+   option list dài cuộn xuống. */
+.aselsearch {
+  position: sticky;
+  top: -4px; /* bù padding p-1 của menu */
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 6px;
+  margin: -4px -4px 4px;
+  background: var(--popover);
+  border-bottom: 1px solid var(--border);
+}
+.aselsearchic {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  flex: 0 0 auto;
+  margin-left: 4px;
+  color: var(--muted-foreground);
+}
+.aselsearchin {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--popover-foreground);
+  font-family: var(--sans);
+  outline: none;
+  padding: 4px 0;
+}
+.aselsearchin::placeholder {
+  color: var(--muted-foreground);
+}
+.aselnone {
+  padding: 10px 8px;
+  font-size: var(--fs-sm);
+  color: var(--muted-foreground);
+  text-align: center;
+}
 .aselopt {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   width: 100%;
+  min-height: 28px; /* h-7 */
   border: 0;
   background: transparent;
-  border-radius: var(--r-xs);
-  padding: 6px 9px;
+  border-radius: var(--r-xs); /* rounded-sm */
+  padding: 0 8px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textMuted);
+  color: var(--popover-foreground);
   cursor: pointer;
   text-align: left;
   white-space: nowrap;
@@ -259,12 +349,12 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 .aselopt:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .aselopt.on {
-  color: var(--text);
-  background: var(--bgActive);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .aselopt.disabled {
   color: var(--textFaint);
@@ -278,6 +368,6 @@ onBeforeUnmount(() => {
   width: var(--icon-sm);
   height: var(--icon-sm);
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--primary);
 }
 </style>

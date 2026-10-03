@@ -33,24 +33,24 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button v-if="draft" class="btn" @click="resetDraft">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button v-if="draft" variant="outline" @click="resetDraft">
         <Icon name="refresh" />
         {{ t('hooks.configEdit.regenerate') }}
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!draft"
-        class="btn pri"
         :disabled="isGenerating || !prompt.trim()"
+        variant="default"
         @click="onGenerate"
       >
         <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
         {{ isGenerating ? t('hooks.configEdit.generating') : t('hooks.configEdit.generate') }}
-      </button>
-      <button v-else class="btn pri" @click="onApply">
+      </Button>
+      <Button v-else variant="default" @click="onApply">
         <Icon name="check" />
         {{ t('hooks.configEdit.apply') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -64,6 +64,7 @@ import { computed, ref, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useHooksStore, type Hook, type HookConfig } from '~/stores/hooks'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

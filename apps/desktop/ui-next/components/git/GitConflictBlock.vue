@@ -46,7 +46,7 @@
 // read-only panes (OURS as deletions, THEIRS as additions) rendered through the
 // shared GitDiffLine so add/del theming is reused. An empty side shows the
 // emptySide placeholder (add/add or delete/modify blocks). No hex color: chosen
-// state borders via var(--accent), everything else via var(--border) (see <style>).
+// state borders via var(--primary), everything else via var(--border) (see <style>).
 import type { DiffRow } from './git-types'
 import { toDiffLines } from '~/composables/useConflictResolver'
 
@@ -85,28 +85,28 @@ const theirsRows = computed(() => toRows(props.theirs, 'theirs'))
   overflow: hidden;
 }
 .cblock.chosen {
-  border-color: var(--accent);
+  border-color: var(--primary);
 }
 .cbhead {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: var(--bgSubtle);
+  background: var(--muted);
   border-bottom: 1px solid var(--border);
 }
 .cbtitle {
   font-size: 12px;
   line-height: 18px;
   font-variant-numeric: tabular-nums;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .cbtake {
   padding: 2px 10px;
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     background 0.12s,
@@ -114,13 +114,13 @@ const theirsRows = computed(() => toRows(props.theirs, 'theirs'))
     border-color 0.12s;
 }
 .cbtake:hover {
-  color: var(--text);
-  border-color: var(--accent);
+  color: var(--foreground);
+  border-color: var(--primary);
 }
 .cbtake.on {
-  background: var(--accent);
-  color: var(--accentText);
-  border-color: var(--accent);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
 }
 .cbpanes {
   display: grid;
@@ -134,14 +134,14 @@ const theirsRows = computed(() => toRows(props.theirs, 'theirs'))
   border-right: none;
 }
 .cbpane.on {
-  background: var(--accentDim);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
 }
 .cbpanehd {
   padding: 4px 10px;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
-  background: var(--bgSubtle);
+  color: var(--muted-foreground);
+  background: var(--muted);
   border-bottom: 1px solid var(--border);
   overflow: hidden;
   white-space: nowrap;

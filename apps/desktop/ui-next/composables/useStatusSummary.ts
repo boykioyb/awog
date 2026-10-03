@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
+import { isBoardSession } from './useSessionsData'
 import type { AwogTrayCommand } from '~/types/awog-bridge'
 
 // Shared plumbing for the two glanceable status surfaces — the system tray
@@ -18,15 +19,21 @@ export function useStatusCounts() {
 
   const running = computed(
     () =>
-      tasks.runningTasks.length + sessions.sessions.filter((s) => s.status === 'streaming').length,
+      tasks.runningTasks.length +
+      sessions.sessions.filter((s) => !isBoardSession(s) && s.status === 'streaming').length,
   )
   const attention = computed(
     () =>
-      tasks.awaitingTasks.length + sessions.sessions.filter((s) => s.status === 'awaiting').length,
+      tasks.awaitingTasks.length +
+      sessions.sessions.filter((s) => !isBoardSession(s) && s.status === 'awaiting').length,
   )
   // Finished-but-unread sessions: without these the surface goes blank the moment
   // work completes, which is exactly when the user most wants to be told.
-  const unread = computed(() => sessions.sessions.filter((s) => s.unread).length)
+  // Phiên board ẩn khỏi list — unread của nó thuộc về board/Teams chứ không phải
+  // màn Sessions, đếm vào đây sẽ báo ảo (badge đỏ mà list không thấy gì).
+  const unread = computed(
+    () => sessions.sessions.filter((s) => !isBoardSession(s) && s.unread).length,
+  )
 
   return { running, attention, unread }
 }

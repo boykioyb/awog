@@ -22,14 +22,16 @@
       <div class="sech">{{ t('workflow.inspector.outputs') }}</div>
       <div class="wfi-outs">
         <div v-for="(out, i) in node.outputs" :key="i" class="wfi-out-row">
-          <input
-            class="wfi-inp mono"
-            :value="out"
-            @input="updateOutput(i, ($event.target as HTMLInputElement).value)"
-          />
-          <button class="iconbtn wfi-del" :title="t('common.delete')" @click="removeOutput(i)">
+          <Input :model-value="out" class="mono" @update:model-value="updateOutput(i, $event)" />
+          <Button
+            :title="t('common.delete')"
+            class="wfi-del"
+            variant="outline"
+            size="iconMd"
+            @click="removeOutput(i)"
+          >
             <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          </button>
+          </Button>
         </div>
         <button class="wfi-add" @click="addOutput">
           <Icon name="plus" style="width: var(--icon-xs); height: var(--icon-xs)" />
@@ -63,13 +65,13 @@
         </div>
         <div class="wfi-gate-field">
           <div class="wfi-gate-lbl">{{ t('workflow.inspector.gateMaxIter') }}</div>
-          <input
-            class="wfi-inp mono wfi-gate-num"
+          <Input
             type="number"
             min="1"
             max="10"
-            :value="node.gate.maxIterations"
-            @input="onGateMaxIter(($event.target as HTMLInputElement).value)"
+            :model-value="node.gate.maxIterations"
+            class="mono wfi-gate-num"
+            @update:model-value="onGateMaxIter($event)"
           />
         </div>
         <label class="wfi-chk wfi-gate-auto">
@@ -97,6 +99,8 @@ import { computed } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { WorkflowAgent, WorkflowSkill } from '~/composables/useWorkflowGen'
 import type { NodeGate, WorkflowNode } from '~/stores/workflows'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   node: WorkflowNode | undefined

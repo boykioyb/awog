@@ -1,31 +1,43 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="gpm-ovl" @click.self="emit('close')">
-      <div class="gpm-card gbd" role="dialog" aria-modal="true">
-        <div class="gpm-title">{{ t('git.deleteBranch.title') }}</div>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>{{ t('git.deleteBranch.title') }}</DialogTitle>
+        <DialogDescription>
+          {{ t('git.deleteBranch.desc', { name: branchName }) }}
+        </DialogDescription>
+      </DialogHeader>
 
-        <p class="gbd-desc">{{ t('git.deleteBranch.desc', { name: branchName }) }}</p>
-
-        <!-- Also delete the remote branch — only when one exists for this branch. -->
-        <div v-if="remoteName" class="gbd-toggle" @click="deleteRemote = !deleteRemote">
-          <span class="gbd-togtext">
-            <span :style="deleteRemote ? { color: 'var(--danger)' } : undefined">
-              {{ t('git.deleteBranch.alsoRemote') }}
-            </span>
-            <span class="gbd-ref mono">{{ remoteName }}/{{ branchName }}</span>
+      <!-- Also delete the remote branch — only when one exists for this branch. -->
+      <div
+        v-if="remoteName"
+        class="flex cursor-pointer select-none items-center justify-between gap-3"
+        @click="deleteRemote = !deleteRemote"
+      >
+        <span class="flex min-w-0 flex-col gap-0.5 text-sm">
+          <span :class="deleteRemote ? 'text-destructive' : undefined">
+            {{ t('git.deleteBranch.alsoRemote') }}
           </span>
-          <span class="tog2 sm" :class="{ off: !deleteRemote }" />
-        </div>
-
-        <div class="gpm-foot">
-          <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-          <button class="btn pri gbd-dangerbtn" @click="submit">
-            {{ t('git.deleteBranch.confirm') }}
-          </button>
-        </div>
+          <span class="truncate font-mono text-xs text-muted-foreground">
+            {{ remoteName }}/{{ branchName }}
+          </span>
+        </span>
+        <Switch
+          :checked="deleteRemote"
+          class="data-[state=checked]:bg-destructive"
+          @click.stop
+          @update:checked="deleteRemote = $event"
+        />
       </div>
-    </div>
-  </Teleport>
+
+      <DialogFooter>
+        <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+        <Button variant="destructive" @click="submit">
+          {{ t('git.deleteBranch.confirm') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -33,6 +45,15 @@
 // opt-in "also delete the remote branch" toggle (shown only when the branch has a
 // matching remote-tracking ref). Emits the chosen options; GitManager runs the
 // delete (and handles the UNMERGED → force-delete follow-up).
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogDescription from '~/components/ui/dialog/DialogDescription.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Switch from '~/components/ui/switch/Switch.vue'
+
 const props = defineProps<{
   open: boolean
   branchName: string
@@ -62,70 +83,3 @@ function submit() {
   emit('submit', { deleteRemote: props.remoteName ? deleteRemote.value : false })
 }
 </script>
-
-<style scoped>
-.gpm-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.gpm-card {
-  width: 420px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.gpm-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.gbd-desc {
-  font-size: 1em;
-  line-height: var(--lh-md);
-  color: var(--textMuted);
-}
-.gbd-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  cursor: pointer;
-  user-select: none;
-}
-.gbd-togtext {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  font-size: 1em;
-  color: var(--text);
-}
-.gbd-ref {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.gpm-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 2px;
-}
-.gbd-dangerbtn {
-  background: var(--danger);
-}
-</style>

@@ -20,9 +20,8 @@
         <div class="bsm-row">
           <span class="bsm-label">{{ t('browser.sites.hosts') }}</span>
           <form class="bsm-add" @submit.prevent="onAdd">
-            <input
+            <Input
               v-model="draft"
-              class="bsm-input"
               type="text"
               spellcheck="false"
               :placeholder="t('browser.sites.placeholder')"
@@ -57,6 +56,7 @@
 // Ghi NGAY mỗi lần đổi (không có nút Save): một chính sách bảo mật nửa vời trên
 // màn hình mà chưa xuống đĩa là thứ dễ đọc sai nhất ở bề mặt này.
 import type { AwogBrowserSites } from '~/types/awog-bridge'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ (e: 'close'): void }>()

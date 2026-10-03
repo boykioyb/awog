@@ -8,14 +8,15 @@
       @back="goBack"
     >
       <template #actions>
-        <button
-          class="iconbtn"
+        <Button
           :disabled="!activeTab || !activeTab.dirty"
           :title="t('editor.save')"
+          variant="outline"
+          size="iconMd"
           @click="saveFile"
         >
           <Icon name="save" class="acticon" />
-        </button>
+        </Button>
       </template>
     </EditorTopBar>
 
@@ -79,7 +80,7 @@
     </div>
 
     <!-- Shared file context menu (right-click a tree row). -->
-    <ContextMenu
+    <AppContextMenu
       :open="fileMenu.menu.value !== null"
       :position="fileMenu.menu.value ?? { x: 0, y: 0 }"
       :items="fileMenu.items.value"
@@ -101,6 +102,7 @@ import EditorFileTree from '~/components/editor/EditorFileTree.vue'
 import EditorMonacoPane from '~/components/editor/EditorMonacoPane.vue'
 import type { MonacoEditorHandle } from '~/components/editor/types'
 import { useCodeWorkspace } from '~/composables/useCodeWorkspace'
+import Button from '~/components/ui/button/Button.vue'
 
 definePageMeta({ layout: false })
 // `code` is a reserved HTML element name — give the page an explicit name so Vue
@@ -174,14 +176,6 @@ onMounted(() => {
 .acticon {
   width: var(--icon-sm);
   height: var(--icon-sm);
-}
-.iconbtn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-.iconbtn:disabled:hover {
-  border-color: var(--border);
-  color: var(--textMuted);
 }
 
 .codebody {

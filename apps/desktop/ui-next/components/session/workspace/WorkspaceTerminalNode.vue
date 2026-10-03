@@ -22,7 +22,7 @@
         @mousedown.stop
         @pointerdown.stop="ctx.onGripDown(tabId, leaf!.paneId, $event)"
       >
-        <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Move class="size-3.5" />
       </button>
       <button
         class="wsterm-pane-close"
@@ -31,7 +31,7 @@
         @mousedown.stop
         @click="ctx.closePane(tabId, leaf!.paneId)"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <X class="size-3.5" />
       </button>
     </div>
 
@@ -66,6 +66,8 @@
 // the file (`inject` / `computed` come from Nuxt auto-import in <script setup>) so
 // the two script blocks never collide on a duplicate-import autofix.
 import type { InjectionKey } from 'vue'
+// lucide icons live here too (module scope is shared with <script setup>).
+import { Move, X } from 'lucide-vue-next'
 
 // A tab's panes form a binary/n-ary split tree. A single-pane tab is a lone `leaf`
 // → it renders one full box, identical to the pre-grid terminal. A `split` lays its
@@ -211,8 +213,8 @@ export const swapPanes = (root: LayoutNode, aId: string, bId: string): void => {
 // helpers live in the plain <script> above). Splits render a resizable flex
 // container; leaves render the pane box wired back to WorkspaceTerminal via the
 // injected context. The component refers to itself recursively for nested splits.
-// No imports here (icons via the auto-imported <Icon>, vue APIs auto-imported) so
-// the plain <script> above stays the sole import site — otherwise eslint's
+// No imports here (vue APIs auto-imported; lucide icons are imported in the plain
+// <script> above) so that block stays the sole import site — otherwise eslint's
 // import/first fights the two-block layout.
 
 defineOptions({ name: 'WorkspaceTerminalNode' })
@@ -249,10 +251,10 @@ const nodeKey = (node: LayoutNode): string =>
      INCLUSIVE), so padding is consumed by the fit — it adds an extra row that renders
      into the padding and gets clipped by overflow:hidden. The breathing-room gutter
      lives on the parent `.wsterm-panes` (which xterm does NOT measure). */
-  background: var(--wsterm-bg, var(--bg));
+  background: var(--wsterm-bg, var(--background));
 }
 .wsterm-box.pane-active {
-  box-shadow: inset 0 0 0 1px var(--accent);
+  box-shadow: inset 0 0 0 1px var(--primary);
 }
 .wsterm-box.pane-dragging {
   opacity: 0.55;
@@ -323,7 +325,7 @@ const nodeKey = (node: LayoutNode): string =>
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
-  background: var(--bgPanel);
+  background: var(--popover);
   box-shadow: var(--shadow-sm);
   opacity: 0;
   /* Hidden ≠ inert: at opacity 0 the buttons still hit-tested, swallowing clicks and
@@ -347,7 +349,7 @@ const nodeKey = (node: LayoutNode): string =>
   border: none;
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     background 0.12s,
@@ -360,16 +362,16 @@ const nodeKey = (node: LayoutNode): string =>
   cursor: grabbing;
 }
 .wsterm-pane-grip:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .wsterm-pane-close:hover {
-  background: var(--dangerBg, var(--bgHover));
-  color: var(--danger, var(--text));
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  color: var(--destructive);
 }
 .wsterm-pane-grip:focus-visible,
 .wsterm-pane-close:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: -1px;
 }
 
@@ -384,8 +386,8 @@ const nodeKey = (node: LayoutNode): string =>
 .wsterm-drop-band {
   position: absolute;
   border-radius: var(--r-xs);
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--primary) 22%, transparent);
+  border: 1px solid var(--primary);
 }
 .wsterm-drop-band.left {
   left: 0;

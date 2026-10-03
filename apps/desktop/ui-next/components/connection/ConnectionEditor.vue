@@ -31,12 +31,12 @@
       <div class="cne-grid">
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.slug') }}</label>
-          <input
-            class="cne-input mono"
-            :value="draft.slug"
+          <Input
+            :model-value="draft.slug"
             placeholder="e.g. github"
             spellcheck="false"
-            @input="onSlugInput"
+            class="mono"
+            @update:model-value="onSlugInput"
           />
           <div class="cne-hint">
             {{
@@ -46,11 +46,7 @@
         </div>
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.name') }}</label>
-          <input
-            v-model="draft.name"
-            class="cne-input"
-            :placeholder="t('connections.editor.namePh')"
-          />
+          <Input v-model="draft.name" :placeholder="t('connections.editor.namePh')" />
         </div>
       </div>
 
@@ -67,9 +63,8 @@
       <div class="cne-grid">
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.icon') }}</label>
-          <input
+          <Input
             v-model="draft.icon"
-            class="cne-input"
             :placeholder="t('connections.editor.iconPh')"
             spellcheck="false"
           />
@@ -77,11 +72,7 @@
         </div>
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.tagline') }}</label>
-          <input
-            v-model="draft.tagline"
-            class="cne-input"
-            :placeholder="t('connections.editor.taglinePh')"
-          />
+          <Input v-model="draft.tagline" :placeholder="t('connections.editor.taglinePh')" />
         </div>
       </div>
 
@@ -92,7 +83,7 @@
         </div>
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.timeout') }}</label>
-          <input v-model.number="draft.timeoutMs" type="number" class="cne-input mono" />
+          <Input v-model.number="draft.timeoutMs" type="number" class="mono" />
         </div>
       </div>
 
@@ -107,11 +98,7 @@
         <template v-if="draft.transport === 'stdio'">
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.command') }}</label>
-            <input
-              v-model="draft.command"
-              class="cne-input mono"
-              placeholder="npx, uvx, /path/to/bin"
-            />
+            <Input v-model="draft.command" placeholder="npx, uvx, /path/to/bin" class="mono" />
           </div>
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.args') }}</label>
@@ -124,11 +111,7 @@
           </div>
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.cwd') }}</label>
-            <input
-              v-model="draft.cwd"
-              class="cne-input mono"
-              :placeholder="t('connections.editor.cwdPh')"
-            />
+            <Input v-model="draft.cwd" :placeholder="t('connections.editor.cwdPh')" class="mono" />
           </div>
           <LibraryKvEditor
             v-model="envEntries"
@@ -141,11 +124,7 @@
         <template v-else>
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.url') }}</label>
-            <input
-              v-model="draft.url"
-              class="cne-input mono"
-              placeholder="https://mcp.example.com/v1"
-            />
+            <Input v-model="draft.url" placeholder="https://mcp.example.com/v1" class="mono" />
           </div>
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.authType') }}</label>
@@ -158,13 +137,13 @@
                tokens come from the sign-in flow (Connect on the detail pane). -->
           <div v-if="draft.authType === 'bearer'" class="cne-field">
             <label class="cne-label">{{ t('connections.editor.credentialToken') }}</label>
-            <input
+            <Input
               v-model="mcpBearerToken"
               type="password"
-              class="cne-input mono"
               :placeholder="t('connections.editor.mcpBearerPh')"
               spellcheck="false"
               autocomplete="off"
+              class="mono"
             />
             <div class="cne-hint">{{ mcpBearerHint }}</div>
           </div>
@@ -188,12 +167,12 @@
             :options="toolOptions"
             width="100%"
           />
-          <input
+          <Input
             v-else
             v-model="healthTool"
-            class="cne-input mono"
             :placeholder="t('connections.editor.healthToolPh')"
             spellcheck="false"
+            class="mono"
           />
           <template v-if="healthTool">
             <textarea
@@ -213,11 +192,11 @@
       <template v-else-if="draft.type === 'api'">
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.baseUrl') }}</label>
-          <input
+          <Input
             v-model="draft.apiBaseUrl"
-            class="cne-input mono"
             placeholder="https://api.example.com/"
             spellcheck="false"
+            class="mono"
           />
           <div class="cne-hint">{{ t('connections.editor.baseUrlHint') }}</div>
         </div>
@@ -234,18 +213,18 @@
         <template v-if="draft.apiAuthType === 'bearer'">
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.authScheme') }}</label>
-            <input v-model="draft.apiAuthScheme" class="cne-input mono" placeholder="Bearer" />
+            <Input v-model="draft.apiAuthScheme" placeholder="Bearer" class="mono" />
             <div class="cne-hint">{{ t('connections.editor.authSchemeHint') }}</div>
           </div>
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.credentialToken') }}</label>
-            <input
+            <Input
               v-model="credValue"
               type="password"
-              class="cne-input mono"
               :placeholder="t('connections.editor.credentialTokenPh')"
               spellcheck="false"
               autocomplete="off"
+              class="mono"
             />
             <div class="cne-hint">{{ credentialHint }}</div>
           </div>
@@ -259,22 +238,22 @@
           <template v-if="draft.apiHeaderMode === 'single'">
             <div class="cne-field">
               <label class="cne-label">{{ t('connections.editor.headerName') }}</label>
-              <input
+              <Input
                 v-model="draft.apiHeaderName"
-                class="cne-input mono"
                 :placeholder="t('connections.editor.headerNamePh')"
                 spellcheck="false"
+                class="mono"
               />
             </div>
             <div class="cne-field">
               <label class="cne-label">{{ t('connections.editor.credentialApiKey') }}</label>
-              <input
+              <Input
                 v-model="credValue"
                 type="password"
-                class="cne-input mono"
                 :placeholder="t('connections.editor.credentialApiKeyPh')"
                 spellcheck="false"
                 autocomplete="off"
+                class="mono"
               />
               <div class="cne-hint">{{ credentialHint }}</div>
             </div>
@@ -291,22 +270,22 @@
         <template v-else-if="draft.apiAuthType === 'query'">
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.queryParam') }}</label>
-            <input
+            <Input
               v-model="draft.apiQueryParam"
-              class="cne-input mono"
               :placeholder="t('connections.editor.queryParamPh')"
               spellcheck="false"
+              class="mono"
             />
           </div>
           <div class="cne-field">
             <label class="cne-label">{{ t('connections.editor.credentialApiKey') }}</label>
-            <input
+            <Input
               v-model="credValue"
               type="password"
-              class="cne-input mono"
               :placeholder="t('connections.editor.credentialApiKeyPh')"
               spellcheck="false"
               autocomplete="off"
+              class="mono"
             />
             <div class="cne-hint">{{ credentialHint }}</div>
           </div>
@@ -316,21 +295,16 @@
           <div class="cne-grid">
             <div class="cne-field">
               <label class="cne-label">{{ t('connections.editor.credentialUsername') }}</label>
-              <input
-                v-model="credUsername"
-                class="cne-input mono"
-                spellcheck="false"
-                autocomplete="off"
-              />
+              <Input v-model="credUsername" spellcheck="false" autocomplete="off" class="mono" />
             </div>
             <div class="cne-field">
               <label class="cne-label">{{ t('connections.editor.credentialPassword') }}</label>
-              <input
+              <Input
                 v-model="credPassword"
                 type="password"
-                class="cne-input mono"
                 spellcheck="false"
                 autocomplete="off"
+                class="mono"
               />
             </div>
           </div>
@@ -349,11 +323,11 @@
           <div class="cne-hint">{{ t('connections.editor.testEndpointHint') }}</div>
           <div class="cne-grid-te">
             <AppSelect v-model="apiTestMethodSelect" :options="testMethodOptions" width="100%" />
-            <input
+            <Input
               v-model="draft.apiTestPath"
-              class="cne-input mono"
               :placeholder="t('connections.editor.testPathPh')"
               spellcheck="false"
+              class="mono"
             />
           </div>
           <template v-if="draft.apiTestMethod === 'POST'">
@@ -374,11 +348,11 @@
       <template v-else-if="draft.type === 'local'">
         <div class="cne-field">
           <label class="cne-label">{{ t('connections.editor.path') }}</label>
-          <input
+          <Input
             v-model="draft.localPath"
-            class="cne-input mono"
             :placeholder="t('connections.editor.pathPh')"
             spellcheck="false"
+            class="mono"
           />
           <div class="cne-hint">{{ t('connections.editor.pathHint') }}</div>
         </div>
@@ -396,14 +370,14 @@
 
       <!-- verify (save-first: source.test operates on the persisted source) -->
       <div class="cne-verify">
-        <button class="btn sm" :disabled="!canVerify || verifying" @click="onVerify">
+        <Button :disabled="!canVerify || verifying" variant="outline" size="sm" @click="onVerify">
           <Icon
             :name="verifying ? 'refresh' : 'check'"
             :class="{ spin: verifying }"
             style="width: var(--icon-xs); height: var(--icon-xs)"
           />
           {{ verifying ? t('connections.editor.testing') : t('connections.editor.verify') }}
-        </button>
+        </Button>
         <span v-if="verifyResult" class="cne-verify-sum" :class="{ ok: verifyResult.ok }">
           {{ verifyResult.summary }}
         </span>
@@ -436,20 +410,21 @@
     </div>
 
     <template #footer>
-      <button
+      <Button
         v-if="isExisting"
-        class="btn cne-ai"
         :title="t('connections.editor.refineAiHint')"
+        class="cne-ai"
+        variant="outline"
         @click="emit('refine-ai')"
       >
         <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('connections.editor.refineAi') }}
-      </button>
+      </Button>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('connections.editor.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -475,6 +450,8 @@
 import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import LibraryKvEditor, {
   type KvEntry,
   type KvSecretMode,
@@ -818,8 +795,8 @@ watch(
   },
 )
 
-const onSlugInput = (e: Event) => {
-  draft.value.slug = (e.target as HTMLInputElement).value
+const onSlugInput = (v: string) => {
+  draft.value.slug = v
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '')

@@ -6,13 +6,12 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { completePi } from '../runtime/complete.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const Params = z.object({
-  prompt: z.string().min(1).max(8_000),
+  prompt: z.string().min(1).max(32_000),
   accountId: z.string().min(1).max(120).optional(),
   modelId: ModelSchema.optional(),
   // The hook command (so the model knows how the script is invoked + its path).

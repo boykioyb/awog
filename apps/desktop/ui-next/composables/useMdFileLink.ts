@@ -1,6 +1,6 @@
 import { toValue, type MaybeRefOrGetter } from 'vue'
 import { usePreview, previewKindFromPath } from './usePreview'
-import { useFilePreview } from './useFilePreview'
+import { useFilePreview, hasFilePreviewHost } from './useFilePreview'
 import { isInternalFileHref, normalizeWorkspacePath } from '~/utils/file-links'
 
 // One delegated click handler for every rendered-markdown surface that isn't the session
@@ -32,6 +32,15 @@ export function useMdFileLink(workspaceRoot?: MaybeRefOrGetter<string | null | u
     const href = (a.getAttribute('href') ?? '').trim()
     if (!isInternalFileHref(href)) return // external URL / #anchor → default handling
     e.preventDefault()
+    // href trần bắt đầu '/' vừa có thể là root-relative (convention markdown)
+    // vừa là filesystem-absolute (agent viết path thật dưới ~/.awog/…). Khi có
+    // filePreview host, để nó quyết: matchPath map root-relative qua file index,
+    // còn abs ngoài workspace scope vào thư mục cha — normalizeWorkspacePath ở
+    // đây sẽ nuốt dấu '/' và ghép sai "<root>/Users/…".
+    if (href.startsWith('/') && hasFilePreviewHost()) {
+      filePreview.open(href)
+      return
+    }
     const root = toValue(workspaceRoot)
     const path = root ? normalizeWorkspacePath(href) : null
     if (root && path) {

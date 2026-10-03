@@ -5,10 +5,9 @@
       <span v-if="required" class="ape-req" aria-hidden="true">*</span>
     </label>
     <AppSelect v-if="!manual" v-model="selected" :options="options" width="100%" />
-    <input
+    <Input
       v-else
       v-model.trim="model"
-      class="ape-input"
       spellcheck="false"
       :placeholder="t('infra.editor.regionPh')"
     />
@@ -38,6 +37,7 @@
 import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import { AWS_REGIONS, isKnownRegion } from '~/utils/aws-regions'
+import Input from '~/components/ui/input/Input.vue'
 
 withDefaults(
   defineProps<{

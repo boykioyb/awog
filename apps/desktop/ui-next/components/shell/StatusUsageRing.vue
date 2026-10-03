@@ -52,9 +52,11 @@ const { entries, loading, error, refresh } = useAccountUsage(() => ({
 }))
 
 function rlColor(u: number): string {
-  if (u >= 1) return 'var(--danger)'
-  if (u >= 0.9) return 'var(--amber)'
-  return 'var(--accent)'
+  // Canonical shadcn status vars — the bridge aliases them to AWOG's
+  // --danger/--amber/--accent, so the palette is unchanged.
+  if (u >= 1) return 'var(--destructive)'
+  if (u >= 0.9) return 'var(--warning)'
+  return 'var(--primary)'
 }
 function formatResetsIn(ms?: number): string {
   if (!ms) return ''
@@ -120,7 +122,7 @@ function onFocus() {
   cursor: default;
 }
 .donut-wrap:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .donut {
   width: 18px;
@@ -155,9 +157,12 @@ function onFocus() {
   flex-direction: column;
   gap: 7px;
   padding: 11px 12px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
+  background: var(--popover);
+  /* --input (the stronger hairline) not --border: matches the .smenu popover
+     border the rest of the app uses — AWOG keeps elevated surfaces on the
+     stronger hairline, and the bridge canonical name for it is --input. */
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-md);
 }
 .donut-wrap:hover .donut-pop {
@@ -167,7 +172,7 @@ function onFocus() {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -186,7 +191,7 @@ function onFocus() {
   flex: 0 0 84px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -195,7 +200,7 @@ function onFocus() {
   flex: 1 1 auto;
   height: 5px;
   border-radius: var(--r-pill);
-  background: var(--bgInput);
+  background: var(--muted);
   overflow: hidden;
 }
 .donut-rbar i {

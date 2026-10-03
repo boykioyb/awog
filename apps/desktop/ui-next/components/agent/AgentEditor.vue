@@ -6,42 +6,17 @@
     @close="emit('cancel')"
   >
     <div class="age">
-      <!-- Save location (tier) — locked once an agent exists (moving tiers = a new file). -->
-      <div class="age-field">
-        <label class="age-label">{{ t('agents.editor.saveLocation') }}</label>
-        <div class="age-tiers">
-          <button
-            v-for="opt in sourceOptions"
-            :key="opt.value"
-            type="button"
-            class="chip age-tier"
-            :class="{ on: draft.source === opt.value }"
-            :disabled="isExisting"
-            @click="setSource(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-        <div v-if="draft.source === 'project'" class="age-project">
-          <AppSelect
-            v-model="draft.projectId"
-            :options="projectOptions"
-            :placeholder="t('agents.editor.pickProject')"
-            width="100%"
-          />
-        </div>
-        <div class="age-hint">{{ sourceHint }}</div>
-      </div>
-
+      <!-- Agents are global roles (~/.awog/agents) — no tier picker. An existing
+           project-tier agent keeps its location silently (source preserved). -->
       <div class="age-grid">
         <div class="age-field">
           <label class="age-label">{{ t('agents.editor.slug') }}</label>
-          <input
-            class="age-input mono"
-            :value="draft.id"
+          <Input
+            :model-value="draft.id"
             placeholder="e.g. tech-lead"
             spellcheck="false"
-            @input="onSlugInput"
+            class="mono"
+            @update:model-value="onSlugInput"
           />
           <div class="age-hint">
             {{ t('agents.editor.slugHint', { slug: draft.id || 'slug' }) }}
@@ -49,18 +24,14 @@
         </div>
         <div class="age-field">
           <label class="age-label">{{ t('agents.editor.role') }}</label>
-          <input
-            v-model="draft.role"
-            class="age-input mono"
-            :placeholder="t('agents.editor.rolePh')"
-          />
+          <Input v-model="draft.role" :placeholder="t('agents.editor.rolePh')" class="mono" />
           <div class="age-hint">{{ t('agents.editor.roleHint') }}</div>
         </div>
       </div>
 
       <div class="age-field">
         <label class="age-label">{{ t('agents.editor.name') }}</label>
-        <input v-model="draft.name" class="age-input" :placeholder="t('agents.editor.namePh')" />
+        <Input v-model="draft.name" :placeholder="t('agents.editor.namePh')" />
       </div>
 
       <div class="age-field">
@@ -106,94 +77,92 @@
         />
       </div>
 
-      <!-- Tools whitelist (chip input). Empty = full toolset. -->
+      <!-- Whitelists — shared pickers (same components the detail tabs render
+           inline). Empty model = unrestricted / inherit session. -->
       <div class="age-field">
         <label class="age-label">{{ t('agents.editor.tools') }}</label>
-        <div v-if="draft.tools.length" class="age-chips">
-          <span
-            v-for="tool in draft.tools"
-            :key="tool"
-            class="chip"
-            :class="{ mono: tool.startsWith('mcp__') }"
-          >
-            {{ tool }}
-            <button
-              class="age-chipx"
-              :title="t('agents.editor.removeTool')"
-              @click="draft.tools = draft.tools.filter((x) => x !== tool)"
-            >
-              <Icon name="x" style="width: 10px; height: 10px" />
-            </button>
-          </span>
-        </div>
-        <input
-          v-model="toolInput"
-          class="age-input mono"
-          :placeholder="t('agents.editor.toolsPh')"
-          @keydown.enter.prevent="addTool"
+        <AgentToolsPicker
+          :model-value="draft.tools"
+          :servers="mcpServers"
+          @update:model-value="(v) => (draft.tools = v ?? [])"
         />
-        <div class="age-hint">{{ t('agents.editor.toolsHint') }}</div>
       </div>
 
-      <!-- Connections (MCP) whitelist — checkbox list. Unticked = inherit. -->
       <div class="age-field">
         <label class="age-label">
           {{ t('agents.editor.connections') }}
           <span class="age-count">{{ mcpCountLabel }}</span>
         </label>
-        <div class="age-mcp">
-          <label
-            v-for="s in mcpServers"
-            :key="s.id"
-            class="age-mcprow"
-            :class="{ on: isMcpAllowed(s.id) }"
-          >
-            <input
-              type="checkbox"
-              :checked="isMcpAllowed(s.id)"
-              class="age-cbx"
-              @change="toggleMcpServer(s.id)"
-            />
-            <span class="age-mcpname mono">{{ s.name }}</span>
-          </label>
-          <div v-if="mcpServers.length === 0" class="age-mcpempty">
-            {{ t('agents.editor.connectionsEmpty') }}
-          </div>
-        </div>
-        <div class="age-hint">{{ t('agents.editor.connectionsHint') }}</div>
+        <AgentConnectionsPicker
+          :model-value="mcpModel"
+          :servers="mcpServers"
+          @update:model-value="(v) => (mcpModel = v)"
+        />
+      </div>
+
+      <div class="age-field">
+        <label class="age-label">
+          {{ t('agents.editor.skills') }}
+          <span class="age-count">{{ skillCountLabel }}</span>
+        </label>
+        <AgentSkillsPicker
+          :model-value="draft.skillIds"
+          :skills="skills"
+          @update:model-value="(v) => (draft.skillIds = v ?? [])"
+        />
+      </div>
+
+      <div class="age-field">
+        <label class="age-label">
+          {{ t('agents.editor.repos') }}
+          <span class="age-count">{{ repoCountLabel }}</span>
+        </label>
+        <AgentReposPicker
+          :model-value="draft.repos"
+          :projects="projects"
+          @update:model-value="(v) => (draft.repos = v ?? [])"
+        />
       </div>
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ agent?.id ? t('agents.editor.save') : t('agents.editor.create') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
 
 <script setup lang="ts">
 // Agent form editor — port of the old UI AgentEditor logic, rendered in
-// prototype CSS inside LibraryEntityModal. Save-location tier is locked once the
-// agent exists; slug is sanitized to kebab-case. Provider/model/account selectors
-// use AppSelect; the MCP whitelist is a checkbox list; the tools whitelist is a
-// chip input (empty = full toolset). NOTE: no skills picker — agent.skillIds was
-// removed project-wide (skills live on Workflow nodes only). Emits a save payload
-// carrying the optional previousId for slug renames.
+// prototype CSS inside LibraryEntityModal. Agents are global roles — new agents
+// always write to ~/.awog/agents; a legacy project-tier agent keeps its
+// source/projectId silently (no tier picker in the form). Slug is sanitized to
+// kebab-case. Provider/model/account selectors use AppSelect; the four
+// whitelists (tools/connections/skills/repos) use the shared Agent*Picker
+// components — the same ones the detail tabs render for inline editing.
+// Emits a save payload carrying the optional previousId for slug renames.
 import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
+import AgentToolsPicker from '~/components/agent/AgentToolsPicker.vue'
+import AgentConnectionsPicker from '~/components/agent/AgentConnectionsPicker.vue'
+import AgentSkillsPicker from '~/components/agent/AgentSkillsPicker.vue'
+import AgentReposPicker from '~/components/agent/AgentReposPicker.vue'
 import { PROVIDERS, modelsForProvider } from './agent-display'
 import { useSettingsStore } from '~/stores/settings'
 import type { Agent, AgentSource } from '~/stores/agents'
 import type { ProviderName } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean
   agent: Agent | null
   projects: { id: string; name: string; path?: string }[]
   mcpServers: { id: string; name: string }[]
+  skills: { id: string; name: string; description?: string; source?: string; projectId?: string }[]
 }>()
 
 const emit = defineEmits<{
@@ -203,11 +172,6 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const settings = useSettingsStore()
-
-const sourceOptions: { value: AgentSource; label: string }[] = [
-  { value: 'global', label: '~/.awog/agents' },
-  { value: 'project', label: 'project · .awog/agents' },
-]
 
 type Draft = {
   id: string
@@ -225,6 +189,8 @@ type Draft = {
   // Sentinel: false = inherit session MCP (no per-agent filter); true = explicit
   // whitelist (even when empty). Mirrors the old UI's undefined-vs-array logic.
   mcpExplicit: boolean
+  skillIds: string[]
+  repos: string[]
 }
 
 const makeDefaults = (): Draft => ({
@@ -241,6 +207,8 @@ const makeDefaults = (): Draft => ({
   tools: [],
   mcpServerIds: [],
   mcpExplicit: false,
+  skillIds: [],
+  repos: [],
 })
 
 const fromAgent = (a: Agent): Draft => ({
@@ -257,13 +225,14 @@ const fromAgent = (a: Agent): Draft => ({
   tools: [...(a.tools ?? [])],
   mcpServerIds: [...(a.mcpServerIds ?? [])],
   mcpExplicit: Array.isArray(a.mcpServerIds),
+  skillIds: [...(a.skillIds ?? [])],
+  repos: [...(a.repos ?? [])],
 })
 
 const initDraft = (a: Agent | null): Draft => (a ? fromAgent(a) : makeDefaults())
 
 const draft = ref<Draft>(initDraft(props.agent))
 const previousId = ref<string | undefined>(props.agent?.id)
-const toolInput = ref('')
 
 // Re-seed the draft each time the modal opens or the target agent changes.
 watch(
@@ -272,38 +241,11 @@ watch(
     if (!isOpen) return
     draft.value = initDraft(props.agent)
     previousId.value = props.agent?.id
-    toolInput.value = ''
   },
 )
 
-const isExisting = computed(() => !!props.agent)
-
-const projectOptions = computed<AppSelectOption[]>(() =>
-  props.projects.map((p) => ({ value: p.id, label: p.path ? `${p.name} (${p.path})` : p.name })),
-)
-
-const setSource = (source: AgentSource) => {
-  if (isExisting.value) return
-  draft.value.source = source
-  if (source === 'project') {
-    if (!draft.value.projectId) draft.value.projectId = props.projects[0]?.id ?? ''
-  } else {
-    draft.value.projectId = ''
-  }
-}
-
-const sourceHint = computed(() => {
-  if (draft.value.source === 'global') return t('agents.editor.globalHint')
-  const project = props.projects.find((p) => p.id === draft.value.projectId)
-  if (!project) return t('agents.editor.projectHintNone', { slug: draft.value.id || 'slug' })
-  return t('agents.editor.projectHint', {
-    path: project.path ?? project.name,
-    slug: draft.value.id || 'slug',
-  })
-})
-
-const onSlugInput = (e: Event) => {
-  draft.value.id = (e.target as HTMLInputElement).value
+const onSlugInput = (v: string) => {
+  draft.value.id = v
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-+/g, '-')
@@ -365,32 +307,37 @@ const accountSelect = computed<string>({
   },
 })
 
-// --- tools ----------------------------------------------------------------
-const addTool = () => {
-  const v = toolInput.value.trim()
-  if (!v) return
-  if (!draft.value.tools.includes(v)) draft.value.tools = [...draft.value.tools, v]
-  toolInput.value = ''
-}
-
-// --- MCP whitelist --------------------------------------------------------
-const isMcpAllowed = (id: string): boolean =>
-  draft.value.mcpExplicit && draft.value.mcpServerIds.includes(id)
-
-const toggleMcpServer = (id: string) => {
-  const current = draft.value.mcpServerIds
-  const next = current.includes(id) ? current.filter((s) => s !== id) : [...current, id]
-  draft.value.mcpServerIds = next
-  // Any toggle moves the agent into explicit-whitelist mode; an emptied list is
-  // still explicit (= "none") until the user closes & re-opens with no list.
-  draft.value.mcpExplicit = true
-}
+// --- whitelists -------------------------------------------------------------
+// The four Agent*Picker components model `string[] | undefined` (undefined =
+// unrestricted/inherit). Draft keeps plain arrays + the mcpExplicit sentinel;
+// this computed maps the sentinel across the picker boundary. Toggling any row
+// moves the agent into explicit mode; emptying it returns to inherit (the
+// serializer drops empty arrays anyway, so "explicit none" never persisted).
+const mcpModel = computed<string[] | undefined>({
+  get: () => (draft.value.mcpExplicit ? draft.value.mcpServerIds : undefined),
+  set: (v) => {
+    draft.value.mcpExplicit = v !== undefined
+    draft.value.mcpServerIds = v ?? []
+  },
+})
 
 const mcpCountLabel = computed(() => {
   if (!draft.value.mcpExplicit) return t('agents.editor.mcpInherit')
   if (draft.value.mcpServerIds.length === 0) return t('agents.editor.mcpNone')
   return t('agents.editor.mcpAllowed', { n: draft.value.mcpServerIds.length })
 })
+
+const skillCountLabel = computed(() =>
+  draft.value.skillIds.length === 0
+    ? t('agents.editor.skillsAll')
+    : t('agents.editor.skillsAllowed', { n: draft.value.skillIds.length }),
+)
+
+const repoCountLabel = computed(() =>
+  draft.value.repos.length === 0
+    ? t('agents.editor.reposAll')
+    : t('agents.editor.reposAllowed', { n: draft.value.repos.length }),
+)
 
 // --- save -----------------------------------------------------------------
 const canSave = computed(() => {
@@ -423,6 +370,10 @@ const onSave = () => {
   if (draft.value.mcpExplicit && draft.value.mcpServerIds.length > 0) {
     agent.mcpServerIds = [...draft.value.mcpServerIds]
   }
+  // Skills + repos whitelists: persisted only when non-empty — an empty list
+  // means "unrestricted", same as the field being absent.
+  if (draft.value.skillIds.length > 0) agent.skillIds = [...draft.value.skillIds]
+  if (draft.value.repos.length > 0) agent.repos = [...draft.value.repos]
 
   const payload: { agent: Agent; previousId?: string } = { agent }
   if (previousId.value && previousId.value !== agent.id) payload.previousId = previousId.value
@@ -491,74 +442,6 @@ const onSave = () => {
   color: var(--textDim);
   line-height: var(--lh-sm);
 }
-.age-tiers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.age-tier {
-  cursor: pointer;
-  background: var(--bgInput);
-}
-.age-tier.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.age-tier:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.age-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-.age-chipx {
-  display: inline-flex;
-  border: 0;
-  background: transparent;
-  color: var(--textDim);
-  cursor: pointer;
-  padding: 0;
-}
-.age-chipx:hover {
-  color: var(--danger);
-}
-.age-mcp {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-btn);
-  padding: 6px;
-}
-.age-mcprow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-}
-.age-mcprow.on {
-  background: var(--bgActive);
-}
-.age-cbx {
-  accent-color: var(--accent);
-}
-.age-mcpname {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  font-weight: 500;
-  color: var(--text);
-}
-.age-mcpempty {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-  text-align: center;
-  padding: 12px 0;
-}
+/* Whitelist list/chip styles live in assets/css/agent-whitelist.css (.awp-*) —
+   shared with the pickers the detail tabs render inline. */
 </style>

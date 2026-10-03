@@ -35,9 +35,8 @@
         </div>
 
         <div class="itoolgrp igrow">
-          <input
+          <Input
             v-model="resourceName"
-            class="itp-inp"
             type="text"
             autocomplete="off"
             spellcheck="false"
@@ -46,16 +45,17 @@
             @keydown.enter="lookup"
           />
 
-          <button
-            class="btn sm pri"
+          <Button
             type="button"
             :disabled="loading || !hasAccount"
             :aria-busy="loading"
+            variant="default"
+            size="sm"
             @click="lookup"
           >
             <Icon name="search" class="itp-ic" :class="loading ? 'itp-spin' : ''" />
             {{ t('infra.trail.lookup') }}
-          </button>
+          </Button>
         </div>
 
         <label v-if="report" class="itoolgrp itp-chk">
@@ -138,6 +138,8 @@ import { computed, ref } from 'vue'
 import InfraEmpty from '~/components/infra/InfraEmpty.vue'
 import { useInfraMode } from '~/composables/useInfraMode'
 import { useInfraTrail } from '~/composables/useInfraTrail'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const { isExpert } = useInfraMode()

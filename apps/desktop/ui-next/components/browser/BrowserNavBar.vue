@@ -38,10 +38,9 @@
          lên trên — một cú bấm focus input + select-all đúng kiểu omnibox. Lớp
          đọc là <button> để tab/keyboard vẫn tới được. -->
     <div class="bch-url">
-      <input
+      <Input
         ref="urlEl"
         v-model="url"
-        class="bch-urlinp"
         type="text"
         spellcheck="false"
         :placeholder="t('sessions.workspace.browser.urlPlaceholder')"
@@ -90,14 +89,14 @@
   </div>
 
   <!-- Menu split-view: đổi mép dock của view Browser. -->
-  <ContextMenu
+  <AppContextMenu
     :open="dockAt !== null"
     :position="dockAt ?? { x: 0, y: 0 }"
     :items="dockItems"
     @close="dockAt = null"
     @select="onDockSelect"
   />
-  <ContextMenu
+  <AppContextMenu
     :open="actionsAt !== null"
     :position="actionsAt ?? { x: 0, y: 0 }"
     :items="actionItems"
@@ -109,6 +108,7 @@
     :position="overflowAt ?? { x: 0, y: 0 }"
     :root="root"
     :tab-id="tabId"
+    :scope="tab?.scope"
     @close="overflowAt = null"
   />
 </template>
@@ -122,6 +122,7 @@ import type { AwogBrowserTab } from '~/types/awog-bridge'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import type { BrowserChromeSurface } from './BrowserChrome.vue'
 import { useBrowserActions } from '~/composables/useBrowserActions'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = withDefaults(
   defineProps<{

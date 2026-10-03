@@ -6,9 +6,18 @@
     :style="{ flex: `0 0 ${listWidth}px !important`, width: `${listWidth}px !important` }"
   >
     <div class="ltop">
-      <div class="srch">
-        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <input v-model="filter" :placeholder="t('sessions.search.placeholder')" />
+      <!-- Proto search idiom: the icon overlays a muted, borderless ui Input. -->
+      <div class="relative flex-1">
+        <Icon
+          name="search"
+          class="absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
+          style="width: var(--icon-sm); height: var(--icon-sm)"
+        />
+        <Input
+          v-model="filter"
+          :placeholder="t('sessions.search.placeholder')"
+          class="h-[var(--ctrl-h-sm)] border-transparent bg-muted pl-8 shadow-none focus-visible:ring-1"
+        />
       </div>
       <!-- Tạo phiên. KHÔNG thêm nút thứ hai cạnh nó — header này chỉ vừa đúng ba điều
            khiển (ô tìm · + · ⋯). Thay vào đó `+` mở một menu: phiên đơn · phiên con của
@@ -16,15 +25,15 @@
            lựa chọn nào (chưa mở phiên nào, chưa có nhóm nào) nó mới tạo thẳng. Anchor là
            span RIÊNG của nút này — dùng chung span với nút khác thì hai nút xuống dòng. -->
       <span style="position: relative">
-        <button
-          class="iconbtn"
+        <Button
+          variant="ghost"
+          size="iconSm"
           :title="hasChoice ? t('sessions.newIn.tooltip') : t('sessions.new')"
-          style="width: 28px; height: 28px"
-          :style="newMenu ? { borderColor: 'var(--accent)', color: 'var(--accent)' } : {}"
+          :class="newMenu && 'bg-primary/10 text-primary'"
           @click.stop="onNewClick"
         >
-          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="plus" />
+        </Button>
         <div
           v-if="newMenu"
           style="position: fixed; inset: 0; z-index: 40"
@@ -76,19 +85,15 @@
            Ba thao tác dùng vài lần một tuần nhưng đang chiếm chỗ thường trực ngang
            hàng với nút tạo phiên — thứ được bấm mỗi ngày. -->
       <span style="position: relative">
-        <button
-          class="iconbtn"
+        <Button
+          variant="ghost"
+          size="iconSm"
           :title="t('sessions.sidebar.more')"
-          style="width: 28px; height: 28px"
-          :style="
-            store.selecting || listMenu
-              ? { borderColor: 'var(--accent)', color: 'var(--accent)' }
-              : {}
-          "
+          :class="(store.selecting || listMenu) && 'bg-primary/10 text-primary'"
           @click.stop="listMenu = !listMenu"
         >
-          <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+          <Icon name="dots" />
+        </Button>
         <div
           v-if="listMenu"
           style="position: fixed; inset: 0; z-index: 40"
@@ -137,7 +142,7 @@
             @click.stop
           >
             <div v-for="[value] in GROUPBY" :key="value" class="mi" @click="selectGroup(value)">
-              {{ t(`sessions.group.${value}`) }}
+              {{ t(`sessions.team.${value}`) }}
               <Icon
                 v-if="value === groupBy"
                 name="check"
@@ -218,7 +223,7 @@
         v-if="selectedCount"
         class="del"
         :title="t('sessions.sidebar.deleteSelected')"
-        style="color: var(--danger)"
+        style="color: var(--destructive)"
         @click="askBulkRemove"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -235,7 +240,7 @@
     <div class="lscroll">
       <template v-if="groupBy === 'none'">
         <template v-if="filtered.length">
-          <div class="grpitems" style="padding-top: 4px">
+          <div class="grpitems">
             <SessionListItem
               v-for="s in flatPage.items"
               :key="s.id"
@@ -279,7 +284,7 @@
            v-for phẳng — hàng phiên giữ nguyên rename inline / select / context menu. -->
       <template v-else-if="groupBy === 'tree'">
         <template v-if="treeRows.length">
-          <div class="grpitems" style="padding-top: 4px">
+          <div class="grpitems">
             <SessionListItem
               v-for="r in treeRows"
               :key="r.session.id"
@@ -433,12 +438,12 @@
       @click="closeMenus"
     />
 
-    <SessionGroupPicker
-      v-if="groupPickerFor"
-      :session="groupPickerFor"
+    <SessionRunPicker
+      v-if="runPickerFor"
+      :session="runPickerFor"
       :sessions="props.sessions"
-      @pick="applyGroupPick"
-      @close="groupPickerFor = null"
+      @pick="applyRunPick"
+      @close="runPickerFor = null"
     />
 
     <!-- Right-click context menu (one shared menu, positioned at the cursor). -->
@@ -496,9 +501,7 @@
         <div class="mi" @click="ctxGroup">
           <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{
-            ctx.session.groupParentId
-              ? t('sessions.ctx.changeGroup')
-              : t('sessions.ctx.moveToGroup')
+            ctx.session.teamRunId ? t('sessions.ctx.changeGroup') : t('sessions.ctx.moveToGroup')
           }}
         </div>
         <!-- Lưới các phiên con. Chỉ hiện trên phiên CÓ con: mở lưới từ một phiên lẻ
@@ -508,20 +511,9 @@
           <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('sessions.ctx.gridChildren') }}
         </div>
-        <!-- Tự giao tin trong nhóm. CHỈ hiện trên phiên GỐC của nhóm (phiên có con và
-             không có cha): cờ nằm ở gốc và là công tắc của cả nhóm, nên hiện nó ở một
-             phiên con sẽ hứa một thứ mà bấm vào không có tác dụng. -->
-        <div v-if="ctxIsGroupRoot" class="mi" @click="ctxToggleAutoDeliver">
-          <Icon name="zap" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{
-            ctx.session.groupAutoDeliver
-              ? t('sessions.group.autoDeliverOff')
-              : t('sessions.group.autoDeliverOn')
-          }}
-        </div>
-        <div v-if="ctx.session.groupParentId" class="mi" @click="ctxUngroup">
+        <div v-if="ctx.session.teamRunId" class="mi" @click="ctxUngroup">
           <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.group.detach') }}
+          {{ t('sessions.team.detach') }}
         </div>
         <!-- Move the session to its own OS window / bring it back (popout hand-off). -->
         <div v-if="ctxCanWindow" class="mi" @click="ctxWindow">
@@ -561,6 +553,7 @@
 // select mode + bulk bar, and a per-row context menu. The page passes
 // `store.tabSessions` (the active tab's sessions), so this list is always scoped to
 // one project; rows hide their project label since the tab already names it.
+import { isBoardSession } from '~/composables/useSessionsData'
 import type { Session, SortBy } from '~/composables/useSessionsData'
 import { PROJECT_COLOR_DEFAULT } from '~/composables/useProjectColors'
 import {
@@ -729,7 +722,7 @@ function openSortMenu() {
 // Per-group collapse state, keyed by the group's stable key (groupKeyOf).
 const collapsed = ref<Record<string, boolean>>({})
 
-const groupByLabel = computed(() => t(`sessions.group.${groupBy.value}`))
+const groupByLabel = computed(() => t(`sessions.team.${groupBy.value}`))
 const sortByLabel = computed(() => t(`sessions.sort.${sortBy.value}`))
 
 // Epoch ms of an ISO timestamp (0 when missing/invalid) — for the time-based sorts.
@@ -746,9 +739,15 @@ const SORT_CMP: Record<SortBy, (a: Session, b: Session) => number> = {
 
 const filtered = computed(() => {
   const q = filter.value.toLowerCase()
-  // Archived rows are out unless the filter drawer asks for them.
+  // Archived rows are out unless the filter drawer asks for them. Phiên "của
+  // board" (member/lead của một team run — `teamId`; lone-agent dispatch —
+  // `origin:'board'`) cũng ẩn: vòng đời của chúng sống trong board item và
+  // trang Teams, không phải danh sách chat (isBoardSession).
   const f = props.sessions.filter(
-    (s) => s.title.toLowerCase().includes(q) && (showArchived.value || !store.isArchived(s.id)),
+    (s) =>
+      s.title.toLowerCase().includes(q) &&
+      (showArchived.value || !store.isArchived(s.id)) &&
+      !isBoardSession(s),
   )
   const cmp = SORT_CMP[sortBy.value]
   // Pinned-first, then the chosen sort. Applies to the flat list and — since buckets
@@ -807,11 +806,14 @@ const flatPage = computed(() => {
 function groupKeyOf(s: Session): string {
   if (groupBy.value === 'provider') return providerOf(s.account)
   if (groupBy.value === 'unread') return s.unread ? 'unreadBucket' : 'read'
+  if (groupBy.value === 'agent') return s.agent?.id ?? 'noAgent'
   return s.model
 }
 function groupLabelOf(key: string): string {
-  // Unread/read bucket names go through i18n; provider/model show the raw value.
-  if (groupBy.value === 'unread') return t(`sessions.group.${key}`)
+  // Unread/read + phiên không bind agent đi qua i18n; provider/model/agent id
+  // hiện giá trị thô.
+  if (groupBy.value === 'unread' || (groupBy.value === 'agent' && key === 'noAgent'))
+    return t(`sessions.team.${key}`)
   return key
 }
 
@@ -882,10 +884,10 @@ const groupTargets = computed<GroupTarget[]>(() => {
   const active = all.find((s) => s.id === props.activeId)
   const activeRoot = active ? store.groupRootEid(active) : undefined
   // Gốc nhóm = phiên không có cha VÀ có ít nhất một con.
-  const parents = new Set(all.map((s) => s.groupParentId).filter(Boolean) as string[])
+  const parents = new Set(all.map((s) => s.teamRunId).filter(Boolean) as string[])
   return (
     all
-      .filter((s) => s.engineId && !s.groupParentId && parents.has(s.engineId))
+      .filter((s) => s.engineId && !s.teamRunId && parents.has(s.engineId))
       .map((s) => ({
         engineId: s.engineId as string,
         title: s.title,
@@ -904,7 +906,7 @@ const activeAsParent = computed<GroupTarget | null>(() => {
   if (!active?.engineId) return null
   // Nhóm chỉ có HAI CẤP: một phiên đã là con thì không làm cha được. Nhóm của nó đã
   // nằm trong `groupTargets` rồi, nên người dùng vẫn thêm được vào đúng nhóm đó.
-  if (active.groupParentId) return null
+  if (active.teamRunId) return null
   if (groupTargets.value.some((g) => g.engineId === active.engineId)) return null
   return {
     engineId: active.engineId,
@@ -943,15 +945,15 @@ const {
 } = useSessionTree(() => filtered.value)
 
 // Phiên đang mở hộp chọn nhóm (null = hộp đóng).
-const groupPickerFor = ref<Session | null>(null)
+const runPickerFor = ref<Session | null>(null)
 
 // Đóng hộp NGAY khi chọn, không đợi RPC: thao tác sai (chu trình, phiên chưa lưu) đã
 // được lọc khỏi danh sách ứng viên và vẫn bị sidecar chặn, còn giữ hộp mở trong lúc
 // chờ thì người dùng bấm được lần thứ hai vào một dòng khác.
-function applyGroupPick(parentClientId: number | null, role: string | null) {
-  const s = groupPickerFor.value
-  groupPickerFor.value = null
-  if (s) void store.setGroupParent(s.id, parentClientId, role)
+function applyRunPick(parentClientId: number | null, role: string | null) {
+  const s = runPickerFor.value
+  runPickerFor.value = null
+  if (s) void store.setRunMembership(s.id, parentClientId, role)
 }
 
 // ── Right-click context menu ───────────────────────────────────────────────────
@@ -971,23 +973,15 @@ function openCtx(p: { id: number; x: number; y: number }, s: Session) {
   })
 }
 function ctxGroup() {
-  groupPickerFor.value = ctx.value?.session ?? null
+  runPickerFor.value = ctx.value?.session ?? null
   ctx.value = null
 }
-// Phiên được bấm có phải GỐC của một nhóm không: không có cha, và có ít nhất một
-// phiên nhận nó làm cha. Một phiên lẻ (không cha không con) KHÔNG phải gốc nhóm —
-// bật tự giao ở đó chẳng có ai để giao.
-const ctxIsGroupRoot = computed(() => {
-  const s = ctx.value?.session
-  if (!s?.engineId || s.groupParentId) return false
-  return props.sessions.some((x) => x.groupParentId === s.engineId)
-})
 // Phiên được bấm có phiên con nào không. Quét TOÀN BỘ store chứ không phải
 // `props.sessions` (đã lọc theo tab project + ô tìm kiếm): một phiên con bị lọc khỏi
 // danh sách vẫn là con, và lưới vẫn phải mở được nó ra.
 const ctxHasChildren = computed(() => {
   const eid = ctx.value?.session.engineId
-  return !!eid && store.sessions.some((x) => x.groupParentId === eid)
+  return !!eid && store.sessions.some((x) => x.teamRunId === eid)
 })
 // Mở phiên cha RỒI đặt yêu cầu lưới: `gridMode` là ref cục bộ của SessionDetail, cột
 // này không với tới được (xem `requestGridView` trong store).
@@ -998,14 +992,10 @@ function ctxGrid() {
   store.requestGridView(s.id)
   emit('select', s.id)
 }
-function ctxToggleAutoDeliver() {
-  if (ctx.value) void store.toggleGroupAutoDeliver(ctx.value.session.id)
-  ctx.value = null
-}
 function ctxUngroup() {
   const s = ctx.value?.session
   ctx.value = null
-  if (s) void store.setGroupParent(s.id, null)
+  if (s) void store.setRunMembership(s.id, null)
 }
 function ctxOpen() {
   if (ctx.value) emit('select', ctx.value.session.id)
@@ -1148,7 +1138,7 @@ function toggleFoldAll() {
    `width: 62px`, nên "Trong nhóm" bị bẻ làm hai dòng. */
 .nmlbl {
   padding: 4px 10px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   white-space: nowrap;
@@ -1175,11 +1165,11 @@ function toggleFoldAll() {
   height: 22px;
   border-radius: var(--r-xs);
   cursor: pointer;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .bulkbar .del:hover {
-  color: var(--text);
-  background: var(--bgActive);
+  color: var(--foreground);
+  background: var(--accent-wash);
 }
 .bulkbar .lcbox {
   cursor: pointer;
@@ -1211,16 +1201,28 @@ function toggleFoldAll() {
 }
 /* Destructive item (Delete): danger tint + hover. */
 .ctxmenu .mi.danger {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .ctxmenu .mi.danger:hover {
-  background: var(--dangerDim, color-mix(in srgb, var(--danger) 14%, transparent));
+  background: color-mix(in srgb, var(--destructive) 14%, transparent);
 }
-/* Toolbar icon buttons sit beside the ~28px-tall search field — the global 32px
-   .iconbtn reads oversized here, so scope them down to match the search box. */
-.ltop .iconbtn {
-  width: 28px;
-  height: 28px;
+/* Proto zinc parity — `.list` is SHARED (Library / Projects / Infra / Workflows
+   all reuse it), so the reskin stays scoped to this column:
+     · background → var(--background) (the global fills var(--bgPanel), the AWOG
+       gray seam that sits a step above the zinc app background);
+     · border-right → none. The .rsz drag handle already paints the one hairline
+       between list and detail — the panel edge stacked a second line 2.5px away. */
+.list {
+  background: var(--background);
+  border-right: none;
+}
+/* The global .ltop pads 11px with an 8px gap and a bottom hairline; the proto list
+   header is p-2 + gap-1.5 on the same background as the rows — tighter, and no
+   divider, so the search field reads as one band with the two ghost buttons. */
+.ltop {
+  padding: 8px;
+  gap: 6px;
+  border-bottom: none;
 }
 /* Per-group / flat pager: prev/next + "Page X / Y" at the bottom of a list section.
    Centered, subtle — sits under the rows like the old load-more link but with
@@ -1241,24 +1243,24 @@ function toggleFoldAll() {
   border: none;
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     color 0.12s,
     background 0.12s;
 }
 .pgbtn:hover:not(:disabled) {
-  color: var(--accent);
-  background: var(--bgHover);
+  color: var(--primary);
+  background: var(--accent-wash);
 }
 .pgbtn:disabled {
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   cursor: default;
   opacity: 0.5;
 }
 .pgbtn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .pgbtn .icn {
   width: var(--icon-sm);
@@ -1275,7 +1277,7 @@ function toggleFoldAll() {
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   line-height: 12px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   min-width: 68px;
   text-align: center;
 }
@@ -1292,10 +1294,10 @@ function toggleFoldAll() {
 .archlbl {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .sfdrawer .csrow.arch:hover .archlbl {
-  color: var(--text);
+  color: var(--foreground);
 }
 /* Content-search section: docked under the (shrinking) list, capped so the list
    above always keeps some rows, with its own scroll for the hits. */
@@ -1306,14 +1308,14 @@ function toggleFoldAll() {
   flex-direction: column;
   min-height: 0;
   border-top: 1px solid var(--border);
-  background: var(--bgSubtle);
+  background: var(--muted);
 }
 .csh {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 7px 11px;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .csttl {
   font-size: var(--fs-xs);
@@ -1325,7 +1327,7 @@ function toggleFoldAll() {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .csbody {
   overflow-y: auto;
@@ -1335,10 +1337,10 @@ function toggleFoldAll() {
   padding: 6px 4px;
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .csnote.err {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .cshit {
   padding: 7px 8px;
@@ -1347,7 +1349,7 @@ function toggleFoldAll() {
   cursor: pointer;
 }
 .cshit:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .cshead {
   display: flex;
@@ -1360,7 +1362,7 @@ function toggleFoldAll() {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-weight: 550;
-  color: var(--text);
+  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1370,13 +1372,13 @@ function toggleFoldAll() {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   font-variant-numeric: tabular-nums;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .cssnip {
   margin-top: 3px;
   font-size: var(--fs-xs);
   line-height: var(--lh-sm);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   /* Two lines of context is enough to recognise the hit; the rest is in the session. */
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -1384,13 +1386,47 @@ function toggleFoldAll() {
   overflow: hidden;
 }
 .csrole {
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   margin-right: 5px;
 }
 .cssnip .hl {
-  background: var(--accentDim);
-  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 16%, transparent);
+  color: var(--foreground);
   border-radius: var(--r-xs);
   font-weight: 650;
+}
+/* Group headers (provider / model / agent / unread buckets): shadcn section-label
+   idiom — small, uppercase, tracked — on the sidebar surface, sticky over its rows. */
+.grph {
+  background: var(--sidebar);
+}
+.grph:hover {
+  background: var(--accent-wash);
+}
+.grph .gnm {
+  color: var(--muted-foreground);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.grph:hover .gnm {
+  color: var(--foreground);
+}
+.grph .gct {
+  color: var(--muted-foreground);
+}
+/* Rows scroll under proto's `p-2 pt-0` container (was 7px 11px for the old flat
+   list): side/bottom insets only — the header's own bottom padding supplies the
+   gap above the first row. The global `.grpitems{padding-top:4px}` still wants a
+   sliver for the top-level wrappers, so pin them to 0 (nested .grp > .grpitems
+   keeps its 4px under a sticky .grph). */
+.lscroll {
+  padding: 0 8px 8px;
+}
+.lscroll > .grpitems {
+  padding-top: 0;
+}
+.listempty {
+  color: var(--muted-foreground);
 }
 </style>

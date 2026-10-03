@@ -11,6 +11,7 @@
 // resolving after the user imports the agent into `.awog`.
 
 import { loadAgent, listAgents } from '../agents/store.js'
+import { repoAccessBlock } from '../agents/repo-access.js'
 import { listProjects } from '../projects/store.js'
 import { listSources } from '../sources/store.js'
 import { applyOAuthAuthorization } from '../sources/oauth-manager.js'
@@ -49,6 +50,14 @@ export interface ResolvedAgentContext {
   model?: string
   systemPrompt?: string
   allowedTools?: string[]
+  // Agent repo-access whitelist (Agent.repos). The caller's runtime narrows its
+  // fs-tool roots to the resolved list AND the <repo_access> boundary is already
+  // folded into systemPromptAppend below so every runtime sees it.
+  repos?: string[]
+  // Per-agent skill whitelist (Agent.skillIds). Subagents on the Claude SDK
+  // path forward it to the SDK `skills` option; Pi subagents/tasks rely on the
+  // catalogue filter applied by the caller.
+  skillIds?: string[]
   mcpServers?: McpServersConfig
   // Enabled api sources (ADR 0060 P3) resolved for this node — bridged to
   // `mcp__<id>__api_<slug>` tools by the runtime (Pi path).
@@ -235,6 +244,8 @@ export async function resolveAgentContext(
   if (agent.model) ctx.model = agent.model
   if (agent.systemPrompt) ctx.systemPrompt = agent.systemPrompt
   if (agent.tools && agent.tools.length > 0) ctx.allowedTools = agent.tools
+  if (agent.skillIds && agent.skillIds.length > 0) ctx.skillIds = agent.skillIds
+  if (agent.repos && agent.repos.length > 0) ctx.repos = agent.repos
 
   const { mcpServers, apiSources, attached, sourceToolPatterns, sourceApiEndpoints, localNote } =
     await buildRuntimeSources(agent.mcpServerIds, connectionId)
@@ -257,6 +268,15 @@ export async function resolveAgentContext(
     ctx.systemPromptAppend = ctx.systemPromptAppend
       ? `${ctx.systemPromptAppend}\n\n${localNote}`
       : localNote
+  }
+
+  // Repo-access boundary — the prompt layer of the whitelist; the caller's
+  // runtime additionally narrows fs roots from ctx.repos where supported.
+  if (ctx.repos) {
+    const block = repoAccessBlock(ctx.repos)
+    ctx.systemPromptAppend = ctx.systemPromptAppend
+      ? `${ctx.systemPromptAppend}\n\n${block}`
+      : block
   }
 
   return ctx

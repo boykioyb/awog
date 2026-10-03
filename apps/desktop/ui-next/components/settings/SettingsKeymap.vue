@@ -12,23 +12,26 @@
           <div class="km-row">
             <template v-if="recording === a.id">
               <span class="km-cap on">{{ t('settings.keymap.recording') }}</span>
-              <button class="btn sm" @click="cancelRecord">{{ t('common.cancel') }}</button>
+              <Button variant="outline" size="sm" @click="cancelRecord">
+                {{ t('common.cancel') }}
+              </Button>
             </template>
             <template v-else>
               <kbd class="km-cap">{{ formatCombo(bindings[a.id]) }}</kbd>
-              <button class="btn sm" @click="startRecord(a.id)">
+              <Button variant="outline" size="sm" @click="startRecord(a.id)">
                 <Icon name="edit" />
                 {{ t('settings.keymap.rebind') }}
-              </button>
-              <button
+              </Button>
+              <Button
                 v-if="!isDefault(a.id)"
-                class="iconbtn"
                 style="width: 28px; height: 28px"
                 :title="t('settings.keymap.reset')"
+                variant="outline"
+                size="iconMd"
                 @click="resetBinding(a.id)"
               >
                 <Icon name="refresh" />
-              </button>
+              </Button>
             </template>
           </div>
           <div v-if="recording === a.id && error" class="km-err">{{ error }}</div>
@@ -37,10 +40,10 @@
     </template>
 
     <div class="km-foot">
-      <button class="btn sm" @click="resetAll">
+      <Button variant="outline" size="sm" @click="resetAll">
         <Icon name="refresh" />
         {{ t('settings.keymap.resetAll') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -53,6 +56,7 @@
 // persist via useKeymap into the settings store (~/.awog/settings.json, issue
 // #43); the live global handler reacts immediately.
 import { onBeforeUnmount, ref, watch } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 import {
   KEYMAP_ACTIONS,
   KEYMAP_GROUPS,

@@ -9,11 +9,11 @@
 
     <span ref="noteCellRef" class="ltnt">
       <span v-if="editing" class="ltntedit">
-        <input
+        <Input
           ref="noteEl"
           v-model="draftNote"
-          class="ltedit"
           :placeholder="t('logtime.form.note')"
+          class="ltedit"
           @keydown.enter.prevent="save"
           @keydown.esc.prevent="cancel"
         />
@@ -51,11 +51,11 @@
     </span>
 
     <span class="lthr">
-      <input
+      <Input
         v-if="editing"
         v-model="draftHours"
-        class="ltedit ltnum tnum"
         inputmode="decimal"
+        class="ltedit ltnum tnum"
         @keydown.enter.prevent="save"
         @keydown.esc.prevent="cancel"
       />
@@ -127,6 +127,7 @@ import { computed, nextTick, ref } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
 import type { LogtimeEntry } from '~/stores/logtime'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ entry: LogtimeEntry }>()
 // `update` chỉ mang note + hours: đổi dự án của một dòng đã đẩy là làm nó lệch khỏi

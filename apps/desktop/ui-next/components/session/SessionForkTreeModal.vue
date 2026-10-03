@@ -5,7 +5,7 @@
         <div class="forkmodal-head">
           <Icon
             name="fork"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--primary)"
           />
           <span class="forkmodal-title">{{ t('sessions.fork.treeTitle') }}</span>
           <span style="flex: 1" />
@@ -74,9 +74,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   height: 80vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); /* rounded-lg */
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
@@ -87,7 +88,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--bgEl);
 }
 .forkmodal-title {
   font-weight: 600;
@@ -95,15 +95,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .forkmodal-x {
   background: transparent;
   border: none;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   display: inline-flex;
 }
 .forkmodal-x:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .forkmodal-body {
   flex: 1;
@@ -117,19 +117,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .forkempty .ei {
   width: 48px;
   height: 48px;
-  border-radius: var(--r-card);
-  background: var(--bgEl);
+  border-radius: var(--radius); /* rounded-lg */
+  background: var(--muted);
   border: 1px solid var(--border);
   display: grid;
   place-items: center;
 }
 .forkempty .et {
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .forkempty .es {
   font-size: 12px;

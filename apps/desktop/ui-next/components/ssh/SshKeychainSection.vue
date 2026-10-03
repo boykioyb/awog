@@ -3,10 +3,16 @@
     <div class="sshx-kc-top">
       <span class="sshx-kc-title">{{ t('ssh.nav.keychain') }}</span>
       <span class="sshx-kc-count">{{ identities.length }}</span>
-      <button class="btn pri sm sshx-kc-new" :title="t('ssh.identity.new')" @click="emit('new')">
+      <Button
+        :title="t('ssh.identity.new')"
+        class="sshx-kc-new"
+        variant="default"
+        size="sm"
+        @click="emit('new')"
+      >
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.identity.new') }}
-      </button>
+      </Button>
     </div>
 
     <div class="sshx-kc-scroll">
@@ -64,6 +70,7 @@
 // host editor uses. Nothing reads a secret.
 import SshEmptyState from '~/components/ssh/SshEmptyState.vue'
 import type { SshIdentity } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
 
 defineProps<{ identities: SshIdentity[] }>()
 

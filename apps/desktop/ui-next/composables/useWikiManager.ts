@@ -8,6 +8,7 @@ import {
   type WikiSource,
 } from '~/stores/wiki'
 import { useProjectsStore } from '~/stores/projects'
+import { useI18n } from '~/composables/useI18n'
 import { pickFiles, pickFolders } from '~/composables/useFolderPicker'
 
 // Page controller for /wiki (nuxt-vue rule: a page over ~250 lines pushes ALL
@@ -60,6 +61,7 @@ export function slugifySegment(name: string): string {
 export function useWikiManager() {
   const store = useWikiStore()
   const projects = useProjectsStore()
+  const { t } = useI18n()
 
   const selectedKey = ref('')
   const content = ref<WikiPageContent | null>(null)
@@ -111,6 +113,20 @@ export function useWikiManager() {
   const query = ref('')
   const hits = ref<WikiSearchHit[]>([])
   const searching = ref(false)
+
+  // Tier filter — '': tất cả wiki; 'global'; 'project:<id>'. Cây + kết quả
+  // search lọc cùng một vị từ để nhìn đúng một dự án. Cùng quy ước sentinel
+  // `project:` của WikiImportModal.
+  const tierFilter = ref('')
+  const tierOf = (p: Pick<WikiPage, 'source' | 'projectId'>): string =>
+    p.source === 'project' ? `project:${p.projectId ?? ''}` : 'global'
+  const matchTier = (p: Pick<WikiPage, 'source' | 'projectId'>): boolean =>
+    tierFilter.value === '' || tierOf(p) === tierFilter.value
+  const tierOptions = computed(() => [
+    { value: '', label: t('wiki.filter.all') },
+    { value: 'global', label: t('wiki.importModal.tierGlobal') },
+    ...projects.projects.map((p) => ({ value: `project:${p.id}`, label: p.name })),
+  ])
 
   // Editor draft — mirrors the open page until saved.
   const draft = ref({ title: '', description: '', tags: '', context: true, body: '' })
@@ -185,7 +201,7 @@ export function useWikiManager() {
       return node
     }
 
-    for (const page of store.pages) {
+    for (const page of store.pages.filter(matchTier)) {
       const segments = page.path.split('/')
       const node = ensure(page, page.path, segments.length - 1)
       node.page = page
@@ -414,7 +430,7 @@ export function useWikiManager() {
     }
     searching.value = true
     try {
-      hits.value = await store.search(q)
+      hits.value = (await store.search(q)).filter(matchTier)
     } finally {
       searching.value = false
     }
@@ -561,6 +577,9 @@ export function useWikiManager() {
     hits,
     searching,
     runSearch,
+    // tier filter
+    tierFilter,
+    tierOptions,
     // import
     importing,
     importTarget,

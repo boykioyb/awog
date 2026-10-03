@@ -16,15 +16,21 @@
         />
         <div class="ltnp-foot">
           <!-- Khai thác chữ đang gõ thành note nghiệp vụ đầy đủ. -->
-          <button type="button" class="btn ltnp-btn" :disabled="refining" @click="onRefine">
+          <Button
+            type="button"
+            :disabled="refining"
+            class="ltnp-btn"
+            variant="outline"
+            @click="onRefine"
+          >
             <Icon :name="refining ? 'refresh' : 'sparkles'" :class="{ 'ltnp-spin': refining }" />
             {{ refining ? t('logtime.form.noteRefining') : t('logtime.form.noteRefine') }}
-          </button>
+          </Button>
           <span class="ltnp-hint">{{ t('logtime.form.noteHint') }}</span>
           <span class="ltnp-sp" />
-          <button type="button" class="btn pri ltnp-btn" @click="close">
+          <Button type="button" class="ltnp-btn" variant="default" @click="close">
             {{ t('logtime.form.noteDone') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -38,6 +44,7 @@
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

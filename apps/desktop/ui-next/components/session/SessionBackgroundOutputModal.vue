@@ -135,6 +135,7 @@ onBeforeUnmount(() => {
   z-index: 120;
 }
 .bgo-card {
+  /* Dialog chrome — popover surface + hairline border + --radius + lg shadow. */
   width: 720px;
   max-width: 92vw;
   max-height: 78vh;
@@ -142,9 +143,9 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 12px;
   padding: 16px 18px 18px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
 }
 .bgo-head {
@@ -156,13 +157,13 @@ onBeforeUnmount(() => {
   width: var(--icon-md);
   height: var(--icon-md);
   flex: 0 0 auto;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .bgo-title {
   font-size: var(--fs-lg);
   line-height: var(--lh-lg);
   font-weight: 650;
-  color: var(--text);
+  color: var(--foreground);
 }
 .bgo-status {
   padding: 1px 8px;
@@ -170,26 +171,26 @@ onBeforeUnmount(() => {
   border-radius: var(--r-xs);
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .bgo-status.is-ok {
-  border-color: color-mix(in srgb, var(--add) 45%, var(--border));
-  color: var(--add);
+  border-color: color-mix(in srgb, var(--success) 45%, var(--border));
+  color: var(--success);
 }
 .bgo-status.is-fail {
-  border-color: color-mix(in srgb, var(--amber) 45%, var(--border));
-  color: var(--amber);
+  border-color: color-mix(in srgb, var(--destructive) 45%, var(--border));
+  color: var(--destructive);
 }
 .bgo-status.is-running {
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  color: var(--accent);
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+  color: var(--primary);
 }
 .bgo-x {
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .bgo-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .bgo-head .bgo-x {
   margin-left: auto;
@@ -202,7 +203,7 @@ onBeforeUnmount(() => {
   align-items: baseline;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .bgo-k {
   color: var(--textFaint);
@@ -212,7 +213,7 @@ onBeforeUnmount(() => {
   font-family: var(--code);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--text);
+  color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -226,21 +227,22 @@ onBeforeUnmount(() => {
 .bgo-outhd .bgo-x {
   margin-left: auto;
 }
-/* The long part: its own scroll area so the card chrome stays put. */
+/* The long part: its own scroll area so the card chrome stays put. Muted surface
+   like a code block / secondary panel. */
 .bgo-out {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   margin: 0;
   padding: 10px 12px;
-  background: var(--bgInput);
+  background: var(--muted);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   /* mono-ok: raw stdout+stderr of a shell command */
   font-family: var(--code);
   font-size: var(--fs-sm);
   line-height: var(--lh-md);
-  color: var(--text);
+  color: var(--foreground);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -262,8 +264,8 @@ onBeforeUnmount(() => {
 /* Chỉ lỗi ĐỌC mới tô đỏ; output rỗng đúng bản chất thì không. */
 .bgo-empty.is-err {
   border-style: solid;
-  border-color: var(--dangerBorder);
-  background: var(--dangerDim);
-  color: var(--danger);
+  border-color: color-mix(in srgb, var(--destructive) 40%, var(--border));
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  color: var(--destructive);
 }
 </style>

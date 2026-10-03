@@ -21,6 +21,11 @@
         <path d="M8 6h13M8 12h13M8 18h13" />
         <path d="M3 6l1 1 2-2M3 12l1 1 2-2M3 18l1 1 2-2" />
       </symbol>
+      <symbol id="i-board" viewBox="0 0 24 24">
+        <rect x="3" y="4" width="5" height="12" rx="1" />
+        <rect x="9.5" y="4" width="5" height="16" rx="1" />
+        <rect x="16" y="4" width="5" height="8" rx="1" />
+      </symbol>
       <symbol id="i-workflows" viewBox="0 0 24 24">
         <rect x="3" y="3" width="6" height="6" rx="1" />
         <rect x="15" y="15" width="6" height="6" rx="1" />
@@ -262,6 +267,104 @@
         <path d="M8 4l4 4 4-4M8 20l4-4 4 4M4 12h16" />
       </symbol>
       <!-- brain (lucide) — used for Thinking blocks -->
+      <symbol id="i-users" viewBox="0 0 24 24">
+        <path
+          d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <circle cx="9" cy="7" r="4" fill="none" stroke="currentColor" stroke-width="2" />
+        <path
+          d="M22 21v-2a4 4 0 0 0-3-3.87"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M16 3.13a4 4 0 0 1 0 7.75"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </symbol>
+      <symbol id="i-crown" viewBox="0 0 24 24">
+        <path
+          d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.735H5.81a1 1 0 0 1-.957-.735L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M5 21h14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+      </symbol>
+      <symbol id="i-arrow-left" viewBox="0 0 24 24">
+        <path
+          d="m12 19-7-7 7-7"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M19 12H5"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </symbol>
+      <symbol id="i-bot" viewBox="0 0 24 24">
+        <path
+          d="M12 8V4H8"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <rect
+          width="16"
+          height="12"
+          x="4"
+          y="8"
+          rx="2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        />
+        <path
+          d="M2 14h2M20 14h2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+        <circle cx="9" cy="13" r="1" fill="currentColor" />
+        <circle cx="15" cy="13" r="1" fill="currentColor" />
+        <path
+          d="M9 17h6"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+        />
+      </symbol>
       <symbol id="i-brain" viewBox="0 0 24 24">
         <path
           d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"

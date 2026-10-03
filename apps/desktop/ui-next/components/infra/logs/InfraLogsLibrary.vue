@@ -65,9 +65,9 @@
     <!-- Lịch sử -->
     <div v-else class="llb-list">
       <div class="llb-histhead">
-        <button class="btn sm" type="button" @click="emit('clear-history')">
+        <Button type="button" variant="outline" size="sm" @click="emit('clear-history')">
           {{ t('infra.logs.library.clearHistory') }}
-        </button>
+        </Button>
       </div>
       <button
         v-for="h in history"
@@ -88,6 +88,8 @@
 </template>
 
 <script setup lang="ts">
+import Button from '~/components/ui/button/Button.vue'
+
 // Thư viện query (Mốc 2 việc 2.4): mẫu sẵn · đã lưu · lịch sử.
 //
 // Ba tab, một khung. `lastScan` của câu đã lưu là con số ĐO ĐƯỢC của lần chạy gần

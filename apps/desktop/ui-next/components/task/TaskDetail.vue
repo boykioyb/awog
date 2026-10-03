@@ -9,42 +9,60 @@
       <Icon :name="statusIcon" class="td-statusi" :class="{ spin: task.status === 'running' }" />
       {{ t(`tasks.statusLabel.${task.status}`) }}
     </span>
-    <button
+    <Button
       v-if="task.status === 'running'"
-      class="iconbtn"
       :title="t('tasks.action.pause')"
+      variant="outline"
+      size="iconMd"
       @click="emit('pause')"
     >
       <Icon name="clock" />
-    </button>
-    <button
+    </Button>
+    <Button
       v-if="task.status === 'paused'"
-      class="iconbtn"
       :title="t('tasks.action.resume')"
+      variant="outline"
+      size="iconMd"
       @click="emit('resume')"
     >
       <Icon name="play" />
-    </button>
-    <button
+    </Button>
+    <Button
       v-if="isActive"
-      class="iconbtn danger"
       :title="t('tasks.action.stop')"
+      variant="danger"
+      size="iconMd"
       @click="emit('cancel')"
     >
       <Icon name="stop" />
-    </button>
-    <button class="iconbtn" :title="t('minimize.task')" @click="minimizeTask">
+    </Button>
+    <Button :title="t('minimize.task')" variant="outline" size="iconMd" @click="minimizeTask">
       <Icon name="minimize" />
-    </button>
-    <button class="iconbtn" :title="t('tasks.action.discussInSession')" @click="discussTask">
+    </Button>
+    <Button
+      :title="t('tasks.action.discussInSession')"
+      variant="outline"
+      size="iconMd"
+      @click="discussTask"
+    >
       <Icon name="sessions" />
-    </button>
-    <button class="iconbtn" :title="t('tasks.action.openEditor')" @click="openEditor">
+    </Button>
+    <Button
+      :title="t('tasks.action.openEditor')"
+      variant="outline"
+      size="iconMd"
+      @click="openEditor"
+    >
       <Icon name="edit" />
-    </button>
-    <button class="iconbtn danger" :title="t('tasks.action.delete')" @click="emit('delete')">
+    </Button>
+    <Button
+      :title="t('tasks.action.delete')"
+      variant="danger"
+      size="iconMd"
+      @click="emit('delete')"
+    >
       <Icon name="trash" />
-    </button>
+    </Button>
   </div>
 
   <div class="dscroll">
@@ -115,6 +133,7 @@ import { useTasksStore, type Task, type TaskPhase } from '~/stores/tasks'
 import { useSessionsStore } from '~/stores/sessions'
 import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ task: Task }>()
 
@@ -265,10 +284,6 @@ const formattedTime = computed(() => {
   50% {
     opacity: 0.4;
   }
-}
-.iconbtn.danger:hover {
-  color: var(--danger);
-  border-color: var(--dangerBorder, var(--border));
 }
 .td-meta {
   display: flex;

@@ -264,6 +264,27 @@ function humanLabel(toolName: string, input: Record<string, unknown>): string {
       return 'Sessions'
     case 'send_session_message':
       return 'Message'
+    // Tool ê-kíp (Session Teams): nhãn khớp ĐÚNG field `label` của AgentTool
+    // bên nhánh Pi — `mcp__awogteam__*` đã được gấp về tên trần trước bảng này,
+    // nên thiếu case thì nhánh SDK hiện tên thô trong khi Pi hiện nhãn người đọc.
+    case 'team_item_list':
+      return 'Board list'
+    case 'team_item_get':
+      return 'Board item'
+    case 'team_item_create':
+      return 'Board create'
+    case 'team_item_update':
+      return 'Board update'
+    case 'team_item_comment':
+      return 'Board comment'
+    case 'team_say':
+      return 'Team say'
+    case 'team_note':
+      return 'Team note'
+    case 'channel_read':
+      return 'Channel read'
+    case 'member_diff':
+      return 'Member diff'
     case 'ExitPlanMode':
       return 'Exit plan'
     case 'EnterPlanMode':

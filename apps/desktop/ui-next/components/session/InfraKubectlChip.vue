@@ -61,14 +61,14 @@
              sách. Rỗng = "để kubectl quyết" (namespace khai trong context). -->
           <div class="ifield">
             <div class="ilbl">{{ t('infra.k8s.namespace.label') }}</div>
-            <input
-              :value="namespaceDraft"
-              class="iin"
+            <Input
+              :model-value="namespaceDraft"
               spellcheck="false"
               :placeholder="t('infra.k8s.namespace.placeholder')"
-              @input="namespaceDraft = ($event.target as HTMLInputElement).value"
+              class="flex-1"
               @keydown.enter="commitNamespace"
               @blur="commitNamespace"
+              @update:model-value="namespaceDraft = $event"
             />
             <p class="ihint">{{ t('infra.k8s.namespace.note') }}</p>
           </div>
@@ -112,6 +112,7 @@
 import type { Session } from '~/composables/useSessionsData'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { InfraContext } from '~/types'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ session: Session }>()
 

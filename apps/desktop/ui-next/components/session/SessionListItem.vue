@@ -15,7 +15,7 @@
         v-if="hasChildren"
         class="twisty"
         :class="{ col: collapsed }"
-        :title="collapsed ? t('sessions.group.expand') : t('sessions.group.collapse')"
+        :title="collapsed ? t('sessions.team.expand') : t('sessions.team.collapse')"
         @click.stop="emit('toggleChildren')"
       >
         <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
@@ -40,12 +40,17 @@
       >
         <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </span>
-      <span
-        class="sdot"
-        :class="{ pulse: session.status === 'streaming' }"
-        :style="{ background: statusColor }"
-      />
-      <input
+      <!-- Trạng thái = icon lucide 14px (proto), không phải chấm màu. "Streaming"
+           là vòng cung quay QUANH glyph — idiom đã chốt (SessionStepItem), không
+           quay chính glyph. -->
+      <span class="sic" :class="statusMeta.cls" :title="statusLabel">
+        <component :is="statusMeta.icon" :size="14" />
+        <span
+          v-if="session.status === 'streaming'"
+          class="absolute -inset-[3px] animate-spin rounded-full border border-transparent border-t-primary"
+        />
+      </span>
+      <Input
         v-if="editing"
         ref="renameInput"
         v-model="draft"
@@ -65,29 +70,67 @@
         {{ session.title }}
       </span>
       <span v-if="session.unread && !editing" class="undot" :title="t('sessions.item.unread')" />
-      <span v-if="!editing" class="tm">{{ timeLabel }}</span>
+      <!-- ⋯ từng hàng — cùng bộ thao tác với menu chuột phải (gương proto):
+           ghim · chọn · đổi tên · xoá. Reveal khi hover / focus-within / mở. -->
+      <DropdownMenu v-if="!editing">
+        <DropdownMenuTrigger as-child>
+          <span
+            role="button"
+            tabindex="-1"
+            class="ddbtn"
+            :title="t('sessions.sidebar.more')"
+            :aria-label="t('sessions.sidebar.more')"
+            @click.stop
+          >
+            <Icon name="dots" />
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="bottom" class="w-52">
+          <DropdownMenuItem @select="store.togglePin(session.id)">
+            <Icon name="pin" />
+            {{ session.pinned ? t('sessions.ctx.unpin') : t('sessions.ctx.pin') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="onSelectToggle">
+            <Icon name="check" />
+            {{ t('sessions.ctx.select') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem @select="startRename">
+            <Icon name="edit" />
+            {{ t('sessions.ctx.rename') }}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+            @select="askRemove"
+          >
+            <Icon name="trash" />
+            {{ t('sessions.ctx.delete') }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
-    <div class="sub" :style="indentStyle">
-      <span v-if="!hideProject" class="tag projtag" style="padding: 1px 6px">{{ projName }}</span>
-      <!-- Vai trong nhóm đứng TRƯỚC tên model: khi đã xếp nhóm thì "phiên này làm gì"
-           là thứ phân biệt được các hàng, còn model thì thường giống nhau cả nhóm. -->
-      <span v-if="session.groupRole" class="rolechip">{{ session.groupRole }}</span>
-      <!-- Nhóm này tự giao tin giữa các phiên con. Chỉ hiện trên hàng GỐC (nơi giữ cờ)
-           và chỉ khi nó thật sự có con — một phiên lẻ bật cờ thì không có ai để giao. -->
-      <span
-        v-if="session.groupAutoDeliver && hasChildren"
-        class="autochip"
-        :title="t('sessions.group.autoDeliverBadgeHint')"
-      >
-        <Icon name="zap" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        {{ t('sessions.group.autoDeliverBadge') }}
+    <div class="sub" :style="subIndentStyle">
+      <!-- Thứ tự proto: agent · model (agent = chip pill khi phiên thuộc một
+           session-team; chỉ model khi không có). -->
+      <span v-if="session.agent" class="agentchip" :title="session.agent.id">
+        <Icon name="agents" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <span class="acname">{{ session.agent.id }}</span>
       </span>
       <span class="smeta">{{ session.model }}</span>
       <span v-if="collapsed && descendants" class="smeta">
-        {{ t('sessions.group.hiddenCount', { n: descendants }) }}
+        {{ t('sessions.team.hiddenCount', { n: descendants }) }}
       </span>
-      <!-- Indicators + status badge, grouped on the far right (status rightmost). -->
+      <!-- Cụm phải của dòng meta: các chip phụ rồi tới `tokens · time` (tabular-nums)
+           ở mép phải — cột số thẳng hàng theo proto. -->
       <span class="subright">
+        <span v-if="!hideProject" class="tag projtag" style="padding: 1px 6px">{{ projName }}</span>
+        <!-- Vai trong nhóm — chip viền accent, NHƯNG giấu khi trùng tiêu đề
+             (member spawn từ spec có title ≡ role → chip chỉ lặp lại chữ của
+             dòng trên và đẩy badge/time ra khỏi tầm nhìn). Đổi tên phiên thì
+             chip hiện lại — lúc đó nó mang thông tin role thật sự. -->
+        <span v-if="session.teamRole && session.teamRole !== session.title" class="rolechip">
+          {{ session.teamRole }}
+        </span>
         <!-- Archived rows are hidden until the list filter asks for them, so this chip
              is the ONLY thing telling them apart once they show up
              (docs/features/cross-session-search.md §3). Deliberately the quietest
@@ -112,32 +155,27 @@
           </span>
         </span>
         <span class="statusbadge" :style="badgeStyle">{{ statusLabel }}</span>
-      </span>
-    </div>
-    <div v-if="!editing" class="liact">
-      <span
-        class="liactbtn"
-        :class="{ on: session.pinned }"
-        :title="session.pinned ? t('sessions.sidebar.unpin') : t('sessions.sidebar.pin')"
-        @click.stop="store.togglePin(session.id)"
-      >
-        <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </span>
-      <span class="liactbtn danger" :title="t('sessions.item.delete')" @click.stop="askRemove">
-        <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <span class="subtime">
+          <span v-if="tokensLabel">{{ tokensLabel }}</span>
+          <span>{{ timeLabel }}</span>
+        </span>
       </span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-// One session row in the list (liHtml ~1243): selection checkbox, pin mark,
-// status dot, title, unread mark, time, project tag + model · status, and
-// compact indicator chips (attachments / pending follow-ups / queued). Hover
-// reveals pin + delete actions. Title supports inline rename (double-click →
-// input). Pin / delete / select route to the store; in select mode a row click
-// toggles selection instead of opening the session.
+// One session row in the list, restructured to the proto skeleton
+// (components/proto/ProtoSessionList.vue): line 1 = status icon · title · unread
+// dot · hover ⋯ menu; line 2 (indented under the title) = agent · model on the
+// left, chips + status badge + `tokens · time` on the right. Selection checkbox,
+// pin mark, group twisty, inline rename (double-click → input), and the
+// right-click context menu all unchanged. Pin / delete / select route to the
+// store; in select mode a row click toggles selection instead of opening.
 import type { Session, SessionStatus } from '~/composables/useSessionsData'
+import { CircleCheck, CircleHelp, CircleX, FileText, Loader2 } from 'lucide-vue-next'
+import { formatTokenCount } from '~/utils/context-window'
+import Input from '~/components/ui/input/Input.vue'
 
 // Status badge palette — mirrors the app's node-badge convention (.bdg.run / .nx.ok =
 // accent, .bdg.wait = amber): done + running use accent (complete/active), waiting amber,
@@ -156,20 +194,24 @@ const BADGE_STYLE: Record<
   // readable; muting `done` BUYS scannability rather than spending it.
   idle: { color: 'var(--textFaint)', background: 'transparent', borderColor: 'var(--border)' },
   streaming: {
-    color: 'var(--accent)',
-    background: 'var(--accentDim)',
-    borderColor: 'var(--accentBorder)',
+    color: 'var(--primary)',
+    background: 'color-mix(in srgb, var(--primary) 14%, transparent)',
+    borderColor: 'color-mix(in srgb, var(--primary) 42%, transparent)',
   },
   awaiting: {
-    color: 'var(--amber)',
-    background: 'var(--amberDim)',
-    borderColor: 'var(--amberBorder)',
+    color: 'var(--warning)',
+    background: 'color-mix(in srgb, var(--warning) 12%, transparent)',
+    borderColor: 'color-mix(in srgb, var(--warning) 40%, transparent)',
   },
-  done: { color: 'var(--textMuted)', background: 'transparent', borderColor: 'var(--border)' },
+  done: {
+    color: 'var(--muted-foreground)',
+    background: 'transparent',
+    borderColor: 'var(--border)',
+  },
   error: {
-    color: 'var(--danger)',
-    background: 'var(--dangerDim)',
-    borderColor: 'color-mix(in srgb, var(--danger) 40%, transparent)',
+    color: 'var(--destructive)',
+    background: 'color-mix(in srgb, var(--destructive) 10%, transparent)',
+    borderColor: 'color-mix(in srgb, var(--destructive) 40%, transparent)',
   },
 }
 
@@ -207,8 +249,9 @@ const emit = defineEmits<{
 // Thụt lề theo tầng. Kẹp ở tầng 6: sâu hơn nữa thì cột danh sách (hẹp tới 240px) chỉ
 // còn lại vài chục pixel cho tiêu đề — cây vẫn đúng, chỉ là không thụt thêm nữa.
 const INDENT_PER_LEVEL = 14
+const depthPad = computed(() => Math.min(props.depth ?? 0, 6) * INDENT_PER_LEVEL)
 const indentStyle = computed(() => ({
-  paddingLeft: `${Math.min(props.depth ?? 0, 6) * INDENT_PER_LEVEL}px`,
+  paddingLeft: `${depthPad.value}px`,
 }))
 
 // ⚠ KHÔNG đặt tên `grp`: prototype.css đã có một class TOÀN CỤC tên đó cho header
@@ -240,7 +283,6 @@ const railStyle = computed(() => {
 })
 
 const { t } = useI18n()
-const { STATUS_COLOR } = useSessionsData()
 const { projectName } = useProjects()
 const store = useSessionsStore()
 const { confirm } = useConfirm()
@@ -262,7 +304,18 @@ const timeLabel = computed(() =>
   props.session.updatedAt ? relativeTime(props.session.updatedAt, now.value) : props.session.when,
 )
 
-const statusColor = computed(() => STATUS_COLOR[props.session.status])
+// Status icon per status — proto's row icon (ProtoSessionList `statusMeta`) with
+// the lucide 0.460 names. Colors ride the standard tokens (success / primary /
+// warning / destructive / muted-foreground); the dot they replace carried the
+// same hues via STATUS_COLOR.
+const STATUS_META: Record<SessionStatus, { icon: typeof CircleCheck; cls: string }> = {
+  idle: { icon: FileText, cls: 'text-muted-foreground' },
+  streaming: { icon: Loader2, cls: 'text-primary' },
+  awaiting: { icon: CircleHelp, cls: 'text-warning' },
+  done: { icon: CircleCheck, cls: 'text-success' },
+  error: { icon: CircleX, cls: 'text-destructive' },
+}
+const statusMeta = computed(() => STATUS_META[props.session.status])
 const statusLabel = computed(() => t(`sessions.status.${props.session.status}`))
 // Drives the status-tinted row background (see the `.st-*` rules) — a clearer
 // at-a-glance signal than the tiny status dot, which for `done` is near-invisible.
@@ -327,6 +380,13 @@ function onRowClick(e: MouseEvent) {
   }
 }
 
+// ⋯ menu "Select" — same semantics as the context-menu item: enter select mode
+// and toggle this row into the selection.
+function onSelectToggle() {
+  store.setSelectMode(true)
+  store.toggleSelect(props.session.id)
+}
+
 // Inline rename: local UI state; the renamed value is committed to the store.
 const editing = ref(false)
 const draft = ref('')
@@ -346,6 +406,28 @@ function cancelRename() {
   editing.value = false
 }
 
+// Dòng meta thụt vào để chữ bắt đầu ngay dưới tiêu đề (proto `pl-[22px]` = icon
+// 14px + gap 8px). Mỗi phần tử đứng đầu hàng 1 (twisty 14 · lcbox 16 · pinmark
+// 12, kèm gap 8 của `.lrow`) đẩy tiêu đề sang phải, nên `.sub` cộng đúng bề rộng
+// của chúng để căn giữ nguyên — kể cả khi select mode bật hay hàng được ghim.
+// `editing` giấy lcbox/pinmark nên indent co lại theo.
+const subIndentStyle = computed(() => {
+  let lead = 22 // status icon column: icon 14 + lrow gap 8
+  if (props.hasChildren) lead += 14 + 8 // .twisty + gap
+  if ((props.selecting || selected.value) && !editing.value) lead += 16 + 8 // .lcbox + gap
+  if (props.session.pinned && !editing.value) lead += 12 + 8 // .pinmark + gap
+  return { paddingLeft: `${depthPad.value + lead}px` }
+})
+
+// `tokens` của proto: session.usage có contextTokens (độ đầy context đo được của
+// request cuối) — giá trị gần nghĩa nhất với "tokens" của hàng; sessions cũ thiếu
+// nó thì fallback sang `total` (tally API tích luỹ), không có gì thì chỉ hiện time.
+const tokensLabel = computed(() => {
+  const u = props.session.usage
+  const n = (u?.contextTokens && u.contextTokens > 0 ? u.contextTokens : u?.total) ?? 0
+  return n > 0 ? formatTokenCount(n) : ''
+})
+
 // Right-click → bubble the cursor position up so the parent shows one shared menu.
 function onCtx(e: MouseEvent) {
   emit('ctxmenu', { id: props.session.id, x: e.clientX, y: e.clientY })
@@ -364,13 +446,17 @@ watch(
    default WHITE box, so its theme-light text was white-on-white in dark mode. Pin
    it to theme tokens (dark surface + readable text + accent focus ring). */
 input.ttl {
-  background: var(--bgInput);
-  color: var(--text);
-  border: 1px solid var(--accentBorder);
+  background: var(--muted);
+  color: var(--foreground);
+  border: 1px solid var(--input);
   border-radius: var(--r-xs);
   padding: 2px 7px;
   outline: none;
   font: inherit;
+}
+input.ttl:focus-visible {
+  border-color: transparent;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 
 /* UNREAD rows get a status-colored background so a session that settled or produced
@@ -384,7 +470,7 @@ input.ttl {
    paints UNREAD rows, so it means "this finished while you were away" — a real signal,
    unlike the badge, which shows on every row forever. */
 .li.st-done {
-  --li-tint: color-mix(in srgb, var(--accent) 12%, transparent);
+  --li-tint: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 /* A streaming row is on screen and moving; it does not need a tint to be noticed, and
    at 14% it was indistinguishable from `done` anyway. */
@@ -392,16 +478,60 @@ input.ttl {
   --li-tint: transparent;
 }
 .li.st-awaiting {
-  --li-tint: color-mix(in srgb, var(--amber) 16%, transparent);
+  --li-tint: color-mix(in srgb, var(--warning) 16%, transparent);
 }
 .li.st-error {
-  --li-tint: color-mix(in srgb, var(--danger) 14%, transparent);
+  --li-tint: color-mix(in srgb, var(--destructive) 14%, transparent);
 }
 .li.unread:not(.on):not(.sel) {
-  background: var(--li-tint, var(--bgHover));
+  background: var(--li-tint, var(--accent-wash));
 }
-.li.unread:not(.on):not(.sel):hover {
-  background: var(--bgHover);
+
+/* ── Selection = neutral wash (shadcn idiom), never an emerald fill ─────────────
+   Proto: active row = `bg-accent` (the --accent-wash surface), inactive hover =
+   `bg-accent/50`. The global `.li` rules paint `--bgHover` (= the same wash) at
+   full strength on hover and an accentDim+inset-bar on `.on`; these overrides
+   install the 55%-wash hover and replace the emerald active state with the flat
+   wash — no border, no left bar. `.sel` (multi-select) shares the same wash. */
+.li:not(.on):not(.sel):hover {
+  background: color-mix(in srgb, var(--accent-wash) 55%, transparent);
+}
+.li.on {
+  background: var(--accent-wash);
+  border-color: transparent;
+  box-shadow: none;
+}
+.li.sel {
+  background: var(--accent-wash);
+}
+/* Row density — proto `rounded-lg px-2.5 py-2` in a `gap-0.5` column: vertical
+   padding 8px (was 9), inter-row gap 2px (was 3), and NO border (the 1px
+   transparent frame was 2px of dead height no state paints on the zinc themes —
+   Cute re-adds its own border via `body[cute] :is(.li)`, which outranks this
+   scoped block, so its mint active card keeps working). */
+.li {
+  padding: 8px 10px;
+  margin-bottom: 2px;
+  border: none;
+  transition: background-color 0.12s ease;
+}
+/* The select checkbox keeps the accent (it is a toggle state, not a selection
+   surface): --input at rest, primary when checked. */
+.li .lcbox {
+  border-color: var(--input);
+}
+.li .lcbox.on {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+/* Meta row: muted-foreground per the proto item (was one step dimmer). */
+.li .sub {
+  color: var(--muted-foreground);
+}
+/* The unread glyph is a primary marker (same value as the old --accent). */
+.li .undot {
+  background: var(--primary);
 }
 
 /* ── Cụm nhóm trong chế độ xem "Nhóm" ────────────────────────────────────────
@@ -414,12 +544,12 @@ input.ttl {
    cục, và nếu không loại trừ thì hàng đang chọn trong nhóm mất hẳn accent-tint.
    Cặp `:hover` đi kèm cũng vì lý do đó (cùng khuôn với `.li.unread` bên dưới). */
 .li.nest:not(.on):not(.sel) {
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  background: color-mix(in srgb, var(--primary) 6%, transparent);
 }
 .li.nest:not(.on):not(.sel):hover {
-  background: var(--bgHover);
+  background: color-mix(in srgb, var(--accent-wash) 55%, transparent);
 }
-/* Các hàng trong cụm dính liền nhau: khe 3px giữa hàng sẽ cắt nền thành từng vạch
+/* Các hàng trong cụm dính liền nhau: khe 2px giữa hàng sẽ cắt nền thành từng vạch
    rời và phá đúng cái cảm giác "một khối". Khe chỉ trả lại DƯỚI hàng cuối cụm.
    `margin-top: 0` là bắt buộc chứ không thừa: `.li` không tự đặt margin-top, nhưng
    một class trùng tên toàn cục đã từng bơm 11px vào đây (xem chú thích ở `groupClass`)
@@ -436,7 +566,7 @@ input.ttl {
 .li.nest.nest-bot {
   border-bottom-left-radius: var(--r-sm);
   border-bottom-right-radius: var(--r-sm);
-  margin-bottom: 3px;
+  margin-bottom: 2px;
 }
 /* ── Nhánh cây nối cha với từng hàng con ──────────────────────────────────────
    Khuôn cây thư mục: thân dọc thả từ nút xoè của hàng cha xuống, tới mỗi hàng con thì
@@ -444,16 +574,16 @@ input.ttl {
    chạy suốt — nó nói được "mấy hàng này cùng một cụm" nhưng không nói được "hàng NÀY
    treo vào hàng KIA".
 
-   Y của khuỷu = tâm dòng tiêu đề: 9px padding-top của `.li` (prototype.css:208) + nửa
-   hộp dòng. Lấy `--lh-md` chứ không phải số cố định vì hộp dòng co giãn theo cỡ chữ ở
-   Settings → Appearance, mà khuỷu thì phải bám theo chữ.
+   Y của khuỷu = tâm dòng tiêu đề: 8px padding-top của `.li` (rule scoped trên —
+   proto `py-2`) + nửa hộp dòng. Lấy `--lh-md` chứ không phải số cố định vì hộp
+   dòng co giãn theo cỡ chữ ở Settings → Appearance, mà khuỷu thì phải bám theo chữ.
 
    ⚠ Hàng CHA không vẽ gì cả. Bản đầu nó thả một đoạn thân cây từ nút xoè xuống hết
    hàng, nhưng đoạn đó chạy dọc sát tiêu đề của chính phiên cha và trông rối — user bác.
    Bỏ đi vẫn liền mạch: đoạn dọc của hàng con bắt đầu ngay mép trên của nó, mà các hàng
    trong cụm đã dính liền nhau nên đường kẻ trông như chui ra từ dưới hàng cha. */
 .li.nest-child {
-  --nest-elbow: calc(9px + var(--lh-md) / 2);
+  --nest-elbow: calc(8px + var(--lh-md) / 2);
 }
 /* Thân dọc nối xuống hàng con KẾ TIẾP. Hàng con CUỐI không có — một đường kẻ thõng
    xuống dưới mà không nối vào đâu là rác thị giác.
@@ -468,7 +598,7 @@ input.ttl {
   top: var(--nest-elbow);
   bottom: 0;
   width: 1px;
-  background: var(--accentBorder);
+  background: color-mix(in srgb, var(--primary) 42%, transparent);
 }
 /* Khuỷu rẽ vào hàng con: dọc từ mép trên hàng xuống khuỷu rồi gãy VUÔNG sang phải,
    dừng đúng mép trái chấm trạng thái (17px + 7px = 24px = `.li` padding 10 + thụt lề
@@ -482,8 +612,8 @@ input.ttl {
   top: 0;
   width: 7px;
   height: var(--nest-elbow);
-  border-left: 1px solid var(--accentBorder);
-  border-bottom: 1px solid var(--accentBorder);
+  border-left: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
 }
 
 /* Nút xoè/thu của chế độ xem "Nhóm". Mũi tên chỉ XUỐNG khi đang xoè và sang PHẢI khi
@@ -494,11 +624,11 @@ input.ttl {
   width: 14px;
   height: 14px;
   flex: 0 0 auto;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   transition: transform 0.12s ease;
 }
 .twisty:hover {
-  color: var(--text);
+  color: var(--foreground);
 }
 .twisty.col {
   transform: rotate(-90deg);
@@ -506,38 +636,110 @@ input.ttl {
 /* Vai trong nhóm: chip viền, không nền đặc (cùng quy ước với các chip trạng thái yên
    tĩnh trong hàng — nền đặc dành cho trạng thái cần giành lấy mắt người đọc). */
 .rolechip {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 1px 6px;
-  border: 1px solid var(--accentBorder);
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
   border-radius: var(--r-pill);
-  color: var(--accent);
+  color: var(--primary);
   max-width: 40%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Chip "nhóm này tự giao tin". Dùng tông amber như các trạng thái "đang chờ/chú ý"
-   khác trong hàng: nó nói một việc SẼ tự xảy ra mà không hỏi, nên nó phải đọc được
-   ngay chứ không chìm như chip trung tính. */
-.autochip {
+/* Chip AGENT của session-teams: trung tính (muted) thay vì accent — rolechip đã
+   là nhãn "vai" cần giật mắt; agent id chỉ là tham chiếu kỹ thuật kèm theo.
+   `0 1 auto` + .acname ellipsis: id spec dài co về "product-deli…" thay vì đẩy
+   cụm phải ra ngoài. */
+.agentchip {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
   padding: 1px 6px;
-  border: 1px solid var(--amberBorder);
+  border: 1px solid var(--border);
   border-radius: var(--r-pill);
-  color: var(--amber);
+  color: var(--muted-foreground);
+  max-width: 40%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.agentchip .acname {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Right-aligned group in the sub-row: indicator chips + status badge, badge rightmost. */
+/* Status icon — proto row glyph (14px, lucide). The wrapper gives the streaming
+   arc ring (-inset-[3px], spans the full circle) a positioned parent without
+   changing the row's 8px rhythm. */
+.sic {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+/* Per-row ⋯ trigger — proto idiom: always laid out (no layout jump) but
+   transparent until the row is hovered/focused or the menu is open (reka marks
+   the trigger data-state=open). In-flow at the right edge of the title line —
+   the old .liact absolute pin/trash pair is gone; this menu covers both. */
+.ddbtn {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  flex: 0 0 auto;
+  border-radius: var(--r-xs);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    color 0.12s,
+    background 0.12s;
+}
+.li:hover .ddbtn,
+.li:focus-within .ddbtn,
+.ddbtn[data-state='open'] {
+  opacity: 1;
+}
+.ddbtn:hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--accent-foreground) 10%, transparent);
+}
+.ddbtn .icn {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+/* Right-aligned group in the sub-row: aux chips + status badge + `tokens · time`
+   (the title-line timestamp moved here per the proto skeleton — tabular numbers
+   at the row's right edge so the column of times stays put). `0 1 auto` +
+   min-width 0: cụm này CO được — chip phụ ellipsize/clip trước, badge + time
+   (flex-none) luôn sống ở mép phải thay vì cả cụm tràn khỏi hàng. */
 .subright {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-left: auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+.subtime {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
 }
 /* Status chip: colored text + tint fill + border (bound inline via badgeStyle). Radius 5px
    + 12px mono match the app's .bdg node-badge convention, not the round .tag pill. */
@@ -554,26 +756,34 @@ input.ttl {
    with the Appearance base size), faint text, no fill and no border so it stays a
    whisper next to the status badge. Sentence case, system font — not a technical tag. */
 .archchip {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--textFaint);
   font-size: 12px;
   line-height: 12px;
   white-space: nowrap;
 }
 /* Indicator chips: small mono count pills, subtle (§1). Color tokens only — no
-   hardcoded hex. Numeric counts use a fixed 12px mono per the badge rule. */
+   hardcoded hex. Numeric counts use a fixed 12px mono per the badge rule.
+   NON-SHRINKING như statusbadge: số đếm (queued/followup/attachments) là DATA —
+   co chip sẽ clip mất số, chỉ còn icon trông như vỡ. */
 .lind {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  flex: 0 0 auto;
 }
 .lindchip {
   display: inline-flex;
   align-items: center;
   gap: 3px;
+  flex: 0 0 auto;
   font-size: 12px;
   line-height: 12px;
-  color: var(--textFaint);
+  white-space: nowrap;
+  color: var(--muted-foreground);
 }
 /* Keep the meta sub-row on a SINGLE line: never wrap, and let the two text parts
    shrink + ellipsis instead of pushing to a second line. Project chip is capped
@@ -596,35 +806,15 @@ input.ttl {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* Pin mark is interactive (toggles pin); keep the pointer affordance. */
+/* Pin mark is interactive (toggles pin); keep the pointer affordance. Pin itself
+   is a warning-amber marker (same value as the old --amber pin). */
 .pinmark {
   cursor: pointer;
+  color: var(--warning);
 }
-/* Row hover actions — ghost pills. Pin hovers to accent (it's a toggle, not
-   destructive); only the trash variant goes danger. The shared prototype `.del`
-   rule turned BOTH red, so these own classes replace it. */
-.liact .liactbtn {
-  display: grid;
-  place-items: center;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--r-xs);
-  cursor: pointer;
-  color: var(--textDim);
-  background: var(--bgActive);
-  transition:
-    color 0.12s,
-    background 0.12s;
-}
-.liact .liactbtn:hover {
-  color: var(--accent);
-  background: var(--bgHover);
-}
-.liact .liactbtn.on {
-  color: var(--accent);
-}
-.liact .liactbtn.danger:hover {
-  color: var(--danger);
-  background: var(--dangerDim, var(--bgHover));
+@media (prefers-reduced-motion: reduce) {
+  .ddbtn {
+    transition: none;
+  }
 }
 </style>

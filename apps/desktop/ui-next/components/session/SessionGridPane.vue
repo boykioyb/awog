@@ -7,7 +7,7 @@
     <div class="gph">
       <span class="gpdot" :style="{ background: statusColor }" :title="statusLabel" />
       <span class="gptitle" :title="session.title">{{ session.title }}</span>
-      <span v-if="session.groupRole" class="gprole">{{ session.groupRole }}</span>
+      <span v-if="session.teamRole" class="gprole">{{ session.teamRole }}</span>
       <span class="gpwhen">{{ timeLabel }}</span>
       <button
         class="gpib"
@@ -149,19 +149,23 @@ function previewAtt(i: number) {
   min-width: 0;
   border: 1px solid var(--border);
   border-radius: var(--r-card);
-  background: var(--bg);
+  background: var(--background);
   overflow: hidden;
 }
+/* The parent's pane wears a primary-tinted border (lit-toggle idiom, not a fill). */
 .gpane.primary {
-  border-color: var(--accentBorder);
+  border-color: color-mix(in srgb, var(--primary) 42%, transparent);
 }
+/* h-8 / xs — the proto panel-header idiom. */
 .gph {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 0 8px;
-  height: 34px;
+  height: 32px;
   flex: 0 0 auto;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   box-shadow: inset 0 -1px 0 var(--border);
 }
 .gpdot {
@@ -181,15 +185,15 @@ function previewAtt(i: number) {
 .gprole {
   flex: 0 0 auto;
   padding: 1px 6px;
-  border: 1px solid var(--accentBorder);
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, transparent);
   border-radius: var(--r-pill);
-  color: var(--accent);
+  color: var(--primary);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
 .gpwhen {
   flex: 0 0 auto;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   font-variant-numeric: tabular-nums;
@@ -201,13 +205,13 @@ function previewAtt(i: number) {
   width: 20px;
   height: 20px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   background: transparent;
   cursor: pointer;
 }
 .gpib:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .gpbody {
   flex: 1 1 auto;

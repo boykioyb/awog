@@ -1,5 +1,6 @@
 import type { AwogBrowserTabList } from '~/types/awog-bridge'
 import { useSettingsStore } from '~/stores/settings'
+import { useSessionsStore } from '~/stores/sessions'
 import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 
 // Browser Picture-in-Picture — bề mặt THỨ BA của trình duyệt nhúng (ADR 0086),
@@ -137,9 +138,18 @@ const toggleMinimize = (): void => {
 }
 
 // Phán đoán auto-open trên một lần broadcast `browser:changed`.
+//
+// BROWSER PER-SESSION: card PiP của cửa sổ chính theo phiên ĐANG XEM —
+// `mine` chỉ gồm tab thuộc engineId của phiên đó (vắng session ⇒ pool global
+// như cũ). Broadcast là danh sách global nên lọc ở đây, cùng cách
+// `applyList` của useEmbeddedBrowser lọc cho mặt của nó.
 const maybeAutoPip = (list: AwogBrowserTabList): void => {
-  // Hết burst: thu card (nếu đang mở) + trả quyền auto-open cho đợt sau.
-  if (list.tabs.length === 0) {
+  const scope = useSessionsStore().active?.engineId
+  const mine = scope === undefined ? list.tabs : list.tabs.filter((t) => t.scope === scope)
+  // Hết burst CỦA SCOPE NÀY: thu card (nếu đang mở) + trả quyền auto-open cho
+  // đợt sau. Đổi sang phiên chưa có browser cũng đi qua đây — card đóng thay vì
+  // lơ lửng một khung trống.
+  if (mine.length === 0) {
     dismissed.value = false
     open.value = false
     return
@@ -155,7 +165,8 @@ const maybeAutoPip = (list: AwogBrowserTabList): void => {
   // bị KeepAlive giấu thì cờ false → card vẫn được phép hiện (đúng semantics
   // "không ai đang hiển thị trang").
   if (useWorkspacePanel().browserActive.value) return
-  const active = list.tabs.find((t) => t.tabId === list.activeTabId)
+  const activeId = scope === undefined ? list.activeTabId : (list.activeByScope?.[scope] ?? null)
+  const active = mine.find((t) => t.tabId === activeId)
   // `shown`/`shownElsewhere` đã là per-window của main: cả hai cùng false nghĩa
   // là KHÔNG bề mặt nào — panel, dock mép kia, PiP, popout — đang hiển thị trang.
   if (!active || active.shown || active.shownElsewhere) return
@@ -200,6 +211,20 @@ const init = (): void => {
   // Seed một lần: `changed` chỉ phát khi có ĐỔI, mà reload renderer (dev) thì
   // tab đang rảnh đã nằm sẵn đó từ trước — không có event nào tới cả.
   void api?.tabs().then(maybeAutoPip)
+  // Đổi phiên KHÔNG phát `browser:changed` (list không đổi, chỉ chủ quan sát
+  // đổi) → tự hỏi list của scope mới để card theo đúng "browser của phiên này":
+  // phiên mới chưa có tab thì thu card, có tab đang trôi thì maybeAutoPip cân
+  // nhắc mở. Cùng effectScope detached phía trên để sóng qua unmount.
+  const sessions = useSessionsStore()
+  scope.run(() => {
+    watch(
+      () => sessions.active?.engineId,
+      async (scope) => {
+        const list = await api?.tabs(scope)
+        if (list) maybeAutoPip(list)
+      },
+    )
+  })
 }
 
 export function useBrowserPip() {

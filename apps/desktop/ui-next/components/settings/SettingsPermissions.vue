@@ -22,14 +22,14 @@
       <!-- ── Gợi ý từ lịch sử ─────────────────────────────────────────────── -->
       <div class="permhead">
         <div class="sech">{{ t('settingsPermissions.suggest.heading') }}</div>
-        <button class="btn sm" :disabled="scanning" @click="scan">
+        <Button :disabled="scanning" variant="outline" size="sm" @click="scan">
           <Icon name="scan" />
           {{
             scanning
               ? t('settingsPermissions.suggest.scanning')
               : t('settingsPermissions.suggest.scan')
           }}
-        </button>
+        </Button>
       </div>
       <p class="permdesc">{{ t('settingsPermissions.suggest.desc') }}</p>
 
@@ -57,9 +57,9 @@
           width="190px"
           @update:model-value="targets[s.id] = $event"
         />
-        <button class="btn sm" :disabled="busyKey === s.id" @click="onAccept(s)">
+        <Button :disabled="busyKey === s.id" variant="outline" size="sm" @click="onAccept(s)">
           {{ t('settingsPermissions.suggest.add') }}
-        </button>
+        </Button>
       </div>
       <div v-if="scanReport && suggestions.length === 0" class="permempty">
         {{ t('settingsPermissions.suggest.none') }}
@@ -72,26 +72,31 @@
       </div>
       <p class="permdesc">{{ t('settingsPermissions.deny.desc') }}</p>
       <div class="permdeny">
-        <input
+        <Input
           v-model="denyRule"
-          class="keyinp mono permdenyi"
           :placeholder="t('settingsPermissions.deny.placeholder')"
+          class="mono permdenyi flex-1"
           @keyup.enter="onAddDeny"
         />
         <AppSelect v-model="denyTarget" :options="denyTargetOptions" class="permdenys" />
-        <button class="btn sm" :disabled="!denyRule.trim() || denyBusy" @click="onAddDeny">
+        <Button
+          :disabled="!denyRule.trim() || denyBusy"
+          variant="outline"
+          size="sm"
+          @click="onAddDeny"
+        >
           <Icon name="shield" />
           {{ t('settingsPermissions.deny.add') }}
-        </button>
+        </Button>
       </div>
 
       <!-- ── Luật đã lưu ──────────────────────────────────────────────────── -->
       <div class="permhead">
         <div class="sech">{{ t('settingsPermissions.list.heading') }}</div>
-        <button class="btn sm" :disabled="loading" @click="load">
+        <Button :disabled="loading" variant="outline" size="sm" @click="load">
           <Icon name="refresh" />
           {{ t('settingsPermissions.list.refresh') }}
-        </button>
+        </Button>
       </div>
 
       <div v-if="loaded && rules.length === 0" class="permempty">
@@ -139,6 +144,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import AppSelect from '~/components/common/AppSelect.vue'
 import { useConfirm } from '~/composables/useConfirm'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import {
   permissionRuleKey,
   type PermissionRuleGroup,

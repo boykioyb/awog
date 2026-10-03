@@ -57,12 +57,13 @@
       <div class="gsearch">
         <Icon
           name="search"
-          style="width: var(--icon-sm); height: var(--icon-sm); color: var(--textDim)"
+          style="width: var(--icon-sm); height: var(--icon-sm); color: var(--muted-foreground)"
         />
-        <input
-          :value="search"
+        <Input
+          unstyled
+          :model-value="search"
           :placeholder="t('git.sidebar.searchBranches')"
-          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
+          @update:model-value="emit('update:search', $event)"
         />
       </div>
 
@@ -80,9 +81,9 @@
             v-if="dirtyCount > 0"
             class="gbadge"
             :style="{
-              color: 'var(--amber)',
-              background: 'var(--amberDim)',
-              borderColor: 'var(--amberBorder)',
+              color: 'var(--warning)',
+              background: 'color-mix(in oklab, var(--warning) 12%, transparent)',
+              borderColor: 'color-mix(in oklab, var(--warning) 40%, transparent)',
             }"
           >
             {{ dirtyCount }}
@@ -142,13 +143,13 @@
               <Icon
                 name="branch"
                 style="width: var(--icon-xs); height: var(--icon-xs)"
-                :style="b.current ? { color: 'var(--accent)' } : undefined"
+                :style="b.current ? { color: 'var(--primary)' } : undefined"
               />
               <span
                 class="gtrunc"
                 :style="
                   b.current
-                    ? 'flex:1;min-width:0;color:var(--accent);font-weight:600'
+                    ? 'flex:1;min-width:0;color:var(--primary);font-weight:600'
                     : 'flex:1;min-width:0'
                 "
               >
@@ -157,7 +158,7 @@
               <span
                 v-if="branchHint(b)"
                 class="gc"
-                :style="b.current ? { color: 'var(--accent)' } : undefined"
+                :style="b.current ? { color: 'var(--primary)' } : undefined"
               >
                 {{ branchHint(b) }}
               </span>
@@ -197,13 +198,13 @@
               <Icon
                 name="branch"
                 style="width: var(--icon-xs); height: var(--icon-xs)"
-                :style="row.branch.current ? { color: 'var(--accent)' } : undefined"
+                :style="row.branch.current ? { color: 'var(--primary)' } : undefined"
               />
               <span
                 class="gtrunc"
                 :style="
                   row.branch.current
-                    ? 'flex:1;min-width:0;color:var(--accent);font-weight:600'
+                    ? 'flex:1;min-width:0;color:var(--primary);font-weight:600'
                     : 'flex:1;min-width:0'
                 "
               >
@@ -212,7 +213,7 @@
               <span
                 v-if="branchHint(row.branch)"
                 class="gc"
-                :style="row.branch.current ? { color: 'var(--accent)' } : undefined"
+                :style="row.branch.current ? { color: 'var(--primary)' } : undefined"
               >
                 {{ branchHint(row.branch) }}
               </span>
@@ -354,6 +355,7 @@
 // nested remote branches) / Tags / Stashes / Submodules + collapse toggle + resize.
 import type { BranchInfo, GitSection, RemoteInfo, SectionOpen, Stash } from './git-types'
 import { sectionKey } from './git-types'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   section: GitSection
@@ -594,7 +596,7 @@ function onPointerDown(ev: PointerEvent) {
   flex: 0 0 auto;
   padding: 2px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   opacity: 0;
   transition:
@@ -607,12 +609,12 @@ function onPointerDown(ev: PointerEvent) {
 }
 .gpinbtn:hover {
   opacity: 1;
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
+  background: var(--accent-wash);
 }
 .gpinbtn.on {
   opacity: 1;
-  color: var(--accent);
+  color: var(--primary);
 }
 @media (prefers-reduced-motion: reduce) {
   .gpinbtn {

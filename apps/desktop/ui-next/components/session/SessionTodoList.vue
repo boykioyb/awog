@@ -1,10 +1,11 @@
 <template>
-  <div class="todol">
+  <div class="flex flex-col gap-0.5">
     <button
       v-for="(td, i) in todos"
       :key="i"
+      type="button"
       class="tdrow"
-      :class="{ done: td.done, ip: td.status === 'in_progress', ro: !editable }"
+      :class="{ done: td.done, ip: td.status === 'in_progress' }"
       :disabled="!editable"
       :title="editable ? t('sessions.todo.cycle') : undefined"
       @click="emit('cycle', i)"
@@ -36,27 +37,65 @@ const { t } = useI18n()
 </script>
 
 <style scoped>
-/* Rows are <button> for keyboard access; strip the native chrome so they keep the
-   prototype's plain-row look in both the editable and the read-only case. */
+/* Checkbox row — rounded-md hover wash (proto list-row idiom). Rows are <button>
+   for keyboard access; strip the native chrome so they keep the plain-row look in
+   both the editable and the read-only case. */
 .tdrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
-  background: none;
+  padding: 3px 6px;
   border: 0;
+  border-radius: var(--r-sm);
+  background: none;
   text-align: left;
   font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: background 0.12s ease;
 }
-/* Read-only rows (the transcript record) — drop the prototype's pointer cursor. */
-.tdrow.ro {
+.tdrow:hover:not(:disabled) {
+  background: var(--accent-wash);
+}
+/* Read-only rows (the transcript record) — no pointer affordance. */
+.tdrow:disabled {
   cursor: default;
 }
-/* In-progress marker: accent box + a small live dot (vs. empty pending / ✓ done). */
+/* Checkbox box: hairline input border; done = primary fill + tick. */
+.tdck {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--input);
+  border-radius: var(--r-xs);
+  color: var(--primary);
+}
+.tdrow.done {
+  color: var(--muted-foreground);
+  text-decoration: line-through;
+}
+.tdrow.done .tdck {
+  border-color: var(--primary);
+  background: rgb(from var(--primary) r g b / 14%);
+}
+/* In-progress marker: primary box + a small live dot (vs. empty pending / ✓ done). */
 .tdrow.ip .tdck {
-  border-color: var(--accent);
+  border-color: var(--primary);
 }
 .tddot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--primary);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tdrow {
+    transition: none;
+  }
 }
 </style>

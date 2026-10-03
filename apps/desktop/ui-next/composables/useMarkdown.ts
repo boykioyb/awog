@@ -33,10 +33,44 @@ const ESC: Record<string, string> = {
 }
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ESC[c] ?? c)
 
+// Scheme được phép trong href do tác giả markdown kiểm soát (L1, untrusted —
+// bảng sink của rules/security.md). ALLOWLIST thay vì blacklist: blacklist chỉ
+// đếm được `javascript|data|vbscript` nên `file:`/`tel:`/mọi scheme lạ khác đi
+// xuyên, và biến thể entity/kiểm-soát (`jav&#x09;ascript:`) lách nó vì chuỗi
+// lúc test còn nguyên `&#x09;` — tới attribute của DOM thì browser decode ra
+// `\t`, URL parser lại nuốt `\t` → `javascript:` chạy.
+const ALLOWED_HREF_SCHEMES = new Set(['http', 'https', 'mailto', 'tel'])
+
+// Decode entity qua một <textarea> tái dùng: RCDATA chỉ decode entity mà không
+// parse con thành element, nên đây là cách đọc "browser sẽ thấy gì trong attr"
+// gọn và đúng nhất (numeric &#x09;, hex, và named như &Tab;/&colon; đều phủ).
+let hrefEntityDecoder: HTMLTextAreaElement | null | undefined
+function decodeHrefEntities(s: string): string {
+  if (typeof document === 'undefined') return s
+  if (hrefEntityDecoder === undefined) hrefEntityDecoder = document.createElement('textarea')
+  if (!hrefEntityDecoder) return s
+  hrefEntityDecoder.innerHTML = s
+  return hrefEntityDecoder.value
+}
+
+// Trả lại chính `h` khi được phép, `'#'` khi chặn (convention cũ: href đã
+// sanitize được emit nguyên vào attr — '<a href="#">'; href rỗng cũng quy về
+// '#' vì `href=""` resolve về đúng URL hiện tại → một click = reload SPA).
 function sanitizeHref(href: string | null | undefined): string {
   const h = (href ?? '').trim()
-  if (/^(javascript|data|vbscript):/i.test(h)) return '#'
-  return h
+  if (!h) return '#'
+  // Candidate để ĐÁNH GIÁ scheme: entity đã decode (bắt biến thể smuggled) rồi
+  // bỏ mọi control (\p{Cc} gồm C0 + DEL + C1) và space-separator (\p{Zs}) — URL
+  // parser nuốt tab/LF/CR ở giữa scheme, nên `jav\tascript:` hay `java script:`
+  // phải tụ về `javascript:`.
+  const candidate = decodeHrefEntities(h).replace(/[\p{Cc}\p{Zs}]/gu, '')
+  // `//host/…` là protocol-relative — có HOST, không phải đường workspace.
+  if (candidate.startsWith('//')) return '#'
+  // Scheme = đoạn trước ':' đầu tiên nếu đúng cú pháp scheme. Không có scheme →
+  // anchor (#…), query, hoặc đường tương đối/workspace → cho qua.
+  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(candidate)
+  if (!m) return h
+  return ALLOWED_HREF_SCHEMES.has((m[1] ?? '').toLowerCase()) ? h : '#'
 }
 
 // Strip a leading YAML front-matter block (--- … ---) so config docs (agents,

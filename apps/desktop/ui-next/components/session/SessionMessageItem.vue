@@ -1,13 +1,24 @@
 <template>
-  <!-- system divider -->
-  <div v-if="message.role === 'system'" :data-mi="msgIndex" class="sysdiv">
-    <span class="sl" />
-    <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    {{ message.text }}
-    <span class="sl" />
+  <!-- system divider — header (avatar + byline) là một hàng riêng, nội dung
+       tràn full width ngang mép avatar thay vì thụt vào sau cột avatar. -->
+  <div v-if="message.role === 'system'" :data-mi="msgIndex" class="srow">
+    <div class="mhead">
+      <span class="mavatar"><Wrench class="size-3.5" /></span>
+      <div class="mbyline">
+        <span class="mauthor">{{ t('sessionsSearch.role.system') }}</span>
+        <span class="mtime">{{ fmt(message.at) }}</span>
+        <span v-if="message.via" class="mvia">{{ viaLabel }}</span>
+      </div>
+    </div>
+    <div class="sysdiv">
+      <span class="sl" />
+      <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <SessionLinkedText :text="message.text" />
+      <span class="sl" />
+    </div>
   </div>
 
-  <!-- user bubble -->
+  <!-- user bubble — proto bubble-mode render: no avatar/byline, body right-aligned. -->
   <div v-else-if="message.role === 'user'" :data-mi="msgIndex" class="urow">
     <div class="mu">
       <div v-if="message.quotes && message.quotes.length" class="uquotes">
@@ -45,96 +56,118 @@
         />
       </div>
     </div>
-    <!-- Footer (standardized with the assistant): byline + persistent actions below the
-         bubble, right-aligned — replaces the old floating hover pill. -->
+    <!-- Footer dưới bubble (proto `flex-row-reverse` trên row + cluster): meta
+         nằm sát mép phải bubble, cụm action ghost dãn ra trái — ⋯ ngoài cùng.
+         `readonly` (board thread render comment dưới dạng message) giấu cụm
+         action — resend/rewind/fork/edit của nó nhắm vào transcript của phiên
+         thật qua scope, trên message giả lập sẽ thao tác nhầm phiên. -->
     <div class="mmeta mmetarow">
       <span class="mmetatxt">{{ fmt(message.at) }} · {{ tokLabel }} tok</span>
-      <SessionMsgActions :primary="userPrimary" :overflow="userOverflow" />
+      <!-- Tin nhập từ CLI (Open in CLI → syncCli) mang cờ `via` — chip mờ nhỏ,
+           metadata chứ không phải nhãn lớn. -->
+      <span v-if="message.via" class="mvia">{{ viaLabel }}</span>
+      <!-- Readonly (board thread) vẫn hiện cụm action — chỉ là subset an toàn
+           (copy / fullscreen): các computed lọc hành động ghi-phiên ra rồi. -->
+      <SessionMsgActions
+        v-if="userPrimary.length"
+        :primary="userPrimary"
+        :overflow="userOverflow"
+      />
     </div>
   </div>
 
-  <!-- assistant -->
+  <!-- assistant — header (avatar + byline) là một hàng riêng, phần thân
+       (anchors → body card → meta/actions) tràn full width ngang mép avatar. -->
   <div v-else :data-mi="msgIndex" class="maw">
-    <div v-if="anchors.length" class="fwanchors">
-      <span
-        v-for="a in anchors"
-        :key="a.label"
-        class="fwanchor"
-        role="button"
-        :title="t('sessions.transcript.anchor.tooltip')"
-        style="cursor: pointer"
-        @click="void scrollToMessage(msgIndex)"
-      >
-        {{ a.label }}
-      </span>
+    <div class="mhead">
+      <span class="mavatar agent"><Bot class="size-3.5" /></span>
+      <div class="mbyline">
+        <span class="mauthor">{{ turnAuthor }}</span>
+        <span class="mtime">{{ fmt(message.at) }}</span>
+      </div>
     </div>
-    <!-- The whole assistant turn sits in ONE elevated bubble (craft-style card): the
-         collapsed activity section ("N steps") + the final response together, so they
-         read as one unit. The response caps its own height + scrolls inside the card. -->
-    <div class="abody" :class="{ bubble: showBubble }">
-      <template v-for="(g, gi) in grouped" :key="g.key">
-        <!-- Collapsible activity section (tools + thinking + intermediate commentary),
-             craft TurnCard body. -->
-        <SessionTurnActivities
-          v-if="g.type === 'activities'"
-          :entries="g.entries"
-          :preview="g.preview"
-          :streaming="streaming"
-        />
-        <!-- The prominent final answer (craft's ResponseCard) — bubbled per the
-             assistantBubble pref. Carries §8 quote highlights + caret. -->
-        <SessionTextBlock
-          v-else-if="g.type === 'text'"
-          :text="g.text"
-          :highlights="highlightsForBlock(g.blockIndex)"
-          :streaming="streaming"
-          :caret="streaming && gi === grouped.length - 1"
-          :bubble="showBubble"
-        />
-        <!-- Latest TodoWrite checklist, rendered inline once the docked banner yields. -->
-        <SessionStepItem v-else-if="g.type === 'todo'" :block="g.step" />
-        <!-- Turn error (stopReason 'error') — surface the provider message + a one-click
-             retry (re-run this turn) instead of a silent empty bubble. -->
-        <div v-else-if="g.type === 'error'" class="merr">
-          <Icon name="alert" class="merr-ic" />
-          <div class="merr-main">
-            <div class="merr-msg">{{ g.text }}</div>
-            <button class="merr-retry" :title="t('sessions.message.retry')" @click="regen">
-              <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
-              {{ t('sessions.message.retry') }}
-            </button>
+    <div class="mcol">
+      <div v-if="anchors.length" class="fwanchors">
+        <span
+          v-for="a in anchors"
+          :key="a.label"
+          class="fwanchor"
+          role="button"
+          :title="t('sessions.transcript.anchor.tooltip')"
+          style="cursor: pointer"
+          @click="void scrollToMessage(msgIndex)"
+        >
+          {{ a.label }}
+        </span>
+      </div>
+      <!-- The whole assistant turn sits in ONE elevated bubble (craft-style card): the
+           collapsed activity section ("N steps") + the final response together, so they
+           read as one unit. The response caps its own height + scrolls inside the card. -->
+      <div class="abody" :class="{ bubble: showBubble }">
+        <template v-for="(g, gi) in grouped" :key="g.key">
+          <!-- Collapsible activity section (tools + thinking + intermediate commentary),
+               craft TurnCard body. -->
+          <SessionTurnActivities
+            v-if="g.type === 'activities'"
+            :entries="g.entries"
+            :preview="g.preview"
+            :streaming="streaming"
+          />
+          <!-- The prominent final answer (craft's ResponseCard) — bubbled per the
+               assistantBubble pref. Carries §8 quote highlights + caret. -->
+          <SessionTextBlock
+            v-else-if="g.type === 'text'"
+            :text="g.text"
+            :highlights="highlightsForBlock(g.blockIndex)"
+            :streaming="streaming"
+            :caret="streaming && gi === grouped.length - 1"
+            :bubble="showBubble"
+          />
+          <!-- Latest TodoWrite checklist, rendered inline once the docked banner yields. -->
+          <SessionStepItem v-else-if="g.type === 'todo'" :block="g.step" />
+          <!-- Turn error (stopReason 'error') — surface the provider message + a one-click
+               retry (re-run this turn) instead of a silent empty bubble. -->
+          <div v-else-if="g.type === 'error'" class="merr">
+            <Icon name="alert" class="merr-ic" />
+            <div class="merr-main">
+              <div class="merr-msg">{{ g.text }}</div>
+              <button class="merr-retry" :title="t('sessions.message.retry')" @click="regen">
+                <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                {{ t('sessions.message.retry') }}
+              </button>
+            </div>
           </div>
-        </div>
-        <!-- Model-initiated surfaces (#24/#26/#27/#34). They ride in as blocks like a
-             gate does, but each renders its own card; the gate card is the fallback. -->
-        <SessionChapterMark
-          v-else-if="g.type === 'gate' && g.gate.kind === 'chapter'"
-          :block="g.gate"
-        />
-        <SessionSharedFiles
-          v-else-if="g.type === 'gate' && g.gate.kind === 'files'"
-          :block="g.gate"
-        />
-        <SessionTaskSuggestion
-          v-else-if="g.type === 'gate' && g.gate.kind === 'suggestion'"
-          :block="g.gate"
-        />
-        <SessionFollowupSuggestions
-          v-else-if="g.type === 'gate' && g.gate.kind === 'followups'"
-          :block="g.gate"
-          :is-last="isLastMessage"
-        />
-        <SessionFindings
-          v-else-if="g.type === 'gate' && g.gate.kind === 'findings'"
-          :block="g.gate"
-        />
-        <SessionGateCard v-else :block="g.gate" />
-      </template>
-      <!-- Action footer INSIDE the card (craft ResponseCard footer): HIDDEN while
-           actively generating (the SessionProcessingIndicator below the turn is the cue
-           then). Parked on a gate → static "Waiting…"; done → byline (left) + always-
-           visible actions (right), a full-width bar at the card's bottom edge. -->
-      <div v-if="!streamingActive" class="mmeta mmetarow" :class="{ footer: !streaming }">
+          <!-- Model-initiated surfaces (#24/#26/#27/#34). They ride in as blocks like a
+               gate does, but each renders its own card; the gate card is the fallback. -->
+          <SessionChapterMark
+            v-else-if="g.type === 'gate' && g.gate.kind === 'chapter'"
+            :block="g.gate"
+          />
+          <SessionSharedFiles
+            v-else-if="g.type === 'gate' && g.gate.kind === 'files'"
+            :block="g.gate"
+          />
+          <SessionTaskSuggestion
+            v-else-if="g.type === 'gate' && g.gate.kind === 'suggestion'"
+            :block="g.gate"
+          />
+          <SessionFollowupSuggestions
+            v-else-if="g.type === 'gate' && g.gate.kind === 'followups'"
+            :block="g.gate"
+            :is-last="isLastMessage"
+          />
+          <SessionFindings
+            v-else-if="g.type === 'gate' && g.gate.kind === 'findings'"
+            :block="g.gate"
+          />
+          <SessionGateCard v-else :block="g.gate" />
+        </template>
+      </div>
+      <!-- Meta + actions row UNDER the body (proto parity — no longer a footer bar
+           inside the card): HIDDEN while actively generating (the
+           SessionProcessingIndicator below the turn is the cue then). Parked on a
+           gate → static "Waiting…"; done → `time · tok · elapsed` + hover actions. -->
+      <div v-if="!streamingActive" class="mmeta mmetarow">
         <span class="mmetatxt">
           <!-- Park trên MỘT CÂU HỎI thì lượt không "đang chạy" theo nghĩa người dùng
                phải ngồi chờ — nó chờ NGƯỜI. Nên: chữ tĩnh (không shimmer, không chấm
@@ -154,8 +187,9 @@
             <template v-if="elapsedLabel">· {{ elapsedLabel }}</template>
           </template>
         </span>
+        <span v-if="message.via" class="mvia">{{ viaLabel }}</span>
         <SessionMsgActions
-          v-if="showBottomActions"
+          v-if="showBottomActions && (asstPrimary.length || asstOverflow.length)"
           :primary="asstPrimary"
           :overflow="asstOverflow"
         />
@@ -173,8 +207,11 @@
 </template>
 
 <script setup lang="ts">
-// One transcript message (renderMsgs ~1490): system divider, user bubble (.mu) with
-// attachments + hover actions, or assistant (.maw) with grouped blocks + hover actions.
+// One transcript message (renderMsgs ~1490). Proto skeleton (ProtoTranscript):
+// system → avatar (Wrench) + byline + divider; user → right-aligned .mu bubble +
+// footer; assistant → Bot avatar + column (byline → anchors → .abody groups →
+// meta + SessionMsgActions). Activities/steps render BEFORE the text body inside
+// `.abody` (grouped order preserved).
 import type {
   SessionMessage,
   AssistantBlock,
@@ -182,7 +219,8 @@ import type {
   TextBlock,
   Followup,
 } from '~/composables/useSessionsData'
-import { MAX_BOOKMARKS } from '~/composables/useSessionsData'
+import { MAX_BOOKMARKS, PROVIDER_DISPLAY } from '~/composables/useSessionsData'
+import { Bot, Wrench } from 'lucide-vue-next'
 import type { BlockHighlight } from './SessionTextBlock.vue'
 import type { ActivityEntry } from './SessionTurnActivities.vue'
 import type { PreviewRef } from '~/composables/usePreview'
@@ -197,7 +235,19 @@ import {
 } from '~/utils/session-turns'
 import { parseFencedMessages } from '~/utils/fenced-message'
 
-const props = defineProps<{ message: SessionMessage; fallbackWhen: string; msgIndex: number }>()
+const props = withDefaults(
+  defineProps<{
+    message: SessionMessage
+    fallbackWhen: string
+    msgIndex: number
+    // Bề mặt chỉ-đọc (board thread render comment dưới dạng message): cụm
+    // SessionMsgActions tự lọc xuống subset AN TOÀN (copy / xem fullscreen) —
+    // resend/rewind/fork/edit/regen/bookmark/quote tác động lên transcript của
+    // phiên trong scope nên không được hiện trên message giả lập từ comment.
+    readonly?: boolean
+  }>(),
+  { readonly: false },
+)
 const { t } = useI18n()
 const settings = useSettingsStore()
 const store = useSessionsStore()
@@ -221,6 +271,30 @@ const { inlineTodoStep } = useSessionTodo(() => store.active)
 const fenced = computed(() =>
   props.message.role === 'user' ? parseFencedMessages(props.message.text) : null,
 )
+
+// Tin nhập từ một CLI ngoài ("Open in CLI" → sessions.syncCli gắn `via`) — chip
+// mờ trên hàng meta cho mọi role (user / assistant / system-divider).
+const viaLabel = computed(() =>
+  props.message.via ? t('sessions.cli.via', { cli: props.message.via }) : '',
+)
+
+// Byline author của lượt assistant — proto "claude · Sonnet 4.5" = harness · model.
+// Agent AWOG (session.agent, thành viên team) thắng provider display name; đọc qua
+// `scope.session` (KHÔNG `store.active`) để ô lưới lấy đúng phiên của nó.
+// Phần model đọc `message.modelUsed` — model ĐÃ sinh lượt này — chứ không phải
+// `s.model` (model đang chọn): đổi model giữa phiên không được viết lại nhãn của
+// các lượt cũ. Tin persist trước khi có field này rơi về `s.model` như cũ.
+const turnAuthor = computed(() => {
+  // Field `author` (chỉ-hiển-thị, không persist) trên AssistantMessage thắng —
+  // bề mặt đa tác giả (board thread render comment thành message) truyền
+  // title của session đã viết thay vì agent/provider của phiên trong scope.
+  if (props.message.role === 'assistant' && props.message.author) return props.message.author
+  const s = scope.session.value
+  if (!s) return t('sessionsSearch.role.agent')
+  const agent = s.agent?.id ?? PROVIDER_DISPLAY[store.providerOf(s)] ?? ''
+  const model = props.message.role === 'assistant' ? props.message.modelUsed : undefined
+  return [agent, model ?? s.model].filter(Boolean).join(' · ')
+})
 
 // Assistant-bubble pref (Settings → Sessions): wrap the reply body in an elevated
 // bubble card. Only when there's content (don't paint an empty box mid-stream).
@@ -277,7 +351,35 @@ const grouped = computed<Grouped[]>(() => {
     runBlocks = []
     runKey = ''
   }
+  // Engine ghi `parts` theo thứ tự event đến: một step/surface event chen giữa
+  // dòng text sẽ chẻ câu đang viết thành hai run ("…viết, k" | tool | "iểm ra
+  // khác…", "…`casebook" | surface | "/case/…") — model thật sự bắn tool_use
+  // giữa từ/câu. Đuôi lẻ ngắn rơi vào nhóm activities thu gọn → nhìn như text
+  // bị cắt mất. Khi text group visible trước kết thúc bằng WORD-CHAR (chưa hết
+  // câu: không khoảng trắng/dấu kết ở mép phải) VÀ block sau mở đầu là
+  // continuation (chữ thường — giữa từ, hoặc dấu nối —/punct — giữa câu; KHÔNG
+  // phải chữ hoa hay block structure mới), hai mảnh là cùng một mạch prose —
+  // dán ngược về group trướ thay vì đẩy vào run. Không flush: step sau vẫn vào
+  // cùng nhóm activities đang mở.
+  const WORD_CHAR = /[\p{L}\p{N}\p{M}]/u
+  // Continuation opener: chữ thường (`iểm…`, `ửa…`), hoặc whitespace + dấu nối
+  // (` —`, `/`, `,`, `)`, `(`…) — em/en dash là U+2013/14 nên không đụng list
+  // marker `- `. Chữ hoa / số / `#-*+>[` mở block mới → không phải continuation.
+  const CONT_OPENER = /^\s*(?:\p{Ll}|[—–,;:.)!?(/'%"`~])/u
+  const midWordTail = (tail: string): Extract<Grouped, { type: 'text' }> | null => {
+    const prev = out.findLast((g) => g.type === 'text')
+    return prev && WORD_CHAR.test(prev.text.at(-1) ?? '') && CONT_OPENER.test(tail) ? prev : null
+  }
   blocks.forEach((b, bi) => {
+    // Text run bắt đầu giữa từ = đuôi của prose trước bị step chẻ — dán về
+    // group text trước (không flush: step phía sau vẫn vào run đang mở).
+    if (b.kind === 'text') {
+      const prev = midWordTail(b.text)
+      if (prev) {
+        prev.text += b.text
+        return
+      }
+    }
     // TodoWrite note steps carry the checklist for the docked SessionTodoPanel. Render
     // the LATEST one inline as its own step ONLY once the live banner has yielded (turn
     // ended / all items done) — never while the banner shows it, and never the older
@@ -516,7 +618,16 @@ async function copyText() {
 onBeforeUnmount(() => {
   if (copiedTimer) clearTimeout(copiedTimer)
 })
-const quote = () => act(store.addQuote)
+// Quote sink do bề mặt embed khai (board thread → chèn `> excerpt` vào composer
+// của nó). Không có sink → đường phiên như cũ (addQuote → followup chips).
+const quoteSink = useQuoteSink()
+const quote = () => {
+  if (props.readonly) {
+    quoteSink?.(plainText.value)
+    return
+  }
+  act(store.addQuote)
+}
 
 // ── Destructive-action guard (docs/features/session-destructive-action-guard.md) ──
 // Four footer actions cut the transcript for good; they sit one icon away from copy /
@@ -645,7 +756,10 @@ const filePreview = useFilePreview()
 const openFullscreen = () => {
   const text = plainText.value
   if (!text.trim()) return
-  const name = store.active?.title?.trim() || t('sessions.message.fullscreenName')
+  const name =
+    (props.message.role === 'assistant' && props.message.author) ||
+    store.active?.title?.trim() ||
+    t('sessions.message.fullscreenName')
   const sid = scope.sessionId.value
   void filePreview.root().then((root) => {
     const item: PreviewRef = { name, kind: 'markdown', text }
@@ -653,7 +767,9 @@ const openFullscreen = () => {
     // Bôi đen trong fullscreen → ghim trích dẫn như trong transcript (store.addQuote),
     // và preview tập trích dẫn ở góc modal. Chỉ gắn hook khi có phiên + message hợp lệ;
     // `list` đọc thẳng `followups` (reactive) để panel góc tự cập nhật khi thêm/xoá.
-    if (sid != null && msgIndex.value >= 0) {
+    // Readonly (board thread): message không thuộc phiên nào — quote-ghi vào
+    // scope session sẽ làm bẩn composer của phiên đang mở, nên bỏ hook quote.
+    if (!props.readonly && sid != null && msgIndex.value >= 0) {
       item.quote = {
         add: (sel: string) => store.addQuote(sid, msgIndex.value, sel),
         list: () =>
@@ -687,7 +803,10 @@ const openTurnFullscreen = () => {
   turnFullscreenOpen.value = true
 }
 const fullscreenTitle = computed(
-  () => store.active?.title?.trim() || t('sessions.message.fullscreenName'),
+  () =>
+    (props.message.role === 'assistant' && props.message.author) ||
+    store.active?.title?.trim() ||
+    t('sessions.message.fullscreenName'),
 )
 // Guard: if the turn is emptied out (rewind/fork/delete) while open, close the overlay so
 // it never renders a stale/empty tree.
@@ -736,69 +855,106 @@ const copyAction = computed<MsgAction>(() => ({
   run: copyText,
   active: copied.value,
 }))
-const userPrimary = computed<MsgAction[]>(() => [
-  copyAction.value,
-  { icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen },
-  ...(canBookmark.value
+const userPrimary = computed<MsgAction[]>(() =>
+  // Readonly (board thread): action KHÔNG chạy qua phiên — copy, quote (đi vào
+  // quote-sink của bề mặt, không phải followup của phiên), xem fullscreen.
+  props.readonly
     ? [
-        {
-          icon: 'bookmark',
-          title: bookmarkTitle.value,
-          run: toggleBookmark,
-          active: isBookmarked.value,
-          disabled: bookmarkFull.value,
-        },
+        copyAction.value,
+        { icon: 'quote', title: t('sessions.message.quote'), run: quote },
+        { icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen },
       ]
-    : []),
-])
-const userOverflow = computed<(MsgAction | MsgSep)[]>(() => [
-  { icon: 'fork', title: t('sessions.message.fork'), run: fork },
-  { sep: true },
-  { icon: 'edit', title: t('sessions.message.edit'), run: editMsg, danger: true },
-  { icon: 'send', title: t('sessions.message.resend'), run: resend, danger: true },
-  { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
-])
+    : [
+        copyAction.value,
+        { icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen },
+        ...(canBookmark.value
+          ? [
+              {
+                icon: 'bookmark',
+                title: bookmarkTitle.value,
+                run: toggleBookmark,
+                active: isBookmarked.value,
+                disabled: bookmarkFull.value,
+              },
+            ]
+          : []),
+      ],
+)
+const userOverflow = computed<(MsgAction | MsgSep)[]>(() =>
+  // Tất cả action của overflow đều ghi vào transcript phiên — readonly còn rỗng.
+  props.readonly
+    ? []
+    : [
+        { icon: 'fork', title: t('sessions.message.fork'), run: fork },
+        { sep: true },
+        { icon: 'edit', title: t('sessions.message.edit'), run: editMsg, danger: true },
+        { icon: 'send', title: t('sessions.message.resend'), run: resend, danger: true },
+        { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
+      ],
+)
 
-const asstPrimary = computed<MsgAction[]>(() => [
-  copyAction.value,
-  { icon: 'quote', title: t('sessions.message.quote'), run: quote },
-  ...(canBookmark.value
+const asstPrimary = computed<MsgAction[]>(() =>
+  props.readonly
+    ? [copyAction.value, { icon: 'quote', title: t('sessions.message.quote'), run: quote }]
+    : [
+        copyAction.value,
+        { icon: 'quote', title: t('sessions.message.quote'), run: quote },
+        ...(canBookmark.value
+          ? [
+              {
+                icon: 'bookmark',
+                title: bookmarkTitle.value,
+                run: toggleBookmark,
+                active: isBookmarked.value,
+                disabled: bookmarkFull.value,
+              },
+            ]
+          : []),
+      ],
+)
+const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
+  // Readonly: chỉ giữ hai ông xem fullscreen (response + cả turn) — publishReport
+  // ghi file wiki, branch/fork/regen/retry/rewind ghi transcript → đều loại.
+  props.readonly
     ? [
-        {
-          icon: 'bookmark',
-          title: bookmarkTitle.value,
-          run: toggleBookmark,
-          active: isBookmarked.value,
-          disabled: bookmarkFull.value,
-        },
+        ...(plainText.value.trim()
+          ? [
+              {
+                icon: 'maximize',
+                title: t('sessions.message.fullscreen'),
+                run: openFullscreen,
+              },
+            ]
+          : []),
+        { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
       ]
-    : []),
-])
-const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
-  // Response-only fullscreen only earns a row when there's prose to read.
-  ...(plainText.value.trim()
-    ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
-    : []),
-  // Xuất thành báo cáo hạ tầng — cũng chỉ khi có văn xuôi: một lượt chỉ có tool thì
-  // không có gì để thành báo cáo, và `publishReport` sẽ trả false mà không nói gì.
-  ...(plainText.value.trim()
-    ? [{ icon: 'file', title: t('sessions.message.report'), run: publishReport }]
-    : []),
-  // Whole-turn fullscreen (activities + gates + response) — always available for an
-  // assistant turn, incl. tool-only turns with no final response (AC3.9).
-  { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
-  { icon: 'branch', title: t('sessions.message.branch'), run: branch },
-  { icon: 'fork', title: t('sessions.message.forkShort'), run: fork },
-  { sep: true },
-  { icon: 'refresh', title: t('sessions.message.regen'), run: regen, danger: true },
-  { icon: 'settings', title: t('sessions.message.retryModel'), run: retry, danger: true },
-  { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
-])
+    : [
+        // Response-only fullscreen only earns a row when there's prose to read.
+        ...(plainText.value.trim()
+          ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
+          : []),
+        // Xuất thành báo cáo hạ tầng — cũng chỉ khi có văn xuôi: một lượt chỉ có tool thì
+        // không có gì để thành báo cáo, và `publishReport` sẽ trả false mà không nói gì.
+        ...(plainText.value.trim()
+          ? [{ icon: 'file', title: t('sessions.message.report'), run: publishReport }]
+          : []),
+        // Whole-turn fullscreen (activities + gates + response) — always available for an
+        // assistant turn, incl. tool-only turns with no final response (AC3.9).
+        { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
+        { icon: 'branch', title: t('sessions.message.branch'), run: branch },
+        { icon: 'fork', title: t('sessions.message.forkShort'), run: fork },
+        { sep: true },
+        { icon: 'refresh', title: t('sessions.message.regen'), run: regen, danger: true },
+        { icon: 'settings', title: t('sessions.message.retryModel'), run: retry, danger: true },
+        { icon: 'rewind', title: t('sessions.message.rewind'), run: rewind, danger: true },
+      ],
+)
 </script>
 
 <style scoped>
 /* Slash-command invocation chip in the user bubble — compact `/name args` pill in
-   place of the expanded body (which is still sent to the model). */
+   place of the expanded body (which is still sent to the model). Giữ primary-tint:
+   nó là "lệnh đã nhận", không phải văn xuôi — đọc trên nền wash vẫn nổi. */
 .ucmd {
   /* mono-ok: slash command — a literal string the user types */
   font-family: var(--code);
@@ -808,33 +964,126 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
   max-width: 100%;
   padding: 3px 9px;
   border-radius: var(--r-sm);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  color: var(--primary);
   vertical-align: middle;
 }
 .ucmd-name {
   font-weight: 650;
 }
 .ucmd-args {
-  color: var(--text);
+  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Message actions live in a PERSISTENT footer row (byline + actions) for both the
-   assistant turn card and the user bubble — no floating hover pill. */
+/* Quote được trích từ reply, in đầu bubble user. Global `.uq` tô nền bằng alpha
+   trắng (dark-only); trên bubble wash thì wash con phải mix theo chữ mới đọc được
+   cả hai theme. */
+.uq {
+  background: color-mix(in srgb, var(--accent-foreground) 5%, transparent);
+  border-left: 2px solid var(--primary);
+}
+.uqx {
+  color: var(--muted-foreground);
+}
+
+/* Message actions live in a footer row (byline + actions) for both the assistant
+   turn card and the user bubble — no floating hover pill. */
 .maw,
-.urow {
+.urow,
+.srow {
   position: relative;
+}
+/* Header riêng một hàng (avatar + byline), thân tin tràn full width ngang mép
+   avatar — không còn cột avatar cố định bên trái nên body và composer thẳng mép
+   nhau theo cột `.msgcol`. `.maw` global là cột flex (skin cũ) — scoped này giữ
+   cột nhưng gom rhythm về 6px (gap-1.5 proto). */
+.maw,
+.srow {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Hàng header: avatar chip + byline ngang nhau, canh giữa. */
+.mhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+/* Avatar chip 24px — proto `size-6 rounded-md border` (rounded-md = 8px →
+   --r-sm). Mặc định muted (user/system); agent = ô primary. */
+.mavatar {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
+}
+.mavatar.agent {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: transparent;
+}
+/* Thân tin dưới header — full width (align-self: stretch của flex column). */
+.mcol {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* Byline `author · time` — author fs-md/500 foreground, time xs muted tabular. */
+.mbyline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.mauthor {
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  font-weight: 500;
+  color: var(--foreground);
+}
+.mtime {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+/* Divider bên trong `.mcol` — global `.sysdiv` đệm `margin:4px 0` cho hàng đứng
+   riêng; trong cột gap-6px đã đủ nhịp. */
+.srow .sysdiv {
+  margin: 0;
+}
+/* User row — proto bubble mode: cap 75% của cột (global `.urow` là 80%), và
+   footer đảo chiều (`flex-row-reverse` của proto) để meta nằm sát mép bubble,
+   cụm icon dãn ra trái với ⋯ ngoài cùng. */
+.urow {
+  max-width: 75%;
+}
+.urow .mmetarow,
+.urow .hoveract {
+  flex-direction: row-reverse;
 }
 /* Bubble width: the prototype caps .mu at max-width:74%, but that % resolves against
    .urow — which shrinks to its widest child. For a short message the meta line
    ("04:02 PM · 3 tok") is wider than the text, so the bubble got capped to 74% of the
    TIMESTAMP width and even "review lại" wrapped. Let the bubble size to its own
-   content instead; long messages are still capped by .urow's max-width:80% of the
-   transcript. */
+   content instead; long messages are still capped by .urow's max-width:75% of the
+   column (proto `max-w-[75%]`).
+
+   User bubble — shadcn idiom: nền wash trung tính `bg-accent` (→ --accent-wash =
+   --bgHover), chữ accent-foreground, bỏ hairline viền (wash tự đủ khối). Radius
+   theo proto `rounded-2xl rounded-tr-md` (bo tròn, góc trên-phải nhỏ làm tail). */
 .mu {
   max-width: 100%;
   /* Break long unbreakable tokens (file:// paths, URLs, underscored filenames) so they
@@ -843,98 +1092,83 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
      directly into .mu. min-width:0 lets the flex bubble actually shrink to wrap. */
   min-width: 0;
   overflow-wrap: anywhere;
+  background: var(--accent-wash);
+  border-color: transparent;
+  color: var(--accent-foreground);
+  border-radius: 1rem;
+  /* Proto `rounded-tr-md`: góc trên-phải nhỏ (6px = --r-xs) làm tail. */
+  border-top-right-radius: var(--r-xs);
 }
-/* The action set sits inline on the footer row (assistant + user) — no floating pill
-   chrome, pushed to the right next to the byline. PERSISTENT (opacity:1, overriding the
-   prototype's hover-only fade) so the controls are discoverable without hovering. */
+/* The action set sits inline on the meta row (assistant + user), right after the
+   `time · tok · elapsed` text — no floating pill, no far-edge margin (proto:
+   icons sit next to the meta). HOVER-GATED theo proto (`group/msg:hover` /
+   focus-within → opacity 1): `.urow:hover`/`.maw:hover` đã lo phần hover trong
+   prototype.css global. */
 .hoveract.bottom {
   position: static;
   top: auto;
   right: auto;
-  margin-left: auto;
   padding: 0;
   background: none;
   border: none;
   box-shadow: none;
+  align-items: center;
+  gap: 2px;
+}
+/* Keyboard parity với hover: tab vào một nút ghost thì cụm phải hiện. :deep vì
+   .hoveract là root của SessionMsgActions con. */
+.urow:focus-within :deep(.hoveract),
+.maw:focus-within :deep(.hoveract) {
   opacity: 1;
 }
-/* Meta row holds the byline (left) + inline action set (right). */
+/* Meta row: `time · tok · elapsed` + via chip + inline action set, ngang nhau
+   theo proto (`gap-0.5` + `mr-1` trên meta ≈ 6px giữa hai cụm). */
 .mmetarow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
 }
-/* Footer variant (turn done): a hairline top rule + breathing room separates the
-   action row from the reply, matching craft's ResponseCard footer. */
-/* Action footer. In a bubble it's a full-width bar flush to the card's bottom edge
-   (negative margins cancel the card padding; the card's overflow:hidden clips it to the
-   radius) with a hairline top divider — craft's ResponseCard footer. Without a bubble it
-   degrades to a plain inset row. Actions stay persistent (see .maw .hoveract.bottom). */
-.mmetarow.footer {
-  margin-top: 2px;
-  padding: 0 4px;
-}
-.abody.bubble .mmetarow.footer {
-  margin: 0 -14px -11px;
-  padding: 7px 12px;
-  border-top: 1px solid var(--border);
+/* Byline `{time} · {tok} tok · {elapsed}` — xs + muted-foreground + tabular-nums
+   (global .mmeta đã có fs/lh/tabular; chỉ nâng mức mờ lên muted-foreground theo
+   spec, textFaint quá yếu cho metadata chính). */
+.mmeta {
+  color: var(--muted-foreground);
+  /* Meta sát mép cột nội dung (proto không đệm footer) — global `.mmeta` đệm
+     `1px 4px 0` cho hàng byline cũ; `.mcol` gap đã lo khoảng dọc. */
+  padding: 0;
 }
 .mmetatxt {
   min-width: 0;
 }
-/* Ghost icon buttons inside the toolbar: borderless, fill on hover. */
-.hoveract .ha {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 20px;
-  border: none;
-  background: transparent;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-}
-.hoveract .ha:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
-/* Bookmarked: the anchor is ON, so the icon carries the accent instead of the muted
-   default. At the cap the button stays visible but inert — the tooltip says why. */
-.hoveract .ha.on {
-  color: var(--accent);
-}
-.hoveract .ha.off {
-  opacity: 0.4;
-  cursor: default;
-}
-.hoveract .ha.off:hover {
-  background: transparent;
-  color: var(--textDim);
-}
-/* Destructive actions (rewind / resend / edit & resend / regenerate / retry another
-   model) read RED on hover, so the risk is visible BEFORE the click rather than only in
-   the dialog after it. Six click points in total — the four gated actions plus
-   `settings`/retryModel, which truncates + spends a model call without asking (§4.3).
-   Theme tokens only: both theme families ship --dangerBg/--danger. */
-.hoveract .ha.danger:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
+/* Chip "via <cli>" trên hàng meta — tin được sessions.syncCli nhập từ một agent
+   CLI ngoài ("Open in CLI"), đánh dấu nó không đi qua composer của AWOG. Viên
+   thuốc nhỏ + mờ (faint = subordinate so với byline muted), không phải nhãn hành động. */
+.mvia {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  color: var(--textFaint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
 }
 /* Assistant reply body. Always a flex column (keeps the per-block gap); the
-   `bubble` variant (Settings → Sessions · Assistant bubble) wraps it in an
-   elevated card mirroring the user bubble, left-tailed. */
+   `bubble` variant (Settings → Sessions · Assistant bubble) wraps it in a card. */
 .abody {
   display: flex;
   flex-direction: column;
   gap: 9px;
 }
 /* Unified turn card (Settings → Sessions · Assistant bubble): wraps the collapsed
-   activity section + the final response in one elevated, left-tailed card. */
+   activity section + the final response in ONE card — `rounded-xl border-border
+   bg-card shadow-sm` của proto (đuôi chỉ có ở user bubble). */
 .abody.bubble {
-  background: var(--bgEl);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  border-bottom-left-radius: var(--r-xs);
+  border-radius: var(--r-card);
   padding: 11px 14px;
+  box-shadow: var(--shadow-sm);
   /* Clip the full-bleed footer bar to the card's rounded corners. */
   overflow: hidden;
 }
@@ -943,49 +1177,52 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
   display: inline-block;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
+  border-radius: var(--r-pill);
+  background: var(--primary);
   margin-right: 5px;
   vertical-align: middle;
   opacity: 0.5;
 }
 
 /* Park trên câu hỏi: trạng thái ĐỨNG YÊN, không phải trạng thái bận — chữ tĩnh,
-   không chấm nhấp nháy, không shimmer. Nút bên cạnh mở lại popup đã đóng. */
+   không chấm nhấp nháy, không shimmer. Nút bên cạnh mở lại popup đã đóng —
+   ghost nhỏ tô primary. */
 .qwait {
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .qwaitbtn {
   margin-left: 8px;
   padding: 1px 8px;
-  border: 1px solid var(--accentBorder, var(--border));
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--accent);
+  color: var(--primary);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
 .qwaitbtn:hover {
-  background: var(--accentDim);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
-/* Turn-error alert: danger-tinted box with the provider message + a retry button. */
+/* Turn-error alert: destructive-tinted box with the provider message + a retry
+   button. --destructive = --danger; hai biến --dangerDim/--dangerBorder không tồn
+   tại trong bridge nên mix trực tiếp từ --destructive. */
 .merr {
   display: flex;
   align-items: flex-start;
   gap: 9px;
   margin: 4px 0;
   padding: 10px 12px;
-  border-radius: var(--r-btn);
-  background: var(--dangerDim, rgba(239, 68, 68, 0.12));
-  border: 1px solid var(--dangerBorder, rgba(239, 68, 68, 0.35));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
 }
 .merr-ic {
   width: var(--icon-md);
   height: var(--icon-md);
   flex: 0 0 auto;
   margin-top: 1px;
-  color: var(--danger);
+  color: var(--destructive);
 }
 .merr-main {
   display: flex;
@@ -995,7 +1232,7 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
   min-width: 0;
 }
 .merr-msg {
-  color: var(--text);
+  color: var(--foreground);
   line-height: var(--lh-md);
   overflow-wrap: anywhere;
 }
@@ -1006,13 +1243,13 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() => [
   padding: 4px 10px;
   border-radius: var(--r-xs);
   background: transparent;
-  border: 1px solid var(--dangerBorder, var(--border));
-  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
+  color: var(--destructive);
   cursor: pointer;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
 .merr-retry:hover {
-  background: var(--dangerDim, var(--bgHover));
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
 }
 </style>

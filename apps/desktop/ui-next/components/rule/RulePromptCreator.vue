@@ -38,24 +38,24 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button v-if="draft" class="btn" @click="resetDraft">
+      <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      <Button v-if="draft" variant="outline" @click="resetDraft">
         <Icon name="refresh" />
         {{ t('rules.creator.regenerate') }}
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!draft"
-        class="btn pri"
         :disabled="isGenerating || !prompt.trim()"
+        variant="default"
         @click="onGenerate"
       >
         <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
         {{ isGenerating ? t('rules.creator.generating') : t('rules.creator.generate') }}
-      </button>
-      <button v-else class="btn pri" :disabled="!canSave" @click="onSave">
+      </Button>
+      <Button v-else :disabled="!canSave" variant="default" @click="onSave">
         <Icon name="check" />
         {{ t('rules.creator.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -73,6 +73,7 @@ import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useRulesStore, type Rule, type RuleDraft } from '~/stores/rules'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

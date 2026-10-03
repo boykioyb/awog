@@ -1,36 +1,43 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="gpm-ovl" @click.self="emit('close')">
-      <div class="gpm-card" role="dialog" aria-modal="true">
-        <div class="gpm-title">{{ t('git.prompt.newBranch') }}</div>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>{{ t('git.prompt.newBranch') }}</DialogTitle>
+      </DialogHeader>
 
-        <label class="gbc-field">
-          <span class="gbc-label">{{ t('git.branchCreate.name') }}</span>
-          <input
+      <div class="grid gap-3">
+        <label class="grid grid-cols-[52px_1fr] items-center gap-3">
+          <span class="text-sm font-medium text-muted-foreground">
+            {{ t('git.branchCreate.name') }}
+          </span>
+          <Input
             ref="nameInput"
             v-model="name"
-            class="gpm-input mono"
+            class="font-mono"
             placeholder="feature/…"
             @keydown.enter.prevent="submit"
-            @keydown.esc.prevent="emit('close')"
           />
         </label>
 
-        <label class="gbc-field">
-          <span class="gbc-label">{{ t('git.branchCreate.from') }}</span>
+        <label class="grid grid-cols-[52px_1fr] items-center gap-3">
+          <span class="text-sm font-medium text-muted-foreground">
+            {{ t('git.branchCreate.from') }}
+          </span>
           <AppSelect v-if="baseOptions.length" v-model="base" :options="baseOptions" width="100%" />
-          <span v-else class="gbc-nobase">{{ t('git.branchCreate.noBase') }}</span>
+          <span v-else class="text-sm italic text-muted-foreground">
+            {{ t('git.branchCreate.noBase') }}
+          </span>
         </label>
-
-        <div class="gpm-foot">
-          <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-          <button class="btn pri" :disabled="!name.trim()" @click="submit">
-            {{ t('git.sidebar.newBranch') }}
-          </button>
-        </div>
       </div>
-    </div>
-  </Teleport>
+
+      <DialogFooter>
+        <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+        <Button :disabled="!name.trim()" @click="submit">
+          {{ t('git.sidebar.newBranch') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -39,6 +46,13 @@
 // remote-tracking refs. Submitting emits { name, from } so the caller can pass
 // `from` to `git branch <name> <from>`.
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import type { BranchInfo } from './git-types'
 
 const props = defineProps<{
@@ -56,7 +70,7 @@ const { t } = useI18n()
 
 const name = ref('')
 const base = ref('')
-const nameInput = useTemplateRef<HTMLInputElement>('nameInput')
+const nameInput = useTemplateRef<{ $el?: HTMLInputElement } | HTMLInputElement>('nameInput')
 
 // Local branches first, then remote-tracking refs — all valid `git branch` bases.
 const baseOptions = computed<AppSelectOption[]>(() => {
@@ -85,81 +99,11 @@ watch(
     base.value = opts.some((o) => o.value === props.currentBranch)
       ? props.currentBranch
       : (opts[0]?.value ?? '')
-    void nextTick(() => nameInput.value?.focus())
+    void nextTick(() => {
+      const el =
+        nameInput.value instanceof HTMLInputElement ? nameInput.value : nameInput.value?.$el
+      el?.focus()
+    })
   },
 )
 </script>
-
-<style scoped>
-.gpm-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.gpm-card {
-  width: 420px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.gpm-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.gbc-field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.gbc-label {
-  flex: none;
-  width: 52px;
-  font-size: 1em;
-  font-weight: 500;
-  color: var(--textDim);
-}
-.gbc-nobase {
-  flex: 1;
-  font-size: 1em;
-  color: var(--textDim);
-  font-style: italic;
-}
-.gpm-input {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  outline: none;
-  color: var(--text);
-  font-size: 1em;
-  font-family: var(--sans);
-}
-.gpm-input.mono {
-  font-family: var(--mono);
-}
-.gpm-input:focus {
-  border-color: var(--accent);
-}
-.gpm-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-.gpm-foot .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-</style>

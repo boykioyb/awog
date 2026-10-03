@@ -28,9 +28,8 @@
           <div class="pbe-row">
             <label class="pbe-fld pbe-grow">
               <span class="pbe-lbl">{{ t('playbooks.editor.name') }}</span>
-              <input
+              <Input
                 v-model="form.name"
-                class="pbe-inp"
                 type="text"
                 maxlength="160"
                 autocomplete="off"
@@ -85,41 +84,42 @@
               <span class="pbe-sec-ttl">{{ t('playbooks.editor.variables') }}</span>
               <span class="pbe-sec-hint">{{ t('playbooks.editor.variablesWhy') }}</span>
               <span class="pbe-gap" />
-              <button
-                class="btn sm"
+              <Button
                 type="button"
                 :disabled="form.variables.length >= MAX_VARIABLES"
+                variant="outline"
+                size="sm"
                 @click="addVariable"
               >
                 <Icon name="plus" class="pbe-ic" />
                 {{ t('playbooks.editor.addVariable') }}
-              </button>
+              </Button>
             </div>
 
             <ul v-if="form.variables.length" class="pbe-vars">
               <li v-for="(v, i) in form.variables" :key="i" class="pbe-var">
-                <input
+                <Input
                   v-model="v.name"
-                  class="pbe-inp pbe-var-name"
                   type="text"
                   maxlength="64"
                   spellcheck="false"
                   :placeholder="t('playbooks.editor.varNamePlaceholder')"
+                  class="pbe-var-name"
                 />
-                <input
+                <Input
                   v-model="v.label"
-                  class="pbe-inp pbe-grow"
                   type="text"
                   maxlength="160"
                   :placeholder="t('playbooks.editor.varLabelPlaceholder')"
+                  class="pbe-grow"
                 />
-                <input
+                <Input
                   v-model="v.default"
-                  class="pbe-inp pbe-var-def"
                   type="text"
                   maxlength="1024"
                   spellcheck="false"
                   :placeholder="t('playbooks.editor.varDefaultPlaceholder')"
+                  class="pbe-var-def"
                 />
                 <label class="pbe-req" :title="t('playbooks.editor.varRequiredWhy')">
                   <input v-model="v.required" type="checkbox" />
@@ -144,18 +144,19 @@
               <span class="pbe-sec-ttl">{{ t('playbooks.editor.steps') }}</span>
               <span class="pbe-sec-hint">{{ t('playbooks.editor.stepsWhy') }}</span>
               <span class="pbe-gap" />
-              <button
+              <Button
                 v-for="v in EDITOR_VERBS"
                 :key="v"
-                class="btn sm"
                 type="button"
                 :disabled="form.steps.length >= MAX_STEPS"
                 :title="t(`playbooks.editor.addStepWhy.${v}`)"
+                variant="outline"
+                size="sm"
                 @click="addStep(v)"
               >
                 <Icon name="plus" class="pbe-ic" />
                 {{ t(`playbooks.verb.${v}`) }}
-              </button>
+              </Button>
             </div>
 
             <!-- Cảnh báo, KHÔNG phải lỗi: bản nháp thiếu bước quay lui vẫn lưu được —
@@ -189,18 +190,18 @@
         </div>
 
         <footer class="pbe-ft">
-          <button class="btn" type="button" :disabled="saving" @click="close">
+          <Button type="button" :disabled="saving" variant="outline" @click="close">
             {{ t('common.cancel') }}
-          </button>
-          <button
-            class="btn pri"
+          </Button>
+          <Button
             type="button"
             :disabled="!canSave"
             :aria-busy="saving"
+            variant="default"
             @click="onSave"
           >
             {{ t('playbooks.editor.save') }}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>
@@ -220,6 +221,8 @@ import {
 import { useProjectsStore } from '~/stores/projects'
 import type { EditorTarget } from '~/composables/usePlaybookEditor'
 import type { PlaybookIssue, PlaybookKind, PlaybookTier } from '~/composables/usePlaybooksApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const emit = defineEmits<{ saved: [target: EditorTarget] }>()
 

@@ -244,11 +244,13 @@ const srcdoc = computed(() => (visible.value && !tooLarge.value ? buildDoc(props
 </script>
 
 <style scoped>
+/* Widget card — muted surface + border + lg radius; icon buttons use the
+   neutral hover wash, the toggle's active state tints primary. */
 .wgt {
   border: 1px solid var(--border);
-  border-radius: var(--r-card);
+  border-radius: var(--radius);
   overflow: hidden;
-  background: var(--bgSubtle);
+  background: var(--muted);
 }
 .wgthead {
   display: flex;
@@ -256,21 +258,21 @@ const srcdoc = computed(() => (visible.value && !tooLarge.value ? buildDoc(props
   gap: 8px;
   height: 34px;
   padding: 0 8px 0 10px;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 18px;
   /* Hairline on a fixed-height bar (ADR 0079): a border would eat 1px of the box and
      push the vertically centered children onto a half pixel. */
   box-shadow: inset 0 -1px 0 var(--border);
 }
 .wgttitle {
-  color: var(--text);
-  font-weight: 600;
+  color: var(--foreground);
+  font-weight: 500;
 }
 .wgtnote {
-  color: var(--textMuted);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
 }
 .wgtgrow {
   flex: 1;
@@ -283,28 +285,36 @@ const srcdoc = computed(() => (visible.value && !tooLarge.value ? buildDoc(props
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 16px;
+  cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 .wgtbtn:hover {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--text);
+  border-color: var(--ring);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .wgticon {
   padding: 5px;
+  border: 0;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
   transition: background 0.12s ease;
 }
 .wgticon:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .wgticon.on {
-  background: var(--accentDim);
-  color: var(--accent);
+  background: rgb(from var(--primary) r g b / 12%);
+  color: var(--primary);
 }
 .wgtframe {
   display: block;
@@ -315,24 +325,25 @@ const srcdoc = computed(() => (visible.value && !tooLarge.value ? buildDoc(props
 .wgtsrc {
   /* mono-ok: the widget's source markup, meant to be read/copied as code */
   font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  font-size: 13px;
+  line-height: 18px;
   margin: 0;
   padding: 10px 12px;
   max-height: 320px;
   overflow: auto;
   white-space: pre-wrap;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   box-shadow: inset 0 1px 0 var(--border);
 }
 .wgtstate {
   padding: 16px 12px;
-  color: var(--textMuted);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 18px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .wgticon {
+  .wgticon,
+  .wgtbtn {
     transition: none;
   }
 }

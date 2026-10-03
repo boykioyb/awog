@@ -57,18 +57,20 @@ function openPreview() {
 </script>
 
 <style scoped>
-/* Outlined attachment chip: drop the grey fill (prototype .a1 uses var(--bgActive))
-   to match the flat step/cluster rows; keep the border, and add a subtle hover so
-   the clickable chip still gives feedback (it opens the preview). */
+/* Attachment chip — proto idiom: rounded-md, muted fill, hairline border, and a
+   neutral accent-wash hover since the chip opens the shared preview. */
 .a1 {
-  background: transparent;
+  background: var(--muted);
+  border-radius: var(--r-sm);
   transition:
     background 0.12s ease,
-    border-color 0.12s ease;
+    border-color 0.12s ease,
+    color 0.12s ease;
 }
 .a1:hover {
-  background: var(--bgHover);
-  border-color: var(--borderStrong);
+  background: var(--accent-wash);
+  border-color: var(--input);
+  color: var(--foreground);
 }
 @media (prefers-reduced-motion: reduce) {
   .a1 {

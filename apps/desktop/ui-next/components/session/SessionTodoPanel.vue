@@ -5,6 +5,7 @@
        đủ vẫn là một cú bấm, y như strip `done/total` trước đây. -->
   <span v-if="variant === 'chip' && bannerVisible && !dismissed" class="ctxwrap2">
     <button
+      type="button"
       class="ctxchip"
       :class="{ acc: allDone, on: popOpen }"
       :title="t('sessions.todo.title')"
@@ -23,7 +24,7 @@
         <div class="pl todopop-h">
           {{ t('sessions.todo.title') }}
           <button type="button" class="todox" :title="t('sessions.todo.hide')" @click="hide">
-            <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
           </button>
         </div>
         <SessionTodoList :todos="todos" editable @cycle="cycleTodo" />
@@ -48,9 +49,10 @@
       :title="collapsed ? t('sessions.todo.expand') : t('sessions.todo.collapse')"
       @click="collapsed = !collapsed"
     >
-      <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+      <Icon name="chev" class="todochev" style="width: var(--icon-xs); height: var(--icon-xs)" />
       <Icon
         :name="allDone ? 'check' : 'tasks'"
+        class="todoic"
         style="width: var(--icon-sm); height: var(--icon-sm)"
       />
       <span>{{ t('sessions.todo.title') }}</span>
@@ -61,10 +63,10 @@
         :title="t('sessions.todo.hide')"
         @click.stop="dismissed = true"
       >
-        <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
     </div>
-    <SessionTodoList :todos="todos" editable @cycle="cycleTodo" />
+    <SessionTodoList v-if="!collapsed" class="todol" :todos="todos" editable @cycle="cycleTodo" />
   </div>
 </template>
 
@@ -118,9 +120,49 @@ watch(total, (n, prev) => {
 </script>
 
 <style scoped>
-/* Sits after `.tdn` (which holds `margin-left:auto`), so it pins to the right edge of
-   the header row. Icon-only, revealed on hover of the row — the header is a click
-   target itself, so a permanently loud × would compete with it. */
+/* Bar variant — card chrome (border + card surface + lg radius), chevron + title
+   + done/total count + hover-revealed × dismiss. */
+.todop {
+  margin: 12px 14px 0;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+.todoh {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  user-select: none;
+}
+.todochev {
+  color: var(--textDim);
+  transition: transform 0.15s ease;
+}
+.todop.col .todochev {
+  transform: rotate(-90deg);
+}
+.todoic {
+  color: var(--textDim);
+}
+.tdn {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--textDim);
+}
+.todol {
+  padding: 0 12px 10px;
+}
+/* Icon-only × — revealed on header hover: the header is a click target itself,
+   so a permanently loud × would compete with it. In the chip popover header it
+   stays visible (that row is not a toggle). */
 .todox {
   flex: 0 0 auto;
   display: grid;
@@ -133,16 +175,20 @@ watch(total, (n, prev) => {
   background: transparent;
   color: var(--textDim);
   cursor: pointer;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.todoh .todox {
   opacity: 0;
-  transition: opacity 0.12s;
 }
 .todoh:hover .todox,
-.todox:focus-visible {
+.todoh .todox:focus-visible {
   opacity: 1;
 }
 .todox:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
+  background: var(--accent-wash);
 }
 
 /* ── Biến thể chip: popover neo vào chip trong hàng ngữ cảnh (§3.2) ─────── */
@@ -173,5 +219,11 @@ watch(total, (n, prev) => {
 }
 .todopop-h .todox {
   margin-left: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .todochev,
+  .todox {
+    transition: none;
+  }
 }
 </style>

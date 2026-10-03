@@ -1,0 +1,95 @@
+/* Agent whitelist pickers — shared by AgentEditor (modal) and the agent detail
+   tabs (inline edit). One global sheet instead of scoped copies in every
+   consumer. `.awp-*` mirrors the old `.age-mcp*` rules; `.chip` stays the
+   app-shell global. */
+
+.awp-list {
+  display: grid;
+  /* auto-fill columns — a single tall column wastes the pane's width on wide
+     screens (skills catalogue runs to hundreds of rows). */
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  align-content: start;
+  gap: 2px;
+  background: var(--bgInput);
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  padding: 6px;
+}
+.awp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r-xs);
+  cursor: pointer;
+}
+.awp-row.on {
+  background: var(--bgActive);
+}
+.awp-cbx {
+  accent-color: var(--accent);
+}
+.awp-name {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
+  color: var(--text);
+}
+.awp-tier {
+  font-size: var(--fs-xs);
+  color: var(--textFaint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.awp-empty {
+  grid-column: 1 / -1;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--textFaint);
+  text-align: center;
+  padding: 12px 0;
+}
+.awp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.awp-chipx {
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+  padding: 0;
+}
+.awp-chipx:hover {
+  color: var(--danger);
+}
+.awp-input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  background: var(--bgInput);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-family: var(--sans);
+  outline: none;
+}
+.awp-input.mono {
+  /* mono-ok: tool names / model ids / repo paths */
+  font-family: var(--code);
+}
+.awp-input:focus {
+  border-color: var(--accent);
+}
+.awp-search {
+  margin-bottom: 8px;
+}
+.awp-hint {
+  font-size: var(--fs-xs);
+  color: var(--textDim);
+  line-height: var(--lh-sm);
+}

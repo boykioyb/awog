@@ -73,12 +73,12 @@
         </div>
 
         <footer class="lpf-ft">
-          <button class="btn" type="button" @click="emit('close')">
+          <Button type="button" variant="outline" @click="emit('close')">
             {{ t('common.cancel') }}
-          </button>
-          <button class="btn pri" type="button" @click="confirm">
+          </Button>
+          <Button type="button" variant="default" @click="confirm">
             {{ t('common.confirm') }}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>
@@ -92,6 +92,7 @@
 // bấm Xác nhận — Huỷ phải thực sự huỷ. Đó cũng là lý do bản nháp được dựng lại mỗi
 // lần mở: mở ra lần sau không được thấy tàn dư của lần trước đã bỏ.
 import { useLogPrefs, type LogPrefs, type LogRowMode } from '~/composables/useLogPrefs'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

@@ -6,38 +6,41 @@
          (Download / Open download page / Restart) sits next to "Check now". -->
     <SettingsField :name="t('settings.about.appName')" :desc="versionLine">
       <div class="keyrow justify-end">
-        <button
+        <Button
           v-if="action"
-          class="btn sm pri"
           :disabled="update.actionBusy"
+          variant="default"
+          size="sm"
           @click="update.runPrimaryAction()"
         >
           <Icon :name="action.icon" :class="{ uaspin: update.actionBusy }" />
           {{ action.label }}
-        </button>
-        <button class="btn sm" :disabled="!available || checking" @click="onCheckNow">
+        </Button>
+        <Button :disabled="!available || checking" variant="outline" size="sm" @click="onCheckNow">
           <Icon name="refresh" />
           {{ checking ? t('settings.about.checking') : t('settings.about.checkNow') }}
-        </button>
+        </Button>
       </div>
     </SettingsField>
 
     <!-- Repository -->
     <SettingsField :name="t('settings.about.repo.name')" :desc="t('settings.about.repo.desc')">
-      <button class="btn sm" @click="onOpenRepo">{{ t('settings.about.repo.open') }}</button>
+      <Button variant="outline" size="sm" @click="onOpenRepo">
+        {{ t('settings.about.repo.open') }}
+      </Button>
     </SettingsField>
 
     <!-- Onboarding — re-run the setup wizard / replay the interface tour. Closes
          this modal first so the wizard + spotlight render over the shell. -->
     <SettingsField :name="t('onboarding.settings.name')" :desc="t('onboarding.settings.desc')">
       <div class="keyrow justify-end">
-        <button class="btn sm" @click="onRerunSetup">
+        <Button variant="outline" size="sm" @click="onRerunSetup">
           <Icon name="sparkles" />
           {{ t('onboarding.settings.rerunSetup') }}
-        </button>
-        <button class="btn sm" @click="onReplayTour">
+        </Button>
+        <Button variant="outline" size="sm" @click="onReplayTour">
           {{ t('onboarding.settings.replayTour') }}
-        </button>
+        </Button>
       </div>
     </SettingsField>
 
@@ -76,6 +79,7 @@ import { computed } from 'vue'
 import { useSettingsStore } from '~/stores/settings'
 import { useUpdateStore } from '~/stores/update'
 import { useSidecar } from '~/composables/useSidecar'
+import Button from '~/components/ui/button/Button.vue'
 
 // About panel — reads the shared update store (state machine + app info live
 // there; the auto-update plugin owns the single app-lifetime subscription). The

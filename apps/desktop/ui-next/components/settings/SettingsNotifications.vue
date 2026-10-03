@@ -16,9 +16,9 @@
     >
       <div style="display: flex; align-items: center; gap: 8px">
         <AppSelect v-model="toastPosition" :options="positionOptions" width="170px" />
-        <button class="btn sm" type="button" @click="previewToast">
+        <Button type="button" variant="outline" size="sm" @click="previewToast">
           {{ t('settings.notifications.position.try') }}
-        </button>
+        </Button>
       </div>
     </SettingsField>
 
@@ -123,6 +123,7 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import { previewNativeNotification, type GhNativeProbe } from '~/composables/useGhNotifications'
 import { useSettingsStore } from '~/stores/settings'
 import type { NotifyDelivery, ToastPosition } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const store = useSettingsStore()

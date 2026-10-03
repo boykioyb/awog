@@ -46,3 +46,20 @@ export function assertInsideWorkspace(workspaceRoot: string, userPath: string): 
   }
   return abs
 }
+
+// Multi-root variant — a path is valid when it satisfies assertInsideWorkspace
+// against ANY of the given roots (agent `repos` whitelist: the session cwd
+// plus the repos the agent was granted). Tried in order, so roots[0] is also
+// the base for relative paths. Throws the FIRST root's error when every root
+// denies, keeping the same RpcError shape callers already surface.
+export function assertInsideAny(roots: string[], userPath: string): string {
+  let firstErr: unknown
+  for (const root of roots) {
+    try {
+      return assertInsideWorkspace(root, userPath)
+    } catch (err) {
+      if (firstErr === undefined) firstErr = err
+    }
+  }
+  throw firstErr
+}

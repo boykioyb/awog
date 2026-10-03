@@ -3,56 +3,44 @@
     <div class="gcph">
       <span class="gcplbl">{{ t('git.commit.header') }}</span>
       <span style="flex: 1" />
-      <button
+      <Button
+        variant="outline"
+        size="xs"
         class="gcpgen"
         :disabled="!stagedCount || generating || committing"
         @click="emit('generate')"
       >
-        <Icon
-          v-if="generating"
-          name="refresh"
-          class="gcpspin"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
+        <Icon v-if="generating" name="refresh" class="gcpspin size-3" />
         <span v-else aria-hidden="true">✨</span>
         {{ generating ? t('git.commit.generating') : t('git.commit.generate') }}
-      </button>
+      </Button>
       <span class="gcpcount">{{ t('git.commit.filesStaged', { n: stagedCount }) }}</span>
     </div>
     <div class="gcpbody">
-      <textarea
-        class="ci gcpta"
-        :value="msg"
+      <Textarea
+        class="gcpta font-mono"
+        :model-value="msg"
         :placeholder="t('git.changes.commitPlaceholder')"
-        @input="emit('update-msg', ($event.target as HTMLTextAreaElement).value)"
+        @update:model-value="emit('update-msg', String($event))"
         @keydown.meta.enter="onCommitShortcut"
       />
     </div>
     <div class="gcpfoot">
-      <button
-        class="btn"
+      <Button
+        variant="outline"
+        size="sm"
         :disabled="!commitsCount || committing || generating"
         @click="emit('amend')"
       >
         {{ t('git.commit.amend') }}
-      </button>
-      <button
-        class="btn pri gcpcommit"
-        :disabled="commitDisabled"
-        :style="commitDisabled ? 'opacity:.45;pointer-events:none' : undefined"
-        @click="emit('commit')"
-      >
-        <Icon
-          v-if="committing"
-          name="refresh"
-          class="gcpspin"
-          style="width: var(--icon-sm); height: var(--icon-sm)"
-        />
-        <Icon v-else name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      </Button>
+      <Button size="sm" :disabled="commitDisabled" @click="emit('commit')">
+        <Icon v-if="committing" name="refresh" class="gcpspin size-3.5" />
+        <Icon v-else name="check" class="size-3.5" />
         {{
           stagedCount ? t('git.changes.commitCount', { n: stagedCount }) : t('git.changes.commit')
         }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -60,6 +48,9 @@
 <script setup lang="ts">
 // Commit panel — lives in the detail pane below the diff (production layout).
 // COMMIT MESSAGE header + Generate (AI) + "N files staged" + textarea + Commit/Amend.
+import Button from '~/components/ui/button/Button.vue'
+import Textarea from '~/components/ui/textarea/Textarea.vue'
+
 const props = defineProps<{
   msg: string
   stagedCount: number

@@ -3,6 +3,32 @@ import { attachCodeBlockControls } from '~/utils/code-block-controls'
 import { useI18n } from '~/composables/useI18n'
 import { useAppearanceDom } from '~/composables/useAppearanceDom'
 import { useSettingsStore } from '~/stores/settings'
+import { usePreview, type PreviewRef } from '~/composables/usePreview'
+import { useFilePreview } from '~/composables/useFilePreview'
+
+// Fence lang (Shiki id ở `data-lang`) → Monaco language id cho viewer của modal.
+// Ngoài map truyền nguyên id — tên phổ biến trùng nhau (typescript, json, python…);
+// id Monaco không biết nó render plaintext, vẫn đọc được.
+const MONACO_LANG_ALIAS: Record<string, string> = {
+  shellscript: 'shell',
+  shellsession: 'shell',
+  console: 'shell',
+  bash: 'shell',
+  sh: 'shell',
+  zsh: 'shell',
+  md: 'markdown',
+  mdx: 'markdown',
+  'c++': 'cpp',
+  'c#': 'csharp',
+  jsx: 'javascript',
+  tsx: 'typescript',
+  vue: 'html',
+  svelte: 'html',
+  yml: 'yaml',
+}
+// Block đánh dấu là tài liệu markdown → mở modal ở kind 'markdown' (Render/Raw)
+// thay vì viewer code — nội dung nó VIẾT là markdown, người đọc cần bản render.
+const MD_KIND = new Set(['markdown', 'md', 'mdx'])
 
 // Binds the shared code-block controls (language chip · soft-wrap toggle · copy) to this
 // app's i18n + settings: the wrap button flips `appearance.codeWrap`, which persists with
@@ -19,17 +45,47 @@ export function useCodeBlockAttacher(opts?: {
   const { t } = useI18n()
   const store = useSettingsStore()
   const { applyCodeWrap } = useAppearanceDom()
+  const preview = usePreview()
+  const filePreview = useFilePreview()
   const onToggleWrap = () => {
     const next = !store.appearance.codeWrap
     store.updateAppearance({ codeWrap: next })
     applyCodeWrap(next)
   }
+  // Expand → đẩy nội dung block sang PreviewModal chung (mount ở AppGlobalHosts).
+  // ```markdown mở dạng render + raw; mọi lang khác vào viewer Monaco read-only.
+  // Khi bề mặt nằm trong một session, workspaceRoot của phiên đi kèm để ảnh/đường
+  // dẫn tương đối trong markdown resolve đúng như transcript (NOOP → mở ngay).
+  const onExpand = (code: string, lang: string | null) => {
+    const l = (lang ?? '').toLowerCase()
+    const item: PreviewRef = {
+      name: MD_KIND.has(l) ? 'code.md' : `code.${l || 'txt'}`,
+      kind: MD_KIND.has(l) ? 'markdown' : 'text',
+      text: code,
+    }
+    const monaco = MONACO_LANG_ALIAS[l] ?? l
+    if (monaco) item.language = monaco
+    void filePreview.root().then((root) => {
+      if (root) item.workspaceRoot = root
+      // push thay vì open: bấm Expand NGAY TRONG một preview đang mở (block code
+      // trong doc) giữ file cha trong history — Back quay lại đúng chỗ đang đọc.
+      // Ngoài transcript current=null → push hành xử y hệt open.
+      preview.push(item)
+    })
+  }
   return (el: HTMLElement) =>
     attachCodeBlockControls(el, {
-      labels: { copy: t('common.copy'), copied: t('common.copied'), wrap: t('common.wrapLines') },
+      labels: {
+        copy: t('common.copy'),
+        copied: t('common.copied'),
+        wrap: t('common.wrapLines'),
+        expand: t('common.fullscreen'),
+        resize: t('common.resize'),
+      },
       onToggleWrap,
       onRun: opts?.onRun,
       runLabel: opts?.runLabel,
+      onExpand,
     })
 }
 

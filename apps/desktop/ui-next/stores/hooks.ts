@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { useSidecar, type UnlistenFn } from '~/composables/useSidecar'
+import { useSettingsStore } from '~/stores/settings'
 
 // Hooks store — dual-path live (execution-engine hooks, ADR 0032). When the
 // Electron bridge is available `loadHooks()` scans the user/global tier + every
@@ -292,7 +293,13 @@ export const useHooksStore = defineStore('hooks', () => {
       'name' | 'description' | 'event' | 'matcher' | 'command' | 'cwd' | 'timeoutMs' | 'runMode'
     >,
   ): Promise<HookConfig> {
-    const params: Record<string, unknown> = { prompt, accountId }
+    // Model+account theo núm AI authoring — xem skills.ts generateSkill.
+    const llm = useSettingsStore().resolveAuthoringLlm()
+    const params: Record<string, unknown> = {
+      prompt,
+      accountId: llm.accountId ?? accountId,
+      modelId: llm.modelId,
+    }
     if (currentHook) params.currentHook = currentHook
     const res = await sc.request<{ hook: HookConfig }>('hooks.generate', params)
     return res.hook
@@ -305,7 +312,12 @@ export const useHooksStore = defineStore('hooks', () => {
     accountId: string,
     opts: { command?: string; currentScript?: string } = {},
   ): Promise<string> {
-    const params: Record<string, unknown> = { prompt, accountId }
+    const llm = useSettingsStore().resolveAuthoringLlm()
+    const params: Record<string, unknown> = {
+      prompt,
+      accountId: llm.accountId ?? accountId,
+      modelId: llm.modelId,
+    }
     if (opts.command) params.command = opts.command
     if (opts.currentScript) params.currentScript = opts.currentScript
     const res = await sc.request<{ content: string }>('hooks.generate-script', params)

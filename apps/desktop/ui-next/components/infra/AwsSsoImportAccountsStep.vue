@@ -3,12 +3,13 @@
     <div class="asa-toolbar">
       <div class="asa-search">
         <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <input v-model="filterText" :placeholder="t('infra.import.sso.accounts.search')" />
+        <Input v-model="filterText" unstyled :placeholder="t('infra.import.sso.accounts.search')" />
       </div>
-      <button
-        class="btn sm"
+      <Button
         type="button"
         :disabled="!visibleKeys.length"
+        variant="outline"
+        size="sm"
         @click="emit('select-all', visibleKeys)"
       >
         {{
@@ -16,7 +17,7 @@
             ? t('infra.import.sso.accounts.deselectAllVisible')
             : t('infra.import.sso.accounts.selectAllVisible')
         }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="warnings.length" class="asa-warnbox">
@@ -64,6 +65,8 @@
 // gọi RPC, chỉ trình bày `accounts`/`selected` do cha sở hữu và emit lên.
 import { computed, ref } from 'vue'
 import type { AwsSsoAccount } from '~/composables/useAwsProfilesApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   accounts: AwsSsoAccount[]

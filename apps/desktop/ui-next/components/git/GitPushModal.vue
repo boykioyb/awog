@@ -1,74 +1,86 @@
 <template>
-  <Teleport to="body">
-    <div v-if="open" class="gpm-ovl" @click.self="emit('close')">
-      <div class="gpm-card gpm-push" role="dialog" aria-modal="true">
-        <div class="gpm-title">{{ t('git.pushDialog.title') }}</div>
+  <Dialog :open="open" @update:open="(v) => !v && emit('close')">
+    <DialogContent class="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>{{ t('git.pushDialog.title') }}</DialogTitle>
+        <DialogDescription>{{ t('git.pushDialog.subtitle') }}</DialogDescription>
+      </DialogHeader>
 
-        <div class="gpm-lead">
-          <Icon name="commit" class="gpm-leadicn" />
-          <span>{{ t('git.pushDialog.subtitle') }}</span>
-        </div>
-
+      <div class="grid gap-3">
         <!-- Branch (current checked-out branch — read-only) -->
-        <label class="gbc-field">
-          <span class="gbc-label">{{ t('git.pushDialog.branchLabel') }}</span>
-          <div class="gpm-ro mono">
-            <Icon name="branch" class="gpm-roicn" />
-            <span class="gtrunc">{{ currentBranch }}</span>
+        <label class="grid grid-cols-[56px_1fr] items-center gap-3">
+          <span class="text-sm font-medium text-muted-foreground">
+            {{ t('git.pushDialog.branchLabel') }}
+          </span>
+          <div
+            class="flex h-[var(--ctrl-h)] min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-3 font-mono text-sm shadow-sm"
+          >
+            <Icon name="branch" class="size-3.5 shrink-0 text-muted-foreground" />
+            <span class="truncate">{{ currentBranch }}</span>
           </div>
         </label>
 
         <!-- To (target remote branch — remote + branch combined, like Fork) -->
-        <label class="gbc-field">
-          <span class="gbc-label">{{ t('git.pushDialog.toLabel') }}</span>
+        <label class="grid grid-cols-[56px_1fr] items-center gap-3">
+          <span class="text-sm font-medium text-muted-foreground">
+            {{ t('git.pushDialog.toLabel') }}
+          </span>
           <AppSelect
             v-if="selectOptions.length"
             v-model="selectedTarget"
             :options="selectOptions"
             width="100%"
           />
-          <span v-else class="gbc-nobase">{{ t('git.pushDialog.noRemote') }}</span>
+          <span v-else class="text-sm italic text-muted-foreground">
+            {{ t('git.pushDialog.noRemote') }}
+          </span>
         </label>
 
         <!-- Upstream / ahead hints -->
-        <div v-if="needsUpstream && selectedTarget" class="gpm-hint warn">
+        <div v-if="needsUpstream && selectedTarget" class="pl-[68px] text-sm text-warning">
           {{ t('git.pushDialog.setUpstreamHint', { target: selectedTarget }) }}
         </div>
-        <div v-else-if="ahead > 0" class="gpm-hint">
+        <div v-else-if="ahead > 0" class="pl-[68px] text-sm text-muted-foreground">
           {{ t('git.pushDialog.aheadSummary', { count: ahead }) }}
         </div>
 
-        <div class="gpm-sep" />
+        <Separator />
 
         <!-- Push all tags -->
-        <div class="gpm-toggle" @click="pushTags = !pushTags">
+        <div
+          class="flex cursor-pointer select-none items-center justify-between gap-3 text-sm"
+          @click="pushTags = !pushTags"
+        >
           <span>{{ t('git.pushDialog.pushTags') }}</span>
-          <span class="tog2 sm" :class="{ off: !pushTags }" />
+          <Switch :checked="pushTags" @click.stop @update:checked="pushTags = $event" />
         </div>
 
         <!-- Force push -->
-        <div class="gpm-toggle" @click="force = !force">
-          <span :style="force ? { color: 'var(--danger)' } : undefined">
+        <div
+          class="flex cursor-pointer select-none items-center justify-between gap-3 text-sm"
+          @click="force = !force"
+        >
+          <span :class="force ? 'text-destructive' : undefined">
             {{ t('git.pushDialog.force') }}
           </span>
-          <span class="tog2 sm" :class="{ off: !force }" />
+          <Switch
+            :checked="force"
+            class="data-[state=checked]:bg-destructive"
+            @click.stop
+            @update:checked="force = $event"
+          />
         </div>
-        <div v-if="force" class="gpm-hint danger">{{ t('git.pushDialog.forceHint') }}</div>
-
-        <div class="gpm-foot">
-          <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-          <button
-            class="btn pri"
-            :class="{ 'gpm-dangerbtn': force }"
-            :disabled="!canPush"
-            @click="submit"
-          >
-            {{ t('git.pushDialog.submit') }}
-          </button>
-        </div>
+        <div v-if="force" class="text-sm text-destructive">{{ t('git.pushDialog.forceHint') }}</div>
       </div>
-    </div>
-  </Teleport>
+
+      <DialogFooter>
+        <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+        <Button :variant="force ? 'destructive' : 'default'" :disabled="!canPush" @click="submit">
+          {{ t('git.pushDialog.submit') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>
 
 <script setup lang="ts">
@@ -78,6 +90,15 @@
 // PushParams so GitManager can call store.push(). Mirrors production
 // apps/desktop/ui/components/git/GitPushModal.vue.
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Dialog from '~/components/ui/dialog/Dialog.vue'
+import DialogContent from '~/components/ui/dialog/DialogContent.vue'
+import DialogDescription from '~/components/ui/dialog/DialogDescription.vue'
+import DialogFooter from '~/components/ui/dialog/DialogFooter.vue'
+import DialogHeader from '~/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '~/components/ui/dialog/DialogTitle.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Separator from '~/components/ui/separator/Separator.vue'
+import Switch from '~/components/ui/switch/Switch.vue'
 import type { PushParams } from '~/composables/useGitApi'
 import type { BranchInfo, RemoteInfo } from './git-types'
 
@@ -184,136 +205,3 @@ function submit() {
   })
 }
 </script>
-
-<style scoped>
-/* Overlay + card mirror GitBranchCreateModal (.gpm-*) for a consistent git-modal
-   look; push-specific rows (lead / read-only branch / toggles / hints) below. */
-.gpm-ovl {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
-}
-.gpm-card {
-  width: 440px;
-  max-width: 92vw;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-card);
-  box-shadow: var(--shadow-lg);
-}
-.gpm-title {
-  font-size: 1em;
-  font-weight: 600;
-  color: var(--text);
-}
-.gpm-lead {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  font-size: 1em;
-  color: var(--textMuted);
-}
-.gpm-leadicn {
-  width: var(--icon-md);
-  height: var(--icon-md);
-  margin-top: 2px;
-  flex: none;
-  color: var(--accent);
-}
-.gbc-field {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.gbc-label {
-  flex: none;
-  width: 56px;
-  font-size: 1em;
-  font-weight: 500;
-  color: var(--textDim);
-}
-.gbc-nobase {
-  flex: 1;
-  font-size: 1em;
-  color: var(--textDim);
-  font-style: italic;
-}
-.gpm-ro {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 11px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font-size: 1em;
-}
-.gpm-ro.mono {
-  font-family: var(--mono);
-}
-.gpm-roicn {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: none;
-  color: var(--textDim);
-}
-.gtrunc {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.gpm-hint {
-  margin-top: -6px;
-  padding-left: 66px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textFaint);
-}
-.gpm-hint.warn {
-  color: var(--amber);
-}
-.gpm-hint.danger {
-  color: var(--danger);
-  padding-left: 0;
-  margin-top: -8px;
-}
-.gpm-sep {
-  height: 1px;
-  background: var(--border);
-}
-.gpm-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 1em;
-  color: var(--text);
-  cursor: pointer;
-  user-select: none;
-}
-.gpm-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 2px;
-}
-.gpm-foot .btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-.gpm-dangerbtn {
-  background: var(--danger);
-}
-</style>

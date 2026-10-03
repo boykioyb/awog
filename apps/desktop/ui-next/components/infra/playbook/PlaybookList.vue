@@ -13,19 +13,19 @@
     <div v-else-if="error" class="pbl-state">
       <Icon name="alert" style="width: var(--icon-lg); height: var(--icon-lg)" />
       <p class="pbl-state-txt">{{ error }}</p>
-      <button class="btn sm" type="button" @click="emit('refresh')">
+      <Button type="button" variant="outline" size="sm" @click="emit('refresh')">
         {{ t('playbooks.list.retry') }}
-      </button>
+      </Button>
     </div>
 
     <div v-else-if="!groups.length" class="pbl-state">
       <Icon name="book" style="width: var(--icon-lg); height: var(--icon-lg)" />
       <p class="pbl-state-txt">{{ t('playbooks.list.empty.title') }}</p>
       <p class="pbl-state-hint">{{ t('playbooks.list.empty.hint') }}</p>
-      <button class="btn sm" type="button" @click="emit('refresh')">
+      <Button type="button" variant="outline" size="sm" @click="emit('refresh')">
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('playbooks.toolbar.refresh') }}
-      </button>
+      </Button>
     </div>
 
     <template v-else>
@@ -74,6 +74,7 @@
 import { useI18n } from '~/composables/useI18n'
 import type { PlaybookGroupKey } from '~/composables/usePlaybooksManager'
 import type { PlaybookSummary } from '~/composables/usePlaybooksApi'
+import Button from '~/components/ui/button/Button.vue'
 
 defineProps<{
   groups: { key: PlaybookGroupKey; items: PlaybookSummary[] }[]

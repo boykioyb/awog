@@ -1,10 +1,9 @@
 <template>
   <div class="pvfind" role="search">
     <Icon name="search" class="pvfico" />
-    <input
+    <Input
       ref="inputRef"
       v-model="query"
-      class="pvfinput"
       :class="{ noresult }"
       spellcheck="false"
       :placeholder="placeholder"
@@ -53,6 +52,8 @@
 </template>
 
 <script setup lang="ts">
+import Input from '~/components/ui/input/Input.vue'
+
 // Find-in-page bar for the PreviewModal markdown-render surface. Thin: state lives in
 // usePreviewFind (owned by usePreviewModal); this component binds query + match-case
 // and emits next/prev/close. Keyboard: Enter = next, Shift+Enter = prev; Esc and a
@@ -105,15 +106,15 @@ function onEnter(e: KeyboardEvent) {
   align-items: center;
   gap: 4px;
   padding: 5px 6px;
-  background: var(--bgEl);
+  background: var(--popover);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-md);
 }
 .pvfico {
   width: var(--icon-sm);
   height: var(--icon-sm);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   flex: none;
   margin: 0 2px;
 }
@@ -121,27 +122,28 @@ function onEnter(e: KeyboardEvent) {
   width: 190px;
   padding: 4px 6px;
   border: 1px solid transparent;
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  color: var(--text);
+  border-radius: var(--r-xs); /* rounded-sm */
+  background: var(--muted);
+  color: var(--foreground);
   outline: none;
 }
-.pvfinput:focus {
-  border-color: var(--accent);
+.pvfinput:focus-visible {
+  border-color: var(--input);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .pvfinput.noresult {
-  border-color: var(--danger);
+  border-color: var(--destructive);
 }
 .pvfcount {
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   white-space: nowrap;
   padding: 0 4px;
 }
 .pvfcount.noresult {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .pvfbtn {
   display: grid;
@@ -149,17 +151,17 @@ function onEnter(e: KeyboardEvent) {
   min-width: 26px;
   height: 26px;
   padding: 0 5px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .pvfbtn:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .pvfbtn.on {
-  background: var(--bgActive);
-  color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--primary);
 }
 .pvfbtn:disabled {
   opacity: 0.4;

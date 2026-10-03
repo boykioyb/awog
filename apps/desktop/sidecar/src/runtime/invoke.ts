@@ -231,10 +231,16 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
     {
       ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
       ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+      // Agent repo-access whitelist → fs-tool roots (see agents/repo-access.ts).
+      ...(args.fsRoots ? { allowedRoots: args.fsRoots } : {}),
       // Per-source Explore scoping (ADR 0060 P4): restrict a source to its own
       // allowedMcpPatterns tools + gate its non-GET api calls. No-op when unset.
       ...(args.sourceToolPatterns ? { sourceToolPatterns: args.sourceToolPatterns } : {}),
       ...(args.sourceApiEndpoints ? { sourceApiEndpoints: args.sourceApiEndpoints } : {}),
+      // Browser per-scope: tab của một task node là của RIÊNG node đó
+      // (`task:<taskId>:<nodeId>` do node-runner truyền) — node song song không
+      // đạp lên tab của nhau, và không node nào thò vào tab của phiên chat.
+      ...(args.browserScope ? { browserScope: args.browserScope } : {}),
       // Wiki lookup (ADR 0073). Tasks get it too: a workflow node reasoning about
       // architecture needs the same documentation a chat turn does. Like the rules
       // prompt below, the task's project is projectIds[0].
@@ -301,6 +307,8 @@ export async function invokeSdkPi(args: InvokeArgs, cb: InvokeCallbacks): Promis
         // Tasks run unattended: no prompt for the subagent either — but the user's
         // DENY rules still hold (ADR 0080 F5). Same deny-only gate as the node.
         beforeToolCall: makeTaskToolGate(args.projectIds?.[0], args.cwd),
+        // Subagent của node chia sẻ browser scope của node (`task:<id>:<node>`).
+        ...(args.browserScope ? { browserScope: args.browserScope } : {}),
         // Inherit the task's co-author setting for subagent-made commits.
         ...(args.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
         makeChildSink: (parentToolCallId) => {

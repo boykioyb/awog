@@ -35,20 +35,20 @@
 
       <div v-if="!originSessionId && sourceType === 'github'" class="nt-field">
         <label class="nt-label">{{ t('tasks.new.githubUrl') }}</label>
-        <input
+        <Input
           v-model="githubUrl"
-          class="nt-input mono"
           placeholder="https://github.com/org/repo/pull/123"
+          class="mono"
           @input="onGithubInput"
         />
       </div>
       <div v-if="!originSessionId && sourceType === 'jira'" class="nt-field">
         <label class="nt-label">{{ t('tasks.new.jiraKey') }}</label>
-        <input
-          :value="jiraKey"
-          class="nt-input mono"
+        <Input
+          :model-value="jiraKey"
           placeholder="PROJ-1234"
-          @input="jiraKey = ($event.target as HTMLInputElement).value.toUpperCase()"
+          class="mono"
+          @update:model-value="jiraKey = $event.toUpperCase()"
         />
       </div>
 
@@ -70,7 +70,7 @@
       <!-- title -->
       <div class="nt-field">
         <label class="nt-label">{{ t('tasks.new.titleLabel') }}</label>
-        <input v-model="title" class="nt-input" :placeholder="t('tasks.new.titlePh')" />
+        <Input v-model="title" :placeholder="t('tasks.new.titlePh')" />
       </div>
 
       <!-- description -->
@@ -108,10 +108,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSubmit" @click="submit">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSubmit" variant="default" @click="submit">
         {{ t('tasks.new.create') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 
@@ -144,6 +144,9 @@ import { useI18n } from '~/composables/useI18n'
 import { useSidecar } from '~/composables/useSidecar'
 import { useSettingsStore } from '~/stores/settings'
 import type { CreateTaskInput, TaskSource } from '~/stores/tasks'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
+import { ghRefTitle } from '~/utils/gh-ref'
 
 const props = defineProps<{
   open: boolean
@@ -257,12 +260,38 @@ const parseGithub = (url: string) => {
   return null
 }
 
+// Fetch lần cuối theo `repo#number` — gõ lại cùng một URL không spawn gh thêm.
+let lastGhTitleKey = ''
 const onGithubInput = () => {
   const parsed = parseGithub(githubUrl.value)
-  if (parsed && !title.value) {
-    const label = parsed.kind === 'pull' ? 'PR' : 'Issue'
-    title.value = `${label} #${parsed.issueNumber} in ${parsed.repo}`
-  }
+  if (!parsed || title.value) return
+  // Quy ước `#<n>_IS:` / `#<n>_PR:` (utils/gh-ref) — gh.get chỉ resolve qua cwd
+  // của project đang chọn, nên URL của repo khác sẽ trả sai: kiểm ngược
+  // thread.url về đúng repo+number trước khi lấy title làm mô tả.
+  const kind: 'issue' | 'pr' = parsed.kind === 'pull' ? 'pr' : 'issue'
+  const refKey = `${parsed.repo}#${parsed.issueNumber}:${kind}`
+  if (lastGhTitleKey === refKey) return
+  lastGhTitleKey = refKey
+  const fallback = ghRefTitle({ kind, number: parsed.issueNumber }, '')
+  title.value = fallback
+  if (!projectId.value || !sc.available) return
+  void sc
+    .request<{ title: string; url?: string }>('gh.get', {
+      projectId: projectId.value,
+      kind,
+      number: parsed.issueNumber,
+    })
+    .then((th) => {
+      // Repo lệch (gh chạy trong project khác repo của URL) → giữ prefix trần.
+      const okUrl = th.url?.includes(
+        `/${parsed.repo}/${kind === 'pr' ? 'pull' : 'issues'}/${parsed.issueNumber}`,
+      )
+      // User đã sửa tay khỏi fallback trong lúc chờ → không đè.
+      if (okUrl && th.title?.trim() && title.value === fallback) {
+        title.value = ghRefTitle({ kind, number: parsed.issueNumber }, th.title)
+      }
+    })
+    .catch(() => {})
 }
 
 const canSubmit = computed(

@@ -12,11 +12,10 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { runGit } from '../git/runner.js'
 import { completePi } from '../runtime/complete.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const Params = z.object({
   workspaceRoot: z.string().min(1).max(4096),

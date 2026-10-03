@@ -12,19 +12,19 @@
 
     <div class="lgp-field">
       <Icon name="search" class="lgp-field-ic" />
-      <input
-        :value="pattern"
-        class="lgp-search"
+      <Input
+        :model-value="pattern"
         type="search"
         spellcheck="false"
         autocomplete="off"
         :placeholder="t('infra.logs.groups.searchPh')"
-        @input="onSearch"
+        class="lgp-search"
         @keydown.enter="emit('reload')"
+        @update:model-value="onSearch"
       />
-      <button class="btn sm" type="button" :disabled="loading" @click="emit('reload')">
+      <Button type="button" :disabled="loading" variant="outline" size="sm" @click="emit('reload')">
         {{ loading ? t('infra.logs.groups.loading') : t('infra.logs.groups.reload') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Nhóm dùng gần đây lên trước khi CHƯA bấm nhóm nào — lối tắt vào việc hay làm. -->
@@ -89,6 +89,8 @@
 //   · `multi` (chế độ Insights nâng cao) — bấm để tick/bỏ, chọn nhiều nhóm cho một
 //     truy vấn Insights. Trần `maxGroups` khớp `MAX_LOG_GROUPS` của sidecar.
 import type { AwsLogGroup } from '~/composables/useAwsLogsApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -143,8 +145,8 @@ function pick(name: string): void {
   else emit('tail', name)
 }
 
-function onSearch(e: Event): void {
-  emit('update:pattern', (e.target as HTMLInputElement).value)
+function onSearch(v: string): void {
+  emit('update:pattern', v)
 }
 
 /**

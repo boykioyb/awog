@@ -82,9 +82,8 @@
             <div class="itr-dur">
               <label class="itr-field">
                 <span class="itr-field-lbl">{{ t('infra.time.duration') }}</span>
-                <input
+                <Input
                   v-model.number="amount"
-                  class="itr-input"
                   type="number"
                   min="1"
                   max="9999"
@@ -103,25 +102,27 @@
           <div v-else class="itr-abs">
             <label class="itr-field">
               <span class="itr-field-lbl">{{ t('infra.time.from') }}</span>
-              <input v-model="absStart" class="itr-input" type="datetime-local" />
+              <Input v-model="absStart" type="datetime-local" />
             </label>
             <label class="itr-field">
               <span class="itr-field-lbl">{{ t('infra.time.to') }}</span>
-              <input v-model="absEnd" class="itr-input" type="datetime-local" />
+              <Input v-model="absEnd" type="datetime-local" />
             </label>
             <p v-if="absError" class="itr-err">{{ absError }}</p>
           </div>
 
           <!-- Footer -->
           <div class="itr-foot">
-            <button class="btn" type="button" @click="onClearDraft">
+            <Button type="button" variant="outline" @click="onClearDraft">
               {{ t('infra.time.clear') }}
-            </button>
+            </Button>
             <span class="itr-foot-sp" />
-            <button class="btn" type="button" @click="close">{{ t('infra.time.cancel') }}</button>
-            <button class="btn pri" type="button" :disabled="!canApply" @click="apply">
+            <Button type="button" variant="outline" @click="close">
+              {{ t('infra.time.cancel') }}
+            </Button>
+            <Button type="button" :disabled="!canApply" variant="default" @click="apply">
               {{ t('infra.time.apply') }}
-            </button>
+            </Button>
           </div>
         </div>
       </template>
@@ -141,6 +142,8 @@ import { computed, nextTick, onBeforeUnmount, ref, useTemplateRef, watch } from 
 import AppSelect from '~/components/common/AppSelect.vue'
 import { useEscToClose } from '~/composables/useEscToClose'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import {
   RELATIVE_GRID,
   UNIT_SECONDS,

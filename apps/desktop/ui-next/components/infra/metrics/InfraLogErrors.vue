@@ -28,16 +28,17 @@
     <!-- Chưa biết nhóm log nào ⇒ bước RẺ trước: đi tìm, rồi mới đọc được. -->
     <div v-if="!ready" class="ile-row">
       <p class="ile-hint">{{ t('infra.monitoring.logErrors.needGroups') }}</p>
-      <button
+      <Button
         type="button"
-        class="btn sm"
         :disabled="resolving || !target"
         :aria-busy="resolving"
+        variant="outline"
+        size="sm"
         @click="emit('resolve')"
       >
         <Icon name="search" class="ile-ic" />
         {{ t('infra.monitoring.logErrors.find') }}
-      </button>
+      </Button>
     </div>
 
     <template v-else>
@@ -62,16 +63,17 @@
           </button>
         </div>
 
-        <button
+        <Button
           type="button"
-          class="btn sm pri"
           :disabled="reading"
           :aria-busy="reading"
+          variant="default"
+          size="sm"
           @click="emit('read', readSpan)"
         >
           <Icon name="refresh" class="ile-ic" :class="reading ? 'ile-spin' : ''" />
           {{ read ? t('infra.monitoring.logErrors.reread') : t('infra.monitoring.logErrors.read') }}
-        </button>
+        </Button>
       </div>
 
       <!-- PHỎNG ĐOÁN PHẢI NÓI RA LÀ PHỎNG ĐOÁN. Với ECS ta đọc tên nhóm từ task
@@ -124,18 +126,19 @@
             <span v-if="ran" class="ile-scan">
               {{ t('infra.monitoring.logErrors.scanned', { gb: scannedGb }) }}
             </span>
-            <button
+            <Button
               type="button"
-              class="btn sm"
               :disabled="running || !window"
               :aria-busy="running"
+              variant="outline"
+              size="sm"
               @click="emit('run')"
             >
               <Icon name="act" class="ile-ic" />
               {{
                 ran ? t('infra.monitoring.logErrors.rerun') : t('infra.monitoring.logErrors.run')
               }}
-            </button>
+            </Button>
           </div>
           <p v-if="error" class="ierr">{{ error }}</p>
           <MetricChart
@@ -164,6 +167,7 @@ import { RECENT_SPANS, type RecentSpan } from '~/composables/useInfraLogErrors'
 import { formatAxisTime } from '~/composables/useInfraMetrics'
 import type { ChartSeriesView, MonitorTarget, WirePoint } from '~/composables/useInfraMetrics'
 import type { ErrorGroup } from '~/utils/log-errors'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   target: MonitorTarget | null

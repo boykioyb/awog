@@ -8,9 +8,9 @@
         <header class="ixf-hd">
           <Icon name="plus" />
           <span class="ixf-title">{{ t(form.label) }}</span>
-          <button class="btn sm" type="button" @click="$emit('close')">
+          <Button type="button" variant="outline" size="sm" @click="$emit('close')">
             <Icon name="x" />
-          </button>
+          </Button>
         </header>
 
         <!-- Hậu quả bằng lời người, TRƯỚC các ô nhập (ADR 0088 §5). -->
@@ -21,9 +21,8 @@
             {{ t(f.label) }}
             <span v-if="f.required" class="ixf-req">*</span>
           </span>
-          <input
+          <Input
             v-model="values[f.key]"
-            class="ixf-input"
             :placeholder="f.placeholder ?? ''"
             autocomplete="off"
             spellcheck="false"
@@ -36,17 +35,17 @@
           <span class="ixf-lbl">
             {{ t('infra.explorer.confirm.typeName', { value: expected }) }}
           </span>
-          <input v-model="typed" class="ixf-input" autocomplete="off" spellcheck="false" />
+          <Input v-model="typed" autocomplete="off" spellcheck="false" />
         </label>
 
         <footer class="ixf-ft">
           <span class="ixf-missing">{{ missingLabel }}</span>
-          <button class="btn" type="button" @click="$emit('close')">
+          <Button type="button" variant="outline" @click="$emit('close')">
             {{ t('common.cancel') }}
-          </button>
-          <button class="btn pri" type="button" :disabled="!ready || busy" @click="submit">
+          </Button>
+          <Button type="button" :disabled="!ready || busy" variant="default" @click="submit">
             {{ t(form.label) }}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>
@@ -59,6 +58,8 @@
 // trở thành một ô nhập không ai kiểm.
 import { computed, reactive, ref } from 'vue'
 import type { InfraFormDescriptor } from '~/composables/useInfraResourcesApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ form: InfraFormDescriptor; busy: boolean }>()
 

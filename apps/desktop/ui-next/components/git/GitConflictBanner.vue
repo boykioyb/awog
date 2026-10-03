@@ -14,14 +14,14 @@
          sequencer state, so there is nothing to complete or abort — resolving and
          staging IS the finish. Offering buttons there would only fail. -->
     <template v-if="pendingOp">
-      <button class="btn sm" :disabled="hasConflict" @click="emit('complete')">
+      <Button variant="outline" size="sm" :disabled="hasConflict" @click="emit('complete')">
         {{ completeLabel }}
-      </button>
+      </Button>
       <!-- git's own third suggestion mid-rebase: drop the commit it is stuck on. -->
-      <button v-if="pendingOp === 'rebase'" class="btn sm" @click="emit('skip')">
+      <Button v-if="pendingOp === 'rebase'" variant="outline" size="sm" @click="emit('skip')">
         {{ t('git.header.skipRebase') }}
-      </button>
-      <button class="btn sm gdanger" @click="emit('abort')">{{ abortLabel }}</button>
+      </Button>
+      <Button variant="destructive" size="sm" @click="emit('abort')">{{ abortLabel }}</Button>
     </template>
   </div>
 </template>
@@ -36,6 +36,7 @@
 // that into a sideways scroll that pushed Abort off-screen — the one control
 // that gets you out of a mid-merge repo. A state this important does not compete
 // with the pickers for width; it gets its own row, and wraps instead of scrolling.
+import Button from '~/components/ui/button/Button.vue'
 import type { GitPendingOp } from '~/composables/useGitApi'
 
 const props = defineProps<{
@@ -90,13 +91,13 @@ const abortLabel = computed(() => t(ABORT_KEY[props.pendingOp ?? 'merge']))
   padding: 8px 14px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--danger);
-  background: var(--dangerBg);
-  box-shadow: inset 0 -1px 0 var(--dangerBorder);
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 14%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in oklab, var(--destructive) 40%, transparent);
 }
 .gcbanner.ready {
-  color: var(--textMuted);
-  background: var(--bgSubtle);
+  color: var(--muted-foreground);
+  background: var(--muted);
   box-shadow: inset 0 -1px 0 var(--border);
 }
 .gcbicon {
@@ -119,10 +120,5 @@ const abortLabel = computed(() => t(ABORT_KEY[props.pendingOp ?? 'merge']))
 .gcbsp {
   flex: 1 1 0;
   min-width: 0;
-}
-.gcbanner .btn {
-  flex: 0 0 auto;
-  height: 28px;
-  border-radius: var(--r-xs);
 }
 </style>

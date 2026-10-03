@@ -16,6 +16,7 @@
   "common.copyMarkdown": "Copy MD",
   "common.copied": "Copied",
   "common.wrapLines": "Wrap long lines",
+  "common.resize": "Drag to resize height",
   "common.time.justNow": "just now",
   "common.time.minutesAgo": "{n}m ago",
   "common.time.hoursAgo": "{n}h ago",
@@ -59,6 +60,9 @@
   "common.preview.group.light": "Light",
   "common.preview.minimize": "Minimize to corner",
   "common.preview.openInWindow": "Open in a separate window",
+  "common.preview.modalWidth": "Preview width: {w}",
+  "common.preview.collapseOutline": "Collapse outline",
+  "common.preview.expandOutline": "Expand outline",
   "common.preview.prevImage": "Previous image (←)",
   "common.preview.nextImage": "Next image (→)",
   "common.preview.dragMove": "Drag to move",
@@ -118,5 +122,11 @@
   "link.openInApp": "Open in AWOG",
   "link.openExternal": "Open in my browser",
   "link.remember": "Always do this",
-  "link.openFailed": "Could not open in AWOG: {message}"
+  "link.openFailed": "Could not open in AWOG: {message}",
+  "collection.create.blank": "Start blank",
+  "collection.create.ai": "Build with AI",
+  "common.discard": "Discard",
+  "common.remove": "Remove",
+  "common.time.never": "No activity",
+  "common.openSettings": "Open settings"
 }

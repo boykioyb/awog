@@ -20,9 +20,9 @@
         >
           <template #actions>
             <span class="lrm-gap" />
-            <button class="btn" type="button" @click="emit('close')">
+            <Button type="button" variant="outline" @click="emit('close')">
               {{ t('infra.logs.results.close') }}
-            </button>
+            </Button>
           </template>
         </InfraLogRowDetail>
       </div>
@@ -40,6 +40,7 @@
 // Phần thân nằm ở `InfraLogRowDetail` dùng chung với chế độ inline.
 import InfraLogRowDetail from '~/components/infra/logs/InfraLogRowDetail.vue'
 import type { AwsInsightsRow } from '~/composables/useAwsLogsApi'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   /** `null` = đóng. Truyền cả dòng chứ không chỉ id: bảng đã có sẵn dữ liệu. */

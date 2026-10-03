@@ -6,9 +6,12 @@
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
-    <!-- Header (session-ui-refactor §3.1): tiêu đề + ĐÚNG HAI điều khiển. Trước đây
-         là 1 chip project + 8 icon button, trong đó tên project đã lặp lại lần thứ hai
-         sau tab strip ngay phía trên. Sáu hành động còn lại nằm sau `⋯`.
+    <!-- Header (proto ProtoSessionDetail parity): một hàng 44px không wrap —
+         title → status badge → ⓤ agent · model → spacer → bubble toggle →
+         workspace toggle → ⋯ DropdownMenu. Mọi hành động hiếm (project/config/
+         grid/CLI/spawn/code/popout/minimize/export/delete) nằm sau ⋯; điều
+         khiển sống của pane CLI (sync/detach/font/back) vẫn là nút thường trực
+         khi pane đang mở.
 
          Cũng gỡ luôn nhánh `v-if="!isCute"` / `v-else`: file từng mang HAI bản markup
          cho cùng bốn hành động (4 iconbtn cho family `awog`, menu `⋯` cho `cute`).
@@ -43,26 +46,48 @@
 
     <div class="sdmain">
       <div class="dh">
+        <!-- ProtoSessionDetail header order: title → status badge → agent · model
+             (icon ~12px) → spacer (.dt flex-1) → workspace toggle → ⋯ overflow. -->
         <div class="dt">
           <span class="dttitle" :title="session.title">{{ session.title }}</span>
+          <Badge :variant="statusVariant" class="dhbadge">{{ statusLabel }}</Badge>
+          <span class="dhwho" :title="whoLabel">
+            <UserRound class="size-3 shrink-0" />
+            <span class="dhwhotext">{{ whoLabel }}</span>
+          </span>
         </div>
+
+        <!-- Bubble toggle (proto `MessagesSquare`): production bubbles user rows
+             permanently — the pref điều khiển khối card của reply assistant
+             (settings.sessions.assistantBubble, cùng một nút trong Settings →
+             Sessions). Toggle trực tiếp, không menu. -->
+        <Button
+          variant="ghost"
+          size="iconSm"
+          class="dhb shrink-0"
+          :class="{ on: settings.sessions.assistantBubble }"
+          :title="t('settings.sessions.bubble.name')"
+          :aria-label="t('settings.sessions.bubble.name')"
+          :aria-pressed="settings.sessions.assistantBubble"
+          @click="settings.sessions.assistantBubble = !settings.sessions.assistantBubble"
+        >
+          <Icon name="message" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </Button>
 
         <!-- Views. Điều khiển duy nhất ở ngoài, vì nó là thứ được bấm nhiều lần trong
              một phiên; mở/tắt từng khung làm việc, khung đang mở có dấu tick. -->
-        <span style="position: relative">
-          <button
-            class="iconbtn"
+        <span class="dhanchor">
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="dhb shrink-0"
+            :class="{ on: wpOpen || menu === 'workspace' }"
             :title="t('sessions.detail.workspacePanel')"
-            style="width: 28px; height: 28px"
-            :style="
-              wpOpen || menu === 'workspace'
-                ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
-                : {}
-            "
+            :aria-label="t('sessions.detail.workspacePanel')"
             @click.stop="openMenu('workspace')"
           >
             <Icon name="workflows" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
           <div
             v-if="menu === 'workspace'"
             class="smenu"
@@ -82,90 +107,139 @@
           </div>
         </span>
 
-        <!-- Overflow. Ba menu (`more` · `proj` · `config`) cùng neo vào span này, nên mở
-             menu con từ trong `more` không cần thêm điểm neo — máy trạng thái `menu` vốn
-             đã chỉ cho phép MỘT menu mở tại một thời điểm. -->
-        <span style="position: relative">
-          <button
-            class="iconbtn"
-            :title="t('sessions.detail.moreActions')"
-            style="width: 28px; height: 28px"
-            :style="
-              menu === 'more' || menu === 'proj' || menu === 'config'
-                ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' }
-                : {}
-            "
-            @click.stop="openMenu('more')"
+        <!-- Điều khiển CLI pane — chỉ hiện khi cliMode đang mở (pane bỏ thanh
+             riêng, các nút sống ở đây theo ghi chú layout). Thứ tự giữ như thanh
+             cũ: Sync · Ngắt · Cỡ/font · Về chat. `.dh` không wrap nên header chỉ
+             co tiêu đề. -->
+        <template v-if="cliMode">
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="dhb shrink-0"
+            :disabled="cliSyncing"
+            :title="t('sessions.cli.syncHint')"
+            :aria-label="t('sessions.cli.syncHint')"
+            @click="syncCliTranscript"
           >
-            <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+            <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="dhb shrink-0"
+            :disabled="cliDetaching"
+            :title="t('sessions.cli.detachHint')"
+            :aria-label="t('sessions.cli.detachHint')"
+            @click="detachCli"
+          >
+            <Icon name="stop" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="dhb shrink-0"
+            :title="t('ssh.appearance.title')"
+            :aria-label="t('ssh.appearance.title')"
+            @click="cliPane?.toggleAppearance?.()"
+          >
+            <Icon name="palette" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="dhb shrink-0"
+            :title="t('sessions.cli.backToChat')"
+            :aria-label="t('sessions.cli.backToChat')"
+            @click="cliMode = false"
+          >
+            <Icon name="message" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </Button>
+        </template>
 
-          <div
-            v-if="menu === 'more'"
-            class="smenu"
-            style="position: absolute; top: 130%; right: 0; z-index: 50"
-            @click.stop
-          >
-            <div class="mi" @click="openMenu('proj')">
-              <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.detail.changeProject') }}
-              <span class="kb">{{ projName }}</span>
-            </div>
-            <div class="mi" @click="openMenu('config')">
-              <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.detail.config') }}
-            </div>
-            <!-- Lưới: phiên này + các phiên con, mỗi phiên một ô. Nằm TRONG `⋯` chứ
-                 không phải một nút thường trực — header cố ý chỉ có tiêu đề + đúng hai
-                 điều khiển (xem chú thích đầu file); nút thứ ba làm hàng nút xuống dòng
-                 và tràn khỏi thanh cao cố định. -->
-            <div class="mi" @click="runOverflow(toggleGrid)">
-              <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ gridMode ? t('sessions.grid.off') : t('sessions.grid.on') }}
-              <Icon
-                v-if="gridMode"
-                name="check"
-                class="ck"
-                style="width: var(--icon-sm); height: var(--icon-sm)"
-              />
-            </div>
-            <!-- Điều phối phiên con THỦ CÔNG — cùng popover với cổng duyệt của
-                 tool create_session, nhưng do người dùng đề xuất ê-kíp. -->
-            <div class="mi" @click="runOverflow(() => spawnDlg.open(session.id))">
-              <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.spawn.menu') }}
-            </div>
-            <!-- Ẩn khi chưa resolve được workspace root (browser-dev / phiên không project). -->
-            <div v-if="codeRoot" class="mi" @click="runOverflow(openInCode)">
-              <Icon name="code" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.detail.openCode') }}
-            </div>
-            <div class="msep" />
-            <!-- Ẩn khi đang ở trong popout (một cửa sổ không tự nhân bản), khoá giữa lượt
-                 đang chạy: lượt stream vào renderer NÀY nên không bàn giao được. -->
-            <div
-              v-if="canOpenInWindow"
-              class="mi"
-              :class="{ mdisabled: turnBusy }"
-              @click="runOverflow(openInWindow)"
-            >
-              <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ popoutTitle }}
-            </div>
-            <div class="mi" @click="runOverflow(minimizeSession)">
-              <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('minimize.session') }}
-            </div>
-            <div class="mi" @click="runOverflow(() => exportModal.open(session.id))">
-              <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.export.title') }}
-            </div>
-            <div class="msep" />
-            <div class="mi dmi" @click="runOverflow(askRemove)">
-              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('sessions.detail.delete') }}
-            </div>
-          </div>
+        <!-- Overflow ⋯ — DropdownMenu chuẩn shadcn (proto parity): mọi hành động
+             hiếm/phá transcript nằm sau nó. Hai submenu `.smenu` (`proj` · `config`)
+             vẫn neo vào span này, nên mở menu con từ trong ⋯ không cần thêm điểm neo. -->
+        <span class="dhanchor">
+          <DropdownMenu v-model:open="ddOpen">
+            <DropdownMenuTrigger as-child>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                class="dhb shrink-0"
+                :class="{ on: ddOpen || menu === 'proj' || menu === 'config' }"
+                :title="t('sessions.detail.moreActions')"
+                :aria-label="t('sessions.detail.moreActions')"
+              >
+                <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-56">
+              <DropdownMenuItem @click="openMenu('proj')">
+                <Icon name="folder" />
+                <span class="min-w-0 flex-1 truncate">
+                  {{ t('sessions.detail.changeProject') }}
+                </span>
+                <span class="ml-auto max-w-28 truncate text-xs text-muted-foreground">
+                  {{ projName }}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem @click="openMenu('config')">
+                <Icon name="settings" />
+                {{ t('sessions.detail.config') }}
+              </DropdownMenuItem>
+              <!-- Lưới: phiên này + các phiên con, mỗi phiên một ô. Nằm TRONG `⋯` chứ
+                   không phải một nút thường trực — header cố ý chỉ có tiêu đề + meta +
+                   đúng hai điều khiển; nút thứ ba làm hàng nút xuống dòng và tràn khỏi
+                   thanh cao cố định. -->
+              <DropdownMenuItem @click="toggleGrid">
+                <Icon name="layers" />
+                {{ gridMode ? t('sessions.grid.off') : t('sessions.grid.on') }}
+                <Icon v-if="gridMode" name="check" class="ml-auto text-primary" />
+              </DropdownMenuItem>
+              <!-- "Open in CLI": pane xterm chạy agent CLI thật trong workspace, thay
+                   chỗ transcript + composer. Chỉ hiện khi phiên có CLI native
+                   (anthropic/openai + engineId + sidecar) — xem canOpenInCli. -->
+              <DropdownMenuItem v-if="canOpenInCli" @click="toggleCli">
+                <Icon name="commands" />
+                {{ cliMode ? t('sessions.cli.backToChat') : t('sessions.cli.open') }}
+                <Icon v-if="cliMode" name="check" class="ml-auto text-primary" />
+              </DropdownMenuItem>
+              <!-- Điều phối phiên con THỦ CÔNG — cùng popover với cổng duyệt của
+                   tool create_session, nhưng do người dùng đề xuất ê-kíp. -->
+              <DropdownMenuItem @click="spawnDlg.open(session.id)">
+                <Icon name="sessions" />
+                {{ t('sessions.spawn.menu') }}
+              </DropdownMenuItem>
+              <!-- Ẩn khi chưa resolve được workspace root (browser-dev / phiên không project). -->
+              <DropdownMenuItem v-if="codeRoot" @click="openInCode">
+                <Icon name="code" />
+                {{ t('sessions.detail.openCode') }}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <!-- Ẩn khi đang ở trong popout (một cửa sổ không tự nhân bản), khoá giữa
+                   lượt đang chạy: lượt stream vào renderer NÀY nên không bàn giao được. -->
+              <DropdownMenuItem v-if="canOpenInWindow" :disabled="turnBusy" @click="openInWindow">
+                <Icon name="external" />
+                {{ popoutTitle }}
+              </DropdownMenuItem>
+              <DropdownMenuItem @click="minimizeSession">
+                <Icon name="minimize" />
+                {{ t('minimize.session') }}
+              </DropdownMenuItem>
+              <DropdownMenuItem @click="exportModal.open(session.id)">
+                <Icon name="save" />
+                {{ t('sessions.export.title') }}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                class="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                @click="askRemove"
+              >
+                <Icon name="trash" />
+                {{ t('sessions.detail.delete') }}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           <div
             v-if="menu === 'proj'"
@@ -235,26 +309,88 @@
                 @close="closeFind"
               />
             </div>
+            <!-- Pane CLI ("Open in CLI"): một xterm chạy agent CLI thật trong
+                 workspace, thay chỗ bề mặt chat. Mount MỘT LẦN rồi chỉ v-show —
+                 unmount là kill PTY, mà "quay lại chat" không được làm mất shell
+                 đang chạy. Đứng NGOÀI nhánh grid/transcript để bật/tắt lưới cũng
+                 không đụng tới vòng đời của nó. -->
+            <SessionCliPane
+              v-if="cliMounted"
+              v-show="cliMode"
+              ref="cliPane"
+              :session="session"
+              :active="cliMode && isActive"
+              @linked="onCliLinked"
+            />
             <!-- Chế độ LƯỚI: phiên này + các phiên con, mỗi phiên một ô có transcript
                  và composer riêng. Thay CHỖ của transcript + composer đơn, không nằm
                  cạnh — hai composer cho cùng một phiên trên một màn hình là mơ hồ. -->
-            <SessionGrid v-if="gridMode" :session="session" :reveal-tick="gridRevealTick" />
+            <SessionGrid
+              v-if="gridMode"
+              v-show="!cliMode"
+              :session="session"
+              :reveal-tick="gridRevealTick"
+            />
             <SessionTranscript
               v-else
+              v-show="!cliMode"
               :messages="session.msgs"
               :fallback-when="session.when"
               :loading="!!session.loading"
               :suppress-auto-scroll="findOpen"
             />
-            <SessionBackgroundWakeCard v-if="!gridMode" :session="session" />
-            <SessionInboxChips v-if="!gridMode" :session="session" />
-            <SessionBackgroundChips v-if="!gridMode" :session="session" />
+            <SessionBackgroundWakeCard v-if="!gridMode && !cliMode" :session="session" />
+            <SessionInboxChips v-if="!gridMode && !cliMode" :session="session" />
+            <SessionBackgroundChips v-if="!gridMode && !cliMode" :session="session" />
             <!-- Câu hỏi của agent (AskUserQuestion) trượt lên từ composer, ngay trên nó,
                  nên người dùng không phải đi tìm thẻ trong transcript đang cuộn. -->
-            <SessionQuestionDrawer v-if="!gridMode" :session="session" />
+            <SessionQuestionDrawer v-if="!gridMode && !cliMode" :session="session" />
+            <!-- Phiên đang gắn một CLI (PTY còn sống, pane chỉ đang ẩn): composer bị
+                 khoá — gõ ở đây sẽ không tới được CLI. Dòng báo gọn kiểu `.cmdnotice`
+                 + nút Sync gấp tin phía CLI vào transcript ngay tại chỗ. -->
+            <div v-if="cliLinked && !gridMode && !cliMode" class="clinotice">
+              <Icon
+                name="commands"
+                style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
+              />
+              <span class="clinoticetxt">
+                {{
+                  cliEngineLinked
+                    ? t('sessions.cli.attachedNotice')
+                    : t('sessions.cli.attachedNoticeUnlinked')
+                }}
+              </span>
+              <!-- Notice bảo "chuyển sang pane CLI" — nút này làm đúng việc đó
+                   thay vì bắt người dùng đi vòng qua menu ⋯. -->
+              <button class="clinoticebtn" @click="cliMode = true">
+                {{ t('sessions.cli.open') }}
+              </button>
+              <button class="clinoticebtn" :disabled="cliSyncing" @click="syncCliTranscript">
+                {{
+                  cliSyncing
+                    ? t('sessions.cli.syncing')
+                    : cliSyncedN == null
+                      ? t('sessions.cli.syncNow')
+                      : t('sessions.cli.synced', { n: cliSyncedN })
+                }}
+              </button>
+              <!-- "Ngắt CLI": kill PTY từ ngay đây — lối thoát khỏi composer bị
+                   khoá không cần mở pane gõ `exit`. Engine (onExit) dọn link +
+                   import transcript; nút Sync còn lại thì chỉ để gấp tin GIỮA
+                   chừng trong lúc CLI còn sống. -->
+              <button
+                class="clinoticebtn"
+                :disabled="cliDetaching"
+                :title="t('sessions.cli.detachHint')"
+                @click="detachCli"
+              >
+                {{ cliDetaching ? t('sessions.cli.detaching') : t('sessions.cli.detach') }}
+              </button>
+            </div>
             <SessionComposer
-              v-if="!gridMode"
+              v-if="!gridMode && !cliMode"
               :attachments="pendingAtt"
+              :disabled="cliLinked"
               @send="onSend"
               @pick="openPicker"
               @remove-att="removeAtt"
@@ -396,6 +532,9 @@
 // time via `menu`, closed by a fixed full-screen backdrop). Data flows through
 // useSessionsStore (remove/setProject/sendMessage) — visual rates are presentational.
 import type { Session, SlashCommandRef } from '~/composables/useSessionsData'
+import { PROVIDER_DISPLAY } from '~/composables/useSessionsData'
+import { UserRound } from 'lucide-vue-next'
+import type { UnlistenFn } from '~/composables/useSidecar'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import {
   imageSiblingsFromAttachments,
@@ -430,6 +569,9 @@ provideFilePreview(
   () => props.session.project,
   () => props.session,
 )
+// Bare "comment <id>" refs in the transcript resolve against THIS session's
+// project repo (session.project carries the projectId).
+provideGhCommentLink(() => props.session.project)
 
 // This detail is a transcript "surface": jump callers underneath it (follow-up
 // anchors, the composer's quote cards) resolve to the SessionTranscript rendered
@@ -536,21 +678,34 @@ async function askRemove() {
 // SSH tools (ssh_exec / ssh_write_file); 'prompt' by default. Takes effect on the
 // next turn (engine reads it per turn).
 
-// Single popover open at a time (project switcher · config · workspace · cute-only
-// overflow). The shared backdrop closes whichever is open.
-type Menu = 'proj' | 'config' | 'workspace' | 'more'
+// Single popover open at a time (project switcher · config · workspace — the ⋯
+// overflow is a self-managed DropdownMenu, outside this union). The shared
+// backdrop closes whichever is open.
+type Menu = 'proj' | 'config' | 'workspace'
 const menu = ref<Menu | null>(null)
 function openMenu(m: Menu) {
   menu.value = menu.value === m ? null : m
 }
+// ⋯ overflow DropdownMenu open state — drives the trigger's "on" highlight only
+// (reka closes the menu itself on select / click-away / Esc).
+const ddOpen = ref(false)
 
-// Cute-only overflow menu (`menu === 'more'`): each row closes the menu then runs
-// the exact same handler its awog-family iconbtn twin calls (mirrors how
-// `selectProj`/`toggleView` already close their own dropdown on pick).
-function runOverflow(fn: () => void) {
-  menu.value = null
-  fn()
-}
+// Header meta (proto parity): status Badge + "agent · model" who-line. Agent = the
+// AWOG member id when the session belongs to a team (session.agent), else the
+// provider display name — the proto's harness slot ('claude', 'codex', …).
+const STATUS_BADGE = {
+  idle: 'outline',
+  streaming: 'default',
+  awaiting: 'warning',
+  done: 'secondary',
+  error: 'destructive',
+} as const
+const statusVariant = computed(() => STATUS_BADGE[props.session.status])
+const statusLabel = computed(() => t(`sessions.status.${props.session.status}`))
+const whoLabel = computed(() => {
+  const agent = props.session.agent?.id ?? PROVIDER_DISPLAY[store.providerOf(props.session)] ?? ''
+  return [agent, props.session.model].filter(Boolean).join(' · ')
+})
 
 // Project switcher (the `.dproj` crumb): the crumb shows the resolved project NAME
 // (session.project holds the engine projectId); selecting persists the id.
@@ -587,6 +742,8 @@ function onSend(text: string, command?: SlashCommandRef) {
 }
 
 const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
+// Pane CLI expose toggleAppearance (drawer cỡ/font) — nút Aa trên header gọi vào.
+const cliPane = useTemplateRef<{ toggleAppearance?: () => void }>('cliPane')
 
 // Đính kèm đang chờ của composer này. Logic dựng attachment (ảnh/PDF → data URL, file
 // chữ → nội dung, còn lại → tham chiếu path) nằm ở `useComposerAttachments` vì chế độ
@@ -1009,8 +1166,8 @@ const canOpenInWindow = computed(
 const turnBusy = computed(
   () => props.session.status === 'streaming' || props.session.status === 'awaiting',
 )
-// Single source for the popout action's label: the inline iconbtn's `title` and the
-// cute overflow menu's row text must read identically.
+// Nhãn của hành động popout trong menu ⋯ — đổi giữa "Mở cửa sổ" / "lượt đang bận"
+// theo turnBusy (disabled state đi kèm nó ở DropdownMenuItem).
 const popoutTitle = computed(() =>
   turnBusy.value ? t('sessions.window.busy') : t('sessions.window.open'),
 )
@@ -1079,14 +1236,234 @@ const wpOpen = ref(false)
 // ⚠ Danh sách này là thứ QUYẾT ĐỊNH view nào mở được, không phải `WPVIEWS` trong
 // useSessionsData (cái đó chỉ cấp icon + phím tắt). Thêm view mà quên thêm vào đây
 // thì component có tồn tại cũng không có đường nào bấm tới.
-// ── Chế độ lưới (docs/features/session-groups.md) ────────────────────────────
+
+// ── "Open in CLI" (pane CLI) ─────────────────────────────────────────────────
+// Chế độ anh em của gridMode: một pane xterm chiếm chỗ transcript + composer,
+// chạy CLI agent THẬT trong workspace của phiên qua sessions.openCli (PTY gom
+// dưới khoá `cli:<engineId>`). Bốn mảnh trạng thái tách vai:
+//   cliMode        — pane đang HIỆN (thay chỗ transcript);
+//   cliMounted     — pane đã từng được mở → giữ mount mãi, chỉ v-show ẩn/hiện —
+//                    unmount là kill PTY, và "quay lại chat" không được làm mất shell;
+//   cliLinked      — một PTY CLI còn sống → khoá composer + hiện notice (+ Sync
+//                    + Detach). Engine chặn sendMessage trên MỌI link sống —
+//                    kể cả devin unlinked — nên cờ này theo "PTY sống", không
+//                    theo cờ engine-linked;
+//   cliEngineLinked — cờ `res.linked` THẬT pane báo về (native resume đúng phiên
+//                    / devin mở phiên riêng) → chỉ để chọn copy notice.
+// cliTerminalId    — terminalId PTY CLI nếu renderer này biết (pane emit →
+//                    terminal.list, khôi phục lúc mount, event terminal.data):
+//                    đối chiếu terminal.exit và dự phòng cho detach.
+const cliApi = useTerminalApi()
+const cliMode = ref(false)
+const cliMounted = ref(false)
+const cliLinked = ref(false)
+const cliEngineLinked = ref(true)
+let cliTerminalId: string | null = null
+// Phiên có CLI native để gắn: engine phải biết nó (engineId — phiên chưa gửi tin
+// nào chưa persist) và provider của nó có CLI tương ứng (anthropic → claude,
+// openai → codex). Pi/Google/browser-dev không offer — mục menu ẩn hẳn.
+const canOpenInCli = computed(
+  () =>
+    sc.available &&
+    !!props.session.engineId &&
+    ['anthropic', 'openai'].includes(store.providerOf(props.session)),
+)
+function toggleCli() {
+  cliMode.value = !cliMode.value
+  if (cliMode.value) {
+    cliMounted.value = true
+    // CLI thay chỗ cả LƯỚI (một pane toàn cột) — bật nó là thu lưới về đơn.
+    // toggleGrid() giữ đúng nghi thức "quên tick reveal" khi lưới đóng.
+    if (gridMode.value) toggleGrid()
+  }
+}
+// Một nhịp sessions.syncCli: engine gấp tin mới phía CLI vào JSONL của phiên
+// (hàng nhập về mang `via`), rồi transcript nạp lại. Đường này phục vụ CẢ nút
+// Sync của notice lẫn nhịp ngầm lúc đóng pane; `reloadTranscript` tự khử trùng
+// với nhánh reload qua event `session.cli-synced` mà engine bắn sau mỗi sync.
+const cliSyncing = ref(false)
+// Số tin vừa nhập, hiện thoáng qua trên nút Sync của notice.
+const cliSyncedN = ref<number | null>(null)
+let cliSyncedTimer: ReturnType<typeof setTimeout> | undefined
+const CLI_SYNCED_SHOW_MS = 3000
+async function syncCliTranscript() {
+  const eid = props.session.engineId
+  if (!eid || !sc.available || cliSyncing.value) return
+  cliSyncing.value = true
+  try {
+    const res = await cliApi.syncCli(eid)
+    cliSyncedN.value = res.imported
+    if (cliSyncedTimer) clearTimeout(cliSyncedTimer)
+    cliSyncedTimer = setTimeout(() => {
+      cliSyncedN.value = null
+    }, CLI_SYNCED_SHOW_MS)
+  } catch (err) {
+    // Engine build cũ chưa có sessions.syncCli, hoặc phiên bận — vẫn cố nạp lại,
+    // transcript có thể đã thay đổi qua đường khác.
+    console.warn('[sessions] syncCli failed', err)
+  } finally {
+    cliSyncing.value = false
+  }
+  store.reloadTranscript(props.session.id)
+}
+// Quay về chat (cliMode true→false) = một nhịp sync ngầm — tin người dùng vừa
+// gõ trong CLI phải sẵn sàng hiện trên transcript mà không cần bấm Sync.
+watch(cliMode, (on, was) => {
+  if (was && !on) void syncCliTranscript()
+})
+// Học terminalId của PTY CLI đang sống từ registry (attach mới, remount, hoặc
+// respawn-race đều đi qua đây). Chỉ cập nhật `cliTerminalId` — cờ cliLinked do
+// luồng gọi quyết, đừng để một nhịp list lỗi hạ khoá composer oan.
+async function learnCliTerminal(): Promise<void> {
+  const eid = props.session.engineId
+  if (!eid || !sc.available) return
+  try {
+    const res = await cliApi.list(`cli:${eid}`)
+    cliTerminalId = res.terminals[0]?.terminalId ?? null
+  } catch {
+    // terminal.list chưa có / engine cũ — detach sẽ list lại lúc bấm.
+  }
+}
+// Pane emit { attached, linked }: `attached` = PTY sống → khoá/mở composer;
+// `linked` = cờ engine (native resume vs devin phiên riêng) → chọn copy notice.
+function onCliLinked(state: { attached: boolean; linked: boolean }) {
+  cliLinked.value = state.attached
+  // Gỡ attach → trả copy về mặc định; một PTY học qua event/list (renderer
+  // khác, remount) không mang cờ engine nên cũng hiện copy mặc định.
+  cliEngineLinked.value = state.attached ? state.linked : true
+  if (state.attached) void learnCliTerminal()
+  else cliTerminalId = null
+}
+// "Ngắt CLI" trên notice: kill PTY — lối thoát khỏi composer bị khoá không cần
+// gõ `exit` trong shell. Engine dọn link + xếp import transcript trong onExit
+// của PTY (rồi bắn `session.cli-synced`); subscription terminal.exit phía dưới
+// xác nhận lại trạng thái, phòng một PTY mới được respawn xen giữa.
+const cliDetaching = ref(false)
+async function detachCli() {
+  const eid = props.session.engineId
+  if (!eid || !sc.available || cliDetaching.value) return
+  cliDetaching.value = true
+  try {
+    // Học lại id từ registry thay vì tin cache — pane/renderer khác có thể đã
+    // respawn một PTY mới dưới cùng khoá `cli:<eid>`.
+    let target = cliTerminalId
+    try {
+      const res = await cliApi.list(`cli:${eid}`)
+      target = res.terminals[0]?.terminalId ?? target
+    } catch {
+      // list lỗi — kill theo id đã biết nếu có.
+    }
+    if (target) await cliApi.kill(target)
+  } catch (err) {
+    // Kill thất bại → giữ nguyên khoá composer (PTY có thể còn sống).
+    console.warn('[sessions] detach CLI failed', err)
+    return
+  } finally {
+    cliDetaching.value = false
+  }
+  cliLinked.value = false
+  cliEngineLinked.value = true
+  cliTerminalId = null
+  store.reloadTranscript(props.session.id)
+}
+// Đối chiếu registry sau một terminal.exit của nhóm `cli:<eid>`: còn PTY sống →
+// giữ khoá + học id mới (respawn race — PTY CŨ vừa bị kill trong một nhịp đổi
+// CLI cũng bắn exit); hết PTY → mở khoá composer + reload transcript (engine
+// đã xếp import trong onExit; `session.cli-synced` đến sau sẽ refresh lần nữa).
+async function reconcileCliLink(exitedId: string): Promise<void> {
+  if (exitedId && exitedId === cliTerminalId) cliTerminalId = null
+  const eid = props.session.engineId
+  if (!eid) {
+    cliLinked.value = false
+    return
+  }
+  let alive: string | null = null
+  try {
+    const res = await cliApi.list(`cli:${eid}`)
+    alive = res.terminals[0]?.terminalId ?? null
+  } catch {
+    // list lỗi — tin chính event exit: coi như không còn PTY nào. Nếu thực ra
+    // còn (respawn race), chunk terminal.data kế tiếp sẽ khoá lại composer.
+  }
+  if (alive) {
+    cliLinked.value = true
+    cliTerminalId = alive
+    return
+  }
+  cliLinked.value = false
+  cliEngineLinked.value = true
+  cliTerminalId = null
+  store.reloadTranscript(props.session.id)
+}
+// Khôi phục `cliLinked` qua remount (KeepAlive / mở lại phiên): một PTY CLI còn
+// sống được engine gom dưới `cli:<engineId>` trong registry terminal. Và lắng
+// `session.cli-synced` + `terminal.*` — sync/exit/spawn có thể đến từ pane đang
+// ẩn (v-show) HOẶC một renderer khác đang sở hữu phiên (popout), nên subscribe
+// ở đây chứ không trông chờ emit `linked` của pane.
+let unlistenCliSync: UnlistenFn | null = null
+onMounted(async () => {
+  const eid = props.session.engineId
+  if (!sc.available) return
+  if (eid) {
+    try {
+      const res = await cliApi.list(`cli:${eid}`)
+      const t = res.terminals[0]
+      if (t) {
+        cliLinked.value = true
+        cliTerminalId = t.terminalId
+      }
+    } catch {
+      // terminal.list chưa có / engine cũ — cờ này chỉ là UI hint, bỏ qua.
+    }
+  }
+  try {
+    unlistenCliSync = await sc.onEvent((evt) => {
+      // Đọc engineId SỐNG — phiên mount khi chưa persist rồi mới có engineId.
+      const eidNow = props.session.engineId
+      if (evt.type === 'session.cli-synced') {
+        const p = evt.payload as { sessionId?: unknown }
+        if (p?.sessionId === eidNow) store.reloadTranscript(props.session.id)
+        return
+      }
+      if (!eidNow) return
+      if (evt.type !== 'terminal.exit' && evt.type !== 'terminal.data') return
+      const p = evt.payload as { terminalId?: unknown; sessionId?: unknown }
+      // PTY của phiên này: group key `cli:<eid>` trong payload, hoặc đúng id
+      // đang theo dõi (phòng payload thiếu sessionId).
+      const ours =
+        p?.sessionId === `cli:${eidNow}` ||
+        (cliTerminalId !== null && p?.terminalId === cliTerminalId)
+      if (!ours) return
+      if (evt.type === 'terminal.data') {
+        // Không có event "created": chunk đầu của một CLI mở ở renderer/popout
+        // KHÁC là tín hiệu duy nhất — khoá composer ngay (engine đã chặn
+        // sendMessage trên link đó).
+        if (typeof p.terminalId === 'string') cliTerminalId = p.terminalId
+        cliLinked.value = true
+        return
+      }
+      // Exit — kể cả kill từ renderer khác. Đối chiếu registry trước khi mở
+      // khoá: một nhịp respawn cũng khiến PTY CŨ bắn exit.
+      void reconcileCliLink(typeof p.terminalId === 'string' ? p.terminalId : '')
+    })
+  } catch {
+    // không có kênh event — nhịp sync tay vẫn tự reload qua syncCliTranscript.
+  }
+})
+onBeforeUnmount(() => {
+  unlistenCliSync?.()
+  unlistenCliSync = null
+  if (cliSyncedTimer) clearTimeout(cliSyncedTimer)
+})
+
+// ── Chế độ lưới (docs/features/session-runs.md) ────────────────────────────
 // Không persist: lưới là cách NHÌN của lúc này, và mở lại một phiên vào thẳng lưới
 // khi người dùng chỉ muốn đọc transcript thì hại hơn lợi. Ô nào hiện TRONG lưới thì
 // có nhớ (SessionGrid tự lo).
 const gridMode = ref(false)
 
 // Yêu cầu "xem các phiên con dạng lưới" đến từ menu chuột phải của DANH SÁCH — cột
-// sibling, không với tới `gridMode` ở đây (docs/features/session-groups.md §5). Mỗi
+// sibling, không với tới `gridMode` ở đây (docs/features/session-runs.md §5). Mỗi
 // lần nhận, tick tăng để lưới quên sở thích "ô nào hiện" của lần trước và bày lại đủ
 // các phiên con: người dùng vừa yêu cầu đúng điều đó.
 //
@@ -1096,6 +1473,9 @@ const gridMode = ref(false)
 const gridRevealTick = ref(0)
 function toggleGrid() {
   gridMode.value = !gridMode.value
+  // Bật lưới trong khi pane CLI đang hiện: lưới thay chỗ nó (pane vẫn mount, PTY
+  // sống — chỉ ẩn khỏi mắt). Hai chế độ thay chỗ cùng một bề mặt, không chồng nhau.
+  if (gridMode.value) cliMode.value = false
   // Tắt lưới ⇒ quên yêu cầu "bày lại đủ các con". Không đưa về 0 thì lần bật sau từ
   // `⋯` vẫn mang tick cũ, và lưới lại xoá sở thích "ô nào hiện" của người dùng.
   if (!gridMode.value) gridRevealTick.value = 0
@@ -1118,7 +1498,7 @@ const ALL_VIEWS = [
   'Browser',
   'Plan',
   'Tasks',
-  'Group',
+  'Team',
   'Preview',
   'Cost',
   'Info',
@@ -1310,34 +1690,89 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   flex-direction: column;
   overflow: hidden;
 }
-/* Discuss banner (ADR 0055) — links a discussion session back to its task. */
+/* Detail header — shadcn idiom (spec §7): h-11, một hàng không wrap. `.dh` global
+   là 50px/gap-10 cho mọi trang detail; ở đây siết về nhịp session: tiêu đề co
+   (`.dttitle` đã truncate trong app-shell), mọi nút shrink-0.
+   KHÔNG `overflow:hidden` ở đây (dù proto có): ba `.smenu` của header neo absolute
+   trong `.dhanchor` và mở xuống QUA cạnh dưới thanh — clip ở `.dh` sẽ chặt đứt
+   menu. Không-wrap đã đủ chặt nhờ flex-nowrap mặc định + `.dt{min-width:0}` +
+   `.dttitle` ellipsis; khi panel hẹp chỉ title co.
+   Giữ selector ở `.dh` trần: theme-cute (attr + class + element) phải thắng. */
+.dh {
+  height: 44px;
+  gap: 6px;
+}
+.dh .dt {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  gap: 8px;
+}
+/* Status badge (proto `Badge`): không co khi title dài — meta co trước. */
+.dhbadge {
+  flex: 0 0 auto;
+}
+/* "agent · model" who-line (proto `text-xs text-muted-foreground` + icon 12px).
+   Co + truncate trước title khi hẹp — proto `min-w-0 shrink truncate`; title
+   `.dttitle` vẫn là phần tử đầu tiên nên thông tin không bao giờ mất hẳn. */
+.dhwho {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 400;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.dhwhotext {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Anchor tương đối cho các menu `.smenu` neo dưới nút — flex item không được co
+   (khi co, menu `absolute` tuỳ thuộc anchor vẫn đúng chỗ). */
+.dhanchor {
+  position: relative;
+  flex: 0 0 auto;
+}
+/* Nút header = ghost iconSm của ui/Button (hover = accent-wash trung tính). Trạng
+   thái "on" (panel đang mở / menu đang mở) = `bg-accent text-accent-foreground`
+   đúng idiom toggle của proto. */
+.dhb.on {
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
+}
+/* Discuss banner (ADR 0055) — links a discussion session back to its task.
+   Primary-tint callout: cùng ngôn ngữ "lit chip" của `.stab-btn.on`. */
 .aboutbar {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 0 14px 8px;
   padding: 7px 11px;
-  border: 1px solid var(--accentBorder);
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--foreground);
   cursor: pointer;
   text-align: left;
   transition: background 0.12s ease;
 }
 .aboutbar:hover {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
 }
 .aboutbar-icn {
   width: var(--icon-sm);
   height: var(--icon-sm);
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--primary);
 }
 .aboutbar-lbl {
   font-weight: 500;
   flex: 0 0 auto;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .aboutbar-title {
   flex: 1;
@@ -1368,11 +1803,11 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
 }
 .sshbar-approval-lbl {
   font-weight: 500;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .sshbar-warn {
   margin: 6px 2px 0;
-  color: var(--amber);
+  color: var(--warning);
   line-height: var(--lh-sm);
 }
 /* Two-axis dock: .chatwrap stacks the top row (chat + right panel) over the
@@ -1392,6 +1827,43 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
    inside it) — scoped, so it only affects `.chat` as rendered by this component. */
 .chat {
   position: relative;
+}
+/* Notice "session is attached to a CLI" — muted bar, canh theo --padX như chính
+   composer. Nút bên trong là ghost nhỏ: hover = accent-wash trung tính. */
+.clinotice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 var(--padX) 8px;
+  padding: 5px 10px;
+  border-radius: var(--r-sm);
+  background: var(--muted);
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.clinoticetxt {
+  flex: 1;
+  min-width: 0;
+}
+.clinoticebtn {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: var(--r-xs);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    background 0.12s,
+    color 0.12s;
+}
+.clinoticebtn:hover:not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+.clinoticebtn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 /* Containing block for the find bar (absolute inside it): offsets it clear of the
    transcript's fold-all button at the same corner, without touching FindBar itself. */
@@ -1434,9 +1906,9 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   display: grid;
   place-items: center;
   pointer-events: none;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
-  border: 2px dashed var(--accent);
-  border-radius: var(--r-btn);
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius);
 }
 .dropzone-inner {
   display: flex;
@@ -1444,10 +1916,10 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   gap: 9px;
   padding: 12px 18px;
   font-weight: 600;
-  color: var(--accent);
-  background: var(--bgEl);
-  border: 1px solid var(--accentBorder);
-  border-radius: var(--r-btn);
+  color: var(--primary);
+  background: var(--popover);
+  border: 1px solid var(--ring);
+  border-radius: var(--radius);
 }
 /* Floating action bar next to a text selection (anchored to viewport coords). */
 /* Floating selection action bar. Laid out at the viewport origin and moved ENTIRELY by
@@ -1472,8 +1944,15 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   );
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   max-width: calc(100vw - 16px);
+  /* Proto idiom: MỘT thanh popover (rounded-lg + border + bg-popover + shadow-lg,
+     p-1) với các item ghost phẳng bên trong — không phải từng nút có khung riêng. */
+  padding: 4px;
+  background: var(--popover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
 }
 .selquote {
   display: inline-flex;
@@ -1482,16 +1961,20 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   padding: 5px 10px;
   /* A two-word label is one label — never break it across lines. */
   white-space: nowrap;
-  color: var(--text);
-  background: var(--bgEl);
-  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--popover-foreground);
+  background: transparent;
+  border: none;
   border-radius: var(--r-sm);
-  box-shadow: var(--shadow-md);
   cursor: pointer;
 }
 .selquote:hover {
-  border-color: var(--accentBorder);
-  color: var(--accent);
+  background: var(--accent-wash);
+}
+.selquote:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 /* Note popover (after clicking the floating Quote button). */
 .notebackdrop {
@@ -1508,9 +1991,9 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   flex-direction: column;
   gap: 8px;
   padding: 10px;
-  background: var(--bgEl);
+  background: var(--popover);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-md);
 }
 /* Once dragged/resized, anchor by explicit top-left (drop the selection transform). */
@@ -1524,7 +2007,7 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  color: var(--accent);
+  color: var(--primary);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   cursor: grab;
@@ -1538,19 +2021,21 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   margin-top: 2px;
 }
 .npex {
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 8em;
   overflow-y: auto;
 }
+/* Input theo idiom shadcn: border-input, nền trong suốt trên popover, focus =
+   viền ring + halo ring 1px (không outline — giữ shape rounded). */
 .npinput {
   width: 100%;
   padding: 6px 9px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  background: var(--bgInput);
-  color: var(--text);
+  border: 1px solid var(--input);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--foreground);
   outline: none;
   resize: vertical;
   min-height: 4.5em;
@@ -1564,7 +2049,8 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   resize: none;
 }
 .npinput:focus {
-  border-color: var(--accentBorder);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .nprow {
   display: flex;
@@ -1575,15 +2061,20 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   padding: 4px 12px;
   border-radius: var(--r-xs);
   cursor: pointer;
-  color: var(--textDim);
+  font-weight: 500;
+  color: var(--muted-foreground);
 }
 .npbtn:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .npbtn.pri {
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.npbtn.pri:hover {
+  background: color-mix(in srgb, var(--primary) 90%, transparent);
+  color: var(--primary-foreground);
 }
 /* Bottom-right resize handle (single corner — AN-2 / OQ-B3). */
 .npresize {

@@ -12,9 +12,8 @@
             {{ t('vpn.editor.name') }}
             <span class="vpe-req" aria-hidden="true">*</span>
           </label>
-          <input
+          <Input
             v-model="name"
-            class="vpe-input"
             :class="{ 'has-err': touched.name && nameError }"
             :placeholder="t('vpn.editor.namePh')"
             :aria-invalid="touched.name && !!nameError"
@@ -25,12 +24,12 @@
         <div class="vpe-field">
           <label class="vpe-label">{{ t('vpn.editor.folder') }}</label>
           <AppSelect v-model="folderSelect" :options="folderOptions" width="100%" />
-          <input
+          <Input
             v-if="folderMode === 'new'"
             v-model="folder"
-            class="vpe-input mono"
             :placeholder="t('vpn.editor.folderPh')"
             spellcheck="false"
+            class="mono"
           />
         </div>
       </div>
@@ -41,19 +40,26 @@
           <span class="vpe-req" aria-hidden="true">*</span>
         </label>
         <div class="vpe-path-row">
-          <input
+          <Input
             v-model="configPath"
-            class="vpe-input mono"
             :class="{ 'has-err': touched.configPath && configError }"
             :placeholder="t('vpn.editor.configPathPh')"
             spellcheck="false"
             :aria-invalid="touched.configPath && !!configError"
+            class="mono"
             @blur="touched.configPath = true"
           />
-          <button v-if="canBrowse" type="button" class="btn sm vpe-browse" @click="browseConfig">
+          <Button
+            v-if="canBrowse"
+            type="button"
+            class="vpe-browse"
+            variant="outline"
+            size="sm"
+            @click="browseConfig"
+          >
             <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ t('vpn.editor.browse') }}
-          </button>
+          </Button>
         </div>
         <div v-if="touched.configPath && configError" class="vpe-err">{{ configError }}</div>
         <div class="vpe-hint">{{ t('vpn.editor.configPathHint') }}</div>
@@ -67,12 +73,7 @@
 
       <div class="vpe-field">
         <label class="vpe-label">{{ t('vpn.editor.tags') }}</label>
-        <input
-          v-model="tagsText"
-          class="vpe-input"
-          :placeholder="t('vpn.editor.tagsPh')"
-          spellcheck="false"
-        />
+        <Input v-model="tagsText" :placeholder="t('vpn.editor.tagsPh')" spellcheck="false" />
         <div class="vpe-hint">{{ t('vpn.editor.tagsHint') }}</div>
       </div>
 
@@ -94,25 +95,25 @@
         <template v-if="authMode === 'user-pass'">
           <div class="vpe-field">
             <label class="vpe-sub-label">{{ t('vpn.editor.creds.username') }}</label>
-            <input
+            <Input
               v-model="username"
-              class="vpe-input mono"
               :placeholder="t('vpn.editor.creds.usernamePh')"
               spellcheck="false"
               autocomplete="off"
+              class="mono"
             />
           </div>
 
           <div class="vpe-field">
             <label class="vpe-sub-label">{{ t('vpn.editor.creds.password') }}</label>
             <div class="vpe-pw">
-              <input
+              <Input
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                class="vpe-input mono has-eye"
                 :placeholder="t('vpn.editor.creds.passwordPh')"
                 spellcheck="false"
                 autocomplete="off"
+                class="mono has-eye"
               />
               <button
                 type="button"
@@ -137,13 +138,13 @@
         <div class="vpe-field">
           <label class="vpe-sub-label">{{ t('vpn.editor.creds.keyPassphrase') }}</label>
           <div class="vpe-pw">
-            <input
+            <Input
               v-model="keyPassphrase"
               :type="showPassphrase ? 'text' : 'password'"
-              class="vpe-input mono has-eye"
               :placeholder="t('vpn.editor.creds.keyPassphrasePh')"
               spellcheck="false"
               autocomplete="off"
+              class="mono has-eye"
             />
             <button
               type="button"
@@ -170,10 +171,10 @@
 
     <template #footer>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('vpn.editor.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -190,6 +191,8 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { pickFile } from '~/composables/useFolderPicker'
 import { useVpnStore, type VpnAuthMode, type VpnImportDraft, type VpnProfile } from '~/stores/vpn'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // The editor emits its raw secret parts; the section maps them to vpn.setCredential.
 export type VpnCredentialSecret = { username?: string; password?: string; keyPassphrase?: string }

@@ -7,7 +7,7 @@
         <div class="expmodal-head">
           <Icon
             name="save"
-            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--accent)"
+            style="width: var(--icon-sm); height: var(--icon-sm); color: var(--primary)"
           />
           <span class="expmodal-title">{{ t('sessions.export.title') }}</span>
           <span style="flex: 1" />
@@ -318,9 +318,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   height: 82vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
+  background: var(--card);
+  color: var(--card-foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--radius); /* rounded-lg */
   overflow: hidden;
   box-shadow: var(--shadow-lg);
 }
@@ -331,7 +332,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   gap: 8px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--bgEl);
 }
 .expmodal-title {
   font-weight: 600;
@@ -339,15 +339,15 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .expmodal-x {
   background: transparent;
   border: none;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   padding: 4px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   display: inline-flex;
 }
 .expmodal-x:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .expmodal-bar {
   flex: 0 0 auto;
@@ -367,23 +367,23 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
   gap: 5px;
   padding: 5px 11px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .expseg-btn:hover {
-  color: var(--text);
-  border-color: var(--borderStrong);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
 .expseg-btn.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
+  color: var(--primary);
+  border-color: var(--ring);
+  background: var(--accent-wash);
 }
 .expstatus {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 18px;
   max-width: 360px;
@@ -392,7 +392,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   white-space: nowrap;
 }
 .expstatus.err {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .expbtn {
   font-weight: 500;
@@ -400,19 +400,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--text);
+  color: var(--foreground);
   cursor: pointer;
 }
 .expbtn:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .expbtn.pri {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 .expbtn:disabled {
   opacity: 0.5;
@@ -425,7 +425,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   gap: 6px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--accentDim);
+  background: rgb(from var(--success) r g b / 0.08);
 }
 .expsaved-top {
   display: flex;
@@ -433,7 +433,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   gap: 8px;
 }
 .expsaved-ok {
-  color: var(--accent);
+  color: var(--success);
 }
 .expsaved-label {
   font-weight: 600;
@@ -446,10 +446,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   overflow-wrap: anywhere;
 }
 .expsaved-dir {
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .expsaved-name {
-  color: var(--text);
+  color: var(--foreground);
   font-weight: 600;
 }
 .expmodal-body {
@@ -466,7 +466,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-family: var(--code);
   font-size: 12px;
   line-height: 20px;
-  color: var(--text);
+  color: var(--foreground);
 }
 /* Prompt mode: editable text area filling the body — user can tweak before copy/save.
    resize:none because the modal body governs the height (single-purpose modal input). */
@@ -484,13 +484,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   font-family: var(--code);
   font-size: 12px;
   line-height: 20px;
-  color: var(--text);
+  color: var(--foreground);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 /* Prompt tab icon pulses while the summary is streaming — a loading cue on the tab. */
 .expseg-busy {
-  color: var(--accent);
+  color: var(--primary);
   animation: expgen-pulse 1.2s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -506,14 +506,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
   align-items: center;
   justify-content: center;
   gap: 12px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   text-align: center;
 }
 .expgen.err {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .expgen-spin {
-  color: var(--accent);
+  color: var(--primary);
   animation: expgen-pulse 1.2s ease-in-out infinite;
 }
 @keyframes expgen-pulse {

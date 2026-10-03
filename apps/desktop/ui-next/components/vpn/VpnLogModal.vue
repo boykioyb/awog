@@ -13,11 +13,11 @@
     </div>
 
     <template #footer>
-      <button class="btn" :disabled="!lines.length" @click="onClear">
+      <Button :disabled="!lines.length" variant="outline" @click="onClear">
         {{ t('vpn.log.clear') }}
-      </button>
+      </Button>
       <span style="flex: 1" />
-      <button class="btn" @click="emit('close')">{{ t('common.close') }}</button>
+      <Button variant="outline" @click="emit('close')">{{ t('common.close') }}</Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -29,6 +29,7 @@
 import { computed, nextTick, useTemplateRef, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useVpnStore, VPN_STATUS_COLORS, type VpnStatus } from '~/stores/vpn'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean

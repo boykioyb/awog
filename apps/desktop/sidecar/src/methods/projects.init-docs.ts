@@ -20,12 +20,11 @@ import { z } from 'zod'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { register, RpcError } from '../transport/rpc.js'
-import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { completePi } from '../runtime/complete.js'
 import { renderScan, scanRepo } from '../context/repo-scan.js'
 import { log } from '../util/logger.js'
 
-const ModelSchema = z.enum(ANTHROPIC_MODELS)
+const ModelSchema = z.string().min(1).max(200)
 
 const Params = z.object({
   path: z.string().min(1).max(4096),

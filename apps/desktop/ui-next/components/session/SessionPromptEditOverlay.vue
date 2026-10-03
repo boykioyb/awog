@@ -98,9 +98,9 @@ watch(
   margin: 0 16px;
   display: flex;
   flex-direction: column;
-  background: var(--bgEl);
+  background: var(--popover);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -110,10 +110,10 @@ watch(
   gap: 9px;
   padding: 11px 14px;
   border-bottom: 1px solid var(--border);
-  color: var(--text);
+  color: var(--foreground);
 }
 .pe-head-ic {
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .pe-title {
   font-weight: 600;
@@ -127,30 +127,33 @@ watch(
   place-items: center;
   padding: 4px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   background: transparent;
 }
 .pe-x:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
+/* Textarea theo idiom input: border-input, nền trong suốt trên popover, focus =
+   viền ring + halo 1px (không outline — giữ shape rounded). */
 .pe-textarea {
   resize: vertical;
   min-height: 9rem;
   margin: 12px 14px;
   padding: 10px 12px;
-  background: var(--bgInput);
-  border: 1px solid var(--border);
+  background: transparent;
+  border: 1px solid var(--input);
   border-radius: var(--r-sm);
   outline: none;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 1em;
   font-family: var(--sans);
   line-height: var(--lh-prose);
 }
 .pe-textarea:focus {
-  border-color: var(--accent);
+  border-color: var(--ring);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .pe-foot {
   display: flex;
@@ -164,17 +167,20 @@ watch(
   font-size: 1em;
   font-weight: 500;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--text);
+  color: var(--foreground);
 }
+/* Ghost = hover wash trung tính, không viền. */
 .pe-btn.ghost:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .pe-btn.primary {
-  background: var(--accent);
-  color: var(--accentText);
-  border-color: var(--accent);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+.pe-btn.primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 90%, transparent);
 }
 .pe-btn.primary:disabled {
   opacity: 0.45;

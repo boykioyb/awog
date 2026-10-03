@@ -36,18 +36,25 @@
       />
       <div class="srch" style="flex: 1; min-width: 120px; max-width: 220px">
         <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <input :value="search" :placeholder="t('projects.gh.search')" @input="onSearch" />
+        <Input
+          unstyled
+          :model-value="search"
+          :placeholder="t('projects.gh.search')"
+          @update:model-value="onSearch"
+        />
       </div>
-      <button
-        class="iconbtn ghrefresh"
+      <Button
         :class="{ busy: loading || revalidating }"
         :title="t('projects.gh.refresh')"
         style="width: 30px; height: 30px"
         :disabled="loading"
+        class="ghrefresh"
+        variant="outline"
+        size="iconMd"
         @click="emit('refresh')"
       >
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <!-- Re-fetch over an already-loaded list: dim the rows (the spinning button
@@ -84,15 +91,17 @@
             >
               {{ t('projects.gh.state.draft') }}
             </span>
-            <button
-              class="iconbtn ghnewses"
+            <Button
               style="width: 26px; height: 26px; flex: 0 0 auto"
               :title="t('projects.gh.newSession')"
               :aria-label="t('projects.gh.newSession')"
+              class="ghnewses"
+              variant="outline"
+              size="iconMd"
               @click.stop="emit('new-session', it)"
             >
               <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            </button>
+            </Button>
           </div>
           <div class="ghr2">
             <span v-if="kind === 'pr' && it.baseRefName" class="mono">
@@ -136,23 +145,23 @@
 
           <!-- gh CLI not installed → install button + per-OS hint -->
           <div v-if="errorCode === 'GH_NOT_FOUND'" class="ghcta">
-            <button class="btn pri sm" @click="emit('install-gh')">
+            <Button variant="default" size="sm" @click="emit('install-gh')">
               <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('projects.gh.installBtn') }}
-            </button>
+            </Button>
             <code class="ghcmd">{{ installHint }}</code>
           </div>
 
           <!-- gh installed but not authenticated → copy login command + open guide -->
           <div v-else-if="errorCode === 'GH_NOT_AUTH'" class="ghcta">
-            <button class="btn sm" @click="copyLoginCmd">
+            <Button variant="outline" size="sm" @click="copyLoginCmd">
               <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ copied ? t('projects.gh.copied') : t('projects.gh.copyLoginCmd') }}
-            </button>
-            <button class="btn sm" @click="emit('login-help')">
+            </Button>
+            <Button variant="outline" size="sm" @click="emit('login-help')">
               <Icon name="help" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('projects.gh.loginGuide') }}
-            </button>
+            </Button>
           </div>
         </div>
         <button v-if="canLoadMore" class="ghmore" :disabled="loading" @click="emit('load-more')">
@@ -180,6 +189,8 @@ import type {
   GhThreadSummary,
 } from '~/composables/useProjectGh'
 import { ghLabelStyle } from '~/utils/gh-label'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { isDark } = useTheme()
 
@@ -347,7 +358,7 @@ const installHint = computed<string>(() => {
   if (p.includes('win')) return 'winget install GitHub.cli'
   return 'cli.github.com'
 })
-const onSearch = (e: Event) => emit('set-search', (e.target as HTMLInputElement).value)
+const onSearch = (v: string) => emit('set-search', v)
 
 // Hover intent → warm the row's detail so the click after it opens from cache.
 // The delay keeps a cursor sweeping across the list from firing a gh call per row.

@@ -16,6 +16,43 @@
         :list-width="listWidth"
         @select="store.setActive($event)"
       />
+      <!-- Collapsed icon rail (proto parity): a thin column keeps the sessions of the
+           active tab reachable — expand button on top, then one status icon per
+           session; tooltip carries the title, click selects. Rendered only in the
+           wide layout — compact mode uses the off-canvas drawer instead. -->
+      <div v-if="listHidden" class="listrail">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              :aria-label="t('sessions.list.expand')"
+              :title="t('sessions.list.expand')"
+              @click="toggleList"
+            >
+              <PanelLeftOpen class="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right">{{ t('sessions.list.expand') }}</TooltipContent>
+        </Tooltip>
+        <Separator class="my-1" />
+        <Tooltip v-for="s in store.tabSessions.slice(0, 6)" :key="s.id">
+          <TooltipTrigger as-child>
+            <button
+              class="lritem"
+              :class="{ on: s.id === store.activeId }"
+              :aria-label="s.title"
+              @click="store.setActive(s.id)"
+            >
+              <component
+                :is="RAIL_META[s.status].icon"
+                :class="['lrico', RAIL_META[s.status].cls]"
+              />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">{{ s.title }}</TooltipContent>
+        </Tooltip>
+      </div>
       <div
         v-if="!listHidden"
         class="rsz"
@@ -55,10 +92,10 @@
               <br />
               {{ t('sessions.empty.subtitle') }}
             </div>
-            <button class="btn pri" @click="store.create(store.activeTab)">
+            <Button @click="store.create(store.activeTab)">
               <Icon name="plus" />
               {{ t('sessions.new') }}
-            </button>
+            </Button>
           </div>
         </div>
       </KeepAlive>
@@ -68,6 +105,8 @@
 
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
+import { CircleCheck, CircleHelp, CircleX, FileText, Loader2, PanelLeftOpen } from 'lucide-vue-next'
+import type { SessionStatus } from '~/composables/useSessionsData'
 // Sessions page — project tab strip on top, then list + resize handle + detail,
 // all backed by the reactive `useSessionsStore`. The list operates on the active
 // tab's sessions (store.tabSessions); the empty-state "+" creates a session scoped
@@ -95,12 +134,22 @@ const { setInset, clearInset } = useDockMetrics()
 const { compact } = useResponsiveShell()
 
 // The list column can also be collapsed away entirely (toggle in the tab strip).
-// Collapsed, there is no rail to clear either — same as compact mode.
-const { collapsed: listCollapsed } = useSessionListCollapse()
+// Collapsed it becomes a 40px icon rail — the dock inset must still clear it.
+const { collapsed: listCollapsed, toggle: toggleList } = useSessionListCollapse()
 const listHidden = computed(() => listCollapsed.value && !compact.value)
 
+// Status→icon cho rail — cùng map STATUS_META của SessionListItem (giữ đồng bộ).
+const RAIL_META: Record<SessionStatus, { icon: typeof CircleCheck; cls: string }> = {
+  idle: { icon: FileText, cls: 'text-muted-foreground' },
+  streaming: { icon: Loader2, cls: 'text-primary lrspin' },
+  awaiting: { icon: CircleHelp, cls: 'text-warning' },
+  done: { icon: CircleCheck, cls: 'text-success' },
+  error: { icon: CircleX, cls: 'text-destructive' },
+}
+
+const RAIL_W = 40
 const publishInset = () =>
-  setInset(compact.value || listCollapsed.value ? 0 : listWidth.value + RSZ_W)
+  setInset(compact.value ? 0 : listCollapsed.value ? RAIL_W : listWidth.value + RSZ_W)
 watch([listWidth, compact, listHidden], publishInset)
 onMounted(publishInset)
 onActivated(publishInset)
@@ -114,5 +163,73 @@ onUnmounted(clearInset)
    (flex:0 0 auto, set in SessionTabBar); `.md` fills the rest. */
 .sessions-page.page {
   flex-direction: column;
+}
+
+/* shadcn token pass (alias bridge): the empty-state tile reads as a raised card,
+   copy in muted-foreground; the resize handle's active/hover line uses --ring
+   (the emerald-42% accent border) instead of a solid accent stripe. */
+.sessions-page .empty .ei {
+  background: var(--card);
+  border-color: var(--border);
+  color: var(--muted-foreground);
+}
+.sessions-page .empty .et {
+  color: var(--muted-foreground);
+}
+.sessions-page .rsz:hover::after,
+.sessions-page .rsz.drag::after {
+  background: var(--ring);
+}
+
+/* Collapsed list → icon rail (proto: w-10 flex-col items-center gap-1 border-r
+   bg-background py-2). Sessions can exceed the rail's height — scroll the item
+   column, scrollbar hidden since it would eat most of a 40px strip. */
+.listrail {
+  width: 40px;
+  flex: 0 0 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0;
+  border-right: 1px solid var(--border);
+  background: var(--background);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.lritem {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
+.lritem:hover {
+  background: var(--accent-wash);
+}
+.lritem.on {
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
+}
+.lritem .lrico {
+  width: 14px;
+  height: 14px;
+}
+/* Loader2 spin — animate-spin của proto; giữ keyframes cục bộ để không phụ thuộc
+   tailwind utility trong trang không-dùng-tailwind này. */
+.lritem .lrspin {
+  animation: lrspin 1s linear infinite;
+}
+@keyframes lrspin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

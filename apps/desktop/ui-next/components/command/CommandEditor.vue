@@ -38,13 +38,13 @@
           <label class="cme-label">{{ t('commands.editor.slug') }}</label>
           <div class="cme-slug">
             <span class="cme-slash mono">/</span>
-            <input
-              class="cme-input mono"
-              :value="draft.id"
+            <Input
+              :model-value="draft.id"
               :placeholder="t('commands.editor.slugPh')"
               spellcheck="false"
               :disabled="isExisting"
-              @input="onSlugInput"
+              class="mono"
+              @update:model-value="onSlugInput"
             />
           </div>
           <div class="cme-hint">
@@ -53,11 +53,7 @@
         </div>
         <div class="cme-field">
           <label class="cme-label">{{ t('commands.editor.name') }}</label>
-          <input
-            v-model="draft.name"
-            class="cme-input"
-            :placeholder="t('commands.editor.namePh')"
-          />
+          <Input v-model="draft.name" :placeholder="t('commands.editor.namePh')" />
         </div>
       </div>
 
@@ -74,28 +70,24 @@
       <div class="cme-grid">
         <div class="cme-field">
           <label class="cme-label">{{ t('commands.editor.argumentHint') }}</label>
-          <input
+          <Input
             v-model="draft.argumentHint"
-            class="cme-input mono"
             :placeholder="t('commands.editor.argumentHintPh')"
+            class="mono"
           />
         </div>
         <div class="cme-field">
           <label class="cme-label">{{ t('commands.editor.model') }}</label>
-          <input
-            v-model="draft.model"
-            class="cme-input mono"
-            :placeholder="t('commands.editor.modelPh')"
-          />
+          <Input v-model="draft.model" :placeholder="t('commands.editor.modelPh')" class="mono" />
         </div>
       </div>
 
       <div class="cme-field">
         <label class="cme-label">{{ t('commands.editor.allowedTools') }}</label>
-        <input
+        <Input
           v-model="draft.allowedTools"
-          class="cme-input mono"
           :placeholder="t('commands.editor.allowedToolsPh')"
+          class="mono"
         />
       </div>
 
@@ -126,10 +118,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('commands.editor.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -144,6 +136,8 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { CommandSeed } from '~/composables/useCommandsPage'
 import type { Command, CommandSource } from '~/stores/commands'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean
@@ -264,9 +258,9 @@ watch(
   },
 )
 
-const onSlugInput = (e: Event) => {
+const onSlugInput = (v: string) => {
   slugTouched = true
-  draft.value.id = slugify((e.target as HTMLInputElement).value)
+  draft.value.id = slugify(v)
 }
 
 // Auto-derive the slug from the name while creating + the slug is untouched.

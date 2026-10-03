@@ -20,30 +20,31 @@
       </div>
 
       <div v-if="item.pod" class="ikri-acts">
-        <button type="button" class="btn sm" @click="emit('open-logs', item.pod)">
+        <Button type="button" variant="outline" size="sm" @click="emit('open-logs', item.pod)">
           {{ t('infra.kube.report.act.prevLogs') }}
-        </button>
-        <button type="button" class="btn sm" @click="emit('open-describe', item.pod)">
+        </Button>
+        <Button type="button" variant="outline" size="sm" @click="emit('open-describe', item.pod)">
           {{ t('infra.kube.report.act.describe') }}
-        </button>
-        <button type="button" class="btn sm" @click="emit('open-terminal', item.pod)">
+        </Button>
+        <Button type="button" variant="outline" size="sm" @click="emit('open-terminal', item.pod)">
           {{ t('infra.kube.report.act.terminal') }}
-        </button>
+        </Button>
       </div>
 
       <!-- Lệnh chép được đi CÙNG dòng việc chứ không nằm trong một khối "lệnh gợi
            ý" riêng: nó chỉ có nghĩa với đúng đối tượng ngay phía trên. -->
       <div v-if="item.command" class="ikri-cmd">
         <code class="ikri-cmdt">{{ item.command }}</code>
-        <button
+        <Button
           type="button"
-          class="btn sm"
           :title="t('infra.kube.report.act.copyCmd')"
+          variant="outline"
+          size="sm"
           @click="emit('copy-cmd', item.command)"
         >
           <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.kube.report.act.copyCmd') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -51,6 +52,7 @@
 
 <script setup lang="ts">
 import type { ReportItem } from '~/composables/useInfraKubeReport'
+import Button from '~/components/ui/button/Button.vue'
 
 defineProps<{ items: ReportItem[] }>()
 

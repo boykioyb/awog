@@ -3,10 +3,16 @@
     <div class="sshx-sn-top">
       <span class="sshx-sn-title">{{ t('ssh.nav.snippets') }}</span>
       <span class="sshx-sn-count">{{ snippetsStore.snippets.length }}</span>
-      <button class="btn pri sm sshx-sn-new" :title="t('ssh.snippet.new')" @click="openNew">
+      <Button
+        :title="t('ssh.snippet.new')"
+        class="sshx-sn-new"
+        variant="default"
+        size="sm"
+        @click="openNew"
+      >
         <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('ssh.snippet.new') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Run target: the live terminal connection a snippet is written into. -->
@@ -94,6 +100,7 @@ import { useConfirm } from '~/composables/useConfirm'
 import { useSshApi } from '~/composables/useSshApi'
 import { useSshStore } from '~/stores/ssh'
 import { useSshSnippetsStore, type SshSnippet } from '~/stores/sshSnippets'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const store = useSshStore()

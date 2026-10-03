@@ -10,22 +10,22 @@
 
         <label class="sfmod-field">
           <span>{{ t('ssh.sftp.chown.owner') }}</span>
-          <input
+          <Input
             ref="ownerInput"
             v-model="owner"
-            class="sfmod-in mono"
             spellcheck="false"
             placeholder="root"
+            class="sfmod-in mono"
             @keydown.enter="submit"
           />
         </label>
         <label class="sfmod-field">
           <span>{{ t('ssh.sftp.chown.group') }}</span>
-          <input
+          <Input
             v-model="group"
-            class="sfmod-in mono"
             spellcheck="false"
             :placeholder="t('ssh.sftp.chown.groupPh')"
+            class="sfmod-in mono"
             @keydown.enter="submit"
           />
         </label>
@@ -36,10 +36,10 @@
         <div class="sfmod-hint">{{ t('ssh.sftp.chown.hint') }}</div>
 
         <div class="sfmod-foot">
-          <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-          <button class="btn pri" :disabled="!valid" @click="submit">
+          <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+          <Button :disabled="!valid" variant="default" @click="submit">
             {{ t('ssh.sftp.chown.apply') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -51,6 +51,8 @@
 // charset-validated (mirrors the sidecar's own guard) before the button enables.
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import type { SftpEntry } from '~/composables/useSshApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ open: boolean; targets: SftpEntry[] }>()
 const emit = defineEmits<{

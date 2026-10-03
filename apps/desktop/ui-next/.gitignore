@@ -9,3 +9,6 @@ dist
 .env
 .env.*
 !.env.example
+
+# Pre-bundled heavy deps (scripts/prebundle-monaco.mjs)
+public/vendor/

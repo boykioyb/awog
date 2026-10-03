@@ -113,6 +113,22 @@ const MACHINE_METHODS = [
 // gateway pins workspaceRoot. Still UNATTENDED_ONLY on top of that.
 const TERMINAL_SCOPED = ['terminal.create'] as const
 
+// Terminal methods acting on an EXISTING terminalId: they pass through the
+// MACHINE_METHODS param rule, but a terminal whose record is grouped under a
+// `cli:` key is a "Open in CLI" agent PTY — never writable/resizable/killable
+// from a remote origin (the CLI shares a transcript with an AWOG session; a
+// phone must not inject keystrokes or kill it).
+const TERMINAL_ID_METHODS = new Set(['terminal.write', 'terminal.resize', 'terminal.kill'])
+
+// Group-key prefix the sidecar's cli-registry spawns CLI PTYs under
+// (`cli:<sessionId>`). Used by BOTH this file (rpc gates) and the gateway
+// (subscription + event-egress filters) — one constant, one place.
+export const CLI_GROUP_PREFIX = 'cli:'
+
+export function isCliGroupKey(key: string | null | undefined): boolean {
+  return typeof key === 'string' && key.startsWith(CLI_GROUP_PREFIX)
+}
+
 // Mutating / turn-driving methods → bespoke param-pick below (F1).
 const BESPOKE = [
   'sessions.sendMessage',
@@ -689,7 +705,32 @@ export async function sanitizeRemoteParams(
     const rest = { ...p }
     delete rest.projectId
     delete rest.workspaceRoot // drop any client-supplied root, no matter what
+    // The `cli:` grouping namespace is engine-owned ("Open in CLI" PTYs): a
+    // remote-created terminal squatting on it would read as a CLI link to the
+    // sidecar's own checks and trip the terminal-id gates below for no gain.
+    if (method === 'terminal.create' && isCliGroupKey(rest.sessionId as string | undefined)) {
+      throw new RemoteRejected('cli: terminal groups are reserved for engine CLI links')
+    }
     return { ...rest, workspaceRoot: project.path }
+  }
+
+  // write/resize/kill on a CLI-attached terminal are refused wholesale: the PTY
+  // runs an interactive agent CLI sharing the session transcript — keystroke
+  // injection IS turn-driving without any of sendMessage's pinning, and killing
+  // it silently drops the shared-history import path. Look the record up by id;
+  // an unknown terminalId falls through and the sidecar returns its own
+  // 'Unknown terminal' (nothing CLI-scoped can exist without a live record).
+  if (TERMINAL_ID_METHODS.has(method)) {
+    const p = asObject(raw)
+    const terminalId = reqString(p.terminalId, 'terminalId')
+    const { terminals } = (await request('terminal.list', {})) as {
+      terminals: { terminalId: string; sessionId: string }[]
+    }
+    const record = terminals.find((t) => t.terminalId === terminalId)
+    if (record && isCliGroupKey(record.sessionId)) {
+      throw new RemoteRejected('CLI-attached terminals are not remotely controllable')
+    }
+    return raw ?? null
   }
 
   // Machine methods carry no workspaceRoot to pin — connId/hostId/keychain refs

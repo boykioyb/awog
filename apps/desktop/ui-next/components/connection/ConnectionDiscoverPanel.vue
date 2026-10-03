@@ -50,12 +50,7 @@
     <!-- Tìm kiếm registry -->
     <div class="cdp-bar">
       <Icon name="search" class="cdp-bar-ic" />
-      <input
-        v-model="query"
-        type="text"
-        class="cdp-input"
-        :placeholder="t('connectionsDiscover.search')"
-      />
+      <Input v-model="query" type="text" :placeholder="t('connectionsDiscover.search')" />
       <button
         type="button"
         class="cdp-refresh"
@@ -127,6 +122,7 @@ import {
   type SourceSuggestionReason,
 } from '~/stores/connections'
 import { useProjectsStore } from '~/stores/projects'
+import Input from '~/components/ui/input/Input.vue'
 
 const emit = defineEmits<{ pick: [id: string] }>()
 

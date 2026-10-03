@@ -4,7 +4,12 @@
        its containing block and confine it (the "gap at top" bug). Disabled inline. -->
   <Teleport to="body" :disabled="!fullscreen">
     <div class="mmd" :class="{ full: fullscreen }">
+      <!-- Header tích hợp dính cạnh trên card (chrome proto): nhãn ngôn ngữ bên trái,
+          cụm điều khiển zoom/pan/copy/fullscreen bên phải. -->
       <div class="mmdbar">
+        <Waypoints class="mmdic-brand" />
+        <span class="mmdlang">mermaid</span>
+        <span class="mmdspacer" />
         <button class="mmb" :title="t('common.zoomOut')" @click="zoomBy(-0.2)">
           <Icon name="minus" style="width: var(--icon-sm); height: var(--icon-sm)" />
         </button>
@@ -48,16 +53,22 @@
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
       >
         <!-- mermaid output is sanitized (securityLevel:strict) before v-html -->
         <!-- eslint-disable-next-line vue/no-v-html -- mermaid SVG, sanitized -->
         <div v-if="svg" class="mmdstage" :style="stageStyle" v-html="svg" />
         <div v-else-if="error" class="mmderr">
-          <Icon name="alert" style="width: var(--icon-md); height: var(--icon-md)" />
-          <span>{{ error }}</span>
+          <span class="mmderrline">
+            <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <span>{{ error }}</span>
+          </span>
           <pre class="mmdsrc">{{ source }}</pre>
         </div>
-        <div v-else class="mmdwait">{{ t('common.mermaid.rendering') }}</div>
+        <div v-else class="mmdwait">
+          <Loader2 class="mmdspin animate-spin" />
+          {{ t('common.mermaid.rendering') }}
+        </div>
       </div>
     </div>
   </Teleport>
@@ -72,6 +83,12 @@
 // that block re-runs per instance, so a counter declared there resets to 0 every time
 // and every diagram starts at mmd-1 → collisions the moment a message with several
 // diagrams mounts together.
+// Waypoints (nhãn header) + Loader2 (spinner chờ render) chưa có trong IconSprite.
+// Import ở block module (không phải <script setup>): mọi import gom ở đầu file để
+// eslint import/first pass — module scope được chia sẻ với <script setup> nên
+// template vẫn dùng trực tiếp (giống SessionFileTree / WorkspaceTerminalNode).
+import { Loader2, Waypoints } from 'lucide-vue-next'
+
 let mermaidUid = 0
 </script>
 
@@ -390,7 +407,7 @@ async function render() {
     return
   }
   try {
-    const mermaid = (await import('mermaid')).default
+    const mermaid = (await loadHeavyDep(() => import('mermaid'))).default
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'strict',
@@ -484,6 +501,11 @@ function onFsKey(e: KeyboardEvent) {
     e.stopPropagation()
   }
 }
+// Viewport đổi kích thước khi vào/ra fullscreen → re-fit sau khi layout xong (proto).
+watch(fullscreen, async () => {
+  await nextTick()
+  fit()
+})
 onMounted(() => window.addEventListener('keydown', onFsKey, true))
 onBeforeUnmount(() => {
   clearRetry()
@@ -493,77 +515,88 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* Chrome theo proto: card bo --r-btn với header TÍCH HỢP dính cạnh trên (trước là
+   pill điều khiển nổi trên viewport), nền muted 50%, viewport cao 256px tổng cả header. */
 .mmd {
   position: relative;
   align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  height: 256px;
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
+  border-radius: var(--r-btn);
+  background: color-mix(in srgb, var(--muted) 50%, transparent);
   overflow: hidden;
 }
+/* Fullscreen KHÔNG edge-to-edge nữa: một card nổi lùi 16px khỏi mép cửa sổ, giữ
+   border + radius, nền đục + shadow lớn (proto inset-4 z-[85] shadow-2xl). z 550:
+   mermaid sống TRONG preview (`.pvovl` 480) / board item (160) / peek full (400)
+   — bung full từ đó phải nổi trên preview; vẫn dưới action-menu (570). */
 .mmd.full {
   position: fixed;
-  inset: 0;
-  z-index: 300;
-  border: 0;
-  border-radius: 0;
-  background: var(--bg);
+  inset: 16px;
+  z-index: 550;
+  height: auto;
+  background: var(--background);
+  box-shadow: var(--shadow-lg);
 }
-.mmd.full .mmdvp {
-  height: 100vh;
-  max-height: none;
-}
-/* Slim control pill, consistent with the app's other floating toolbars. */
+/* Header bar: nhãn "mermaid" bên trái, cụm nút bên phải, hairline dưới tách viewport. */
 .mmdbar {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
-  box-shadow: var(--shadow-md);
+  gap: 4px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
 }
+.mmdic-brand {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--muted-foreground);
+}
+.mmdlang {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+}
+.mmdspacer {
+  flex: 1;
+}
+/* Ghost icon button 24×24 (proto Button iconSm size-6). */
 .mmb {
   display: grid;
   place-items: center;
   width: 24px;
-  height: 22px;
+  height: 24px;
   border: none;
   background: transparent;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .mmb:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
-/* Copy confirmed — same green tick as the transcript's code-block copy button. */
+/* Copy confirmed — tick xanh giống nút copy của code-block trong transcript. */
 .mmb.ok,
 .mmb.ok:hover {
-  color: var(--add);
+  color: var(--success);
 }
+/* Nút % — click reset zoom+pan (proto w-10, chỉ đổi màu chữ khi hover). */
 .mmz {
-  height: 22px;
-  min-width: 44px;
-  padding: 0 6px;
+  width: 40px;
+  height: 24px;
   border: none;
   background: transparent;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-sm);
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .mmz:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  color: var(--foreground);
 }
 .mmsep {
   width: 1px;
@@ -572,21 +605,21 @@ onBeforeUnmount(() => {
   margin: 0 2px;
 }
 .mmdvp {
-  height: 360px;
-  max-height: 60vh;
+  position: relative;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   display: grid;
-  /* Definite track so the stage's width:100% resolves to the viewport width. Without it
-     the implicit `auto` column sizes to content, and mermaid's `<svg width="100%">`
-     contributes 0 to an auto track → the column (and the diagram) collapses to nothing.
-     minmax(0,1fr) fills the container yet still lets a zoomed (>100%) stage overflow +
-     be clipped. */
+  /* Track có kích thước xác định để width:100% của stage resolve theo viewport. Không
+     có nó, cột `auto` ngầm định co theo content, mà `<svg width="100%">` của mermaid
+     đóng góp 0 vào track auto → cột (và diagram) sập về 0. minmax(0,1fr) lấp đầy
+     container nhưng vẫn cho stage zoom (>100%) tràn + bị clip. */
   grid-template-columns: minmax(0, 1fr);
   place-items: center;
   cursor: grab;
   touch-action: none;
-  /* The diagram is a pan surface — dragging must not select its label text (the
-     blue highlight that appears while panning). Non-selectable throughout. */
+  /* Diagram là bề mặt pan — kéo không được bôi chữ label (highlight xanh khi pan).
+     Không selectable trong suốt viewport. */
   user-select: none;
   -webkit-user-select: none;
 }
@@ -603,22 +636,34 @@ onBeforeUnmount(() => {
   height: auto !important;
   max-width: none !important;
 }
-/* Error state: an icon + the parser message + the offending source, so a failed
-   diagram is diagnosable instead of an empty grey box. */
+/* Trạng thái lỗi/loading ghim góc trên-trái của viewport (proto p-3 text-xs
+   text-destructive) — tuyệt đối để không lệch grid centering của stage. Container
+   scroll được để source dài không bị cắt. */
 .mmderr {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 8px;
-  max-width: 90%;
-  padding: 16px;
-  color: var(--danger);
-  text-align: center;
+  padding: 12px;
+  color: var(--destructive);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
+.mmderrline {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.mmderrline .icn {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+/* Giữ source gốc kèm lỗi parse — proto không có nhưng production cần để chẩn đoán. */
 .mmdsrc {
   margin: 0;
   max-width: 100%;
-  max-height: 200px;
   overflow: auto;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -633,6 +678,19 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 .mmdwait {
-  color: var(--textFaint);
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+}
+.mmdspin {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 </style>

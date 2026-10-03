@@ -3,31 +3,28 @@
     <div v-if="!stash" class="gsecempty">{{ t('git.sidebar.empty') }}</div>
     <div v-else style="max-width: 560px">
       <div class="gdph">
-        <Icon name="clip" style="width: 18px; height: 18px; color: var(--accent)" />
-        <span class="mono" style="color: var(--accent)">{{ stash.ref }}</span>
-        <span style="color: var(--textDim)">
-          {{ t('git.stash.onBranch', { branch: stash.branch }) }}
-        </span>
+        <Icon name="clip" class="size-[18px] text-primary" />
+        <span class="mono text-primary">{{ stash.ref }}</span>
+        <span class="text-dim">{{ t('git.stash.onBranch', { branch: stash.branch }) }}</span>
       </div>
-      <div class="gcard">
-        <div style="white-space: pre-wrap; color: var(--text)">{{ stash.m }}</div>
-        <div style="margin-top: 8px; color: var(--textFaint); font-size: var(--fs-xs)">
-          {{ stash.w }}
-        </div>
+      <div class="rounded-xl border bg-card p-3.5 text-card-foreground shadow-sm">
+        <div class="whitespace-pre-wrap text-foreground">{{ stash.m }}</div>
+        <div class="mt-2 text-xs text-faint">{{ stash.w }}</div>
         <div class="gdpactions">
-          <button class="btn pri sm" @click="emit('pop', stash.index)">
+          <Button size="sm" @click="emit('pop', stash.index)">
             {{ t('git.stash.pop') }}
-          </button>
-          <button class="btn sm" @click="emit('apply', stash.index)">
+          </Button>
+          <Button variant="outline" size="sm" @click="emit('apply', stash.index)">
             {{ t('git.stash.apply') }}
-          </button>
-          <button
-            class="btn sm gdanger"
-            style="margin-left: auto"
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            class="ml-auto"
             @click="emit('drop', stash.index)"
           >
             {{ t('git.stash.drop') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -36,6 +33,7 @@
 
 <script setup lang="ts">
 // Stash detail pane — message + pop/apply/drop. Mirrors production GitStashDetailPane.vue.
+import Button from '~/components/ui/button/Button.vue'
 import type { Stash } from './git-types'
 
 const props = defineProps<{ index: number; stashes: Stash[] }>()

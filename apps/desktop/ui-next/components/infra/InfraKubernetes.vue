@@ -47,20 +47,20 @@
       <div class="itoolgrp iend">
         <!-- Bảng context + đường thêm cluster: việc thỉnh thoảng mới làm, nên nằm
              trong modal. Số bên cạnh là số context máy này đọc được. -->
-        <button type="button" class="btn" :title="pathsLabel" @click="kube.openClusters()">
+        <Button type="button" :title="pathsLabel" variant="outline" @click="kube.openClusters()">
           <Icon name="k8s" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.kube.manage.open') }}
           <span v-if="contexts.length" class="ikcount">{{ contexts.length }}</span>
-        </button>
+        </Button>
 
         <!-- Icon quay theo `busy`: nút vô hiệu mà đứng im thì người dùng không phân
              biệt được "đang nạp" với "nút hỏng". -->
-        <button
+        <Button
           type="button"
-          class="btn"
           :disabled="!pinnedCluster || busy"
           :aria-busy="busy"
           :title="t('infra.kube.refresh')"
+          variant="outline"
           @click="kube.refreshWorkload()"
         >
           <Icon
@@ -68,20 +68,20 @@
             :class="{ ikspin: busy }"
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
-        </button>
+        </Button>
 
         <!-- Chú thích dài (danh tính kubectl dùng, nhật ký hoạt động) không chiếm
              chỗ trên màn: một cú bấm là thấy, bấm ra ngoài là gập. -->
         <div ref="noteWrapRef" class="iknotewrap">
-          <button
+          <Button
             type="button"
-            class="btn"
             :title="t('infra.kube.footnote.title')"
             :aria-expanded="noteOpen"
+            variant="outline"
             @click="noteOpen = !noteOpen"
           >
             <Icon name="info" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
           <div v-if="noteOpen" class="smenu iknote" role="note">
             <p class="iknotetxt">{{ t('infra.kube.footnote') }}</p>
           </div>
@@ -101,6 +101,7 @@
 <script setup lang="ts">
 import { useInfraKube } from '~/composables/useInfraKube'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 // MỘT controller cho cả tab: truyền xuống các khối con dưới dạng prop thay vì gọi

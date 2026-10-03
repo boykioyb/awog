@@ -8,64 +8,144 @@
          (edge-to-edge) surface must not close it — the OS chrome / header ✕ own that. -->
     <div
       v-if="shownItem"
-      class="ovl on pvovl"
+      class="ovl on pvovl data-[state=open]:animate-in data-[state=open]:fade-in-0"
       :class="{ pvwin: windowMode }"
+      data-state="open"
       @click.self="onOverlayClick"
     >
-      <div class="pvcard">
+      <div
+        class="pvcard"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="shownItem.name"
+        :style="windowMode ? undefined : { maxWidth: modalMaxW }"
+      >
         <div class="pvhead">
-          <button
+          <Button
             v-if="canGoBack"
-            class="pvx"
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
             :title="t('common.back')"
             :aria-label="t('common.back')"
             @click="goBack"
           >
-            <Icon name="chev-left" style="width: var(--icon-md); height: var(--icon-md)" />
-          </button>
-          <Icon :name="headIcon" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Icon name="chev-left" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </Button>
+          <Icon
+            :name="headIcon"
+            class="shrink-0 text-muted-foreground"
+            style="width: var(--icon-md); height: var(--icon-md)"
+          />
           <span class="pvname" :title="absPath">{{ headerPath }}</span>
-          <button
+          <Button
             v-if="hasWorkspaceFile"
-            class="pvx pvcopy"
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
             :title="t('common.preview.copyPath')"
+            :aria-label="t('common.preview.copyPath')"
             @click="copyPath"
           >
             <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="hasWorkspaceFile"
-            class="pvx pvcopy"
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
             :title="t('common.preview.reveal')"
+            :aria-label="t('common.preview.reveal')"
             @click="reveal"
           >
             <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <span v-if="dirty" class="pvdirty" :title="t('common.preview.unsaved')">●</span>
+          </Button>
           <span v-if="meta" class="pvmeta">{{ meta }}</span>
+          <span v-if="dirty" class="pvdirty" :title="t('common.preview.unsaved')">●</span>
           <span v-if="truncated" class="pvtrunc" :title="t('common.preview.truncated')">
             {{ t('common.preview.truncated') }}
           </span>
-          <span style="flex: 1" />
-          <button
+          <Badge variant="secondary" class="ml-1 shrink-0">{{ shownItem.kind }}</Badge>
+          <span class="flex-1" />
+          <!-- Render|Raw segmented control — the header slot the proto gives markdown.
+               html shares it too (same `view` state, same two modes). -->
+          <div
+            v-if="shownItem.kind === 'markdown' || shownItem.kind === 'html'"
+            class="flex shrink-0 rounded-md border border-border p-0.5"
+          >
+            <button
+              v-for="v in ['render', 'raw'] as const"
+              :key="v"
+              type="button"
+              :class="[
+                'rounded px-2 py-0.5 text-xs capitalize transition-colors',
+                view === v
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              ]"
+              @click="view = v"
+            >
+              {{ t(v === 'render' ? 'common.render' : 'common.raw') }}
+            </button>
+          </div>
+          <Button
+            v-if="canCopyContent"
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
+            :title="t('common.copy')"
+            :aria-label="t('common.copy')"
+            @click="copyTextContent"
+          >
+            <Icon
+              :name="contentCopied ? 'check' : 'copy'"
+              :class="{ 'text-success': contentCopied }"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
+          </Button>
+          <Button
+            v-if="!windowMode"
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
+            :title="t('common.preview.modalWidth', { w: modalWLabel })"
+            :aria-label="t('common.preview.modalWidth', { w: modalWLabel })"
+            @click="cycleModalW"
+          >
+            <StretchHorizontal :size="14" />
+          </Button>
+          <Button
             v-if="canOpenInWindow"
-            class="pvx"
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
             :title="t('common.preview.openInWindow')"
+            :aria-label="t('common.preview.openInWindow')"
             @click="openInWindow"
           >
             <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button
+          </Button>
+          <Button
             v-if="canMinimize"
-            class="pvx"
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
             :title="t('common.preview.minimize')"
+            :aria-label="t('common.preview.minimize')"
             @click="minimize"
           >
             <Icon name="minimize" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
-          <button class="pvx" :title="t('common.close')" @click="close">
+          </Button>
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="shrink-0"
+            :title="t('common.close')"
+            :aria-label="t('common.close')"
+            @click="close"
+          >
             <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
         </div>
 
         <FindBar
@@ -86,7 +166,7 @@
                Loading shows a spinner; the other states keep the file icon. -->
           <div v-if="statusMessage" class="pvempty">
             <span v-if="loading" class="pvspin" />
-            <Icon v-else :name="headIcon" style="width: 40px; height: 40px" />
+            <Icon v-else :name="headIcon" style="width: 32px; height: 32px" />
             <div class="pvename">{{ shownItem.name }}</div>
             <div class="pvehint">{{ statusMessage }}</div>
           </div>
@@ -96,7 +176,7 @@
           <div
             v-else-if="shownItem.kind === 'image' && effectiveSrc"
             ref="imgVp"
-            class="pvimgvp"
+            class="pvimgvp bg-muted/30"
             @wheel="onWheel"
             @pointerdown="onPointerDown"
             @pointermove="onPointerMove"
@@ -128,7 +208,7 @@
                seekable) for workspace files, or an in-memory blob for drag-drops. -->
           <div
             v-else-if="shownItem.kind === 'video' && effectiveSrc && !mediaError"
-            class="pvmediavp"
+            class="pvmediavp bg-black"
           >
             <video
               :src="effectiveSrc"
@@ -145,7 +225,7 @@
             v-else-if="shownItem.kind === 'audio' && effectiveSrc && !mediaError"
             class="pvaudiovp"
           >
-            <Icon name="play" style="width: 40px; height: 40px" />
+            <Icon name="play" style="width: 32px; height: 32px" />
             <div class="pvename">{{ shownItem.name }}</div>
             <audio
               :src="effectiveSrc"
@@ -159,15 +239,28 @@
           <!-- media unavailable: unsupported codec / decode error / no source →
                keep the toolbar (workspace files can still "open externally"). -->
           <div v-else-if="shownItem.kind === 'video' || shownItem.kind === 'audio'" class="pvempty">
-            <Icon name="play" style="width: 40px; height: 40px" />
+            <Icon name="play" style="width: 32px; height: 32px" />
             <div class="pvename">{{ shownItem.name }}</div>
             <div class="pvehint">{{ t('common.preview.mediaError') }}</div>
           </div>
 
-          <!-- markdown rendered: outline (TOC) sidebar + scrollable content -->
+          <!-- markdown rendered: outline (TOC) sidebar + scrollable content.
+               TOC thu gọn được thành rail 34px — nút collapse nằm trên hàng label,
+               rail giữ nút mở lại; bản thân aside đã "sticky" (không cuộn theo
+               .mdscroll vì là sibling flex). -->
           <template v-else-if="shownItem.kind === 'markdown' && view === 'render'">
-            <aside v-if="headings.length" class="mdoutline">
-              <div class="mdolabel">{{ t('common.outline') }}</div>
+            <aside v-if="headings.length && !outlineCollapsed" class="mdoutline bg-muted/30">
+              <div class="mdohead">
+                <div class="mdolabel">{{ t('common.outline') }}</div>
+                <button
+                  class="mdotgl"
+                  :title="t('common.preview.collapseOutline')"
+                  :aria-label="t('common.preview.collapseOutline')"
+                  @click="outlineCollapsed = true"
+                >
+                  <PanelLeftClose :size="14" />
+                </button>
+              </div>
               <a
                 v-for="h in headings"
                 :key="h.id"
@@ -179,6 +272,15 @@
                 {{ h.text }}
               </a>
             </aside>
+            <button
+              v-else-if="headings.length"
+              class="mdorail"
+              :title="t('common.preview.expandOutline')"
+              :aria-label="t('common.preview.expandOutline')"
+              @click="outlineCollapsed = false"
+            >
+              <PanelLeftOpen :size="14" />
+            </button>
             <div
               ref="mdScroll"
               class="mdscroll"
@@ -203,12 +305,16 @@
           <!-- docx → parsed block model rendered as a reading column -->
           <OfficeDocView v-else-if="showOfficeDoc && officeDoc" :doc="officeDoc" />
 
-          <!-- xlsx → sheet grid + sheet tabs (fills the body, owns its scroll) -->
-          <OfficeSheetView v-else-if="showOfficeSheet" :office="office" />
+          <!-- xlsx → sheet grid + sheet tabs (fills the body, owns its scroll).
+               Wrapper pins a definite box for the grid's height:100% chain —
+               same collapse .pvcode solves with absolute positioning. -->
+          <div v-else-if="showOfficeSheet" class="pvsheet">
+            <OfficeSheetView :office="office" />
+          </div>
 
           <!-- office file that parsed to nothing readable (empty doc / empty sheet) -->
           <div v-else-if="officeEmpty" class="pvempty">
-            <Icon :name="headIcon" style="width: 40px; height: 40px" />
+            <Icon :name="headIcon" style="width: 32px; height: 32px" />
             <div class="pvename">{{ shownItem.name }}</div>
             <div class="pvehint">{{ t('common.preview.officeEmpty') }}</div>
           </div>
@@ -250,7 +356,7 @@
             <SessionFileTree v-if="treeRootNodes.length" :nodes="treeRootNodes" :ctrl="treeCtrl" />
             <div v-else class="pvempty">
               <span v-if="treeLoading" class="pvspin" />
-              <Icon v-else name="folder" style="width: 40px; height: 40px" />
+              <Icon v-else name="folder" style="width: 32px; height: 32px" />
               <div class="pvename">{{ shownItem.name }}</div>
               <div class="pvehint">
                 {{ treeLoading ? t('sessions.preview.loading') : t('common.preview.folderEmpty') }}
@@ -262,7 +368,7 @@
           <div v-else class="pvempty">
             <Icon
               :name="shownItem.kind === 'image' ? 'clip' : 'rules'"
-              style="width: 40px; height: 40px"
+              style="width: 32px; height: 32px"
             />
             <div class="pvename">{{ shownItem.name }}</div>
             <div class="pvehint">
@@ -336,10 +442,9 @@
                 )
               }}
             </div>
-            <input
+            <Input
               ref="renameInput"
               v-model="rename.value"
-              class="pvinput"
               spellcheck="false"
               @keydown.enter="submitRename"
               @keydown.esc.stop="closeRename"
@@ -377,8 +482,11 @@
 </template>
 
 <script lang="ts">
-// Shared, reusable preview modal — full-window viewer with a floating control bar
-// (PreviewToolbar) and file actions. Decoupled from any feature type; callers map
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
+
+// Shared, reusable preview modal — centered dialog (proto chrome) with a floating
+// control bar (PreviewToolbar) and file actions. Decoupled from any feature type; callers map
 // their object (e.g. SessionAttachment) into a PreviewRef. Mount once, drive with a
 // nullable `item` prop or the shared usePreview() store. All state + IPC live in
 // usePreviewModal (page-controller); this SFC is the thin template + styles.
@@ -390,6 +498,7 @@
 </script>
 
 <script setup lang="ts">
+import { PanelLeftClose, PanelLeftOpen, StretchHorizontal } from 'lucide-vue-next'
 import MermaidView from '~/components/common/MermaidView.vue'
 import MonacoViewer from '~/components/common/MonacoViewer.vue'
 import OfficeDocView from '~/components/common/OfficeDocView.vue'
@@ -475,6 +584,7 @@ const {
   goBack,
   onKey,
   copyPath,
+  copyContent,
   reveal,
   openLink,
   hasWorkspaceFile,
@@ -525,6 +635,45 @@ const absPath = computed(() => {
   }
   return headerPath.value
 })
+
+// Nút copy content ở header (theo proto): chỉ hiện khi có text để copy — text/
+// markdown/html/notebook qua effectiveText; docx/xlsx chiếu text từ model đã
+// parse (copyContent của ctrl tự chọn nguồn đúng, kể cả TSV cho sheet).
+const canCopyContent = computed(() => {
+  const it = shownItem.value
+  if (!it || statusMessage.value) return false
+  if (it.kind === 'doc' || it.kind === 'sheet') return !!(office.doc.value || office.sheet.value)
+  return !!effectiveText.value
+})
+// Độ rộng modal — header có nút cycle qua các preset (0 = tràn khung nhìn).
+// Inline maxWidth trên .pvcard ghi đè CSS `max-width: 768px`; popout
+// (windowMode) không áp vì card lúc đó chính là OS window.
+const MODAL_W = [880, 1180, 0] as const
+const modalWIdx = ref(1)
+const modalWLabel = computed(() =>
+  MODAL_W[modalWIdx.value] === 0 ? t('common.full') : `${MODAL_W[modalWIdx.value]}px`,
+)
+const modalMaxW = computed(() => {
+  const w = MODAL_W[modalWIdx.value]
+  return w === 0 ? 'calc(100vw - 40px)' : `min(${w}px, calc(100vw - 40px))`
+})
+function cycleModalW() {
+  modalWIdx.value = (modalWIdx.value + 1) % MODAL_W.length
+}
+
+// Mục lục của markdown render — thu gọn thành rail mỏng khi cần chỗ đọc.
+const outlineCollapsed = ref(false)
+
+const contentCopied = ref(false)
+let contentCopiedTimer: ReturnType<typeof setTimeout> | null = null
+async function copyTextContent() {
+  await Promise.resolve(copyContent())
+  contentCopied.value = true
+  if (contentCopiedTimer) clearTimeout(contentCopiedTimer)
+  contentCopiedTimer = setTimeout(() => {
+    contentCopied.value = false
+  }, 1200)
+}
 
 // Intercept clicks on links inside the rendered markdown preview. An internal
 // workspace/relative path would otherwise send the SPA router to a dead route
@@ -664,11 +813,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 </script>
 
 <style scoped>
-/* Full-window viewer: the scrim fills the window and the card stretches edge-to-edge. */
+/* Proto chrome: centered dialog card over the shared `.ovl` scrim (p-6), not an
+   edge-to-edge sheet. The scrim keeps its global look (all modals share it; the
+   cute theme re-tints `.ovl` itself). */
 .pvovl {
-  align-items: stretch;
-  padding: 0;
+  /* `.ovl` mặc định z-100 — quá THẤP cho vùng "trên-modal": preview có thể mở
+     TỪ trong board item (`.wsed-ovl` 160), peek full (`.apeek.full` 400) hay
+     lượt-fullscreen (`.ftovl` 470) — dưới chúng thì modal bị đè chìm. Thang
+     teleported: ftovl 470 < pvovl 480 < select-popover 490 < lbox 540 < menu
+     570 < confirm 580. */
+  align-items: center;
+  padding: 24px;
   cursor: default;
+  z-index: 480;
   /* Modal phủ từ y=0 nên header đè lên dải kéo cửa sổ `.top` (`-webkit-app-region:
      drag`). Vùng kéo tính ở tầng compositor bất kể z-index, nên mousedown lên nút
      sẽ khởi động kéo cửa sổ và nuốt @click (Copy path / Reveal / Close không bấm
@@ -678,84 +835,102 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 /* Popout window (pages/preview.vue): the modal IS the whole window, so drop `.ovl`'s dim
    backdrop — there is nothing behind it to dim, and the wash only muddies the content. */
 .pvovl.pvwin {
-  background: var(--bg);
+  align-items: stretch;
+  padding: 0;
+  background: var(--background);
 }
+/* Card — the proto dialog shell: max-w-3xl · max-h-85vh · rounded-xl · border ·
+   shadow-2xl. Auto-height: shrink-wraps short content; the 85vh cap + .pvbody's
+   shrink/scroll take over past it. */
 .pvcard {
   position: relative;
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
-  background: var(--bgEl);
+  max-width: 768px;
+  max-height: 85vh;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card); /* rounded-xl */
+  box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
+/* In a popout the card is again the window itself — chrome (radius/border/shadow)
+   belongs to the OS frame, not the content. */
+.pvwin .pvcard {
+  max-width: none;
+  max-height: none;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+/* Header — proto: flex items-center gap-2 px-3 py-2, hairline under. */
 .pvhead {
   display: flex;
   align-items: center;
-  gap: 9px;
-  /* Edge-to-edge in the shell window means this row runs under the OS window
-     controls, so it takes the strips app-shell.css publishes (both are 0px in a
-     popout window, which keeps its native title bar). */
-  padding: 10px calc(14px + var(--titlebar-inset-end)) 10px calc(14px + var(--titlebar-inset-start));
+  gap: 8px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border);
-  color: var(--text);
+  color: var(--foreground);
+  flex: 0 0 auto;
 }
 .pvname {
-  /* mono-ok: file path being previewed */
+  /* mono-ok: workspace-relative file path being previewed */
   font-family: var(--code);
-  font-weight: 600;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
 }
-.pvcopy {
-  flex: none;
-}
 .pvdirty {
-  color: var(--amber);
-  font-size: 12px;
-  line-height: 12px;
+  color: var(--warning);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
   flex: 0 0 auto;
 }
+/* Proto meta: mono xs muted, truncates when the header runs out of room. */
 .pvmeta {
+  /* mono-ok: "size · mime" meta */
+  font-family: var(--code);
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 .pvtrunc {
-  font-size: 12px;
-  line-height: 12px;
-  color: var(--amber);
-  background: var(--bgActive);
-  border: 1px solid var(--border);
-  border-radius: var(--r-xs);
-  padding: 3px 7px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--warning);
+  background: rgb(from var(--warning) r g b / 0.12);
+  border: 1px solid rgb(from var(--warning) r g b / 0.3);
+  border-radius: var(--r-xs); /* rounded-sm */
+  padding: 2px 7px;
   white-space: nowrap;
   flex: 0 0 auto;
 }
-.pvx {
-  display: grid;
-  place-items: center;
-  padding: 4px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
-  cursor: pointer;
-}
-.pvx:hover {
-  background: var(--bgHover);
-  color: var(--text);
-}
 .pvbody {
-  flex: 1;
+  /* flex-basis auto (not flex:1's 0%): the auto-sized card sizes itself from this
+     content, so short content gives a short card; past the 85vh cap it shrinks
+     again and scrolls internally. */
+  flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 26px 22px 86px;
+  /* p-5 + clearance under the floating PreviewToolbar so it never covers the
+     content's end. */
+  padding: 20px 20px 80px;
   /* Positioning parent for the image viewport (see .pvimgvp) — it needs a definite box to
      be absolutely sized against. */
   position: relative;
@@ -763,6 +938,14 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvbody.flush {
   padding: 0;
   overflow: hidden;
+  /* Full-bleed viewers (image/pdf/iframe/Monaco/sheet) contribute no intrinsic
+     height — without a floor the shrink-wrap card would collapse to the header. */
+  min-height: 60vh;
+}
+/* Popout: the card fills the window already — a vh floor would clip the viewer in
+   a short window instead of shrinking with it. */
+.pvwin .pvbody.flush {
+  min-height: 0;
 }
 .pvbody.mdrender {
   flex-direction: row;
@@ -774,7 +957,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
    centers its own reading measure). */
 .pvbody.nbbody {
   align-items: stretch;
-  padding: 20px 22px 86px;
+  padding: 20px 20px 80px;
 }
 /* Folder tree: fill the body, left-aligned, tree manages its own scroll. */
 .pvbody.tree {
@@ -783,8 +966,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   overflow: hidden;
 }
 .pvfolder {
-  width: 100%;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 14px 12px;
 }
@@ -793,19 +976,68 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   overflow-y: auto;
   padding: 14px 8px;
   border-right: 1px solid var(--border);
-  background: var(--bgSubtle);
+  /* bg-muted/30 per the proto surface — alpha comes from the class on the aside,
+     so the var keeps working under every theme. */
+}
+/* Label row carries the collapse toggle — label flexes, toggle is a 24px ghost
+   icon button hugging the aside's right edge. */
+.mdohead {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 4px 8px;
 }
 .mdolabel {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--textFaint);
-  padding: 0 8px 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  padding: 0 4px;
+}
+.mdotgl {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.mdotgl:hover {
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
+}
+/* Collapsed rail — slim strip down the body's left edge; the whole strip is the
+   expand button (a 24px target alone would be fiddly). */
+.mdorail {
+  flex: 0 0 34px;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.mdorail:hover {
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .mdoitem {
   display: block;
   padding: 5px 10px;
-  border-radius: var(--r-xs);
-  color: var(--textDim);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--muted-foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   cursor: pointer;
@@ -814,12 +1046,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   text-overflow: ellipsis;
 }
 .mdoitem:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .mdoitem.on {
-  background: var(--bgActive);
-  color: var(--accent);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .mdscroll {
   position: relative;
@@ -829,7 +1061,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 26px 22px 86px;
+  padding: 20px 20px 80px;
 }
 /* Floating action bar (Translate + Copy MD) next to a text selection in the rendered
    markdown (anchored to viewport coords; sits above the preview card, under the shared
@@ -847,16 +1079,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
-  color: var(--text);
-  background: var(--bgEl);
+  color: var(--popover-foreground);
+  background: var(--popover);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-sm); /* rounded-md */
   box-shadow: var(--shadow-md);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   cursor: pointer;
 }
 .pvseltr:hover {
-  border-color: var(--accentBorder);
-  color: var(--accent);
+  border-color: var(--ring);
+  color: var(--primary);
 }
 /* Panel preview trích dẫn ở góc dưới-phải của card (position: relative). Neo trong
    card chứ không fixed để nó ở cùng lớp với nội dung modal và không đè lên UI khác
@@ -871,9 +1105,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   max-height: 45%;
   display: flex;
   flex-direction: column;
-  background: var(--bgEl);
+  background: var(--popover);
   border: 1px solid var(--border);
-  border-radius: var(--r-card);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-md);
   overflow: hidden;
 }
@@ -883,7 +1117,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   gap: 6px;
   padding: 8px 11px;
   border-bottom: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
@@ -899,16 +1133,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   align-items: flex-start;
   gap: 6px;
   padding: 6px 8px;
-  border-radius: var(--r-sm);
-  background: var(--bgSubtle);
-  border-left: 2px solid var(--accentBorder);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--muted);
+  border-left: 2px solid var(--ring);
 }
 .pvquote-x {
   flex: 1;
   min-width: 0;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--text);
+  color: var(--foreground);
   /* Kẹp 3 dòng: một trích dẫn dài vẫn gọn trong thẻ, không kéo panel dài ra. */
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -921,13 +1155,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   align-items: center;
   justify-content: center;
   padding: 2px;
-  border-radius: var(--r-xs);
-  color: var(--textFaint);
+  border-radius: var(--r-xs); /* rounded-sm */
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .pvquote-rm:hover {
-  background: var(--dangerBg);
-  color: var(--danger);
+  background: rgb(from var(--destructive) r g b / 0.1);
+  color: var(--destructive);
 }
 /* Image viewport — a fixed frame (absolute inset 0 of the body) that clips whatever the
    image does. It deliberately does NOT try to size the image: the previous attempts
@@ -942,7 +1176,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   overflow: hidden;
   cursor: grab;
   touch-action: none;
-  background: repeating-conic-gradient(var(--bgSubtle) 0% 25%, transparent 0% 50%) 50% / 22px 22px;
+  /* Surface comes from `bg-muted/30` on the element (proto image surface). */
 }
 .pvimgvp:active {
   cursor: grabbing;
@@ -968,35 +1202,41 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   transform-origin: center center;
 }
 .pvpdf {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   border: 0;
 }
-/* Video — fills the body (flush), letterboxed on a black canvas. The player is
-   sized to the container (100% × 100%) with object-fit:contain rather than
-   max-width/height so it can't overflow the viewport (which would push the native
-   control bar below the fold). display:block avoids the inline baseline gap. */
+/* Video — letterboxed on a black canvas filling the body (flush). Old code sized
+   the player 100% × 100% + object-fit:contain, but height:100% is unreliable
+   here: .pvbody is shrink-wrap (flex-basis auto), so
+   the percentage resolved to `auto` and the <video> fell back to its INTRINSIC
+   size — a 1080p clip stood ~1080px tall inside an 85vh card and its native
+   control bar sat below the overflow-hidden fold. The proto rule instead caps
+   the ELEMENT at 62vh; max-width/max-height preserve the aspect ratio, and the
+   controls always land inside the card. */
 .pvmediavp {
   width: 100%;
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
   overflow: hidden;
-  background: #000;
+  /* Letterbox canvas: `bg-black` on the element (proto video surface). */
 }
 .pvvideo {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  max-width: 100%;
+  max-height: 62vh; /* proto max-h-[62vh] */
 }
 /* Audio — centered file card in the (non-flush) body. */
 .pvaudiovp {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   margin: auto 0;
-  padding: 40px 20px;
-  color: var(--textDim);
+  padding: 56px 20px;
+  color: var(--muted-foreground);
 }
 .pvaudioel {
   width: min(460px, 80vw);
@@ -1004,40 +1244,53 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 /* HTML render — sandboxed iframe fills the body; white canvas (browser default) so
    a page without its own background stays readable in dark mode. */
 .pvhtml {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
   border: 0;
   background: #fff;
 }
-/* Monaco viewer fills the body edge-to-edge (body padding reset via `flush`). */
+/* Monaco viewer fills the body edge-to-edge (body padding reset via `flush`).
+   Absolute like .pvimgvp: the shrink-wrap card leaves .pvbody's used height
+   INdefinite, so a `height: 100%` chain collapses to 0 — the editor then mounts
+   into a 0×0 host (and even the loading/error overlays get clipped by the body's
+   overflow:hidden, which is why a failed code preview reads as a blank card). */
 .pvcode {
-  width: 100%;
-  height: 100%;
-  min-height: 0;
+  position: absolute;
+  inset: 0;
 }
+/* Sheet grid — same definite-box need as .pvcode (its .osv root is height:100%). */
+.pvsheet {
+  position: absolute;
+  inset: 0;
+}
+/* Opaque/status card — proto: centered column, gap-3, py-14, muted text. */
 .pvempty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 9px;
+  gap: 12px;
   margin: auto 0;
-  padding: 40px 20px;
-  color: var(--textDim);
+  padding: 56px 20px;
+  color: var(--muted-foreground);
 }
 .pvename {
   /* mono-ok: file name */
   font-family: var(--code);
-  color: var(--text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--foreground);
 }
 .pvehint {
-  color: var(--textFaint);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--muted-foreground);
 }
 /* Loading spinner (content fetch / folder tree load) inside the empty placeholder. */
 .pvspin {
   width: 26px;
   height: 26px;
   border: 2px solid var(--border);
-  border-top-color: var(--accent);
+  border-top-color: var(--primary);
   border-radius: 50%;
   animation: pv-spin 0.8s linear infinite;
 }
@@ -1062,37 +1315,41 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   flex-direction: column;
   gap: 12px;
   padding: 18px;
-  background: var(--bgEl);
+  background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-lg);
 }
 .pvdlgt {
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .pvdlgm {
-  color: var(--textDim);
-  line-height: var(--lh-md);
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
 }
 .pvdlgerr {
-  color: var(--danger);
+  color: var(--destructive);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
 .pvinput {
   width: 100%;
   padding: 9px 11px;
-  border-radius: var(--r-sm);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
+  border-radius: var(--r-sm); /* rounded-md */
+  background: var(--background);
+  border: 1px solid var(--input);
+  color: var(--foreground);
   /* mono-ok: rename input — a file name */
   font-family: var(--code);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   outline: none;
 }
-.pvinput:focus {
-  border-color: var(--accent);
+.pvinput:focus-visible {
+  border-color: var(--input);
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .pvdlgrow {
   display: flex;
@@ -1101,26 +1358,28 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 }
 .pvbtn {
   font-weight: 500;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
   padding: 7px 14px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-sm); /* rounded-md */
   border: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   background: transparent;
   cursor: pointer;
 }
 .pvbtn:hover {
-  border-color: var(--borderStrong);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .pvbtn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--bg);
+  background: var(--primary);
+  border-color: transparent;
+  color: var(--primary-foreground);
 }
 .pvbtn.danger {
-  background: var(--danger);
-  border-color: var(--danger);
-  color: var(--bg);
+  background: var(--destructive);
+  border-color: transparent;
+  color: var(--destructive-foreground);
 }
 
 /* ── rendered markdown prose (v-html content → :deep) ─────────────────── */
@@ -1128,7 +1387,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   width: 100%;
   max-width: 880px;
   line-height: var(--lh-prose);
-  color: var(--text);
+  color: var(--foreground);
 }
 .mdbody :deep(h1),
 .mdbody :deep(h2),
@@ -1172,21 +1431,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   margin: 0.2em 0;
 }
 .mdbody :deep(a) {
-  color: var(--accent);
+  color: var(--primary);
   text-decoration: underline;
 }
 .mdbody :deep(code) {
   /* mono-ok: inline code in the markdown render */
   font-family: var(--code);
   font-size: 0.9em;
-  background: var(--bgActive);
+  background: var(--muted);
   padding: 1px 5px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
 }
 .mdbody :deep(pre) {
-  background: var(--bgSubtle);
+  background: var(--muted);
   border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  border-radius: var(--r-sm); /* rounded-md */
   padding: 12px 14px;
   overflow-x: auto;
   line-height: var(--lh-sm);
@@ -1200,7 +1459,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .mdbody :deep(blockquote) {
   border-left: 3px solid var(--border);
   padding-left: 1em;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .mdbody :deep(table) {
   border-collapse: collapse;
@@ -1213,7 +1472,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
   text-align: left;
 }
 .mdbody :deep(th) {
-  background: var(--bgActive);
+  background: var(--muted);
 }
 .mdbody :deep(hr) {
   border: 0;

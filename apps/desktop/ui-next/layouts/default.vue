@@ -2,52 +2,57 @@
   <!-- Column wrapper: the NavRail|main row sits above the full-width status bar
        (VSCode-style footer). The row keeps the compact-drawer classes so the
        `.app.compact …` rules in app-shell.css are unchanged. -->
-  <div class="appwrap">
-    <div class="app" :class="{ compact, 'nav-open': navOpen, 'list-open': listOpen }">
-      <NavRail />
-      <div class="main">
-        <AppTopBar />
-        <!-- Global auto-update notice — sits above the page body so it pushes
-             content down on every page (ADR 0028). -->
-        <UpdateBanner />
-        <div class="body">
-          <slot />
-        </div>
+  <!-- Reka TooltipProvider bọc toàn shell một lần (giống layouts/proto.vue) —
+       `Tooltip` cần provider trong cây tổ tiên; thiếu nó là crash
+       "Injection TooltipProviderContext not found" (rail collapse của Sessions
+       từng trắng trang vì lỗi này). -->
+  <TooltipProvider :delay-duration="300">
+    <div class="appwrap">
+      <div class="app" :class="{ compact, 'nav-open': navOpen, 'list-open': listOpen }">
+        <NavRail />
+        <div class="main">
+          <AppTopBar />
+          <!-- Global auto-update notice — sits above the page body so it pushes
+               content down on every page (ADR 0028). -->
+          <UpdateBanner />
+          <div class="body">
+            <slot />
+          </div>
 
-        <!-- App-wide terminal dock. Mounted INSIDE .main (under the page body, above
+          <!-- App-wide terminal dock. Mounted INSIDE .main (under the page body, above
              the status bar) so it spans only the work area — never the NavRail. It
              stops short of a page's leading rail via useDockInset (the Sessions list
              publishes its width). Single mount: its PTYs persist across navigation and
              across open/close (useGlobalTerminal). -->
-        <GlobalTerminalHost />
+          <GlobalTerminalHost />
+        </div>
+
+        <!-- Compact-mode drawer backdrop: dim the main content and dismiss the open
+           nav/list drawer on click. Only mounted while a drawer is open. -->
+        <div v-if="compact && (navOpen || listOpen)" class="shell-scrim" @click="closeDrawers" />
       </div>
 
-      <!-- Compact-mode drawer backdrop: dim the main content and dismiss the open
-           nav/list drawer on click. Only mounted while a drawer is open. -->
-      <div v-if="compact && (navOpen || listOpen)" class="shell-scrim" @click="closeDrawers" />
-    </div>
+      <!-- Global status bar — single app-lifetime mount, shows on every page. -->
+      <AppStatusBar />
 
-    <!-- Global status bar — single app-lifetime mount, shows on every page. -->
-    <AppStatusBar />
-
-    <!-- §9 globals: mounted once so they work on every page. The shared host stack
+      <!-- §9 globals: mounted once so they work on every page. The shared host stack
          (confirm/toast/preview/session modals) lives in AppGlobalHosts so a session
          popout window gets exactly the same set (docs/features/session-popout-window.md);
          only the app-shell-only globals stay here. -->
-    <CommandPalette />
-    <SettingsModal />
-    <ActivityModal />
-    <WhatsNewModal />
-    <OnboardingWizard />
-    <TourHost />
-    <AppGlobalHosts />
-    <!-- Browser PiP — card nổi cấp app giữ view native sống (docs/features/
+      <CommandPalette />
+      <SettingsModal />
+      <ActivityModal />
+      <WhatsNewModal />
+      <OnboardingWizard />
+      <TourHost />
+      <AppGlobalHosts />
+      <!-- Browser PiP — card nổi cấp app giữ view native sống (docs/features/
          session-browser-panel.md). Cố ý ở ĐÂY chứ không vào AppGlobalHosts:
          AppGlobalHosts lắp lại trong cửa sổ popout phiên, còn PiP chỉ tồn tại ở
          cửa sổ chính — subscriber auto-open của useBrowserPip cũng chỉ đăng ký
          khi layout này chạm tới composable. -->
-    <BrowserPip />
-    <!-- Phiên bong bóng ở góc phải (mini session, thư mục riêng `awog-infra`).
+      <BrowserPip />
+      <!-- Phiên bong bóng ở góc phải (mini session, thư mục riêng `awog-infra`).
          Cố ý ở lại ĐÂY chứ không vào AppGlobalHosts: một cửa sổ popout ĐÃ là một
          phiên, nên thêm một phiên thu nhỏ nổi bên trong nó là hai điều khiển cho
          cùng một việc.
@@ -62,8 +67,9 @@
          còn. Không đường nào khác hỏng vì gate này — mọi `openBubble()` đều nằm
          trong `/infra`, còn "Hỏi agent → phiên mới" đi qua `seedIntoNewSession()`,
          thứ chỉ tạo phiên và gieo draft chứ không cần bong bóng hiện ra. -->
-    <InfraBubble v-if="onInfraPage" />
-  </div>
+      <InfraBubble v-if="onInfraPage" />
+    </div>
+  </TooltipProvider>
 </template>
 
 <script setup lang="ts">
@@ -130,7 +136,9 @@ useGlobalShortcuts()
 // useGlobalShortcuts (keymap-driven); Esc stays here because it also drives the
 // palette + drawers owned by this layout.
 function onKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
+  // `defaultPrevented` = một overlay (preview/modal) đã tiêu thụ Esc — một nhấn
+  // chỉ đóng đúng một lớp, không xuyên xuống palette/drawer bên dưới.
+  if (e.key !== 'Escape' || e.defaultPrevented) return
   if (isOpen.value) {
     close()
     return

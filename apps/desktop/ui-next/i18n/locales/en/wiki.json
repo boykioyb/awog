@@ -8,6 +8,7 @@
   "wiki.tree.empty": "No pages yet. Import Markdown or create the first page.",
   "wiki.tree.rootGroup": "Root",
   "wiki.tier.project": "project",
+  "wiki.filter.all": "All wikis",
   "wiki.footer.budget": "{pages} pages in LLM context · index ~{chars} chars",
   "wiki.page.edit": "Edit page",
   "wiki.page.delete": "Delete page",

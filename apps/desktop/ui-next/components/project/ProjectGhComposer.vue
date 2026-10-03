@@ -62,13 +62,14 @@
         <span>{{ t('projects.drawer.translateMenu') }}</span>
         <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
-      <button
-        class="iconbtn"
+      <Button
         type="button"
         :title="enhancing ? t('projects.drawer.enhancing') : t('projects.drawer.enhance')"
         :aria-label="t('projects.drawer.enhance')"
         :disabled="busy || !modelValue.trim()"
         style="width: 28px; height: 28px"
+        variant="outline"
+        size="iconMd"
         @click="emit('enhance')"
       >
         <Icon
@@ -77,35 +78,37 @@
           :class="{ enhspin: enhancing }"
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="canUndo"
-        class="iconbtn"
         type="button"
         :title="t('projects.drawer.undo')"
         :aria-label="t('projects.drawer.undo')"
         :disabled="busy"
         style="width: 28px; height: 28px"
+        variant="outline"
+        size="iconMd"
         @click="emit('undo')"
       >
         <Icon name="revert" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
       <span v-if="translating" class="fd ghcbusy">{{ t('projects.drawer.translatingDraft') }}</span>
       <span style="flex: 1" />
-      <button
-        class="btn pri sm"
+      <Button
         type="button"
         :disabled="posting || !modelValue.trim()"
         :title="t('projects.drawer.comment')"
+        variant="default"
+        size="sm"
         @click="emit('submit')"
       >
         <Icon :name="posting ? 'clock' : 'send'" />
         {{ posting ? t('projects.drawer.posting') : t('projects.drawer.comment') }}
-      </button>
+      </Button>
     </div>
 
     <!-- Translate-language dropdown (vi / en / ja), anchored under the trigger. -->
-    <ContextMenu
+    <AppContextMenu
       :open="trMenu.pos.value !== null"
       :position="trMenu.pos.value ?? { x: 0, y: 0 }"
       :items="trMenuItems"
@@ -126,6 +129,7 @@ import ProjectGhMarkdown from './ProjectGhMarkdown.vue'
 import type { MenuItem } from '~/composables/useContextMenu'
 import { useContextMenu } from '~/composables/useContextMenu'
 import type { TranslateLang } from '~/composables/useSelectionTranslate'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   modelValue: string
@@ -345,8 +349,6 @@ defineExpose({ focus })
   font-size: 12px;
   line-height: 18px;
 }
-.btn.pri.sm:disabled,
-.iconbtn:disabled,
 .ghctool:disabled,
 .ghclang:disabled {
   opacity: 0.5;

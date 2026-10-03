@@ -1,27 +1,36 @@
 <template>
-  <div class="wsdiff">
+  <div class="flex h-full min-h-0 flex-col">
     <!-- Git link header — real current branch + ahead / session-changed counts,
          plus a quick action to open the full Git Manager over the session. -->
-    <div v-if="ready && !noRepo" class="gitlink">
-      <div class="gl1">
-        <Icon name="branch" />
-        <span class="brn">{{ branch || '—' }}</span>
-        <span class="tnum" style="font-size: var(--fs-xs); color: var(--textDim)">
-          {{ t('sessions.workspace.changed', { ahead, changed: changedCount }) }}
-        </span>
-        <span style="margin-left: auto; display: inline-flex; gap: 2px">
-          <button class="wsdiff-refresh" :title="t('sessions.workspace.openGit')" @click="openGit">
-            <Icon name="git" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          </button>
-          <button class="wsdiff-refresh" :title="t('sessions.workspace.refresh')" @click="load">
-            <Icon
-              name="refresh"
-              :class="{ spin: loading }"
-              style="width: var(--icon-xs); height: var(--icon-xs)"
-            />
-          </button>
-        </span>
-      </div>
+    <div
+      v-if="ready && !noRepo"
+      class="flex h-8 shrink-0 items-center gap-2 border-b border-border px-3"
+    >
+      <GitBranch class="size-3.5 text-muted-foreground" />
+      <span class="truncate text-xs font-medium text-foreground">{{ branch || '—' }}</span>
+      <span class="text-xs text-muted-foreground tabular-nums">
+        {{ t('sessions.workspace.changed', { ahead, changed: changedCount }) }}
+      </span>
+      <span class="ml-auto flex items-center gap-0.5">
+        <Button
+          variant="ghost"
+          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          :title="t('sessions.workspace.openGit')"
+          :aria-label="t('sessions.workspace.openGit')"
+          @click="openGit"
+        >
+          <SquareArrowOutUpRight class="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          :title="t('sessions.workspace.refresh')"
+          :aria-label="t('sessions.workspace.refresh')"
+          @click="load"
+        >
+          <RotateCw class="size-3.5" :class="{ 'animate-spin': loading }" />
+        </Button>
+      </span>
     </div>
 
     <!-- Unavailable / no-repo / empty states -->
@@ -39,19 +48,27 @@
       <!-- Changed-file list — click a file to open it in the shared full-window
            PreviewModal (workspaceRoot + path → fs.readFile). The full +/- diff
            stays one click away via the "Open Git" button above. -->
-      <div class="wsdiff-files">
-        <button v-for="f in files" :key="f.path" class="frow file" @click="openFile(f)">
-          <span class="fst" :class="statusClass(f.changeType)">
+      <div class="min-h-0 flex-1 overflow-y-auto">
+        <Button
+          v-for="f in files"
+          :key="f.path"
+          variant="ghost"
+          class="h-auto p-0 flex h-7 w-full items-center gap-2 px-3 text-left font-mono text-xs text-muted-foreground transition-colors hover:bg-accent"
+          @click="openFile(f)"
+        >
+          <!-- status letter — M amber / A green / D red -->
+          <span class="w-3 shrink-0 text-center font-semibold" :class="statusClass(f.changeType)">
             {{ statusLetter(f.changeType) }}
           </span>
-          <span class="fn" style="flex: 1; overflow: hidden; text-overflow: ellipsis">
-            {{ f.path }}
+          <span class="min-w-0 flex-1 truncate text-foreground">{{ f.path }}</span>
+          <span
+            v-if="f.additions || f.deletions"
+            class="ml-auto flex shrink-0 items-center gap-1.5 text-xs tabular-nums"
+          >
+            <span v-if="f.additions" class="text-success">+{{ f.additions }}</span>
+            <span v-if="f.deletions" class="text-destructive">−{{ f.deletions }}</span>
           </span>
-          <span v-if="f.additions || f.deletions" class="wsdiff-counts">
-            <span v-if="f.additions" style="color: var(--add)">+{{ f.additions }}</span>
-            <span v-if="f.deletions" style="color: var(--del)">−{{ f.deletions }}</span>
-          </span>
-        </button>
+        </Button>
       </div>
     </template>
   </div>
@@ -63,6 +80,7 @@
 // in the shared full-window PreviewModal (usePreview) rather than an inline diff
 // pane. Degrades to an empty/disabled state when the engine bridge is absent or the
 // root can't be resolved (browser-dev).
+import { GitBranch, RotateCw, SquareArrowOutUpRight } from 'lucide-vue-next'
 import type { Session } from '~/composables/useSessionsData'
 import {
   SidecarError,
@@ -73,7 +91,9 @@ import {
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useGitModal } from '~/composables/useGitModal'
 import { usePreview, previewKindFromPath } from '~/composables/usePreview'
+import { absFileScope } from '~/composables/useFilePreview'
 import { useSessionTouchedPaths } from '~/composables/useSessionTouchedPaths'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ session: Session }>()
 
@@ -126,7 +146,7 @@ type SidecarGitStatus = {
 const rawFiles = ref<SidecarGitFileStatus[]>([])
 const loading = ref(false)
 const noRepo = ref(false)
-// Real current branch + ahead count for the gitlink header (replaces the old static meta).
+// Real current branch + ahead count for the header (replaces the old static meta).
 const branch = ref('')
 const ahead = ref(0)
 
@@ -171,10 +191,12 @@ const STATUS_LETTER: Record<GitFileChangeType, string> = {
   ignored: 'I',
 }
 const statusLetter = (c: GitFileChangeType): string => STATUS_LETTER[c] ?? 'M'
-const statusClass = (c: GitFileChangeType): Record<string, boolean> => ({
-  a: c === 'added' || c === 'untracked',
-  m: c !== 'added' && c !== 'untracked' && c !== 'deleted',
-})
+// M → warning, A/U → success, D/! → destructive (proto diff-list convention).
+const statusClass = (c: GitFileChangeType): string => {
+  if (c === 'added' || c === 'untracked') return 'text-success'
+  if (c === 'deleted' || c === 'conflicted') return 'text-destructive'
+  return 'text-warning'
+}
 
 const gitCodeOf = (err: unknown): string | null => {
   if (!(err instanceof SidecarError)) return null
@@ -185,13 +207,28 @@ const gitCodeOf = (err: unknown): string | null => {
 // → fs.readFile). A binary file with no useful text view falls back to the modal's
 // file placeholder.
 function openFile(f: SidecarGitFileStatus): void {
-  if (!root.value) return
-  const kind = previewKindFromPath(f.path)
+  const r = root.value
+  if (!r) return
+  let ws = r
+  let p = f.path
+  if (p.startsWith('/')) {
+    // Touched path tuyệt đối: trong root → cắt prefix; ngoài root (file của
+    // session worktree) → scope về thư mục cha, KHÔNG ghép vào root của phiên.
+    if (p.startsWith(r + '/')) p = p.slice(r.length + 1)
+    else {
+      const s = absFileScope(p)
+      if (s) {
+        ws = s.root
+        p = s.rel
+      }
+    }
+  }
+  const kind = previewKindFromPath(p)
   preview.open({
-    name: f.path.split('/').pop() || f.path,
+    name: p.split('/').pop() || p,
     kind: f.isBinary && kind === 'text' ? 'file' : kind,
-    workspaceRoot: root.value,
-    path: f.path,
+    workspaceRoot: ws,
+    path: p,
   })
 }
 
@@ -249,56 +286,3 @@ onBeforeUnmount(() => {
   if (unlisten) unlisten()
 })
 </script>
-
-<style scoped>
-.wsdiff {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-.wsdiff-files {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  /* mono-ok: file paths of the changed files */
-  font-family: var(--code);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-.wsdiff-files .frow.file {
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-.wsdiff-counts {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 18px;
-  display: inline-flex;
-  gap: 6px;
-  flex: 0 0 auto;
-}
-.wsdiff-refresh {
-  background: transparent;
-  border: none;
-  color: var(--textDim);
-  cursor: pointer;
-  padding: 2px;
-  display: inline-flex;
-}
-.wsdiff-refresh:hover {
-  color: var(--text);
-}
-.spin {
-  animation: wsdiff-spin 1s linear infinite;
-}
-@keyframes wsdiff-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-</style>

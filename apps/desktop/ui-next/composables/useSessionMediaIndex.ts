@@ -29,10 +29,10 @@ import {
   previewRefFromAttachment,
   imageSiblingsFromAttachments,
 } from '~/composables/usePreview'
-import { useFilePreview } from '~/composables/useFilePreview'
+import { useFilePreview, PATH_TOKEN_RE, filePathOf } from '~/composables/useFilePreview'
 import { WRITE_LABELS, workspaceRelative } from '~/composables/useSessionTouchedPaths'
 
-export type SessionFileOrigin = 'attachment' | 'written' | 'shared'
+export type SessionFileOrigin = 'attachment' | 'written' | 'shared' | 'mentioned'
 export type SessionFileItem = {
   key: string
   name: string
@@ -112,7 +112,12 @@ export function useSessionMediaIndex(
       files.push(item)
     }
     const addPathFile = (path: string, origin: SessionFileOrigin, at?: string, size?: number) => {
-      const rel = workspaceRelative(path, toValue(root))
+      const r = toValue(root)
+      // Absolute path NGOÀI workspace (draft trong session-worktree, file kéo
+      // vào từ chỗ khác): không có dạng tương đối — giữ nguyên absolute làm
+      // key/detail; verifyPaths + open() scope vào thư mục cha của nó.
+      const rel =
+        path.startsWith('/') && (!r || !path.startsWith(r)) ? path : workspaceRelative(path, r)
       if (!rel) return
       const bucket = bucketOf(rel)
       if (!bucket) return // source/config file — not media, not a document
@@ -161,6 +166,15 @@ export function useSessionMediaIndex(
         rest = rest.replace(m[0], ' ')
       }
       for (const m of rest.matchAll(URL_RE)) addLink(m[0], 'message', at)
+      // Bare file-path mentions — a comment's "- name: /abs/path" attachment
+      // lines, a draft path named in prose. Verified against disk below, so a
+      // path-shaped token that left nothing behind never becomes a dead row.
+      for (const m of rest.matchAll(PATH_TOKEN_RE)) {
+        const idx = m.index ?? 0
+        if (rest[idx - 1] === ':') continue // `://` scheme tail — the URL pass owns it
+        const p = filePathOf(m[0])
+        if (p) addPathFile(p, 'mentioned', at)
+      }
     }
 
     for (const m of s.msgs) {

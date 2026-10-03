@@ -315,6 +315,33 @@ export interface SessionAttachment {
   height?: number
 }
 
+// CLI độc lập mà một phiên AWOG có thể mở trong PTY (feature "Open in CLI").
+// 'claude'/'codex' là CLI của CHÍNH runtime phiên (linked — resume đúng handle),
+// 'devin' luôn unlinked (AWOG không có devin runtime — một session độc lập trong
+// cùng workspace; transcript của nó vẫn được importer kéo về để XEM).
+export type SessionCliKind = 'claude' | 'codex' | 'devin'
+
+// Con trỏ dedupe của CLI transcript importer (sessions/cli-import.ts): vị trí đã
+// đọc tới trong file transcript của CLI. Persist trên header để cursor sống qua
+// restart sidecar — thiếu nó thì mỗi lần sync lại import trùng toàn bộ file.
+export interface SessionCliImportCursor {
+  // Đường dẫn tuyệt đối file transcript đang import (claude/codex JSONL; devin
+  // ATIF json). Giữ lại vì file có thể đổi giữa hai lần sync (devin tạo file mới
+  // mỗi session) — cursor chỉ có nghĩa khi `file` trùng file hiện tại.
+  // Optional vì record còn đóng vai trò "bằng chứng spawn" ngay sau khi PTY mở
+  // — lúc đó chưa có file/offset nào được import.
+  file?: string
+  // Byte offset đã consume (JSONL) hoặc số step đã consume (devin JSON object).
+  offset?: number
+  // SDK session id mà CLI claude được spawn với `--session-id`. Registry giữ
+  // thông tin này in-memory nhưng map đó mất khi sidecar restart — persist ở đây
+  // để importer adopt đúng transcript thay vì quét file mới nhất của người khác.
+  pendingSdkSessionId?: string
+  // Timestamp (ms) lúc PTY CLI được spawn. Devin transcript discovery dùng làm
+  // mtime floor để không nhặt transcript cũ không liên quan sau restart.
+  spawnedAt?: number
+}
+
 export interface SessionMessage {
   id: string
   role: 'user' | 'agent' | 'system'
@@ -322,6 +349,12 @@ export interface SessionMessage {
   text: string
   at: string
   modeAtSend?: AgentMode
+  // Nguồn của message: vắng mặt = do AWOG stream (đường bình thường). 'claude' /
+  // 'codex' / 'devin' = importer kéo về từ transcript của CLI tương ứng khi phiên
+  // được mở ở "chế độ CLI" (sessions.openCli) — UI badge "via CLI", và trên nhánh
+  // Pi các message này VẪN vào context rebuild như history thường (đó là cố ý:
+  // việc làm trong CLI là work thật trên workspace, model nên thấy).
+  via?: SessionCliKind
   // User attachments on a `user` message. Persisted so a JSONL reload keeps the
   // image preview, and so resume rebuilds the image content block for the model
   // (ADR 0029 resume = rebuild Context from history each turn).
@@ -485,43 +518,63 @@ export interface Session {
   // (id) it forked at. Set by sessions.fork / upsert; drives the fork-tree graph.
   parentSessionId?: string
   forkFromMessageId?: string
-  // Gom nhóm phiên (kiểu cây trang Notion): id của phiên CHA trong cây nhóm, và
-  // vai của phiên này bên trong nhóm đó ("Reviewer", "Điều phối"…).
+  // Agent AWOG (AGENT.md) mà phiên này là một RUN của — "vai có thật" của phiên
+  // (docs/features/session-teams.md). Mỗi lượt resolve ref này phía sidecar
+  // (resolveAgentContext) để áp systemPrompt/model/tools của agent. Session NẰM
+  // SAU agent: danh sách phiên gom theo agent, trang Agents liệt kê runs.
+  // Đường ghi: `sessions.setAgent` (RPC riêng vì gỡ agent phải XOÁ HẲN key) và
+  // `create_session`/`sessions.spawn`/`teams.run` khi tạo member.
+  agent?: SessionAgentRef
+  // Phiên thuộc một TEAM RUN: id của phiên LEAD (anchor) của run. Một run = một
+  // lần materialize của team spec (teams.run) hoặc một phiên bất kỳ spawn member.
+  // Không có entity "group" riêng — run được nhận diện qua chính id phiên lead;
+  // một phiên là lead khi có phiên khác trỏ teamRunId về nó.
   //
   // CỐ Ý tách khỏi `parentSessionId` dù cả hai đều là "cha": fork lineage ghi lại
-  // một phiên được SAO ra từ đâu (SessionForkGraph vẽ đúng cái đó), còn nhóm là
-  // việc người dùng tự xếp các phiên ĐỘC LẬP vào với nhau. Dùng chung một field thì
-  // mỗi lần fork một phiên sẽ tự ý thêm một thành viên vào nhóm, và tách một phiên
-  // khỏi nhóm sẽ xoá mất lịch sử fork của nó.
-  //
-  // Nhóm KHÔNG có tên riêng: tên nhóm CHÍNH LÀ tiêu đề của phiên cha, nên không có
-  // entity thứ hai nào phải đặt tên, đổi tên hay dọn rác khi phiên cha bị xoá.
-  // Đường ghi duy nhất là RPC `sessions.setGroup` (tách nhóm phải XOÁ HẲN key, mà
-  // patch kiểu spread của updateMetadata không xoá được key — cùng lý do với
-  // setArchived/setInfra).
-  groupParentId?: string
-  groupRole?: string
-  // Tự giao tin TRONG nhóm (hướng A — phiên điều phối phiên). Chỉ có nghĩa trên phiên
-  // GỐC của nhóm: nó là công tắc của cả nhóm, và phiên con đọc cờ của gốc.
-  //
-  // Mặc định TẮT. Bật lên là mở đúng cánh cửa mà session-messaging P1 cố ý đóng
-  // ("không lượt LLM nào chạy sau lưng người dùng") — nên nó chỉ mở được BÊN TRONG một
-  // nhóm do chính người dùng tự tay lập, tức một ranh giới đồng thuận tường minh, và
-  // vẫn bị trần số lượt của nhóm chặn ở renderer.
-  //
-  // Là boolean nên KHÔNG cần RPC riêng như `groupParentId`: `false` là một giá trị
-  // thật chứ không phải "xoá key", nên nó đi được đường patch spread của
-  // updateSessionMetadata y như `pinned`.
-  groupAutoDeliver?: boolean
-  // Cấu hình spawn đã duyệt + NHỚ cho nhóm này (popover điều phối → "nhớ cho nhóm").
-  // Chỉ có nghĩa trên phiên GỐC của nhóm: `create_session` nhìn thấy nó sẽ BỎ QUA
-  // popover và đẻ phiên con thẳng với cấu hình này — đúng nghĩa "duyệt một lần cho
-  // cả workflow". KHÔNG có nghĩa là bỏ cổng quyền tool bên trong phiên con:
+  // một phiên được SAO ra từ đâu, còn teamRunId là run điều phối đang tham gia.
+  teamRunId?: string
+  // Nhãn vai trong run của một member ("Reviewer", "Điều phối"…) — text tự do
+  // đặt lúc spawn/gán, KHÔNG phải machine role. Lead/member suy ra từ teamRunId;
+  // field này chỉ là chip hiển thị.
+  teamRole?: string
+  // Team spec (TeamSpec.id) mà run này được materialize từ — chỉ có trên các
+  // phiên của một run do `teams.run` tạo. Link ngược để UI nhóm các run theo đội
+  // và trang Team nhận diện instance của spec. Vắng mặt với run ad-hoc (spawn
+  // member tay, không qua spec).
+  teamId?: string
+  // Tier + project SỞ HỮU của team spec — đi cùng `teamId` để `loadTeam` resolve
+  // lại đúng file (member của spec spawn LƯỜI khi được giao item — materialize
+  // cần đọc lại spec chứ không giữ snapshot). `teamProjectId` chỉ có nghĩa khi
+  // `teamSource === 'project'` — project ĐÍCH của run vẫn là `projectId`.
+  teamSource?: 'global' | 'project'
+  teamProjectId?: string
+  // Nguồn gốc materialize của phiên — 'board' = phiên lone-agent do dispatch từ
+  // board item tạo (materializeRef 'agent:…' → agents.run origin:'board').
+  // Renderer dùng nó để ẩn các phiên "của board" khỏi danh sách session —
+  // việc ê-kíp sống trong board/Teams, không phải inbox chat. Phiên tạo tay
+  // (kể cả "chat với agent" ở trang Agents) KHÔNG mang field này.
+  // Chỉ ghi lúc tạo — không có RPC nào sửa nó.
+  origin?: 'board'
+  // Override LLM cấp phiên do NGƯỜI DÙNG đặt tay (board item → Advanced, "đổi
+  // account khi hết token"). Áp SAU overlay của agent bind trong send-message —
+  // thắng cả pin của spec vì đây là quyết định trực tiếp + mới nhất của con
+  // người. Đường ghi: `sessions.setLlmOverride` (RPC riêng vì gỡ phải XOÁ HẲN
+  // key, y hệt setAgent/setSpawnConfig).
+  llmOverride?: SessionLlmOverride
+  // Cấu hình spawn đã duyệt + NHỚ cho run này (popover điều phối → "nhớ cho nhóm").
+  // Chỉ có nghĩa trên phiên LEAD: `create_session` nhìn thấy nó sẽ BỎ QUA
+  // popover và đẻ phiên member thẳng với cấu hình này — đúng nghĩa "duyệt một lần cho
+  // cả workflow". KHÔNG có nghĩa là bỏ cổng quyền tool bên trong phiên member:
   // `mode` ở đây vẫn đi qua PreToolUse y như mọi phiên khác.
   //
   // Vì "ngừng nhớ" phải XOÁ HẲN key (spread patch không xoá được), đường ghi duy
-  // nhất là RPC `sessions.setGroupSpawn` — cùng lý do đã viết ở groupParentId.
-  groupSpawnConfig?: SpawnSessionConfig
+  // nhất là RPC `sessions.setSpawnConfig`.
+  spawnConfig?: SpawnSessionConfig
+  // Checkout riêng của member trong run — worktree sống THEO MEMBERSHIP (nhả khi
+  // rời run/lưu trữ/xoá, không theo lượt). Khi có mặt, cwd của mọi lượt trỏ vào
+  // `worktreePath` thay vì cây chung của project (tasks/worktree.ts quản lý vòng
+  // đời; thiết lập lười ở lượt đầu tiên của member).
+  worktree?: SessionWorktree
   // Task this session was opened to discuss (ADR 0055). When set, buildContext
   // injects a <linked_task> block (the task's latest output + a trace summary)
   // each turn so the agent can reason about the task's results. Absent for a
@@ -576,6 +629,10 @@ export interface Session {
   // Theo TỪNG TRƯỜNG: field vắng mặt = kế thừa tiếp xuống project/app; field bằng
   // '' = cố ý không ghim và DỪNG kế thừa (đúng ngữ nghĩa `githubAccount`).
   infra?: InfraContext
+  // Con trỏ import của từng CLI đã từng mở trên phiên này ("Open in CLI").
+  // `cliImport.claude.file` là file ~/.claude/projects/<cwd-hash>/<sdkSessionId>.jsonl
+  // đang được fold về; xem SessionCliImportCursor + sessions/cli-import.ts.
+  cliImport?: Partial<Record<SessionCliKind, SessionCliImportCursor>>
 }
 
 // Lightweight list-row projection of a Session WITHOUT `messages` (ADR 0048).
@@ -627,19 +684,36 @@ export interface SessionSummary {
   // can be built from sessions.list without loading every transcript. Mirrors
   // Session.parentSessionId.
   parentSessionId?: string
-  // Cha trong cây nhóm + vai trong nhóm — mirrors Session.groupParentId/groupRole.
-  // Có mặt trên hàng danh sách vì chế độ xem "Nhóm" của danh sách phiên dựng cả cây
-  // từ `sessions.list`, KHÔNG được nạp transcript của từng phiên để biết ai là con ai.
-  groupParentId?: string
-  groupRole?: string
-  // Công tắc tự giao tin trong nhóm — mirrors Session.groupAutoDeliver. Có trên hàng
-  // danh sách vì renderer phải quyết định tự giao hay không NGAY khi tin tới, kể cả khi
-  // phiên gốc của nhóm chưa được mở lần nào trong phiên làm việc này.
-  groupAutoDeliver?: boolean
-  // Cấu hình spawn đã nhớ của nhóm — mirrors Session.groupSpawnConfig. Lên summary
+  // Agent mà phiên này là run của + run điều phối + team spec nguồn — mirrors
+  // Session.agent/teamRunId/teamId. Có trên hàng danh sách để sessions list gom
+  // theo agent, và roster của run dựng được từ `sessions.list`, KHÔNG cần nạp
+  // transcript của từng phiên để biết ai thuộc run nào.
+  agent?: SessionAgentRef
+  teamRunId?: string
+  teamId?: string
+  // Tier + project sở hữu của team spec — mirrors Session.teamSource/
+  // teamProjectId. Cần trên summary để resolveRunContext/materialize member
+  // lười đọc lại đúng spec mà không nạp transcript của lead.
+  teamSource?: 'global' | 'project'
+  teamProjectId?: string
+  // Nguồn gốc materialize — mirrors Session.origin ('board' = phiên lone-agent
+  // dispatch từ board). Lên summary để renderer ẩn các phiên board khỏi danh
+  // sách session mà không nạp transcript.
+  origin?: 'board'
+  // Override LLM cấp phiên — mirrors Session.llmOverride. Lên summary để
+  // renderer hiện/đổi override (vd. tab Advanced của board item) mà không cần
+  // nạp transcript.
+  llmOverride?: SessionLlmOverride
+  // Nhãn vai của member trong run — mirrors Session.teamRole (chip hiển thị).
+  teamRole?: string
+  // Cấu hình spawn đã nhớ của run — mirrors Session.spawnConfig. Lên summary
   // để renderer hiện chip "đang điều phối" và menu "ngừng điều phối" mà không cần
-  // nạp transcript của phiên gốc.
-  groupSpawnConfig?: SpawnSessionConfig
+  // nạp transcript của phiên lead.
+  spawnConfig?: SpawnSessionConfig
+  // Branch worktree riêng của member — mirrors Session.worktree. Có trên hàng
+  // danh sách để roster của run (và chip branch) hiện đúng mà không cần nạp
+  // transcript.
+  worktree?: SessionWorktree
   // True when a compaction checkpoint exists — lets the UI badge it without
   // loading the transcript.
   hasCompaction?: boolean
@@ -1197,6 +1271,16 @@ export interface Agent {
   // session's MCP set" (no per-agent filtering). When set, sidecar intersects
   // with the session-level mcpServerIds before forwarding to the SDK.
   mcpServerIds?: string[]
+  // Per-agent skill whitelist (skill ids = SKILL.md dir names). Empty/undefined
+  // = the session sees every in-scope skill. When set, the <available_skills>
+  // catalogue is filtered AND the Claude SDK `skills` option is narrowed so the
+  // CLI's own Skill tool agrees with the catalogue.
+  skillIds?: string[]
+  // Repositories this agent may touch — absolute paths (a project root or a
+  // repo inside a multi-repo project container). Empty/undefined = unrestricted
+  // (the session workspace). When set: Pi runtime narrows fs-tool roots to them,
+  // and every runtime gets a <repo_access> boundary in the system prompt.
+  repos?: string[]
 }
 
 // ─── Workflow ────────────────────────────────────────────────────────────────
@@ -2062,4 +2146,182 @@ export interface LogtimePushResult {
   ok: boolean
   worklogId?: string | undefined
   error?: string | undefined
+}
+
+// ─── Session teams — nhóm phiên vận hành như một code team ───────────────────
+// (docs/features/session-teams.md, ADR 0094). Ba khối dưới đây là contract chung
+// của cả sidecar lẫn renderer: agent gắn vào member, worktree riêng của member,
+// và board work-item / kênh nhóm.
+//
+// Mô hình: KHÔNG còn entity "group" — một TEAM RUN là tập phiên chia sẻ
+// `teamRunId` (trỏ về phiên LEAD). Mỗi member là một session gắn `agent` thật
+// + branch riêng; việc được điều phối qua BOARD THEO PROJECT, còn trao đổi
+// ngang qua CHANNEL của run. Board sống theo project — run tan không mất
+// backlog. Session NẰM SAU AGENT: danh sách phiên gom theo agent đã bind.
+
+// Tham chiếu một agent AWOG (AGENT.md). Giống bộ ba agentId/agentSource/
+// agentProjectId của WorkflowNode nhưng gói lại thành object cho Session.
+// `source`/`projectId` phân biệt agent global vs agent của project — một id
+// 'reviewer' có thể tồn tại ở cả hai tier.
+export interface SessionAgentRef {
+  id: string
+  source?: AgentSource | undefined
+  projectId?: string | undefined
+}
+
+// Override LLM cấp phiên do người dùng đặt tay — tập con có chủ đích của
+// SessionSettings ("chạy bằng gì/ai/nấc nào"). Mọi field vắng mặt nghĩa là
+// "không đè" — kế thừa chuỗi session.settings ← agent-pin bình thường.
+export interface SessionLlmOverride {
+  provider?: ProviderName | undefined
+  modelId?: string | undefined
+  accountId?: string | undefined
+  level?: ThinkingLevel | undefined
+  mode?: AgentMode | undefined
+}
+
+// Worktree/branch RIÊNG của một member trong run, SỐNG THEO MEMBERSHIP (nhả khi
+// rời run / lưu trữ / xoá — KHÔNG theo lượt như subagent). cwd của mọi lượt
+// của phiên member trỏ vào đây thay vì cây chung của project.
+export interface SessionWorktree {
+  // Đường tuyệt đối tới repo gốc (= project.path của member).
+  repoPath: string
+  // Đường tuyệt đối tới checkout riêng (~/.awog/session-worktrees/<id>/worktrees/team).
+  worktreePath: string
+  // Branch của member, dạng `awog/session/<sessionId>/team`.
+  branch: string
+  // Ref gốc lúc tạo worktree (tên nhánh hoặc SHA) — điểm neo cho member_diff và
+  // cho integrate khi merge ngược về.
+  baseRef: string
+  createdAt: string
+}
+
+// ── Team (squad) — spec BỀN của một đội, tách khỏi cây phiên runtime ────────
+//
+// Team là "hồ sơ đội" kiểu Multica Squad: định nghĩa SẴN lead + member theo
+// AGENT.md refs, tồn tại độc lập với mọi run. Mỗi lần giao việc cho
+// team (`teams.run`) sidecar MATERIALIZE một run mới đúng spec — spawn
+// lead + members chia sẻ một teamRunId; run tan thì team spec vẫn còn
+// để chạy lần sau. Hai tầng lưu trữ khuôn workflows/agents:
+//   global  → ~/.awog/teams/<id>.json
+//   project → {project.path}/.awog/teams/<id>.json
+// `source`/`projectId` suy ra từ vị trí file, KHÔNG ghi vào JSON.
+
+// Một member của team — tên hiển thị của phiên con + vai agent bind vào
+// (vắng mặt = member "vai tự do", vẫn spawn được).
+export interface TeamMemberSpec {
+  title: string
+  agent?: SessionAgentRef
+}
+
+export interface TeamSpec {
+  id: string
+  name: string
+  desc?: string
+  // Chỉ dẫn cấp đội (luật chia việc, chuẩn cộng tác…) — khuôn "squad
+  // instructions" của Multica: chỉ đưa cho LEAD, vào prompt đầu khi run.
+  instructions?: string
+  // Agent bind lên phiên GỐC (lead) — vắng mặt = lead vai tự do.
+  lead?: SessionAgentRef
+  members: TeamMemberSpec[]
+  createdAt: string
+  updatedAt: string
+  // Suy ra từ vị trí file khi đọc — strip trước khi ghi (khuôn Workflow).
+  source?: 'global' | 'project'
+  projectId?: string
+}
+
+// ── Board work-item — backlog THEO PROJECT (~/.awog/boards/<projectId>.json) ──
+//
+// Hợp đồng status (Multica-style): AGENT tự ghi status trong lượt qua tool
+// `team_item_update`; hệ thống chỉ tự sửa ở hai chỗ —
+//   1. lượt của assignee fail/không retry  → in_progress về todo;
+//   2. user bấm Merge thành công           → in_review/changes về done.
+// `done` và `cancelled` là của NGƯỜI DÙNG — agent không tự set hai trạng thái đó.
+// `backlog` là bãi đỗ: không đánh thức ai; kéo ra `todo` mới wake assignee.
+export type BoardItemStatus =
+  | 'backlog'
+  | 'todo'
+  | 'in_progress'
+  | 'in_review'
+  | 'changes' // reviewer/lead trả về, kèm comment nói cần sửa gì
+  | 'blocked' // member tự báo kẹt — first-class, không phải "fail"
+  | 'done'
+  | 'cancelled'
+
+export interface BoardItemComment {
+  id: string
+  at: string
+  // sessionId của member/lead viết, hoặc null khi NGƯỜI DÙNG viết từ UI.
+  from: string | null
+  fromTitle: string
+  text: string
+}
+
+export interface BoardItem {
+  id: string
+  // Chủ sở hữu = project (file nằm ở ~/.awog/boards/<projectId>.json). Giữ lại
+  // trong record để một file lỡ bị ghi nhầm project vẫn lọc ra được.
+  projectId: string
+  title: string
+  desc?: string
+  // sessionId của member được giao; vắng mặt = chưa ai nhận (bơi trong backlog).
+  assigneeSessionId?: string
+  // Người nhận DỰ KIẾN theo spec — 'agent:<source|projectId|id>' hoặc
+  // 'team:<source|projectId|id>' (khoá agents/teams bên UI). Chỉ có nghĩa khi
+  // item nằm backlog chưa materialize: kéo sang status sống ⇒ UI chạy
+  // agents.run/teams.run, gán assigneeSessionId rồi xoá ref này. Để riêng khỏi
+  // assigneeSessionId vì field đó là sessionId thật (zod SESSION_ID_RE).
+  assigneeRef?: string
+  // Override LLM per-slot của người dùng (editor → Advanced, collapse mặc định).
+  // Key: 'self' (item giao agent lẻ), 'lead' (gốc run khi giao team), hoặc
+  // 'member:<title>' (member của spec — key theo TITLE vì member chưa có phiên
+  // lúc đặt). Áp vào session ở ba điểm: materializeRef (UI → agents.run/
+  // teams.run + sessions.setLlmOverride), sessions.materializeMember, và
+  // assignee_member của board-tools — cả ba đọc lại item lúc materialize nên
+  // override sửa trước giờ spawn luôn kịp áp.
+  assigneeConfig?: Record<string, SessionLlmOverride>
+  status: BoardItemStatus
+  // Đợt chạy (stage waves): khi mọi item của stage sớm nhất done/cancelled thì
+  // hệ thống đánh thức lead để điều phối đợt sau. Vắng mặt = không chia đợt.
+  stage?: number
+  // sessionId của bên tạo, hoặc null khi người dùng tạo từ UI.
+  createdBy: string | null
+  createdAt: string
+  updatedAt: string
+  // Branch của member đã merge khi item đi tới done qua sessions.integrateMember.
+  mergedBranch?: string
+  comments: BoardItemComment[]
+}
+
+// File ~/.awog/boards/<projectId>.json.
+export interface ProjectBoard {
+  version: 1
+  items: BoardItem[]
+}
+
+// ── Kênh nhóm — ~/.awog/groups/<runId>/channel.jsonl ───────────────────
+// Kênh CHUNG của cả ê-kíp, khác hộp thư 1-1: post vào đây là nói với cả nhóm.
+// Tail của kênh được inject vào lượt của mọi member (pull-based) nên một post
+// MẶC ĐỊNH KHÔNG đánh thức ai; `mentions` (sessionId) hoặc post của member
+// không-mention mới wake lead — xem re-trigger rules trong spec.
+export type TeamChannelKind =
+  | 'chat' // trao đổi thường (member ↔ member, user ↔ team)
+  | 'status' // báo cáo tiến độ / handoff có cấu trúc
+  | 'note' // ghi chú của người dùng — KHÔNG bao giờ wake ai
+  | 'eval' // evaluation log của lead (ghi nhận định sau mỗi lần tỉnh)
+  | 'system' // hệ thống thông báo (stage wave xong, member merge…)
+
+export interface TeamChannelEntry {
+  id: string
+  at: string
+  // sessionId của bên post; null = người dùng. 'system' dùng from = null + fromTitle 'system'.
+  from: string | null
+  fromTitle: string
+  kind: TeamChannelKind
+  // Đã qua redactString trước khi ghi (nội dung do model viết sẽ nằm trong
+  // context của mọi member khi tail được inject).
+  text: string
+  // sessionId của member được @-mention — những phiên này được wake qua hộp thư.
+  mentions?: string[]
 }

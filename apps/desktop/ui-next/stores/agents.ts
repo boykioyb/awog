@@ -23,8 +23,7 @@ export type AgentSource = 'global' | 'project'
 
 // Full Agent entity (mirror of sidecar Agent — apps/desktop/sidecar/src/types/
 // shared.ts). NOT imported from the sidecar package; the store owns its own
-// minimal slice. `agent.skillIds` was removed project-wide (agent = systemPrompt;
-// skills live only on Workflow nodes) — do NOT reintroduce it.
+// minimal slice.
 export type Agent = {
   id: string
   source: AgentSource
@@ -44,6 +43,13 @@ export type Agent = {
   tools?: string[]
   // Per-agent MCP server whitelist (ADR 0016). Empty/undefined = inherit session.
   mcpServerIds?: string[]
+  // Per-agent skill whitelist — the <available_skills> catalogue is filtered to
+  // these ids; on the Claude SDK path the `skills` option is narrowed to match.
+  // Empty/undefined = all in-scope skills.
+  skillIds?: string[]
+  // Repos the agent may touch (absolute paths — a project root or a repo inside
+  // a multi-repo container). Empty/undefined = unrestricted (session workspace).
+  repos?: string[]
 }
 
 // Roster row the Home dashboard binds to (id/name/model/role display strings).
@@ -64,6 +70,20 @@ export type AgentScanReport = {
 
 // Draft a save accepts — the full Agent shape (storage metadata + content).
 export type AgentInput = Agent
+
+// Draft mà agents.generate trả về (không source/projectId — caller giữ tier).
+export type AgentDraftResult = {
+  id: string
+  name: string
+  description: string
+  model: string
+  systemPrompt: string
+  role: string
+  mcpServerIds?: string[]
+  skillIds?: string[]
+  repos?: string[]
+  tools?: string[]
+}
 
 type AgentsListResponse = { agents: Agent[]; reports?: AgentScanReport[] }
 type AgentUpsertResponse = { agent: Agent }
@@ -150,8 +170,11 @@ export const useAgentsStore = defineStore('agents', () => {
             }),
         )
       }
-      const existing = agents.value.find((a) => matchKey(a, res.agent))
-      if (existing) Object.assign(existing, res.agent)
+      // Wholesale replace — res.agent is authoritative. Object.assign would
+      // leave cleared optional fields (skillIds/tools/repos/mcpServerIds —
+      // the serializer drops empty keys) lingering on the store object.
+      const idx = agents.value.findIndex((a) => matchKey(a, res.agent))
+      if (idx >= 0) agents.value.splice(idx, 1, res.agent)
       else agents.value.push(res.agent)
       return res.agent
     }
@@ -167,8 +190,8 @@ export const useAgentsStore = defineStore('agents', () => {
           }),
       )
     }
-    const existing = agents.value.find((a) => matchKey(a, targetKey))
-    if (existing) Object.assign(existing, data)
+    const idx = agents.value.findIndex((a) => matchKey(a, targetKey))
+    if (idx >= 0) agents.value.splice(idx, 1, { ...data })
     else agents.value.push({ ...data })
     return data
   }
@@ -206,34 +229,78 @@ export const useAgentsStore = defineStore('agents', () => {
 
   // One-shot LLM draft/revision from a natural-language prompt (agents.generate).
   // Returns a draft (no `source`/`projectId` — the caller preserves the tier).
+  // `catalogs` feed the model the real pickable values (global skills + tool
+  // names) so it can propose valid whitelists instead of guessing ids.
   // Throws on failure so the caller can surface the error.
   async function generateAgent(
     prompt: string,
     accountId: string,
     currentAgent?: Partial<Agent>,
-  ): Promise<{
-    id: string
-    name: string
-    description: string
-    model: string
-    systemPrompt: string
-    role: string
-    mcpServerIds?: string[]
-  }> {
+    modelId?: string,
+    catalogs?: { skills?: { id: string; name: string }[]; tools?: string[] },
+  ): Promise<{ draft: AgentDraftResult; catalogDropped: boolean }> {
     const params: Record<string, unknown> = { prompt, accountId }
     if (currentAgent) params.currentAgent = currentAgent
-    const res = await sc.request<{
-      agent: {
-        id: string
-        name: string
-        description: string
-        model: string
-        systemPrompt: string
-        role: string
-        mcpServerIds?: string[]
-      }
-    }>('agents.generate', params)
-    return res.agent
+    // Model theo cấu hình AI authoring — vắng mặt thì sidecar dùng mặc định.
+    if (modelId) params.modelId = modelId
+    if (catalogs) params.catalogs = catalogs
+    const res = await sc.request<{ agent: AgentDraftResult; catalogDropped?: boolean }>(
+      'agents.generate',
+      params,
+    )
+    // catalogDropped=true: provider đã chặn request do catalog skills → sidecar
+    // retry không kèm danh sách, nên draft không có gợi ý skillIds.
+    return { draft: res.agent, catalogDropped: res.catalogDropped === true }
+  }
+
+  // agents.export — raw AGENT.md của các agent được chọn, trả {name, content}[]
+  // để UI zip + lưu (utils/export). Throw khi không agent nào tồn tại.
+  async function exportAgents(
+    refs: { id: string; source?: AgentSource; projectId?: string }[],
+  ): Promise<{ name: string; content: string }[]> {
+    const res = await sc.request<{ files?: { name: string; content: string }[] }>('agents.export', {
+      agents: refs,
+    })
+    return res?.files ?? []
+  }
+
+  // agents.run — DISPATCH một agent spec thành phiên thật trên project đích
+  // (giao việc cho agent; session là instance do dispatch materialize — xem
+  // sidecar agents.run). Trả về sessionId của phiên vừa tạo.
+  // `origin: 'board'` đánh dấu phiên lone-agent do một board item dispatch —
+  // danh sách session ẩn nó (việc ê-kíp sống trong board UI); "chat với agent"
+  // ở trang Agents không gửi nên phiên đó vẫn hiện thường.
+  async function runAgent(
+    agent: Agent,
+    projectId: string | null,
+    settings: {
+      provider: string
+      modelId: string
+      level?: string
+      mode?: string
+      accountId?: string
+    },
+    title?: string,
+    origin?: 'board',
+  ): Promise<{ sessionId: string } | null> {
+    if (!available.value) return null
+    try {
+      return await sc.request<{ sessionId: string }>('agents.run', {
+        agent: {
+          id: agent.id,
+          source: agent.source,
+          ...(agent.projectId ? { projectId: agent.projectId } : {}),
+        },
+        projectId,
+        settings,
+        ...(title ? { title } : {}),
+        ...(origin ? { origin } : {}),
+      })
+    } catch (err) {
+      // KHÔNG nuốt — caller toast message thật qua sidecarErrorText.
+      console.warn('[agents] agents.run failed', err)
+      throw err
+    }
   }
 
   async function subscribe(): Promise<void> {
@@ -268,7 +335,9 @@ export const useAgentsStore = defineStore('agents', () => {
     loadAgents,
     saveAgent,
     deleteAgent,
+    exportAgents,
     duplicateAgent,
     generateAgent,
+    runAgent,
   }
 })

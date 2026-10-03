@@ -11,17 +11,17 @@
            là đường ít thao tác nhất, và là câu trả lời cho đúng nhóm người dùng
            KHÔNG có credential nào khác để điền vào form. -->
       <div ref="newMenuWrapRef" class="ia-menuwrap">
-        <button
-          class="btn pri"
+        <Button
           type="button"
           aria-haspopup="menu"
           :aria-expanded="newMenuOpen"
+          variant="default"
           @click="toggleNewMenu"
         >
           <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.list.toolbar.new') }}
           <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
+        </Button>
         <div v-if="newMenuOpen" class="smenu ia-newmenu">
           <div class="mi ia-mi2" @click="onPickNewConsole">
             <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -41,17 +41,17 @@
       </div>
 
       <div ref="importMenuWrapRef" class="ia-menuwrap">
-        <button
-          class="btn"
+        <Button
           type="button"
           aria-haspopup="menu"
           :aria-expanded="importMenuOpen"
+          variant="outline"
           @click="toggleImportMenu"
         >
           <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.list.toolbar.import') }}
           <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
+        </Button>
         <div v-if="importMenuOpen" class="smenu ia-importmenu">
           <div class="mi" @click="onPickImportFile">
             <Icon name="file" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -64,17 +64,18 @@
         </div>
       </div>
 
-      <button class="btn" type="button" @click="emit('export')">
+      <Button type="button" variant="outline" @click="emit('export')">
         <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('infra.list.toolbar.export') }}
-      </button>
+      </Button>
 
       <div class="srch ia-search">
         <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <input
-          :value="search"
+        <Input
+          unstyled
+          :model-value="search"
           :placeholder="t('infra.list.search')"
-          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
+          @update:model-value="emit('update:search', $event)"
         />
       </div>
     </div>
@@ -89,10 +90,10 @@
         style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 1px"
       />
       <p>{{ t('infra.list.accountId.explain') }}</p>
-      <button
-        class="btn"
+      <Button
         type="button"
         :disabled="fillingMissingAccountIds"
+        variant="outline"
         @click="onFillMissingAccountIds"
       >
         <Icon
@@ -105,7 +106,7 @@
             ? t('infra.list.accountId.working')
             : t('infra.list.accountId.fillMissing', { n: missingAccountIdProfiles.length })
         }}
-      </button>
+      </Button>
     </div>
 
     <!-- Icon quay: đọc danh sách profile là việc chạm đĩa, im lìm vài trăm ms thì
@@ -130,23 +131,23 @@
       </span>
       <template v-if="search.trim()">
         <div class="et">{{ t('infra.list.noMatch') }}</div>
-        <button class="btn" type="button" @click="emit('update:search', '')">
+        <Button type="button" variant="outline" @click="emit('update:search', '')">
           {{ t('infra.list.clearSearch') }}
-        </button>
+        </Button>
       </template>
       <template v-else>
         <div class="et">{{ t('infra.list.empty') }}</div>
         <!-- Người chưa có profile nào là đúng nhóm cần "Đăng nhập Console" nhất
              (chỉ có tài khoản + mật khẩu AWS), nên ở màn trống hai lối này hiện
              thẳng ra thay vì giấu sau menu — bớt được một cú bấm so với toolbar. -->
-        <button class="btn pri" type="button" @click="emit('console-login')">
+        <Button type="button" variant="default" @click="emit('console-login')">
           <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.list.toolbar.newConsole') }}
-        </button>
-        <button class="btn" type="button" @click="emit('new-profile')">
+        </Button>
+        <Button type="button" variant="outline" @click="emit('new-profile')">
           <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.list.toolbar.newManual') }}
-        </button>
+        </Button>
       </template>
     </div>
 
@@ -208,17 +209,17 @@
       />
       <template #footer>
         <span style="flex: 1" />
-        <button class="btn" type="button" @click="replaceOpen = false">
+        <Button type="button" variant="outline" @click="replaceOpen = false">
           {{ t('common.cancel') }}
-        </button>
-        <button
-          class="btn pri"
+        </Button>
+        <Button
           type="button"
           :disabled="!replaceTarget"
+          variant="default"
           @click="confirmReplaceThenDelete"
         >
           {{ t('infra.list.replaceDefault.confirm') }}
-        </button>
+        </Button>
       </template>
     </LibraryEntityModal>
   </div>
@@ -253,6 +254,8 @@ import {
   suggestDuplicateProfileName,
 } from '~/utils/aws-profile-view'
 import type { AwsProfile } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   /** Đã lọc theo ô tìm — dùng để HIỂN THỊ danh sách. */

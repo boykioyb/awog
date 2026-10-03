@@ -13,8 +13,10 @@ export interface OutlineHeading {
   level: number
 }
 
-// Reading-column width presets (px; 0 = full width).
-const MD_WIDTHS = [720, 880, 1100, 1400, 0]
+// Reading-column width presets (px; 0 = full width). Presets nhỏ hơn bề rộng
+// pane hiện tại thì bấm không thấy đổi — vì vậy phải có mức ≤ modal hẹp nhất
+// (880px modal − TOC 240 − padding ≈ 600px ⇒ cần 560).
+const MD_WIDTHS = [560, 720, 880, 1100, 1400, 0]
 
 const ID_BAD = /[^\p{L}\p{N}\s-]/gu
 function slugify(s: string): string {
@@ -26,7 +28,7 @@ export function useMarkdownOutline(rebuildDep: Ref<unknown>) {
   const headings = ref<OutlineHeading[]>([])
   const activeHeading = ref('')
 
-  const widthIdx = ref(1)
+  const widthIdx = ref(2) // 880px — cột đọc mặc định
   const widthValue = computed(() => MD_WIDTHS[widthIdx.value] ?? 880)
   const mdMaxWidth = computed(() => (widthValue.value === 0 ? '100%' : `${widthValue.value}px`))
   function stepWidth(d: number) {

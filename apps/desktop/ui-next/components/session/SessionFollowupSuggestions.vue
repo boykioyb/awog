@@ -40,6 +40,8 @@ function use(text: string): void {
 </script>
 
 <style scoped>
+/* Follow-up prompt chips — outline pills on the hover wash; sparkles icon marks
+   them as model-authored. */
 .fups {
   display: flex;
   flex-wrap: wrap;
@@ -55,9 +57,9 @@ function use(text: string): void {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 18px;
   cursor: pointer;
   transition:
     background 0.12s ease,
@@ -65,13 +67,13 @@ function use(text: string): void {
     color 0.12s ease;
 }
 .fup:hover {
-  background: var(--bgHover);
-  border-color: var(--accentBorder);
-  color: var(--text);
+  background: var(--accent-wash);
+  border-color: var(--ring);
+  color: var(--foreground);
 }
 .fup .icn {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--primary);
 }
 .fuptext {
   overflow: hidden;

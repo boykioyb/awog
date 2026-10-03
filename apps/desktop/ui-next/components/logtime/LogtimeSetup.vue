@@ -6,10 +6,15 @@
       <span>{{ t('logtime.setup.sources') }}</span>
       <span class="ltmuted">{{ t('logtime.setup.sourcesHint') }}</span>
       <span class="ltsp" />
-      <button class="btn" type="button" :disabled="store.busy" @click="store.loadCapabilities()">
+      <Button
+        type="button"
+        :disabled="store.busy"
+        variant="outline"
+        @click="store.loadCapabilities()"
+      >
         <Icon name="refresh" />
         {{ t('logtime.setup.rescan') }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="store.capabilities.length === 0" class="ltnote">
@@ -212,7 +217,7 @@
           <div class="ltopt2">{{ t('logtime.setup.remindHint') }}</div>
         </div>
         <div class="ltoptc">
-          <input v-model="dRemindAt" class="lttime" type="time" />
+          <Input v-model="dRemindAt" type="time" class="lttime" />
           <button
             type="button"
             class="ltsw"
@@ -230,14 +235,14 @@
         <span v-if="rulesDirty" class="ltsavehint">{{ t('logtime.setup.unsaved') }}</span>
         <span v-else class="ltsavehint ok">{{ t('logtime.setup.savedState') }}</span>
         <span class="ltsp" />
-        <button
+        <Button
           type="button"
-          class="btn pri"
           :disabled="!rulesDirty || store.busy"
+          variant="default"
           @click="saveRules"
         >
           {{ t('logtime.setup.save') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -254,6 +259,8 @@ import { useLogtimeManager } from '~/composables/useLogtimeManager'
 import { useProjectsStore } from '~/stores/projects'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { LogtimeLink, LogtimeSourceCapability, PmsOption } from '~/stores/logtime'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const { add: toast } = useToast()

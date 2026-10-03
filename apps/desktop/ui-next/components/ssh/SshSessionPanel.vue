@@ -95,8 +95,8 @@
         :fallback-when="session.when"
         :loading="!!session.loading"
       />
-      <!-- Model / Account / Reasoning-effort / Style chips (same as the app status
-           bar; popovers open upward into the transcript). Mode lives in the composer. -->
+      <!-- Account / Style chip (same as the app status bar; popovers open upward into
+           the transcript). Model / effort / mode live in the composer footer. -->
       <div class="sshsess-cfg">
         <StatusConfig :session="session" />
       </div>

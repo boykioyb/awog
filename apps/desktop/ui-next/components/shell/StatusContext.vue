@@ -251,7 +251,7 @@ function onCompact() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--foreground);
 }
 .catnum,
 .catpct {
@@ -290,7 +290,7 @@ function onCompact() {
   line-height: 18px;
 }
 .ctxsechead:hover {
-  color: var(--text);
+  color: var(--foreground);
 }
 .ctxchev {
   transition: transform 0.12s ease;
@@ -354,7 +354,7 @@ function onCompact() {
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
@@ -364,9 +364,9 @@ function onCompact() {
     color 0.12s ease;
 }
 .ctxaction:hover:not(:disabled) {
-  background: var(--bgHover);
-  border-color: var(--accentBorder);
-  color: var(--accent);
+  background: var(--accent-wash);
+  border-color: var(--ring);
+  color: var(--primary);
 }
 .ctxaction:disabled {
   cursor: default;

@@ -18,16 +18,18 @@
     <aside v-if="!sidebarCollapsed" class="ixe-side" :style="{ width: `${sideW}px` }">
       <div class="ixe-side-hd">
         <span class="ixe-side-ttl">{{ t('infra.explorer.side.title') }}</span>
-        <button
-          class="iconbtn ixe-side-toggle"
+        <Button
           type="button"
           :title="t('infra.explorer.pinned.collapse')"
           :aria-label="t('infra.explorer.pinned.collapse')"
           aria-expanded="true"
+          class="ixe-side-toggle"
+          variant="outline"
+          size="iconMd"
           @click="setSidebarCollapsed(true)"
         >
           <Icon name="panel" />
-        </button>
+        </Button>
       </div>
       <!-- Phần cuộn được tách khỏi hàng tiêu đề: danh mục đầy đủ dài hơn một
            màn, mà tiêu đề + nút "Tất cả dịch vụ" thì phải luôn ở trên. -->
@@ -40,10 +42,16 @@
              Nút này xuống HÀNG RIÊNG thay vì nằm cạnh tiêu đề: cột chỉ rộng
              180–220px, xếp thêm nút thu gọn vào cùng hàng là ba thứ tranh chỗ và
              tiêu đề sẽ là thứ bị cắt chữ. -->
-        <button class="btn sm ixe-catalog" type="button" @click="emit('open-catalog')">
+        <Button
+          type="button"
+          class="ixe-catalog"
+          variant="outline"
+          size="sm"
+          @click="emit('open-catalog')"
+        >
           <Icon name="layers" />
           {{ t('infra.explorer.services.open') }}
-        </button>
+        </Button>
 
         <section class="ixe-grp">
           <button
@@ -133,17 +141,19 @@
       <!-- Đường mở lại cột dịch vụ sau khi thu gọn. Nằm ở ĐÂY, không nằm trong
            một thanh ray rỗng bên trái: nút này không chiếm chỗ của bảng, và nó
            vẫn hiện khi chưa chọn view nào (nhánh dưới). -->
-      <button
+      <Button
         v-if="sidebarCollapsed"
-        class="btn sm ixe-expand"
         type="button"
         :title="t('infra.explorer.pinned.expand')"
         :aria-label="t('infra.explorer.pinned.expand')"
+        class="ixe-expand"
+        variant="outline"
+        size="sm"
         @click="setSidebarCollapsed(false)"
       >
         <Icon name="panel" />
         {{ t('infra.explorer.side.title') }}
-      </button>
+      </Button>
       <template v-if="activeView">
         <header class="ixe-hd">
           <div class="ixe-hd-txt">
@@ -154,37 +164,45 @@
             <!-- Form nhỏ của view (task 3.6): tạo bucket/thư mục, tải lên, presign.
                  Nút cũng bị ẩn khi dò quyền từ chối (task 3.3) — lý do giống nút
                  ghi trên dòng. -->
-            <button
+            <Button
               v-for="f in activeView.forms"
               :key="f.id"
-              class="btn sm"
               type="button"
               :disabled="actionDenied(f.id)"
               :title="actionDenied(f.id) ? t('infra.explorer.denied') : t(f.consequence)"
+              variant="outline"
+              size="sm"
               @click="startForm(f)"
             >
               <Icon name="plus" />
               {{ t(f.label) }}
-            </button>
-            <button
-              class="btn sm"
+            </Button>
+            <Button
               type="button"
               :disabled="!activeView.hasConsole"
+              variant="outline"
+              size="sm"
               @click="openConsole(selected)"
             >
               <Icon name="external" />
               {{ t('infra.explorer.console') }}
-            </button>
+            </Button>
             <!-- Dock phiên thu nhỏ (task 3.5): dùng lại dock của app, mang theo
                  ngữ cảnh của đối tượng đang chọn. -->
-            <button class="btn sm" type="button" :disabled="docking" @click="minimizeSession">
+            <Button
+              type="button"
+              :disabled="docking"
+              variant="outline"
+              size="sm"
+              @click="minimizeSession"
+            >
               <Icon name="minimize" />
               {{ t('infra.explorer.dock') }}
-            </button>
-            <button class="btn sm" type="button" @click="askScreen">
+            </Button>
+            <Button type="button" variant="outline" size="sm" @click="askScreen">
               <Icon name="sparkles" />
               {{ t('infra.explorer.ask') }}
-            </button>
+            </Button>
           </div>
         </header>
 
@@ -197,22 +215,21 @@
         >
           <label v-for="f in activeView.required" :key="f.key" class="ixe-param">
             <span class="ixe-param-lbl">{{ t(f.label) }}</span>
-            <input
-              :value="viewValues[f.key] ?? ''"
-              class="ixe-param-input"
+            <Input
+              :model-value="viewValues[f.key] ?? ''"
               :placeholder="f.placeholder ?? ''"
               autocomplete="off"
               spellcheck="false"
-              @input="viewValues[f.key] = ($event.target as HTMLInputElement).value"
+              @update:model-value="viewValues[f.key] = $event"
             />
           </label>
-          <button class="btn pri sm" type="submit" :disabled="loading">
+          <Button type="submit" :disabled="loading" variant="default" size="sm">
             {{ t('infra.explorer.load') }}
-          </button>
-          <button v-if="inPrefixTree" class="btn sm" type="button" @click="goUpPrefix">
+          </Button>
+          <Button v-if="inPrefixTree" type="button" variant="outline" size="sm" @click="goUpPrefix">
             <Icon name="chev-left" />
             {{ t('infra.explorer.up') }}
-          </button>
+          </Button>
         </form>
 
         <!-- Cảnh báo của VIEW (Mốc 4, task 4.1): khác tooltip `about` ở chỗ nó
@@ -230,9 +247,9 @@
         <div v-if="lastDownload" class="ixe-warn ok">
           <Icon name="download" />
           {{ t('infra.explorer.downloaded') }}
-          <button class="btn sm" type="button" @click="previewDownload">
+          <Button type="button" variant="outline" size="sm" @click="previewDownload">
             {{ t('infra.explorer.preview') }}
-          </button>
+          </Button>
         </div>
 
         <InfraResourceTable
@@ -292,6 +309,8 @@ import { SIDEBAR_MAX, SIDEBAR_MIN, useInfraExplorer } from '~/composables/useInf
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useResizable } from '~/composables/useResizable'
 import { useToast } from '~/composables/useToast'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import type {
   InfraActionDescriptor,
   InfraCatalogService,

@@ -35,18 +35,12 @@
       <div class="pe-grid" :style="{ order: nameOrder }">
         <div class="pe-field" style="grid-column: span 2">
           <label class="pe-label">{{ t('projects.editor.name') }}</label>
-          <input
-            v-model="draft.name"
-            class="pe-input"
-            :placeholder="t('projects.editor.namePh')"
-            :disabled="busy"
-          />
+          <Input v-model="draft.name" :placeholder="t('projects.editor.namePh')" :disabled="busy" />
         </div>
         <div class="pe-field">
           <label class="pe-label">{{ t('projects.editor.language') }}</label>
-          <input
+          <Input
             v-model="draft.language"
-            class="pe-input"
             :placeholder="t('projects.editor.languagePh')"
             :disabled="busy"
           />
@@ -58,23 +52,23 @@
           {{ isClone ? t('projects.editor.dest') : t('projects.editor.path') }}
         </label>
         <div style="display: flex; gap: 6px">
-          <input
+          <Input
             v-model="draft.path"
-            class="pe-input mono"
             :placeholder="t('projects.editor.pathPh')"
             :disabled="busy"
             style="flex: 1"
+            class="mono"
             @blur="onPathBlur"
           />
-          <button
-            class="btn"
+          <Button
             :disabled="busy || !canBrowse"
             :title="canBrowse ? t('projects.editor.browse') : t('projects.editor.browseUnavail')"
+            variant="outline"
             @click="onBrowse"
           >
             <Icon name="folder" />
             {{ t('projects.editor.browse') }}
-          </button>
+          </Button>
         </div>
         <div class="pe-hint">
           {{ isClone ? t('projects.editor.destHint') : t('projects.editor.pathHint') }}
@@ -87,21 +81,21 @@
             {{ t('projects.editor.gitRemote') }}
             <span v-if="detecting" class="pe-detecting">{{ t('projects.editor.detecting') }}</span>
           </label>
-          <input
+          <Input
             v-model="draft.gitRemote"
-            class="pe-input mono"
             placeholder="git@github.com:org/repo.git"
             :disabled="busy"
+            class="mono"
             @blur="onRemoteBlur"
           />
         </div>
         <div class="pe-field">
           <label class="pe-label">{{ t('projects.editor.branch') }}</label>
-          <input
+          <Input
             v-model="draft.gitBranch"
-            class="pe-input mono"
             placeholder="main"
             :disabled="busy || isClone"
+            class="mono"
           />
         </div>
       </div>
@@ -144,10 +138,12 @@
     </div>
 
     <template #footer>
-      <button class="btn" :disabled="busy" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave || busy" @click="onSubmit">
+      <Button :disabled="busy" variant="outline" @click="emit('cancel')">
+        {{ t('common.cancel') }}
+      </Button>
+      <Button :disabled="!canSave || busy" variant="default" @click="onSubmit">
         {{ saveLabel }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -162,6 +158,8 @@ import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { ProjectInspectResult, RemoteInspectResult } from '~/stores/projects'
 import type { Project } from '~/types'
 import type { ProjectEditorDraft, ProjectEditorSavePayload } from './types'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean

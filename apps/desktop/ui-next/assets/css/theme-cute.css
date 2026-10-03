@@ -10,7 +10,7 @@
    note on them; component rules stay mode-agnostic and read the tokens.)
 
    Why one file can restyle 262 components: ui-next is built from a small set of
-   shared prototype classes (.ni .li .btn .iconbtn .chip .tag .tile .step .smenu …)
+   shared prototype classes (.ni .li [data-slot='button'] .chip .tag .tile .step .smenu …)
    and every component takes its colors from `var(--token)`. Re-declare the tokens +
    restyle those classes once and the whole product moves together. The scope also
    buys the specificity to reach INTO component `scoped` styles: a scoped selector
@@ -118,12 +118,12 @@ body[data-theme-family='cute'] {
   --codeBg: #24292e;
 }
 
-/* — light variant — THE design target (§14). Off-white base, pure-white surfaces,
+/* — light variant — THE design target (§14). Pure-white base and surfaces,
      barely-there mint-tinted hairlines; depth comes from the shadow ramp, and gray
      survives only as hover/active tints (which also carry the mint cast, so the whole
      app reads as one family instead of "office gray"). */
 body.light[data-theme-family='cute'] {
-  --bg: #fafcfc;
+  --bg: #ffffff;
   --bgPanel: #ffffff;
   --bgEl: #ffffff;
   --bgHover: #f1f6f6;
@@ -501,7 +501,8 @@ body[data-theme-family='cute'] .liact .liactbtn:hover {
 body[data-theme-family='cute'] .liact .liactbtn.on {
   color: var(--accent);
 }
-body[data-theme-family='cute'] :is(.liact .liactbtn.danger:hover, .liact .del:hover, .li .del:hover) {
+body[data-theme-family='cute']
+  :is(.liact .liactbtn.danger:hover, .liact .del:hover, .li .del:hover) {
   background: color-mix(in srgb, var(--danger) 12%, var(--bgPanel));
   border-color: color-mix(in srgb, var(--danger) 34%, transparent);
   color: var(--danger);
@@ -580,55 +581,69 @@ body[data-theme-family='cute'] .sech {
    ONE filled style: the primary CTA.
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute']
-  :is(.btn, .keyinp, .sel2, .csval, .qother, .srch, .toolsrch, .gsearch, .seg, .gtoggle) {
+  :is(
+    [data-slot='button'],
+    .keyinp,
+    .sel2,
+    .csval,
+    .qother,
+    .srch,
+    .toolsrch,
+    .gsearch,
+    .seg,
+    .gtoggle
+  ) {
   border-radius: var(--r-btn);
 }
-body[data-theme-family='cute'] .btn {
+body[data-theme-family='cute'] [data-slot='button'] {
   padding: 7px 12px;
   font-weight: 550;
 }
-body[data-theme-family='cute'] .btn:hover {
+body[data-theme-family='cute'] [data-slot='button']:hover {
   background: var(--bgHover);
   border-color: var(--border);
   color: var(--text);
 }
 /* The one filled control. Lifts on hover, settles on press. */
-body[data-theme-family='cute'] .btn.pri {
+body[data-theme-family='cute'] [data-slot='button'][data-variant='default'] {
   background: var(--accent);
   color: var(--accentText);
   border-color: transparent;
   font-weight: 600;
   box-shadow: var(--shadow-sm);
 }
-body[data-theme-family='cute'] .btn.pri:hover {
+body[data-theme-family='cute'] [data-slot='button'][data-variant='default']:hover {
   background: var(--accentHover);
   color: var(--accentText);
   border-color: transparent;
   filter: none;
   box-shadow: var(--shadow-md);
 }
-body[data-theme-family='cute'] .btn.pri:active {
+body[data-theme-family='cute'] [data-slot='button'][data-variant='default']:active {
   box-shadow: none;
 }
-body[data-theme-family='cute'] .btn.pri:disabled {
+body[data-theme-family='cute'] [data-slot='button'][data-variant='default']:disabled {
   box-shadow: none;
 }
 /* Destructive stays outlined until it is the committed action. */
-body[data-theme-family='cute'] .btn.gdanger {
+body[data-theme-family='cute'] [data-slot='button'][data-variant='danger'] {
   border-radius: var(--r-btn);
 }
-body[data-theme-family='cute'] .iconbtn {
+/* Nút icon nhỏ (tương đương .iconbtn cũ): cute giữ khổ 30px và bo tròn --r-btn
+   thay vì 32px/r-sm của ladder mặc định. */
+body[data-theme-family='cute'] [data-slot='button'][data-size='iconMd'] {
   width: 30px;
   height: 30px;
+  padding: 0;
   border-radius: var(--r-btn);
   border-color: transparent;
 }
-body[data-theme-family='cute'] .iconbtn:hover {
+body[data-theme-family='cute'] [data-slot='button'][data-size='iconMd']:hover {
   background: var(--bgHover);
   border-color: transparent;
   color: var(--text);
 }
-body[data-theme-family='cute'] .iconbtn.on {
+body[data-theme-family='cute'] [data-slot='button'][data-size='iconMd'].on {
   background: var(--accentSoft);
   color: var(--accent);
   border-color: transparent;
@@ -900,15 +915,20 @@ body[data-theme-family='cute'] .codelang {
   background: color-mix(in srgb, var(--termText) 13%, transparent);
   border-color: transparent;
 }
-body[data-theme-family='cute'] :is(.codecopy, .codewrap) {
+body[data-theme-family='cute'] :is(.codecopy, .codewrap, .codeexpand) {
   border-radius: var(--r-xs);
   background: color-mix(in srgb, var(--termText) 13%, transparent);
   border-color: transparent;
   color: var(--termText);
 }
-body[data-theme-family='cute'] :is(.codecopy, .codewrap):hover {
+body[data-theme-family='cute'] :is(.codecopy, .codewrap, .codeexpand):hover {
   background: color-mix(in srgb, var(--termText) 24%, transparent);
   color: var(--termText);
+}
+/* Grip kéo chiều cao nằm TRONG card code tối (.codeblock overflow:hidden) →
+   cùng màu --termText như phần chrome còn lại của block. */
+body[data-theme-family='cute'] .codehres::before {
+  background: var(--termText);
 }
 /* Prose rhythm (§9): headings get air, bullets breathe, inline code is a soft chip. */
 body[data-theme-family='cute'] .mdinline :is(h1, h2, h3, h4, h5) {
@@ -965,14 +985,12 @@ body[data-theme-family='cute'] .cbox {
   border-radius: var(--r-panel);
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
   background: var(--bgEl);
-  padding: 12px 14px;
+  padding: 4px;
   box-shadow: var(--shadow-md);
 }
 body[data-theme-family='cute'] .cbox:focus-within {
   border-color: var(--accentBorder);
-  box-shadow:
-    var(--shadow-md),
-    var(--shadow-glow);
+  box-shadow: var(--shadow-md), var(--shadow-glow);
 }
 body[data-theme-family='cute'] .cbar {
   margin-top: 10px;
@@ -1243,8 +1261,7 @@ body[data-theme-family='cute']
     .setni,
     .smenu .mi,
     .seg span,
-    .btn,
-    .iconbtn,
+    [data-slot='button'],
     .chip,
     .ghrow,
     .stab,
@@ -1256,19 +1273,18 @@ body[data-theme-family='cute']
     border-color var(--dur) var(--ease),
     box-shadow var(--dur) var(--ease);
 }
-body[data-theme-family='cute'] :is(.btn, .iconbtn, .qopt):active {
+body[data-theme-family='cute'] :is([data-slot='button'], .qopt):active {
   transform: scale(0.975);
 }
 body[data-theme-family='cute'] .tcard:hover {
   transform: translateY(-2px);
 }
 @media (prefers-reduced-motion: reduce) {
-  body[data-theme-family='cute']
-    :is(.smenu, .pop, .stylemenu, .styinfocard, .setmodal),
+  body[data-theme-family='cute'] :is(.smenu, .pop, .stylemenu, .styinfocard, .setmodal),
   body[data-theme-family='cute'] .tst[data-state='open'] {
     animation: none;
   }
-  body[data-theme-family='cute'] :is(.btn, .iconbtn, .qopt):active,
+  body[data-theme-family='cute'] :is([data-slot='button'], .qopt):active,
   body[data-theme-family='cute'] .tcard:hover {
     transform: none;
   }

@@ -187,6 +187,9 @@ export function usePromptCreator(config: PromptCreatorConfig) {
         history,
         userText: trimmed,
         accountId,
+        // Model theo cấu hình AI authoring (Settings → Models) — khớp provider
+        // của account đã resolve (authoringModelFor xử lý fallback cross-provider).
+        modelId: settings.authoringModelFor(provider),
         scope: config.scope(),
         ...(config.extraParams?.() ?? {}),
       })

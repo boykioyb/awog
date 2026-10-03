@@ -35,16 +35,16 @@
     <div v-else-if="sourceKind === 'file'" class="ais-field">
       <label class="ais-label">{{ t('infra.import.file.file.label') }}</label>
       <div class="ais-path-row">
-        <input
+        <Input
           v-model="filePath"
-          class="ais-input mono"
           :placeholder="t('infra.import.file.file.pathPlaceholder')"
           spellcheck="false"
+          class="mono"
         />
-        <button v-if="canBrowse" type="button" class="btn sm" @click="browseFile">
+        <Button v-if="canBrowse" type="button" variant="outline" size="sm" @click="browseFile">
           <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ t('infra.import.file.file.browse') }}
-        </button>
+        </Button>
       </div>
       <div class="ais-hint">{{ t('infra.import.file.file.hint') }}</div>
     </div>
@@ -52,16 +52,16 @@
     <div v-else class="ais-field">
       <label class="ais-label">{{ t('infra.import.file.csv.label') }}</label>
       <div class="ais-path-row">
-        <input
+        <Input
           v-model="csvPath"
-          class="ais-input mono"
           :placeholder="t('infra.import.file.csv.pathPlaceholder')"
           spellcheck="false"
+          class="mono"
         />
-        <button v-if="canBrowse" type="button" class="btn sm" @click="browseCsv">
+        <Button v-if="canBrowse" type="button" variant="outline" size="sm" @click="browseCsv">
           <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
           {{ t('infra.import.file.csv.browse') }}
-        </button>
+        </Button>
       </div>
       <div class="ais-hint">{{ t('infra.import.file.csv.hint') }}</div>
       <!-- Người chưa từng tạo access key đọc hint trên không biết đi đâu tiếp.
@@ -78,6 +78,8 @@
 // này qua defineModel — cha chỉ giữ ref, không cần biết chi tiết UI bên trong.
 import { hasBridge, pickFile } from '~/composables/useFolderPicker'
 import type { AwsProfileImportSource } from '~/composables/useAwsProfilesApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const sourceKind = defineModel<AwsProfileImportSource>('sourceKind', { required: true })
 const pasteText = defineModel<string>('pasteText', { required: true })

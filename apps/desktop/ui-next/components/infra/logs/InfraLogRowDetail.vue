@@ -21,29 +21,36 @@
     </section>
 
     <div class="lrd-acts">
-      <button class="btn sm" type="button" @click="emit('copy', detailText)">
+      <Button type="button" variant="outline" size="sm" @click="emit('copy', detailText)">
         <Icon name="copy" class="lrd-ic" />
         {{ copied ? t('infra.logs.results.copied') : t('infra.logs.row.copyJson') }}
-      </button>
-      <button v-if="message" class="btn sm" type="button" @click="emit('copy', message)">
+      </Button>
+      <Button
+        v-if="message"
+        type="button"
+        variant="outline"
+        size="sm"
+        @click="emit('copy', message)"
+      >
         <Icon name="copy" class="lrd-ic" />
         {{ t('infra.logs.row.copyMessage') }}
-      </button>
-      <button class="btn sm" type="button" @click="emit('send-to-chat', detailText)">
+      </Button>
+      <Button type="button" variant="outline" size="sm" @click="emit('send-to-chat', detailText)">
         <Icon name="message" class="lrd-ic" />
         {{ t('infra.logs.results.sendToChat') }}
-      </button>
+      </Button>
       <!-- Chỉ hiện khi dòng này THẬT SỰ mang một id lần theo được. -->
-      <button
+      <Button
         v-if="traceId"
-        class="btn sm"
         type="button"
         :title="t('infra.logs.results.traceTitle', { id: traceId })"
+        variant="outline"
+        size="sm"
         @click="emit('trace', traceId)"
       >
         <Icon name="branch" class="lrd-ic" />
         {{ t('infra.logs.results.trace') }}
-      </button>
+      </Button>
       <slot name="actions" />
     </div>
   </div>
@@ -61,6 +68,7 @@
 // `redactString` xử lý TRƯỚC khi rời tiến trình con (invariant #1).
 import { traceIdFromRow } from '~/utils/infra-trace-id'
 import type { AwsInsightsRow } from '~/composables/useAwsLogsApi'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   row: AwsInsightsRow

@@ -49,13 +49,14 @@
            bảng rỗng là thứ bấm vào không ra gì. -->
       <div v-if="showSearch" class="srch ikfind">
         <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <input
-          :value="search"
+        <Input
+          unstyled
+          :model-value="search"
           type="text"
           spellcheck="false"
           :placeholder="t('infra.kube.search.ph')"
           :aria-label="t('infra.kube.search.ph')"
-          @input="onSearch"
+          @update:model-value="onSearch"
         />
         <button
           v-if="search"
@@ -86,16 +87,16 @@
       <p class="iwarn">{{ blocked.reason }}</p>
       <div v-if="blocked.command" class="ikcmd">
         <code>{{ blocked.command }}</code>
-        <button type="button" class="btn" @click="kube.copyCommand(blocked.command)">
+        <Button type="button" variant="outline" @click="kube.copyCommand(blocked.command)">
           {{ t('infra.kube.blocked.copy') }}
-        </button>
+        </Button>
       </div>
       <!-- Không có dòng lệnh nghĩa là lỗi trước khi spawn (hay gặp nhất: kubectl
            ngoài allowlist đường dẫn) ⇒ lối sửa nằm trong modal quản lý cluster. -->
-      <button v-else type="button" class="btn" @click="kube.openClusters()">
+      <Button v-else type="button" variant="outline" @click="kube.openClusters()">
         <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('infra.kube.manage.open') }}
-      </button>
+      </Button>
     </div>
 
     <p v-if="namespacesError" class="iwarn">{{ namespacesError }}</p>
@@ -106,15 +107,16 @@
     <p v-if="!pinnedCluster" class="ihint">
       {{ contexts.length ? t('infra.kube.workloads.pickFirst') : t('infra.kube.clusters.noFile') }}
     </p>
-    <button
+    <Button
       v-if="!pinnedCluster && !contexts.length"
       type="button"
-      class="btn ikempty-btn"
+      class="ikempty-btn"
+      variant="outline"
       @click="kube.openClusters()"
     >
       <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('infra.kube.manage.open') }}
-    </button>
+    </Button>
 
     <template v-else>
       <p v-if="activeError" class="ierr">{{ activeError }}</p>
@@ -144,10 +146,10 @@
           />
           <div v-else-if="search.trim()" class="iknomatch">
             <span class="ihint">{{ t('infra.kube.search.noMatch', { q: search }) }}</span>
-            <button type="button" class="btn" @click="search = ''">
+            <Button type="button" variant="outline" @click="search = ''">
               <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.kube.search.clear') }}
-            </button>
+            </Button>
           </div>
           <p v-else-if="!podsLoading && !podsError" class="ihint">
             {{ t('infra.kube.pods.empty') }}
@@ -168,11 +170,11 @@
               <!-- Nút của ĐÚNG hàng đang chạy mới quay; mọi nút ghi khác bị khoá
                    trong lúc đó, để cú bấm thứ hai (chuột đúp / bấm vội vì tưởng
                    chưa ăn) không thành hai `rollout restart`. -->
-              <button
+              <Button
                 type="button"
-                class="btn"
                 :disabled="actionBusy"
                 :aria-busy="restarting === row.name"
+                variant="outline"
                 @click="kube.restartDeployment(row.name)"
               >
                 <Icon
@@ -181,15 +183,15 @@
                   style="width: var(--icon-sm); height: var(--icon-sm)"
                 />
                 {{ t('infra.kube.act.restart') }}
-              </button>
+              </Button>
             </template>
           </InfraKubeTable>
           <div v-else-if="search.trim()" class="iknomatch">
             <span class="ihint">{{ t('infra.kube.search.noMatch', { q: search }) }}</span>
-            <button type="button" class="btn" @click="search = ''">
+            <Button type="button" variant="outline" @click="search = ''">
               <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.kube.search.clear') }}
-            </button>
+            </Button>
           </div>
           <p v-else-if="!deploymentsLoading && !deploymentsError" class="ihint">
             {{ t('infra.kube.deploys.empty') }}
@@ -203,6 +205,8 @@
 <script setup lang="ts">
 import InfraKubeReport from '~/components/infra/kube/InfraKubeReport.vue'
 import type { InfraKubeController, KubeRow } from '~/composables/useInfraKube'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ kube: InfraKubeController }>()
 const {
@@ -233,9 +237,8 @@ const tab = ref<'pods' | 'deployments' | 'report'>('pods')
 const search = ref('')
 const needle = computed(() => search.value.trim().toLowerCase())
 
-function onSearch(e: Event): void {
-  const el = e.target
-  search.value = el instanceof HTMLInputElement ? el.value : ''
+function onSearch(v: string): void {
+  search.value = v
 }
 
 /** Khớp ở TÊN hoặc ở bất kỳ ô nào (trạng thái, số lần restart, tuổi…) — gõ

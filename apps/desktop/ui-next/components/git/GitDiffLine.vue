@@ -52,9 +52,9 @@ const { t } = useI18n()
   padding: 1px 8px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--accent);
-  background: var(--accentDim);
-  border: 1px solid var(--accentBorder);
+  color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  border: 1px solid var(--ring);
   border-radius: var(--r-xs);
   cursor: pointer;
   transition:
@@ -62,8 +62,8 @@ const { t } = useI18n()
     color 0.12s;
 }
 .stagehunk:hover {
-  background: var(--accent);
-  color: var(--accentText);
+  background: var(--primary);
+  color: var(--primary-foreground);
 }
 @media (prefers-reduced-motion: reduce) {
   .stagehunk {

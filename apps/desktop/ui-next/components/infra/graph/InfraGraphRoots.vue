@@ -7,10 +7,10 @@
 
     <template v-else-if="error">
       <p class="igr-state err">{{ error }}</p>
-      <button class="btn sm" type="button" @click="emit('retry')">
+      <Button type="button" variant="outline" size="sm" @click="emit('retry')">
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('infra.graph.roots.retry') }}
-      </button>
+      </Button>
     </template>
 
     <template v-else-if="!roots.length">
@@ -19,10 +19,10 @@
       </span>
       <div class="igr-ttl">{{ t('infra.graph.roots.empty.title') }}</div>
       <p class="igr-body">{{ t('infra.graph.roots.empty.body') }}</p>
-      <button class="btn sm" type="button" @click="emit('retry')">
+      <Button type="button" variant="outline" size="sm" @click="emit('retry')">
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('infra.graph.roots.retry') }}
-      </button>
+      </Button>
     </template>
 
     <template v-else>
@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { graphServiceIcon } from '~/composables/useInfraGraph'
 import type { InfraGraphRoot } from '~/composables/useInfraGraphApi'
+import Button from '~/components/ui/button/Button.vue'
 
 defineProps<{
   roots: InfraGraphRoot[]

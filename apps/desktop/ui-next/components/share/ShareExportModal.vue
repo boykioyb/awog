@@ -86,18 +86,18 @@
         <div v-if="report" class="sx-report">
           <p class="sx-about">{{ t(report.aboutKey) }}</p>
           <div class="sx-report-acts">
-            <button class="btn sm" type="button" @click="saveReportToWiki">
+            <Button type="button" variant="outline" size="sm" @click="saveReportToWiki">
               <Icon name="book" class="sx-btn-icn" />
               {{ t('infra.share.action.wiki') }}
-            </button>
+            </Button>
             <!-- Ngoặc là bắt buộc: `scheduleReport` nhận `kind?`, nên viết trần
                  thì PointerEvent của cú bấm chui vào tham số đầu, `reportInfo()`
                  không tìm thấy loại nào và cú bấm thành im lặng. Gọi rỗng để
                  composable tự lấy loại từ đối tượng đang mở. -->
-            <button class="btn sm" type="button" @click="scheduleReport()">
+            <Button type="button" variant="outline" size="sm" @click="scheduleReport()">
               <Icon name="clock" class="sx-btn-icn" />
               {{ t('infra.share.action.schedule') }}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -135,24 +135,50 @@
         </div>
 
         <footer class="sx-foot">
-          <button class="btn sm" type="button" :disabled="!share.doc" @click="copyMarkdown">
+          <Button
+            type="button"
+            :disabled="!share.doc"
+            variant="outline"
+            size="sm"
+            @click="copyMarkdown"
+          >
             <Icon name="copy" class="sx-btn-icn" />
             {{ t('infra.share.action.copy') }}
-          </button>
-          <button class="btn sm" type="button" :disabled="!share.doc" @click="sendToChat">
+          </Button>
+          <Button
+            type="button"
+            :disabled="!share.doc"
+            variant="outline"
+            size="sm"
+            @click="sendToChat"
+          >
             <Icon name="send" class="sx-btn-icn" />
             {{ t('infra.share.action.chat') }}
-          </button>
-          <button class="btn sm" type="button" :disabled="!share.doc" @click="openFullPreview">
+          </Button>
+          <Button
+            type="button"
+            :disabled="!share.doc"
+            variant="outline"
+            size="sm"
+            @click="openFullPreview"
+          >
             <Icon name="fullscreen" class="sx-btn-icn" />
             {{ t('infra.share.action.preview') }}
-          </button>
+          </Button>
           <span class="sx-gap" />
-          <button class="btn sm" type="button" @click="closeShare">{{ t('common.close') }}</button>
-          <button class="btn sm pri" type="button" :disabled="!share.doc" @click="saveToFile">
+          <Button type="button" variant="outline" size="sm" @click="closeShare">
+            {{ t('common.close') }}
+          </Button>
+          <Button
+            type="button"
+            :disabled="!share.doc"
+            variant="default"
+            size="sm"
+            @click="saveToFile"
+          >
             <Icon name="save" class="sx-btn-icn" />
             {{ t('infra.share.action.save') }}
-          </button>
+          </Button>
         </footer>
       </div>
     </div>
@@ -166,6 +192,7 @@
 import { computed } from 'vue'
 import { useShareExport } from '~/composables/useShareExport'
 import type { ShareAudience } from '~/composables/useShareExport'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const {

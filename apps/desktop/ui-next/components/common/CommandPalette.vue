@@ -5,10 +5,9 @@
         <div class="cmdk-card" role="dialog" aria-modal="true">
           <div class="cmdk-search">
             <Search :size="16" class="cmdk-search-ic" />
-            <input
+            <Input
               ref="inputRef"
               v-model="query"
-              class="cmdk-input"
               :placeholder="t('palette.placeholder')"
               :aria-label="t('palette.placeholder')"
               @keydown.down.prevent="moveDown"
@@ -80,6 +79,7 @@ import { useProjects } from '~/composables/useProjects'
 import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
 import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
 import { useLinkOpen } from '~/composables/useLinkOpen'
+import Input from '~/components/ui/input/Input.vue'
 import {
   highlightSegments,
   rankCommands,
@@ -330,9 +330,10 @@ watch(activeIndex, (i) => {
   display: flex;
   flex-direction: column;
   max-height: 64vh;
-  background: var(--bgEl);
+  background: var(--popover);
+  color: var(--popover-foreground);
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius); /* rounded-lg */
   box-shadow: var(--shadow-lg);
   overflow: hidden;
 }
@@ -345,7 +346,7 @@ watch(activeIndex, (i) => {
   flex-shrink: 0;
 }
 .cmdk-search-ic {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   flex-shrink: 0;
 }
 .cmdk-input {
@@ -354,7 +355,7 @@ watch(activeIndex, (i) => {
   background: transparent;
   border: 0;
   outline: none;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 1em;
   font-family: var(--sans);
 }
@@ -369,14 +370,18 @@ watch(activeIndex, (i) => {
 }
 .cmdk-empty {
   padding: 14px 12px;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   font-size: 1em;
 }
+/* Group header — the shadcn uppercase micro-label idiom. */
 .cmdk-group {
   padding: 8px 10px 4px;
-  font-size: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   line-height: 18px;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .cmdk-row {
   width: 100%;
@@ -384,21 +389,22 @@ watch(activeIndex, (i) => {
   align-items: center;
   gap: 9px;
   padding: 7px 9px;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-xs); /* rounded-sm */
   text-align: left;
-  color: var(--text);
+  color: var(--popover-foreground);
   cursor: pointer;
   background: transparent;
 }
 .cmdk-row.on {
-  background: var(--bgActive);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .cmdk-row-ic {
   flex-shrink: 0;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .cmdk-row.on .cmdk-row-ic {
-  color: var(--accent);
+  color: var(--primary);
 }
 .cmdk-row-label {
   flex: 1;
@@ -410,16 +416,16 @@ watch(activeIndex, (i) => {
   text-overflow: ellipsis;
 }
 .cmdk-row-label .hl {
-  color: var(--accent);
+  color: var(--primary);
   font-weight: 600;
 }
 .cmdk-row-meta {
   flex-shrink: 0;
   max-width: 40%;
   padding: 1px 7px;
-  border-radius: var(--r-pill);
-  background: var(--bgActive);
-  color: var(--textDim);
+  border-radius: var(--r-pill); /* rounded-full */
+  background: var(--muted);
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 18px;
   white-space: nowrap;
@@ -430,7 +436,7 @@ watch(activeIndex, (i) => {
   flex-shrink: 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 .cmdk-foot {
   display: flex;
@@ -440,7 +446,7 @@ watch(activeIndex, (i) => {
   flex-shrink: 0;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 
 .cmdk-enter-active,

@@ -147,7 +147,10 @@
   border-top: 1px solid var(--border);
   margin: 1.2em 0;
 }
+/* Ảnh inline theo proto (.proto-md img): bo --r-btn (= shadcn --radius → lg 10px)
+   + hairline border, để ảnh đọc như một card nhỏ thay vì trôi trên nền prose. */
 .mdbody img {
   max-width: 100%;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-btn);
+  border: 1px solid var(--border);
 }

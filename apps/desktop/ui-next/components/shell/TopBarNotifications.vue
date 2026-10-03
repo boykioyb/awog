@@ -1,6 +1,8 @@
 <template>
   <span class="ntf">
-    <button
+    <Button
+      variant="ghost"
+      size="iconSm"
       class="ntf-btn"
       type="button"
       :class="{ on: open, live: unreadCount > 0 }"
@@ -10,7 +12,7 @@
     >
       <Icon name="bell" style="width: var(--icon-md); height: var(--icon-md)" />
       <span v-if="unreadCount > 0" class="ntf-badge">{{ badge }}</span>
-    </button>
+    </Button>
 
     <div
       v-if="open"
@@ -494,34 +496,25 @@ function openOnGithub(): void {
   flex: 0 0 auto;
   display: inline-flex;
 }
-/* Matches the top bar's .kbd height/round so bell + search read as one row. */
+/* Matches the top bar's .kbd height/round so bell + search read as one row.
+   Geometry/hover/focus come from the ghost iconSm Button; scoped keeps the badge
+   anchor, the transparent border the .on state paints in, and the live/open
+   states. */
 .ntf-btn {
   position: relative;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
   border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
   color: var(--textDim);
-  cursor: pointer;
 }
 .ntf-btn:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
 }
 .ntf-btn.live {
-  color: var(--text);
+  color: var(--foreground);
 }
 .ntf-btn.on {
-  color: var(--accent);
-  border-color: var(--borderStrong);
-  background: var(--bgHover);
-}
-.ntf-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  color: var(--primary);
+  border-color: var(--input);
+  background: var(--accent-wash);
 }
 .ntf-badge {
   position: absolute;
@@ -531,8 +524,8 @@ function openOnGithub(): void {
   height: 16px;
   padding: 0 3px;
   border-radius: var(--r-pill);
-  background: var(--accent);
-  color: var(--bg);
+  background: var(--primary);
+  color: var(--primary-foreground);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
   line-height: 16px;
@@ -551,9 +544,11 @@ function openOnGithub(): void {
   max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
-  border-radius: var(--r-btn);
+  background: var(--popover);
+  /* --input = the stronger hairline the app puts on elevated popovers (.smenu);
+     canonical name for the same value the panel always used. */
+  border: 1px solid var(--input);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-md);
   overflow: hidden;
 }
@@ -572,7 +567,7 @@ function openOnGithub(): void {
 .ntf-head-title {
   flex: 1 1 auto;
   min-width: 0;
-  color: var(--text);
+  color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -587,8 +582,8 @@ function openOnGithub(): void {
   cursor: pointer;
 }
 .ntf-act:hover:not(:disabled) {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .ntf-act:disabled {
   opacity: 0.4;
@@ -623,11 +618,11 @@ function openOnGithub(): void {
   font: inherit;
 }
 .ntf-tab:hover {
-  color: var(--text);
+  color: var(--foreground);
 }
 .ntf-tab.on {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--primary);
+  color: var(--primary);
 }
 .ntf-tab-n {
   font-size: 12px;
@@ -635,7 +630,7 @@ function openOnGithub(): void {
   color: var(--textDim);
 }
 .ntf-tab.on .ntf-tab-n {
-  color: var(--accent);
+  color: var(--primary);
 }
 .ntf-body {
   max-height: min(520px, 68vh);
@@ -664,7 +659,7 @@ function openOnGithub(): void {
   width: 100%;
   min-width: 0;
   /* Opaque: rows scroll UNDER this. */
-  background: var(--bgEl);
+  background: var(--popover);
   border: 0;
   padding: 7px 8px 5px 4px;
   font: inherit;
@@ -675,10 +670,10 @@ function openOnGithub(): void {
 }
 .ntf-grp-head:hover .ntf-grp-name,
 .ntf-grp-head:hover .ntf-grp-chev {
-  color: var(--text);
+  color: var(--foreground);
 }
 .ntf-grp-head:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
   border-radius: var(--r-xs);
 }
@@ -700,12 +695,12 @@ function openOnGithub(): void {
   height: 6px;
   margin-left: auto;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--primary);
 }
 .ntf-grp-name {
   flex: 0 1 auto;
   min-width: 0;
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -749,12 +744,12 @@ function openOnGithub(): void {
   border: 0;
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--text);
+  color: var(--foreground);
   text-align: left;
   cursor: pointer;
 }
 .ntf-cicd-row:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .ntf-cicd-dot {
   flex: 0 0 auto;
@@ -765,13 +760,13 @@ function openOnGithub(): void {
   background: var(--textDim);
 }
 .ntf-cicd-dot.failed {
-  background: var(--danger);
+  background: var(--destructive);
 }
 .ntf-cicd-dot.waiting {
-  background: var(--amber);
+  background: var(--warning);
 }
 .ntf-cicd-row.wait .ntf-cicd-title {
-  color: var(--amber);
+  color: var(--warning);
 }
 .ntf-cicd-body {
   display: flex;
@@ -802,7 +797,7 @@ function openOnGithub(): void {
   color: var(--textDim);
 }
 .ntf-note.err {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .ntf-foot {
   display: flex;
@@ -825,7 +820,7 @@ function openOnGithub(): void {
   flex: 0 0 auto;
   border: 0;
   background: transparent;
-  color: var(--accent);
+  color: var(--primary);
   cursor: pointer;
   font: inherit;
 }

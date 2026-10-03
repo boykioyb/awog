@@ -10,10 +10,9 @@
       <p class="vch-sub">{{ t('vpn.challenge.sub', { name }) }}</p>
       <p class="vch-prompt">{{ promptText }}</p>
 
-      <input
+      <Input
         ref="input"
         v-model="code"
-        class="vch-input"
         :type="echo ? 'text' : 'password'"
         inputmode="text"
         autocomplete="one-time-code"
@@ -27,11 +26,11 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="onCancel">{{ t('common.cancel') }}</button>
+      <Button variant="outline" @click="onCancel">{{ t('common.cancel') }}</Button>
       <span style="flex: 1" />
-      <button class="btn pri" :disabled="!code.trim()" @click="onSubmit">
+      <Button :disabled="!code.trim()" variant="default" @click="onSubmit">
         {{ t('vpn.challenge.submit') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -44,6 +43,8 @@
 // (e.g. a wrong-code retry re-issues the challenge).
 import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean

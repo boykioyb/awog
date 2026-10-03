@@ -24,8 +24,8 @@ interface Summary {
   createdAt: string
   updatedAt: string
   archived?: boolean
-  groupParentId?: string
-  groupRole?: string
+  teamRunId?: string
+  teamRole?: string
   messageCount?: number
 }
 
@@ -42,7 +42,7 @@ vi.mock('../../transport/stdio.js', () => ({
   emit: () => {},
 }))
 
-const { InboxError, listGroupChildren, listSessionContacts, postSessionMessage } = await import(
+const { InboxError, listRunMembers, listSessionContacts, postSessionMessage } = await import(
   '../inbox.js'
 )
 
@@ -180,8 +180,8 @@ describe('postSessionMessage — giao việc cha ↔ con miễn trần hop', () 
     const b = freshId()
     summaries.push(
       session(parent),
-      session(a, { groupParentId: parent }),
-      session(b, { groupParentId: parent }),
+      session(a, { teamRunId: parent }),
+      session(b, { teamRunId: parent }),
     )
     await exhaustHops(a)
     await expect(postSessionMessage({ from: a, to: b, text: 'hỏi ngang' })).rejects.toMatchObject({
@@ -192,7 +192,7 @@ describe('postSessionMessage — giao việc cha ↔ con miễn trần hop', () 
   it('con báo lên CHA thì đi được dù chuỗi đã dài', async () => {
     const parent = freshId()
     const child = freshId()
-    summaries.push(session(parent), session(child, { groupParentId: parent }))
+    summaries.push(session(parent), session(child, { teamRunId: parent }))
     await exhaustHops(child)
     await expect(
       postSessionMessage({ from: child, to: parent, text: 'xong việc' }),
@@ -202,7 +202,7 @@ describe('postSessionMessage — giao việc cha ↔ con miễn trần hop', () 
   it('cha giao xuống CON thì đi được dù chuỗi đã dài', async () => {
     const parent = freshId()
     const child = freshId()
-    summaries.push(session(parent), session(child, { groupParentId: parent }))
+    summaries.push(session(parent), session(child, { teamRunId: parent }))
     await exhaustHops(parent)
     await expect(
       postSessionMessage({ from: parent, to: child, text: 'làm tiếp việc này' }),
@@ -216,7 +216,7 @@ describe('postSessionMessage — giao việc cha ↔ con miễn trần hop', () 
     const child = freshId()
     summaries.push(
       session(parent),
-      session(child, { groupParentId: parent, updatedAt: at(5 * DAY_MS) }),
+      session(child, { teamRunId: parent, updatedAt: at(5 * DAY_MS) }),
     )
     await expect(
       postSessionMessage({ from: parent, to: child, text: 'việc mới' }),
@@ -235,7 +235,7 @@ describe('postSessionMessage — giao việc cha ↔ con miễn trần hop', () 
     const parent = freshId()
     const child = freshId()
     const stranger = freshId()
-    summaries.push(session(parent), session(child, { groupParentId: parent }), session(stranger))
+    summaries.push(session(parent), session(child, { teamRunId: parent }), session(stranger))
     await exhaustHops(parent)
     await postSessionMessage({ from: parent, to: child, text: 'việc' })
     await expect(
@@ -246,18 +246,18 @@ describe('postSessionMessage — giao việc cha ↔ con miễn trần hop', () 
 
 // Nhóm phiên (cây kiểu trang Notion) hiện ra trong danh bạ: một danh bạ chỉ có tiêu
 // đề buộc model phải ĐOÁN xem trong mấy phiên tên na ná nhau thì phiên nào là người
-// review. Tên nhóm = tiêu đề phiên CHA, nên nó phải giải được từ `groupParentId`.
+// review. Tên nhóm = tiêu đề phiên CHA, nên nó phải giải được từ `teamRunId`.
 describe('listSessionContacts — nhóm và vai', () => {
   it('phiên con mang tên nhóm của cha và vai của chính nó', async () => {
     const parent = freshId()
     const child = freshId()
     summaries.push(
       session(parent, { title: 'Ship feature X' }),
-      session(child, { groupParentId: parent, groupRole: 'Reviewer' }),
+      session(child, { teamRunId: parent, teamRole: 'Reviewer' }),
     )
     const contacts = await listSessionContacts(SENDER)
     expect(contacts.find((c) => c.id === child)).toMatchObject({
-      group: 'Ship feature X',
+      team: 'Ship feature X',
       role: 'Reviewer',
     })
   })
@@ -267,10 +267,10 @@ describe('listSessionContacts — nhóm và vai', () => {
     const child = freshId()
     summaries.push(
       session(parent, { title: 'Ship feature X' }),
-      session(child, { groupParentId: parent }),
+      session(child, { teamRunId: parent }),
     )
     const contacts = await listSessionContacts(SENDER)
-    expect(contacts.find((c) => c.id === parent)?.group).toBe('Ship feature X')
+    expect(contacts.find((c) => c.id === parent)?.team).toBe('Ship feature X')
     // Cha không có vai: vai là thứ người dùng đặt cho THÀNH VIÊN trong nhóm.
     expect(contacts.find((c) => c.id === parent)?.role).toBeUndefined()
   })
@@ -279,7 +279,7 @@ describe('listSessionContacts — nhóm và vai', () => {
     const lone = freshId()
     summaries.push(session(lone))
     const contact = (await listSessionContacts(SENDER)).find((c) => c.id === lone)
-    expect(contact?.group).toBeUndefined()
+    expect(contact?.team).toBeUndefined()
     expect(contact?.role).toBeUndefined()
   })
 
@@ -291,27 +291,27 @@ describe('listSessionContacts — nhóm và vai', () => {
     const child = freshId()
     summaries.push(
       session(parent, { title: 'Nhóm nguội', updatedAt: at(2 * DAY_MS) }),
-      session(child, { groupParentId: parent }),
+      session(child, { teamRunId: parent }),
     )
     const contacts = await listSessionContacts(SENDER)
     expect(contacts.map((c) => c.id)).not.toContain(parent)
-    expect(contacts.find((c) => c.id === child)?.group).toBe('Nhóm nguội')
+    expect(contacts.find((c) => c.id === child)?.team).toBe('Nhóm nguội')
   })
 })
 
 // Bảng trạng thái nhóm cho phiên CHA. Luật quan trọng nhất ở đây là thứ nó KHÔNG trả:
 // không preview, không transcript — cùng một luật với danh bạ.
-describe('listGroupChildren — trạng thái phiên con', () => {
+describe('listRunMembers — trạng thái phiên con', () => {
   it('chỉ trả con TRỰC TIẾP, không trả cháu', async () => {
     const parent = freshId()
     const child = freshId()
     const grandchild = freshId()
     summaries.push(
       session(parent),
-      session(child, { groupParentId: parent }),
-      session(grandchild, { groupParentId: child }),
+      session(child, { teamRunId: parent }),
+      session(grandchild, { teamRunId: child }),
     )
-    const rows = await listGroupChildren(parent)
+    const rows = await listRunMembers(parent)
     expect(rows.map((r) => r.id)).toEqual([child])
     // Nhưng vẫn nói được nhánh đó còn sâu bao nhiêu.
     expect(rows[0]?.descendants).toBe(1)
@@ -323,11 +323,11 @@ describe('listGroupChildren — trạng thái phiên con', () => {
     const calm = freshId()
     summaries.push(
       session(parent),
-      session(busy, { groupParentId: parent }),
-      session(calm, { groupParentId: parent }),
+      session(busy, { teamRunId: parent }),
+      session(calm, { teamRunId: parent }),
     )
     running = [busy]
-    const rows = await listGroupChildren(parent)
+    const rows = await listRunMembers(parent)
     expect(rows.find((r) => r.id === busy)?.busy).toBe(true)
     expect(rows.find((r) => r.id === calm)?.busy).toBe(false)
   })
@@ -335,15 +335,15 @@ describe('listGroupChildren — trạng thái phiên con', () => {
   it('bỏ qua phiên con đã lưu trữ', async () => {
     const parent = freshId()
     const gone = freshId()
-    summaries.push(session(parent), session(gone, { groupParentId: parent, archived: true }))
-    await expect(listGroupChildren(parent)).resolves.toEqual([])
+    summaries.push(session(parent), session(gone, { teamRunId: parent, archived: true }))
+    await expect(listRunMembers(parent)).resolves.toEqual([])
   })
 
   it('KHÔNG trả nội dung phiên con — chỉ metadata', async () => {
     const parent = freshId()
     const child = freshId()
-    summaries.push(session(parent), session(child, { groupParentId: parent, groupRole: 'Dev' }))
-    const row = (await listGroupChildren(parent))[0]
+    summaries.push(session(parent), session(child, { teamRunId: parent, teamRole: 'Dev' }))
+    const row = (await listRunMembers(parent))[0]
     // Khoá danh sách field: thêm một field mang nội dung (preview, lastMessage…) sẽ
     // làm test này đỏ, và đó CHÍNH LÀ điều cần xảy ra — nội dung một phiên không được
     // rò sang context của phiên khác.
@@ -361,13 +361,13 @@ describe('listGroupChildren — trạng thái phiên con', () => {
   it('phiên không có con thì trả mảng rỗng', async () => {
     const lone = freshId()
     summaries.push(session(lone))
-    await expect(listGroupChildren(lone)).resolves.toEqual([])
+    await expect(listRunMembers(lone)).resolves.toEqual([])
   })
 })
 
 // Nhóm chỉ có HAI CẤP — kiểm ở tầng vị từ miễn trần: con-của-con không tồn tại, nên
 // "cháu" luôn là anh em của ai đó và chịu trần hop như mọi trao đổi tự phát.
-describe('isGroupHandoff — chỉ đi dọc cạnh cha–con', () => {
+describe('isRunHandoff — chỉ đi dọc cạnh cha–con', () => {
   it('anh em (cùng một cha) KHÔNG được miễn trần', async () => {
     const parent = freshId()
     const a = freshId()
@@ -375,8 +375,8 @@ describe('isGroupHandoff — chỉ đi dọc cạnh cha–con', () => {
     const other = freshId()
     summaries.push(
       session(parent),
-      session(a, { groupParentId: parent }),
-      session(b, { groupParentId: parent }),
+      session(a, { teamRunId: parent }),
+      session(b, { teamRunId: parent }),
       session(other),
     )
     // Đẩy mốc hop của `a` lên 4 (xem exhaustHops ở describe trên).

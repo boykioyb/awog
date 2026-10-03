@@ -61,12 +61,12 @@
       <span v-if="whenLabel" class="ihint">
         {{ t('infra.kube.report.stale', { when: whenLabel }) }}
       </span>
-      <button
+      <Button
         type="button"
-        class="btn"
         :disabled="busy"
         :aria-busy="busy"
         :title="t('infra.kube.report.refreshAll')"
+        variant="outline"
         @click="refresh()"
       >
         <Icon
@@ -74,7 +74,7 @@
           :class="{ ikspin: busy }"
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
-      </button>
+      </Button>
     </div>
 
     <p v-if="!hasAny" class="ihint">{{ t('infra.kube.report.noData') }}</p>
@@ -387,11 +387,11 @@
         </div>
         <div class="ikrep-secb">
           <div class="ikrep-block ikrep-watch ikrep-wide">
-            <button
+            <Button
               type="button"
-              class="btn"
               :class="{ pri: !watching }"
               :aria-pressed="watching"
+              variant="outline"
               @click="toggleWatch()"
             >
               <Icon
@@ -403,7 +403,7 @@
                   ? t('infra.kube.report.monitorStop')
                   : t('infra.kube.report.monitor', { sec: WATCH_SECONDS })
               }}
-            </button>
+            </Button>
             <span v-if="watching" class="ihint" role="status">
               {{ t('infra.kube.report.monitorOn', { when: lastLabel || '—' }) }}
             </span>
@@ -449,14 +449,14 @@
       </section>
 
       <div class="ikrep-acts">
-        <button type="button" class="btn" @click="copyReport()">
+        <Button type="button" variant="outline" @click="copyReport()">
           <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.kube.report.copy') }}
-        </button>
-        <button type="button" class="btn" @click="askAboutReport()">
+        </Button>
+        <Button type="button" variant="outline" @click="askAboutReport()">
           <Icon name="message" style="width: var(--icon-sm); height: var(--icon-sm)" />
           {{ t('infra.kube.report.ask') }}
-        </button>
+        </Button>
       </div>
     </template>
   </div>
@@ -485,6 +485,7 @@ import type { ChartSeriesView, IncidentBand } from '~/composables/useInfraMetric
 import type { WorkloadStat } from '~/utils/kube-report'
 import type { InfraKubeController } from '~/composables/useInfraKube'
 import { copyText } from '~/utils/clipboard'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ kube: InfraKubeController }>()
 const kube = props.kube

@@ -1,117 +1,126 @@
 <template>
-  <div class="wsmld">
-    <div class="wsmld-h">{{ t('sessions.info.mld.title') }}</div>
+  <div class="mt-3.5">
+    <div class="mb-1.5 text-sm text-dim">{{ t('sessions.info.mld.title') }}</div>
 
     <!-- Segmented picker — one bucket at a time, each with its own count. -->
-    <div class="wsmld-seg">
+    <div class="mb-2 flex gap-1">
       <button
         v-for="tab in TABS"
         :key="tab"
         type="button"
-        class="wsmld-segbtn"
-        :class="{ on: tab === active }"
+        :class="[
+          'flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium leading-4 transition-colors',
+          tab === active
+            ? 'border-ring bg-primary/10 text-primary'
+            : 'border-transparent text-dim hover:bg-accent hover:text-foreground',
+        ]"
         @click="pick(tab)"
       >
         <span>{{ t(`sessions.info.mld.tab.${tab}`) }}</span>
-        <span v-if="counts[tab]" class="wsmld-n tnum">{{ counts[tab] }}</span>
+        <span
+          v-if="counts[tab]"
+          class="text-xs leading-4 tabular-nums"
+          :class="tab === active ? 'text-primary' : 'text-faint'"
+        >
+          {{ counts[tab] }}
+        </span>
       </button>
     </div>
 
     <!-- Media — thumbnail grid (images resolve their bytes lazily; video/audio show
          a play tile). Clicking opens the shared PreviewModal. -->
     <template v-if="active === 'media'">
-      <div v-if="media.length" class="wsmld-grid">
+      <div v-if="media.length" class="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-1.5">
         <button
           v-for="m in media"
           :key="m.key"
           type="button"
-          class="wsmld-tile"
+          class="group flex min-w-0 flex-col items-stretch gap-1 overflow-hidden text-left"
           :title="m.detail"
           @click="openFile(m)"
         >
-          <img v-if="thumbOf(m)" class="wsmld-thumb" :src="thumbOf(m)" :alt="m.name" />
-          <span v-else class="wsmld-tileic">
-            <Icon
-              :name="m.isImage ? 'file' : 'play'"
-              style="width: var(--icon-md); height: var(--icon-md)"
-            />
+          <img
+            v-if="thumbOf(m)"
+            class="aspect-square w-full rounded-md border border-border bg-muted object-cover transition-colors group-hover:border-ring"
+            :src="thumbOf(m)"
+            :alt="m.name"
+          />
+          <span
+            v-else
+            class="flex aspect-square w-full items-center justify-center rounded-md border border-border bg-muted text-faint transition-colors group-hover:border-ring"
+          >
+            <component :is="m.isImage ? File : Play" class="size-4" />
           </span>
-          <span class="wsmld-tilename">{{ m.name }}</span>
+          <span
+            class="line-clamp-2 w-full min-w-0 text-xs leading-4 text-dim [overflow-wrap:anywhere]"
+          >
+            {{ m.name }}
+          </span>
         </button>
       </div>
-      <p v-else class="wsmld-empty">{{ t('sessions.info.mld.emptyMedia') }}</p>
+      <p v-else class="py-1 text-faint">{{ t('sessions.info.mld.emptyMedia') }}</p>
     </template>
 
     <!-- Links — every http(s) URL the session mentioned. Opens in the OS browser. -->
     <template v-else-if="active === 'links'">
-      <div v-for="l in links" :key="l.key" class="wsmld-row">
-        <button type="button" class="wsmld-rowmain" :title="l.url" @click="openLink(l)">
-          <Icon
-            name="link"
-            style="
-              width: var(--icon-xs);
-              height: var(--icon-xs);
-              flex: 0 0 auto;
-              color: var(--textDim);
-            "
-          />
-          <span class="wsmld-main">
-            <span class="wsmld-name">{{ l.label }}</span>
-            <span class="wsmld-sub">{{ l.host }}</span>
-          </span>
-          <Icon
-            name="external"
-            style="
-              width: var(--icon-xs);
-              height: var(--icon-xs);
-              flex: 0 0 auto;
-              color: var(--textFaint);
-            "
-          />
-        </button>
-        <button
+      <div
+        v-for="l in links"
+        :key="l.key"
+        class="flex w-full items-center border-b border-border text-left transition-colors hover:bg-accent"
+      >
+        <Button
+          variant="ghost"
           type="button"
-          class="wsmld-act"
+          class="h-auto p-0 flex min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-left"
+          :title="l.url"
+          @click="openLink(l)"
+        >
+          <Link class="size-3 shrink-0 text-dim" />
+          <span class="flex min-w-0 flex-1 flex-col gap-px">
+            <span class="truncate text-foreground">{{ l.label }}</span>
+            <span class="truncate text-xs leading-4 text-faint">{{ l.host }}</span>
+          </span>
+          <ExternalLink class="size-3 shrink-0 text-faint" />
+        </Button>
+        <Button
+          variant="ghost"
+          type="button"
+          class="h-auto p-0 flex size-6 shrink-0 items-center justify-center rounded-sm text-faint transition-colors hover:bg-accent hover:text-foreground"
           :title="copiedKey === l.key ? t('common.copied') : t('common.copy')"
+          :aria-label="copiedKey === l.key ? t('common.copied') : t('common.copy')"
           @click="copyLink(l)"
         >
-          <Icon
-            :name="copiedKey === l.key ? 'check' : 'copy'"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
-        </button>
+          <component :is="copiedKey === l.key ? Check : Copy" class="size-3" />
+        </Button>
       </div>
-      <p v-if="!links.length" class="wsmld-empty">{{ t('sessions.info.mld.emptyLinks') }}</p>
+      <p v-if="!links.length" class="py-1 text-faint">{{ t('sessions.info.mld.emptyLinks') }}</p>
     </template>
 
     <!-- Docs — every non-media file: attachments, files the session wrote, files the
          model handed over. Opens in the shared PreviewModal. -->
     <template v-else>
-      <button
+      <Button
         v-for="d in docs"
         :key="d.key"
+        variant="outline"
         type="button"
-        class="wsmld-row wsmld-rowmain"
+        class="h-auto p-0 flex w-full items-center gap-2 border-b border-border px-1 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
         :title="d.detail"
         @click="openFile(d)"
       >
-        <Icon
-          name="file"
-          style="
-            width: var(--icon-xs);
-            height: var(--icon-xs);
-            flex: 0 0 auto;
-            color: var(--textDim);
-          "
-        />
-        <span class="wsmld-main">
-          <span class="wsmld-name">{{ d.name }}</span>
-          <span class="wsmld-sub">{{ d.detail }}</span>
+        <File class="size-3 shrink-0 text-dim" />
+        <span class="flex min-w-0 flex-1 flex-col gap-px">
+          <span class="truncate">{{ d.name }}</span>
+          <span class="truncate text-xs leading-4 text-faint">{{ d.detail }}</span>
         </span>
-        <span v-if="d.size != null" class="wsmld-size tnum">{{ formatBytes(d.size) }}</span>
-        <span class="wsmld-kind">{{ t(`sessions.info.mld.origin.${d.origin}`) }}</span>
-      </button>
-      <p v-if="!docs.length" class="wsmld-empty">{{ t('sessions.info.mld.emptyDocs') }}</p>
+        <span v-if="d.size != null" class="shrink-0 text-xs leading-4 tabular-nums text-faint">
+          {{ formatBytes(d.size) }}
+        </span>
+        <span class="shrink-0 text-xs leading-4 text-muted-foreground">
+          {{ t(`sessions.info.mld.origin.${d.origin}`) }}
+        </span>
+      </Button>
+      <p v-if="!docs.length" class="py-1 text-faint">{{ t('sessions.info.mld.emptyDocs') }}</p>
     </template>
   </div>
 </template>
@@ -126,6 +135,7 @@
 // assertInsideWorkspace, cached per path). Reads happen only while the Media tab is
 // open and are capped — a session that wrote hundreds of screenshots must not turn
 // opening the Info tab into hundreds of IPC reads.
+import { Check, Copy, ExternalLink, File, Link, Play } from 'lucide-vue-next'
 import type { Session } from '~/composables/useSessionsData'
 import {
   useSessionMediaIndex,
@@ -135,6 +145,7 @@ import {
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { formatBytes } from '~/utils/format-bytes'
 import { copyText } from '~/utils/clipboard'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ session: Session }>()
 
@@ -214,193 +225,3 @@ watch(filePreview.imagesVersion, () => {
   void resolveThumbs()
 })
 </script>
-
-<style scoped>
-.wsmld {
-  margin-top: 14px;
-}
-/* Section title — same weight as the Context files header above it. */
-.wsmld-h {
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  margin-bottom: 6px;
-}
-/* Segmented picker — transparent + accent-tint when on (no gray surface fills). */
-.wsmld-seg {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-.wsmld-segbtn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 10px;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  background: transparent;
-  color: var(--textDim);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  font-weight: 500;
-  cursor: pointer;
-}
-.wsmld-segbtn:hover {
-  color: var(--text);
-  background: var(--bgHover);
-}
-.wsmld-segbtn.on {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-}
-.wsmld-n {
-  color: var(--textFaint);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-}
-.wsmld-segbtn.on .wsmld-n {
-  color: var(--accent);
-}
-/* Media grid — square thumbnails, filename under each tile. */
-.wsmld-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 6px;
-}
-.wsmld-tile {
-  display: flex;
-  flex-direction: column;
-  /* `stretch` and `hidden` are BOTH load-bearing, not defaults restated: a <button>
-     carries UA styles no reset touches, so the name box is pinned to the tile width
-     here rather than trusted to inherit it, and the tile clips its own paint so a
-     long filename can never be drawn over the neighbouring tile. */
-  align-items: stretch;
-  overflow: hidden;
-  gap: 4px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  text-align: left;
-  min-width: 0;
-}
-.wsmld-thumb,
-.wsmld-tileic {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  object-fit: cover;
-}
-.wsmld-tileic {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--textFaint);
-}
-.wsmld-tile:hover .wsmld-thumb,
-.wsmld-tile:hover .wsmld-tileic {
-  border-color: var(--accentBorder);
-}
-/* Two lines, broken anywhere. One nowrap line ellipsised at ~85px showed "CleanSh…"
-   of "CleanShot 2026-09-12 at 06.34.22@2x.png" — a label that names nothing. Screenshot
-   filenames have no spaces to break at, hence `anywhere`; `-webkit-box` + line-clamp is
-   the recipe that works on this Chromium (same as TopBarNotifyRow). Full name on hover
-   via the tile's title. */
-.wsmld-tilename {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  width: 100%;
-  min-width: 0;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-/* Link / doc rows — same rhythm as the context-files rows above them. The shell owns
-   the divider + hover; `.wsmld-rowmain` is the clickable body. A link row needs both
-   (its copy action is a second button, which cannot nest inside the first); a doc row
-   carries both classes on one element. */
-.wsmld-row {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  color: var(--text);
-  text-align: left;
-}
-.wsmld-row:hover {
-  background: var(--bgHover);
-}
-.wsmld-rowmain {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
-  padding: 6px 4px;
-  background: transparent;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-.wsmld-act {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  border: none;
-  border-radius: var(--r-xs);
-  background: transparent;
-  color: var(--textFaint);
-  cursor: pointer;
-}
-.wsmld-act:hover {
-  color: var(--text);
-  background: var(--bgActive);
-}
-.wsmld-main {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-.wsmld-name,
-.wsmld-sub {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.wsmld-sub {
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textFaint);
-}
-.wsmld-size,
-.wsmld-kind {
-  flex: 0 0 auto;
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  color: var(--textDim);
-}
-.wsmld-size {
-  color: var(--textFaint);
-}
-.wsmld-empty {
-  color: var(--textFaint);
-  padding: 4px 0;
-}
-</style>

@@ -4,8 +4,9 @@
 // snapshot exists for the message, the rewind is conversation-only.
 
 import { z } from 'zod'
-import { register } from '../transport/rpc.js'
+import { register, RpcError } from '../transport/rpc.js'
 import { truncateSession, loadSession } from '../sessions/store.js'
+import { isCliAttached } from '../sessions/cli-registry.js'
 import { restoreSnapshot } from '../sessions/snapshots.js'
 import { loadProject } from '../projects/store.js'
 import { removeSdkSession } from '../runtime/claude-sdk/store.js'
@@ -19,6 +20,12 @@ const Params = z.object({
 
 register('sessions.rewind', async (raw) => {
   const params = Params.parse(raw)
+
+  // Cùng cổng CLI-đang-gắn của truncate: rewind cắt transcript + khôi phục file
+  // dưới chân một CLI đang resume shared transcript → từ chối -32021.
+  if (isCliAttached(params.sessionId)) {
+    throw new RpcError(-32021, 'A CLI is attached to this session — close it before rewinding')
+  }
 
   // Conversation: drop every message after the target (it is kept). The
   // truncation invalidates the Claude SDK resume handle (fold clears

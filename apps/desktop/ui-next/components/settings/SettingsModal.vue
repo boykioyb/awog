@@ -4,17 +4,18 @@
       <div class="setmodal setmodal-lg">
         <div class="setmodalhd">
           <span>{{ t('nav.settings') }}</span>
-          <button
-            class="iconbtn"
-            style="width: 28px; height: 28px"
+          <Button
+            variant="ghost"
+            size="iconSm"
             :title="t('common.close')"
+            :aria-label="t('common.close')"
             @click="closeSettings"
           >
             <Icon name="x" />
-          </button>
+          </Button>
         </div>
         <div class="settwo">
-          <SettingsNav :sections="SETTINGS_SECTIONS" :active="section" @select="section = $event" />
+          <SettingsNav :groups="SETTINGS_GROUPS" :active="section" @select="section = $event" />
           <SettingsPane :active="section" />
         </div>
       </div>
@@ -28,7 +29,7 @@
 // open/section state lives in useSettingsModal so the NavRail trigger drives it.
 // Accounts hydrate from the sidecar each time the modal opens.
 import { watch } from 'vue'
-import { SETTINGS_SECTIONS } from '~/components/settings/sections'
+import { SETTINGS_GROUPS } from '~/components/settings/sections'
 import { useSettingsStore } from '~/stores/settings'
 
 const { t } = useI18n()

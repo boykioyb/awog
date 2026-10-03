@@ -28,9 +28,8 @@
 
         <div class="ifield">
           <div class="ilbl">{{ t('infra.cicd.filter.branch') }}</div>
-          <input
+          <Input
             v-model="branchFilter"
-            class="icinput"
             type="text"
             :placeholder="t('infra.cicd.filter.branchAny')"
             :disabled="loading"
@@ -49,12 +48,12 @@
           />
         </div>
 
-        <button
+        <Button
           type="button"
-          class="btn"
           :disabled="loading"
           :aria-busy="loading"
           :title="t('infra.cicd.refresh')"
+          variant="outline"
           @click="refresh()"
         >
           <Icon
@@ -63,7 +62,7 @@
             style="width: var(--icon-sm); height: var(--icon-sm)"
           />
           {{ t('infra.cicd.refresh') }}
-        </button>
+        </Button>
       </div>
 
       <!-- `v-if`: cụm RỖNG vẫn là một mục flex, và với `margin-left: auto` nó vẫn
@@ -191,14 +190,15 @@
             <b>{{ detail?.run.project ?? '' }}</b>
             <span class="icdsub">{{ detail?.run.title ?? '' }}</span>
           </div>
-          <button
+          <Button
             type="button"
-            class="iconbtn"
             :title="t('infra.cicd.close')"
+            variant="outline"
+            size="iconMd"
             @click="closeDetail()"
           >
             <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
         </div>
 
         <div v-if="detailLoading" class="icdnote">{{ t('infra.cicd.loading') }}</div>
@@ -234,54 +234,59 @@
           <div v-if="detail.approvals.length" class="icdapprove">
             <div v-for="ap in detail.approvals" :key="ap.id" class="icdapv">
               <span>{{ t('infra.cicd.approvalPending', { label: ap.label }) }}</span>
-              <button
+              <Button
                 type="button"
-                class="btn"
                 :disabled="busy"
+                variant="outline"
                 @click="decide(detail.run, ap.id, true)"
               >
                 {{ t('infra.cicd.approve') }}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                class="btn"
                 :disabled="busy"
+                variant="outline"
                 @click="decide(detail.run, ap.id, false)"
               >
                 {{ t('infra.cicd.reject') }}
-              </button>
+              </Button>
             </div>
           </div>
 
           <div class="icdacts">
-            <button
+            <Button
               v-if="detail.run.status === 'failed'"
               type="button"
-              class="btn"
               :disabled="busy"
+              variant="outline"
               @click="rerun(detail.run)"
             >
               <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.cicd.action.rerun') }}
-            </button>
-            <button
+            </Button>
+            <Button
               v-if="isLive(detail.run.status)"
               type="button"
-              class="btn"
               :disabled="busy"
+              variant="outline"
               @click="cancel(detail.run)"
             >
               <Icon name="stop" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.cicd.action.cancel') }}
-            </button>
-            <button type="button" class="btn" :disabled="busy" @click="openDispatch(detail.run)">
+            </Button>
+            <Button
+              type="button"
+              :disabled="busy"
+              variant="outline"
+              @click="openDispatch(detail.run)"
+            >
               <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.cicd.action.dispatch') }}
-            </button>
-            <button type="button" class="btn" :disabled="busy" @click="askAbout(detail.run)">
+            </Button>
+            <Button type="button" :disabled="busy" variant="outline" @click="askAbout(detail.run)">
               <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('infra.cicd.askAgent') }}
-            </button>
+            </Button>
           </div>
 
           <div class="icdsec">
@@ -376,14 +381,15 @@
       <div class="icmodalbox">
         <div class="icdhead">
           <b>{{ t('infra.cicd.action.dispatch') }}</b>
-          <button
+          <Button
             type="button"
-            class="iconbtn"
             :title="t('infra.cicd.close')"
+            variant="outline"
+            size="iconMd"
             @click="closeDispatch()"
           >
             <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          </button>
+          </Button>
         </div>
         <div class="icdnote">
           {{ t('infra.cicd.consequence.dispatch', { project: dispatchRun?.project ?? '' }) }}
@@ -404,21 +410,21 @@
           </div>
           <div class="ifield">
             <div class="ilbl">{{ t('infra.cicd.form.ref') }}</div>
-            <input v-model="dispatchRefValue" class="icinput" type="text" placeholder="main" />
+            <Input v-model="dispatchRefValue" type="text" placeholder="main" />
           </div>
         </div>
         <div class="icdacts">
-          <button
+          <Button
             type="button"
-            class="btn pri"
             :disabled="busy || (dispatchRun?.source === 'github' && !dispatchWorkflow)"
+            variant="default"
             @click="submitDispatch()"
           >
             {{ t('infra.cicd.action.dispatch') }}
-          </button>
-          <button type="button" class="btn" @click="closeDispatch()">
+          </Button>
+          <Button type="button" variant="outline" @click="closeDispatch()">
             {{ t('common.cancel') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -438,6 +444,8 @@ import {
 } from '~/composables/useInfraCicd'
 import type { CicdRun, CicdSource, CicdStep } from '~/composables/useInfraCicdApi'
 import { useLinkOpen } from '~/composables/useLinkOpen'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 
@@ -866,15 +874,6 @@ function openPr(pr: { url: string }): void {
 }
 .linkbtn.strong {
   color: var(--amber);
-}
-.iconbtn {
-  display: grid;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  color: var(--textMuted);
-  cursor: pointer;
-  padding: 4px;
 }
 .icdetail {
   flex: 0 0 380px;

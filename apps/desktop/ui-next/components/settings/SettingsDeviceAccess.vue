@@ -5,17 +5,22 @@
         <div class="acc-title">{{ t('settings.devices.access.title') }}</div>
         <div class="acc-hint">{{ t('settings.devices.access.hint') }}</div>
       </div>
-      <button class="btn sm" :title="t('settings.devices.access.copy')" @click="copy">
+      <Button :title="t('settings.devices.access.copy')" variant="outline" size="sm" @click="copy">
         <Icon
           :name="copied ? 'check' : 'copy'"
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
         {{ copied ? t('settings.devices.access.copied') : t('settings.devices.access.copy') }}
-      </button>
-      <button class="btn sm" :title="t('settings.devices.access.qr')" @click="showQr = !showQr">
+      </Button>
+      <Button
+        :title="t('settings.devices.access.qr')"
+        variant="outline"
+        size="sm"
+        @click="showQr = !showQr"
+      >
         <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ showQr ? t('settings.devices.access.hideQr') : t('settings.devices.access.qr') }}
-      </button>
+      </Button>
     </div>
 
     <code class="acc-url">{{ url }}</code>
@@ -36,6 +41,7 @@
 // leave on screen — scanning it grants nothing on its own.
 import QRCode from 'qrcode'
 import { computed, ref, watch } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ host: string; port: number }>()
 

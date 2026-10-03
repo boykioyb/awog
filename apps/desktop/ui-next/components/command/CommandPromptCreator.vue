@@ -38,28 +38,28 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button v-if="draft" class="btn" @click="resetDraft">
+      <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      <Button v-if="draft" variant="outline" @click="resetDraft">
         <Icon name="refresh" />
         {{ t('commands.creator.regenerate') }}
-      </button>
-      <button v-if="draft" class="btn" @click="onEditDetails">
+      </Button>
+      <Button v-if="draft" variant="outline" @click="onEditDetails">
         <Icon name="edit" />
         {{ t('commands.creator.editDetails') }}
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!draft"
-        class="btn pri"
         :disabled="isGenerating || !prompt.trim()"
+        variant="default"
         @click="onGenerate"
       >
         <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
         {{ isGenerating ? t('commands.creator.generating') : t('commands.creator.generate') }}
-      </button>
-      <button v-else class="btn pri" @click="onSave">
+      </Button>
+      <Button v-else variant="default" @click="onSave">
         <Icon name="save" />
         {{ t('commands.creator.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -78,6 +78,7 @@ import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import type { CommandSeed } from '~/composables/useCommandsPage'
 import { useSidecar } from '~/composables/useSidecar'
 import { useCommandsStore } from '~/stores/commands'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

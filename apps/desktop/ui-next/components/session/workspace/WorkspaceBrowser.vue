@@ -1,5 +1,5 @@
 <template>
-  <div class="wsbr">
+  <div class="flex h-full min-h-0 flex-col">
     <!-- Browser-dev / không có shell Electron: không có Chromium nào để nhúng. -->
     <div v-if="!available" class="empty" style="padding: 30px">
       <div class="et">{{ t('sessions.workspace.browser.unavailable') }}</div>
@@ -30,15 +30,21 @@
         @close="onClose"
       />
 
-      <div v-if="error" class="wsbr-err">{{ error }}</div>
+      <div v-if="error" class="shrink-0 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive">
+        {{ error }}
+      </div>
 
       <!-- Khung xem. Element này CHỈ là placeholder: trang web là một view native
            do main process đặt đúng lên hình chữ nhật này (ADR 0086) — vì thế không
            có iframe nào ở đây, và hộp phải giữ kích thước ổn định. Hai state phụ
            thuộc sự thật của view: "đang hiện chỗ khác" (elsewhere) thắng trước,
            rồi tới "tab trắng" (empty) — tab trắng không bao giờ được attach nên
-           DOM ở đây thật sự nhìn thấy. -->
-      <div ref="viewportEl" class="wsbr-view">
+           DOM ở đây thật sự nhìn thấy. `.wsbr-view` không còn là selector hook —
+           sizing đi qua `closest('.wpanel')` trên chính element này. -->
+      <div
+        ref="viewportEl"
+        class="relative flex min-h-0 flex-1 items-center justify-center bg-background"
+      >
         <BrowserElsewhere v-if="elsewhere" :where="elsewhereWhere" @takeover="takeOver" />
         <BrowserEmptyState v-else-if="empty" @open="onEmptyOpen" />
       </div>
@@ -63,12 +69,11 @@ import { useBrowserPanelSizing } from '~/composables/useBrowserPanelSizing'
 import { useBrowserPip } from '~/composables/useBrowserPip'
 import { useWorkspaceData } from '~/composables/useWorkspaceData'
 import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
-import { useSessionsStore } from '~/stores/sessions'
+import type { Session } from '~/composables/useSessionsData'
 
-const props = defineProps<{ active?: boolean }>()
+const props = defineProps<{ active?: boolean; session: Session }>()
 
 const { t } = useI18n()
-const sessions = useSessionsStore()
 const viewportEl = useTemplateRef<HTMLElement>('viewportEl')
 
 const {
@@ -96,6 +101,10 @@ const {
   // đi mỗi lần đổi tab), nên "đang hiện" là một prop chứ không phải trạng thái mount
   // — view native vẫn phải rời màn hình trong cả hai đường.
   visible: () => props.active !== false,
+  // Browser THEO PHIÊN: prop `session` (không phải `sessions.active`) vì một panel
+  // đang ngủ trong KeepAlive vẫn là panel CỦA session đó — nó phải giữ đúng scope
+  // của mình kể cả lúc người dùng đang mở session khác.
+  scope: () => props.session.engineId,
 })
 
 // Sizing/dock/expand của panel — đo hộp flex qua `closest('.wpanel')` từ chính
@@ -128,10 +137,10 @@ watch(
   { immediate: true },
 )
 
-// Project của session đang xem → root tuyệt đối để lưu ảnh chụp trang. Panel không
-// truyền `session` xuống view này, nên lấy từ store: view Browser chỉ render bên
-// trong session đang hiển thị, và `active` chính là session đó.
-const project = computed(() => sessions.active?.project)
+// Project của session SỞ HỮU panel này → root tuyệt đối để lưu ảnh chụp trang.
+// Đọc từ prop chứ không phải `sessions.active`: panel ngủ trong KeepAlive vẫn
+// thuộc về session của nó.
+const project = computed(() => props.session.project)
 const { root } = useWorkspaceData(project)
 
 // "Ở chỗ khác" cụ thể là ở đâu: `shownElsewhere` (main báo) ⇒ cửa sổ popout/app
@@ -153,31 +162,3 @@ const onEmptyOpen = (url: string): Promise<void> => {
 const { toggleView } = useWorkspacePanel()
 const onClose = (): void => toggleView('Browser')
 </script>
-
-<style scoped>
-.wsbr {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-}
-.wsbr-err {
-  padding: 6px 10px;
-  color: var(--danger);
-  background: var(--dangerBg);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  flex-shrink: 0;
-}
-/* Hộp placeholder mà view native che lên. Tự giữ background để panel không loé
-   qua trong nhịp giữa một lần resize và lúc view bám theo. */
-.wsbr-view {
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
-  background: var(--bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-</style>

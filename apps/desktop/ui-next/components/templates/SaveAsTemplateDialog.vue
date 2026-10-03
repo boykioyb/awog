@@ -19,7 +19,7 @@
 
       <div class="tpd-field">
         <label class="tpd-label">{{ t('templates.saveDialog.name') }}</label>
-        <input v-model="name" class="tpd-input" :placeholder="t('templates.saveDialog.namePh')" />
+        <Input v-model="name" :placeholder="t('templates.saveDialog.namePh')" />
       </div>
 
       <div class="tpd-field">
@@ -51,10 +51,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave || saving" @click="onSave">
+      <Button variant="outline" @click="emit('close')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave || saving" variant="default" @click="onSave">
         {{ t('templates.saveDialog.confirm', { count: selectedEntities.length }) }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -68,6 +68,8 @@
 import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import {
   KIND_ORDER,
   useTemplatesStore,

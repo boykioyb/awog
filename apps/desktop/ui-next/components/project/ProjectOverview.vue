@@ -145,10 +145,10 @@
       <div class="kvrow">
         <span class="kvk">{{ t('projects.overview.llm') }}</span>
         <span class="kvv">
-          <button v-if="!compact" class="btn sm" @click="emit('open-llm')">
+          <Button v-if="!compact" variant="outline" size="sm" @click="emit('open-llm')">
             <Icon name="brain" />
             {{ llmLabel }}
-          </button>
+          </Button>
           <span v-else style="display: inline-flex; align-items: center; gap: 6px">
             <Icon name="brain" style="width: var(--icon-xs); height: var(--icon-xs)" />
             {{ llmLabel }}
@@ -192,21 +192,27 @@
         </span>
         <span v-else>{{ t('projects.import.done', { n: justImported }) }}</span>
         <span style="flex: 1" />
-        <button v-if="importable.length" class="btn sm pri" :disabled="importing" @click="onImport">
+        <Button
+          v-if="importable.length"
+          :disabled="importing"
+          variant="default"
+          size="sm"
+          @click="onImport"
+        >
           {{
             importing
               ? t('projects.import.importing')
               : t('projects.import.action', { n: importable.length })
           }}
-        </button>
+        </Button>
       </div>
     </div>
 
     <div v-if="!compact" style="display: flex; justify-content: flex-end; margin-top: 6px">
-      <button class="btn sm" style="color: var(--danger)" @click="emit('delete')">
+      <Button style="color: var(--danger)" variant="outline" size="sm" @click="emit('delete')">
         <Icon name="trash" />
         {{ t('projects.overview.removeProject') }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -227,6 +233,7 @@ import { useSettingsStore } from '~/stores/settings'
 import { useGhAccounts } from '~/composables/useGhAccounts'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { Project } from '~/types'
+import Button from '~/components/ui/button/Button.vue'
 
 // `compact` (quick-view modal): hide destructive / management controls (remove
 // project, config-import banner, LLM-defaults button → static label) so the panel

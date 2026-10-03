@@ -100,7 +100,7 @@
   "projects.drawer.linkCopied": "Đã copy liên kết ✓",
   "projects.drawer.startReview": "Bắt đầu review trong session",
   "projects.drawer.startReviewShort": "Review",
-  "projects.gh.reviewSessionTitle": "Review #{number}",
+  "projects.gh.reviewSessionTitle": "Review",
   "projects.drawer.close": "Đóng",
   "projects.drawer.fullscreen": "Toàn màn hình",
   "projects.drawer.exitFullscreen": "Thoát toàn màn hình",

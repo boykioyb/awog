@@ -109,6 +109,19 @@ export function useFsApi() {
         content,
       })
     },
+    // Binary sibling — export bundles (.zip). Same workspaceRoot/path gate.
+    writeFileBase64: async (
+      workspaceRoot: string,
+      path: string,
+      contentBase64: string,
+    ): Promise<{ bytesWritten: number }> => {
+      if (!available) return { bytesWritten: 0 }
+      return sidecar.request<{ bytesWritten: number }>('fs.writeFileBase64', {
+        workspaceRoot,
+        path,
+        contentBase64,
+      })
+    },
     createFile: async (workspaceRoot: string, path: string): Promise<{ ok: true }> => {
       if (!available) return { ok: true }
       return sidecar.request<{ ok: true }>('fs.createFile', { workspaceRoot, path })

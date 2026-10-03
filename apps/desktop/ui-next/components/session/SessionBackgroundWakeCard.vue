@@ -8,18 +8,19 @@
       <div class="bgwake-title">{{ title }}</div>
       <div class="bgwake-sub" :title="lastCommand">{{ subtitle }}</div>
     </div>
-    <button type="button" class="bgwake-go" @click="onContinue">
+    <Button size="xs" @click="onContinue">
       <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
       <span>{{ t('sessions.bg.wake.continue') }}</span>
-    </button>
-    <button
-      type="button"
+    </Button>
+    <Button
+      variant="ghost"
+      size="iconSm"
       class="bgwake-x"
       :title="t('sessions.bg.wake.dismiss')"
       @click="onDismiss"
     >
       <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
+    </Button>
   </div>
 </template>
 
@@ -62,19 +63,21 @@ function onDismiss(): void {
 </script>
 
 <style scoped>
+/* Wake card — primary-tinted alert strip (card shape, primary accent edge),
+   muted mono subtitle, primary "continue" + ghost dismiss actions. */
 .bgwake {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 6px 12px 0;
-  padding: 8px 10px;
-  border-radius: var(--r-sm);
-  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  color: var(--text);
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+  color: var(--foreground);
 }
 .bgwake-ic {
-  color: var(--accent);
+  color: var(--primary);
   flex: none;
 }
 .bgwake-body {
@@ -89,41 +92,17 @@ function onDismiss(): void {
 .bgwake-sub {
   font-size: 12px;
   line-height: 18px;
-  opacity: 0.6;
+  color: var(--muted-foreground);
   font-family: var(--code, monospace);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.bgwake-go {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  flex: none;
-  padding: 4px 10px;
-  border-radius: var(--r-xs);
-  font-size: 12px;
-  line-height: 18px;
-  font-weight: 600;
-  color: #fff;
-  background: var(--accent);
-  transition: opacity 0.12s var(--ease, ease);
-}
-.bgwake-go:hover {
-  opacity: 0.88;
-}
+/* Ghost dismiss — quieter than the default ghost text until hovered. */
 .bgwake-x {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  padding: 3px;
-  border-radius: var(--r-xs);
-  color: var(--text);
-  opacity: 0.5;
-  transition: opacity 0.12s var(--ease, ease);
+  color: var(--muted-foreground);
 }
 .bgwake-x:hover {
-  opacity: 1;
+  color: var(--foreground);
 }
 </style>

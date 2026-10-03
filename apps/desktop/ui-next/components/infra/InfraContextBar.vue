@@ -67,9 +67,10 @@
             <div class="ilbl">{{ t('infra.profile.label') }}</div>
             <label class="srch ictx-srch">
               <Icon name="search" />
-              <input
+              <Input
                 ref="profileSearchEl"
                 v-model="profileQuery"
+                unstyled
                 type="text"
                 role="combobox"
                 aria-autocomplete="list"
@@ -122,9 +123,10 @@
             <div class="ilbl">{{ t('infra.region.label') }}</div>
             <label class="srch ictx-srch">
               <Icon name="search" />
-              <input
+              <Input
                 ref="regionSearchEl"
                 v-model="regionQuery"
+                unstyled
                 type="text"
                 role="combobox"
                 aria-autocomplete="list"
@@ -182,6 +184,7 @@ import { useEscToClose } from '~/composables/useEscToClose'
 import { AWS_REGIONS } from '~/utils/aws-regions'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { AwsProfile } from '~/types'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   /** Danh sách GỐC từ `~/.aws` (chưa lọc theo ô tìm của tab Tài khoản). */

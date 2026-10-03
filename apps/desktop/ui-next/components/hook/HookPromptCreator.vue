@@ -41,26 +41,26 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
       <template v-if="!draft">
-        <button class="btn pri" :disabled="isGenerating || !prompt.trim()" @click="onGenerate">
+        <Button :disabled="isGenerating || !prompt.trim()" variant="default" @click="onGenerate">
           <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
           {{ isGenerating ? t('hooks.creator.generating') : t('hooks.creator.generate') }}
-        </button>
+        </Button>
       </template>
       <template v-else>
-        <button class="btn" @click="resetDraft">
+        <Button variant="outline" @click="resetDraft">
           <Icon name="refresh" />
           {{ t('hooks.creator.regenerate') }}
-        </button>
-        <button class="btn" @click="onEditDetails">
+        </Button>
+        <Button variant="outline" @click="onEditDetails">
           <Icon name="edit" />
           {{ t('hooks.creator.editDetails') }}
-        </button>
-        <button class="btn pri" @click="onSave">
+        </Button>
+        <Button variant="default" @click="onSave">
           <Icon name="save" />
           {{ t('hooks.creator.save') }}
-        </button>
+        </Button>
       </template>
     </template>
   </LibraryEntityModal>
@@ -78,6 +78,7 @@ import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import LibraryScopePicker from '~/components/library/LibraryScopePicker.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useHooksStore, type Hook, type HookConfig } from '~/stores/hooks'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(
   defineProps<{

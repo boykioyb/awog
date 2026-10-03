@@ -36,12 +36,12 @@
       <div class="ske-grid">
         <div class="ske-field">
           <label class="ske-label">{{ t('skills.editor.slug') }}</label>
-          <input
-            class="ske-input mono"
-            :value="draft.id"
+          <Input
+            :model-value="draft.id"
             placeholder="e.g. code-review"
             spellcheck="false"
-            @input="onSlugInput"
+            class="mono"
+            @update:model-value="onSlugInput"
           />
           <div class="ske-hint">
             {{ t('skills.editor.slugHint', { slug: draft.id || 'slug' }) }}
@@ -49,13 +49,13 @@
         </div>
         <div class="ske-field">
           <label class="ske-label">{{ t('skills.editor.icon') }}</label>
-          <input v-model="draft.icon" class="ske-input" placeholder="e.g. 🔍" />
+          <Input v-model="draft.icon" placeholder="e.g. 🔍" />
         </div>
       </div>
 
       <div class="ske-field">
         <label class="ske-label">{{ t('skills.editor.name') }}</label>
-        <input v-model="draft.name" class="ske-input" :placeholder="t('skills.editor.namePh')" />
+        <Input v-model="draft.name" :placeholder="t('skills.editor.namePh')" />
       </div>
 
       <div class="ske-field">
@@ -89,10 +89,10 @@
               </button>
             </span>
           </div>
-          <input
+          <Input
             v-model="globInput"
-            class="ske-input mono"
             placeholder="e.g. *.test.ts (Enter)"
+            class="mono"
             @keydown.enter.prevent="addChip('globs', globInput, () => (globInput = ''))"
           />
         </div>
@@ -109,9 +109,8 @@
               </button>
             </span>
           </div>
-          <input
+          <Input
             v-model="allowInput"
-            class="ske-input"
             placeholder="e.g. Bash (Enter)"
             @keydown.enter.prevent="addChip('alwaysAllow', allowInput, () => (allowInput = ''))"
           />
@@ -131,9 +130,8 @@
             </button>
           </span>
         </div>
-        <input
+        <Input
           v-model="sourceInput"
-          class="ske-input"
           placeholder="e.g. github (Enter)"
           @keydown.enter.prevent="addChip('requiredSources', sourceInput, () => (sourceInput = ''))"
         />
@@ -141,10 +139,10 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button class="btn pri" :disabled="!canSave" @click="onSave">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button :disabled="!canSave" variant="default" @click="onSave">
         {{ t('skills.editor.save') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -158,6 +156,8 @@ import { computed, ref, watch } from 'vue'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import type { Skill, SkillSource } from '~/stores/skills'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   open: boolean
@@ -266,8 +266,8 @@ watch(
   },
 )
 
-const onSlugInput = (e: Event) => {
-  draft.value.id = (e.target as HTMLInputElement).value
+const onSlugInput = (v: string) => {
+  draft.value.id = v
     .toLowerCase()
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-+/g, '-')

@@ -63,6 +63,10 @@ interface TerminalRecord {
   pty: PtyProcess
   // Ring buffer output (xem RING BUFFER bên dưới).
   buffer: string
+  // Internal-only exit callback (sessions.openCli → CLI transcript importer).
+  // Distinct from the `terminal.exit` UI event: this fires inside the sidecar so
+  // an importer can run even when no renderer is listening.
+  onExit?: ((exitCode: number, signal?: number) => void) | undefined
 }
 
 // RING BUFFER — vì sao có:
@@ -231,6 +235,8 @@ class TerminalManager {
     // Grouping key only (list/limit). Not a security boundary — the command safety
     // is the caller's, per the note above.
     sessionId: string
+    // Sidecar-internal exit hook (see TerminalRecord.onExit). Never exposed to RPC.
+    onExit?: ((exitCode: number, signal?: number) => void) | undefined
   }): Promise<{ terminalId: string }> {
     if (!isAbsolute(params.cwd)) throw new Error('cwd must be absolute')
     const pty = await getPty()
@@ -250,12 +256,17 @@ class TerminalManager {
       cwd: params.cwd,
       env: params.env,
     })
-    return { terminalId: this.track(proc, params.sessionId, params.cwd) }
+    return { terminalId: this.track(proc, params.sessionId, params.cwd, params.onExit) }
   }
 
   // Register a freshly spawned PTY: ring buffer + terminal.data/exit fan-out. Shared
   // by create() and spawnProcess() so both stream + reap identically.
-  private track(proc: PtyProcess, sessionId: string, workspaceRoot: string): string {
+  private track(
+    proc: PtyProcess,
+    sessionId: string,
+    workspaceRoot: string,
+    onExit?: ((exitCode: number, signal?: number) => void) | undefined,
+  ): string {
     const terminalId = `term-${Date.now().toString(36)}-${(this.idCounter += 1).toString(36)}`
     const record: TerminalRecord = {
       terminalId,
@@ -264,6 +275,7 @@ class TerminalManager {
       createdAt: Date.now(),
       pty: proc,
       buffer: '',
+      ...(onExit ? { onExit } : {}),
     }
     this.terminals.set(terminalId, record)
     // Màn Giám sát quy CPU/RAM của PTY (và mọi lệnh chạy trong nó) về đúng phiên
@@ -279,6 +291,14 @@ class TerminalManager {
       this.terminals.delete(terminalId)
       unregisterOwnedProcess(proc.pid)
       emit('terminal.exit', { terminalId, sessionId, exitCode, signal })
+      try {
+        record.onExit?.(exitCode, signal)
+      } catch (err) {
+        log.warn('terminal: onExit hook failed', {
+          terminalId,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
     })
 
     return terminalId
@@ -311,6 +331,14 @@ class TerminalManager {
     return [...this.terminals.values()]
       .filter((t) => sessionId === undefined || t.sessionId === sessionId)
       .map((t) => ({ terminalId: t.terminalId, sessionId: t.sessionId, createdAt: t.createdAt }))
+  }
+
+  // Khoá gom nhóm mà record được spawn dưới (`ses:…`, `cli:…`, `global:…`,
+  // `ssh:…`) — undefined khi record không còn. sessions.delete kiểm chứng một
+  // cli-link có còn PTY thật phía sau hay không trước khi coi nó là stale
+  // (cli-registry); bề mặt remote cần cùng thông tin qua terminal.list.
+  groupKeyFor(terminalId: string): string | undefined {
+    return this.terminals.get(terminalId)?.sessionId
   }
 
   // Terminal đang mở trong ĐÚNG workspace root này, mới nhất trước.

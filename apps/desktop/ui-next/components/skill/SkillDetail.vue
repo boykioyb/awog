@@ -6,31 +6,43 @@
       <span class="tag mono">/{{ skill.id }}</span>
       <span class="tag" :class="{ acc: isProject }" :title="sourcePath">{{ sourceLabel }}</span>
       <span style="flex: 1" />
-      <button
-        class="iconbtn skd-act"
+      <Button
         :class="{ on: showCheck }"
         :title="showCheck ? t('skillsEval.close') : t('skillsEval.open')"
+        class="skd-act"
+        variant="outline"
+        size="iconMd"
         @click="showCheck = !showCheck"
       >
         <Icon name="scan" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button class="iconbtn skd-act" :title="t('skills.detail.edit')" @click="emit('edit')">
+      </Button>
+      <Button
+        :title="t('skills.detail.edit')"
+        class="skd-act"
+        variant="outline"
+        size="iconMd"
+        @click="emit('edit')"
+      >
         <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="iconbtn skd-act"
+      </Button>
+      <Button
         :title="t('skills.detail.duplicate')"
+        class="skd-act"
+        variant="outline"
+        size="iconMd"
         @click="emit('duplicate')"
       >
         <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button
-        class="iconbtn skd-act skd-danger"
+      </Button>
+      <Button
         :title="t('skills.detail.delete')"
+        class="skd-act skd-danger"
+        variant="outline"
+        size="iconMd"
         @click="emit('delete')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <div class="dscroll">
@@ -77,6 +89,7 @@ import { computed, ref } from 'vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import SkillCheckPanel from '~/components/skill/SkillCheckPanel.vue'
 import type { Skill } from '~/stores/skills'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   skill: Skill

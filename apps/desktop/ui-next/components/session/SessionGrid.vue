@@ -43,10 +43,10 @@
       <!-- Thêm phiên: gõ TÊN hoặc id. Dán id thì thêm thẳng; gõ tên thì hiện danh sách
            khớp để chọn — người dùng nhớ tên phiên chứ không nhớ `260915-agent-3f2a`. -->
       <div class="sgaddwrap">
-        <input
+        <Input
           v-model="query"
-          class="sgadd"
           :placeholder="t('sessions.grid.searchPlaceholder')"
+          class="sgadd"
           @keydown.enter.prevent="addFirstMatch"
           @keydown.esc.prevent="query = ''"
         />
@@ -83,7 +83,7 @@
 
 <script setup lang="ts">
 // Chế độ LƯỚI của một phiên: các phiên CON của nó (và, nếu bật, chính nó), mỗi phiên
-// một ô có transcript và composer riêng (docs/features/session-groups.md).
+// một ô có transcript và composer riêng (docs/features/session-runs.md).
 //
 // Vì sao nó đáng có: một phiên điều phối mà phải bấm qua bấm lại từng phiên con thì
 // người dùng mất hết cảm giác "cả nhóm đang làm gì". Bảng trạng thái (tab Group) trả
@@ -100,6 +100,7 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useSessionsStore } from '~/stores/sessions'
 import { useSessionsData, type Session } from '~/composables/useSessionsData'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   // Phiên GỐC của lưới (phiên cha). Các ô mặc định là những phiên con của nó.
@@ -170,7 +171,7 @@ watch(
 const children = computed<Session[]>(() => {
   const eid = props.session.engineId
   if (!eid) return []
-  return store.sessions.filter((s) => s.groupParentId === eid)
+  return store.sessions.filter((s) => s.teamRunId === eid)
 })
 const childEids = computed(() => new Set(children.value.map((c) => c.engineId ?? '')))
 const parentEid = computed(() => props.session.engineId ?? '')
@@ -217,7 +218,7 @@ type Chip = {
 const chipOf = (s: Session): Chip => ({
   id: s.id,
   engineId: s.engineId ?? '',
-  label: s.groupRole || s.title,
+  label: s.teamRole || s.title,
   title: s.title,
   color: STATUS_COLOR[s.status],
   shown: !!s.engineId && visible.value.includes(s.engineId),
@@ -257,7 +258,7 @@ const matches = computed(() => {
     .filter(
       (s) =>
         s.title.toLowerCase().includes(q) ||
-        (s.groupRole ?? '').toLowerCase().includes(q) ||
+        (s.teamRole ?? '').toLowerCase().includes(q) ||
         (s.engineId ?? '').toLowerCase().includes(q),
     )
     .slice(0, MAX_MATCHES)
@@ -265,7 +266,7 @@ const matches = computed(() => {
       id: s.id,
       engineId: s.engineId ?? '',
       title: s.title,
-      role: s.groupRole ?? '',
+      role: s.teamRole ?? '',
       color: STATUS_COLOR[s.status],
     }))
 })
@@ -307,10 +308,12 @@ function openFull(id: number) {
   gap: 6px;
 }
 .sglbl {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
+/* Pane-toggle chips: rounded-full muted surface; a LIT chip is a primary tint
+   (same "on" idiom as .stab-btn.on / the open-state list buttons), not a fill. */
 .sgchip {
   display: inline-flex;
   align-items: center;
@@ -318,8 +321,8 @@ function openFull(id: number) {
   padding: 2px 8px;
   border: 1px solid var(--border);
   border-radius: var(--r-pill);
-  background: transparent;
-  color: var(--textDim);
+  background: var(--muted);
+  color: var(--muted-foreground);
   cursor: pointer;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
@@ -329,12 +332,12 @@ function openFull(id: number) {
   white-space: nowrap;
 }
 .sgchip:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .sgchip.on {
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
-  color: var(--accent);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  color: var(--primary);
 }
 .sgchip.is-extra {
   cursor: default;
@@ -357,34 +360,39 @@ function openFull(id: number) {
   height: 14px;
   background: var(--border);
 }
+/* Add-session field — the proto search idiom (muted surface, borderless, ring on
+   focus) as a hand-rolled input: it is compact (hugs the chip row), so no <Input>. */
 .sgadd {
   width: 190px;
   padding: 3px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
-  background: var(--bgInput);
-  color: var(--text);
+  background: var(--muted);
+  color: var(--foreground);
   font-family: var(--sans);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   outline: none;
 }
-.sgadd:focus {
-  border-color: var(--accent);
+.sgadd::placeholder {
+  color: var(--muted-foreground);
+}
+.sgadd:focus-visible {
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .sgaddb {
   padding: 3px 10px;
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
 .sgaddb:hover:not(:disabled) {
-  border-color: var(--accentBorder);
-  color: var(--accent);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+  color: var(--primary);
 }
 .sgaddb:disabled {
   opacity: 0.4;
@@ -403,8 +411,8 @@ function openFull(id: number) {
   max-height: 260px;
   overflow-y: auto;
   padding: 4px;
-  background: var(--bgEl);
-  border: 1px solid var(--borderStrong);
+  background: var(--popover);
+  border: 1px solid var(--border);
   border-radius: var(--r-sm);
   box-shadow: var(--shadow-lg);
 }
@@ -415,15 +423,15 @@ function openFull(id: number) {
   padding: 6px 8px;
   border-radius: var(--r-xs);
   cursor: pointer;
-  color: var(--text);
+  color: var(--foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
 }
 .sgmi:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .sgmi.is-empty {
-  color: var(--textFaint);
+  color: var(--muted-foreground);
   cursor: default;
 }
 .sgmi.is-empty:hover {
@@ -438,7 +446,7 @@ function openFull(id: number) {
 }
 .sgmr {
   flex: 0 0 auto;
-  color: var(--accent);
+  color: var(--primary);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
@@ -469,6 +477,6 @@ function openFull(id: number) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--textFaint);
+  color: var(--muted-foreground);
 }
 </style>

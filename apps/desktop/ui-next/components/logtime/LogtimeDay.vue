@@ -11,24 +11,37 @@
           <span class="ltheads">{{ dayMeta }}</span>
         </span>
         <span class="ltsp" />
-        <button class="btn ltbtn" type="button" :disabled="store.busy" @click="pullRange">
+        <Button
+          type="button"
+          :disabled="store.busy"
+          class="ltbtn"
+          variant="outline"
+          @click="pullRange"
+        >
           <Icon name="refresh" />
           {{ t('logtime.action.pull') }}
-        </button>
-        <button class="btn ltbtn" type="button" :disabled="!hasYesterday" @click="copyYesterday">
+        </Button>
+        <Button
+          type="button"
+          :disabled="!hasYesterday"
+          class="ltbtn"
+          variant="outline"
+          @click="copyYesterday"
+        >
           <Icon name="copy" />
           {{ t('logtime.action.copy') }}
-        </button>
+        </Button>
         <!-- Chỉ đọc: mở báo cáo của ngày để chép ra ngoài. Không gửi gì lên PMS. -->
-        <button
-          class="btn ltbtn"
+        <Button
           type="button"
           :disabled="entries.length === 0"
+          class="ltbtn"
+          variant="outline"
           @click="openReport"
         >
           <Icon name="file" />
           {{ t('logtime.report.open') }}
-        </button>
+        </Button>
       </div>
 
       <!-- Nội dung ngày (cuộn) + cột phải "Hôm nay bạn đã làm", dán liền nhau như bản
@@ -124,7 +137,7 @@
               >
                 <Icon name="edit" />
               </button>
-              <input
+              <Input
                 v-model="formNote"
                 :placeholder="formComposing ? t('logtime.form.composing') : t('logtime.form.note')"
                 :disabled="formComposing"
@@ -143,11 +156,11 @@
                 +
               </button>
             </div>
-            <button type="button" class="btn ltbtn" @click="openTaskPicker">
+            <Button type="button" class="ltbtn" variant="outline" @click="openTaskPicker">
               <Icon name="link" />
               <span v-if="!formTask">{{ t('logtime.form.attach') }}</span>
               <span v-else class="tnum">#{{ formTask.issue ?? '—' }}</span>
-            </button>
+            </Button>
             <button
               v-if="formTask"
               type="button"
@@ -157,9 +170,9 @@
             >
               <Icon name="x" />
             </button>
-            <button type="submit" class="btn pri ltbtn" :disabled="formComposing">
+            <Button type="submit" :disabled="formComposing" class="ltbtn" variant="default">
               {{ t('logtime.form.add') }}
-            </button>
+            </Button>
           </form>
 
           <!-- Popover sửa note (dùng chung với LogtimeRow). Neo theo ô note; tự chọn mở
@@ -209,23 +222,25 @@
         <!-- "Xem trước payload" mở ĐÚNG modal của nút đẩy — bản phác cũng nối hai nút
              vào một handler, và modal đã bày payload từng dòng nên đây không phải nút
              giả: nó là lối vào chỉ-đọc của cùng một thứ. -->
-        <button
-          class="btn ltbtn"
+        <Button
           type="button"
           :disabled="drafts.length === 0 || store.busy"
+          class="ltbtn"
+          variant="outline"
           @click="openPush"
         >
           {{ t('logtime.action.preview') }}
-        </button>
-        <button
-          class="btn pri ltbtn"
+        </Button>
+        <Button
           type="button"
           :disabled="drafts.length === 0 || store.busy"
+          class="ltbtn"
+          variant="default"
           @click="openPush"
         >
           <Icon name="arrow-up" />
           {{ t('logtime.action.push', { n: drafts.length }) }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -237,6 +252,8 @@
 import { computed, ref, useTemplateRef } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const {

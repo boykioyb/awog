@@ -35,5 +35,7 @@
   "github.inbox.author": "Người tạo: {login}",
   "github.inbox.tabHint.all": "Mọi thread chưa đọc của tài khoản GitHub này",
   "github.inbox.tabHint.watched": "Chỉ repo của project đã chọn ở Settings → Git — những repo được phép bắn toast",
-  "github.inbox.notWatched": "không theo dõi"
+  "github.inbox.notWatched": "không theo dõi",
+  "github.comment.open": "Mở comment {id} trên GitHub",
+  "github.comment.openFailed": "Không mở được comment {id} trên GitHub"
 }

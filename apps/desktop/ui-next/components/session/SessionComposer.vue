@@ -1,5 +1,5 @@
 <template>
-  <div class="composer">
+  <div class="composer" :class="{ cdis: disabled }">
     <div
       class="cresize"
       :class="{ drag: resizing }"
@@ -41,7 +41,7 @@
           :class="{ editing: editingQueued === i }"
           :title="editingQueued === i ? '' : t('sessions.composer.queued')"
         >
-          <Icon name="clock" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Clock style="width: var(--icon-xs); height: var(--icon-xs)" />
           <textarea
             v-if="editingQueued === i"
             :ref="focusQueuedInput"
@@ -62,14 +62,14 @@
               :title="t('sessions.composer.queuedEdit')"
               @click.stop="startQueuedEdit(i)"
             >
-              <Icon name="edit" style="width: var(--icon-xs); height: var(--icon-xs)" />
+              <PenLine style="width: var(--icon-xs); height: var(--icon-xs)" />
             </span>
             <span
               class="qsend"
               :title="t('sessions.composer.queuedSendNow')"
               @click.stop="sendQueuedNow(i)"
             >
-              <Icon name="send" style="width: var(--icon-xs); height: var(--icon-xs)" />
+              <SendHorizontal style="width: var(--icon-xs); height: var(--icon-xs)" />
             </span>
             <span class="x" :title="t('sessions.composer.queuedRemove')" @click.stop="dequeue(i)">
               ×
@@ -96,30 +96,15 @@
 
       <!-- persistent while /compact runs; else transient built-in command feedback -->
       <div v-if="compacting" class="cmdnotice compacting">
-        <Icon
-          name="refresh"
-          class="cmdspin"
-          style="width: var(--icon-xs); height: var(--icon-xs)"
-        />
+        <Loader2 class="cmdspin" style="width: var(--icon-xs); height: var(--icon-xs)" />
         {{ t('sessions.command.notice.compacting') }}
       </div>
       <div v-else-if="commandNotice" class="cmdnotice">{{ commandNotice }}</div>
 
-      <!-- textarea is single-purpose composer input → resize handled by .cresize handle -->
-      <textarea
-        ref="ta"
-        v-model="draft"
-        class="ci"
-        rows="1"
-        :placeholder="t('sessions.composer.placeholder')"
-        @input="onInput"
-        @keydown.down="onAcArrow($event, 1)"
-        @keydown.up="onAcArrow($event, -1)"
-        @keydown.esc="closeAutocomplete"
-        @keydown.enter="onEnter"
-        @paste="onPaste"
-      />
-      <div class="attc">
+      <!-- Pending attachments — INSIDE the card directly above the input (proto
+           order: quotes → attachments → textarea). Chips preview via the shared
+           modal, × removes, overflow collapses into "+N". -->
+      <div v-if="attachments.length" class="attc pattc">
         <span
           v-for="(a, i) in visibleAtt"
           :key="i"
@@ -130,12 +115,8 @@
         >
           <img v-if="a.img && a.src" :src="a.src" class="attthumb" :alt="a.name" />
           <span v-else-if="a.img" class="thumb" />
-          <Icon
-            v-else-if="a.folder"
-            name="folder"
-            style="width: var(--icon-xs); height: var(--icon-xs)"
-          />
-          <Icon v-else name="rules" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <Folder v-else-if="a.folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <FileText v-else style="width: var(--icon-xs); height: var(--icon-xs)" />
           <span class="attn">{{ a.name }}</span>
           <span
             class="x"
@@ -154,18 +135,173 @@
           {{ t('sessions.attachment.more', { n: overflowCount }) }}
         </span>
       </div>
+
+      <!-- textarea is single-purpose composer input → resize handled by .cresize handle -->
+      <textarea
+        ref="ta"
+        v-model="draft"
+        class="ci"
+        rows="1"
+        :disabled="disabled"
+        :placeholder="t('sessions.composer.placeholder')"
+        @input="onInput"
+        @keydown.down="onAcArrow($event, 1)"
+        @keydown.up="onAcArrow($event, -1)"
+        @keydown.esc="closeAutocomplete"
+        @keydown.enter="onEnter"
+        @paste="onPaste"
+      />
       <!-- Pinned context (session working-set) is managed entirely from the pin button's
            popover below; the button shows a count so the bar stays uncluttered. -->
 
       <!-- soft budget warning: cumulative cost crossed the limit (no block). -->
       <div v-if="budgetOver" class="budgetwarn">
-        <Icon name="alert" style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
+        <TriangleAlert style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
         {{ t('sessions.budget.warnBanner', { cost: budgetLabel }) }}
       </div>
 
       <div class="cbar">
-        <!-- Per-turn Mode chip (Ask/Plan/AcceptEdits/Execute). Model / Account /
-             Reasoning-effort / Style moved to the global status-bar chips. -->
+        <!-- `+` menu (proto parity): label "Attach" → the native file/folder
+             picker. The proto's per-type rows (Image / Video / Markdown) collapse
+             into the ONE real attach action — the system dialog is type-agnostic
+             and picks all of them. "Insert" types the autocomplete trigger for
+             you: `/` opens the slash menu, `@` the mention menu — the menus stay
+             single-source instead of a second picker drifting from them. -->
+        <DropdownMenu @update:open="ddGuard">
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              class="cico"
+              :title="t('sessions.composer.attach')"
+              :aria-label="t('sessions.composer.attach')"
+            >
+              <Plus />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" class="w-56">
+            <DropdownMenuLabel>{{ t('sessions.composer.attachTitle') }}</DropdownMenuLabel>
+            <DropdownMenuItem @click="emit('pick')">
+              <Paperclip />
+              {{ t('sessions.composer.attach') }}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>{{ t('sessions.composer.insert') }}</DropdownMenuLabel>
+            <!-- Literal trigger glyphs — the same `/` and `@` the slash/mention
+                 menus render, matching the proto's Slash/AtSign icons. -->
+            <DropdownMenuItem @click="insertSlash">
+              <span class="cmat">/</span>
+              {{ t('sessions.composer.slashCommands') }}
+            </DropdownMenuItem>
+            <DropdownMenuItem @click="insertMention">
+              <span class="cmat">@</span>
+              {{ t('sessions.composer.mentionTitle') }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <span class="csep" />
+        <!-- Model + reasoning-effort pickers (proto composer parity). The ghost-sm
+             triggers open real menus fed by useSessionModelConfig — the SAME data
+             source as the status-bar StatusConfig, so both surfaces list and write
+             identical values (store actions underneath). Bound to THIS composer's
+             session so a grid pane edits its own, not the active tab's. -->
+        <DropdownMenu
+          v-if="target"
+          @update:open="
+            (v: boolean) => {
+              ddGuard(v)
+              if (v) modelSection = 'model'
+            }
+          "
+        >
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="cpick text-muted-foreground"
+              :title="t('sessions.composer.modelTooltip')"
+              :aria-label="t('statusbar.cfg.model')"
+            >
+              <Sparkles />
+              <span class="cpicklbl">{{ selectedModel }}</span>
+              <ChevronDown class="opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" class="w-52">
+            <!-- Model + account đi một cặp: account quyết định model nào khả dụng,
+                 nên menu này có hai tab — cùng quy ước segment của StatusConfig.
+                 Tab account chỉ đổi account của session, không phải của app. -->
+            <div class="cseg">
+              <button
+                class="cseg-b"
+                :class="{ on: modelSection === 'model' }"
+                @click.stop="modelSection = 'model'"
+              >
+                {{ t('statusbar.cfg.model') }}
+              </button>
+              <button
+                class="cseg-b"
+                :class="{ on: modelSection === 'account' }"
+                @click.stop="modelSection = 'account'"
+              >
+                {{ t('statusbar.cfg.account') }}
+              </button>
+            </div>
+            <template v-if="modelSection === 'model'">
+              <DropdownMenuItem v-for="m in availableModels" :key="m" @click="selectModel(m)">
+                <span class="min-w-0 flex-1 truncate">{{ m }}</span>
+                <Check v-if="m === selectedModel" class="ml-auto text-primary" />
+              </DropdownMenuItem>
+            </template>
+            <template v-else>
+              <DropdownMenuItem v-if="!accounts.length" disabled>
+                <span class="min-w-0 flex-1 text-muted-foreground">
+                  {{ t('sessions.config.noAccountHint') }}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem v-for="a in accounts" :key="a.id" @click="selectAccount(a)">
+                <span class="min-w-0 flex-1 truncate">{{ a.display }}</span>
+                <Check v-if="a.id === selectedAccountId" class="ml-auto text-primary" />
+              </DropdownMenuItem>
+            </template>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <!-- Effort hides on models that can't reason — the mirror of the status
+             bar's hidden segment rule. -->
+        <DropdownMenu v-if="target && thinkSupported" @update:open="ddGuard">
+          <DropdownMenuTrigger as-child>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="cpick text-muted-foreground"
+              :title="t('statusbar.effort.title')"
+              :aria-label="t('statusbar.effort.title')"
+            >
+              <span class="cpicklbl">{{ thinkingLabel }}</span>
+              <ChevronDown class="opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" class="w-36">
+            <DropdownMenuLabel>{{ t('statusbar.effort.title') }}</DropdownMenuLabel>
+            <DropdownMenuItem v-for="[v, l] in THINK" :key="v" @click="selectThink(v)">
+              <span class="min-w-0 flex-1 truncate">{{ l }}</span>
+              <Check v-if="v === thinking && !ultracodeOn" class="ml-auto text-primary" />
+            </DropdownMenuItem>
+            <!-- Bậc thứ sáu, chỉ nhánh Claude SDK (ADR 0089) — cùng hàng và cùng
+                 hint với picker ở status bar. -->
+            <DropdownMenuItem
+              v-if="ultracodeSupported"
+              :title="t('common.thinking.ultracodeHint')"
+              @click="selectUltracode"
+            >
+              <span class="min-w-0 flex-1 truncate">{{ t('common.thinking.ultracode') }}</span>
+              <Check v-if="ultracodeOn" class="ml-auto text-primary" />
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <!-- Per-turn Mode chip (Ask/Plan/AcceptEdits/Execute) — a production extra
+             the proto lacks; it stays on the row AFTER the two pickers. Model /
+             account / effort / style still live on the status-bar chips too. -->
         <span
           class="chip sm chipbtn"
           :class="`mode-${selectedMode}`"
@@ -173,9 +309,9 @@
           style="position: relative"
           @click.stop="toggle('mode')"
         >
-          <Icon :name="modeIcon" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <component :is="modeIcon" class="mico" />
           {{ t(`sessions.mode.${selectedMode}`) }}
-          <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <ChevronDown class="mchev opacity-60" />
           <div
             v-if="open === 'mode'"
             class="smenu"
@@ -183,36 +319,33 @@
             @click.stop
           >
             <div v-for="m in MODES_UI" :key="m.id" class="mi" @click="selectMode(m.id)">
-              <Icon :name="m.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <component :is="m.icon" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t(`sessions.mode.${m.id}`) }}
-              <Icon
+              <Check
                 v-if="m.id === selectedMode"
-                name="check"
                 class="ck"
                 style="width: var(--icon-sm); height: var(--icon-sm)"
               />
             </div>
           </div>
         </span>
-        <span class="grow1" />
         <!-- Overflow (session-ui-refactor §3.7): nguồn MCP · ghim context · làm đẹp
              prompt. Cả ba đều là cấu hình ĐẶT MỘT LẦN rồi để đó, không phải thao tác
              mỗi lượt như Mode hay đính kèm — nên chúng rời thanh, để composer còn
-             Mode · đính kèm · ⋯ · Gửi. Chấm accent trên `⋯` giữ lại tín hiệu trạng
+             đính kèm · Mode · ⋯ · Gửi. Chấm accent trên `⋯` giữ lại tín hiệu trạng
              thái đã mất khi chip biến đi. -->
         <span style="position: relative">
-          <button
-            class="iconbtn"
+          <Button
+            variant="ghost"
+            size="iconSm"
+            class="cmorebtn"
+            :class="{ on: open === 'more' }"
             :title="t('sessions.composer.more')"
-            style="width: 28px; height: 28px; position: relative"
-            :style="
-              open === 'more' ? { color: 'var(--accent)', borderColor: 'var(--accentBorder)' } : {}
-            "
             @click.stop="toggle('more')"
           >
-            <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <Ellipsis />
             <span v-if="hasPinned" class="fbadge">{{ pinnedCount }}</span>
-          </button>
+          </Button>
           <div
             v-if="open === 'more'"
             class="pop cmorepop"
@@ -222,13 +355,12 @@
             <SessionMcpChip variant="inline" />
             <div class="cmoresep" />
             <button class="cmorerow" @click="onPinOpen">
-              <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
+              <Pin style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('sessions.pinned.title') }}
               <span v-if="pinnedCount > 0" class="cmorecount">{{ pinnedCount }}</span>
             </button>
             <button class="cmorerow" :disabled="enhancing" @click="onEnhance">
-              <Icon
-                name="sparkles"
+              <Sparkles
                 class="enhicon"
                 :class="{ enhspin: enhancing }"
                 style="width: var(--icon-sm); height: var(--icon-sm)"
@@ -248,10 +380,7 @@
             <!-- pinned files -->
             <div v-if="pinnedFiles.length" class="pinlist">
               <div v-for="f in pinnedFiles" :key="f" class="pinrow">
-                <Icon
-                  name="file"
-                  style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-                />
+                <File style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
                 <span class="pinpath" :title="f">{{ f }}</span>
                 <span class="pinx" :title="t('sessions.pinned.remove')" @click="removePin(f)">
                   ×
@@ -262,10 +391,7 @@
             <!-- applied reusable notes (toggled from the library below, like file pins) -->
             <div v-if="appliedNotes.length" class="pinlist">
               <div v-for="(n, i) in appliedNotes" :key="`an${i}`" class="pinrow" :title="n">
-                <Icon
-                  name="pin"
-                  style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-                />
+                <Pin style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
                 <span class="pinpath">{{ noteLabel(n) }}</span>
                 <span class="pinx" :title="t('sessions.pinned.remove')" @click="toggleNote(n)">
                   ×
@@ -274,11 +400,7 @@
             </div>
 
             <!-- add a file (workspace file index, same source as @-mention) -->
-            <input
-              v-model="pinQuery"
-              class="pininput"
-              :placeholder="t('sessions.pinned.searchFiles')"
-            />
+            <Input v-model="pinQuery" :placeholder="t('sessions.pinned.searchFiles')" />
             <div v-if="pinFileMatches.length" class="pinmatches">
               <div
                 v-for="f in pinFileMatches"
@@ -287,10 +409,7 @@
                 :title="f.path"
                 @click="addPin(f.path)"
               >
-                <Icon
-                  name="plus"
-                  style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-                />
+                <Plus style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
                 <span class="pinmname">{{ f.name }}</span>
                 <span class="pinmpath">{{ f.path }}</span>
               </div>
@@ -315,15 +434,15 @@
                 :title="t('sessions.pinned.savePresetTitle')"
                 @click="startPreset"
               >
-                <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
+                <Pin style="width: var(--icon-xs); height: var(--icon-xs)" />
                 {{ t('sessions.pinned.savePreset') }}
               </button>
               <template v-else>
-                <input
+                <Input
                   ref="presetNameInput"
                   v-model="presetName"
-                  class="pinreuse-name"
                   :placeholder="t('sessions.pinned.presetNamePlaceholder')"
+                  class="pinreuse-name"
                   @keydown.enter.prevent="confirmPreset"
                   @keydown.esc.prevent="cancelPreset"
                 />
@@ -332,14 +451,14 @@
                   :title="t('sessions.pinned.savePreset')"
                   @click="confirmPreset"
                 >
-                  <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                  <Check style="width: var(--icon-sm); height: var(--icon-sm)" />
                 </button>
                 <button
                   class="pinreuse-iconbtn"
                   :title="t('sessions.pinned.cancelPreset')"
                   @click="cancelPreset"
                 >
-                  <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                  <X style="width: var(--icon-sm); height: var(--icon-sm)" />
                 </button>
               </template>
             </div>
@@ -355,14 +474,10 @@
                   :title="p.text"
                   @click="toggleNote(p.text)"
                 >
-                  <Icon
-                    name="pin"
-                    style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-                  />
+                  <Pin style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
                   <span class="pinreuse-label">{{ p.name }}</span>
-                  <Icon
+                  <Check
                     v-if="isNoteApplied(p.text)"
-                    name="check"
                     :title="t('sessions.pinned.inUse')"
                     style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
                   />
@@ -393,14 +508,10 @@
                   :title="h"
                   @click="toggleNote(h)"
                 >
-                  <Icon
-                    name="rules"
-                    style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
-                  />
+                  <FileText style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto" />
                   <span class="pinreuse-label">{{ noteLabel(h) }}</span>
-                  <Icon
+                  <Check
                     v-if="isNoteApplied(h)"
-                    name="check"
                     :title="t('sessions.pinned.inUse')"
                     style="width: var(--icon-xs); height: var(--icon-xs); flex: 0 0 auto"
                   />
@@ -416,53 +527,66 @@
             </template>
           </div>
         </span>
-        <button
-          class="iconbtn"
-          :title="t('sessions.composer.attach')"
-          style="width: 28px; height: 28px"
-          @click="emit('pick')"
-        >
-          <Icon name="clip" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        <span class="grow1" />
+        <!-- Draft character counter — proto right-cluster readout (text-xs muted,
+             tabular-nums so the digits don't jiggle the send button). -->
+        <span class="ccount">{{ draft.length }}</span>
         <!-- Compacting → disabled processing button (Send locked until the RPC ends).
              Idle → Send. While a turn streams → Stop + a split steer/queue button
-             (caret opens the alternate action). Mirrors the production composer. -->
+             (caret opens the alternate action). All icon-only per the proto
+             iconSm idiom; labels live on the tooltips. -->
         <span v-if="compacting">
-          <button class="btn pri sm" disabled :title="t('sessions.composer.compacting')">
-            <Icon name="refresh" class="cmdspin" />
-            {{ t('sessions.composer.compacting') }}
-          </button>
+          <Button
+            disabled
+            :title="t('sessions.composer.compacting')"
+            class="cicon"
+            variant="default"
+            size="iconSm"
+          >
+            <Loader2 class="cmdspin" />
+          </Button>
         </span>
         <span v-else-if="!busy">
-          <button class="btn pri sm" :title="t('sessions.composer.send')" @click="sendNow">
-            <Icon name="send" />
-            {{ t('sessions.composer.send') }}
-          </button>
+          <Button
+            :disabled="!hasContent"
+            :title="t('sessions.composer.send')"
+            class="cicon"
+            variant="default"
+            size="iconSm"
+            @click="sendNow"
+          >
+            <SendHorizontal />
+          </Button>
         </span>
         <span v-else class="sendgrp">
-          <button
-            class="btn pri sm stop"
+          <Button
             :title="t('sessions.composer.stopTooltip')"
+            class="stop cicon"
+            variant="default"
+            size="iconSm"
             @click="sid != null && store.cancel(sid)"
           >
-            <Icon name="stop" />
-            {{ t('sessions.composer.stop') }}
-          </button>
+            <Square fill="currentColor" />
+          </Button>
           <span v-if="hasContent" class="splitsend">
-            <button
-              class="btn pri sm splitmain"
+            <Button
               :title="streamPrimaryTitle"
+              class="splitmain"
+              variant="default"
+              size="iconSm"
               @click="onStreamPrimary"
             >
-              <Icon :name="streamPrimaryAction === 'steer' ? 'send' : 'clock'" />
-            </button>
-            <button
-              class="btn pri sm splitcaret"
+              <component :is="streamPrimaryAction === 'steer' ? SendHorizontal : Clock" />
+            </Button>
+            <Button
               :title="t('sessions.composer.queue')"
+              class="splitcaret"
+              variant="default"
+              size="iconSm"
               @click.stop="sendMenuOpen = !sendMenuOpen"
             >
-              <Icon name="chev" style="transform: rotate(180deg)" />
-            </button>
+              <ChevronUp />
+            </Button>
             <div v-if="sendMenuOpen" class="smenu sendmenu" @click.stop>
               <div
                 v-if="store.canSteerId(sid)"
@@ -470,14 +594,14 @@
                 :class="{ mdisabled: !canSteer }"
                 @click="pickSteer"
               >
-                <Icon name="send" class="styicon" />
+                <SendHorizontal class="styicon" />
                 <div class="stytext">
                   <div class="nm2">{{ t('sessions.composer.steer') }}</div>
                   <div class="sd2">{{ t('sessions.composer.steerHint') }}</div>
                 </div>
               </div>
               <div class="mi sty" @click="pickQueue">
-                <Icon name="clock" class="styicon" />
+                <Clock class="styicon" />
                 <div class="stytext">
                   <div class="nm2">{{ t('sessions.composer.queue') }}</div>
                   <div class="sd2">{{ t('sessions.composer.queueHint') }}</div>
@@ -498,17 +622,21 @@
 </template>
 
 <script setup lang="ts">
-// Composer (renderDetail composer block ~1358 + renderSendArea ~1659). Four chips
-// (mode → model → account → style) each open a `.smenu` popover (upward), textarea
-// with Enter-to-send / Shift+Enter newline, enhance (one-shot rewrite via the store)
-// and slash `/` + `@`-mention autocomplete (real engine sources via useComposerData:
-// commands/skills/agents/files). When the active session
-// is busy the Send action queues (gửi sau) instead of sending. Chip selections drive
-// the STORE (read the target session, write via store actions) so they persist + take
-// effect on the next turn. The model chip popover also folds the Thinking selector;
-// the style chip carries the response-style catalog + the no-markdown toggle.
+// Composer — proto frame: one bordered card holding follow-up quote cards, queued
+// chips, attachments, the textarea and a single footer row. Footer (proto order):
+// `+` attach/insert menu · separator · model picker · effort picker · per-turn
+// Mode chip · `⋯` overflow (MCP / pin / enhance) · char counter · icon-only send
+// area. Textarea with Enter-to-send / Shift+Enter newline, enhance (one-shot
+// rewrite via the store) and slash `/` + `@`-mention autocomplete (real engine
+// sources via useComposerData: commands/skills/agents/files). When the active
+// session is busy the Send action queues (gửi sau) instead of sending. Picker
+// selections drive the STORE (read the target session, write via store actions)
+// so they persist + take effect on the next turn; model/effort share
+// useSessionModelConfig with the status-bar StatusConfig so the two surfaces
+// never drift.
 import type {
   QueuedMessage,
+  Session,
   SessionAttachment,
   SlashCommandRef,
 } from '~/composables/useSessionsData'
@@ -524,11 +652,38 @@ import {
   type MentionRow,
 } from './session-composer-commands'
 import { useBrowserContext, openBrowserTab } from '~/composables/useBrowserContext'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 import {
   parseSlashInvocation,
   findInvocableCommand,
   expandCommandBody,
 } from '~/utils/slash-command'
+// Toàn bộ icon composer dùng lucide trực tiếp (proto parity): nét stroke 2 của
+// lucide sắc hơn glyph sprite `<Icon>` ở cỡ 14–16px mà footer/chip/menu cần.
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Ellipsis,
+  File,
+  FileText,
+  Folder,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  Paperclip,
+  PenLine,
+  Pin,
+  Play,
+  Plus,
+  SendHorizontal,
+  Sparkles,
+  Square,
+  TriangleAlert,
+  X,
+} from 'lucide-vue-next'
 
 const props = withDefaults(
   defineProps<{
@@ -538,8 +693,13 @@ const props = withDefaults(
     // có nhiều composer cùng lúc, mỗi cái cho một phiên khác nhau — nếu chúng đều đọc
     // `store.active` thì gõ vào ô nào cũng gửi cho đúng một phiên.
     sessionId?: number
+    // Khoá cứng toàn composer — dùng khi phiên đang gắn vào một CLI ngoài
+    // ("Open in CLI"): ô nhập + mọi đường send/queue/steer đều chết, chỉ còn
+    // hiển thị mờ. Khác `busy`/`compacting` là chỗ này không hứa hẹn "gửi sau":
+    // tin phải đi qua pane CLI. Cha tự lo dòng giải thích ngay phía trên.
+    disabled?: boolean
   }>(),
-  { attachments: () => [], sessionId: undefined },
+  { attachments: () => [], sessionId: undefined, disabled: false },
 )
 const emit = defineEmits<{
   // `text` is the expanded body sent to the model; `command` (when set) is the
@@ -563,12 +723,13 @@ const MAX_INLINE = 6
 const visibleAtt = computed(() => props.attachments.slice(0, MAX_INLINE))
 const overflowCount = computed(() => Math.max(0, props.attachments.length - MAX_INLINE))
 
-// Composer modes + their icon (adds "Accept Edits" beyond the prototype's three).
+// Composer modes + their lucide icon (adds "Accept Edits" beyond the prototype's
+// three — sprite names đổi sang component để footer đồng bộ nét lucide).
 const MODES_UI = [
-  { id: 'Ask', icon: 'sessions' },
-  { id: 'Plan', icon: 'rules' },
-  { id: 'AcceptEdits', icon: 'edit' },
-  { id: 'Execute', icon: 'play' },
+  { id: 'Ask', icon: MessageSquare },
+  { id: 'Plan', icon: ListChecks },
+  { id: 'AcceptEdits', icon: PenLine },
+  { id: 'Execute', icon: Play },
 ] as const
 
 const store = useSessionsStore()
@@ -668,7 +829,9 @@ function onCommand(builtinId: string, arg = '') {
 // the JS ceilings (640/560) disagreed with the CSS `max-height: 40vh`. Now MANUAL
 // resize wins over auto-grow (userSizedManually flag) and there is a SINGLE max source:
 // 40vh, computed in px at runtime to keep JS clamp in sync with the CSS `40vh`.
-const COMPOSER_MIN_H = 40
+// Floor matches the proto Textarea's `min-h-[52px]` (and the scoped `min-height`
+// on .ci below) — one MIN source so the JS clamp and the CSS floor never disagree.
+const COMPOSER_MIN_H = 52
 // Runtime px equivalent of the CSS `textarea.ci { max-height: 40vh }` — one source of
 // truth (DRY). Re-derived on window resize so the clamp tracks a shrinking viewport.
 const composerMaxH = ref(Math.round(window.innerHeight * 0.4))
@@ -772,9 +935,46 @@ function onNote(i: number, e: Event) {
   if (sid.value != null) store.setQuoteNote(sid.value, i, (e.target as HTMLTextAreaElement).value)
 }
 
-// The per-turn Mode chip reads straight off the active session (store-driven);
-// model / account / effort / style moved to the status-bar chips (StatusConfig).
+// The per-turn Mode chip reads straight off the active session (store-driven).
 const selectedMode = computed(() => target.value?.mode || 'Ask')
+
+// ── Model / reasoning-effort pickers (proto parity) ──────────────────────────
+// The footer's ghost-sm triggers list + write through the same composable the
+// status-bar StatusConfig uses, so the two surfaces can't drift. Bound to THIS
+// composer's `target` — a grid-pane composer edits its own session. When nothing
+// is bound (`target` null) the triggers don't render, so a stub keeps the getter
+// total instead of a conditional composable call.
+const EMPTY_SESSION: Session = {
+  id: -1,
+  title: '',
+  project: '',
+  model: '',
+  account: '',
+  style: '',
+  status: 'idle',
+  when: '',
+  msgs: [],
+}
+const {
+  selectedModel,
+  availableModels,
+  selectModel,
+  accounts,
+  selectedAccountId,
+  selectAccount,
+  thinking,
+  thinkingLabel,
+  thinkSupported,
+  ultracodeSupported,
+  ultracodeOn,
+  selectUltracode,
+  THINK,
+  selectThink,
+} = useSessionModelConfig(() => target.value ?? EMPTY_SESSION)
+
+// Tab đang mở trong menu model (model | account) — reset về model mỗi lần mở
+// menu để lần sau vào luôn thấy danh sách model, không phải tab đã rời đi.
+const modelSection = ref<'model' | 'account'>('model')
 
 // Composer popovers: Mode chip, overflow `⋯`, và popover ghim context mở TỪ trong
 // overflow (cùng điểm neo, nên nó thay chỗ menu thay vì lồng vào trong).
@@ -782,6 +982,13 @@ type MenuKind = 'mode' | 'more' | 'pin'
 const open = ref<MenuKind | null>(null)
 function toggle(kind: MenuKind) {
   open.value = open.value === kind ? null : kind
+}
+// A reka DropdownMenu opening should retire any hand-rolled `.smenu`/`.pop` still
+// up — two stacked menus read as a bug even though each dismisses on its own.
+function ddGuard(v: boolean) {
+  if (!v) return
+  open.value = null
+  sendMenuOpen.value = false
 }
 
 // ── Pinned context (session working-set) ─────────────────────────────────────
@@ -912,7 +1119,7 @@ function selectMode(m: string) {
   open.value = null
 }
 const modeIcon = computed(
-  () => MODES_UI.find((m) => m.id === selectedMode.value)?.icon ?? 'sessions',
+  () => MODES_UI.find((m) => m.id === selectedMode.value)?.icon ?? MessageSquare,
 )
 
 // ── Queue (gửi sau) ──────────────────────────────────────────────────────────
@@ -1013,7 +1220,8 @@ const streamPrimaryTitle = computed(() =>
 let sendChecking = false
 
 async function sendNow() {
-  if (compacting.value) return
+  // Khoá ngoài (CLI đang gắn) và khoá /compact — kiểm tra trước mọi cửa gửi.
+  if (props.disabled || compacting.value) return
   const { text: outgoing, command } = buildOutgoing(draft.value)
   const hasAtt = props.attachments.length > 0
   const hasQuotes = followups.value.length > 0
@@ -1045,6 +1253,7 @@ async function sendNow() {
 // here is deliberate: the parent's onSend has no busy-guard and would open a second
 // concurrent turn instead of queueing.
 async function onQueue() {
+  if (props.disabled) return
   const { text: outgoing, command } = buildOutgoing(draft.value)
   const hasAtt = props.attachments.length > 0
   const hasQuotes = followups.value.length > 0
@@ -1073,6 +1282,7 @@ async function onQueue() {
 // Steer → inject the raw draft text into the in-flight turn (text only; matches the
 // old UI, which does not expand commands when steering). Clears just the draft.
 async function onSteer() {
+  if (props.disabled) return
   const text = draft.value
   if (!text.trim() || sid.value == null) return
   draft.value = ''
@@ -1115,8 +1325,8 @@ function dispatchBuiltinDraft(): boolean {
 
 // Enter / primary action router: idle → fresh turn; streaming → steer or queue.
 function send() {
-  // Locked while /compact runs — no fresh turn, no steer, no queue.
-  if (compacting.value) return
+  // Khoá ngoài (CLI đang gắn) + khoá /compact — không turn mới, không steer/queue.
+  if (props.disabled || compacting.value) return
   // Hành động của người dùng, không phải tin nhắn: chạy kể cả khi session đang bận.
   if (dispatchBuiltinDraft()) return
   if (busy.value) {
@@ -1470,6 +1680,33 @@ function applyMention(i: number) {
   })
 }
 
+// ── `+` menu → Insert (proto parity) ──────────────────────────────────────────
+// The autocomplete menus trigger off the character itself, so an Insert item just
+// types the trigger and lets the normal input path open the matching menu — no
+// parallel picker to keep in sync. Focus moves on a macrotask so it wins over the
+// dropdown's own focus-restore-to-trigger on close.
+function refocusDraft() {
+  setTimeout(() => {
+    const el = ta.value
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+    onInput()
+  }, 0)
+}
+function insertSlash() {
+  // The slash menu keys on the first token after `/`: an empty draft gets a bare
+  // `/`; a typed draft gets `/` prepended so its first word becomes the live
+  // filter (picking a command then replaces that token, keeping the rest).
+  draft.value = draft.value.startsWith('/') ? draft.value : `/${draft.value}`
+  refocusDraft()
+}
+function insertMention() {
+  // The mention regex needs `@` at the caret preceded by start-of-line or space.
+  draft.value += /(^|\s)$/.test(draft.value) ? '@' : ' @'
+  refocusDraft()
+}
+
 // Expand a `/command args` draft into the user command's body on send (built-ins
 // are dispatched via the menu, never sent as text). Returns the expanded `text`
 // for the model plus the `command` invocation for the compact bubble; a
@@ -1559,80 +1796,25 @@ function onPaste(e: ClipboardEvent) {
 </script>
 
 <style scoped>
-/* Keep the composer toolbar on ONE line. The prototype's .cbar sets flex-wrap:wrap
-   "for responsiveness", but a long account name then pushed the Send/Stop button
-   onto a second row. Disable wrap and make the account chip the single flexible
-   item: it shrinks + ellipsises its label while the fixed chips + action buttons
-   keep their natural size. */
-.cbar {
-  flex-wrap: nowrap;
-}
-.cbar > .chip,
-.cbar > .iconbtn,
-.cbar > span:last-child {
-  flex: 0 0 auto;
-}
-/* Outlined attachment chips: drop the grey fill (prototype .att uses
-   var(--bgActive)) to match the transcript chips + flat step rows; keep the border,
-   add a subtle hover since the chip opens a preview. Covers pending, queued (.qatt)
-   and the "+N more" (.attmore) chips. */
-.att {
+/* Composer strip — proto frame: the card floats on the session background with
+   breathing room around it (px-4 pb-3 → horizontal keeps the shared --padX
+   column gutter, 12px bottom). No separator strip / panel fill of its own. */
+.composer {
+  border-top: 0;
   background: transparent;
-  transition:
-    background 0.12s ease,
-    border-color 0.12s ease;
+  padding: 0 var(--padX) 8px;
 }
-.att:hover {
-  background: var(--bgHover);
-  border-color: var(--borderStrong);
-}
-@media (prefers-reduced-motion: reduce) {
-  .att {
-    transition: none;
-  }
-}
-/* Remove button as a floating badge at the chip's top-right corner instead of the
-   prototype's bare inline `×` (a tiny, fiddly target crammed against the filename).
-   A circular 16px badge sits over the corner, reveals on hover/focus, and turns
-   danger-red on its own hover — an isolated, easy click that frees the chip's inner
-   width for the filename. (Queued `.qatt` chips also carry `.att`, so this covers
-   them too.) */
-.att {
-  position: relative;
-}
-.att .x {
-  position: absolute;
-  top: -7px;
-  right: -7px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--bgActive);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: 12px;
-  opacity: 0;
-  transform: scale(0.85);
-  transition:
-    opacity 0.12s ease,
-    transform 0.12s ease,
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
-}
-.att:hover .x,
-.att:focus-within .x {
-  opacity: 1;
-  transform: scale(1);
-}
-.att .x:hover {
-  background: var(--del);
-  border-color: var(--del);
-  color: var(--bgPanel);
+/* Chrome cốt lõi của composer (card .cbox, textarea .ci, chip .att/.pattc,
+   thanh .cbar, .csep/.cmat/.ccount, .cmdnotice…) đã hoist lên `prototype.css`
+   để WorkspaceBoardComposer (ô giao việc trên board) xài chung nguyên xi —
+   hai bản scoped sẽ trôi khỏi nhau. Phần scoped còn lại dưới đây chỉ giữ
+   chrome riêng của session (model/mode picker, queue, follow-up, split-send). */
+/* iconSm trigger glyph ⋯ — Button's own `[&_svg]:size-3.5` ép 14px; nâng lên
+   --icon-md cho ngang cụm send/picker (16px, lucide `size-4`). `.cico` (+) có
+   rule ở prototype.css rồi. */
+.cbar .cmorebtn svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 /* "Send now" on a queued chip: mirror the remove badge but on the opposite (top-left)
    corner with an accent (positive) hover — reveal on chip hover so it doesn't crowd
@@ -1647,9 +1829,9 @@ function onPaste(e: ClipboardEvent) {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--bgActive);
+  background: var(--popover);
   border: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   opacity: 0;
   transform: scale(0.85);
@@ -1666,40 +1848,83 @@ function onPaste(e: ClipboardEvent) {
   transform: scale(1);
 }
 .att .qsend:hover {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accentText);
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-foreground);
 }
-@media (prefers-reduced-motion: reduce) {
-  .att .x {
-    transition: none;
-  }
+/* Toolbar pickers — ghost buttons, not outlined chips (proto: h-7 ghost,
+   text-xs muted-foreground + chevron). Border phải `!important`: global
+   `.mode-Plan`/`.mode-Execute` (`prototype.css`) cũng dùng `!important` để tô
+   viền tint — chừa nó thì chip Mode lệch khỏi hàng ghost. Tint giữ trên TEXT
+   (Execute emerald / Plan amber) làm tín hiệu "lượt này chạy khác"; viền bỏ. */
+.cbar .chip.chipbtn {
+  height: 28px;
+  padding: 0 8px;
+  border-color: transparent !important;
+  background: transparent;
+  box-shadow: none;
+  border-radius: var(--r-sm);
+  color: var(--muted-foreground);
 }
-/* Composer box reacts to focus: the border + a soft accent ring light up while the
-   textarea inside is focused (focus-within), instead of a static border. */
-.cbox {
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+.cbar .chip.chipbtn:hover {
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
-.cbox:focus-within {
-  border-color: var(--accentBorder);
-  box-shadow: 0 0 0 3px var(--accentDim);
+/* Mode chip: icon mode + chevron ở --icon-sm — lucide svg render 24px mặc định
+   nên phải ép size (sprite <Icon> tự ép trong component). */
+.cbar .chipbtn .mico,
+.cbar .chipbtn .mchev {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  flex: 0 0 auto;
 }
-/* Hard-cap the composer input height. A paste that stays BELOW the paste-as-file
-   threshold is inserted inline; without a ceiling the auto-grow (grow()) can still make
-   the box tall enough to push the toolbar / Execute·Stop buttons off-screen on a
-   shorter window. `40vh` is the SINGLE max source: grow()/onResize clamp against the
-   px equivalent (composerMaxH = innerHeight * 0.4, re-derived on resize) so JS and CSS
-   agree. Scrolls internally past it. Overrides the global `textarea.ci { max-height:
-   none }` (prototype.css) — the scoped selector's [data-v] wins on specificity. */
-textarea.ci {
-  max-height: 40vh;
+/* Tab chuyển mục trong menu model (Model | Account) — cùng quy ước `.cfgseg` của
+   StatusConfig: accent-tint cho mục đang chọn, không fill xám đặc. */
+.cseg {
+  display: flex;
+  gap: 3px;
+  padding: 2px 2px 6px;
+  box-shadow: inset 0 -1px 0 var(--border);
+  margin-bottom: 4px;
 }
-/* Tactile press: primary + icon action buttons dip slightly when pressed, and the
+.cseg-b {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--muted-foreground);
+  font-family: inherit;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.cseg-b:hover {
+  color: var(--foreground);
+  background: var(--accent-wash);
+}
+.cseg-b.on {
+  color: var(--primary);
+  border-color: var(--ring);
+  background: var(--accentDim);
+}
+/* ⋯ overflow trigger — ui <Button variant="ghost" size="iconSm">; `.cmorebtn`
+   anchors the pinned-count badge (.fbadge) and carries the lit "menu open" tint. */
+.cmorebtn {
+  position: relative;
+  color: var(--muted-foreground);
+}
+.cmorebtn.on {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+/* Tactile press: primary action buttons dip slightly when pressed, and the
    primary's hover brightness now eases in instead of snapping. */
-.btn,
-.iconbtn {
+.btn {
   transition:
     transform 0.08s ease,
     filter 0.12s ease,
@@ -1707,73 +1932,35 @@ textarea.ci {
     border-color 0.12s ease,
     color 0.12s ease;
 }
-.btn:active,
-.iconbtn:active {
+.btn:active {
   transform: scale(0.95);
 }
 @media (prefers-reduced-motion: reduce) {
   .cbox,
-  .btn,
-  .iconbtn {
+  .btn {
     transition: none;
   }
-  .btn:active,
-  .iconbtn:active {
+  .btn:active {
     transform: none;
   }
-}
-/* Transient built-in command feedback (Mode → Plan, /compact running…). Sits just
-   above the textarea; auto-dismisses (showNotice). */
-.cmdnotice {
-  margin: 0 2px 6px;
-  padding: 5px 10px;
-  border-radius: var(--r-xs);
-  background: var(--bgActive);
-  border: 1px solid var(--border);
-  color: var(--textDim);
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-}
-/* Composer attachment thumbnail (image chips) — matches SessionAttachmentChip's
-   inline gradient swatch from the prototype. */
-.thumb {
-  width: 15px;
-  height: 15px;
-  border-radius: var(--r-xs);
-  flex: 0 0 auto;
-  background: linear-gradient(135deg, var(--blue), var(--violet));
-}
-/* Real image thumbnail when a dropped/picked file has an object URL. */
-.attthumb {
-  width: 18px;
-  height: 18px;
-  border-radius: var(--r-xs);
-  object-fit: cover;
-  flex: 0 0 auto;
-}
-/* Bound the filename so one long name can't blow out the chip row. */
-.attn {
-  max-width: 168px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.attmore {
-  cursor: pointer;
-  font-weight: 600;
-  color: var(--accent);
 }
 /* follow-up quote container (cards use prototype .fwcard/.fwh/.fwn/.fwq/.fwx/.fwnote) */
 .sfollow {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  margin-bottom: 9px;
+  /* Card top section — owns its inset like the proto quote row (`px-2.5 pt-2.5`). */
+  margin-bottom: 0;
+  padding: 8px 10px 0;
 }
-/* Drop the grey fill (prototype .fwcard uses var(--bgSubtle)) — the accent left-border
-   + outline already mark these as quote cards, matching the flat composer chips. */
+/* Quote card — proto idiom: rounded-lg border + translucent muted fill. The
+   circled ① (.fwn) carries the accent, so the card itself stays neutral (the
+   prototype's accent left-border is dropped). */
 .fwcard {
-  background: transparent;
+  background: color-mix(in srgb, var(--muted) 40%, transparent);
+  border-color: var(--border);
+  border-left-width: 1px;
+  border-radius: var(--radius);
 }
 /* Cap the visible quote stack at ~3 cards; beyond that the box scrolls so a long
    stack of follow-up quotes can't push the textarea + toolbar off-screen. The
@@ -1789,22 +1976,24 @@ textarea.ci {
   cursor: pointer;
 }
 .fwlink:hover {
-  color: var(--accent);
+  color: var(--primary);
   text-decoration: underline;
 }
-/* Queued (gửi sau) chip row sits above the input; chips reuse .att with an accent
+/* Queued (gửi sau) chip row sits above the input; chips reuse .att with a primary
    tint so they read as pending-send rather than attachments. */
 .qattc {
-  margin-bottom: 9px;
+  /* Card top section — same `px-2.5 pt-2.5` inset as the other chip rows. */
+  margin-bottom: 0;
+  padding: 8px 10px 0;
 }
 .qatt {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 /* While editing a queued message, the chip reads as active + gives the editor room. */
 .qatt.editing {
-  border-color: var(--accent);
+  border-color: var(--primary);
 }
 /* Inline editor for a queued message — blends into the chip, grows with its content. */
 .qedit {
@@ -1818,7 +2007,7 @@ textarea.ci {
   background: transparent;
   resize: none;
   overflow: hidden;
-  color: var(--accent);
+  color: var(--primary);
   font: inherit;
   line-height: var(--lh-sm);
 }
@@ -1840,44 +2029,21 @@ textarea.ci {
     animation: none;
   }
 }
-/* Spinner glyph shared by the "compacting…" notice + the locked Send button. */
-.cmdspin {
-  animation: enhspin 0.9s linear infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .cmdspin {
-    animation: none;
-  }
-}
-.cmdnotice.compacting {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-/* Uniform 28px height for every primary composer action (Send / Stop / split / the
-   locked "compacting" button) so text and icon-only buttons line up with each other
-   and with the 28px toolbar icon buttons — otherwise their computed heights differ
-   and the streaming Stop + split group looks misaligned. */
-.btn.pri.sm {
-  height: 28px;
-}
-/* Locked Send while /compact runs — reads as processing (dimmed, not clickable). */
-.btn.pri.sm:disabled {
+/* Locked Send while /compact runs — reads as processing (dimmed, not clickable).
+   Primary action cluster uses Button size="iconSm" (28px) — the old .btn.pri.sm
+   height pin died in the shadcn migration. */
+.cbar .cicon:disabled {
   cursor: default;
-  opacity: 0.6;
+  opacity: 0.5;
   filter: none;
 }
-.iconbtn:disabled {
-  cursor: default;
-  opacity: 0.6;
+/* Stop state: the primary button turns destructive-tinted while a turn is running
+   and nothing is queued (click cancels the turn). */
+.cbar .stop {
+  background: var(--destructive);
 }
-/* Stop state: the primary button turns danger-tinted while a turn is running and
-   nothing is queued (click cancels the turn). */
-.btn.pri.stop {
-  background: var(--danger);
-}
-.btn.pri.stop:hover {
-  background: color-mix(in srgb, var(--danger) 88%, black);
+.cbar .stop:hover {
+  background: color-mix(in srgb, var(--destructive) 88%, black);
 }
 
 /* Streaming send area: Stop + a split steer/queue button (caret opens the
@@ -1901,7 +2067,7 @@ textarea.ci {
   border-bottom-left-radius: 0;
   padding-left: 6px;
   padding-right: 6px;
-  border-left: 1px solid color-mix(in srgb, var(--accentText) 25%, transparent);
+  border-left: 1px solid color-mix(in srgb, var(--primary-foreground) 25%, transparent);
 }
 /* Anchor the menu above the split button (the base .smenu is position:fixed). */
 .sendmenu {
@@ -1911,20 +2077,75 @@ textarea.ci {
   z-index: 50;
   min-width: 224px;
 }
+/* Popover chrome on the composer's hand-rolled menus (mode picker + send split
+   menu): the global .smenu/.pop keep their class hooks, the look moves to the
+   shadcn tokens — popover surface, hairline border, radius var(--radius), items
+   rounded-sm with the neutral accent-wash hover. */
+.smenu {
+  background: var(--popover);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+}
+.smenu .mi {
+  padding: 6px 8px;
+  border-radius: var(--r-xs);
+  color: var(--muted-foreground);
+}
+.smenu .mi:hover {
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
+}
+.smenu .mi .ck {
+  color: var(--primary);
+}
+/* Steer/queue rows: stacked name + hint (the .stylemenu .mi.sty idiom — the split
+   menu isn't under .stylemenu, so the layout lives here). */
+.sendmenu .mi.sty {
+  align-items: flex-start;
+  gap: 9px;
+  padding: 7px 8px;
+}
+.sendmenu .styicon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  flex: none;
+  margin-top: 1px;
+  color: var(--muted-foreground);
+}
+.sendmenu .mi.sty:hover .styicon {
+  color: var(--accent-foreground);
+}
+.sendmenu .stytext {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sendmenu .nm2 {
+  color: var(--foreground);
+}
+.sendmenu .sd2 {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--muted-foreground);
+  white-space: normal;
+}
 
 /* Soft-budget warning banner above the toolbar (no block — just a heads-up). */
 .budgetwarn {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin: 4px 2px 0;
+  margin: 6px 10px 2px;
   padding: 5px 9px;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-sm);
   font-size: 12px;
   line-height: 18px;
-  color: var(--danger);
-  background: var(--dangerBg);
-  border: 1px solid var(--danger);
+  color: var(--destructive);
+  background: color-mix(in srgb, var(--destructive) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--destructive) 40%, transparent);
 }
 
 /* Pinned-context popover (toolbar pin button). Reuses the .pop chrome; adds a file
@@ -1937,14 +2158,22 @@ textarea.ci {
   flex-direction: column;
   gap: 8px;
 }
+/* Popover chrome — same shadcn pass as .smenu above (popover surface, hairline
+   border, --radius, mid shadow). */
+.pop {
+  background: var(--popover);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
 .pinpop-h {
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .pinpop-hint {
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   margin-top: -4px;
 }
 .pinlist {
@@ -1958,8 +2187,11 @@ textarea.ci {
   gap: 6px;
   padding: 4px 6px;
   border-radius: var(--r-xs);
-  background: var(--bgActive);
-  color: var(--text);
+  background: var(--muted);
+  color: var(--foreground);
+}
+.pinrow .icn {
+  color: var(--muted-foreground);
 }
 .pinpath {
   flex: 1;
@@ -1974,22 +2206,28 @@ textarea.ci {
 }
 .pinx {
   cursor: pointer;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   padding: 0 2px;
+  border-radius: var(--r-xs);
 }
 .pinx:hover {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .pininput,
 .pinnotes {
   width: 100%;
-  background: var(--bgInput, var(--bgActive));
-  border: 1px solid var(--border);
+  background: transparent;
+  border: 1px solid var(--input);
   border-radius: var(--r-xs);
   padding: 6px 8px;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 12px;
   line-height: 18px;
+}
+.pininput:focus,
+.pinnotes:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .pinnotes {
   resize: vertical;
@@ -2010,10 +2248,13 @@ textarea.ci {
   padding: 4px 6px;
   border-radius: var(--r-xs);
   cursor: pointer;
-  color: var(--text);
+  color: var(--foreground);
+}
+.pinmatch .icn {
+  color: var(--muted-foreground);
 }
 .pinmatch:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .pinmname {
   font-size: 12px;
@@ -2028,7 +2269,7 @@ textarea.ci {
   white-space: nowrap;
   font-size: 12px;
   line-height: 18px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   /* mono-ok: pinned file path */
   font-family: var(--code);
 }
@@ -2042,14 +2283,18 @@ textarea.ci {
 .pinreuse-name {
   flex: 1;
   min-width: 0;
-  background: var(--bgInput, var(--bgActive));
-  border: 1px solid var(--accentBorder, var(--border));
+  background: transparent;
+  border: 1px solid var(--input);
   border-radius: var(--r-xs);
   padding: 5px 8px;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 12px;
   line-height: 18px;
   font-weight: 500;
+}
+.pinreuse-name:focus {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--ring);
 }
 .pinreuse-iconbtn {
   display: inline-flex;
@@ -2059,32 +2304,30 @@ textarea.ci {
   height: 26px;
   flex: 0 0 auto;
   border-radius: var(--r-xs);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .pinreuse-iconbtn:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .pinreuse-save {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--input);
   background: transparent;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 12px;
   line-height: 18px;
   cursor: pointer;
 }
 .pinreuse-save:hover:not(:disabled) {
-  background: var(--bgHover);
-  border-color: var(--accentBorder);
-  color: var(--accent);
+  background: var(--accent-wash);
 }
 .pinreuse-save:disabled {
   opacity: 0.5;
@@ -2096,16 +2339,16 @@ textarea.ci {
   font-size: 12px;
   line-height: 18px;
   font-weight: 600;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .pinreuse-clear {
   margin-left: auto;
   font-weight: 500;
   cursor: pointer;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .pinreuse-clear:hover {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .pinreuse-list {
   display: flex;
@@ -2121,17 +2364,23 @@ textarea.ci {
   padding: 4px 6px;
   border-radius: var(--r-xs);
   cursor: pointer;
-  color: var(--text);
+  color: var(--foreground);
+}
+.pinreuse-item .icn {
+  color: var(--muted-foreground);
 }
 .pinreuse-item:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 /* The library item matching the note currently in the box — the one actually in use.
-   Inset ring (not a border) so the accent marker adds no layout shift. */
+   Inset ring (not a border) so the primary marker adds no layout shift. */
 .pinreuse-item.active {
-  color: var(--accent);
-  background: var(--bgHover);
-  box-shadow: inset 0 0 0 1px var(--accentBorder, var(--border));
+  color: var(--primary);
+  background: var(--accent-wash);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+.pinreuse-item.active .icn {
+  color: var(--primary);
 }
 .pinreuse-label {
   flex: 1;
@@ -2165,7 +2414,7 @@ textarea.ci {
   border: 0;
   background: transparent;
   border-radius: var(--r-xs);
-  color: var(--text);
+  color: var(--foreground);
   font-family: inherit;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
@@ -2173,14 +2422,14 @@ textarea.ci {
   text-align: left;
 }
 .cmorerow:hover:not(:disabled) {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .cmorerow:disabled {
   opacity: 0.55;
   cursor: default;
 }
 .cmorerow .icn {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   flex: 0 0 auto;
 }
 .cmorecount {
@@ -2188,6 +2437,6 @@ textarea.ci {
   font-variant-numeric: tabular-nums;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--accent);
+  color: var(--primary);
 }
 </style>

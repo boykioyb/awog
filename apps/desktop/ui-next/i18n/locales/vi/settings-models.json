@@ -1,7 +1,6 @@
 {
   "settingsModels.heading": "Model & API Key",
   "settingsModels.intro": "Đăng nhập các nhà cung cấp model. Thông tin đăng nhập chỉ nằm trên máy này và không bao giờ rời khỏi sidecar.",
-
   "settingsModels.status.notConnected": "Chưa kết nối",
   "settingsModels.status.connected": "Đã kết nối",
   "settingsModels.status.connectedCount": "Đã kết nối · {n} {accounts}",
@@ -11,27 +10,22 @@
   "settingsModels.statusDot.connected": "Đã kết nối",
   "settingsModels.statusDot.expired": "Hết hạn",
   "settingsModels.statusDot.disconnected": "Đã ngắt",
-
   "settingsModels.anthropic.name": "Anthropic",
   "settingsModels.anthropic.models": "Claude Opus · Claude Sonnet",
   "settingsModels.anthropic.signIn": "Đăng nhập bằng Claude",
   "settingsModels.anthropic.signInHint": "Dùng gói Claude Pro hoặc Max của bạn. Không cần API key.",
   "settingsModels.anthropic.advancedToggle": "Nâng cao — dùng API key",
   "settingsModels.anthropic.advancedHint": "Dùng API key Anthropic trả theo lượt (sk-ant-…) thay cho đăng nhập gói thuê bao. Key chỉ nằm trên máy này.",
-
   "settingsModels.openai.name": "OpenAI",
   "settingsModels.openai.models": "GPT-5.1 · o3 · GPT-4.1",
   "settingsModels.openai.signIn": "Đăng nhập bằng ChatGPT",
   "settingsModels.openai.signInHint": "Dùng gói ChatGPT Plus hoặc Pro của bạn. Không cần API key.",
-
   "settingsModels.google.name": "Google",
   "settingsModels.google.models": "Gemini 3 Pro · Gemini 2.5 Flash",
-
   "settingsModels.custom.name": "Endpoint tùy chỉnh",
   "settingsModels.custom.models": "Base URL tương thích Anthropic hoặc OpenAI + API key (Ollama, vLLM, LM Studio, OpenRouter, LiteLLM)",
   "settingsModels.custom.add": "Thêm endpoint tùy chỉnh",
   "settingsModels.custom.subtitle": "Tùy chỉnh",
-
   "settingsModels.account.setActive": "Đặt làm mặc định",
   "settingsModels.account.active": "Đang dùng",
   "settingsModels.account.edit": "Sửa",
@@ -44,7 +38,6 @@
   "settingsModels.account.subscription": "Gói thuê bao",
   "settingsModels.account.apiKey": "API key",
   "settingsModels.account.apiKeyFingerprint": "API key · {fingerprint}",
-
   "settingsModels.form.label": "Nhãn",
   "settingsModels.form.labelOptional": "Nhãn (tùy chọn)",
   "settingsModels.form.show": "Hiện",
@@ -53,9 +46,7 @@
   "settingsModels.form.cancel": "Hủy",
   "settingsModels.form.save": "Lưu thay đổi",
   "settingsModels.form.addKeyError": "Không thêm được API key",
-
   "settingsModels.note": "🔒 API key chỉ lưu local (credentials.json chmod 600) và không bao giờ rời sidecar — chỉ hiển thị fingerprint.",
-
   "settingsModels.oauth.title": "Kết nối Claude Pro/Max",
   "settingsModels.oauth.step1": "Mở trang đăng nhập Anthropic trong trình duyệt.",
   "settingsModels.oauth.step2": "Sau khi đăng nhập, Anthropic sẽ hiển thị một mã dùng một lần. Sao chép mã đó.",
@@ -69,13 +60,11 @@
   "settingsModels.oauth.stateMismatch": "Mã không khớp với phiên ủy quyền này. Vui lòng thử lại từ đầu.",
   "settingsModels.oauth.reauthTitle": "Đăng nhập lại tài khoản Claude",
   "settingsModels.oauth.reauthHint": "Phiên đăng nhập của tài khoản này đã hết hạn. Đăng nhập lại để làm mới — thông tin đăng nhập được thay tại chỗ nên tài khoản vẫn giữ nguyên cấu hình.",
-
   "settingsModels.codex.title": "Đăng nhập bằng ChatGPT",
   "settingsModels.codex.preparing": "Đang chuẩn bị đăng nhập OpenAI…",
   "settingsModels.codex.opened": "Một cửa sổ trình duyệt đã mở để đăng nhập ChatGPT. Hoàn tất đăng nhập ở đó — hộp thoại này tự đóng sau khi bạn ủy quyền.",
   "settingsModels.codex.reopen": "Mở lại trang đăng nhập",
   "settingsModels.codex.waiting": "Đang chờ ủy quyền…",
-
   "settingsModels.edit.title": "Sửa kết nối",
   "settingsModels.edit.keyLabel": "API key",
   "settingsModels.edit.keyReplacePlaceholder": "Nhập key mới để thay thế",
@@ -83,7 +72,6 @@
   "settingsModels.edit.keyBlankKeep": "Để trống để giữ key hiện tại.",
   "settingsModels.edit.modelsLabel": "Model — xóa để ẩn, thêm để bao gồm. Để trống để dùng tất cả model khả dụng.",
   "settingsModels.edit.saveError": "Không lưu được thay đổi",
-
   "settingsModels.custom.apiType": "Loại API",
   "settingsModels.custom.apiAnthropic": "Tương thích Anthropic",
   "settingsModels.custom.apiOpenai": "Tương thích OpenAI",
@@ -97,15 +85,12 @@
   "settingsModels.custom.labelUrlRequired": "Cần nhập nhãn và base URL",
   "settingsModels.custom.modelRequired": "Endpoint tùy chỉnh cần ít nhất một model id",
   "settingsModels.custom.addError": "Không thêm được endpoint",
-
   "settingsModels.models.available": "Khả dụng:",
   "settingsModels.models.add": "Thêm model",
   "settingsModels.models.remove": "Xóa model",
   "settingsModels.models.idPlaceholder": "model-id",
-
   "settingsModels.tabs.accounts": "Tài khoản",
   "settingsModels.tabs.models": "Model",
-
   "settingsModels.catalog.title": "Model khả dụng",
   "settingsModels.catalog.intro": "Chọn model hiển thị trong các picker. Model thuộc về provider — mọi tài khoản của một provider dùng chung danh sách này.",
   "settingsModels.catalog.fetch": "Cập nhật",
@@ -121,7 +106,6 @@
   "settingsModels.catalog.empty": "Chưa có model.",
   "settingsModels.catalog.source.api": "trực tiếp",
   "settingsModels.catalog.source.both": "tích hợp · trực tiếp",
-
   "settingsModels.test.ok": "OK",
   "settingsModels.test.okExpires": "OK — hết hạn {when}",
   "settingsModels.test.error": "Lỗi: {code} {message}",
@@ -131,8 +115,10 @@
   "settingsModels.test.inMinutes": "sau {n} phút",
   "settingsModels.test.inHours": "sau {n} giờ",
   "settingsModels.test.inDays": "sau {n} ngày",
-
   "settingsModels.error.sidecarUnavailable": "Sidecar không khả dụng. Hãy đảm bảo bạn đang chạy ứng dụng desktop.",
   "settingsModels.error.signInCancelled": "Đã hủy đăng nhập.",
-  "settingsModels.error.unknown": "Lỗi không xác định"
+  "settingsModels.error.unknown": "Lỗi không xác định",
+  "settings.aiAuthoring.title": "Model cho AI authoring",
+  "settings.aiAuthoring.desc": "Dùng khi tạo/sửa team, agent, issue, skill… bằng AI",
+  "settings.aiAuthoring.auto": "Tự động — theo mặc định phiên ({model})"
 }

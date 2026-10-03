@@ -4,45 +4,49 @@
       <div class="ltop">
         <div class="srch">
           <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <input v-model="q" :placeholder="placeholder ?? t('common.search')" />
+          <Input v-model="q" unstyled :placeholder="placeholder ?? t('common.search')" />
         </div>
-        <button
+        <Button
           v-if="groupBy"
-          class="iconbtn"
           :title="t('library.filter.tooltip')"
           style="width: 32px; height: 32px; position: relative"
+          variant="outline"
+          size="iconMd"
           @click="showFilters = !showFilters"
         >
           <Icon name="filter" style="width: var(--icon-sm); height: var(--icon-sm)" />
           <span v-if="activeFilters" class="fbadge">{{ activeFilters }}</span>
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="groupBy"
-          class="iconbtn"
           :title="t('library.foldAll.tooltip')"
           style="width: 32px; height: 32px"
+          variant="outline"
+          size="iconMd"
           @click="toggleFoldAll"
         >
           <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="importKind"
-          class="iconbtn"
           :title="t('library.import.tooltip')"
           style="width: 32px; height: 32px"
+          variant="outline"
+          size="iconMd"
           @click="importOpen = true"
         >
           <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
+        </Button>
+        <Button
           v-if="showNew"
-          class="iconbtn"
           :title="t('common.add')"
           style="width: 32px; height: 32px"
+          variant="outline"
+          size="iconMd"
           @click="emit('new')"
         >
           <Icon name="plus" />
-        </button>
+        </Button>
       </div>
 
       <!-- Filter drawer (grouped lists only) — project tier filter, mirrors Sessions. -->
@@ -182,6 +186,8 @@
 import { computed, ref, watch } from 'vue'
 import type { GroupWindow } from '~/composables/useLoadMore'
 import type { ConfigKind } from '~/stores/templates'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Shared master-detail shell — a searchable list (.list/.ltop/.lscroll/.libli)
 // beside a detail pane (.detail). Pages supply per-entity #row and #detail slots

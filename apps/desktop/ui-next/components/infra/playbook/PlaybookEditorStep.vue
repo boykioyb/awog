@@ -12,15 +12,15 @@
       <AppSelect v-model="verb" :options="verbOptions" width="116px" />
       <AppSelect v-model="tool" :options="toolOptions" width="116px" />
 
-      <input
+      <Input
         v-model="id"
-        class="pbe-inp pbe-id"
         type="text"
         maxlength="64"
         autocomplete="off"
         spellcheck="false"
         :placeholder="t('playbooks.editor.step.idPlaceholder')"
         :title="t('playbooks.editor.step.idWhy')"
+        class="pbe-id"
       />
 
       <span class="pbe-step-gap" />
@@ -55,9 +55,8 @@
       </button>
     </div>
 
-    <input
+    <Input
       v-model="title"
-      class="pbe-inp"
       type="text"
       maxlength="200"
       :placeholder="t('playbooks.editor.step.titlePlaceholder')"
@@ -103,6 +102,7 @@ import { EDITOR_TOOLS, EDITOR_VERBS } from '~/composables/usePlaybookEditor'
 import type { EditorStep } from '~/composables/usePlaybookEditor'
 import type { PlaybookVerb } from '~/composables/usePlaybooksApi'
 import type { InfraTool } from '~/types'
+import Input from '~/components/ui/input/Input.vue'
 
 defineProps<{ index: number; isLast: boolean }>()
 

@@ -62,15 +62,17 @@ onUnmounted(() => document.removeEventListener('click', closeOnOutside))
   right: 52px;
   z-index: 4;
 }
+/* Nút mở = chip popover giống .foldbtn; menu mở → wash sáng lên (`bg-accent
+   text-accent-foreground`). */
 .chapbtn {
   display: grid;
   place-items: center;
   width: 28px;
   height: 28px;
   border-radius: var(--r-sm);
-  background: var(--bgEl);
+  background: var(--popover);
   border: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
   opacity: 0.72;
@@ -82,15 +84,19 @@ onUnmounted(() => document.removeEventListener('click', closeOnOutside))
 }
 .chapbtn:hover {
   opacity: 1;
-  background: var(--bgHover);
-  border-color: var(--borderStrong);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+.chapbtn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .chapbtn.on {
   opacity: 1;
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--accent-foreground);
+  background: var(--accent-wash);
 }
+/* ToC panel = popover chuẩn: bg-popover + hairline border + shadow-md. */
 .chaplist {
   position: absolute;
   top: 34px;
@@ -98,17 +104,17 @@ onUnmounted(() => document.removeEventListener('click', closeOnOutside))
   width: 260px;
   max-height: 320px;
   overflow-y: auto;
-  padding: 6px;
-  border-radius: var(--r-sm);
-  background: var(--bgEl);
+  padding: 4px;
+  border-radius: var(--radius);
+  background: var(--popover);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
 }
 .chaphead {
-  padding: 4px 8px 6px;
+  padding: 6px 8px 4px;
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .chaprow {
   display: flex;
@@ -120,17 +126,21 @@ onUnmounted(() => document.removeEventListener('click', closeOnOutside))
   border: 0;
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--text);
+  color: var(--popover-foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   cursor: pointer;
 }
 .chaprow:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
+}
+.chaprow:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .chapn {
   flex: 0 0 auto;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
 }
 .chapt {

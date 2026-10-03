@@ -61,21 +61,21 @@
            hành động độc lập — và nó chính là nút bị bỏ rơi một mình ở hàng hai trong
            ảnh người dùng 2026-09-16. -->
       <div class="itoolgrp iend">
-        <button class="btn sm" type="button" :disabled="loading" @click="load">
+        <Button type="button" :disabled="loading" variant="outline" size="sm" @click="load">
           <Icon name="refresh" />
           {{ t('infra.audit.reload') }}
-        </button>
+        </Button>
 
         <span class="ixa-sep" />
 
-        <button class="btn sm" type="button" @click="exportAs('csv')">
+        <Button type="button" variant="outline" size="sm" @click="exportAs('csv')">
           <Icon name="download" />
           CSV
-        </button>
-        <button class="btn sm" type="button" @click="exportAs('jsonl')">
+        </Button>
+        <Button type="button" variant="outline" size="sm" @click="exportAs('jsonl')">
           <Icon name="download" />
           JSONL
-        </button>
+        </Button>
 
         <!-- Vạch ngăn trước hai nút XOÁ: một cú bấm nhầm ở đây xoá sổ trên đĩa, nên
              chúng không được đứng liền kề nút tải về như anh em cùng loại. -->
@@ -87,26 +87,28 @@
              hàng dưới. Icon-trần thì KHÔNG dùng được ở đây: bộ icon chỉ có một
              glyph `trash`, nên hai nút sẽ trông y hệt nhau trong khi một cái xoá
              theo bộ lọc còn cái kia xoá sạch sổ. -->
-        <button
-          class="btn sm danger"
+        <Button
           type="button"
           :title="t('infra.audit.clean.title')"
           :disabled="cleaning || !entries.length"
+          variant="danger"
+          size="sm"
           @click="clean('filtered')"
         >
           <Icon name="trash" />
           {{ t('infra.audit.clean.short') }}
-        </button>
-        <button
-          class="btn sm danger"
+        </Button>
+        <Button
           type="button"
           :title="t('infra.audit.clean.allTitle')"
           :disabled="cleaning || !summary?.total"
+          variant="danger"
+          size="sm"
           @click="clean('all')"
         >
           <Icon name="trash" />
           {{ t('infra.audit.clean.allShort') }}
-        </button>
+        </Button>
       </div>
     </header>
 
@@ -178,25 +180,27 @@
                   <!-- "Hỏi agent" cho MỘT dòng: đẩy dòng này (kèm JSON thô) vào hộp
                        chọn đích dùng chung — phiên hiện tại hay phiên mới. Đây là
                        chiều ngược lại của "agent đọc được nhật ký". -->
-                  <button
-                    class="btn sm"
+                  <Button
                     type="button"
                     :title="t('infra.audit.ask.label')"
+                    variant="outline"
+                    size="sm"
                     @click.stop="askAbout(e)"
                   >
                     <Icon name="sparkles" />
-                  </button>
+                  </Button>
                   <!-- ↗ nhảy về phiên: chỉ hiện khi dòng THẬT SỰ có phiên + tin để
                        nhảy tới. Một nút dẫn tới hư không còn tệ hơn không có nút. -->
-                  <button
+                  <Button
                     v-if="e.sessionId && e.messageId"
-                    class="btn sm"
                     type="button"
                     :title="t('infra.audit.jump.label')"
+                    variant="outline"
+                    size="sm"
                     @click.stop="jumpToSession(e)"
                   >
                     <Icon name="forward" />
-                  </button>
+                  </Button>
                 </div>
               </td>
             </tr>
@@ -208,9 +212,9 @@
         <header class="ixa-detail-hd">
           <Icon name="info" />
           <span class="ixa-detail-ttl">{{ t('infra.audit.detail.title') }}</span>
-          <button class="btn sm" type="button" @click="selected = null">
+          <Button type="button" variant="outline" size="sm" @click="selected = null">
             <Icon name="x" />
-          </button>
+          </Button>
         </header>
         <dl class="ixa-dl">
           <dt>{{ t('infra.audit.col.at') }}</dt>
@@ -250,6 +254,7 @@ import { useInfraAskAgent } from '~/composables/useInfraAskAgent'
 import { useInfraMode } from '~/composables/useInfraMode'
 import type { InfraAuditEntry } from '~/composables/useInfraResourcesApi'
 import { infraAuditSource } from '~/utils/infra-audit-source'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { isExpert } = useInfraMode()

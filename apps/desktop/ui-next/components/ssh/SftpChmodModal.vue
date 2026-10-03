@@ -29,14 +29,14 @@
 
         <label class="sfmod-octal">
           <span>{{ t('ssh.sftp.chmod.octal') }}</span>
-          <input v-model="octal" class="sfmod-octal-in mono" maxlength="3" inputmode="numeric" />
+          <Input v-model="octal" maxlength="3" inputmode="numeric" class="sfmod-octal-in mono" />
         </label>
 
         <div class="sfmod-foot">
-          <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-          <button class="btn pri" @click="emit('confirm', mode)">
+          <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+          <Button variant="default" @click="emit('confirm', mode)">
             {{ t('ssh.sftp.chmod.apply') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -49,6 +49,8 @@
 // target's current mode on open.
 import { computed, ref, watch } from 'vue'
 import type { SftpEntry } from '~/composables/useSshApi'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{ open: boolean; targets: SftpEntry[] }>()
 const emit = defineEmits<{ confirm: [mode: number]; cancel: [] }>()

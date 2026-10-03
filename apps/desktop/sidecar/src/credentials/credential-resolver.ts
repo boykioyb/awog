@@ -58,6 +58,21 @@ export async function resolveAccount(
   return acc
 }
 
+// Provider sở hữu một accountId — id account là duy nhất toàn cục, nên quét cả
+// ba bucket. Dùng khi caller chỉ gửi accountId (các đường authoring/già): account
+// OpenAI trên provider mặc định 'anthropic' trước đây rơi vào 'account not
+// found' — suy ra provider từ account thì đúng ngay.
+export async function providerOfAccount(
+  accountId: string | undefined,
+): Promise<ProviderName | undefined> {
+  if (!accountId) return undefined
+  const data = await loadCredentials()
+  for (const provider of Object.keys(data.providers) as ProviderName[]) {
+    if (data.providers[provider]?.accounts.some((a) => a.id === accountId)) return provider
+  }
+  return undefined
+}
+
 // Persist the refreshed pi OAuth credentials back to the account so the next
 // request reuses the rotated refresh token (version++ for optimistic reads).
 // Failure to persist must NOT block the request (we already have a valid token);

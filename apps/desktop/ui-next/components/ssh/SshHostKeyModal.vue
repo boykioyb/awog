@@ -38,19 +38,19 @@
         </label>
 
         <div class="skh-foot">
-          <button class="btn" @click="reject">{{ t('ssh.hostKey.reject') }}</button>
-          <button
-            class="btn"
+          <Button variant="outline" @click="reject">{{ t('ssh.hostKey.reject') }}</Button>
+          <Button
             :class="{ pri: !changed }"
             :style="
               changed
                 ? { background: 'var(--danger)', color: 'var(--bg)', borderColor: 'transparent' }
                 : undefined
             "
+            variant="outline"
             @click="accept"
           >
             {{ t('ssh.hostKey.accept') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -65,6 +65,7 @@
 // the ssh store's pendingHostKey + confirmHostKey.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { SshHostKeyPrompt } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ open: boolean; prompt: SshHostKeyPrompt | null }>()
 const emit = defineEmits<{ confirm: [accept: boolean, remember: boolean] }>()

@@ -65,18 +65,19 @@
           <span v-if="tab.badge != null" class="chip tnum tpc-tabbadge">{{ tab.badge }}</span>
         </button>
         <span class="tpc-tabsp" />
-        <button
+        <Button
           v-if="phase.status === 'waiting_approval'"
-          class="btn pri sm"
+          variant="default"
+          size="sm"
           @click.stop="emit('approve')"
         >
           <Icon name="check" />
           {{ t('tasks.approve') }}
-        </button>
-        <button v-if="canRerun" class="btn sm" @click.stop="rerunOpen = true">
+        </Button>
+        <Button v-if="canRerun" variant="outline" size="sm" @click.stop="rerunOpen = true">
           <Icon name="refresh" />
           {{ t('tasks.phase.rerunFromHere') }}
-        </button>
+        </Button>
       </div>
 
       <!-- tab body -->
@@ -99,15 +100,14 @@
           </div>
           <div v-else class="tpc-empty">{{ t('tasks.phase.noDiscuss') }}</div>
           <div class="tpc-composer">
-            <input
+            <Input
               v-model="draft"
-              class="tpc-input"
               :placeholder="t('tasks.phase.discussPh')"
               @keydown.enter="sendDiscuss"
             />
-            <button class="btn sm" :disabled="!draft.trim()" @click="sendDiscuss">
+            <Button :disabled="!draft.trim()" variant="outline" size="sm" @click="sendDiscuss">
               <Icon name="send" />
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -130,8 +130,8 @@
         />
       </div>
       <template #footer>
-        <button class="btn" @click="rerunOpen = false">{{ t('common.cancel') }}</button>
-        <button class="btn pri" @click="confirmRerun">{{ t('tasks.rerun.confirm') }}</button>
+        <Button variant="outline" @click="rerunOpen = false">{{ t('common.cancel') }}</Button>
+        <Button variant="default" @click="confirmRerun">{{ t('tasks.rerun.confirm') }}</Button>
       </template>
     </LibraryEntityModal>
   </div>
@@ -149,6 +149,8 @@ import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import TaskTraceNode from '~/components/task/TaskTraceNode.vue'
 import { useI18n } from '~/composables/useI18n'
 import type { TaskPhase, TaskStatus } from '~/stores/tasks'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   taskId: string

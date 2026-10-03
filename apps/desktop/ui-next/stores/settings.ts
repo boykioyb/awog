@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { reactive, ref, watch } from 'vue'
 import { useSidecar } from '~/composables/useSidecar'
+import { providerModelsShown } from '~/composables/useProviderModels'
 import type { KeymapBlob } from '~/composables/useKeymap'
 import type { PetQuipBucket } from '~/utils/pet-quips'
 import { DEFAULT_SYSTEM_PROMPT } from '~/utils/system-prompt'
@@ -115,6 +116,15 @@ export interface PrReviewLlm {
 // "Follow the session's own config" for PrReviewLlm.accountId — the account (and
 // with it the provider) stays whatever a new session in that project would get.
 export const PR_REVIEW_ACCOUNT_INHERIT = '__inherit'
+
+// Model cho các đường "AI authoring" (dựng/sửa team, agent, issue, skill… bằng
+// prompt): tách khỏi session defaults vì authoring thường muốn model rẻ/nhanh.
+// Cả hai field cùng rỗng = theo session defaults — picker luôn set/clear cùng
+// lúc nên không có trạng thái lẻ provider-có-model-trống.
+export interface AiAuthoringSettings {
+  provider: ProviderName | ''
+  modelId: string
+}
 
 export type AutoCommitScope = 'workspace' | 'artifacts-only'
 export type DirtyTaskPolicy = 'warn' | 'auto-stash'
@@ -382,6 +392,8 @@ const DEFAULT_DEFAULTS: SessionDefaults = {
   thinkingLevel: 'medium',
 }
 
+const DEFAULT_AI_AUTHORING: AiAuthoringSettings = { provider: '', modelId: '' }
+
 // Deliberately plain: it must do something sensible with no setup, and the user's
 // own review workflow (a skill, a house checklist, a language) is exactly what the
 // setting is for.
@@ -541,6 +553,7 @@ const SANS_NATIVE_MIGRATION_KEY = 'awog-sans-native-v1'
 // should keep. Order = write order in settings.json (cosmetic only).
 interface SyncedShape {
   defaults: SessionDefaults
+  aiAuthoring: AiAuthoringSettings
   git: GitSettings
   sessions: SessionSettings
   quota: QuotaWarningSettings
@@ -665,6 +678,10 @@ export const useSettingsStore = defineStore('settings', () => {
   // Persisted preference slices (merge over defaults so new fields appear).
   const workspacePath = ref(persisted.workspacePath ?? DEFAULT_WORKSPACE_PATH)
   const defaults = reactive<SessionDefaults>({ ...DEFAULT_DEFAULTS, ...persisted.defaults })
+  const aiAuthoring = reactive<AiAuthoringSettings>({
+    ...DEFAULT_AI_AUTHORING,
+    ...persisted.aiAuthoring,
+  })
   // Seed the default system prompt when the persisted value is empty/missing — an
   // earlier build defaulted it to '' and may have saved that blank. (A user who
   // truly wants it empty can clear it; it only re-seeds when blank.)
@@ -736,6 +753,7 @@ export const useSettingsStore = defineStore('settings', () => {
   // reactive proxies would otherwise reach IPC and fail to serialize).
   const syncedSnapshot = (): SyncedShape => ({
     defaults: { ...defaults },
+    aiAuthoring: { ...aiAuthoring },
     git: { ...git },
     sessions: { ...sessions },
     quota: { ...quota },
@@ -792,6 +810,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (!defaults.systemPrompt) defaults.systemPrompt = DEFAULT_SYSTEM_PROMPT
     if (isObj(blob.git)) Object.assign(git, blob.git)
     if (isObj(blob.sessions)) Object.assign(sessions, blob.sessions)
+    if (isObj(blob.aiAuthoring)) Object.assign(aiAuthoring, blob.aiAuthoring)
     if (isObj(blob.quota)) Object.assign(quota, blob.quota)
     if (isObj(blob.autoUpdate)) Object.assign(autoUpdate, blob.autoUpdate)
     if (isObj(blob.appearance)) Object.assign(appearance, blob.appearance)
@@ -862,6 +881,7 @@ export const useSettingsStore = defineStore('settings', () => {
     [
       workspacePath,
       defaults,
+      aiAuthoring,
       git,
       sessions,
       quota,
@@ -972,13 +992,17 @@ export const useSettingsStore = defineStore('settings', () => {
   // (sessions.ts) minus the project-pinned branch, since creator libraries have no
   // project context. `kind` classifies the outcome so the UI can pick wording; the
   // store stays out of the presentation layer (SoC — no message strings here).
-  const resolveCreatorAccount = (): {
+  // `preferProvider` — provider của model authoring (aiAuthoring) được ưu tiên
+  // trước; chuỗi fallback giữ nguyên (active → first → cross-provider).
+  const resolveCreatorAccount = (
+    preferProvider?: ProviderName,
+  ): {
     accountId: string | null
     provider: ProviderName
     kind: CreatorAccountKind
   } => {
-    const p = defaults.provider
-    // 1. active account of the default provider (matches Sessions' isActive branch).
+    const p = preferProvider ?? (aiAuthoring.provider || defaults.provider)
+    // 1. active account of the preferred provider (matches Sessions' isActive branch).
     const active = activeAccount(p)
     if (active) return { accountId: active.id, provider: p, kind: 'active' }
     // 2. first connected account of the default provider (Sessions' inProvider[0]).
@@ -992,6 +1016,31 @@ export const useSettingsStore = defineStore('settings', () => {
     }
     // 4. nothing connected anywhere.
     return { accountId: null, provider: p, kind: 'none' }
+  }
+
+  // Model cho một provider cụ thể trong đường authoring: nếu account resolve ra
+  // provider khác với model đã chọn (fallback cross-provider) thì trả model đầu
+  // catalog của provider thực tế — model provider A không chạy trên account B.
+  const authoringModelFor = (provider: ProviderName): string => {
+    const effP = aiAuthoring.provider || defaults.provider
+    const effM = aiAuthoring.modelId || defaults.modelId
+    return provider === effP ? effM : (providerModelsShown(provider)[0]?.id ?? effM)
+  }
+
+  // Bộ ba nhất quán cho các đường "AI authoring" (draft team/agent/issue/skill
+  // bằng prompt): provider+model theo aiAuthoring (rỗng → session defaults),
+  // account resolve theo provider đó.
+  const resolveAuthoringLlm = (): {
+    accountId: string | null
+    provider: ProviderName
+    modelId: string
+  } => {
+    const acct = resolveCreatorAccount()
+    return {
+      accountId: acct.accountId,
+      provider: acct.provider,
+      modelId: authoringModelFor(acct.provider),
+    }
   }
 
   // --- account/auth IPC actions ---
@@ -1208,7 +1257,10 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   // Resolve the dock side for a view, falling back to 'right' for unknown views.
-  const workspaceDockOf = (view: string): WorkspaceDockSide => workspacePanel.dock[view] ?? 'right'
+  const workspaceDockOf = (view: string): WorkspaceDockSide =>
+    workspacePanel.dock[view] ??
+    (view === 'Team' ? workspacePanel.dock['Group'] : undefined) ??
+    'right'
   const setWorkspaceDock = (view: string, side: WorkspaceDockSide) => {
     workspacePanel.dock[view] = side
   }
@@ -1227,6 +1279,7 @@ export const useSettingsStore = defineStore('settings', () => {
     providers,
     workspacePath,
     defaults,
+    aiAuthoring,
     git,
     sessions,
     quota,
@@ -1248,6 +1301,8 @@ export const useSettingsStore = defineStore('settings', () => {
     // getters
     activeAccount,
     resolveCreatorAccount,
+    resolveAuthoringLlm,
+    authoringModelFor,
     isProviderConnected,
     keyFingerprint,
     workspaceDockOf,

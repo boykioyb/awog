@@ -36,24 +36,34 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('cancel')">{{ t('common.cancel') }}</button>
-      <button v-if="draft" class="btn" @click="resetDraft">
+      <Button variant="outline" @click="emit('cancel')">{{ t('common.cancel') }}</Button>
+      <Button v-if="draft" variant="outline" @click="resetDraft">
         <Icon name="refresh" />
         {{ t('skills.bodyEdit.regenerate') }}
-      </button>
-      <button
+      </Button>
+      <Button
         v-if="!draft"
-        class="btn pri"
         :disabled="isGenerating || !prompt.trim()"
+        variant="outline"
+        :title="t('library.bgEdit.hint')"
+        @click="onGenerateSave"
+      >
+        <Icon name="check" />
+        {{ t('library.bgEdit.generateSave') }}
+      </Button>
+      <Button
+        v-if="!draft"
+        :disabled="isGenerating || !prompt.trim()"
+        variant="default"
         @click="onGenerate"
       >
         <Icon :name="isGenerating ? 'refresh' : 'sparkles'" :class="{ spin: isGenerating }" />
         {{ isGenerating ? t('skills.bodyEdit.generating') : t('skills.bodyEdit.generate') }}
-      </button>
-      <button v-else class="btn pri" :disabled="!canApply" @click="onApply">
+      </Button>
+      <Button v-else :disabled="!canApply" variant="default" @click="onApply">
         <Icon name="check" />
         {{ t('skills.bodyEdit.apply') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -69,6 +79,8 @@ import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import LibraryMarkdownBody from '~/components/library/LibraryMarkdownBody.vue'
 import { useSidecar } from '~/composables/useSidecar'
 import { useSkillsStore, type Skill } from '~/stores/skills'
+import { startAiEditSave } from '~/composables/useAiEditSave'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{
   open: boolean
@@ -139,10 +151,8 @@ const onGenerate = async () => {
   }
 }
 
-const onApply = () => {
-  const d = draft.value
-  if (!d || !d.id) return
-  // Preserve storage metadata; only content fields come from the model.
+// Merge draft vào skill hiện tại: giữ storage metadata; content từ model.
+const applyDraft = (d: Skill): Skill => {
   const updated: Skill = {
     id: d.id,
     source: props.skill.source,
@@ -156,7 +166,63 @@ const onApply = () => {
   if (d.alwaysAllow && d.alwaysAllow.length > 0) updated.alwaysAllow = [...d.alwaysAllow]
   if (d.requiredSources && d.requiredSources.length > 0)
     updated.requiredSources = [...d.requiredSources]
-  emit('apply', updated)
+  return updated
+}
+
+const onApply = () => {
+  const d = draft.value
+  if (!d || !d.id) return
+  emit('apply', applyDraft(d))
+}
+
+// "Sửa + lưu": generate + apply + save chạy nền — đóng modal ngay, xong/lỗi
+// bắn toast. Chụp entity + account lúc bấm vì modal unmount sau emit('cancel').
+const onGenerateSave = () => {
+  const text = prompt.value.trim()
+  if (!text || isGenerating.value) return
+  if (!sc.available || !props.accountId) {
+    error.value = t('common.aiUnavailable')
+    return
+  }
+  const skill = props.skill
+  const accountId = props.accountId
+  const current = {
+    id: skill.id,
+    name: skill.name,
+    description: skill.description,
+    body: skill.body,
+    icon: skill.icon,
+    globs: skill.globs,
+    alwaysAllow: skill.alwaysAllow,
+    requiredSources: skill.requiredSources,
+  }
+  emit('cancel')
+  startAiEditSave({
+    key: `skill-${skill.id}`,
+    name: skill.name || skill.id,
+    task: async () => {
+      const result = await store.generateSkill(text, accountId, current)
+      if (!result.id || !result.name || !result.description) {
+        throw new Error('Model returned an incomplete draft')
+      }
+      const updated: Skill = {
+        id: result.id,
+        source: skill.source,
+        name: result.name,
+        description: result.description,
+        body: result.body,
+      }
+      if (skill.projectId) updated.projectId = skill.projectId
+      if (result.icon) updated.icon = result.icon
+      if (result.globs && result.globs.length > 0) updated.globs = [...result.globs]
+      if (result.alwaysAllow && result.alwaysAllow.length > 0)
+        updated.alwaysAllow = [...result.alwaysAllow]
+      if (result.requiredSources && result.requiredSources.length > 0)
+        updated.requiredSources = [...result.requiredSources]
+      await store.saveSkill(updated)
+      return undefined
+    },
+  })
 }
 </script>
 

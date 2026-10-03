@@ -5,8 +5,8 @@
 // Sidecar không có primitive "bắt đầu một lượt" — phiên do RENDERER lái (xem
 // sessions/runner.ts + mô hình wake của ADR 0066 P2). Nên hàm này chỉ làm hai việc:
 // tạo phiên trên đĩa, rồi đặt lời giao việc vào HỘP THƯ của nó qua đúng
-// `postSessionMessage` mà mọi tin liên phiên đi qua. Từ đó renderer quyết định: nhóm
-// đã bật tự giao ⇒ chạy ngay; chưa bật ⇒ hiện chip cho người dùng bấm.
+// `postSessionMessage` mà mọi tin liên phiên đi qua. Từ đó renderer TỰ GIAO:
+// phiên con rảnh ⇒ chạy ngay; đang bận ⇒ xếp sau lượt hiện tại.
 //
 // Nhờ vậy không có đường thứ hai nào đi vào một phiên: cùng hàng rào nonce, cùng
 // `redactString`, cùng ba trần chống lạm dụng.
@@ -20,20 +20,17 @@
 import { randomBytes } from 'node:crypto'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
+import { loadAgent } from '../agents/store.js'
 import { InboxError, MAX_TEXT_LEN, oneLineLabel, postSessionMessage } from './inbox.js'
-import {
-  createSession,
-  flushSession,
-  listSessionSummaries,
-  updateSessionMetadata,
-} from './store.js'
+import { createSession, listSessionSummaries } from './store.js'
 import type {
   Session,
+  SessionAgentRef,
   SessionSettings,
   SessionSummary,
-  SpawnChildSpec,
   SpawnSessionConfig,
 } from '../types/shared.js'
+import type { SpawnChildSpec as SpawnChildSpecBase } from '../types/shared.js'
 
 // Trần số con TRỰC TIẾP của một phiên. Nhóm lớn hơn chừng này thì vấn đề không còn là
 // điều phối nữa — và người dùng vẫn tự tay xếp thêm được qua UI.
@@ -64,12 +61,34 @@ export class SpawnError extends Error {
 // ĐỊNH từ `clientId` (số thứ tự trong store của renderer), thứ sidecar không có và
 // không nên biết. Nên ở đây là ngày + ngẫu nhiên từ CSPRNG. Vẫn khớp `SESSION_ID_RE`
 // (`^[a-z0-9-]+$`) của các RPC nhận id, và vẫn sắp được theo thời gian nhờ tiền tố ngày.
-function mintSessionId(): string {
+export function mintSessionId(): string {
   const d = new Date()
   const yy = String(d.getFullYear()).slice(2)
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
   return `${yy}${mm}${dd}-agent-${randomBytes(4).toString('hex')}`
+}
+
+// Bộ đặc tả phiên con đi qua MỌI đường spawn (tool `create_session`, popover
+// `sessions.spawnMembers`/`sessions.spawnResolve`) — `SpawnChildSpec` của
+// types/shared.ts cộng thêm tuple bind agent. Tuple ở đây chứ không trên
+// shared.ts vì file đó đang được một track khác của feature này chỉnh sửa;
+// `Session.agent` gói ba field này lại thành `SessionAgentRef`.
+//
+// Cả ba đều OPTIONAL để spec cũ (tool/RPC trước feature, popover không chọn
+// agent) vẫn hợp lệ nguyên vẹn — vắng mặt = không bind, phiên con chạy prompt
+// thường y hệt trước.
+export interface SpawnChildSpec extends SpawnChildSpecBase {
+  // Id agent AWOG (AGENT.md) bind vào phiên con — "vai có thật"
+  // (docs/features/session-teams.md §3): systemPrompt/model/tools của agent áp
+  // lên mọi lượt của nó. Ghi nguyên vào `session.agent`.
+  agentId?: string
+  // Tier của agent: 'global' (~/.claude/agents) hoặc 'project'
+  // (<project>/.claude/agents) — một id có thể tồn tại ở cả hai tier.
+  agentSource?: 'global' | 'project'
+  // Project sở hữu agent khi `agentSource === 'project'` (member kế thừa
+  // projectId của cha — UI nên gửi đủ tuple từ picker).
+  agentProjectId?: string
 }
 
 export interface SpawnChildInput {
@@ -82,6 +101,14 @@ export interface SpawnChildInput {
   // Cấu hình NGƯỜI DÙNG đã duyệt trong popover điều phối (chung của lô đã trộn
   // xong với đè riêng của phiên này). Vắng mặt = kế thừa nguyên settings của cha.
   config?: SpawnSessionConfig
+  // Tuple agent bind vào phiên con — đi nguyên vào `session.agent`.
+  agentId?: string
+  agentSource?: 'global' | 'project'
+  agentProjectId?: string
+  // Trần con của cả run — spawnMemberSessions/materializeMember truyền xuống
+  // để đường spec (teams.run, assignee_member) nới cap theo danh sách người
+  // dùng đã duyệt. Vắng mặt = MAX_CHILDREN.
+  maxRunChildren?: number
 }
 
 // Trộn cấu hình đã duyệt lên settings kế thừa của phiên cha. Chỉ field ĐƯỢC ĐẶT
@@ -106,41 +133,18 @@ export function mergeSpawnConfig(
   return merged
 }
 
-// Bật "workflow tự chạy" cho nhóm của `rootId`: `groupAutoDeliver` lên gốc.
-// `updateSessionMetadata` không phát event nào — nếu chỉ ghi đĩa thì renderer
-// không biết cờ đã đứng, và tin giao việc đến ngay sau đó rơi vào chip chờ
-// "Giao cho agent" (đúng thứ cờ này sinh ra để bỏ). `session.group-armed` là
-// kênh duy nhất đẩy cờ xuống UI, nó còn vá luôn khe hở cửa sổ-popout.
-export async function armGroupAutoDeliver(
-  rootId: string,
-  spawnConfig?: SpawnSessionConfig,
-): Promise<void> {
-  await updateSessionMetadata(rootId, { groupAutoDeliver: true })
-  // Flush ngay (không chỉ debounce): cờ này là bản ghi của một lần DUYỆT —
-  // thoát app trong cửa sổ 500ms mà mất nó nghĩa là phiên con vừa đẻ reload xong
-  // lại rơi vào chip chờ "Giao cho agent" (cùng lý do với setGroup/setGroupSpawn).
-  await flushSession(rootId)
-  // Gửi kèm giá trị cờ: cùng event này mang `false` khi người dùng tắt công tắc
-  // (sessions.setGroupAutoDeliver) — payload tường minh để hai chiều hội tụ.
-  emit('session.group-armed', {
-    sessionId: rootId,
-    groupAutoDeliver: true,
-    ...(spawnConfig ? { groupSpawnConfig: spawnConfig } : {}),
-  })
-}
-
 // Phiên GỐC của nhóm chứa `sessionId` — chính nó khi không thuộc nhóm nào
 // hoặc đã là gốc. Trả `undefined` khi id lạ (phiên chưa lưu). Đây cũng là nơi
-// `groupSpawnConfig` được tra: popover điều phối chỉ được BỎ QUA khi gốc đã
+// `spawnConfig` được tra: popover điều phối chỉ được BỎ QUA khi gốc đã
 // nhớ một cấu hình — "duyệt một lần cho cả nhóm" là của NHÓM, không của phiên.
-export function groupRootOf(
+export function runRootOf(
   summaries: SessionSummary[],
   sessionId: string,
 ): SessionSummary | undefined {
   const caller = summaries.find((s) => s.id === sessionId)
   if (!caller) return undefined
-  if (!caller.groupParentId) return caller
-  return summaries.find((s) => s.id === caller.groupParentId) ?? caller
+  if (!caller.teamRunId) return caller
+  return summaries.find((s) => s.id === caller.teamRunId) ?? caller
 }
 
 export interface SpawnChildResult {
@@ -171,12 +175,45 @@ function spawnPromptText(prompt: string, title: string, role: string): string {
   return trimmed.slice(0, MAX_TEXT_LEN - marker.length) + marker
 }
 
+// Tra tên hiển thị của một agent để làm nhãn `teamRole` khi spec bind agent mà
+// không gửi `role` — "vai có thật" đã có sẵn một cái tên đúng ngữ nghĩa. Đây là
+// suy diễn NHÃN thuần tuý: agent lạ/đã xoá thì vai để trống, binding vẫn được
+// ghi vì `id` là đủ cho `resolveAgentContext` ở lượt chạy.
+//
+// `projectId` ở đây là NGỮ CẢNH tra cứu (member kế thừa project của cha — dùng
+// `parent.projectId` khi spec không nói rõ), KHÔNG phải giá trị ghi vào
+// `agent` — ref lưu nguyên những gì caller gửi.
+async function agentRoleLabel(
+  agentId: string,
+  source: 'global' | 'project' | undefined,
+  projectId: string | null | undefined,
+): Promise<string> {
+  try {
+    let agent = null
+    if (source) {
+      agent = await loadAgent(agentId, source, projectId ?? undefined)
+    } else {
+      // Chưa biết tier: thử global trước (phổ biến hơn), rồi project của phiên —
+      // đúng thứ tự ưu tiên mà `loadAgentFlexibly` (tasks/agent-context.ts) áp.
+      agent = await loadAgent(agentId, 'global')
+      if (!agent && projectId) agent = await loadAgent(agentId, 'project', projectId)
+    }
+    return agent?.name ?? ''
+  } catch (err) {
+    log.warn('spawn: agent lookup for role label failed', {
+      agentId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return ''
+  }
+}
+
 // Tạo một phiên con dưới `parentId` rồi giao việc đầu tiên cho nó.
 export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnChildResult> {
   // Tiêu đề và vai do MODEL viết ⇒ L1 với mọi bề mặt đọc chúng sau này (hàng danh
   // sách, danh bạ liên phiên). Đi qua đúng cách xử lý của tiêu đề phiên trong danh bạ.
   const title = oneLineLabel(input.title, MAX_TITLE_LEN)
-  const role = oneLineLabel(input.role, MAX_ROLE_LEN)
+  let role = oneLineLabel(input.role, MAX_ROLE_LEN)
   if (!title) throw new SpawnError('invalid-input', 'The new session needs a title.')
 
   const summaries = await listSessionSummaries()
@@ -191,15 +228,38 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
   // cùng một gốc), không phải cháu. Nếu không, một phiên điều phối giao việc cho BA rồi
   // BA tự đẻ tiếp sẽ dựng ra một cái cây sâu mà bảng trạng thái và lưới đều chỉ hiện
   // được một tầng.
-  const parentId = caller.groupParentId ?? input.parentId
+  const parentId = caller.teamRunId ?? input.parentId
   const parent = summaries.find((s) => s.id === parentId) ?? caller
-  const children = summaries.filter((s) => s.groupParentId === parentId).length
-  if (children >= MAX_CHILDREN) {
+  const children = summaries.filter((s) => s.teamRunId === parentId).length
+  const maxRunChildren = input.maxRunChildren ?? MAX_CHILDREN
+  if (children >= maxRunChildren) {
     throw new SpawnError(
       'too-many-children',
       `This session already has ${children} sub-sessions, which is the limit. Reuse one of them instead of creating another.`,
     )
   }
+
+  // Vai trống mà có bind agent ⇒ mượn tên agent làm nhãn (roster hiện "vai có
+  // thật"). Tra cứu dùng project của CHA làm ngữ cảnh khi spec không nói rõ tier.
+  if (!role && input.agentId) {
+    role = oneLineLabel(
+      await agentRoleLabel(
+        input.agentId,
+        input.agentSource,
+        input.agentProjectId ?? parent.projectId,
+      ),
+      MAX_ROLE_LEN,
+    )
+  }
+  // Ref agent ghi NGUYÊN tuple caller gửi (không điền projectId của cha): ref
+  // chỉ là con trỏ — tier được `resolveAgentContext` resolve lại mỗi lượt.
+  const agent: SessionAgentRef | undefined = input.agentId
+    ? {
+        id: input.agentId,
+        ...(input.agentSource ? { source: input.agentSource } : {}),
+        ...(input.agentProjectId ? { projectId: input.agentProjectId } : {}),
+      }
+    : undefined
 
   const id = mintSessionId()
   const now = new Date().toISOString()
@@ -218,8 +278,16 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
     messages: [],
     pendingAgentIds: [],
     settings,
-    groupParentId: parentId,
-    ...(role ? { groupRole: role } : {}),
+    teamRunId: parentId,
+    ...(role ? { teamRole: role } : {}),
+    ...(agent ? { agent } : {}),
+    // Member thừa hưởng link team spec của lead — run ad-hoc (không qua spec)
+    // thì vắng mặt. teamSource/teamProjectId đi cùng để materialize member
+    // lười (board-tools) resolve đúng file spec kể cả khi member được đẻ ra
+    // TRƯỚC khi chính nó gọi assignee_member (member dispatch cho bạn bè).
+    ...(parent.teamId ? { teamId: parent.teamId } : {}),
+    ...(parent.teamSource ? { teamSource: parent.teamSource } : {}),
+    ...(parent.teamProjectId ? { teamProjectId: parent.teamProjectId } : {}),
   }
   await createSession(session)
 
@@ -237,13 +305,17 @@ export async function spawnChildSession(input: SpawnChildInput): Promise<SpawnCh
     pendingAgentIds: [],
     settings,
     messageCount: 0,
-    groupParentId: parentId,
-    ...(role ? { groupRole: role } : {}),
+    teamRunId: parentId,
+    ...(role ? { teamRole: role } : {}),
+    ...(agent ? { agent } : {}),
+    ...(parent.teamId ? { teamId: parent.teamId } : {}),
+    ...(parent.teamSource ? { teamSource: parent.teamSource } : {}),
+    ...(parent.teamProjectId ? { teamProjectId: parent.teamProjectId } : {}),
   }
   emit('session.created', { session: summary })
 
   // Giao việc đi đúng đường của mọi tin liên phiên: khử bí mật + hàng rào nonce + ba
-  // trần. Đây là cạnh cha→con nên nó được miễn trần hop (xem isGroupHandoff). Tin
+  // trần. Đây là cạnh cha→con nên nó được miễn trần hop (xem isRunHandoff). Tin
   // đi qua spawnPromptText trước — một refusal ở đây mồ côi hoá phiên vừa tạo.
   try {
     await postSessionMessage({
@@ -275,12 +347,17 @@ export interface SpawnChildrenResult {
 }
 
 // Tạo MỘT LÔ phiên con dưới cùng một cha (popover điều phối duyệt nhiều phiên
-// một lần, hoặc RPC `sessions.spawnChildren` của UI). Trần nhóm (MAX_CHILDREN)
-// vẫn cầm chừng qua `spawnChildSession` ở mỗi vòng — nhưng đếm TRƯỚC cả lô để
-// trả một lỗi sạch sẽ thay vì nửa đẻ nửa từ chối.
-export async function spawnChildrenSessions(
+// một lần, RPC `sessions.spawnMembers` của UI, hoặc materialize LƯỜI member
+// của team spec — `assignee_member` trên board tools → `materializeMember`).
+// Trần nhóm mặc định MAX_CHILDREN; đường spec truyền cap riêng
+// (MAX_TEAM_MEMBERS) vì spec là danh sách người dùng tự duyệt, không phải fanout
+// do model bịa — và phải khớp trần teams.upsert để spec hợp lệ chạy được.
+// Trần vẫn cầm chừng qua `spawnChildSession` ở mỗi vòng — nhưng đếm TRƯỚC cả
+// lô để trả một lỗi sạch sẽ thay vì nửa đẻ nửa từ chối.
+export async function spawnMemberSessions(
   parentId: string,
   children: SpawnChildSpec[],
+  maxPerRun: number = MAX_CHILDREN,
 ): Promise<SpawnChildrenResult> {
   const summaries = await listSessionSummaries()
   const caller = summaries.find((s) => s.id === parentId)
@@ -290,12 +367,12 @@ export async function spawnChildrenSessions(
       'This session is not saved yet, so it cannot own a sub-session.',
     )
   }
-  const rootId = caller.groupParentId ?? parentId
-  const existing = summaries.filter((s) => s.groupParentId === rootId).length
-  if (existing + children.length > MAX_CHILDREN) {
+  const rootId = caller.teamRunId ?? parentId
+  const existing = summaries.filter((s) => s.teamRunId === rootId).length
+  if (existing + children.length > maxPerRun) {
     throw new SpawnError(
       'too-many-children',
-      `This group already has ${existing} sub-sessions and the request asks for ${children.length} more, over the limit of ${MAX_CHILDREN}. Drop some and try again.`,
+      `This run already has ${existing} sub-sessions and the request asks for ${children.length} more, over the limit of ${maxPerRun}. Drop some and try again.`,
     )
   }
   const created: { id: string; title: string }[] = []
@@ -309,6 +386,10 @@ export async function spawnChildrenSessions(
           role: child.role,
           prompt: child.prompt,
           ...(child.config ? { config: child.config } : {}),
+          ...(child.agentId ? { agentId: child.agentId } : {}),
+          ...(child.agentSource ? { agentSource: child.agentSource } : {}),
+          ...(child.agentProjectId ? { agentProjectId: child.agentProjectId } : {}),
+          ...(maxPerRun !== MAX_CHILDREN ? { maxRunChildren: maxPerRun } : {}),
         }),
       )
     } catch (err) {

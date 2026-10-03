@@ -10,38 +10,46 @@
         :aria-label="statusLabel"
       />
       <div class="ssh-row-acts">
-        <button
-          class="iconbtn ssh-qa"
+        <Button
           :title="t('ssh.detail.connect')"
           :aria-label="t('ssh.detail.connect')"
+          class="ssh-qa"
+          variant="outline"
+          size="iconMd"
           @click.stop="emit('connect')"
         >
           <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
-        <button
-          class="iconbtn ssh-qa"
+        </Button>
+        <Button
           :title="t('ssh.detail.sftp')"
           :aria-label="t('ssh.detail.sftp')"
+          class="ssh-qa"
+          variant="outline"
+          size="iconMd"
           @click.stop="emit('sftp')"
         >
           <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
-        <button
-          class="iconbtn ssh-qa"
+        </Button>
+        <Button
           :title="t('ssh.detail.forward')"
           :aria-label="t('ssh.detail.forward')"
+          class="ssh-qa"
+          variant="outline"
+          size="iconMd"
           @click.stop="emit('forward')"
         >
           <Icon name="move" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </button>
-        <button
-          class="iconbtn ssh-qa ssh-menu"
+        </Button>
+        <Button
           :title="t('ssh.menu.more')"
           :aria-label="t('ssh.menu.more')"
+          class="ssh-qa ssh-menu"
+          variant="outline"
+          size="iconMd"
           @click.stop="emit('menu', $event)"
         >
           <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
+        </Button>
       </div>
     </div>
     <div class="ssh-sub">
@@ -59,6 +67,7 @@
 // the fade never shifts the badges — the app's .hoveract idiom).
 import { computed } from 'vue'
 import { hostAccent, SSH_STATUS_COLORS, type SshHost } from '~/stores/ssh'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = defineProps<{ host: SshHost }>()
 

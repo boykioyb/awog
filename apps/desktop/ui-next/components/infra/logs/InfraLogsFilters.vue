@@ -3,13 +3,12 @@
     <div class="lfl-row">
       <div class="lfl-field">
         <Icon name="search" class="lfl-field-ic" />
-        <input
-          :value="quick"
-          class="lfl-input"
+        <Input
+          :model-value="quick"
           type="search"
           spellcheck="false"
           :placeholder="t('infra.logs.filters.quickPh')"
-          @input="onQuick"
+          @update:model-value="onQuick"
         />
       </div>
       <div class="lfl-levels" role="group" :aria-label="t('infra.logs.filters.level')">
@@ -59,6 +58,7 @@
 // lại CloudWatch, không tốn thêm xu nào. Muốn thu hẹp ở phía AWS thì đó là việc
 // của câu lệnh (facet làm hộ: nó chèn thêm một mệnh đề `filter`).
 import type { LogsFacet } from '~/composables/useInfraLogs'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = defineProps<{
   quick: string
@@ -79,8 +79,8 @@ const { t } = useI18n()
 const LEVELS: ('' | 'ERROR' | 'WARN' | 'INFO' | 'DEBUG')[] = ['', 'ERROR', 'WARN', 'INFO', 'DEBUG']
 const active = computed(() => props.active)
 
-function onQuick(e: Event): void {
-  emit('update:quick', (e.target as HTMLInputElement).value)
+function onQuick(v: string): void {
+  emit('update:quick', v)
 }
 </script>
 

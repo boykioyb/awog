@@ -5,10 +5,10 @@
       style="width: var(--icon-md); height: var(--icon-md); flex: 0 0 auto; color: var(--textDim)"
     />
     <span class="scg-msg">{{ t('ssh.conn.needConnect') }}</span>
-    <button class="btn pri sm" @click="emit('connect')">
+    <Button variant="default" size="sm" @click="emit('connect')">
       <Icon name="play" style="width: var(--icon-xs); height: var(--icon-xs)" />
       {{ t('ssh.detail.connect') }}
-    </button>
+    </Button>
     <button
       class="scg-x"
       :title="t('ssh.panel.close')"
@@ -21,6 +21,8 @@
 </template>
 
 <script setup lang="ts">
+import Button from '~/components/ui/button/Button.vue'
+
 // Shown in the detail body when SFTP / forward is opened for a host that isn't
 // connected yet (ADR 0063) — SFTP + forwards run over a live connection, so this
 // prompts Connect (opens the terminal → establishes the connId) or closes.

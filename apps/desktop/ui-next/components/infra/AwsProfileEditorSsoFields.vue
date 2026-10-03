@@ -18,11 +18,11 @@
       {{ t('infra.editor.sso.ssoSession') }}
       <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
     </label>
-    <input
+    <Input
       v-model.trim="model.ssoSession"
-      class="ape-input mono"
       spellcheck="false"
       :placeholder="t('infra.editor.sso.ssoSessionPh')"
+      class="mono"
     />
     <div class="ape-hint">{{ t('infra.editor.sso.ssoSessionHint') }}</div>
   </div>
@@ -33,11 +33,11 @@
         {{ t('infra.editor.sso.startUrl') }}
         <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
       </label>
-      <input
+      <Input
         v-model.trim="model.ssoStartUrl"
-        class="ape-input mono"
         spellcheck="false"
         :placeholder="t('infra.editor.sso.startUrlPh')"
+        class="mono"
       />
     </div>
     <AwsRegionField
@@ -54,11 +54,11 @@
         {{ t('infra.editor.sso.accountId') }}
         <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
       </label>
-      <input
+      <Input
         v-model.trim="model.ssoAccountId"
-        class="ape-input mono"
         spellcheck="false"
         :placeholder="t('infra.editor.sso.accountIdPh')"
+        class="mono"
       />
     </div>
     <div class="ape-field">
@@ -66,9 +66,8 @@
         {{ t('infra.editor.sso.roleName') }}
         <span v-if="!isExisting" class="ape-req" aria-hidden="true">*</span>
       </label>
-      <input
+      <Input
         v-model.trim="model.ssoRoleName"
-        class="ape-input"
         spellcheck="false"
         :placeholder="t('infra.editor.sso.roleNamePh')"
       />
@@ -86,6 +85,7 @@
 // start URL + sso region (định dạng SSO cũ, không có block sso-session).
 import AwsRegionField from '~/components/infra/AwsRegionField.vue'
 import type { SsoFormState } from '~/utils/aws-profile-form'
+import Input from '~/components/ui/input/Input.vue'
 
 withDefaults(
   defineProps<{

@@ -119,11 +119,11 @@ const hoverText = computed(() => `${props.repo} #${props.number}\n${props.title}
   margin-top: 4px;
 }
 .prw-row:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 /* Chưa theo dõi = ứng viên, đọc nhạt hơn hàng đang theo dõi. */
 .prw-row.off .prw-title {
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .prw-ci {
   width: var(--icon-sm);
@@ -132,13 +132,13 @@ const hoverText = computed(() => `${props.repo} #${props.number}\n${props.title}
   color: var(--textFaint);
 }
 .prw-ci.pass {
-  color: var(--green);
+  color: var(--success);
 }
 .prw-ci.fail {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .prw-ci.pending {
-  color: var(--amber);
+  color: var(--warning);
 }
 .prw-body {
   min-width: 0;
@@ -154,7 +154,7 @@ const hoverText = computed(() => `${props.repo} #${props.number}\n${props.title}
 }
 .prw-title {
   display: block;
-  color: var(--text);
+  color: var(--foreground);
   font-size: var(--fs-md);
   line-height: var(--lh-md);
   overflow: hidden;
@@ -167,15 +167,15 @@ const hoverText = computed(() => `${props.repo} #${props.number}\n${props.title}
   align-items: center;
   gap: 6px;
   margin-top: 2px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
 }
 .prw-num {
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .prw-review.warn {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .prw-state {
   color: var(--violet);
@@ -185,7 +185,7 @@ const hoverText = computed(() => `${props.repo} #${props.number}\n${props.title}
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--danger);
+  color: var(--destructive);
 }
 .prw-acts {
   display: flex;
@@ -202,14 +202,14 @@ const hoverText = computed(() => `${props.repo} #${props.number}\n${props.title}
   border: 1px solid var(--border);
   border-radius: var(--r-xs);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   cursor: pointer;
 }
 .prw-act:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--borderStrong);
+  color: var(--foreground);
+  border-color: var(--input);
 }
 .prw-act:disabled {
   opacity: 0.5;
@@ -217,12 +217,12 @@ const hoverText = computed(() => `${props.repo} #${props.number}\n${props.title}
 }
 /* Đang theo dõi = accent-tint + viền accent, KHÔNG phải nền xám đặc. */
 .prw-act.on {
-  color: var(--accentText);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
+  color: var(--primary-foreground);
+  border-color: var(--ring);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
 }
 .prw-bind {
-  color: var(--textMuted);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   overflow: hidden;

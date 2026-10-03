@@ -9,25 +9,33 @@
         {{ t('templates.detail.entityCount', { n: template.entities.length }) }}
       </span>
       <span style="flex: 1" />
-      <button
+      <Button
         v-if="template.sourceUrl"
-        class="iconbtn"
         :title="t('templatesUpdate.check')"
+        variant="outline"
+        size="iconMd"
         @click="emit('check-update')"
       >
         <Icon name="refresh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
-      <button class="btn pri sm" :title="t('templates.detail.install')" @click="emit('install')">
+      </Button>
+      <Button
+        :title="t('templates.detail.install')"
+        variant="default"
+        size="sm"
+        @click="emit('install')"
+      >
         <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('templates.detail.install') }}
-      </button>
-      <button
-        class="iconbtn tdt-danger"
+      </Button>
+      <Button
         :title="t('templates.detail.delete')"
+        class="tdt-danger"
+        variant="outline"
+        size="iconMd"
         @click="emit('delete')"
       >
         <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      </button>
+      </Button>
     </div>
 
     <div class="dscroll">
@@ -70,6 +78,7 @@
 // always reflects the row LibraryView has selected (which owns its own selection
 // state); the page owns dialog + delete state.
 import { computed } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 import {
   KIND_ORDER,
   type ConfigKind,

@@ -85,9 +85,14 @@ export function mapClaudeErrorToRpc(err: unknown): RpcError {
 export function buildSdkEnv(
   cred: Credential,
   infra?: { profile?: string | undefined; region?: string | undefined },
+  // Base env để phủ lên. Mặc định = bản sao process.env của sidecar (đường
+  // turn — subprocess chết theo lượt nên thừa kế ambient là chấp nhận được).
+  // Đường CLI PTY truyền base ĐÃ LỌC (cli-registry sanitizedBaseEnv): một
+  // process tương tác sống lâu không được kế thừa ngầm env của sidecar.
+  base?: Record<string, string>,
 ): Record<string, string> {
   const env: Record<string, string> = {}
-  for (const [k, v] of Object.entries(process.env)) {
+  for (const [k, v] of Object.entries(base ?? process.env)) {
     if (typeof v === 'string') env[k] = v
   }
   delete env.CLAUDE_CODE_OAUTH_TOKEN

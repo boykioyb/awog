@@ -12,6 +12,8 @@
   "sessions.composer.steerDone": "Inserted into the running turn",
   "sessions.composer.queue": "Queue",
   "sessions.composer.queueHint": "Send as a new turn after this one",
+  "sessions.composer.attachTitle": "Attach",
+  "sessions.composer.insert": "Insert",
   "sessions.composer.slashCommands": "Commands",
   "sessions.composer.slashHint": "built-in · commands · skills",
   "sessions.composer.mentionTitle": "Mention",

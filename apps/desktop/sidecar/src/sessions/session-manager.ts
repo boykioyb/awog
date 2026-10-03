@@ -10,11 +10,14 @@
 
 import { readdir, rm } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
+import { releaseSessionWorkspace } from '../tasks/worktree.js'
 import { log } from '../util/logger.js'
 import type {
   InfraContext,
   Session,
+  SessionAgentRef,
   SessionBookmark,
+  SessionLlmOverride,
   SessionMessage,
   SessionSummary,
   SessionHeader,
@@ -53,10 +56,10 @@ type SessionMetadataPatch = Partial<
     | 'budget'
     | 'parentSessionId'
     | 'forkFromMessageId'
-    | 'groupAutoDeliver'
     | 'sdkSessionId'
     | 'codexThreadId'
     | 'codexToolSignature'
+    | 'cliImport'
     | 'compaction'
     | 'todos'
     | 'bookmarks'
@@ -126,10 +129,19 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.aboutGhUrl !== undefined) summary.aboutGhUrl = h.aboutGhUrl
   if (h.infra !== undefined) summary.infra = h.infra
   if (h.parentSessionId !== undefined) summary.parentSessionId = h.parentSessionId
-  if (h.groupParentId !== undefined) summary.groupParentId = h.groupParentId
-  if (h.groupRole !== undefined) summary.groupRole = h.groupRole
-  if (h.groupAutoDeliver !== undefined) summary.groupAutoDeliver = h.groupAutoDeliver
-  if (h.groupSpawnConfig !== undefined) summary.groupSpawnConfig = h.groupSpawnConfig
+  if (h.teamRunId !== undefined) summary.teamRunId = h.teamRunId
+  if (h.teamRole !== undefined) summary.teamRole = h.teamRole
+  if (h.teamId !== undefined) summary.teamId = h.teamId
+  if (h.teamSource !== undefined) summary.teamSource = h.teamSource
+  if (h.teamProjectId !== undefined) summary.teamProjectId = h.teamProjectId
+  if (h.origin !== undefined) summary.origin = h.origin
+  if (h.llmOverride !== undefined) summary.llmOverride = h.llmOverride
+  if (h.spawnConfig !== undefined) summary.spawnConfig = h.spawnConfig
+  // Agent bound + worktree riêng của member (session-teams §1.1): roster của
+  // nhóm đọc từ sessions.list nên hai field này phải lên summary mà không cần
+  // nạp transcript.
+  if (h.agent !== undefined) summary.agent = h.agent
+  if (h.worktree !== undefined) summary.worktree = h.worktree
   if (h.compaction) summary.hasCompaction = true
   if (h.lastPreview) summary.lastPreview = h.lastPreview
   return summary
@@ -169,6 +181,22 @@ function withSanitizedBookmarks(header: SessionHeader): SessionHeader {
   if (bookmarks) return { ...header, bookmarks }
   const { bookmarks: _dropped, ...rest } = header
   return rest
+}
+
+// Nhả worktree riêng của member (session-teams §4 — commit WIP lên branch,
+// remove worktree, GIỮ branch) ở ba thời điểm kết thúc membership: tách khỏi
+// nhóm, lưu trữ, xoá phiên.
+//
+// FIRE-AND-FORGET + KHÔNG BAO GIỜ ném: nhả worktree là việc git nền, không được
+// chặn thao tác nhóm đang diễn ra. Mọi thất bại chỉ còn là log.warn — sweeper
+// ở boot (sweepOrphanWorktrees) dọn nốt theo file neo.
+function releaseSessionWorktreeBestEffort(sessionId: string): void {
+  void releaseSessionWorkspace(sessionId).catch((err) => {
+    log.warn('session worktree release failed', {
+      sessionId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+  })
 }
 
 class SessionManager {
@@ -336,8 +364,18 @@ class SessionManager {
       log.warn('session-manager: setArchived on unknown session', { id })
       return false
     }
+    // Đọc membership TRƯỚC khi header bị viết lại: archive một member phải nhả
+    // worktree riêng của nó, còn `worktree` sẽ bị xoá ngay bên dưới nên
+    // đọc sau là đã mất dấu.
+    const hadMemberWorktree =
+      m.header.teamRunId !== undefined || m.header.worktree !== undefined
     if (archived) {
-      m.header = { ...m.header, archived: true, archivedAt: new Date().toISOString() }
+      // Worktree riêng của member được nhả ngay bên dưới ⇒ con trỏ
+      // `worktree` trên header là con trỏ chết, phải xoá cùng lúc bật cờ —
+      // để rơi một pointer vào worktree đã dọn vi phạm nghiệp "worktree sống
+      // theo membership" (session-teams §1.1).
+      const { worktree: _droppedWorktree, ...rest } = m.header
+      m.header = { ...rest, archived: true, archivedAt: new Date().toISOString() }
     } else {
       const { archived: _wasArchived, archivedAt: _wasArchivedAt, ...rest } = m.header
       m.header = rest
@@ -347,6 +385,11 @@ class SessionManager {
     // — thoát app trong cửa sổ 500ms sẽ nuốt mất cờ vừa bật (cùng lý do với
     // createSession/saveSession, ADR 0062 D-2).
     await sessionPersistenceQueue.flush(id)
+    // Nhả worktree riêng của member khi phiên đi vào lưu trữ — worktree sống
+    // theo membership (session-teams §4), archive cũng là một dạng "rời". Chỉ
+    // gọi khi phiên từng là member để một archive thường không tốn một lệnh git.
+    // Fire-and-forget: việc git nền không được chặn thao tác archive.
+    if (archived && hadMemberWorktree) releaseSessionWorktreeBestEffort(id)
     return true
   }
 
@@ -391,7 +434,7 @@ class SessionManager {
   //
   // Trả về mã lỗi thay vì ném, để RPC nói đúng chuyện gì đã xảy ra:
   //   'ok' | 'unknown-session' | 'unknown-parent' | 'self-parent' | 'cycle'
-  async setGroup(
+  async setRunMembership(
     id: string,
     parentId: string | null,
     role: string | null,
@@ -408,7 +451,7 @@ class SessionManager {
       // trả lời "gốc là ai" theo đường vòng — miễn trần hop tính theo CẠNH cha–con, bảng
       // trạng thái chỉ hiện con trực tiếp, lưới chỉ xếp một hàng con. Giới hạn hai cấp
       // giữ cả ba thứ đó nói cùng một câu chuyện.
-      if (parent.header.groupParentId) return 'nested-parent'
+      if (parent.header.teamRunId) return 'nested-parent'
       // Đi ngược từ cha đề xuất lên gốc: gặp lại `id` nghĩa là `id` đang là tổ tiên
       // của cha, nên nối vào sẽ đóng vòng. `seen` chặn cả trường hợp dữ liệu trên
       // đĩa ĐÃ có sẵn chu trình (file sửa tay) — không thì vòng while này treo máy.
@@ -417,23 +460,103 @@ class SessionManager {
       while (cursor) {
         if (seen.has(cursor)) return 'cycle'
         seen.add(cursor)
-        cursor = this.sessions.get(cursor)?.header.groupParentId
+        cursor = this.sessions.get(cursor)?.header.teamRunId
       }
     }
 
-    const { groupParentId: _oldParent, groupRole: _oldRole, ...rest } = m.header
+    // `agent` cũng chỉ có nghĩa BÊN TRONG một nhóm — nó là "vai có thật" của
+    // `teamRole` (session-teams §3). RỜI nhóm (parentId null) hoặc CHUYỂN sang
+    // cha khác ⇒ gỡ luôn: binding được cho trong ngữ cảnh của nhóm cũ, không
+    // được âm thầm đi theo sang nhóm mới. Hai trường hợp GIỮ binding: xếp vào
+    // nhóm lần đầu (binding đặt trước khi join), và đổi vai thuần tuý trên cùng
+    // một cha — một lần sửa nhãn không được phép tháo agent ra khỏi member.
+    const priorParent = m.header.teamRunId
+    const leavingGroup = parentId === null && priorParent !== undefined
+    const movingGroup =
+      parentId !== null && priorParent !== undefined && parentId !== priorParent
+    const keepAgent = !leavingGroup && !movingGroup
+    const {
+      teamRunId: _oldParent,
+      teamRole: _oldRole,
+      agent: _oldAgent,
+      worktree: _oldWorktree,
+      ...rest
+    } = m.header
     m.header = {
       ...rest,
-      ...(parentId !== null ? { groupParentId: parentId } : {}),
+      ...(parentId !== null ? { teamRunId: parentId } : {}),
       // Vai chỉ có nghĩa BÊN TRONG một nhóm: tách khỏi nhóm thì bỏ luôn, kẻo lần
       // xếp vào nhóm khác sau này thừa hưởng một cái nhãn của nhóm cũ.
-      ...(parentId !== null && role ? { groupRole: role } : {}),
+      ...(parentId !== null && role ? { teamRole: role } : {}),
+      ...(keepAgent && _oldAgent ? { agent: _oldAgent } : {}),
+      // Worktree được NHẢ ngay bên dưới khi rời nhóm ⇒ pointer trên header phải
+      // đi theo (con trỏ chết). CHUYỂN nhóm thì GIỮ: thư worktree gắn với
+      // sessionId chứ không gắn với cha — member chuyển nhóm mang theo cả WIP.
+      ...(!leavingGroup && _oldWorktree ? { worktree: _oldWorktree } : {}),
     }
     this.persistSession(m)
     // Flush ngay, cùng lý do với setArchived: một thao tác rời rạc của người dùng
     // không được rơi mất vì thoát app trong cửa sổ debounce 500ms.
     await sessionPersistenceQueue.flush(id)
+    // Nhả worktree riêng của member khi phiên RỜI nhóm (session-teams §4).
+    // Fire-and-forget: việc git nền (commit WIP + worktree remove) không được
+    // chặn một thao tác nhóm vừa ghi đĩa xong.
+    if (leavingGroup) releaseSessionWorktreeBestEffort(id)
     return 'ok'
+  }
+
+  // Gắn / gỡ agent AWOG (AGENT.md) của một phiên VỚI TƯ CÁCH member/lead của
+  // nhóm — "vai có thật" thay cho nhãn `teamRole` (docs/features/session-teams.md
+  // §3). Ref này được `resolveAgentContext` đọc phía sidecar mỗi lượt để áp
+  // systemPrompt/model/tools của agent.
+  //
+  // Tách khỏi updateMetadata vì `agent === null` (gỡ) phải XOÁ HẲN key — cùng
+  // lý do đã viết ở setArchived/setInfra/setGroup/setGroupSpawn: spread patch
+  // không xoá được key và `exactOptionalPropertyTypes` cấm gán `undefined`.
+  //
+  // `updatedAt` KHÔNG bump, cùng lý do với setGroup: đổi binding là thao tác cấu
+  // hình của con người, không phải hoạt động của phiên.
+  // Trả false khi id không tồn tại để RPC báo lỗi thay vì im lặng nuốt.
+  async setSessionAgent(id: string, agent: SessionAgentRef | null): Promise<boolean> {
+    const m = this.sessions.get(id)
+    if (!m) {
+      log.warn('session-manager: setGroupAgent on unknown session', { id })
+      return false
+    }
+    if (agent !== null) {
+      m.header = { ...m.header, agent: agent }
+    } else {
+      const { agent: _cleared, ...rest } = m.header
+      m.header = rest
+    }
+    this.persistSession(m)
+    // Flush ngay, cùng lý do với setGroup: đổi agent là một ghi rời rạc — thoát
+    // app trong cửa sổ 500ms mà mất nó nghĩa là lượt sau chạy với binding cũ
+    // (agent vừa gỡ lại áp, hoặc agent vừa gắn chưa có mặt).
+    await sessionPersistenceQueue.flush(id)
+    return true
+  }
+
+  // Override LLM cấp phiên (Session.llmOverride — thắng cả pin của agent spec).
+  // `null` = gỡ override → XOÁ HẲN key. Flush ngay vì đây là ghi rời rạc của
+  // người dùng — đổi account khi hết token mà mất ghi thì lượt sau chạy account
+  // cũ lại fail tiếp. `updatedAt` không bump (thao tác cấu hình, không phải
+  // hoạt động của phiên).
+  async setLlmOverride(id: string, override: SessionLlmOverride | null): Promise<boolean> {
+    const m = this.sessions.get(id)
+    if (!m) {
+      log.warn('session-manager: setLlmOverride on unknown session', { id })
+      return false
+    }
+    if (override !== null) {
+      m.header = { ...m.header, llmOverride: override }
+    } else {
+      const { llmOverride: _cleared, ...rest } = m.header
+      m.header = rest
+    }
+    this.persistSession(m)
+    await sessionPersistenceQueue.flush(id)
+    return true
   }
 
   // Ghi nhớ (hoặc xoá) cấu hình spawn của nhóm trên phiên GỐC — "duyệt một lần
@@ -446,7 +569,7 @@ class SessionManager {
   // `updatedAt` KHÔNG bump, cùng lý do với setGroup: đây là thao tác cấu hình
   // của con người, không phải hoạt động của phiên.
   // Trả false khi id không tồn tại để RPC báo lỗi thay vì im lặng nuốt.
-  async setGroupSpawn(id: string, config: SpawnSessionConfig | null): Promise<boolean> {
+  async setSpawnConfig(id: string, config: SpawnSessionConfig | null): Promise<boolean> {
     const m = this.sessions.get(id)
     if (!m) {
       log.warn('session-manager: setGroupSpawn on unknown session', { id })
@@ -454,12 +577,12 @@ class SessionManager {
     }
     // `{}` là marker hợp lệ — "đã duyệt điều phối, kế thừa toàn bộ cha" (xem
     // sessions.spawn.ts: duyệt với mọi field kế thừa vẫn phải ghi marker, nếu
-    // không groupSpawnConfig vắng mặt và popover lại hiện ở lần spawn sau).
+    // không spawnConfig vắng mặt và popover lại hiện ở lần spawn sau).
     // Chỉ `null` mới là "ngừng điều phối" (xoá hẳn key).
     if (config !== null) {
-      m.header = { ...m.header, groupSpawnConfig: config }
+      m.header = { ...m.header, spawnConfig: config }
     } else {
-      const { groupSpawnConfig: _cleared, ...rest } = m.header
+      const { spawnConfig: _cleared, ...rest } = m.header
       m.header = rest
     }
     this.persistSession(m)
@@ -508,6 +631,12 @@ class SessionManager {
   // map. Unlike the old event-sourced store (logical tombstone), this removes the files
   // — no purge step is needed. `force: true` makes a missing folder a no-op.
   async deleteSession(id: string): Promise<void> {
+    // Đọc membership TRƯỚC khi xoá: worktree riêng của member (session-teams §4)
+    // nằm ở ~/.awog/session-worktrees/<id> — NGOÀI thư mục phiên nên rm phía
+    // dưới không chạm tới nó, phải nhả theo đường riêng.
+    const hadMembership =
+      this.sessions.get(id)?.header.teamRunId !== undefined ||
+      this.sessions.get(id)?.header.worktree !== undefined
     sessionPersistenceQueue.cancel(id)
     try {
       await rm(sessionDir(id), { recursive: true, force: true })
@@ -520,6 +649,9 @@ class SessionManager {
       }
     }
     this.sessions.delete(id)
+    // Fire-and-forget, sau khi map đã bỏ entry: commit WIP + remove worktree là
+    // việc git nền, không được chặn (và cũng không hoàn tác được) một lệnh xoá.
+    if (hadMembership) releaseSessionWorktreeBestEffort(id)
   }
 
   // Build the snapshot and hand it to the queue. Cold guard: if messages haven't

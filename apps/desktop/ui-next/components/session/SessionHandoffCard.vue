@@ -8,13 +8,13 @@
         <span class="ho-title">{{ session.title }}</span>
       </div>
       <div class="ho-actions">
-        <button class="btn pri" @click="focusWindow">
+        <Button @click="focusWindow">
           <Icon name="external" />
           {{ t('sessions.window.handedOff.focus') }}
-        </button>
-        <button class="btn" @click="bringBack">
+        </Button>
+        <Button variant="outline" @click="bringBack">
           {{ t('sessions.window.handedOff.bringBack') }}
-        </button>
+        </Button>
       </div>
     </div>
   </div>
@@ -39,9 +39,12 @@ const bringBack = () => void store.closeWindowFor(props.session.id)
 </script>
 
 <style scoped>
+/* `.detail`/`.empty`/`.ei`/`.et` stay on the shared global chrome — theme-cute.css
+   restyles that empty-state block family for the whole app, so this file only owns
+   the title weight and the action row. */
 .ho-title {
-  color: var(--text);
-  font-weight: 550;
+  color: var(--foreground);
+  font-weight: 500;
 }
 .ho-actions {
   display: flex;

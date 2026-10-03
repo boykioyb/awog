@@ -3,19 +3,16 @@
     <div class="cpfgrid">
       <label class="cpffield">
         <span class="fd">{{ t('settingsModels.form.label') }}</span>
-        <input
+        <Input
           v-model="draft.label"
-          class="keyinp"
           :placeholder="t('settingsModels.custom.labelPlaceholder')"
           required
+          class="flex-1"
         />
       </label>
       <label class="cpffield">
         <span class="fd">{{ t('settingsModels.custom.apiType') }}</span>
-        <select v-model="draft.api" class="cpfsel">
-          <option value="anthropic-messages">{{ t('settingsModels.custom.apiAnthropic') }}</option>
-          <option value="openai-completions">{{ t('settingsModels.custom.apiOpenai') }}</option>
-        </select>
+        <AppSelect v-model="apiSel" :options="apiTypeOpts" width="100%" />
       </label>
     </div>
 
@@ -27,22 +24,22 @@
             : t('settingsModels.custom.baseUrlAnthropic')
         }}
       </span>
-      <input
+      <Input
         v-model="draft.baseUrl"
-        class="keyinp mono"
         :placeholder="baseUrlPlaceholder"
         required
+        class="mono flex-1"
       />
     </label>
 
     <label class="cpffield">
       <span class="fd">{{ t('settingsModels.custom.apiKeyLabel') }}</span>
       <div class="keyrow">
-        <input
+        <Input
           v-model="draft.apiKey"
-          class="keyinp mono"
           :type="reveal ? 'text' : 'password'"
           :placeholder="editing ? t('settingsModels.edit.keyReplacePlaceholder') : 'sk-…'"
+          class="mono flex-1"
         />
         <span
           class="keyeye"
@@ -67,19 +64,22 @@
     </div>
 
     <div class="cpfactions">
-      <button class="btn sm" type="button" @click="emit('cancel')">
+      <Button type="button" variant="outline" size="sm" @click="emit('cancel')">
         {{ t('settingsModels.form.cancel') }}
-      </button>
-      <button class="btn sm pri" type="submit" :disabled="!canSubmit">
+      </Button>
+      <Button type="submit" :disabled="!canSubmit" variant="default" size="sm">
         {{ submitLabel }}
-      </button>
+      </Button>
     </div>
   </form>
 </template>
 
 <script setup lang="ts">
 import ModelListEditor from '~/components/settings/ModelListEditor.vue'
+import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { EndpointApi } from '~/stores/settings'
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
 
 // Custom endpoint draft — local to the Models subtree (ui-next store does not
 // export a CustomProviderInput type). Mirrors the legacy shape.
@@ -112,6 +112,18 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const reveal = ref(false)
+
+// AppSelect's v-model is a plain string — bridge to the EndpointApi union.
+const apiSel = computed<string>({
+  get: () => draft.value.api,
+  set: (v) => {
+    draft.value = { ...draft.value, api: v as EndpointApi }
+  },
+})
+const apiTypeOpts = computed<AppSelectOption[]>(() => [
+  { value: 'anthropic-messages', label: t('settingsModels.custom.apiAnthropic') },
+  { value: 'openai-completions', label: t('settingsModels.custom.apiOpenai') },
+])
 
 const isOpenAi = computed(() => draft.value.api === 'openai-completions')
 const baseUrlPlaceholder = computed(() =>
@@ -150,21 +162,6 @@ const onSubmit = () => {
 }
 .cpffield > .keyinp {
   width: 100%;
-}
-.cpfsel {
-  border: 1px solid var(--border);
-  background: var(--bgInput);
-  border-radius: var(--r-sm);
-  padding: 7px 10px;
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--text);
-  outline: none;
-  font-family: var(--sans);
-  cursor: pointer;
-}
-.cpfsel:focus {
-  border-color: var(--borderFocus);
 }
 .cpfnote {
   margin: 0;

@@ -26,10 +26,10 @@
             <Icon name="projects" style="width: var(--icon-lg); height: var(--icon-lg)" />
           </span>
           <div class="et">{{ t('projects.empty') }}</div>
-          <button class="btn pri sm" @click="openCreate">
+          <Button variant="default" size="sm" @click="openCreate">
             <Icon name="plus" />
             {{ t('projects.list.new') }}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -100,6 +100,7 @@ import ProjectList from '~/components/project/ProjectList.vue'
 import InstallTemplateDialog from '~/components/templates/InstallTemplateDialog.vue'
 import SaveAsTemplateDialog from '~/components/templates/SaveAsTemplateDialog.vue'
 import { useProjectsPage } from '~/composables/useProjectsPage'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 

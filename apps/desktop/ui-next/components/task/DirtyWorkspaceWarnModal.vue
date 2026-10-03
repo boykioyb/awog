@@ -19,15 +19,15 @@
     </div>
 
     <template #footer>
-      <button class="btn" @click="emit('continue-anyway', suppress)">
+      <Button variant="outline" @click="emit('continue-anyway', suppress)">
         {{ t('tasks.dirty.continueAnyway') }}
-      </button>
-      <button class="btn" @click="emit('stash-and-continue', suppress)">
+      </Button>
+      <Button variant="outline" @click="emit('stash-and-continue', suppress)">
         {{ t('tasks.dirty.stashAndContinue') }}
-      </button>
-      <button class="btn pri" @click="emit('commit-now', suppress)">
+      </Button>
+      <Button variant="default" @click="emit('commit-now', suppress)">
         {{ t('tasks.dirty.commitNow') }}
-      </button>
+      </Button>
     </template>
   </LibraryEntityModal>
 </template>
@@ -41,6 +41,7 @@
 import { computed, ref } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import { useI18n } from '~/composables/useI18n'
+import Button from '~/components/ui/button/Button.vue'
 
 const props = withDefaults(defineProps<{ open: boolean; fileCount?: number }>(), {
   fileCount: 0,

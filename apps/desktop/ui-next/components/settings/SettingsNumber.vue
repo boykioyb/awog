@@ -1,12 +1,12 @@
 <template>
   <div class="keyrow">
-    <input
+    <Input
       v-model="display"
-      class="keyinp mono"
       type="number"
       :min="min"
       :max="max"
       :step="step"
+      class="mono flex-1"
       @change="commit"
       @blur="commit"
     />
@@ -26,6 +26,7 @@
 // Committing here always rewrites `display` to the canonical clamped string, so
 // the DOM resyncs even in that boundary case.
 import { ref, watch } from 'vue'
+import Input from '~/components/ui/input/Input.vue'
 
 const props = withDefaults(
   defineProps<{

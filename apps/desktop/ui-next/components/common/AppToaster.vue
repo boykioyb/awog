@@ -187,14 +187,15 @@ function retire(id: string): void {
   width: max-content;
   max-width: 100%;
   pointer-events: auto;
-  background: var(--bgEl);
+  background: var(--popover);
+  color: var(--popover-foreground);
   /* Neutral surface. The semantic colour rides the ICON (and the progress bar),
      not the border: a full bright ring around the whole card is the loudest thing
      on screen for a message that is usually just an acknowledgement. This is also
      what Nuxt UI's toast does — the old `.toast` tinted its border per kind and it
      read as an alert box every time something succeeded. */
   border: 1px solid var(--border);
-  border-radius: var(--r-btn);
+  border-radius: var(--radius); /* rounded-lg */
   padding: 11px 13px;
   /* Containing block + clip for .tstbar, which rides the bottom edge. */
   position: relative;
@@ -204,42 +205,41 @@ function retire(id: string): void {
   box-shadow: var(--shadow-md);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--text);
 }
 
-/* Semantic color → AWOG theme token. Never a hex, so theme-cute.css can restyle
+/* Semantic color → standard theme token. Never a hex, so theme-cute.css can restyle
    the whole family by redefining the tokens. Consumed by the icon + progress bar. */
 .tst-success {
-  --tstAccent: var(--green);
+  --tstAccent: var(--success);
 }
 .tst-error {
-  --tstAccent: var(--danger);
+  --tstAccent: var(--destructive);
 }
 .tst-warning {
-  --tstAccent: var(--amber);
+  --tstAccent: var(--warning);
 }
 .tst-primary {
-  --tstAccent: var(--accent);
+  --tstAccent: var(--primary);
 }
 .tst-info {
-  --tstAccent: var(--blue);
+  --tstAccent: var(--info);
 }
 .tst-neutral {
-  --tstAccent: var(--borderStrong);
+  --tstAccent: var(--input);
 }
 
 .tst-click {
   cursor: pointer;
 }
 .tst-click:hover {
-  border-color: var(--borderStrong);
+  border-color: var(--input);
 }
 
 .tsticn {
   width: var(--icon-md);
   height: var(--icon-md);
   flex-shrink: 0;
-  color: var(--tstAccent, var(--textDim));
+  color: var(--tstAccent, var(--muted-foreground));
   /* Optical: line up with the title's cap height rather than its line box top. */
   margin-top: 1px;
 }
@@ -262,7 +262,7 @@ function retire(id: string): void {
 }
 
 .tstdesc {
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   /* Wraps, and breaks long unbroken tokens (a path, a SHA) instead of forcing the
@@ -289,9 +289,9 @@ function retire(id: string): void {
   gap: 5px;
   background: transparent;
   border: 1px solid var(--border);
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   padding: 3px 9px;
-  color: var(--text);
+  color: var(--popover-foreground);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   cursor: pointer;
@@ -300,8 +300,8 @@ function retire(id: string): void {
     border-color 0.12s;
 }
 .tstact:hover {
-  background: var(--accentDim);
-  border-color: var(--accentBorder);
+  background: var(--accent-wash);
+  border-color: var(--ring);
 }
 .tstacticn {
   width: var(--icon-xs);
@@ -316,7 +316,7 @@ function retire(id: string): void {
   right: 0;
   bottom: 0;
   height: 2px;
-  background: var(--tstAccent, var(--borderStrong));
+  background: var(--tstAccent, var(--input));
   transform-origin: left;
   opacity: 0.7;
 }
@@ -325,7 +325,7 @@ function retire(id: string): void {
   width: var(--icon-sm);
   height: var(--icon-sm);
   flex-shrink: 0;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   margin-top: 2px;
 }
 
@@ -333,17 +333,17 @@ function retire(id: string): void {
   flex-shrink: 0;
   background: transparent;
   border: 0;
-  border-radius: var(--r-xs);
+  border-radius: var(--r-xs); /* rounded-sm */
   padding: 2px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     background 0.12s,
     color 0.12s;
 }
 .tstx:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .tstxicn {
   width: var(--icon-sm);

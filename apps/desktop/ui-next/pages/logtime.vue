@@ -34,10 +34,16 @@
       </div>
       <!-- Soạn bằng AI: gọi model soạn dòng công nháp từ việc đo được của NGÀY đang mở.
            Nhận xong vẫn là nháp, đẩy PMS vẫn là bước riêng. -->
-      <button class="btn ltbtn" type="button" :disabled="store.composeBusy" @click="openAi">
+      <Button
+        type="button"
+        :disabled="store.composeBusy"
+        class="ltbtn"
+        variant="outline"
+        @click="openAi"
+      >
         <Icon name="sparkles" />
         {{ t('logtime.ai.open') }}
-      </button>
+      </Button>
       <!-- Thiết lập dạng icon (bánh răng), tô accent khi đang mở. -->
       <button
         class="ltgear"
@@ -69,6 +75,7 @@
 import { onMounted } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import { useLogtimeManager } from '~/composables/useLogtimeManager'
+import Button from '~/components/ui/button/Button.vue'
 
 const { t } = useI18n()
 const { view, budget, fmt, store, setView, openAi, init } = useLogtimeManager()

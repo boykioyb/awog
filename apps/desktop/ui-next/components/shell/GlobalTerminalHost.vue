@@ -382,7 +382,7 @@ function onResize(ev: PointerEvent): void {
   flex-direction: column;
   min-height: 0;
   border-top: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--background);
 }
 /* Thin grab strip straddling the top border. */
 .gterm-rsz {
@@ -409,7 +409,7 @@ function onResize(ev: PointerEvent): void {
   height: 30px;
   padding: 0 8px 0 10px;
   box-shadow: inset 0 -1px 0 var(--border);
-  background: var(--bgPanel);
+  background: var(--sidebar);
 }
 /* Collapsed: the header is the whole dock, so its bottom border is redundant and
    the whole bar becomes a click target to expand. */
@@ -429,14 +429,14 @@ function onResize(ev: PointerEvent): void {
   background: var(--textFaint);
 }
 .gterm-dot--live {
-  background: var(--accent);
+  background: var(--primary);
   animation: gterm-dot-breathe 1.6s ease-in-out infinite;
 }
 .gterm-dot--idle {
   background: var(--textFaint);
 }
 .gterm-dot--off {
-  background: var(--danger);
+  background: var(--destructive);
 }
 @keyframes gterm-dot-breathe {
   0%,
@@ -456,7 +456,7 @@ function onResize(ev: PointerEvent): void {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--text);
+  color: var(--foreground);
   font-size: 12px;
   line-height: 18px;
   font-weight: 600;
@@ -487,18 +487,18 @@ function onResize(ev: PointerEvent): void {
   margin-left: auto;
 }
 .gterm-btn:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
+  background: var(--accent-wash);
 }
 /* Active toggle (snippets rail open) — accent tint, no solid gray fill. Declared
    after :hover so it wins for the open state (equal specificity, later source). */
 .gterm-btn--on,
 .gterm-btn--on:hover {
-  color: var(--accent);
+  color: var(--primary);
   background: var(--accentDim);
 }
 .gterm-btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ring);
   outline-offset: -2px;
 }
 .gterm-body {

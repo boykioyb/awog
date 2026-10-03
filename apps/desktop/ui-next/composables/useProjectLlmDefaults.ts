@@ -26,6 +26,46 @@ export interface LlmDefaultsDraft {
 const PROVIDERS: ProviderName[] = ['anthropic', 'openai', 'google']
 const LEVELS = THINKING_LEVELS
 
+// Settings hiệu dụng khi DISPATCH một phiên/agent vào một project: defaults
+// global → `project.llmDefaults` → ghim của spec. Dùng chung cho mọi đường
+// materialize (board assigneeRef, "chat với agent", teams.run) để phiên của
+// board/team chạy đúng account/provider/model mà PROJECT đã ghim — trước đây
+// các đường này chỉ gửi defaults global nên spec không ghim account thì rơi
+// về account active toàn cục, sai ý "mỗi project một tài khoản".
+//
+// `spec` = ghim provider/model/account của agent spec (AGENT.md): thắng cả
+// llmDefaults lẫn global — đúng với ngữ nghĩa runtime (boundAgent stomp mỗi
+// lượt trong send-message). Account của project chỉ áp khi provider hiệu
+// dụng khớp provider của llmDefaults — spec đổi provider thì account đó
+// (của provider khác) rơi ra, về account active của provider.
+export function dispatchRunSettings(
+  projectId: string | null | undefined,
+  spec?: { provider?: string; model?: string; accountId?: string },
+): {
+  provider: string
+  modelId: string
+  level: ThinkingLevel
+  mode: string
+  accountId?: string
+} {
+  const settings = useSettingsStore()
+  const projectsStore = useProjectsStore()
+  const g = settings.defaults
+  const ld = projectId ? projectsStore.projectById(projectId)?.llmDefaults : undefined
+  const provider = spec?.provider || ld?.provider || g.provider
+  const modelId = spec?.model || ld?.modelId || g.modelId
+  const accountId =
+    spec?.accountId ??
+    (ld?.accountId && (!ld.provider || ld.provider === provider) ? ld.accountId : undefined)
+  return {
+    provider,
+    modelId,
+    level: ld?.level ?? g.thinkingLevel,
+    mode: g.mode,
+    ...(accountId ? { accountId } : {}),
+  }
+}
+
 export function useProjectLlmDefaults(getProjectId: () => string | null, getOpen: () => boolean) {
   const store = useProjectsStore()
   const settings = useSettingsStore()

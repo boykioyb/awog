@@ -24,6 +24,7 @@ import { autoCommitPhase } from '../git/auto-commit.js'
 import { sanitizeStderr } from '../git/error-map.js'
 import { invokeSdk } from '../sdk/invoke.js'
 import { resolveAgentContext } from './agent-context.js'
+import { resolveAgentFsRoots } from '../agents/repo-access.js'
 import {
   traceAgentNode,
   traceFromToolUse,
@@ -305,6 +306,11 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     const thinking = new Map<string, string>()
     let capturedModel = ''
 
+    // Repo-access whitelist → fs-tool roots, resolved against this node's cwd.
+    const agentFsRoots = agentCtx.repos
+      ? resolveAgentFsRoots(cwd, agentCtx.repos)
+      : undefined
+
     const result = await invokeSdk(
       {
         prompt,
@@ -319,12 +325,19 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
         // tools/endpoints. trust:'prompt' is not enforced in unattended tasks.
         ...(agentCtx.sourceToolPatterns ? { sourceToolPatterns: agentCtx.sourceToolPatterns } : {}),
         ...(agentCtx.sourceApiEndpoints ? { sourceApiEndpoints: agentCtx.sourceApiEndpoints } : {}),
+        // Agent repo-access whitelist — narrows the fs-tool roots on the Pi
+        // path; the boundary text itself already rides in systemPromptAppend.
+        ...(agentFsRoots ? { fsRoots: agentFsRoots } : {}),
         cwd,
         // Task subagent menu scope (ADR 0030): the task project + the node
         // agent's project. The task's source connection is unioned into a
         // subagent's MCP set, same as the node's own agent.
         ...(skillProjectIds.length > 0 ? { projectIds: skillProjectIds } : {}),
         ...(connectionId ? { connectionId } : {}),
+        // Browser per-node: `browser_tool` của node này sở hữu tab dưới scope
+        // `task:<taskId>:<nodeId>` — hai node chạy song song không đạp lên tab
+        // của nhau, và task không lẫn với browser của bất kỳ phiên chat nào.
+        browserScope: `task:${taskId}:${node.id}`,
         // Co-author trailer on model-made commits inside the node — matches the
         // task's per-phase auto-commit trailer (autoCommitPhase below).
         commitCoAuthor: task.commitCoAuthor ?? true,

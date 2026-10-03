@@ -72,8 +72,8 @@ const vfElements = computed<(Node | Edge)[]>(() => {
 const defaultEdgeOptions = {
   type: 'default',
   animated: false,
-  style: { stroke: 'var(--borderStrong)', strokeWidth: 1.8 },
-  markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--borderStrong)', width: 16, height: 16 },
+  style: { stroke: 'var(--input)', strokeWidth: 1.8 },
+  markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--input)', width: 16, height: 16 },
 }
 
 function onNodeClick(e: NodeMouseEvent) {
@@ -92,26 +92,26 @@ function onNodeClick(e: NodeMouseEvent) {
 </style>
 
 <style>
-/* Blend VueFlow internals with the AWOG palette (unscoped — reaches the controls). */
+/* Blend VueFlow internals with the shared palette (unscoped — reaches the controls). */
 .forkcanvas .vue-flow__handle {
   width: 7px;
   height: 7px;
-  background: var(--borderStrong);
-  border: 2px solid var(--bgEl);
+  background: var(--input);
+  border: 2px solid var(--card);
 }
 .forkcanvas .vue-flow__controls {
   box-shadow: none;
-  border-radius: var(--r-sm);
+  border-radius: var(--r-sm); /* rounded-md */
   overflow: hidden;
 }
 .forkcanvas .vue-flow__controls button {
-  background: var(--bgEl);
+  background: var(--popover);
   border-bottom: 1px solid var(--border);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .forkcanvas .vue-flow__controls button:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--accent-foreground);
 }
 .forkcanvas .vue-flow__controls button svg {
   fill: currentColor;

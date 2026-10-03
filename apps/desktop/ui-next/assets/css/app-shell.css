@@ -13,6 +13,16 @@
   /* Global status-bar (footer) height — the column wrapper reserves this row
      beneath the NavRail|main shell. */
   --statusbar-h: 26px;
+  /* Chiều cao control chung — Input / Select trigger / Button / TabsList phải
+     bằng nhau khi đứng cạnh nhau. Scale theo --font-size-base như mọi type
+     token (×2.77 → 36px tại base 13px, tức đúng spec h-9 của shadcn), vì nếu
+     dùng rem thẳng thì utility Tailwind co xuống ~29px ở root 13px trong khi
+     control hardcode px vẫn giữ 36px → lệch hàng. Ladder khớp shadcn:
+     xs=h-7 · sm=h-8 · md=h-9 · lg=h-10 ở kích thước mặc định. */
+  --ctrl-h: round(down, calc(var(--font-size-base) * 2.77), 2px);
+  --ctrl-h-xs: calc(var(--ctrl-h) - 8px);
+  --ctrl-h-sm: calc(var(--ctrl-h) - 4px);
+  --ctrl-h-lg: calc(var(--ctrl-h) + 4px);
 }
 html {
   font-size: var(--font-size-base);
@@ -386,15 +396,15 @@ body.light[data-surface='deep'] {
    ════════════════════════════════════════════════════════════════════════ */
 
 /* Main pane (right of the sidebar): header + selection-driven body. The primary
-   content canvas — sits on the elevated --bgPanel surface so it reads as the clean
-   focus area, lifted above the recessed sidebar/file-list chrome (which use --bg). */
+   content canvas — sits on the deepest --background surface so it reads as the
+   clean focus area under the --sidebar chrome (sidebar + changes list). */
 .gmain {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bgPanel);
+  background: var(--background);
 }
 .gbody {
   flex: 1;
@@ -436,7 +446,7 @@ body.light[data-surface='deep'] {
 @container gitmain (max-width: 860px) {
   /* Trim the unbounded labels first: a long branch name is the single biggest
      item in the row (180px of label alone). */
-  .gbar .chip .gchiplbl {
+  .gbar .gbar-pick .gchiplbl {
     max-width: 104px;
   }
   /* The last 22px: nine gaps at 9px and 14px of side padding is generous for a
@@ -477,9 +487,9 @@ body.light[data-surface='deep'] {
   padding: 8px 14px;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--amber);
-  background: var(--amberDim);
-  border-bottom: 1px solid var(--amberBorder);
+  color: var(--warning);
+  background: color-mix(in oklab, var(--warning) 12%, transparent);
+  border-bottom: 1px solid color-mix(in oklab, var(--warning) 40%, transparent);
 }
 
 /* Sidebar: header + search + scroll body + collapsed rail. */
@@ -507,12 +517,12 @@ body.light[data-surface='deep'] {
   width: 24px;
   height: 24px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .gsidecol:hover {
-  color: var(--text);
-  background: var(--bgHover);
+  color: var(--foreground);
+  background: var(--accent-wash);
 }
 .gsiderail {
   display: flex;
@@ -526,16 +536,16 @@ body.light[data-surface='deep'] {
   width: 30px;
   height: 30px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .gqi:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .gqi.on {
-  background: var(--accentDim);
-  color: var(--accent);
+  background: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
 }
 .gsearch {
   display: flex;
@@ -551,14 +561,14 @@ body.light[data-surface='deep'] {
   border: none;
   background: transparent;
   outline: none;
-  color: var(--text);
+  color: var(--foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-family: var(--sans);
 }
 .gsearch input::placeholder,
 .gbranchfilter input::placeholder {
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .gsidebody {
   flex: 1;
@@ -585,7 +595,7 @@ body.light[data-surface='deep'] {
   border-radius: var(--r-xs);
 }
 .gsec.gseccol:hover {
-  color: var(--textMuted);
+  color: var(--muted-foreground);
 }
 .gseccol .gchv {
   flex: 0 0 auto;
@@ -609,7 +619,7 @@ body.light[data-surface='deep'] {
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   font-style: italic;
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 
 /* Header pickers + dropdown affordances. */
@@ -634,30 +644,23 @@ body.light[data-surface='deep'] {
 
 /* Toolbar primary (Push). Accent outline, not a filled pill: a solid accent
    button sitting between ghost Fetch/Pull reads as a web CTA, and on macOS a
-   toolbar has no default button. `.btn.pri` (filled) is kept for the default
-   button of a form-shaped panel — Commit. The :not(:disabled) on hover is what
-   carries this past the theme-family `.btn:hover` rule, not decoration. */
-.gbar .btn.gpush {
-  color: var(--accent);
-  border-color: var(--accentBorder);
+   toolbar has no default button. `variant="default"` (filled) is kept for the
+   default button of a form-shaped panel — Commit. The :not(:disabled) on hover
+   is what carries this past the theme-family hover rule, not decoration. */
+.gbar .gpush {
+  color: var(--primary);
+  border-color: var(--ring);
   background: transparent;
   font-weight: 600;
 }
-.gbar .btn.gpush:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: var(--accentDim);
+.gbar .gpush:hover:not(:disabled) {
+  color: var(--primary);
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
 }
 
-/* Danger button variant (abort merge / drop stash). */
-.btn.gdanger {
-  color: var(--danger);
-  border-color: var(--dangerBorder);
-  background: var(--dangerBg);
-}
-.btn.gdanger:hover {
-  border-color: var(--danger);
-}
+/* Danger button variant (abort merge / drop stash) — variant="danger" của
+   ui/button đã mang chính xác ramp này. */
 
 /* Detail panes (remote / stash). */
 .gdetailpane {
@@ -675,7 +678,7 @@ body.light[data-surface='deep'] {
   font-size: var(--fs-lg);
   line-height: var(--lh-lg);
   font-weight: 600;
-  color: var(--text);
+  color: var(--foreground);
 }
 .gdpactions {
   display: flex;
@@ -688,7 +691,7 @@ body.light[data-surface='deep'] {
 .gchtitle {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .gchbtn {
   display: grid;
@@ -697,12 +700,12 @@ body.light[data-surface='deep'] {
   width: 24px;
   height: 24px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .gchbtn:hover {
-  background: var(--bgHover);
-  color: var(--text);
+  background: var(--accent-wash);
+  color: var(--foreground);
 }
 .gchseg {
   display: flex;
@@ -716,15 +719,15 @@ body.light[data-surface='deep'] {
   display: grid;
   place-items: center;
   padding: 4px 7px;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .gsegbtn.on {
-  background: var(--accentDim);
-  color: var(--accent);
+  background: var(--secondary);
+  color: var(--secondary-foreground);
 }
 .gsegbtn:not(.on):hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 
 /* Leading status letter on a file row — the porcelain code (M/A/D/R/…), coloured
@@ -752,8 +755,8 @@ body.light[data-surface='deep'] {
   flex: 0 0 auto;
 }
 .gstage.gdiscard:hover {
-  color: var(--danger);
-  border-color: var(--danger);
+  color: var(--destructive);
+  border-color: var(--destructive);
 }
 
 /* Collapsible zone header (Unstaged / Staged). */
@@ -784,21 +787,21 @@ body.light[data-surface='deep'] {
   border-radius: var(--r-xs);
   border: 1px solid var(--border);
   background: transparent;
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-family: var(--sans);
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
   cursor: pointer;
 }
 .gsecbtn:hover:not(:disabled) {
-  color: var(--text);
-  border-color: var(--borderStrong);
-  background: var(--bgHover);
+  color: var(--foreground);
+  border-color: var(--input);
+  background: var(--accent-wash);
 }
 .gsecbtn.stage:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accentBorder);
-  background: var(--accentDim);
+  color: var(--primary);
+  border-color: var(--ring);
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
 }
 .gsecbtn:disabled {
   opacity: 0.4;
@@ -813,10 +816,10 @@ body.light[data-surface='deep'] {
    never a staged state: accent left-bar on every selected row, accent-tint fill
    only on the non-focused ones so the diff-focused row keeps its `.on` surface. */
 .gfile.msel {
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 var(--primary);
 }
 .gfile.msel:not(.on) {
-  background: var(--accentDim);
+  background: var(--accent-wash);
 }
 
 /* Empty zone hint + the hairline that splits the two zones. */
@@ -844,7 +847,7 @@ body.light[data-surface='deep'] {
 .gstatlbl {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   font-weight: 600;
 }
 .gstatct {
@@ -860,12 +863,12 @@ body.light[data-surface='deep'] {
   width: 20px;
   height: 20px;
   border-radius: var(--r-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
   cursor: pointer;
 }
 .gstatact:hover {
-  color: var(--danger);
-  background: var(--dangerBg);
+  color: var(--destructive);
+  background: color-mix(in oklab, var(--destructive) 14%, transparent);
 }
 
 /* Commit panel (detail pane, below the diff). */
@@ -874,7 +877,7 @@ body.light[data-surface='deep'] {
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border);
-  background: var(--bgPanel);
+  background: var(--card);
 }
 .gcph {
   display: flex;
@@ -885,26 +888,18 @@ body.light[data-surface='deep'] {
 .gcplbl {
   font-size: var(--fs-xs);
   line-height: var(--lh-xs);
-  color: var(--textDim);
+  color: var(--muted-foreground);
 }
 .gcpgen {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
-  border-radius: var(--r-xs);
-  border: 1px solid var(--accent);
-  background: transparent;
-  color: var(--accent);
-  font-size: var(--fs-xs);
-  line-height: var(--lh-xs);
-  cursor: pointer;
+  border-color: color-mix(in oklab, var(--primary) 50%, transparent);
+  color: var(--primary);
+}
+.gcpgen:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--primary) 10%, transparent);
+  color: var(--primary);
 }
 .gcpgen:disabled {
-  border-color: var(--border);
-  color: var(--textDim);
-  cursor: not-allowed;
-  opacity: 0.6;
+  color: var(--muted-foreground);
 }
 .gcpcount {
   font-variant-numeric: tabular-nums;
@@ -916,15 +911,9 @@ body.light[data-surface='deep'] {
   padding: 0 14px 8px;
 }
 textarea.gcpta {
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bgInput);
-  padding: 8px 10px;
   min-height: 72px;
   max-height: 180px;
   resize: vertical;
-  /* mono-ok: commit message body — the 50/72 column convention needs a fixed advance */
-  font-family: var(--code);
 }
 .gcpfoot {
   display: flex;
@@ -940,7 +929,7 @@ textarea.gcpta {
   border-radius: var(--r-xs);
 }
 .gtdir:hover {
-  background: var(--bgHover);
+  background: var(--accent-wash);
 }
 .gtdir .fchv {
   flex: 0 0 auto;
@@ -975,7 +964,7 @@ textarea.gcpta {
 }
 .grszh:hover::after,
 .grszh.drag::after {
-  background: var(--accent);
+  background: var(--primary);
   height: 2px;
 }
 
@@ -1483,8 +1472,8 @@ textarea.gcpta {
 }
 /* Phản hồi khi bấm: nút dịch xuống 1px và tối hơn một chút. `.ikm-card` phải nằm
    trong danh sách vì modal Teleport ra body, ngoài cây `.ik`. */
-.ik .btn,
-.ikm-card .btn {
+.ik [data-slot='button'],
+.ikm-card [data-slot='button'] {
   transition:
     transform 0.08s var(--ease),
     filter 0.14s var(--ease),
@@ -1492,8 +1481,8 @@ textarea.gcpta {
     color 0.14s var(--ease),
     border-color 0.14s var(--ease);
 }
-.ik .btn:active:not(:disabled),
-.ikm-card .btn:active:not(:disabled) {
+.ik [data-slot='button']:active:not(:disabled),
+.ikm-card [data-slot='button']:active:not(:disabled) {
   transform: translateY(1px);
   filter: brightness(0.94);
 }
@@ -1536,8 +1525,8 @@ textarea.gcpta {
   .ikspin {
     animation: none;
   }
-  .ik .btn,
-  .ikm-card .btn {
+  .ik [data-slot='button'],
+  .ikm-card [data-slot='button'] {
     transition: none;
   }
 }
@@ -2123,8 +2112,7 @@ textarea.gcpta {
 .setni,
 .smenu .mi,
 .seg span,
-.btn,
-.iconbtn,
+[data-slot='button'],
 .chip {
   transition:
     background 0.14s var(--ease),
@@ -2145,7 +2133,8 @@ textarea.gcpta {
    Every rendered-markdown surface (transcript, preview modal, library body, wiki reader,
    artifact editor, GitHub drawer) wraps each <pre> in `.codeblock` and pins a `.codetools`
    row to its top-right corner: the `.codelang` chip (when a language is known), the
-   `.codewrap` soft-wrap toggle and the `.codecopy` button. Styled globally so the controls
+   `.codewrap` soft-wrap toggle, the `.codeexpand` fullscreen button and the `.codecopy`
+   button — plus a `.codehres` drag handle under tall blocks. Styled globally so the controls
    are identical everywhere instead of being re-declared per surface. The wrapper carries NO
    margin — the surface's own <pre> margin still applies (the transcript, whose <pre> margin
    is zeroed, adds it back on `.codeblock` in its scoped styles). */
@@ -2175,7 +2164,8 @@ textarea.gcpta {
   color: var(--accent);
 }
 .codecopy,
-.codewrap {
+.codewrap,
+.codeexpand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2194,17 +2184,51 @@ textarea.gcpta {
 }
 .codeblock:hover .codecopy,
 .codeblock:hover .codewrap,
+.codeblock:hover .codeexpand,
 .codecopy:focus-visible,
-.codewrap:focus-visible {
+.codewrap:focus-visible,
+.codeexpand:focus-visible {
   opacity: 1;
 }
 .codecopy:hover,
-.codewrap:hover {
+.codewrap:hover,
+.codeexpand:hover {
   color: var(--text);
   background: var(--bgHover);
 }
 .codecopy.ok {
   color: var(--add);
+  opacity: 1;
+}
+/* Thanh kéo chiều cao dưới đáy block (utils/code-block-controls): grip ngang mờ,
+   sáng lên khi hover / đang kéo. Chỉ mọc trên block đủ cao, nên không phải noise
+   trên mọi fence. */
+.codehres {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 10px;
+  margin-top: 3px;
+  border-radius: var(--r-xs);
+  cursor: row-resize;
+  touch-action: none;
+}
+.codehres::before {
+  content: '';
+  width: 44px;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--textFaint);
+  opacity: 0.45;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease;
+}
+.codehres:hover::before {
+  opacity: 1;
+}
+.codeblock.coderesizing .codehres::before {
+  background: var(--accent);
   opacity: 1;
 }
 .codelang {
@@ -2225,7 +2249,8 @@ textarea.gcpta {
   opacity: 1;
 }
 .codecopy .icn,
-.codewrap .icn {
+.codewrap .icn,
+.codeexpand .icn {
   width: var(--icon-sm);
   height: var(--icon-sm);
 }
@@ -2271,6 +2296,12 @@ body[data-code-wrap='on'] .codewrap {
 [data-page='sessions'] .md > .detail {
   padding-bottom: var(--awog-dock-h, 0px);
 }
+/* Content canvas — cột nội dung chính của mọi page ngồi trên `--background`
+   (light = trắng #fff, dark = zinc-950 / cute-dark) thay vì lớp `--bg`
+   gần-trắng thừa hưởng từ shell. `.gmain` của Git đã đi theo token này. */
+.detail {
+  background: var(--background);
+}
 /* Every other page has no leading rail, so the dock spans the full work area and the
    page itself reserves the room. */
 .body > .page:not([data-page='sessions']) {
@@ -2307,8 +2338,7 @@ body[data-code-wrap='on'] .codewrap {
 .top textarea,
 .top label,
 .top [role='button'],
-.top .btn,
-.top .iconbtn,
+.top [data-slot='button'],
 .top .kbd,
 .top .shelltgl,
 .top .ntf {
@@ -2325,8 +2355,8 @@ body[data-platform='darwin'] .top {
 body[data-platform='darwin']:not([data-fullscreen]) .side {
   padding-top: 40px;
 }
-/* Rail collapsed to icons — prototype.css sizes it 58px, but the three lights run to
-   x=66 (leftmost at trafficLightPosition x=14, 12px wide, 20px apart), so at 58px they
+/* Rail collapsed to icons — prototype.css sizes it 52px, but the three lights run to
+   x=66 (leftmost at trafficLightPosition x=14, 12px wide, 20px apart), so at 52px they
    straddle the rail/main divider and spill onto the top bar. Widen the collapsed rail
    just enough to hold them, which keeps ONE rule for the whole shell: the lights always
    sit on the rail. Icons stay centred (`justify-content: center`), only the strip is
@@ -2425,8 +2455,6 @@ body[data-platform='linux']:has(.app) {
 :where(
   button,
   [role='button'],
-  .btn,
-  .iconbtn,
   .ni,
   .li,
   .gsi,
@@ -2448,8 +2476,6 @@ body[data-platform='linux']:has(.app) {
 :is(
     button,
     [role='button'],
-    .btn,
-    .iconbtn,
     .ni,
     .li,
     .gsi,
@@ -2459,10 +2485,10 @@ body[data-platform='linux']:has(.app) {
     .cact,
     .codetab,
     .shelltgl
-  ):not(.pri):active:not(:disabled) {
-  background-color: var(--bgPress);
+  ):not([data-variant='default']):active:not(:disabled) {
+  background-color: var(--accent-wash);
 }
-.btn.pri:active:not(:disabled) {
+[data-slot='button'][data-variant='default']:active:not(:disabled) {
   filter: brightness(0.92);
 }
 
@@ -2471,8 +2497,6 @@ body[data-platform='linux']:has(.app) {
 :where(
   button,
   [role='button'],
-  .btn,
-  .iconbtn,
   .ni,
   .li,
   .gsi,

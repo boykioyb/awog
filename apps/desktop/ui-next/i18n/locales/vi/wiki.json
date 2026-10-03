@@ -8,6 +8,7 @@
   "wiki.tree.empty": "Chưa có trang nào. Nhập Markdown hoặc tạo trang đầu tiên.",
   "wiki.tree.rootGroup": "Gốc",
   "wiki.tier.project": "project",
+  "wiki.filter.all": "Tất cả wiki",
   "wiki.footer.budget": "{pages} trang vào context LLM · mục lục ~{chars} ký tự",
   "wiki.page.edit": "Sửa trang",
   "wiki.page.delete": "Xóa trang",

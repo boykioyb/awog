@@ -5,15 +5,16 @@
     <div v-if="title" class="monsech">
       <span class="monsect">{{ title }}</span>
       <span class="fd">{{ t('monitor.processes.count', { n: rows.length }) }}</span>
-      <button
+      <Button
         v-if="sortable"
-        class="btn mongroupbtn"
         :class="{ on: grouped }"
+        class="mongroupbtn"
+        variant="outline"
         @click="emit('toggle-group')"
       >
         <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
         {{ t('monitor.app.group') }}
-      </button>
+      </Button>
     </div>
 
     <div v-if="rows.length === 0" class="monempty">{{ t('monitor.processes.empty') }}</div>
@@ -93,14 +94,16 @@
             </td>
             <td class="num uptime tnum" />
             <td class="act">
-              <button
+              <Button
                 v-if="g.killable"
-                class="iconbtn monkill"
                 :title="t('monitor.app.kill', { app: g.app })"
+                class="monkill"
+                variant="outline"
+                size="iconMd"
                 @click.stop="emit('kill-app', g)"
               >
                 <Icon name="stop" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              </button>
+              </Button>
             </td>
           </tr>
           <tr
@@ -133,21 +136,23 @@
             </td>
             <td class="num uptime tnum">{{ formatUptime(p.elapsedSeconds) }}</td>
             <td class="act">
-              <button
+              <Button
                 v-if="canKill(p)"
-                class="iconbtn monkill"
                 :class="{ force: needsForce(p.pid) }"
                 :disabled="killing === p.pid"
                 :title="
                   needsForce(p.pid) ? t('monitor.processes.killForce') : t('monitor.processes.kill')
                 "
+                class="monkill"
+                variant="outline"
+                size="iconMd"
                 @click="emit('kill', p, needsForce(p.pid))"
               >
                 <Icon
                   :name="needsForce(p.pid) ? 'zap' : 'stop'"
                   style="width: var(--icon-sm); height: var(--icon-sm)"
                 />
-              </button>
+              </Button>
             </td>
           </tr>
         </template>
@@ -191,21 +196,23 @@
                  lên SIGKILL. Không có đường này thì đúng loại tiến trình cần giết
                  nhất — cái đang quay tít nên không xử lý nổi tín hiệu — lại là cái
                  duy nhất giết không được. -->
-            <button
+            <Button
               v-if="canKill(p)"
-              class="iconbtn monkill"
               :class="{ force: needsForce(p.pid) }"
               :disabled="killing === p.pid"
               :title="
                 needsForce(p.pid) ? t('monitor.processes.killForce') : t('monitor.processes.kill')
               "
+              class="monkill"
+              variant="outline"
+              size="iconMd"
               @click="emit('kill', p, needsForce(p.pid))"
             >
               <Icon
                 :name="needsForce(p.pid) ? 'zap' : 'stop'"
                 style="width: var(--icon-sm); height: var(--icon-sm)"
               />
-            </button>
+            </Button>
           </td>
         </tr>
       </tbody>
@@ -215,6 +222,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import Button from '~/components/ui/button/Button.vue'
 import {
   cpuLevel,
   formatCpuLoad,

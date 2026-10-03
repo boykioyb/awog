@@ -14,18 +14,25 @@
     </div>
 
     <div class="upd-actions">
-      <button
+      <Button
         v-if="action"
-        class="btn sm pri"
+        size="sm"
+        class="shrink-0"
         :disabled="update.actionBusy"
         @click="update.runPrimaryAction()"
       >
         <Icon :name="action.icon" :class="{ uaspin: update.actionBusy }" />
         {{ action.label }}
-      </button>
-      <button v-if="showDismiss" class="btn sm" @click="update.dismiss()">
+      </Button>
+      <Button
+        v-if="showDismiss"
+        size="sm"
+        variant="outline"
+        class="shrink-0"
+        @click="update.dismiss()"
+      >
         {{ dismissLabel }}
-      </button>
+      </Button>
     </div>
   </div>
 </template>
@@ -69,28 +76,28 @@ const dismissLabel = computed(() =>
 </script>
 
 <style scoped>
-/* Accent-tinted notice (not a gray fill) for the update lifecycle; danger tint
-   for an error. Colours come from theme CSS vars so dark/light both hold. */
+/* Accent-tinted notice (not a gray fill) for the update lifecycle; destructive
+   tint for an error. Colours come from theme CSS vars so dark/light both hold. */
 .upd-banner {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 16px;
   background: var(--accentDim);
-  border-bottom: 1px solid var(--accentBorder);
+  border-bottom: 1px solid var(--ring);
 }
 .upd-banner.error {
   background: var(--dangerDim);
-  border-bottom-color: var(--danger);
+  border-bottom-color: var(--destructive);
 }
 .upd-ic {
   width: var(--icon-md);
   height: var(--icon-md);
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--primary);
 }
 .upd-banner.error .upd-ic {
-  color: var(--danger);
+  color: var(--destructive);
 }
 .upd-body {
   flex: 1;
@@ -98,7 +105,7 @@ const dismissLabel = computed(() =>
 }
 .upd-msg {
   font-size: 1em;
-  color: var(--text);
+  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -113,7 +120,7 @@ const dismissLabel = computed(() =>
 .upd-bar {
   height: 100%;
   border-radius: var(--r-pill);
-  background: var(--accent);
+  background: var(--primary);
   transition: width 0.2s;
 }
 .upd-actions {

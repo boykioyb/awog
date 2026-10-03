@@ -2,11 +2,11 @@
   <div class="mle">
     <!-- One editable row per model: text input + delete button -->
     <div v-for="(m, i) in models" :key="i" class="mlerow">
-      <input
-        class="keyinp mono"
-        :value="m"
+      <Input
+        :model-value="m"
         :placeholder="placeholder || t('settingsModels.models.idPlaceholder')"
-        @input="updateAt(i, ($event.target as HTMLInputElement).value)"
+        class="mono flex-1"
+        @update:model-value="updateAt(i, $event)"
       />
       <button
         class="mledel"
@@ -19,10 +19,10 @@
     </div>
 
     <!-- Append a new (empty) row -->
-    <button class="btn sm mleadd" type="button" @click="addRow">
+    <Button type="button" class="mleadd" variant="outline" size="sm" @click="addRow">
       <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
       {{ t('settingsModels.models.add') }}
-    </button>
+    </Button>
 
     <!-- Quick-add suggestions not already in the list -->
     <div v-if="freshSuggestions.length" class="mlesugg">
@@ -42,6 +42,9 @@
 </template>
 
 <script setup lang="ts">
+import Button from '~/components/ui/button/Button.vue'
+import Input from '~/components/ui/input/Input.vue'
+
 // Repeating editable list of model ids. v-model binds the string[]; each id is its
 // own input row with a delete button, plus an Add button to append a row and
 // quick-add suggestion chips. Ports legacy ModelListEditor.vue into ui-next style.

@@ -16,6 +16,7 @@ import {
   RemoteRejected,
   clampPersistedMode,
   clampRemoteMode,
+  isCliGroupKey,
   isEventForwardable,
   isMethodAllowed,
   isUngatedMode,
@@ -375,6 +376,80 @@ test('tasks.create scopes the workflow lookup to the chosen project', async () =
 test('an un-sanitized method fails closed', async () => {
   const { request } = stubEngine()
   await assert.rejects(() => sanitizeRemoteParams('tasks.delete', {}, request, ON), RemoteRejected)
+})
+
+// ─── CLI terminal containment ("Open in CLI" PTYs) ──────────────────────────
+
+test('isCliGroupKey marks only cli:-prefixed keys', () => {
+  assert.equal(isCliGroupKey('cli:ses-1'), true)
+  assert.equal(isCliGroupKey('ses-1'), false)
+  assert.equal(isCliGroupKey('ssh:conn-1'), false)
+  assert.equal(isCliGroupKey(undefined), false)
+  assert.equal(isCliGroupKey(null), false)
+})
+
+test('terminal.write/resize/kill reject terminals grouped under cli:', async () => {
+  const { request } = stubEngine({
+    'terminal.list': {
+      terminals: [
+        { terminalId: 'term-cli', sessionId: 'cli:ses-1', createdAt: 1 },
+        { terminalId: 'term-usr', sessionId: 'ses-1', createdAt: 2 },
+      ],
+    },
+  })
+  for (const m of ['terminal.write', 'terminal.resize', 'terminal.kill']) {
+    await assert.rejects(
+      () =>
+        sanitizeRemoteParams(
+          m,
+          { terminalId: 'term-cli', data: 'x', cols: 80, rows: 24 },
+          request,
+          ON,
+        ),
+      RemoteRejected,
+      `${m} on a CLI-attached terminal must be rejected`,
+    )
+  }
+  // A normal (user) terminal still passes through untouched.
+  const out = (await sanitizeRemoteParams(
+    'terminal.write',
+    { terminalId: 'term-usr', data: 'ls' },
+    request,
+    ON,
+  )) as Record<string, unknown>
+  assert.deepEqual(out, { terminalId: 'term-usr', data: 'ls' })
+  // Unknown terminalId falls through — the sidecar returns its own error; only
+  // a live `cli:` record can trip this gate.
+  const ghost = (await sanitizeRemoteParams(
+    'terminal.kill',
+    { terminalId: 'term-ghost' },
+    request,
+    ON,
+  )) as Record<string, unknown>
+  assert.deepEqual(ghost, { terminalId: 'term-ghost' })
+})
+
+test('terminal.create refuses to squat on the cli: grouping namespace', async () => {
+  const { request } = stubEngine()
+  await assert.rejects(
+    () =>
+      sanitizeRemoteParams(
+        'terminal.create',
+        { projectId: 'prj-1', sessionId: 'cli:ses-1' },
+        request,
+        ON,
+      ),
+    RemoteRejected,
+  )
+  // Legit remote terminal create still gets the pinned workspaceRoot.
+  const out = (await sanitizeRemoteParams(
+    'terminal.create',
+    { projectId: 'prj-1', sessionId: 'ses-1' },
+    request,
+    ON,
+  )) as Record<string, unknown>
+  assert.equal(out.workspaceRoot, '/repo/one')
+  assert.equal(out.sessionId, 'ses-1')
 })
 
 // ─── Method local: field-pick khi ĐỌC task ──────────────────────────────────

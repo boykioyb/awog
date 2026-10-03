@@ -274,6 +274,40 @@ function isSessionHeader(value: unknown): value is SessionHeader {
   return typeof v.id === 'string' && typeof v.messageCount === 'number'
 }
 
+// Migrate các key team-era-cũ (mô hình "session group", đổi tên khi group →
+// team run): file session.jsonl trên đĩa ghi theo tên cũ — đọc xong map sang
+// tên mới và XOÁ key cũ để lần persist kế tiếp ghi sạch. Key mới có sẵn thì
+// giữ nguyên (file đã migrate).
+function migrateLegacyTeamFields(header: SessionHeader): SessionHeader {
+  const legacy = header as SessionHeader & {
+    groupParentId?: string
+    groupRole?: string
+    groupAutoDeliver?: boolean
+    groupSpawnConfig?: SessionHeader['spawnConfig']
+    groupAgent?: SessionHeader['agent']
+    groupWorktree?: SessionHeader['worktree']
+  }
+  const rec = header as unknown as Record<string, unknown>
+  const map: [keyof typeof legacy & string, keyof SessionHeader & string][] = [
+    ['groupParentId', 'teamRunId'],
+    ['groupRole', 'teamRole'],
+    ['groupSpawnConfig', 'spawnConfig'],
+    ['groupAgent', 'agent'],
+    ['groupWorktree', 'worktree'],
+  ]
+  for (const [oldKey, newKey] of map) {
+    const v = legacy[oldKey]
+    if (v === undefined) continue
+    if (rec[newKey] === undefined) rec[newKey] = v
+    delete rec[oldKey]
+  }
+  // `groupAutoDeliver`/`autoDeliver` đã chết cùng cổng giao-tay — key cũ trên
+  // đĩa chỉ còn là rác, xoá luôn thay vì map sang một field không còn tồn tại.
+  delete rec.groupAutoDeliver
+  delete rec.autoDeliver
+  return header
+}
+
 // Read just the first line. Fast path: one 8KB fd read covers the header for the vast
 // majority of sessions. Fallback: when the header is longer than the probe, read up
 // to MAX_HEADER_BYTES to find the newline; a file with no newline within the cap is
@@ -315,7 +349,7 @@ export function readSessionHeader(sessionFile: string): SessionHeader | null {
   try {
     const firstLine = readFirstLine(sessionFile)
     const parsed: unknown = JSON.parse(firstLine)
-    return isSessionHeader(parsed) ? parsed : null
+    return isSessionHeader(parsed) ? migrateLegacyTeamFields(parsed) : null
   } catch (err) {
     // A missing file is a normal, expected case (the persistence queue reads the
     // header of a not-yet-written new session to check for external metadata edits) —
@@ -397,7 +431,7 @@ export function readSessionJsonl(
     const parsed: unknown = JSON.parse(firstLine)
     if (!isSessionHeader(parsed)) return null
     const messages = parseMessagesResilient(lines.slice(1), attachmentsDirForFile(sessionFile))
-    return { header: parsed, messages }
+    return { header: migrateLegacyTeamFields(parsed), messages }
   } catch (err) {
     log.warn('jsonl: failed to read session', {
       file: sessionFile,

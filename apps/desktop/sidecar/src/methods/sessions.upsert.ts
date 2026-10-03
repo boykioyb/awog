@@ -100,21 +100,16 @@ const SessionSchema = z.object({
   workspaceFolder: z.string().optional(),
   // Soft + hard spend caps.
   budget: BudgetSchema.optional(),
-  // Công tắc tự giao tin trong nhóm (chỉ có nghĩa trên phiên GỐC). CHỈ còn
-  // nghĩa ở nhánh 'create' — đường ghi sau khi tạo là RPC riêng
-  // `sessions.setGroupAutoDeliver` (xem sessions.spawn.ts): qua patch spread thì
-  // cờ `true` cũ của một cửa sổ chưa nghe disarm sẽ lặng lẽ hồi sinh cờ vừa tắt.
-  groupAutoDeliver: z.boolean().optional(),
   // Nhóm của phiên. Chỉ đọc ở nhánh 'create' (phiên sinh ra ĐÃ nằm trong một nhóm —
   // "Phiên mới trong nhóm này"), CỐ Ý không có trong patch của 'update-metadata':
   // tách khỏi nhóm phải XOÁ HẲN key, mà patch spread không xoá được key. Đường đổi
   // nhóm sau lúc tạo là RPC riêng `sessions.setGroup`. Cùng khuôn với `infra`.
-  groupParentId: z.string().optional(),
-  groupRole: z.string().max(60).optional(),
+  teamRunId: z.string().optional(),
+  teamRole: z.string().max(60).optional(),
   // Cấu hình spawn đã nhớ — chỉ đọc ở nhánh 'create', CỐ Ý không có trong patch
-  // của 'update-metadata' (cùng khuôn với groupParentId/infra): "ngừng nhớ" phải
-  // XOÁ HẲN key mà patch spread không làm được. Đường ghi là `sessions.setGroupSpawn`.
-  groupSpawnConfig: SpawnSessionConfigSchema.optional(),
+  // của 'update-metadata' (cùng khuôn với teamRunId/infra): "ngừng nhớ" phải
+  // XOÁ HẲN key mà patch spread không làm được. Đường ghi là `sessions.setSpawnConfig`.
+  spawnConfig: SpawnSessionConfigSchema.optional(),
   // Fork lineage.
   parentSessionId: z.string().optional(),
   forkFromMessageId: z.string().optional(),
@@ -162,12 +157,12 @@ function toInfraContext(
 }
 
 // Dựng lại config bỏ hẳn key không có mặt (exactOptionalPropertyTypes). Object
-// rỗng hoàn toàn ⇒ undefined: header không mang `groupSpawnConfig: {}` vô nghĩa.
+// rỗng hoàn toàn ⇒ undefined: header không mang `spawnConfig: {}` vô nghĩa.
 function toSpawnConfig(
   parsed: z.infer<typeof SpawnSessionConfigSchema> | undefined,
-): Session['groupSpawnConfig'] {
+): Session['spawnConfig'] {
   if (!parsed) return undefined
-  const c: NonNullable<Session['groupSpawnConfig']> = {}
+  const c: NonNullable<Session['spawnConfig']> = {}
   if (parsed.provider !== undefined) c.provider = parsed.provider
   if (parsed.modelId !== undefined) c.modelId = parsed.modelId
   if (parsed.accountId !== undefined) c.accountId = parsed.accountId
@@ -201,11 +196,10 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.aboutTaskId !== undefined) base.aboutTaskId = parsed.aboutTaskId
   if (parsed.aboutSshHostId !== undefined) base.aboutSshHostId = parsed.aboutSshHostId
   if (parsed.aboutGhUrl !== undefined) base.aboutGhUrl = parsed.aboutGhUrl
-  if (parsed.groupAutoDeliver !== undefined) base.groupAutoDeliver = parsed.groupAutoDeliver
-  if (parsed.groupParentId !== undefined) base.groupParentId = parsed.groupParentId
-  if (parsed.groupRole !== undefined) base.groupRole = parsed.groupRole
-  const spawnConfig = toSpawnConfig(parsed.groupSpawnConfig)
-  if (spawnConfig) base.groupSpawnConfig = spawnConfig
+  if (parsed.teamRunId !== undefined) base.teamRunId = parsed.teamRunId
+  if (parsed.teamRole !== undefined) base.teamRole = parsed.teamRole
+  const spawnConfig = toSpawnConfig(parsed.spawnConfig)
+  if (spawnConfig) base.spawnConfig = spawnConfig
   const budget = toBudget(parsed.budget)
   if (budget) base.budget = budget
   const pinned = toPinnedContext(parsed.pinnedContext)
@@ -265,8 +259,6 @@ register('sessions.upsert', async (raw) => {
   if (session.aboutTaskId !== undefined) patch.aboutTaskId = session.aboutTaskId
   if (session.aboutSshHostId !== undefined) patch.aboutSshHostId = session.aboutSshHostId
   if (session.aboutGhUrl !== undefined) patch.aboutGhUrl = session.aboutGhUrl
-  // `groupAutoDeliver` CỐ Ý không có trong patch — cùng khuôn `infra`: đường ghi
-  // duy nhất sau lúc tạo là `sessions.setGroupAutoDeliver`.
   if (session.pinnedContext !== undefined) patch.pinnedContext = session.pinnedContext
   if (session.workspaceFolder !== undefined) patch.workspaceFolder = session.workspaceFolder
   if (session.budget !== undefined) patch.budget = session.budget
