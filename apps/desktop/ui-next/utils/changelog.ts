@@ -30,6 +30,66 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.40.0',
+    date: '2026-10-03',
+    highlight: {
+      en: 'Session groups grow into real code teams with a shared issue board, any session can switch into the Claude or Codex command line and back, and Agents get a full page of their own again.',
+      vi: 'Nhóm phiên trở thành ê-kíp code thực thụ với bảng issue dùng chung, mọi phiên có thể chuyển sang dòng lệnh Claude hoặc Codex rồi quay lại, và Agents lại có trang riêng đầy đủ.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Teams: a group now has a lead that coordinates and members bound to real agents. Each member works on its own branch in a separate copy of the repo, so two members never step on each other, and nothing reaches your main branch until you press Merge. The team shares a channel where you can @mention a member to wake it up.',
+        vi: 'Ê-kíp: một nhóm nay có trưởng nhóm điều phối và các thành viên gắn với agent thật. Mỗi thành viên làm trên nhánh riêng trong một bản sao repo tách biệt, nên hai người không bao giờ giẫm lên nhau, và không gì vào nhánh chính của bạn cho tới khi bạn bấm Merge. Cả ê-kíp có chung một kênh, nhắc @tên để đánh thức một thành viên.',
+      },
+      {
+        kind: 'added',
+        en: 'A new Teams page lets you save a team once — lead, members and their agents — and run it on any project whenever you need it. AI can draft the team from a one-line description.',
+        vi: 'Trang Teams mới cho phép lưu một ê-kíp một lần — trưởng nhóm, thành viên và agent của từng người — rồi chạy nó trên bất kỳ dự án nào khi cần. AI có thể soạn sẵn ê-kíp từ một câu mô tả.',
+      },
+      {
+        kind: 'added',
+        en: 'A new Board page: one issue backlog across all your projects, as a board or a list, with statuses, comments and attachments. Describe the work in one box and assign it to an agent — it writes a proper title and description itself and moves the item to “In review” when done. Only you can mark an item Done.',
+        vi: 'Trang Bảng việc (Board) mới: một backlog issue chung cho mọi dự án, xem dạng bảng hoặc danh sách, có trạng thái, bình luận và tệp đính kèm. Mô tả việc trong một ô rồi giao cho agent — nó tự viết tiêu đề và mô tả chỉn chu, xong việc thì chuyển sang “Chờ review”. Chỉ bạn mới đánh dấu được “Xong”.',
+      },
+      {
+        kind: 'added',
+        en: 'Open a session in the CLI from its ⋯ menu: Claude CLI or Codex CLI resumes the very same conversation inside the app, and when you switch back to chat the messages you typed there appear in the transcript. Devin CLI opens as a separate session.',
+        vi: 'Mở một phiên trong CLI từ menu ⋯: Claude CLI hoặc Codex CLI tiếp tục đúng cuộc hội thoại đó ngay trong app, và khi chuyển về chat thì những tin bạn gõ bên đó hiện lại trong transcript. Devin CLI mở thành một phiên riêng.',
+      },
+      {
+        kind: 'added',
+        en: 'Agents are back in the side navigation with a new list and detail page: see which sessions run as each agent, chat with an agent directly, limit which skills, tools, connections and repositories it may use, export one or many as a .zip, and set the model or delete several at once.',
+        vi: 'Agents trở lại thanh điều hướng với trang danh sách và chi tiết mới: xem phiên nào đang chạy dưới mỗi agent, chat trực tiếp với agent, giới hạn skill, tool, connection và repo nó được dùng, xuất một hoặc nhiều agent thành .zip, và đổi model hoặc xoá nhiều agent cùng lúc.',
+      },
+      {
+        kind: 'improved',
+        en: '“Revise with AI” for agents now suggests skills and tools from your own catalog, and a one-click “Full spec & save” writes the complete instructions in the background and tells you when it is done. Choose which model does this writing in Settings.',
+        vi: '“Chỉnh bằng AI” cho agent nay gợi ý skill và tool lấy từ chính danh mục của bạn, và nút một-cú-bấm “Spec đầy đủ + lưu” soạn toàn bộ hướng dẫn ở chế độ nền rồi báo khi xong. Chọn model làm việc soạn thảo này trong Settings.',
+      },
+      {
+        kind: 'changed',
+        en: 'Messages between sessions in a team are now delivered on their own as soon as the receiving session is free — no more separate approval to switch automatic hand-off on.',
+        vi: 'Tin nhắn giữa các phiên trong một ê-kíp nay tự được giao ngay khi phiên nhận rảnh — không còn bước duyệt riêng để bật tự-giao.',
+      },
+      {
+        kind: 'improved',
+        en: 'Settings are grouped into General, AI, Workspace and System, so each page is easier to find.',
+        vi: 'Settings được gom thành Chung, AI, Workspace và Hệ thống, nên dễ tìm từng trang hơn.',
+      },
+      {
+        kind: 'improved',
+        en: 'Terminals draw on the GPU and the code editor loads faster, so busy terminals and large files feel smoother.',
+        vi: 'Terminal vẽ bằng GPU và trình soạn code tải nhanh hơn, nên terminal nhiều output và file lớn mượt hơn.',
+      },
+      {
+        kind: 'added',
+        en: 'Links to GitHub comments open straight at the comment.',
+        vi: 'Link tới bình luận GitHub mở thẳng đúng bình luận đó.',
+      },
+    ],
+  },
+  {
     version: '0.39.0',
     date: '2026-09-28',
     highlight: {
