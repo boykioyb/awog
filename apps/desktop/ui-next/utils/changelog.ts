@@ -30,6 +30,61 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.40.1',
+    date: '2026-10-05',
+    highlight: {
+      en: 'The team board now works like an issue tracker, teammates answer each other on the channel where you can see it, and long-running team sessions no longer die when their context fills up.',
+      vi: 'Bảng việc của ê-kíp nay vận hành như một issue tracker, các thành viên trả lời nhau ngay trên kênh để bạn theo dõi được, và phiên ê-kíp chạy lâu không còn chết khi đầy ngữ cảnh.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Board items now have a type (epic, story, task, subtask, bug), a priority, a severity and a parent, so big work can be split into sub-items. Filter the board by type and priority, or hide child items to see only the top level.',
+        vi: 'Việc trên bảng nay có loại (epic, story, task, subtask, bug), mức ưu tiên, mức nghiêm trọng và việc cha, nên việc lớn có thể tách thành việc con. Lọc bảng theo loại và ưu tiên, hoặc ẩn việc con để chỉ xem cấp trên cùng.',
+      },
+      {
+        kind: 'added',
+        en: 'Each item has its own Discuss tab showing only the team conversation about that item (and its sub-items). Mention @someone there or in a comment and they actually wake up and reply in place; a small receipt tells you whether the message was delivered or is waiting for them to finish their current turn.',
+        vi: 'Mỗi việc có tab Thảo luận riêng, chỉ hiện trao đổi của ê-kíp về đúng việc đó (kể cả việc con). Nhắc @ai đó ở đây hoặc trong bình luận là người đó thức dậy và trả lời ngay tại chỗ; một dòng biên nhận nhỏ cho biết tin đã tới hay đang chờ họ xong lượt hiện tại.',
+      },
+      {
+        kind: 'added',
+        en: 'The lead can open a second (up to a fourth) copy of the same member — say “Dev 2” for the backend while “Dev” does the frontend — when independent work would otherwise queue up.',
+        vi: 'Trưởng nhóm có thể mở thêm bản thứ hai (tối đa bốn) của cùng một thành viên — ví dụ “Dev 2” lo backend trong khi “Dev” làm frontend — khi các việc độc lập sẽ phải xếp hàng chờ nhau.',
+      },
+      {
+        kind: 'improved',
+        en: 'Each member now runs on a model matched to the item: the cheapest model that is strong enough for its size and urgency. Quick channel replies use the lightest model, so a chatty team costs much less. A new “Optimize model” button in an item’s Advanced tab applies the same choice by hand.',
+        vi: 'Mỗi thành viên nay chạy trên model hợp với việc được giao: model rẻ nhất mà vẫn đủ sức cho độ lớn và độ gấp của việc. Các câu trả lời nhanh trên kênh dùng model nhẹ nhất, nên ê-kíp trao đổi nhiều cũng tốn ít hơn hẳn. Nút “Tối ưu model” mới trong tab Nâng cao của việc áp cùng lựa chọn đó bằng tay.',
+      },
+      {
+        kind: 'improved',
+        en: '@mentions in messages become clickable chips that open the member’s details, and a typing bubble shows who is currently writing a reply.',
+        vi: '@nhắc tên trong tin nhắn trở thành chip bấm được để mở thông tin thành viên, và một bong bóng “đang soạn” cho biết ai đang viết trả lời.',
+      },
+      {
+        kind: 'added',
+        en: 'On the Teams page, AI can rewrite a team’s instructions from a short request; you review the result before saving.',
+        vi: 'Trên trang Teams, AI có thể viết lại phần chỉ dẫn của ê-kíp từ một yêu cầu ngắn; bạn duyệt kết quả trước khi lưu.',
+      },
+      {
+        kind: 'fixed',
+        en: 'A session whose conversation grows too long now compacts itself and retries instead of failing for good — important for team leads and members nobody has open.',
+        vi: 'Phiên có cuộc hội thoại quá dài nay tự thu gọn rồi thử lại thay vì hỏng hẳn — quan trọng với trưởng nhóm và thành viên không ai mở xem.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Teammates woken from the channel now reply on the channel instead of only in their own transcript, so you can see the answer.',
+        vi: 'Thành viên được đánh thức từ kênh nay trả lời ngay trên kênh thay vì chỉ trong transcript riêng, nên bạn thấy được câu trả lời.',
+      },
+      {
+        kind: 'fixed',
+        en: 'PDF and HTML previews fill the whole preview window again instead of showing as a small box in the corner.',
+        vi: 'Xem trước PDF và HTML lại lấp đầy cửa sổ xem trước thay vì hiện thành một ô nhỏ ở góc.',
+      },
+    ],
+  },
+  {
     version: '0.40.0',
     date: '2026-10-03',
     highlight: {
