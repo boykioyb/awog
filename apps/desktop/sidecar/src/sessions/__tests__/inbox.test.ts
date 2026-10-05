@@ -32,6 +32,8 @@ interface Summary {
 let summaries: Summary[] = []
 let running: string[] = []
 
+const emitted: { type: string; payload: unknown }[] = []
+
 vi.mock('../store.js', () => ({
   listSessionSummaries: async () => summaries,
 }))
@@ -39,7 +41,9 @@ vi.mock('../runner.js', () => ({
   activeSessionIds: () => running,
 }))
 vi.mock('../../transport/stdio.js', () => ({
-  emit: () => {},
+  emit: (type: string, payload: unknown) => {
+    emitted.push({ type, payload })
+  },
 }))
 
 const { InboxError, listRunMembers, listSessionContacts, postSessionMessage } = await import(
@@ -75,6 +79,7 @@ function freshId(): string {
 beforeEach(() => {
   summaries = [session(SENDER)]
   running = []
+  emitted.length = 0
 })
 
 afterEach(() => {
@@ -124,6 +129,34 @@ describe('postSessionMessage — đích phải nằm trong danh bạ (tin của 
     const id = freshId()
     summaries.push(session(id))
     await expect(send(id)).resolves.toMatchObject({ to: id })
+  })
+})
+
+// Cờ `comm` đi xuyên post → message → event payload: wake từ kênh ê-kíp được
+// đánh dấu để renderer forward sang sendMessage.comm → sidecar kẹp model rẻ +
+// effort thấp cho đúng lượt trả lời (không đụng cấu hình persistent).
+describe('postSessionMessage — cờ comm', () => {
+  it('comm:true lọt vào message + payload session.inbox-message', async () => {
+    const id = freshId()
+    summaries.push(session(id))
+    const msg = await postSessionMessage({
+      from: SENDER,
+      to: id,
+      text: '@bạn trả lời nhanh cái này',
+      comm: true,
+    })
+    expect(msg.comm).toBe(true)
+    const evt = emitted.find((e) => e.type === 'session.inbox-message')
+    expect(evt?.payload).toMatchObject({ sessionId: id, comm: true })
+  })
+
+  it('tin thường (giao việc) KHÔNG mang comm — chạy cấu hình đầy đủ', async () => {
+    const id = freshId()
+    summaries.push(session(id))
+    const msg = await postSessionMessage({ from: SENDER, to: id, text: 'việc mới' })
+    expect(msg.comm).toBeUndefined()
+    const evt = emitted.find((e) => e.type === 'session.inbox-message')
+    expect(evt?.payload).not.toMatchObject({ comm: true })
   })
 })
 

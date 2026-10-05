@@ -12,7 +12,21 @@
     </button>
     <Collapse :open="open">
       <div class="wsed-advbody">
-        <p class="wsed-advhint">{{ t('board.adv.hint') }}</p>
+        <div class="wsed-advbar">
+          <p class="wsed-advhint">{{ t('board.adv.hint') }}</p>
+          <!-- Tối ưu một chạm: chấm độ phức tạp của item → chọn model RẺ NHẤT
+               đủ nấc cho từng slot + effort tương ứng (ghi thẳng vào map
+               override — user vẫn chỉnh tay được sau đó). -->
+          <button
+            type="button"
+            class="wsed-advopt"
+            :title="t('board.adv.optimizeTitle')"
+            @click="optimize"
+          >
+            <Sparkles class="size-3" />
+            {{ t('board.adv.optimize') }}
+          </button>
+        </div>
         <div v-for="row in rows" :key="row.key" class="wsed-advrow">
           <div class="wsed-advhead">
             <span class="wsed-advname">{{ row.label }}</span>
@@ -96,7 +110,7 @@
 // "đổi account khi hết token". Member chưa spawn nhận override lúc
 // materialize (sidecar tra lại item.assigneeConfig).
 import { computed, ref, watch } from 'vue'
-import { ChevronDown, RotateCcw, SlidersHorizontal } from 'lucide-vue-next'
+import { ChevronDown, RotateCcw, SlidersHorizontal, Sparkles } from 'lucide-vue-next'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import Collapse from '~/components/common/Collapse.vue'
 import { useAccounts } from '~/composables/useAccounts'
@@ -113,6 +127,7 @@ import { useBoardStore, type BoardItem } from '~/stores/board'
 import { useSessionsStore } from '~/stores/sessions'
 import { useSettingsStore } from '~/stores/settings'
 import { useTeamsStore } from '~/stores/teams'
+import { useToast } from '~/composables/useToast'
 import type { ProviderName } from '~/types'
 
 const props = defineProps<{
@@ -126,6 +141,10 @@ const props = defineProps<{
   // assignee là 'member:<runId|title>' hoặc một phiên sống thuộc run ngoài).
   lead?: Session | undefined
   members: Session[]
+  // Tín hiệu chấm độ phức tạp cho nút "tối ưu" — create mode item=null nên
+  // editor truyền giá trị form hiện tại; edit mode đọc được từ item nên
+  // truyền hay không đều đúng.
+  signals?: { type?: string; priority?: string; severity?: string; desc?: string }
 }>()
 
 const { t } = useI18n()
@@ -134,6 +153,7 @@ const teamsStore = useTeamsStore()
 const sessionsStore = useSessionsStore()
 const settingsStore = useSettingsStore()
 const board = useBoardStore()
+const toast = useToast()
 // useAccounts tự hydrate providers/accounts từ sidecar — cần cho option
 // account/model khi editor mở mà Settings chưa từng mount.
 const { accountById } = useAccounts()
@@ -170,7 +190,9 @@ const runRoot = computed(() => {
     const s = sessionsStore.sessions.find((x) => x.engineId === a)
     if (s) {
       if (s.teamRunId) return s.teamRunId
-      if (sessionsStore.sessions.some((m) => m.teamRunId === a)) return a
+      // Gốc run spec (teams.run) nhận diện qua `teamId` ngay cả khi chưa có
+      // member — mirror `runRootId` của sidecar / runRoot của editor.
+      if (s.teamId || sessionsStore.sessions.some((m) => m.teamRunId === a)) return a
     }
   }
   return ''
@@ -439,6 +461,77 @@ const modeOpts: AppSelectOption[] = [
   ...MODE_KEYS.map(([v, k]) => ({ value: v, label: t(`sessions.mode.${k}`) })),
 ]
 
+// ── "Tối ưu model" — heuristic deterministic, KHÔNG gọi LLM: chấm độ phức
+// tạp của item (0 nhẹ / 1 thường / 2 nặng) rồi chọn model có tier THẤP NHẤT
+// đủ nấc trong catalog hiệu dụng của từng slot ("rẻ nhất mà đủ"), kèm effort
+// tương ứng. Provider/account giữ nguyên — tối ưu trong nhà provider đang có,
+// không nhảy provider vì account của user chỉ gắn một nhà.
+
+// Tier của một model id theo heuristic chuỗi — catalog không mang giá nên
+// phân loại theo tên dòng: haiku/flash/mini = rẻ nhanh; opus/pro/o3 = đầu
+// bảng; còn lại = tầm giữa. Biên ký tự bắt buộc để "gemini" không ăn 'mini'.
+function modelTier(id: string): 0 | 1 | 2 {
+  const s = id.toLowerCase()
+  if (/(^|[^a-z])(haiku|flash|mini|nano|lite)([^a-z]|$)/.test(s)) return 0
+  if (/opus|ultra|-pro|o3|o4(?!-mini)|codex-max/.test(s)) return 2
+  return 1
+}
+
+// Độ phức tạp của item — cộng tín hiệu khuôn Jira: story/epic nặng nề, bug
+// nặng qua severity, ưu tiên cao đáng được model khỏe, brief dài = phạm vi
+// lớn; subtask nhẹ hơn một bậc. Kẹp 0..2.
+const complexity = computed<0 | 1 | 2>(() => {
+  const sig = props.signals
+  const it = props.item
+  const type = sig?.type ?? it?.type ?? 'task'
+  const sev = sig?.severity ?? it?.severity ?? ''
+  const prio = sig?.priority ?? it?.priority ?? ''
+  const descLen = (sig?.desc ?? it?.desc ?? '').length
+  let s = 0
+  if (type === 'epic' || type === 'story') s++
+  if (sev === 'blocker' || sev === 'major') s++
+  if (prio === 'urgent' || prio === 'high') s++
+  if (descLen > 600) s++
+  if (type === 'subtask') s--
+  return s <= 0 ? 0 : s >= 2 ? 2 : 1
+})
+
+const EFFORT_OF_TIER = ['low', 'medium', 'high'] as const
+
+function optimize(): void {
+  const base = complexity.value
+  const summary: string[] = []
+  for (const row of rows.value) {
+    // Lead điều phối không được xuống dưới tầm giữa — orchestrator rẻ là
+    // orchestrator đần (đọc diff, chia việc, review đều cần suy luận).
+    const target = (row.role === 'lead' ? Math.max(1, base) : base) as 0 | 1 | 2
+    const ids = modelOpts(row)
+      .map((o) => o.value)
+      .filter((v): v is string => !!v)
+    if (!ids.length) continue
+    const tiers = ids.map((id) => ({ id, tier: modelTier(id) }))
+    const fit = tiers.filter((m) => m.tier >= target).sort((a, b) => a.tier - b.tier)
+    const best = fit[0] ?? [...tiers].sort((a, b) => b.tier - a.tier)[0]
+    if (!best) continue
+    const pick = best.id
+    const cur = entry(row.key)
+    if (cur.modelId === pick && cur.level === EFFORT_OF_TIER[target]) continue
+    const next = { ...cfg.value }
+    next[row.key] = { ...cur, modelId: pick, level: EFFORT_OF_TIER[target] }
+    cfg.value = next
+    summary.push(`${row.label} → ${providerModelDisplayName(pick)}`)
+  }
+  if (summary.length) {
+    toast.add({
+      title: t('board.adv.optimizeDone', { n: summary.length }),
+      description: summary.join(' · '),
+      color: 'success',
+    })
+  } else {
+    toast.add({ title: t('board.adv.optimizeSame') })
+  }
+}
+
 // Map đã lọc theo slot của assignee HIỆN TẠI — key lạc hậu (đổi team khác,
 // member đổi tên) không ghi xuống item. null = gỡ hẳn assigneeConfig.
 function configForSave(): Record<string, SessionLlmOverride> | null {
@@ -523,10 +616,33 @@ defineExpose({ configForSave, applyLive })
   gap: 8px;
   padding: 0 10px 10px;
 }
+.wsed-advbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
 .wsed-advhint {
+  flex: 1;
   font-size: 11px;
   line-height: 1.45;
   color: var(--textFaint);
+}
+.wsed-advopt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 3px 9px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--accent);
+  border: 1px solid var(--accentDim);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wsed-advopt:hover {
+  background: var(--accent-wash);
 }
 .wsed-advrow {
   border: 1px solid var(--border);

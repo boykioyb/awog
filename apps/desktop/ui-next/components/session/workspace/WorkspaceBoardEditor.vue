@@ -2,8 +2,8 @@
   <Teleport to="body">
     <div class="ovl on wsed-ovl" @click.self="emit('close')">
       <div
-        class="wsed flex max-h-[86vh] w-[880px] max-w-[94vw] flex-col rounded-xl border border-border bg-popover"
-        :class="{ full: edFull }"
+        class="wsed flex w-[1120px] max-w-[94vw] flex-col rounded-xl border border-border bg-popover"
+        :class="{ full: edFull, 'h-[86vh]': !!item, 'max-h-[86vh]': !item }"
         role="dialog"
         aria-modal="true"
         @click.stop
@@ -22,8 +22,9 @@
             {{ item ? item.title : t('sessions.workspace.group.newItem') }}
           </span>
           <!-- Roster ê-kíp → một dropdown duy nhất (thay wall pill cũ). Bấm
-               member mở peek ngay trong modal, không nhảy sang tab Sessions. -->
-          <DropdownMenu v-if="item && roster.length">
+               member mở peek ngay trong modal, không nhảy sang tab Sessions.
+               Mở dropdown là refresh usage rollup (lượt + token) của roster. -->
+          <DropdownMenu v-if="item && roster.length" @update:open="onRosterOpen">
             <DropdownMenuTrigger as-child>
               <button
                 type="button"
@@ -44,8 +45,19 @@
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-[300px]">
-              <DropdownMenuLabel class="text-[10px] font-semibold uppercase tracking-wide text-dim">
-                {{ t('sessions.workspace.group.roster') }} · {{ roster.length }}
+              <DropdownMenuLabel
+                class="flex items-center justify-between gap-3 text-[10px] font-semibold uppercase tracking-wide text-dim"
+              >
+                <span>{{ t('sessions.workspace.group.roster') }} · {{ roster.length }}</span>
+                <!-- Tổng token cả ê-kíp — rollup lũy kế các phiên member,
+                     nạp khi mở dropdown (memberStats). -->
+                <span
+                  v-if="rosterTotals.tokens"
+                  class="normal-case tracking-normal text-faint"
+                  :title="t('board.rosterTotals', { n: rosterTotals.turns })"
+                >
+                  {{ formatTokenCount(rosterTotals.tokens) }} tok
+                </span>
               </DropdownMenuLabel>
               <div class="max-h-[280px] overflow-y-auto">
                 <DropdownMenuItem
@@ -60,7 +72,18 @@
                   >
                     {{ initial(m.title) }}
                   </span>
-                  <span class="min-w-0 flex-1 truncate text-xs text-foreground">{{ m.title }}</span>
+                  <span class="min-w-0 flex-1">
+                    <span class="block truncate text-xs text-foreground">{{ m.title }}</span>
+                    <!-- Rollup lũy kế của phiên member (sessions.costBreakdown):
+                         số lượt đã chạy + tổng token. Chưa có lượt nào → giấu. -->
+                    <span
+                      v-if="m.engineId && memberStats[m.engineId]?.turns"
+                      class="block truncate text-[10px] leading-4 text-faint"
+                    >
+                      {{ t('board.member.turns', { n: memberStats[m.engineId]!.turns }) }} ·
+                      {{ formatTokenCount(memberStats[m.engineId]!.tokens) }} tok
+                    </span>
+                  </span>
                   <Crown v-if="m.engineId === runRoot" class="size-3 shrink-0 text-warning" />
                   <component
                     :is="statusIcon(m.status)"
@@ -110,18 +133,42 @@
           </Button>
         </div>
 
+        <!-- Breadcrumb cha — chỉ khi item là việc con: chuỗi tổ tiên (mỗi mắt
+             click được) kết thúc bằng item hiện tại. Nhảy về cha trực tiếp
+             không cần đóng modal tìm lại trên board. -->
+        <div
+          v-if="item && parentChain.length"
+          class="flex min-w-0 items-center gap-1 border-b border-dashed border-border px-4 py-1.5"
+        >
+          <ArrowLeft class="size-3 shrink-0 text-faint" />
+          <template v-for="p in parentChain" :key="p.id">
+            <button
+              type="button"
+              class="flex min-w-0 items-center gap-1 text-[11px] text-dim transition-colors hover:text-primary"
+              :title="`${t('board.parentUp')} — ${p.title}`"
+              @click="emit('openItem', p.id)"
+            >
+              <component
+                :is="typeIconOf(p)"
+                class="size-3 shrink-0"
+                :data-type="p.type ?? 'task'"
+              />
+              <span class="truncate">{{ p.title }}</span>
+            </button>
+            <ChevronRight class="size-3 shrink-0 text-faint" />
+          </template>
+          <span class="min-w-0 truncate text-[11px] font-medium text-foreground">
+            {{ item.title }}
+          </span>
+        </div>
+
         <!-- Tab bar — chỉ mode SỬA: Trao đổi (thread) đứng ĐẦU vì thread là bề
-             mặt làm việc chính của item; General (form+props) là metadata. -->
+             mặt làm việc chính của item; General (form+props) là metadata.
+             Kênh ê-kíp của run đã trộn vào chính feed Trao đổi nên không còn
+             tab Nhóm riêng. -->
         <div v-if="item" class="flex gap-1 border-b border-border px-4 pt-2">
           <button
-            v-for="tb in [
-              {
-                k: 'chat',
-                label: `${t('sessions.workspace.group.tabChat')} · ${(item.comments ?? []).length}`,
-              },
-              { k: 'media', label: t('sessions.workspace.group.tabMedia') },
-              { k: 'gen', label: t('sessions.workspace.group.tabGeneral') },
-            ]"
+            v-for="tb in tabs"
             :key="tb.k"
             type="button"
             class="rounded-t-md px-3.5 py-1.5 text-xs transition-colors"
@@ -139,77 +186,140 @@
         <div class="wsed-main" :class="{ 'wsed-main-rel': item }">
           <!-- ═══ EDIT MODE ═══ -->
           <template v-if="item">
-            <!-- Tab GENERAL: form + props một cột, không sidebar. -->
-            <div v-if="tab === 'gen'" class="flex min-h-0 flex-col gap-3 overflow-y-auto px-4 py-4">
-              <Input
-                ref="titleEl"
-                v-model="title"
-                class="font-medium"
-                :placeholder="t('sessions.workspace.group.field.title')"
-                maxlength="200"
-                @keydown.enter="save(false)"
-              />
-              <Textarea
-                v-model="desc"
-                class="min-h-[120px] resize-y"
-                rows="8"
-                :placeholder="t('sessions.workspace.group.field.desc')"
-              />
-              <div class="grid grid-cols-3 gap-2.5">
-                <div class="flex min-w-0 flex-col gap-1">
-                  <span class="text-xs text-muted-foreground">
-                    {{ t('sessions.workspace.group.field.status') }}
-                  </span>
-                  <AppSelect v-model="status" :options="statusOpts" width="100%" />
-                </div>
-                <div class="flex min-w-0 flex-col gap-1">
-                  <span class="text-xs text-muted-foreground">
-                    {{ t('sessions.workspace.group.field.assignee') }}
-                  </span>
-                  <AppSelect v-model="assignee" :options="assigneeOpts" width="100%" />
-                </div>
-                <div class="flex min-w-0 flex-col gap-1">
-                  <span class="text-xs text-muted-foreground">
-                    {{ t('sessions.workspace.group.fieldStage') }}
-                  </span>
+            <!-- Tab GENERAL — layout 9/3: cột trái nội dung (title, mô tả, việc
+                 con, meta), cột phải xếp dọc toàn bộ selectbox thuộc tính
+                 (trạng thái, giao, giai đoạn, loại, ưu tiên, mức độ, cha) +
+                 Advanced. flex-1 lấp đầy chiều cao modal cố định. -->
+            <div
+              v-if="tab === 'gen'"
+              class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-4"
+            >
+              <div class="wsed-gen grid grid-cols-12 gap-4">
+                <div class="col-span-9 flex min-w-0 flex-col gap-3">
                   <Input
-                    v-model="stageText"
-                    type="number"
-                    min="0"
-                    step="1"
-                    class="px-2"
-                    placeholder="—"
+                    ref="titleEl"
+                    v-model="title"
+                    class="font-medium"
+                    :placeholder="t('sessions.workspace.group.field.title')"
+                    maxlength="200"
+                    @keydown.enter="save(false)"
                   />
+                  <Textarea
+                    v-model="desc"
+                    class="min-h-[120px] flex-1 resize-y"
+                    rows="8"
+                    :placeholder="t('sessions.workspace.group.field.desc')"
+                  />
+                  <!-- Việc con của item (khuôn sub-issue): icon type + status +
+                       title — click nhảy sang editor của item con. -->
+                  <div v-if="childItems.length" class="flex flex-col gap-1.5">
+                    <span class="text-xs text-muted-foreground">
+                      {{ t('board.children') }} · {{ childItems.length }}
+                    </span>
+                    <button
+                      v-for="c in childItems"
+                      :key="c.id"
+                      type="button"
+                      class="flex min-w-0 items-center gap-2 rounded-md border border-border px-2.5 py-1.5 text-left transition-colors hover:bg-accent-wash"
+                      @click="emit('openItem', c.id)"
+                    >
+                      <component
+                        :is="typeIconOf(c)"
+                        class="size-3.5 shrink-0"
+                        :data-type="c.type ?? 'task'"
+                      />
+                      <span class="min-w-0 flex-1 truncate text-xs">{{ c.title }}</span>
+                      <span class="shrink-0 text-[10px] text-dim">
+                        {{ statusLabel(c.status) }}
+                      </span>
+                    </button>
+                  </div>
+                  <!-- Advanced — override LLM per-slot (collapse mặc định):
+                       nằm cột trái cho rộng, không nén vào sidebar props. -->
+                  <WorkspaceBoardAdvConfig
+                    ref="advRef"
+                    :assignee="assignee"
+                    :project-id="projectSel"
+                    :item="item"
+                    :lead="lead"
+                    :members="scopedMembers"
+                    :signals="advSignals"
+                  />
+                  <div
+                    class="mt-auto flex flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-dashed border-border pt-2.5 text-[11px] text-faint"
+                  >
+                    <span>
+                      {{ t('sessions.workspace.group.detailProject') }}:
+                      <span class="text-dim">{{ projectName(item.projectId) }}</span>
+                    </span>
+                    <span v-if="item.mergedBranch" class="min-w-0 truncate">
+                      {{ t('sessions.workspace.group.detailBranch') }}:
+                      <span class="font-mono text-dim">{{ item.mergedBranch }}</span>
+                    </span>
+                    <span>
+                      {{ t('sessions.workspace.group.detailCreated') }}:
+                      <span class="text-dim">{{ fmtAt(item.createdAt) }}</span>
+                    </span>
+                    <span>
+                      {{ t('sessions.workspace.group.detailUpdated') }}:
+                      <span class="text-dim">{{ fmtAt(item.updatedAt) }}</span>
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <!-- Advanced — override LLM per-slot (collapse mặc định). -->
-              <WorkspaceBoardAdvConfig
-                ref="advRef"
-                :assignee="assignee"
-                :project-id="projectSel"
-                :item="item"
-                :lead="lead"
-                :members="scopedMembers"
-              />
-              <div
-                class="flex flex-wrap items-center gap-x-4 gap-y-0.5 border-t border-dashed border-border pt-2.5 text-[11px] text-faint"
-              >
-                <span>
-                  {{ t('sessions.workspace.group.detailProject') }}:
-                  <span class="text-dim">{{ projectName(item.projectId) }}</span>
-                </span>
-                <span v-if="item.mergedBranch" class="min-w-0 truncate">
-                  {{ t('sessions.workspace.group.detailBranch') }}:
-                  <span class="font-mono text-dim">{{ item.mergedBranch }}</span>
-                </span>
-                <span>
-                  {{ t('sessions.workspace.group.detailCreated') }}:
-                  <span class="text-dim">{{ fmtAt(item.createdAt) }}</span>
-                </span>
-                <span>
-                  {{ t('sessions.workspace.group.detailUpdated') }}:
-                  <span class="text-dim">{{ fmtAt(item.updatedAt) }}</span>
-                </span>
+                <!-- Sidebar phải: toàn bộ selectbox thuộc tính xếp dọc. -->
+                <div class="col-span-3 flex min-w-0 flex-col gap-2.5">
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">
+                      {{ t('sessions.workspace.group.field.status') }}
+                    </span>
+                    <AppSelect v-model="status" :options="statusOpts" width="100%" />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">
+                      {{ t('sessions.workspace.group.field.assignee') }}
+                    </span>
+                    <AppSelect v-model="assignee" :options="assigneeOpts" width="100%" />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">
+                      {{ t('sessions.workspace.group.fieldStage') }}
+                    </span>
+                    <Input
+                      v-model="stageText"
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="px-2"
+                      placeholder="—"
+                    />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">{{ t('board.field.type') }}</span>
+                    <AppSelect v-model="itemType" :options="typeOpts" width="100%" />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">
+                      {{ t('board.field.priority') }}
+                    </span>
+                    <AppSelect v-model="priority" :options="prioOpts" width="100%" />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">
+                      {{ t('board.field.severity') }}
+                    </span>
+                    <AppSelect v-model="severity" :options="sevOpts" width="100%" />
+                  </div>
+                  <div class="flex min-w-0 flex-col gap-1">
+                    <span class="text-xs text-muted-foreground">{{ t('board.field.parent') }}</span>
+                    <AppSelect
+                      v-model="parentId"
+                      :options="parentOpts"
+                      searchable
+                      :empty-label="t('board.parent.none')"
+                      width="100%"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
             <!-- Tab MEDIA: Media · links · docs của item — cùng section của tab
@@ -218,14 +328,24 @@
             <div v-else-if="tab === 'media'" class="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
               <WorkspaceInfoMedia :session="mediaSession" />
             </div>
-            <!-- Tab TRAO ĐỔI: thread messenger của item. -->
+            <!-- Tab DISCUSS: trao đổi nội bộ của ê-kíp VỀ đúng item này —
+                 entry channel được tag itemId (member↔member bàn scope, lead
+                 trả việc/eval của riêng item); cùng khuôn messenger của tab
+                 Comment, composer broadcast tới cả nhóm và tự gắn tag item. -->
+            <WorkspaceChannelThread
+              v-else-if="tab === 'discuss' && runRoot"
+              :project-id="item.projectId"
+              :root-id="runRoot"
+              :roster="roster"
+              :item-id="item.id"
+            />
+            <!-- Tab COMMENT: thread messenger của item — chỉ comment của item. -->
             <WorkspaceBoardThread
               v-else
               :project-id="item.projectId"
               :item-id="item.id"
               :comments="item.comments ?? []"
               :assignee-session-id="item.assigneeSessionId ?? undefined"
-              @peek="(sid) => (peekId = sid)"
             />
             <!-- Drawer chi tiết agent — trượt trong modal; `full` bung ra toàn
                  màn (fixed) để đọc transcript dài. -->
@@ -240,8 +360,9 @@
           <!-- ═══ CREATE MODE ═══ -->
           <div v-else class="flex min-h-0 flex-col gap-3 overflow-y-auto px-4 py-4">
             <!-- Toggle tạo thủ công / giao cho agent — chỉ có ở mode TẠO.
-                 'agent' = item todo + assignee bắt buộc + tin giao việc vào
-                 inbox của phiên đích khi Lưu. -->
+                 'agent' = assignee spec bắt buộc; mặc định đỗ item vào backlog
+                 (spec chờ, không spawn), nút "Giao việc" phụ mới dispatch:
+                 item todo + tin giao việc vào inbox của phiên đích khi Lưu. -->
             <Tabs
               v-if="!item"
               :model-value="mode"
@@ -281,7 +402,7 @@
               @add-att="att.addAtt"
               @add-files="att.addFiles"
               @remove-att="att.removeAtt"
-              @submit="save(false)"
+              @submit="save(true)"
             />
             <template v-else>
               <!-- AI strip — chỉ mode tạo manual: brief → boards.draft điền
@@ -331,7 +452,8 @@
             </template>
 
             <!-- Props của create mode — cùng lưới 3 cột của tab General; agent
-                 mode giấu status/stage (dispatch luôn todo, stage do lead xếp). -->
+                 mode giấu status/stage (tạo mặc định vào backlog — chỉ nhịp
+                 dispatch mới đặt todo; stage do lead xếp). -->
             <div class="grid grid-cols-3 gap-2.5">
               <div v-if="pickProject" class="flex min-w-0 flex-col gap-1">
                 <span class="text-xs text-muted-foreground">
@@ -367,6 +489,33 @@
               </div>
             </div>
 
+            <!-- Khuôn Jira — tạo mới cũng đặt được loại/ưu tiên/mức độ/cha
+                 (epic do user khai, subtask gắn vào cha ngay từ đầu). -->
+            <div class="grid grid-cols-4 gap-2.5">
+              <div class="flex min-w-0 flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('board.field.type') }}</span>
+                <AppSelect v-model="itemType" :options="typeOpts" width="100%" />
+              </div>
+              <div class="flex min-w-0 flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('board.field.priority') }}</span>
+                <AppSelect v-model="priority" :options="prioOpts" width="100%" />
+              </div>
+              <div class="flex min-w-0 flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('board.field.severity') }}</span>
+                <AppSelect v-model="severity" :options="sevOpts" width="100%" />
+              </div>
+              <div class="flex min-w-0 flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('board.field.parent') }}</span>
+                <AppSelect
+                  v-model="parentId"
+                  :options="parentOpts"
+                  searchable
+                  :empty-label="t('board.parent.none')"
+                  width="100%"
+                />
+              </div>
+            </div>
+
             <!-- Advanced — override LLM per-slot (collapse mặc định). -->
             <WorkspaceBoardAdvConfig
               ref="advRef"
@@ -375,6 +524,7 @@
               :item="item"
               :lead="lead"
               :members="scopedMembers"
+              :signals="advSignals"
             />
           </div>
           <!-- File picker ẩn cho menu `+` của composer brief (agent mode). -->
@@ -396,23 +546,24 @@
           <Button variant="outline" size="sm" :disabled="busy" @click="emit('close')">
             {{ t('common.cancel') }}
           </Button>
-          <!-- Agent mode: hai nhịp — xếp backlog (giữ spec ref, spawn khi bốc)
-               hay giao việc ngay (materialize → item todo + inbox). -->
+          <!-- Agent mode: hai nhịp — CHÍNH = xếp backlog (giữ spec ref, spawn
+               khi item được bốc khỏi backlog — tạo issue luôn rẻ, không tốn
+               token), phụ = giao việc ngay (materialize → item todo + inbox). -->
           <Button
             v-if="!item && mode === 'agent'"
             variant="outline"
             size="sm"
             :disabled="busy || !canSave"
-            @click="save(true)"
+            @click="save(false)"
           >
-            {{ t('board.agent.backlog') }}
+            {{ t('board.agent.submit') }}
           </Button>
-          <Button size="sm" :disabled="busy || !canSave" @click="save(false)">
+          <Button size="sm" :disabled="busy || !canSave" @click="save(!item && mode === 'agent')">
             {{
               item
                 ? t('common.save')
                 : mode === 'agent'
-                  ? t('board.agent.submit')
+                  ? t('board.agent.backlog')
                   : t('common.create')
             }}
           </Button>
@@ -430,18 +581,25 @@
 // sự kiện giao/nhận việc ở giữa). Save gom các field thành một `boards.upsert`;
 // comment post NGAY qua `boards.comment`. Mode tạo giữ layout một cột.
 import {
+  ArrowLeft,
+  BookOpen,
+  Bug,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
   CircleCheck,
   CircleDashed,
+  CornerDownRight,
   Crown,
   Download,
   Hourglass,
+  Layers,
   LoaderCircle,
   Maximize2,
   Minimize2,
   RefreshCw,
   Sparkles,
+  SquareCheck,
   Users,
   X,
 } from 'lucide-vue-next'
@@ -456,6 +614,7 @@ import { useComposerAttachments } from '~/composables/useComposerAttachments'
 import { useBoardAtts } from '~/composables/useBoardAtts'
 import { useSidecar, sidecarErrorText } from '~/composables/useSidecar'
 import { useToast } from '~/composables/useToast'
+import { provideMemberPeek } from '~/composables/useMemberPeek'
 import { isAuthError } from '~/utils/auth-error'
 import { exportSlug, saveTextFile } from '~/utils/export'
 import { ghRefFromText, ghRefTitle, stripGhLinks } from '~/utils/gh-ref'
@@ -466,7 +625,10 @@ import {
   isSpecAssignee,
   useBoardStore,
   type BoardItem,
+  type BoardItemPriority,
+  type BoardItemSeverity,
   type BoardItemStatus,
+  type BoardItemType,
 } from '~/stores/board'
 import { useProjectsStore } from '~/stores/projects'
 import { useTeamsStore } from '~/stores/teams'
@@ -479,12 +641,14 @@ import type {
   SessionStatus,
 } from '~/composables/useSessionsData'
 import { boardCommentToMessage } from '~/utils/board-comment-message'
+import { formatTokenCount } from '~/utils/context-window'
 import { provideFilePreview } from '~/composables/useFilePreview'
 import { avatarHue, nameInitial } from '~/utils/avatar-hue'
 import WorkspaceBoardComposer from './WorkspaceBoardComposer.vue'
 import WorkspaceBoardAdvConfig from './WorkspaceBoardAdvConfig.vue'
 import WorkspaceInfoMedia from './WorkspaceInfoMedia.vue'
 import WorkspaceBoardThread from './WorkspaceBoardThread.vue'
+import WorkspaceChannelThread from './WorkspaceChannelThread.vue'
 import WorkspaceAgentPeek from './WorkspaceAgentPeek.vue'
 import DropdownMenu from '~/components/ui/dropdown-menu/DropdownMenu.vue'
 import DropdownMenuTrigger from '~/components/ui/dropdown-menu/DropdownMenuTrigger.vue'
@@ -508,7 +672,7 @@ const props = withDefaults(
   }>(),
   { lead: undefined, pickProject: false },
 )
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; openItem: [id: string] }>()
 
 const { t } = useI18n()
 const board = useBoardStore()
@@ -553,16 +717,55 @@ const status = ref<BoardItemStatus>(props.item?.status ?? 'backlog')
 const assignee = ref<string>(props.item?.assigneeSessionId ?? props.item?.assigneeRef ?? '')
 // Stage là số nguyên ≥0 hoặc trống (= null ⇒ item không thuộc đợt nào).
 const stageText = ref<string>(props.item?.stage != null ? String(props.item.stage) : '')
+// Khuôn Jira: loại việc (mặc định 'task'), ưu tiên ('' = không đặt — đọc như
+// medium khi filter), mức độ ('' = không đặt), và item CHA của cây sub-issue
+// ('' = cấp trên). parentId null khi save = gỡ khỏi cha.
+const itemType = ref<BoardItemType>(props.item?.type ?? 'task')
+const priority = ref<BoardItemPriority | ''>(props.item?.priority ?? '')
+const severity = ref<BoardItemSeverity | ''>(props.item?.severity ?? '')
+// Tín hiệu cho nút "tối ưu model" của Advanced — create mode item=null nên
+// chấm từ giá trị form đang gõ; edit mode refs đã hydrate từ item nên cùng
+// một nguồn sự thật.
+const advSignals = computed(() => ({
+  type: itemType.value,
+  priority: priority.value,
+  severity: severity.value,
+  desc: desc.value,
+}))
+const parentId = ref<string>(props.item?.parentId ?? '')
 // Project đích — edit mode cố định theo item; create mode đổi được khi
 // pickProject (board unified không ngầm một project duy nhất).
 const projectSel = ref<string>(props.item?.projectId ?? props.projectId)
 
+// Điều hướng cha↔con (openItem) đổi props.item NHƯNG modal không remount —
+// hydrate lại toàn bộ draft kẻo form giữ dữ liệu của item trước.
+watch(
+  () => props.item?.id,
+  () => {
+    const it = props.item
+    title.value = it?.title ?? ''
+    desc.value = it?.desc ?? ''
+    status.value = it?.status ?? 'backlog'
+    assignee.value = it?.assigneeSessionId ?? it?.assigneeRef ?? ''
+    stageText.value = it?.stage != null ? String(it.stage) : ''
+    itemType.value = it?.type ?? 'task'
+    priority.value = it?.priority ?? ''
+    severity.value = it?.severity ?? ''
+    parentId.value = it?.parentId ?? ''
+    projectSel.value = it?.projectId ?? props.projectId
+    tab.value = 'chat'
+  },
+)
+
 // ── Roster ê-kíp của item (dropdown trên header) ──
-// Assignee trỏ vào một phiên: là root của run (lead) khi nó có member, hoặc
-// member — leo `teamRunId` lên root. Phiên lẻ, sentinel 'user' và trống ⇒
-// roster một người (chính assignee) hoặc rỗng.
+// Assignee trỏ vào một phiên: là root của run (lead) khi nó mang link spec
+// `teamId` HOẶC đã có member, hoặc member — leo `teamRunId` lên root. Phiên
+// lẻ, sentinel 'user' và trống ⇒ roster một người (chính assignee) hoặc rỗng.
+// `teamId` nhận diện gốc run spec TRƯỚC cả khi member đầu tiên materialize —
+// mirror `runRootId` phía sidecar (sessions/run-root.ts), kẻo item vừa giao
+// cho team mất luôn roster + bench options.
 // Mở item vào thẳng tab Trao đổi — hành vi trao đổi/tiến độ là nội dung chính.
-const tab = ref<'gen' | 'chat' | 'media'>('chat')
+const tab = ref<'gen' | 'chat' | 'discuss' | 'media'>('chat')
 
 const runRoot = computed(() => {
   const a = props.item?.assigneeSessionId
@@ -570,7 +773,7 @@ const runRoot = computed(() => {
   const s = sessionsStore.sessions.find((x) => x.engineId === a)
   if (!s) return ''
   if (s.teamRunId) return s.teamRunId
-  return sessionsStore.sessions.some((m) => m.teamRunId === a) ? a : ''
+  return s.teamId || sessionsStore.sessions.some((m) => m.teamRunId === a) ? a : ''
 })
 
 // ── Tab Media ────────────────────────────────────────────────────────────
@@ -670,9 +873,94 @@ const rosterLabel = computed(() => {
   const lead = roster.value[0]
   return runRoot.value && lead ? `${lead.title} · ${roster.value.length}` : (lead?.title ?? '')
 })
+// Usage rollup của từng phiên trong roster (sessions.costBreakdown: lượt đã
+// chạy + tổng token lũy kế). Nạp lười khi user MỞ dropdown roster — mỗi phiên
+// một đọc JSONL nên không gọi vô cớ; throttle 15s để mở-đóng nhanh không nạp
+// lại mà số vẫn tươi giữa các lần xem.
+const memberStats = ref<Record<string, { turns: number; tokens: number }>>({})
+let statsAt = 0
+async function refreshMemberStats(): Promise<void> {
+  const now = Date.now()
+  if (now - statsAt < 15_000) return
+  const ids = roster.value.map((m) => m.engineId).filter((x): x is string => !!x)
+  if (!ids.length) return
+  statsAt = now
+  const rows = await Promise.all(
+    ids.map(async (id) => {
+      try {
+        const r = await sc.request<{
+          total: { turns: number; totalTokens: number }
+        }>('sessions.costBreakdown', { sessionId: id })
+        return [id, { turns: r.total.turns, tokens: r.total.totalTokens }] as const
+      } catch {
+        return null // phiên lỗi/thiếu → giữ số cũ (hoặc không hiện dòng stats)
+      }
+    }),
+  )
+  const next: typeof memberStats.value = {}
+  for (const r of rows) if (r) next[r[0]] = r[1]
+  memberStats.value = next
+}
+function onRosterOpen(open: boolean): void {
+  if (open) void refreshMemberStats()
+}
+// Tổng lượt + token cả roster — hiện ở header dropdown khi đã có rollup của
+// ít nhất một phiên (member chưa chạy lượt nào góp 0, không cần chờ đủ cả).
+const rosterTotals = computed(() => {
+  let turns = 0
+  let tokens = 0
+  for (const s of Object.values(memberStats.value)) {
+    turns += s.turns
+    tokens += s.tokens
+  }
+  return { turns, tokens }
+})
+// Tab bar: Comment đứng đầu (thread của item); Discuss chỉ hiện khi item đang
+// trong tay một RUN — trao đổi nội bộ của ê-kíp VỀ đúng item này (badge đếm
+// entry trong scope tag — chính nó + cây con, thẻ chính lẫn phụ), tách khỏi
+// comment của user ↔ assignee.
+const tabs = computed(() => {
+  const list: { k: 'gen' | 'chat' | 'discuss' | 'media'; label: string }[] = [
+    {
+      k: 'chat',
+      label: `${t('sessions.workspace.group.tabChat')} · ${(props.item?.comments ?? []).length}`,
+    },
+  ]
+  if (runRoot.value && props.item) {
+    const item = props.item
+    const scope = board.itemTagScope(item.projectId, item.id)
+    const n = board
+      .channelFor(runRoot.value)
+      .filter((e) => board.entryInScope(e, scope, item.projectId, runRoot.value)).length
+    list.push({ k: 'discuss', label: `${t('sessions.workspace.group.discuss')} · ${n}` })
+  }
+  list.push(
+    { k: 'media', label: t('sessions.workspace.group.tabMedia') },
+    { k: 'gen', label: t('sessions.workspace.group.tabGeneral') },
+  )
+  return list
+})
 function peek(m: Session): void {
   if (m.engineId) peekId.value = m.engineId
 }
+// Bấm chip @mention trong thread → mở drawer phiên của member đó (chip do
+// SessionMarkdownHtml bọc). Handle đến dạng slug (composer chèn agentHandle)
+// hoặc title nguyên văn — khớp cả hai; không ai sống khớp thì báo nhẹ thay vì
+// im lặng nuốt click.
+provideMemberPeek((handle) => {
+  const h = handle.toLowerCase()
+  const slug = (s: string) => s.toLowerCase().replace(/\s+/g, '-')
+  const m = roster.value.find((s) => slug(s.title) === h || s.title.toLowerCase() === h)
+  if (m?.engineId) {
+    peekId.value = m.engineId
+    return
+  }
+  toast.add({
+    title: t('sessions.workspace.group.peek.noLive', { name: handle }),
+    color: 'info',
+    duration: 2500,
+  })
+})
 
 const initial = nameInitial
 const avatarColor = (m: Session): string => avatarHue(m.engineId ?? String(m.id))
@@ -687,8 +975,9 @@ const STATUS_ICONS: Record<SessionStatus, unknown> = {
 }
 const statusIcon = (st: SessionStatus | undefined): unknown => STATUS_ICONS[st ?? 'idle']
 
-// Mode TẠO: 'manual' = item thường; 'agent' = item todo + assignee bắt buộc +
-// tin giao việc vào inbox phiên đích khi Lưu (một modal, hai nhịp xài).
+// Mode TẠO: 'manual' = item thường; 'agent' = assignee spec bắt buộc, mặc định
+// xếp backlog (spec chờ), nút dispatch mới đặt todo + tin giao việc vào inbox
+// phiên đích khi Lưu (một modal, hai nhịp xài).
 // Agent mode: MỘT ô brief — agent được dispatch sẽ tự chuẩn hoá title/desc
 // của item (team_item_update). Title tạm = dòng đầu của brief.
 const brief = ref('')
@@ -726,9 +1015,9 @@ const aiBrief = ref('')
 const aiBusy = ref(false)
 watch(mode, (m) => {
   if (m === 'agent') {
-    if (status.value === 'backlog') status.value = 'todo'
     // Assignee của mode manual là sessionId — không hợp lệ ở agent mode,
-    // reset để user chọn spec (agent:<key> / team:<key>).
+    // reset để user chọn spec (agent:<key> / team:<key>). Status giữ nguyên:
+    // agent mode mặc định đỗ backlog, không còn ngầm dispatch.
     if (!assignee.value.startsWith('agent:') && !assignee.value.startsWith('team:')) {
       assignee.value = ''
     }
@@ -823,6 +1112,90 @@ const statusOpts = computed<AppSelectOption[]>(() =>
   STATUSES.map((s) => ({ value: s, label: statusLabel(s) })),
 )
 
+// Khuôn Jira — options cho type/priority/severity/cha. '' = "không đặt"
+// (priority/severity) và "cấp trên" (parent).
+const typeOpts = computed<AppSelectOption[]>(() =>
+  (['epic', 'story', 'task', 'subtask', 'bug'] as const).map((v) => ({
+    value: v,
+    label: t(`board.type.${v}`),
+  })),
+)
+const prioOpts = computed<AppSelectOption[]>(() => [
+  { value: '', label: t('board.prio.none') },
+  ...(['urgent', 'high', 'medium', 'low'] as const).map((v) => ({
+    value: v,
+    label: t(`board.prio.${v}`),
+  })),
+])
+const sevOpts = computed<AppSelectOption[]>(() => [
+  { value: '', label: t('board.sev.none') },
+  ...(['blocker', 'major', 'minor', 'trivial'] as const).map((v) => ({
+    value: v,
+    label: t(`board.sev.${v}`),
+  })),
+])
+// Ứng viên làm cha: mọi item cùng project TRỪ chính mình và cả nhánh con của
+// mình (chọn con làm cha = vòng). Store vẫn kiểm lại ở checkParentLink — đây
+// chỉ là không cho user chọn cái chắc chắn sai.
+const parentOpts = computed<AppSelectOption[]>(() => {
+  const all = board.itemsFor(projectSel.value)
+  const blocked = new Set<string>()
+  const selfId = props.item?.id
+  if (selfId) {
+    const queue = [selfId]
+    while (queue.length) {
+      const cur = queue.shift()!
+      blocked.add(cur)
+      for (const c of all) {
+        if (c.parentId === cur && !blocked.has(c.id)) queue.push(c.id)
+      }
+    }
+  }
+  const out: AppSelectOption[] = [{ value: '', label: t('board.parent.none') }]
+  for (const it of all) {
+    if (blocked.has(it.id)) continue
+    const tag = it.type && it.type !== 'task' ? `[${t(`board.type.${it.type}`)}] ` : ''
+    out.push({ value: it.id, label: `${tag}${it.title}` })
+  }
+  return out
+})
+
+// Icon theo loại item (dùng chung cho breadcrumb cha lẫn list việc con) —
+// cùng bảng màu/glyph của card ngoài board.
+const TYPE_ICON_OF: Record<BoardItemType, unknown> = {
+  epic: Layers,
+  story: BookOpen,
+  task: SquareCheck,
+  subtask: CornerDownRight,
+  bug: Bug,
+}
+const typeIconOf = (it: BoardItem): unknown => TYPE_ICON_OF[it.type ?? 'task']
+
+// Việc con (cây sub-issue): item nào trỏ parentId vào item đang mở — render
+// trong tab General, click nhảy sang editor của item con (emit openItem).
+const childItems = computed<BoardItem[]>(() => {
+  const id = props.item?.id
+  if (!id) return []
+  return board.itemsFor(props.item!.projectId).filter((c) => c.parentId === id)
+})
+
+// Chuỗi tổ tiên (gốc → … → cha trực tiếp) cho breadcrumb đầu modal — leo
+// parentId qua itemById (item có thể bị filter giấu ngoài board), chặn vòng
+// đề phòng dữ liệu sửa tay.
+const parentChain = computed<BoardItem[]>(() => {
+  const out: BoardItem[] = []
+  const seen = new Set<string>()
+  let cur = props.item?.parentId
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const p = board.itemById(cur)
+    if (!p) break
+    out.unshift(p)
+    cur = p.parentId
+  }
+  return out
+})
+
 // "Giao cho" — nguồn tuỳ mode:
 //   manual: chưa ai · Bạn · lead · member sessions đang sống (giao cho người
 //           đang chạy) + spec (backlog = xếp chờ, status sống = spawn ngay).
@@ -910,8 +1283,9 @@ async function save(toBacklog = false): Promise<void> {
   if (busy.value || !canSave.value) return
   busy.value = true
   try {
-    // Status của lần ghi: agent mode có hai nút — "Giao việc" (todo, spawn
-    // ngay) vs "Xếp vào backlog" (đỗ spec chờ bốc). Form thường theo ô status.
+    // Status của lần ghi: agent mode có hai nhịp — MẶC ĐỊNH "Xếp vào backlog"
+    // (đỗ spec chờ bốc) và nút phụ "Giao việc" (todo, spawn ngay). Form thường
+    // theo ô status.
     const targetStatus: BoardItemStatus = agentMode.value
       ? toBacklog
         ? 'backlog'
@@ -978,6 +1352,14 @@ async function save(toBacklog = false): Promise<void> {
         agentMode.value || stageText.value === ''
           ? null
           : Math.max(0, Math.floor(Number(stageText.value) || 0)),
+      // Khuôn Jira — type luôn có giá trị; priority/severity '' = "không đặt"
+      // gửi null để sidecar XOÁ nhãn cũ (vắng field = giữ nguyên). Cha '' =
+      // cấp trên → null gỡ liên kết; item mới chưa có parentId nên null vô
+      // hại (store bỏ qua parentId rỗng lúc tạo).
+      type: itemType.value,
+      priority: priority.value || null,
+      severity: severity.value || null,
+      parentId: parentId.value || null,
     }
     if (finalDesc) patch.desc = finalDesc
     if (props.item?.id) patch.id = props.item.id
@@ -1211,10 +1593,41 @@ onMounted(async () => {
   gap: 8px;
 }
 
-/* Màn hẹp: lưới props 3 cột co về một cột. */
+/* Màu icon loại item (breadcrumb cha + list việc con) — cùng palette
+   .wsb-ticon của card ngoài board. */
+.wsed [data-type='epic'] {
+  color: var(--violet);
+}
+.wsed [data-type='story'] {
+  color: var(--success);
+}
+.wsed [data-type='task'] {
+  color: var(--info);
+}
+.wsed [data-type='subtask'] {
+  color: var(--muted-foreground);
+}
+.wsed [data-type='bug'] {
+  color: var(--destructive);
+}
+
+/* Màn hẹp: lưới props 3 cột co về một cột; lưới khuôn Jira 4 cột co đôi. */
 @media (max-width: 640px) {
   .wsed .grid-cols-3 {
     grid-template-columns: 1fr;
+  }
+  .wsed .grid-cols-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Màn hẹp: layout General 9/3 xếp chồng — sidebar props xuống dưới nội dung. */
+@media (max-width: 900px) {
+  .wsed-gen {
+    grid-template-columns: 1fr;
+  }
+  .wsed-gen > * {
+    grid-column: 1 / -1;
   }
 }
 </style>

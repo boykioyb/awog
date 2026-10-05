@@ -389,4 +389,98 @@ describe('loadBoard — lọc mềm', () => {
   it('board chưa tồn tại → rỗng', async () => {
     await expect(listBoardItems(pid())).resolves.toEqual([])
   })
+
+  it('field khuôn Jira lạ trên đĩa bị gỡ nhẹ (item vẫn giữ)', async () => {
+    const p = pid()
+    await seedBoard(p, [
+      {
+        id: 'bi-ban',
+        type: 'khong-ton-tai' as never,
+        priority: 'nhanh' as never,
+        severity: 'vo-cung' as never,
+        parentId: 'bi-khong-co',
+      },
+      { id: 'bi-tu-cha', parentId: 'bi-tu-cha' },
+    ])
+    const items = await listBoardItems(p)
+    const ban = items.find((i) => i.id === 'bi-ban')
+    expect(ban?.type).toBeUndefined()
+    expect(ban?.priority).toBeUndefined()
+    expect(ban?.severity).toBeUndefined()
+    expect(ban?.parentId).toBeUndefined()
+    expect(items.find((i) => i.id === 'bi-tu-cha')?.parentId).toBeUndefined()
+  })
+})
+
+describe('khuôn Jira — type/priority/severity/parentId', () => {
+  it('tạo và sửa được đủ bốn field; null gỡ priority/severity/cha', async () => {
+    const p = pid()
+    const epic = await upsertBoardItem(p, { title: 'Epic A', type: 'epic', createdBy: null })
+    expect(epic.type).toBe('epic')
+    const sub = await upsertBoardItem(p, {
+      title: 'Việc con',
+      type: 'subtask',
+      parentId: epic.id,
+      priority: 'high',
+      severity: 'major',
+      createdBy: null,
+    })
+    expect(sub).toMatchObject({ type: 'subtask', parentId: epic.id, priority: 'high' })
+    const patched = await upsertBoardItem(p, {
+      id: sub.id,
+      type: 'task',
+      priority: 'low',
+      severity: null,
+      parentId: null,
+    })
+    expect(patched.type).toBe('task')
+    expect(patched.priority).toBe('low')
+    expect(patched.severity).toBeUndefined()
+    expect(patched.parentId).toBeUndefined()
+  })
+
+  it('từ chối type/priority/severity ngoài enum', async () => {
+    const p = pid()
+    await expect(upsertBoardItem(p, { title: 't', type: 'nhiem-vu' })).rejects.toMatchObject({
+      code: 'invalid-input',
+    })
+    await expect(
+      upsertBoardItem(p, { title: 't', priority: 'choang' }),
+    ).rejects.toMatchObject({ code: 'invalid-input' })
+    await expect(
+      upsertBoardItem(p, { title: 't', severity: 'kinh-khung' }),
+    ).rejects.toMatchObject({ code: 'invalid-input' })
+  })
+
+  it('parentId: cha phải tồn tại, không tự làm cha mình, không vòng', async () => {
+    const p = pid()
+    // Cha lạ — id hợp lệ nhưng không có item nào.
+    await expect(
+      upsertBoardItem(p, { title: 't', parentId: 'bi-deadbeef00' }),
+    ).rejects.toMatchObject({ code: 'unknown-item' })
+    const a = await upsertBoardItem(p, { title: 'A' })
+    // Tự làm cha mình.
+    await expect(
+      upsertBoardItem(p, { id: a.id, parentId: a.id }),
+    ).rejects.toMatchObject({ code: 'invalid-input' })
+    const b = await upsertBoardItem(p, { title: 'B', parentId: a.id })
+    const c = await upsertBoardItem(p, { title: 'C', parentId: b.id })
+    // Vòng A←B←C←A bị chặn.
+    await expect(upsertBoardItem(p, { id: a.id, parentId: c.id })).rejects.toMatchObject({
+      code: 'invalid-input',
+    })
+    // Nhánh hợp lệ vẫn ghi được: A←B←C + A←D.
+    const d = await upsertBoardItem(p, { title: 'D', parentId: a.id })
+    expect(d.parentId).toBe(a.id)
+  })
+
+  it('xoá cha → con MỒ CÔI (parentId bị gỡ), không chết theo', async () => {
+    const p = pid()
+    const parent = await upsertBoardItem(p, { title: 'Cha' })
+    const kid = await upsertBoardItem(p, { title: 'Con', parentId: parent.id })
+    await deleteBoardItem(p, parent.id)
+    const orphan = (await listBoardItems(p)).find((i) => i.id === kid.id)
+    expect(orphan).toBeDefined()
+    expect(orphan?.parentId).toBeUndefined()
+  })
 })

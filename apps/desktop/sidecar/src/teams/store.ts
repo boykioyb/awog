@@ -94,6 +94,10 @@ function parse(
       source,
     }
     if (typeof t.desc === 'string' && t.desc) team.desc = t.desc
+    // instructions: chỉ dẫn cấp đội gửi lead mỗi run — bỏ sót ở đây từng làm
+    // spec ghi rồi mà list/run đọc về luôn trống.
+    if (typeof t.instructions === 'string' && t.instructions.trim())
+      team.instructions = t.instructions
     const lead = cleanAgentRef(t.lead)
     if (lead) team.lead = lead
     if (projectId) team.projectId = projectId
@@ -189,6 +193,8 @@ export async function saveTeam(team: TeamSpec): Promise<void> {
     id: team.id,
     name: team.name,
     ...(team.desc ? { desc: team.desc } : {}),
+    // Chuỗi rỗng coi như xoá — cùng ngữ nghĩa desc.
+    ...(team.instructions?.trim() ? { instructions: team.instructions } : {}),
     ...(team.lead ? { lead: team.lead } : {}),
     members: team.members,
     createdAt: team.createdAt,

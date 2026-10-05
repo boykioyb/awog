@@ -36,6 +36,24 @@
         :empty-label="t('board.filterNone')"
         width="200px"
       />
+      <AppSelect
+        v-model="filterType"
+        :options="typeFilterOpts"
+        :placeholder="t('board.type.all')"
+        width="130px"
+      />
+      <AppSelect
+        v-model="filterPriority"
+        :options="prioFilterOpts"
+        :placeholder="t('board.prio.all')"
+        width="130px"
+      />
+      <!-- Việc con MẶC ĐỊNH ẩn để mặt bảng chỉ nhìn tầng trên của cây — tick
+           mới bung các sub-issue (con vẫn đếm được qua chip ListTree). -->
+      <label class="bp-hidekids" :title="t('board.showChildrenTitle')">
+        <AppCheckbox v-model:checked="showChildren" />
+        {{ t('board.showChildren') }}
+      </label>
       <span class="bp-flex" />
       <!-- View toggle — segmented dùng đúng shadcn Tabs (muted track, active nổi). -->
       <Tabs :model-value="view" @update:model-value="(v) => (view = v as typeof view)">
@@ -90,6 +108,7 @@
               />
             </span>
             <span>{{ t('board.col.issue') }}</span>
+            <span>{{ t('board.col.type') }}</span>
             <span>{{ t('board.col.status') }}</span>
             <span>{{ t('board.col.assignee') }}</span>
             <span>{{ t('board.col.project') }}</span>
@@ -106,8 +125,16 @@
               <AppCheckbox :checked="selected.has(itemKey(it))" @update:checked="toggleItem(it)" />
             </div>
             <div class="cl-cell bp-id">
-              <span class="bp-title-cell">{{ it.title }}</span>
+              <span class="bp-title-cell">
+                <span v-if="it.parentId" class="bp-parent-hint">↳</span>
+                {{ it.title }}
+              </span>
               <span v-if="it.desc" class="bp-desc">{{ it.desc }}</span>
+            </div>
+            <div class="cl-cell">
+              <span class="bp-ttag" :data-type="it.type ?? 'task'">
+                {{ t(`board.type.${it.type ?? 'task'}`) }}
+              </span>
             </div>
             <div class="cl-cell">
               <span class="bp-status" :style="{ '--st': statusColor(it.status) }">
@@ -191,7 +218,13 @@ import { useI18n } from '~/composables/useI18n'
 import { useToast } from '~/composables/useToast'
 import WorkspaceBoard from '~/components/session/workspace/WorkspaceBoard.vue'
 import { exportSlug, saveTextFile } from '~/utils/export'
-import { useBoardStore, type BoardItem, type BoardItemStatus } from '~/stores/board'
+import {
+  useBoardStore,
+  type BoardItem,
+  type BoardItemPriority,
+  type BoardItemStatus,
+  type BoardItemType,
+} from '~/stores/board'
 import { useProjectsStore } from '~/stores/projects'
 import { useSessionsStore } from '~/stores/sessions'
 import { useAgentsStore } from '~/stores/agents'
@@ -209,12 +242,33 @@ const teamsStore = useTeamsStore()
 const projects = computed(() => projectsStore.projects)
 // '' = tất cả project — board hợp nhất hiện hết.
 const filterProject = ref<string>('')
+// '' = mọi loại/mọi mức ưu tiên (khuôn Jira của item).
+const filterType = ref<BoardItemType | ''>('')
+const filterPriority = ref<BoardItemPriority | ''>('')
+// Sub-issue mặc định ẨN — board đọc mặt cây tầng trên; tick "Hiện việc con"
+// mới bung các item có parentId.
+const showChildren = ref(false)
 const query = ref('')
 const view = ref<'board' | 'list'>('board')
 
 const projectFilterOpts = computed<AppSelectOption[]>(() => [
   { value: '', label: t('board.filterAll') },
   ...projects.value.map((p) => ({ value: p.id, label: p.name })),
+])
+
+const typeFilterOpts = computed<AppSelectOption[]>(() => [
+  { value: '', label: t('board.type.all') },
+  ...(['epic', 'story', 'task', 'subtask', 'bug'] as const).map((v) => ({
+    value: v,
+    label: t(`board.type.${v}`),
+  })),
+])
+const prioFilterOpts = computed<AppSelectOption[]>(() => [
+  { value: '', label: t('board.prio.all') },
+  ...(['urgent', 'high', 'medium', 'low'] as const).map((v) => ({
+    value: v,
+    label: t(`board.prio.${v}`),
+  })),
 ])
 
 // Picker "giao cho" của editor nhận MỌI session — editor tự scope theo project
@@ -226,6 +280,10 @@ const visibleItems = computed(() => {
   const q = query.value.trim().toLowerCase()
   return allItems.value.filter((i) => {
     if (filterProject.value && i.projectId !== filterProject.value) return false
+    if (filterType.value && (i.type ?? 'task') !== filterType.value) return false
+    // Item chưa đặt ưu tiên đọc như 'medium' — filter "medium" gom cả hai.
+    if (filterPriority.value && (i.priority ?? 'medium') !== filterPriority.value) return false
+    if (!showChildren.value && i.parentId) return false
     if (!q) return true
     return (
       i.title.toLowerCase().includes(q) ||
@@ -238,7 +296,7 @@ const visibleItems = computed(() => {
 const boardEl = ref<InstanceType<typeof WorkspaceBoard> | null>(null)
 
 // ── List view ────────────────────────────────────────────────────────────────
-const LIST_COLS = '28px minmax(240px,1fr) 110px 140px 140px 96px'
+const LIST_COLS = '28px minmax(240px,1fr) 90px 110px 140px 140px 96px'
 
 // ── Bulk select (list view) + export ─────────────────────────────────────────
 const selected = ref(new Set<string>())
@@ -425,6 +483,16 @@ watch(projects, (list) => {
 .bp-flex {
   flex: 1;
 }
+.bp-hidekids {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
 
 .bp-body {
   flex: 1 1 auto;
@@ -513,6 +581,34 @@ watch(projects, (list) => {
   border-radius: var(--r-pill);
   padding: 1px 8px;
   white-space: nowrap;
+}
+/* Tag loại việc trong list — màu khớp icon type trên card kanban. */
+.bp-ttag {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  border: 1px solid currentColor;
+  border-radius: var(--r-pill);
+  padding: 1px 8px;
+  white-space: nowrap;
+}
+.bp-ttag[data-type='epic'] {
+  color: var(--violet);
+}
+.bp-ttag[data-type='story'] {
+  color: var(--success);
+}
+.bp-ttag[data-type='task'] {
+  color: var(--info);
+}
+.bp-ttag[data-type='subtask'] {
+  color: var(--muted-foreground);
+}
+.bp-ttag[data-type='bug'] {
+  color: var(--destructive);
+}
+.bp-parent-hint {
+  color: var(--textFaint);
+  margin-right: 2px;
 }
 .bp-empty-list {
   padding: 32px;

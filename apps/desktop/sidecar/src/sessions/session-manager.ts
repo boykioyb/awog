@@ -480,6 +480,9 @@ class SessionManager {
       teamRole: _oldRole,
       agent: _oldAgent,
       worktree: _oldWorktree,
+      teamId: _oldTeamId,
+      teamSource: _oldTeamSource,
+      teamProjectId: _oldTeamPid,
       ...rest
     } = m.header
     m.header = {
@@ -493,6 +496,18 @@ class SessionManager {
       // đi theo (con trỏ chết). CHUYỂN nhóm thì GIỮ: thư worktree gắn với
       // sessionId chứ không gắn với cha — member chuyển nhóm mang theo cả WIP.
       ...(!leavingGroup && _oldWorktree ? { worktree: _oldWorktree } : {}),
+      // Link spec (teamId + tier/project sở hữu) cùng lý do: nó có nghĩa "phiên
+      // này THUỘC một run của spec X". Rời hẳn nhóm mà giữ link thì resolver
+      // gốc-run (run-root.ts) đọc nó làm "gốc của run có spec" — một lead ma
+      // không member. Gốc thật không bao giờ chạm đây (priorParent của nó
+      // vắng ⇒ leavingGroup luôn false).
+      ...(!leavingGroup && _oldTeamId !== undefined
+        ? {
+            teamId: _oldTeamId,
+            ...(_oldTeamSource !== undefined ? { teamSource: _oldTeamSource } : {}),
+            ...(_oldTeamPid !== undefined ? { teamProjectId: _oldTeamPid } : {}),
+          }
+        : {}),
     }
     this.persistSession(m)
     // Flush ngay, cùng lý do với setArchived: một thao tác rời rạc của người dùng

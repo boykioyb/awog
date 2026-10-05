@@ -33,6 +33,10 @@ const openGhComment = useGhCommentLink()
 // Shared PreviewModal store — used for images that already carry a loadable src
 // (data:/http:), which have no workspace file for filePreview to resolve.
 const { open: openPreview } = usePreview()
+// Click lên một @mention trong prose → bề mặt chứa (board editor) mở drawer
+// phiên đang chạy của member đó. null ngoài vùng có provider — mention khi đó
+// chỉ là nhãn.
+const memberPeek = useMemberPeek()
 
 // Wrap each quoted excerpt in numbered <mark>s. A quote spanning multiple blocks yields one
 // range per block (locateMarks splits at block boundaries — an inline <mark> can't legally
@@ -313,6 +317,66 @@ function linkifyFilePaths(el: HTMLElement) {
   })
 }
 
+// Token `@handle` trong prose → chip `.mdmention`; bấm vào mở drawer phiên
+// đang chạy của member đó qua provider useMemberPeek (board editor cung cấp).
+// Không provider ⇒ giữ nguyên text — mention ở transcript thường không có
+// ai resolve. Cùng khuôn TreeWalker/splitText của linkifyFilePaths: token đứng
+// trong <a>/<code>/<pre> hoặc dính ký tự word phía trước (email `a@b`) không
+// tính. Handle = slug agentHandle (lowercase + space→'-'), kèm cả ký tự
+// `/&+—–.` thường gặp trong slug; cắt đuôi dấu câu để "@Dev," không mang theo
+// dấu phẩy. Listeners die with the subtree on the next rerender.
+const MENTION_TOKEN_RE = /@([\p{L}\p{N}_\-/&+.–—]+)/gu
+function linkifyMentions(el: HTMLElement) {
+  if (!memberPeek) return
+  const matches: { node: Text; index: number; raw: string }[] = []
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  for (let tn = walker.nextNode() as Text | null; tn; tn = walker.nextNode() as Text | null) {
+    if (tn.parentElement?.closest('a, code, pre, button, script, style')) continue
+    const text = tn.data
+    if (!text.includes('@')) continue
+    for (const m of text.matchAll(MENTION_TOKEN_RE)) {
+      const idx = m.index ?? 0
+      const prev = text[idx - 1]
+      if (prev && /[\w@.]/.test(prev)) continue // email / handle dính liền — không phải mention
+      const raw = m[0].replace(/[-_.+/&–—]+$/, '') // cắt đuôi dấu câu ("@Dev," → "@Dev")
+      if (raw.length > 1) matches.push({ node: tn, index: idx, raw })
+    }
+  }
+  // splitText theo index TRONG CÙNG text node, xử lý lùi từ cuối — group theo
+  // node trước để index của các node khác không lẫn nhau.
+  const perNode = new Map<Text, { index: number; raw: string }[]>()
+  for (const m of matches) {
+    const list = perNode.get(m.node) ?? []
+    list.push(m)
+    perNode.set(m.node, list)
+  }
+  for (const [node, list] of perNode) {
+    for (const e of list.sort((a, b) => b.index - a.index)) {
+      const target = node.splitText(e.index)
+      target.splitText(e.raw.length)
+      const a = document.createElement('a')
+      a.textContent = e.raw
+      a.className = 'mdmention'
+      a.setAttribute('role', 'button')
+      a.setAttribute('tabindex', '0')
+      a.title = t('sessions.workspace.group.peek.mentionHint', { name: e.raw.slice(1) })
+      const handle = e.raw.slice(1)
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault()
+        memberPeek(handle)
+      })
+      a.addEventListener('keydown', (ev) => {
+        const k = (ev as KeyboardEvent).key
+        if (k === 'Enter' || k === ' ') {
+          ev.preventDefault()
+          memberPeek(handle)
+        }
+      })
+      target.replaceWith(a)
+    }
+  }
+}
+
 // Markdown renderers percent-encode non-ASCII src destinations — decode so the path
 // matches the real workspace file (mirrors the link handling in linkifyFilePaths).
 function decodeSrc(s: string): string {
@@ -456,6 +520,7 @@ function rerender() {
   applyMarks(el)
   addCodeBlockControls(el)
   linkifyFilePaths(el)
+  linkifyMentions(el)
   resolveImages(el)
 }
 onMounted(rerender)
@@ -537,6 +602,26 @@ watch(() => filePreview.imagesVersion.value, refreshImages)
 }
 .mdinline :deep(a.ghlink:hover) {
   text-decoration-style: solid;
+}
+/* Token @mention trong prose → chip mở drawer phiên của member. Màu primary +
+   nền mờ theo quy ước chip actionable; :active nhấn sáng rõ để phản hồi click. */
+.mdinline :deep(a.mdmention) {
+  cursor: pointer;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  border-radius: 4px;
+  padding: 0 3px;
+  margin: 0 -1px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.mdinline :deep(a.mdmention:hover),
+.mdinline :deep(a.mdmention:focus-visible) {
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  outline: none;
+}
+.mdinline :deep(a.mdmention:active) {
+  background: color-mix(in srgb, var(--primary) 32%, transparent);
 }
 /* Non-scrolling wrapper around a code block's <pre> (added by addCodeBlockControls). The
    controls row anchors to THIS (a sibling of <pre>), so it stays pinned to the visible

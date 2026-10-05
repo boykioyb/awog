@@ -39,6 +39,11 @@ export type BoardItemComment = {
   text: string
 }
 
+// Mirror BoardItemType/Priority/Severity của sidecar — khuôn Jira.
+export type BoardItemType = 'epic' | 'story' | 'task' | 'subtask' | 'bug'
+export type BoardItemPriority = 'urgent' | 'high' | 'medium' | 'low'
+export type BoardItemSeverity = 'blocker' | 'major' | 'minor' | 'trivial'
+
 export type BoardItem = {
   id: string
   projectId: string
@@ -53,6 +58,11 @@ export type BoardItem = {
   // 'lead' | 'member:<title>' — mirrors sidecar BoardItem.assigneeConfig.
   assigneeConfig?: Record<string, SessionLlmOverride>
   status: BoardItemStatus
+  // Khuôn Jira: loại việc (vắng = 'task'), cha của cây sub-issue, ưu tiên/mức độ.
+  type?: BoardItemType
+  parentId?: string
+  priority?: BoardItemPriority
+  severity?: BoardItemSeverity
   stage?: number
   // sessionId của bên tạo, hoặc null khi người dùng tạo từ UI.
   createdBy: string | null
@@ -74,6 +84,13 @@ export type TeamChannelEntry = {
   text: string
   // sessionId của member được @-mention (được wake qua hộp thư).
   mentions?: string[]
+  // Board item mà entry nói về — tag tùy chọn (xem shared.TeamChannelEntry):
+  // tab Discuss của item lọc theo field này, entry không tag là trao đổi
+  // chung của ê-kíp.
+  itemId?: string
+  // Các item khác được nhắc trong text — sidecar tự extract `bi-<hex>` (xem
+  // shared.TeamChannelEntry.itemIds). Discuss khớp cả thẻ chính lẫn phụ.
+  itemIds?: string[]
 }
 
 // Kết quả `sessions.memberDiff` — diff bounded của branch member so với baseRef.
@@ -135,7 +152,61 @@ export const useBoardStore = defineStore('board', () => {
 
   // ── Getters ──
   const itemsFor = (projectId: string): BoardItem[] => itemsByProject.value[projectId] ?? []
+  // Tra item theo id qua MỌI project đã nạp — dùng cho điều hướng cha↔con khi
+  // item bị filter ngoài board giấu mất (ẩn việc con) nhưng vẫn mở được modal.
+  const itemById = (id: string): BoardItem | undefined => {
+    for (const list of Object.values(itemsByProject.value)) {
+      const hit = list.find((i) => i.id === id)
+      if (hit) return hit
+    }
+    return undefined
+  }
   const channelFor = (rootId: string): TeamChannelEntry[] => channelByGroup.value[rootId] ?? []
+
+  // Phạm vi tag của một item = chính nó + toàn bộ con cháu (walk parentId).
+  // Discuss của epic/parent roll-up cả trao đổi được tag subtask — bàn về việc
+  // con cũng là bàn về việc này. Visited-set chống vòng parentId lỗi.
+  function itemTagScope(projectId: string, itemId: string): Set<string> {
+    const scope = new Set([itemId])
+    const items = itemsFor(projectId)
+    for (let grew = true; grew; ) {
+      grew = false
+      for (const i of items) {
+        if (i.parentId && scope.has(i.parentId) && !scope.has(i.id)) {
+          scope.add(i.id)
+          grew = true
+        }
+      }
+    }
+    return scope
+  }
+
+  // Entry kênh có nói về item trong scope không — khớp thẻ chính lẫn thẻ phụ
+  // (itemIds = `bi-…` sidecar tự extract từ text). Dùng chung cho feed Discuss
+  // và badge đếm, đừng viết filter riêng ở từng component.
+  // Entry cũ ghi trước khi có itemIds → derive tại chỗ từ text (cùng regex
+  // sidecar) thay vì backfill file; và khi vẫn không có thẻ nào, suy luận Y
+  // HỆT sidecar (sessions/channel.ts): tin của member thuộc về item đang do
+  // họ đảm nhận — assigneeSessionId === e.from + status trong vòng làm việc
+  // hoặc done. LEAD (e.from === rootId) điều phối nhiều item nên không suy.
+  const MENTIONED_ITEM_RE = /\bbi-[0-9a-f]{8,16}\b/g
+  const MEMBER_OWN_STATUSES = new Set(['in_progress', 'in_review', 'changes', 'blocked', 'done'])
+  function entryInScope(
+    e: TeamChannelEntry,
+    scope: Set<string>,
+    projectId: string,
+    rootId?: string,
+  ): boolean {
+    if (e.itemId && scope.has(e.itemId)) return true
+    const secondary =
+      e.itemIds ??
+      [...new Set(e.text.match(MENTIONED_ITEM_RE) ?? [])].filter((id) => id !== e.itemId)
+    if (secondary.length > 0) return secondary.some((id) => scope.has(id))
+    if (!e.from || e.from === rootId || e.fromTitle === 'system') return false
+    return itemsFor(projectId).some(
+      (i) => i.assigneeSessionId === e.from && MEMBER_OWN_STATUSES.has(i.status) && scope.has(i.id),
+    )
+  }
   const diffFor = (engineId: string): MemberDiffResult | null | undefined =>
     diffBySession.value[engineId]
 
@@ -179,9 +250,17 @@ export const useBoardStore = defineStore('board', () => {
   // null = gỡ người nhận, stage null = gỡ khỏi đợt (vắng mặt = giữ nguyên).
   async function upsertItem(
     projectId: string,
-    item: Partial<Omit<BoardItem, 'stage' | 'assigneeConfig'>> & {
+    item: Partial<
+      Omit<BoardItem, 'stage' | 'assigneeConfig' | 'parentId' | 'priority' | 'severity'>
+    > & {
       title: string
       stage?: number | null
+      // null = gỡ khỏi cha — về cấp trên của board (sidecar hiểu null là xoá
+      // liên kết; vắng mặt = giữ nguyên như mọi field patch khác).
+      parentId?: string | null
+      // null = gỡ nhãn ưu tiên/mức độ — cùng luật parentId.
+      priority?: BoardItemPriority | null
+      severity?: BoardItemSeverity | null
       // null = gỡ hẳn map override (sidecar hiểu null của assigneeConfig là
       // xoá key — cùng luật assigneeSessionId/assigneeRef).
       assigneeConfig?: Record<string, SessionLlmOverride> | null
@@ -423,6 +502,7 @@ export const useBoardStore = defineStore('board', () => {
     text: string,
     kind: TeamChannelKind = 'chat',
     mentions?: string[],
+    itemId?: string,
   ): Promise<boolean> {
     if (!available.value || !rootId || !text.trim()) return false
     try {
@@ -431,6 +511,7 @@ export const useBoardStore = defineStore('board', () => {
         text: text.trim(),
         kind,
         ...(mentions?.length ? { mentions } : {}),
+        ...(itemId ? { itemId } : {}),
       })
       // Entry trả về append lạc quan ngay; event `channel.appended` có thể tới
       // sau — dedupe theo id ở subscribe() nên không có bản đôi.
@@ -538,6 +619,31 @@ export const useBoardStore = defineStore('board', () => {
           if (typeof p?.projectId === 'string') void listBoard(p.projectId)
           return
         }
+        // Phiên động vào board → toast "ai vừa làm gì" (board.changed chỉ là
+        // tín hiệu refetch trần). id theo itemId để update dồn liên tiếp gộp
+        // vào một toast thay vì xếp hàng.
+        if (evt.type === 'board.item-touched') {
+          const p = evt.payload as {
+            itemId?: unknown
+            title?: unknown
+            actorTitle?: unknown
+            action?: unknown
+            changes?: unknown
+          } | null
+          if (typeof p?.itemId !== 'string' || typeof p?.title !== 'string') return
+          const actor = typeof p.actorTitle === 'string' && p.actorTitle ? p.actorTitle : 'agent'
+          const changes = Array.isArray(p.changes)
+            ? p.changes.filter((c): c is string => typeof c === 'string')
+            : []
+          const created = p.action === 'created'
+          useToast().add({
+            id: `board-touch-${p.itemId}`,
+            title: useI18n().t(created ? 'board.touch.created' : 'board.touch.updated', { actor }),
+            description: created ? p.title : `${p.title} — ${changes.join(' · ')}`,
+            color: created ? 'success' : 'info',
+          })
+          return
+        }
         if (evt.type === 'channel.appended') {
           const p = evt.payload as { rootId?: unknown; entry?: unknown } | null
           const entry = p?.entry as TeamChannelEntry | undefined
@@ -567,8 +673,11 @@ export const useBoardStore = defineStore('board', () => {
     available,
     // getters
     itemsFor,
+    itemById,
     columnsFor,
     channelFor,
+    itemTagScope,
+    entryInScope,
     diffFor,
     // actions
     listBoard,

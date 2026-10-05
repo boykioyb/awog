@@ -324,6 +324,9 @@ export type PendingInboxMessage = {
   at: string
   preview: string
   block: string
+  // Tin wake "chỉ trò chuyện" của kênh ê-kíp — lượt mở ra là để trả lời nhanh
+  // (sidecar đánh dấu trên payload, renderer forward vào sendMessage.comm).
+  comm?: boolean
 }
 // Một mục danh bạ từ `sessions.listAgents` — đủ để chọn đích, không có nội dung.
 export type SessionMessagingTarget = {
@@ -345,6 +348,7 @@ type InboxMessagePayload = {
   at: string
   preview: string
   block: string
+  comm?: boolean
 }
 const isInboxPayload = (raw: unknown): raw is InboxMessagePayload => {
   if (!raw || typeof raw !== 'object') return false
@@ -2794,7 +2798,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Pass the item's own quote snapshot as an override so draining doesn't consume
     // (or get clobbered by) any quotes the user added to the composer meanwhile.
     if (head)
-      void sendMessage(id, head.text, head.att, head.command, head.quotes, head.autoDelivered)
+      void sendMessage(
+        id,
+        head.text,
+        head.att,
+        head.command,
+        head.quotes,
+        head.autoDelivered,
+        head.comm,
+      )
   }
   // "Send now" from a queued chip: stop the current turn and run THIS queued message
   // immediately (jump the queue). The sidecar serializes turns per session
@@ -2816,7 +2828,15 @@ export const useSessionsStore = defineStore('sessions', () => {
     queue.splice(index, 1)
     if (!queue.length) delete s.queue
     await cancel(id)
-    await sendMessage(id, item.text, item.att, item.command, item.quotes, item.autoDelivered)
+    await sendMessage(
+      id,
+      item.text,
+      item.att,
+      item.command,
+      item.quotes,
+      item.autoDelivered,
+      item.comm,
+    )
   }
 
   // ── Turn runner ──────────────────────────────────────────────────────────────
@@ -3373,7 +3393,17 @@ export const useSessionsStore = defineStore('sessions', () => {
     const msgs = pendingInbox.value[engineId]
     if (!s || !msgs?.length || !canDeliverInbox(engineId)) return
     delete pendingInbox.value[engineId]
-    void sendMessage(s.id, buildInboxPrompt(msgs))
+    // Lượt chỉ-comm khi MỌI tin trong batch đều là trò chuyện kênh — một tin
+    // giao việc lẫn vào thì lượt vẫn chạy cấu hình đầy đủ.
+    void sendMessage(
+      s.id,
+      buildInboxPrompt(msgs),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      msgs.every((m) => m.comm) || undefined,
+    )
   }
 
   // ── Tự giao mọi tin hộp thư ───────────────────────────────────────────────
@@ -3459,7 +3489,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Đẩy thẳng vào `s.queue` thay vì gọi `enqueue()`: enqueue còn CHỤP `s.followups`
     // vào item rồi xoá đi, nên một lượt tự giao sẽ cuỗm mất mấy đoạn trích người dùng
     // đang dựng dở trong composer của phiên đó.
-    s.queue = [...(s.queue ?? []), { text: msg.block, autoDelivered: true }]
+    s.queue = [
+      ...(s.queue ?? []),
+      { text: msg.block, autoDelivered: true, ...(msg.comm ? { comm: true } : {}) },
+    ]
     // Đang bận ⇒ không gọi drainQueue: lượt hiện tại kết thúc sạch sẽ tự gọi. Đang
     // rảnh thì không ai gọi hộ, nên gọi ngay tại đây.
     if (idle) void drainQueue(s.id)
@@ -3929,6 +3962,7 @@ export const useSessionsStore = defineStore('sessions', () => {
             at: p.at,
             preview: p.preview,
             block: p.block,
+            ...(p.comm === true ? { comm: true } : {}),
           }
           if (withinDeliverCap(p.sessionId) && autoDeliver(p.sessionId, msg)) {
             const auto = byEngineId(p.sessionId)
@@ -4249,6 +4283,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Item này đến từ đường tự giao của nhóm — sổ trần ghi khi turn THẬT khởi
     // động (xem runEngineTurn), giữ nguyên cờ qua mọi lần xếp lại hàng.
     autoDelivered?: boolean,
+    // Lượt "chỉ trò chuyện" từ kênh ê-kíp — forward sang sidecar để kẹp model
+    // rẻ + effort thấp (lượt trả lời nhanh). Chỉ set bởi đường inbox comm.
+    comm?: boolean,
   ) {
     const s = byId(id)
     const trimmed = text.trim()
@@ -4266,6 +4303,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (command) requeued.command = command
       if (quotes.length) requeued.quotes = [...quotes]
       if (autoDelivered) requeued.autoDelivered = true
+      if (comm) requeued.comm = true
       s.queue = [requeued, ...(s.queue ?? [])]
       if (!quotesOverride) s.followups = []
       return
@@ -4312,6 +4350,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (command) requeued.command = command
       if (quotes.length) requeued.quotes = [...quotes]
       if (autoDelivered) requeued.autoDelivered = true
+      if (comm) requeued.comm = true
       s.queue = [requeued, ...(s.queue ?? [])]
       if (!quotesOverride) s.followups = []
       return
@@ -4360,7 +4399,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     try {
       await maybeAutoCompact(s)
 
-      await runEngineTurn(s, modelText, atts, userMessageId, nativeCommand, autoDelivered)
+      await runEngineTurn(s, modelText, atts, userMessageId, nativeCommand, autoDelivered, comm)
     } finally {
       // Backstop: runEngineTurn nhả latch ngay khi push placeholder (đường
       // chính) — finally này chỉ còn việc gỡ latch khi nó ném TRƯỚC chỗ đó
@@ -4384,6 +4423,9 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Turn này là một lượt tự giao của nhóm — sổ trần auto-deliver ghi ở đây,
     // ngay khi placeholder được push = turn THẬT đã khởi động.
     autoDelivered?: boolean,
+    // Lượt "chỉ trò chuyện" kênh ê-kíp — forward thẳng sang sidecar để kẹp
+    // model rẻ + effort thấp sau mọi overlay settings.
+    comm?: boolean,
   ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
@@ -4498,6 +4540,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         // turn-prompt rider for it, because the CLI only treats a message as a local
         // command when it STARTS with `/`.
         ...(nativeCommand ? { nativeCommand: true } : {}),
+        // Lượt trả lời-nhanh của kênh ê-kíp → sidecar kẹp rẻ+low sau mọi overlay.
+        ...(comm ? { comm: true } : {}),
         ...(engineAtts.length ? { attachments: engineAtts } : {}),
         history: [],
         settings: engineSettings(s),

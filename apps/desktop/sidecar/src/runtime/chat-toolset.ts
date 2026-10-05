@@ -30,19 +30,8 @@ import { createInfraAppTools } from './tools/infra-app-tools.js'
 import { createSshTools } from './tools/ssh-tools.js'
 import type { BeforeToolCall } from './permission.js'
 import { sessionManager } from '../sessions/session-manager.js'
+import { runRootId } from '../sessions/run-root.js'
 import { log } from '../util/logger.js'
-
-// Gốc nhóm của một phiên (cây 2 cấp quanh `teamRunId`): cha của phiên khi nó
-// là member, chính nó khi nó là LEAD có ít nhất một con, null khi phiên lẻ.
-// Đồng bộ qua summaries đang warm — toolset được build lại mỗi lượt nên đây phải
-// là đường rẻ (không đọc đĩa).
-function runRootOf(sessionId: string): string | null {
-  const all = sessionManager.getSessions()
-  const me = all.find((s) => s.id === sessionId)
-  if (!me) return null
-  if (me.teamRunId) return me.teamRunId
-  return all.some((s) => s.teamRunId === sessionId) ? sessionId : null
-}
 
 export interface ChatToolsetOptions {
   inPlanMode: boolean
@@ -148,14 +137,15 @@ export async function buildChatToolset(
       // "This turn belongs to a chat session" — plan mode included. Carries the
       // read-only terminal tool, which background exec's gate would wrongly drop.
       // `runId`: gốc nhóm chứa phiên này (Session Teams) — cha khi phiên là
-      // con, chính nó khi nó có con; null = phiên lẻ ⇒ các tool nhóm
+      // con, chính nó khi nó là lead (link spec `teamId` hoặc có con) —
+      // resolver chung `runRootId`; null = phiên lẻ ⇒ các tool nhóm
       // (member_diff, team_item_*, team_say) không xuất hiện trong schema.
       ...(args.sessionId
         ? {
             chatSession: {
               sessionId: args.sessionId,
               ...(args.abortController ? { signal: args.abortController.signal } : {}),
-              runId: runRootOf(args.sessionId),
+              runId: runRootId(sessionManager.getSessions(), args.sessionId),
             },
           }
         : {}),

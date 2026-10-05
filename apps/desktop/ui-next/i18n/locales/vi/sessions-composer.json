@@ -144,5 +144,6 @@
   "sessions.browserCtx.noSelection": "Hãy bôi đen một đoạn trong trang trước",
   "sessions.browserCtx.failed": "Không đọc được trang: {err}",
   "sessions.browserCtx.opened": "Đã mở {url} trong trình duyệt",
-  "sessions.browserCtx.openFailed": "Không mở được URL đó: {err}"
+  "sessions.browserCtx.openFailed": "Không mở được URL đó: {err}",
+  "sessions.composer.mentionTeam": "ê-kíp"
 }

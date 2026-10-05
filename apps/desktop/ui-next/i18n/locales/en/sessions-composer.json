@@ -144,5 +144,6 @@
   "sessions.browserCtx.noSelection": "Select some text in the page first",
   "sessions.browserCtx.failed": "Could not read the page: {err}",
   "sessions.browserCtx.opened": "Opened {url} in the browser",
-  "sessions.browserCtx.openFailed": "Could not open that URL: {err}"
+  "sessions.browserCtx.openFailed": "Could not open that URL: {err}",
+  "sessions.composer.mentionTeam": "team"
 }

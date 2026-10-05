@@ -1204,6 +1204,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvpdf {
   position: absolute;
   inset: 0;
+  /* <iframe> is a replaced element: the UA stylesheet gives it width:300px ×
+     height:150px, so `inset:0` alone is over-constrained and the frame keeps
+     its intrinsic size anchored top-left. Explicit 100% × 100% wins. */
+  width: 100%;
+  height: 100%;
   border: 0;
 }
 /* Video — letterboxed on a black canvas filling the body (flush). Old code sized
@@ -1246,6 +1251,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeyGuarded))
 .pvhtml {
   position: absolute;
   inset: 0;
+  /* Same replaced-element trap as .pvpdf — without explicit size the frame
+     renders at its UA default 300×150 instead of filling the body. */
+  width: 100%;
+  height: 100%;
   border: 0;
   background: #fff;
 }

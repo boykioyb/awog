@@ -44,7 +44,7 @@ export interface ModelInfo {
 // Models newer than the pinned pi-ai catalog. Keep in sync with the runtime
 // clone-fallback (runtime/model-resolver.ts). The merge dedups by id, so once
 // pi-ai or the live fetch reports them these entries are shadowed harmlessly.
-const AWOG_EXTRAS: Record<BuiltInProvider, ModelInfo[]> = {
+export const AWOG_EXTRAS: Record<BuiltInProvider, ModelInfo[]> = {
   anthropic: [
     { id: 'claude-opus-5', name: 'Claude Opus 5', contextWindow: 1_000_000, maxTokens: 128_000, reasoning: true, source: 'pi' },
     { id: 'claude-opus-5-1m', name: 'Claude Opus 5 (1M)', contextWindow: 1_000_000, maxTokens: 128_000, reasoning: true, source: 'pi' },
@@ -54,7 +54,7 @@ const AWOG_EXTRAS: Record<BuiltInProvider, ModelInfo[]> = {
   google: [],
 }
 
-function piModels(provider: BuiltInProvider): ModelInfo[] {
+export function piModels(provider: BuiltInProvider): ModelInfo[] {
   try {
     return (getModels(provider) as readonly Model<Api>[]).map((m) => ({
       id: m.id,

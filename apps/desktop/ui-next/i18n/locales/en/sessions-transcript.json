@@ -3,6 +3,7 @@
   "sessions.transcript.mark.tooltip": "Quoted as follow-up {n}",
   "sessions.transcript.fold.expand": "Expand all steps",
   "sessions.transcript.fold.collapse": "Collapse all steps",
+  "sessions.transcript.typing": "Typing…",
   "sessions.bookmark.add": "Bookmark",
   "sessions.bookmark.remove": "Remove bookmark",
   "sessions.bookmark.barTitle": "Bookmarked",

@@ -59,7 +59,21 @@
               @dragend="onDragEnd"
               @click="openEditor(it.id)"
             >
-              <div class="wsb-title">{{ it.title }}</div>
+              <!-- Breadcrumb cha — "không biết issue cha là cái nào" của board
+                   rối sub-issue: một dòng mờ trên title trỏ về item cha. -->
+              <div v-if="parentTitle(it)" class="wsb-parent" :title="parentTitle(it)">
+                <CornerDownRight class="size-3 shrink-0" />
+                {{ parentTitle(it) }}
+              </div>
+              <div class="wsb-title">
+                <component
+                  :is="typeIcon(it)"
+                  class="wsb-ticon"
+                  :data-type="typeOf(it)"
+                  :stroke-width="2.2"
+                />
+                {{ it.title }}
+              </div>
               <div v-if="it.desc" class="wsb-desc">{{ it.desc }}</div>
               <div class="wsb-meta">
                 <span v-if="showProject" class="wsb-proj" :title="it.projectId">
@@ -68,6 +82,26 @@
                 </span>
                 <span v-if="typeof it.stage === 'number'" class="wsb-stage">
                   {{ t('sessions.workspace.group.stage', { n: it.stage }) }}
+                </span>
+                <span
+                  v-if="it.priority && it.priority !== 'medium'"
+                  class="wsb-prio"
+                  :data-prio="it.priority"
+                  :title="t(`board.prio.${it.priority}`)"
+                >
+                  <Flag class="size-3" />
+                </span>
+                <span
+                  v-if="it.severity"
+                  class="wsb-sev"
+                  :data-sev="it.severity"
+                  :title="t(`board.sev.${it.severity}`)"
+                >
+                  <TriangleAlert class="size-3" />
+                </span>
+                <span v-if="childCount(it)" class="wsb-kids" :title="t('board.children')">
+                  <ListTree class="size-3" />
+                  {{ childCount(it) }}
                 </span>
                 <span v-if="assigneeOf(it)" class="wsb-who">{{ assigneeOf(it) }}</span>
                 <span v-if="it.comments?.length" class="wsb-cmt">
@@ -95,6 +129,7 @@
       :lead="lead"
       :pick-project="editing.itemId === null && pickProject"
       @close="editing = null"
+      @open-item="openEditor"
     />
   </section>
 </template>
@@ -103,12 +138,27 @@
 // Board theo PROJECT của cockpit (session-teams §8): item gom theo status, click
 // mở WorkspaceBoardEditor (popover neo theo card), "+" tạo item backlog. Dữ liệu
 // sống ở board store — `board.changed` của sidecar tự refetch.
-import { ChevronDown, Folder, GitMerge, MessageSquare, Plus } from 'lucide-vue-next'
+import {
+  BookOpen,
+  Bug,
+  ChevronDown,
+  CornerDownRight,
+  Flag,
+  Folder,
+  GitMerge,
+  Layers,
+  ListTree,
+  MessageSquare,
+  Plus,
+  SquareCheck,
+  TriangleAlert,
+} from 'lucide-vue-next'
 import {
   BOARD_STATUS_ORDER,
   useBoardStore,
   type BoardItem,
   type BoardItemStatus,
+  type BoardItemType,
 } from '~/stores/board'
 import { useAgentsStore } from '~/stores/agents'
 import { useTeamsStore } from '~/stores/teams'
@@ -181,6 +231,25 @@ const STATUS_KEY: Record<BoardItemStatus, string> = {
 }
 const statusLabel = (s: BoardItemStatus): string => t(STATUS_KEY[s] ?? s)
 
+// ── Loại việc / cây cha-con (khuôn Jira) ──
+// Icon kiểu Jira: một glyph màu nhỏ cạnh title — type là cái nhìn đầu tiên
+// phân biệt epic/story/task/subtask/bug trước khi đọc chữ.
+const TYPE_ICON: Record<BoardItemType, unknown> = {
+  epic: Layers,
+  story: BookOpen,
+  task: SquareCheck,
+  subtask: CornerDownRight,
+  bug: Bug,
+}
+const typeOf = (it: BoardItem): BoardItemType => it.type ?? 'task'
+const typeIcon = (it: BoardItem): unknown => TYPE_ICON[typeOf(it)]
+
+// Breadcrumb cha + đếm con — tra trong CÙNG tập items đang hiển thị (board
+// hợp nhất nhiều project vẫn đúng vì parentId luôn cùng file/board với con).
+const parentTitle = (it: BoardItem): string =>
+  it.parentId ? (items.value.find((p) => p.id === it.parentId)?.title ?? '') : ''
+const childCount = (it: BoardItem): number => items.value.filter((c) => c.parentId === it.id).length
+
 // Tên người nhận: 'user' = sentinel của NGƯỜI DÙNG (không phải sessionId);
 // engineId → title của member/lead. assigneeRef = spec CHỜ materialize — hiện
 // tên spec + hậu tố "đã xếp" để phân biệt với phiên đang sống.
@@ -207,12 +276,19 @@ function assigneeOf(it: BoardItem): string {
 // snapshot sẽ đóng băng comments/assignee (chat xong không thấy, roster không
 // hiện sau khi materialize). Item lookup live qua computed.
 const editing = ref<{ itemId: string | null } | null>(null)
+// Tra theo danh sách đang hiển thị trước, rớt xuống store toàn cục — item con
+// có thể bị filter "Ẩn việc con" giấu khỏi `items` nhưng điều hướng cha↔con
+// trong modal vẫn phải mở được.
 const editingItem = computed(() =>
-  editing.value?.itemId ? (items.value.find((i) => i.id === editing.value!.itemId) ?? null) : null,
+  editing.value?.itemId
+    ? (items.value.find((i) => i.id === editing.value!.itemId) ??
+      board.itemById(editing.value!.itemId) ??
+      null)
+    : null,
 )
 
 function openEditor(itemId: string) {
-  if (!items.value.some((i) => i.id === itemId)) return
+  if (!items.value.some((i) => i.id === itemId) && !board.itemById(itemId)) return
   editing.value = { itemId }
 }
 
@@ -563,5 +639,75 @@ watch(
 .wsb-merged {
   color: var(--success);
   display: inline-flex;
+}
+
+/* ── Khuôn Jira: breadcrumb cha · icon loại · cờ ưu tiên · cảnh báo sev ·
+   đếm con. Màu type theo thói quen Jira: epic violet / story xanh lá /
+   task xanh dương / subtask xám / bug đỏ. */
+.wsb-parent {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  line-height: 1.2;
+  color: var(--textFaint);
+  margin-bottom: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.wsb-ticon {
+  display: inline-block;
+  vertical-align: -2px;
+  width: 12px;
+  height: 12px;
+  margin-right: 3px;
+  flex: 0 0 auto;
+}
+.wsb-ticon[data-type='epic'] {
+  color: var(--violet);
+}
+.wsb-ticon[data-type='story'] {
+  color: var(--success);
+}
+.wsb-ticon[data-type='task'] {
+  color: var(--info);
+}
+.wsb-ticon[data-type='subtask'] {
+  color: var(--muted-foreground);
+}
+.wsb-ticon[data-type='bug'] {
+  color: var(--destructive);
+}
+.wsb-prio,
+.wsb-sev,
+.wsb-kids {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.wsb-prio[data-prio='urgent'] {
+  color: var(--destructive);
+}
+.wsb-prio[data-prio='high'] {
+  color: var(--warning);
+}
+.wsb-prio[data-prio='low'] {
+  color: var(--textFaint);
+}
+.wsb-sev[data-sev='blocker'] {
+  color: var(--destructive);
+}
+.wsb-sev[data-sev='major'] {
+  color: var(--warning);
+}
+.wsb-sev[data-sev='minor'] {
+  color: var(--info);
+}
+.wsb-sev[data-sev='trivial'] {
+  color: var(--textFaint);
+}
+.wsb-kids {
+  color: var(--textFaint);
 }
 </style>

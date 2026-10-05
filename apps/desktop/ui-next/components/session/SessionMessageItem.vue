@@ -162,6 +162,18 @@
           />
           <SessionGateCard v-else :block="g.gate" />
         </template>
+        <!-- Chưa có block nào mà turn đang stream → ba chấm typing trong bubble
+             (cả turn thật lúc chờ token đầu lẫn ghost "đang soạn" của channel). -->
+        <div
+          v-if="streaming && grouped.length === 0"
+          class="mtyping"
+          role="status"
+          :aria-label="t('sessions.transcript.typing')"
+        >
+          <span />
+          <span />
+          <span />
+        </div>
       </div>
       <!-- Meta + actions row UNDER the body (proto parity — no longer a footer bar
            inside the card): HIDDEN while actively generating (the
@@ -297,12 +309,14 @@ const turnAuthor = computed(() => {
 })
 
 // Assistant-bubble pref (Settings → Sessions): wrap the reply body in an elevated
-// bubble card. Only when there's content (don't paint an empty box mid-stream).
+// bubble card. Còn cho phép một bubble RỖNG khi đang stream — nó chứa ba chấm
+// typing (`.mtyping`) nên không phải hộp trống: đây là trạng thái "đang soạn"
+// của cả turn thật lẫn ghost placeholder kênh ê-kíp.
 const showBubble = computed(
   () =>
     settings.sessions.assistantBubble &&
     props.message.role === 'assistant' &&
-    grouped.value.length > 0,
+    (grouped.value.length > 0 || streaming.value),
 )
 
 // Pre-narrowed render units so the template never narrows a union via property
@@ -1171,6 +1185,40 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
   box-shadow: var(--shadow-sm);
   /* Clip the full-bleed footer bar to the card's rounded corners. */
   overflow: hidden;
+}
+/* Ba chấm typing trong bubble rỗng — "đang soạn" kiểu chat quen thuộc: hiện
+   khi turn stream mà chưa có block nào (chờ token đầu, ghost kênh ê-kíp). */
+.mtyping {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 1px;
+  width: fit-content;
+}
+.mtyping span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted-foreground);
+  animation: mtype-bounce 1.2s ease-in-out infinite;
+}
+.mtyping span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.mtyping span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes mtype-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }
 /* Byline dot — shown only when a turn is parked on a gate (next to "Waiting…"). */
 .strdot {

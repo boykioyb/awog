@@ -399,3 +399,106 @@ describe('mutator gates — CLI attached', () => {
     expect(h.deleteSession).toHaveBeenCalledWith('ses-gate')
   })
 })
+
+// ─── sendMessage — tự cứu khi tràn ngữ cảnh ──────────────────────────────────
+// "Prompt is too long" giết phiên điều phối vĩnh viễn (không ai bấm /compact):
+// mọi wake sau đập vào cùng bức tường. sendMessage bắt đúng lỗi overflow →
+// chạy runStream slashCommand 'compact' → persist checkpoint → retry ĐÚNG một
+// lần với [summary + kept turns] (resume handles bị fold xoá).
+describe('sendMessage — tự cứu khi tràn ngữ cảnh', () => {
+  const SES_CTX = () =>
+    makeSession({
+      sdkSessionId: 'sdk-1',
+      messages: [{ id: 'msg_1', role: 'user', text: 'hi', at: '2026-01-01T00:00:00.000Z' }],
+    })
+  const COMPACTION = {
+    summary: 'bản tóm tắt',
+    firstKeptMessageId: 'msg_1',
+    tokensBefore: 180_000,
+    at: '2026-01-01T00:00:01.000Z',
+  }
+  const USAGE = { input_tokens: 0, output_tokens: 0 }
+  const OVERFLOW = {
+    text: '',
+    stopReason: 'error',
+    errorMessage: 'Claude Code returned an error result: Prompt is too long',
+    usage: USAGE,
+  }
+
+  it('lượt overflow → auto-compact + retry: reply về đúng, retry re-seed (gỡ sdkSessionId, mang compaction)', async () => {
+    h.session = SES_CTX()
+    const calls: Array<Record<string, unknown>> = []
+    h.runStream.mockImplementation(async (args: Record<string, unknown>) => {
+      calls.push(args)
+      if (args.slashCommand === 'compact') return { compaction: COMPACTION }
+      if (calls.filter((c) => c.slashCommand !== 'compact').length === 1) return OVERFLOW
+      return { text: 'trả lời sau khi nén', stopReason: 'end_turn', modelUsed: 'm', usage: USAGE }
+    })
+    const res = (await dispatch('sessions.sendMessage', SEND)) as { text?: string }
+    expect(res.text).toBe('trả lời sau khi nén')
+    expect(h.runStream).toHaveBeenCalledTimes(3)
+    expect(calls[1]?.slashCommand).toBe('compact')
+    expect(h.compactSession).toHaveBeenCalledWith('ses-gate', COMPACTION)
+    // Lượt đầu resume phiên SDK cũ; lượt retry re-seed — không resume handle.
+    expect(calls[0]?.sdkSessionId).toBe('sdk-1')
+    expect(calls[2]?.sdkSessionId).toBeUndefined()
+    expect(calls[2]?.compaction).toMatchObject(COMPACTION)
+  })
+
+  it('compact không ra checkpoint → giữ nguyên lỗi, không retry', async () => {
+    h.session = SES_CTX()
+    h.runStream.mockImplementation(async (args: Record<string, unknown>) =>
+      args.slashCommand === 'compact' ? {} : OVERFLOW,
+    )
+    const res = (await dispatch('sessions.sendMessage', SEND)) as {
+      errorMessage?: string
+    }
+    expect(res.errorMessage).toContain('Prompt is too long')
+    expect(h.runStream).toHaveBeenCalledTimes(2)
+    expect(h.compactSession).not.toHaveBeenCalled()
+  })
+
+  it('CLI gắn giữa lượt → KHÔNG tự cứu (compact lệch transcript của CLI — cùng cổng sessions.compact)', async () => {
+    h.session = SES_CTX()
+    h.runStream.mockImplementation(async () => {
+      h.attached = true // CLI gắn SAU cổng đầu + re-check registerAborter
+      return OVERFLOW
+    })
+    const res = (await dispatch('sessions.sendMessage', SEND)) as {
+      errorMessage?: string
+    }
+    expect(res.errorMessage).toContain('Prompt is too long')
+    expect(h.runStream).toHaveBeenCalledTimes(1)
+    expect(h.compactSession).not.toHaveBeenCalled()
+  })
+
+  it('lỗi khác (không phải overflow) → không compact, không retry', async () => {
+    h.session = SES_CTX()
+    h.runStream.mockImplementation(async () => ({
+      text: '',
+      stopReason: 'error',
+      errorMessage: 'Claude Code returned an error result: API rate limit reached',
+      usage: USAGE,
+    }))
+    const res = (await dispatch('sessions.sendMessage', SEND)) as {
+      errorMessage?: string
+    }
+    expect(res.errorMessage).toContain('rate limit')
+    expect(h.runStream).toHaveBeenCalledTimes(1)
+    expect(h.compactSession).not.toHaveBeenCalled()
+  })
+
+  it('retry vẫn overflow → chết, KHÔNG lặp vô hạn (đúng 1 lần cứu)', async () => {
+    h.session = SES_CTX()
+    h.runStream.mockImplementation(async (args: Record<string, unknown>) =>
+      args.slashCommand === 'compact' ? { compaction: COMPACTION } : OVERFLOW,
+    )
+    const res = (await dispatch('sessions.sendMessage', SEND)) as {
+      errorMessage?: string
+    }
+    expect(res.errorMessage).toContain('Prompt is too long')
+    // turn → compact → retry: đúng 3 lần gọi, không lần thứ 4.
+    expect(h.runStream).toHaveBeenCalledTimes(3)
+    expect(h.compactSession).toHaveBeenCalledTimes(1)
+  })
+})

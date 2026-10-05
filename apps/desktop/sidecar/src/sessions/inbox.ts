@@ -114,6 +114,11 @@ export interface InboxMessage {
   // lời dẫn + hàng rào nonce + thân tin đã khử bí mật. Dựng đúng một lần ở đây để
   // hàng rào chỉ có một nguồn duy nhất.
   block: string
+  // Tin wake "chỉ trò chuyện" (kênh ê-kíp — member↔member, báo lead): lượt nó
+  // mở ra là để TRẢ LỜI nhanh chứ không phải làm việc sâu, nên renderer đánh
+  // dấu lượt đó comm để sidecar kẹp model rẻ + effort thấp. Tin giao việc
+  // ([board]…) KHÔNG mang cờ này.
+  comm?: boolean
 }
 
 // Một mục danh bạ. CHỈ đủ để chọn đích — không preview, không transcript: nội dung
@@ -386,6 +391,10 @@ export interface PostSessionMessageInput {
   from: string | null
   to: string
   text: string
+  // Tin "chỉ trò chuyện" — lượt đích mở ra là để trả lời nhanh (kênh ê-kíp),
+  // không phải việc được giao. Truyền xuống payload để renderer kẹp cấu hình
+  // rẻ/nhanh cho đúng lượt đó.
+  comm?: boolean
 }
 
 // Đặt một tin vào hộp thư của phiên đích. KHÔNG khởi động lượt nào: chỉ kiểm tra
@@ -518,6 +527,7 @@ export async function postSessionMessage(input: PostSessionMessageInput): Promis
     hops,
     preview: oneLineLabel(body, MAX_PREVIEW_LEN),
     block: buildBlock({ from: input.from, fromTitle, at, body, sameRun }),
+    ...(input.comm ? { comm: true } : {}),
   }
 
   delivered.push({ at: now, from: input.from })
@@ -542,6 +552,7 @@ export async function postSessionMessage(input: PostSessionMessageInput): Promis
     at: message.at,
     preview: message.preview,
     block: message.block,
+    ...(message.comm ? { comm: true } : {}),
   })
   log.info('session inbox: message queued', {
     from: message.from ?? 'user',

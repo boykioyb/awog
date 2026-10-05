@@ -11,10 +11,13 @@
 
 import { loadTeam, MAX_TEAM_MEMBERS } from '../teams/store.js'
 import { listBoardItems } from '../boards/store.js'
+import { applyRoute, effectiveProvider, routeForItem } from '../boards/model-route.js'
 import { log } from '../util/logger.js'
 import { setSessionLlmOverride } from './store.js'
+import { emit } from '../transport/stdio.js'
 import { spawnChildSession, SpawnError } from './spawn.js'
 import type {
+  BoardItem,
   SessionLlmOverride,
   SessionSummary,
   SpawnSessionConfig,
@@ -72,19 +75,49 @@ export function findSpecMember(team: TeamSpec, key: string): SpecMember | undefi
   )
 }
 
-// Phiên SỐNG của run đã là run của member này chưa — agent.id khớp (khi spec
-// bind agent) là nhận diện mạnh nhất; title khớp làm fallback cho member
-// không bind và con đẻ tay cùng tên. Con đã lưu trữ KHÔNG tính còn sống.
+// Một spec member là một VAI TRÒ, không phải một ghế duy nhất: lead có thể xếp
+// nhiều ghế song song của cùng role (`member_instance` trên board tools — Dev
+// làm frontend còn "Dev 2" làm backend). Ghế N≥2 là một phiên riêng mang title
+// `<member title> N`, thừa hưởng agent binding + assigneeConfig của role.
+// Cap chặn typo kiểu "Dev 99" và fanout mất kiểm soát — trần run con
+// (MAX_TEAM_MEMBERS) vẫn áp như thường.
+export const MAX_MEMBER_INSTANCES = 4
+
+// Title của ghế: ghế gốc = title spec; ghế N = "<title> N".
+export function memberSeatTitle(member: SpecMember, instance?: number): string {
+  return instance !== undefined && instance >= 2 ? `${member.title} ${instance}` : member.title
+}
+
+// "<member title> <số>" — nhận diện một phiên là GHẾ instance của member này,
+// để lookup ghế gốc không bốc nhầm "Dev 2" khi đi tìm "Dev".
+const seatTitleRe = (title: string): RegExp =>
+  new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\d+$`)
+
+// Phiên SỐNG của run đang giữ ghế của member này. Ghế gốc (instance vắng/1):
+// agent.id khớp (khi spec bind agent) là nhận diện mạnh nhất — nhưng phải loại
+// các ghế instance ("Dev 2" mang cùng agent binding mà không phải ghế gốc);
+// title khớp làm fallback cho member không bind và con đẻ tay cùng tên. Ghế
+// N≥2 chỉ khớp theo title — agent.id của mọi ghế là giống nhau. Con đã lưu
+// trữ KHÔNG tính còn sống.
 export function liveMemberSession(
   summaries: SessionSummary[],
   runId: string,
   member: SpecMember,
+  instance?: number,
 ): SessionSummary | undefined {
+  if (instance !== undefined && instance >= 2) {
+    const seat = memberSeatTitle(member, instance)
+    return summaries.find(
+      (s) => s.teamRunId === runId && !s.archived && s.title === seat,
+    )
+  }
+  const instRe = seatTitleRe(member.title)
   return summaries.find(
     (s) =>
       s.teamRunId === runId &&
       !s.archived &&
-      ((member.agent?.id && s.agent?.id === member.agent.id) || s.title === member.title),
+      (s.title === member.title ||
+        (!!member.agent?.id && s.agent?.id === member.agent.id && !instRe.test(s.title ?? ''))),
   )
 }
 
@@ -117,12 +150,18 @@ export async function loadMemberLlmOverride(
   projectId: string,
   itemId: string | undefined,
   memberTitle: string,
+  // Title GHẾ khi dispatch vào một instance ("Dev 2") — key `member:<seat>`
+  // thắng nếu user tinh chỉnh riêng cho ghế đó, còn không thì kế thừa config
+  // của cả role (`member:<title>`).
+  seatTitle?: string,
 ): Promise<SessionLlmOverride | undefined> {
   if (!itemId) return undefined
   try {
     const items = await listBoardItems(projectId)
-    const item = items.find((i) => i.id === itemId)
-    return item?.assigneeConfig?.[`member:${memberTitle}`]
+    const cfg = items.find((i) => i.id === itemId)?.assigneeConfig
+    if (!cfg) return undefined
+    if (seatTitle && cfg[`member:${seatTitle}`]) return cfg[`member:${seatTitle}`]
+    return cfg[`member:${memberTitle}`]
   } catch (err) {
     log.warn('team-members: assigneeConfig lookup failed', {
       projectId,
@@ -148,18 +187,45 @@ export async function materializeMember(input: {
   // không đè lại nó ở lượt chạy. Member đã sống ⇒ vẫn ghi override (nó là quyết
   // định mới nhất của người dùng).
   llmOverride?: SessionLlmOverride | undefined
+  // Item đang được giao → auto-route modelId/level theo tính chất việc
+  // (model-route). Route ĐÈ modelId/level của llmOverride tay — dispatch là lúc
+  // quyết lại cấu hình; provider/accountId/mode của user được giữ nguyên.
+  routeItem?: Pick<BoardItem, 'type' | 'priority' | 'severity' | 'desc'> | undefined
+  // Ghế instance (≥2): spawn/tái dùng phiên "<member title> N" — một ghế
+  // song song của cùng role. Vắng/1 = ghế gốc.
+  instance?: number | undefined
 }): Promise<MaterializedMember> {
-  const live = liveMemberSession(input.summaries, input.runId, input.member)
-  if (live) {
-    if (input.llmOverride) {
-      await setSessionLlmOverride(live.id, input.llmOverride).catch((err) => {
-        log.warn('team-members: live-member llmOverride write failed', {
-          sessionId: live.id,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      })
+  // Override HIỆU DỤNG = manual (nếu có) sau khi auto-route đè modelId/level.
+  // Provider để route: override tay → pin của agent member → settings của gốc
+  // run (con kế thừa provider cha qua mergeSpawnConfig).
+  let override = input.llmOverride
+  if (input.routeItem) {
+    const provider = await effectiveProvider({
+      override,
+      agent: input.member.agent,
+      fallback: input.summaries.find((s) => s.id === input.runId)?.settings.provider,
+    })
+    if (provider) {
+      override = applyRoute(override, routeForItem(input.routeItem, provider))
     }
-    return { sessionId: live.id, spawned: false, title: live.title || input.member.title }
+  }
+
+  const seatTitle = memberSeatTitle(input.member, input.instance)
+  const live = liveMemberSession(input.summaries, input.runId, input.member, input.instance)
+  if (live) {
+    if (override) {
+      await setSessionLlmOverride(live.id, override)
+        .then((ok) => {
+          if (ok) emit('session.llm-override', { sessionId: live.id, llmOverride: override })
+        })
+        .catch((err) => {
+          log.warn('team-members: live-member llmOverride write failed', {
+            sessionId: live.id,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
+    }
+    return { sessionId: live.id, spawned: false, title: live.title || seatTitle }
   }
 
   // Member của spec là danh sách NGƯỜI DÙNG đã duyệt — spawn thẳng qua
@@ -169,7 +235,7 @@ export async function materializeMember(input: {
   try {
     const res = await spawnChildSession({
       parentId: input.runId,
-      title: input.member.title,
+      title: seatTitle,
       role: '',
       prompt: input.dispatchPrompt,
       ...(input.member.agent?.id ? { agentId: input.member.agent.id } : {}),
@@ -179,16 +245,20 @@ export async function materializeMember(input: {
         : {}),
       // Override cũng đi vào config để settings phiên (summary/hiển thị) phản
       // ánh đúng lựa chọn — không chỉ tầng llmOverride ở lượt chạy.
-      ...(input.llmOverride ? { config: llmOverrideToConfig(input.llmOverride) } : {}),
+      ...(override ? { config: llmOverrideToConfig(override) } : {}),
       maxRunChildren: MAX_TEAM_MEMBERS,
     })
-    if (input.llmOverride) {
-      await setSessionLlmOverride(res.id, input.llmOverride).catch((err) => {
-        log.warn('team-members: spawned-member llmOverride write failed', {
-          sessionId: res.id,
-          err: err instanceof Error ? err.message : String(err),
+    if (override) {
+      await setSessionLlmOverride(res.id, override)
+        .then((ok) => {
+          if (ok) emit('session.llm-override', { sessionId: res.id, llmOverride: override })
         })
-      })
+        .catch((err) => {
+          log.warn('team-members: spawned-member llmOverride write failed', {
+            sessionId: res.id,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
     }
     return { sessionId: res.id, spawned: true, title: res.title }
   } catch (err) {

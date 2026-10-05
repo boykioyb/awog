@@ -8,14 +8,21 @@ import {
   unregisterAborter,
   type RunStreamResult,
 } from '../sessions/runner.js'
-import { appendMessage, loadSession, updateSessionMetadata } from '../sessions/store.js'
+import {
+  appendMessage,
+  compactSession,
+  loadSession,
+  updateSessionMetadata,
+} from '../sessions/store.js'
 import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { buildLinkedSshHostBlock } from '../sessions/linked-ssh-host.js'
 import { buildSessionChecklistBlock } from '../sessions/todo-context.js'
 import { buildTeamBlock } from '../sessions/team-context.js'
+import { mirrorCommReply } from '../sessions/channel.js'
 import { ensureSessionWorkspace } from '../tasks/worktree.js'
 import { rollbackInProgressItems } from '../boards/store.js'
+import { pickModel } from '../boards/model-route.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import { loadProject } from '../projects/store.js'
@@ -154,6 +161,11 @@ const Params = z.object({
   // (see RunNonStreamArgs.nativeCommand). Anthropic branch only; the runner
   // refuses it on other providers.
   nativeCommand: z.boolean().optional(),
+  // Lượt "chỉ trò chuyện" — mở ra từ một tin wake của kênh ê-kíp ([channel]…)
+  // để TRẢ LỜI nhanh, không phải làm việc sâu. Set ⇒ sau mọi overlay settings
+  // (payload → agent pin → llmOverride) lượt này bị kẹp về effort 'low' + model
+  // rẻ nhất catalog của provider — chỉ lượt này, override persist không đội.
+  comm: z.boolean().optional(),
   history: z.array(SessionMessageSchema).default([]),
   settings: SessionSettingsSchema,
   systemPrompt: z.string().optional(),
@@ -737,6 +749,15 @@ register('sessions.sendMessage', async (raw) => {
     if (llmOv.accountId) sessionSettings.accountId = llmOv.accountId
     if (llmOv.level) sessionSettings.level = llmOv.level
     if (llmOv.mode) sessionSettings.mode = llmOv.mode
+  }
+
+  // Lượt comm (wake từ kênh ê-kíp): kẹp rẻ+nhanh SAU mọi overlay — kể cả
+  // override tay/auto-route, vì đích của lượt là trả lời nhanh chứ không làm
+  // việc sâu. Catalog rỗng ⇒ giữ model đang có, chỉ hạ effort.
+  if (params.comm) {
+    const cheap = pickModel(sessionSettings.provider, 0)
+    if (cheap) sessionSettings.modelId = cheap
+    sessionSettings.level = 'low'
   }
 
   // Resume context (ADR 0029): the runtime has no opaque session id — it rebuilds
@@ -1526,11 +1547,16 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // Session Teams §1.2 — lượt của một MEMBER fail (stopReason error/cancel) ⇒
   // mọi board item đang `in_progress` của nó lùi về `todo` + một system comment
   // (một trong hai chỗ hệ thống tự sửa status — chỗ kia là merge thành công).
-  // Cổng `teamRunId`: lead và phiên lẻ không cuốn gì. Best-effort trọn vẹn
+  // Cổng `teamRunId`: lead và phiên lẻ không cuốn gì. NGOẠI LỆ có chủ đích:
+  // board-worker lẻ (`origin:'board'` do board dispatch) CHÍNH là assignee của
+  // item nó đang làm — lượt fail mà không rollback thì item kẹt `in_progress`
+  // mãi không ai nhìn thấy. Hàm rollback đã scope theo assigneeSessionId nên
+  // việc mở cổng không thể đụng item của ai khác. Best-effort trọn vẹn
   // — rollback không bao giờ được đánh mất lỗi GỐC của lượt.
   const rollbackMemberBoardItems = async (): Promise<void> => {
     const projectId = groupSession?.projectId ?? params.projectId
-    if (!projectId || !groupSession?.teamRunId) return
+    const isBoardWorker = groupSession?.origin === 'board'
+    if (!projectId || (!groupSession?.teamRunId && !isBoardWorker)) return
     try {
       const count = await rollbackInProgressItems(projectId, params.sessionId)
       if (count > 0) {
@@ -1591,9 +1617,68 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     persistProgress()
   }
 
+  // Tự cứu khi lượt chết vì tràn ngữ cảnh ("Prompt is too long"…): không có
+  // người bấm /compact cho phiên điều phối nên một lượt lỗi = phiên chết
+  // vĩnh viễn (mọi wake sau đập vào cùng bức tường). Bắt đúng lỗi overflow →
+  // chạy cùng máy móc /compact (runStream slashCommand 'compact') → persist
+  // checkpoint (xoá sdkSessionId/codexThreadId → re-seed [summary + kept]) →
+  // thử lại ĐÚNG MỘT lần. Bỏ qua khi CLI đang gắn (transcript SDK của CLI sẽ
+  // lệch — cùng cổng của sessions.compact) hay lệnh native (đọc trạng thái CLI).
+  const isOverflowError = (msg: string | undefined): boolean =>
+    !!msg &&
+    /prompt is too long|context[_ ]?length|maximum context|too many tokens|exceeds?.{0,25}(token|context)|request[_ ]?too[_ ]?large/i.test(
+      msg,
+    )
+  let overflowRecovered = false
+  const recoverFromOverflow = async (): Promise<boolean> => {
+    if (params.nativeCommand || isCliAttached(params.sessionId)) return false
+    log.warn('turn hit context overflow — auto-compact then retry once', {
+      sessionId: params.sessionId,
+    })
+    try {
+      const res = await runStream(
+        {
+          sessionId: params.sessionId,
+          pendingText: '/compact',
+          history: historyForRun,
+          settings: {
+            provider: sessionSettings.provider,
+            modelId: sessionSettings.modelId,
+            level: 'low',
+            mode: 'ask',
+            ...(sessionSettings.accountId
+              ? { accountId: sessionSettings.accountId }
+              : {}),
+          },
+          slashCommand: 'compact',
+          abortController: new AbortController(),
+          ...(compactionForRun ? { compaction: compactionForRun } : {}),
+          ...(cwd ? { cwd } : {}),
+        },
+        { onChunk: () => {} },
+      )
+      if (!res.compaction) return false
+      await compactSession(params.sessionId, res.compaction)
+      // Checkpoint mới áp cho lượt retry: resume handles đã bị fold xoá.
+      compactionForRun = res.compaction
+      sdkSessionId = undefined
+      codexThreadId = undefined
+      codexToolSignature = undefined
+      return true
+    } catch (err) {
+      log.warn('overflow recovery compact failed', {
+        sessionId: params.sessionId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      return false
+    }
+  }
+
   let result
   try {
-    result = await runStream(
+    for (;;) {
+      try {
+        result = await runStream(
       {
         sessionId: params.sessionId,
         pendingText: params.text,
@@ -1737,8 +1822,42 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         },
       },
     )
+      } catch (err) {
+        // Pi path ném lỗi provider (kể cả overflow) thay vì trả stopReason.
+        const errMsg = err instanceof Error ? err.message : String(err)
+        if (!overflowRecovered && isOverflowError(errMsg) && (await recoverFromOverflow())) {
+          overflowRecovered = true
+          continue
+        }
+        throw err
+      }
+      // Graceful error stop (Claude SDK, mid-stream provider fail): cùng lỗi
+      // overflow → compact rồi thử lại đúng một lần.
+      if (
+        result.stopReason === 'error' &&
+        !overflowRecovered &&
+        isOverflowError(result.errorMessage) &&
+        (await recoverFromOverflow())
+      ) {
+        overflowRecovered = true
+        continue
+      }
+      break
+    }
     // Success → persist the authoritative final reply (full text + usage + steps).
     await persistAgent({ result })
+    // Lượt comm (wake kênh): mirror reply lên channel — chỉ dẫn team_say trong
+    // tin wake là mềm; marker đảm bảo kênh THẤY câu trả lời kể cả khi model
+    // trả lời trong transcript riêng. Nuốt lỗi nội bộ, skip khi phiên đã tự
+    // team_say trong lượt (xem sessions/channel.ts).
+    if (
+      params.comm &&
+      result.text &&
+      result.stopReason !== 'error' &&
+      result.stopReason !== 'aborted'
+    ) {
+      await mirrorCommReply(params.sessionId, result.text)
+    }
     // Graceful fail cũng gỡ việc khỏi board của member (spec §1.2): Pi nuốt một
     // abort giữa-stream thành stopReason 'aborted' THAY VÌ ném, và provider lỗi
     // giữa chừng về 'error' — cả hai đều đi qua nhánh "thành công" này chứ không

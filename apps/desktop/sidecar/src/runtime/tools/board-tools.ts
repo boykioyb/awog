@@ -5,9 +5,12 @@
 //   team_item_update  — đổi status/assignee/stage/title/desc của một item      (ghi)
 //   team_item_comment — ghi comment dính vào item                             (ghi)
 //
-// CHỈ cấp cho CHAT SESSION nằm trong một NHÓM (lead hoặc member): một phiên lẻ
-// không có ê-kíp để điều phối — `createBoardRunners` trả null khi resolve ra
-// không-nhóm hoặc không-project, nên phiên thường không trả một token schema nào.
+// CHỈ cấp cho CHAT SESSION nằm trong một NHÓM (lead hoặc member) HOẶC phiên
+// board-worker lẻ (agents.run origin 'board' — hợp đồng của nó LÀ board item:
+// tin wake của boards.upsert/comment đã dẫn team_item_* từ trước, thiếu tool
+// thì nó không bao giờ trả lời được trên thread). Phiên chat thường không có
+// ê-kíp lẫn việc board ⇒ `createBoardRunners` trả null, không trả một token
+// schema nào.
 // Gate đọc ĐỒNG BỘ bản đồ `sessionManager` — bản đồ đã ấm vì toolset chỉ được
 // dựng bên trong một lượt của chính phiên đó (cùng khuôn getSessionProjectId của
 // cổng quyền), còn khi caller đã truyền sẵn projectId/runId thì dùng luôn.
@@ -44,13 +47,18 @@ import {
 } from '../../boards/store.js'
 import { listSessionSummaries } from '../../sessions/store.js'
 import { sessionManager } from '../../sessions/session-manager.js'
+import { runRootId } from '../../sessions/run-root.js'
 import { postSessionMessage } from '../../sessions/inbox.js'
+import { routeSessionForItem } from '../../boards/model-route.js'
 import { postChannelEntry } from '../../sessions/channel.js'
+import { emit } from '../../transport/stdio.js'
 import {
   findSpecMember,
   loadMemberLlmOverride,
   loadRunTeam,
   materializeMember,
+  MAX_MEMBER_INSTANCES,
+  memberSeatTitle,
 } from '../../sessions/team-members.js'
 import { clampForLlm } from './output-budget.js'
 import { CHANNEL_TOOL_NAMES } from './channel-tools.js'
@@ -76,6 +84,36 @@ export const TEAM_TOOL_NAMES = [
   ...MEMBER_TOOL_NAMES,
 ] as const
 
+// Báo cho UI toast khi một PHIÊN động vào board — `board.changed` chỉ mang
+// projectId (tín hiệu refetch), event này mang actor + nội dung đổi để renderer
+// hiện "ai vừa làm gì" mà không phải diff. User tự sửa qua modal không qua đây
+// (họ thấy kết quả ngay trên UI). Đặt sau khi item đã ghi xong — toast chậm
+// một nhịp vẫn đúng, còn tool call hỏng vì emit thì không chấp nhận được.
+function emitItemTouched(
+  projectId: string,
+  item: BoardItem,
+  actorTitle: string,
+  action: 'created' | 'updated',
+  changes?: string[],
+): void {
+  try {
+    emit('board.item-touched', {
+      projectId,
+      itemId: item.id,
+      title: item.title,
+      status: item.status,
+      actorTitle,
+      action,
+      ...(changes?.length ? { changes } : {}),
+    })
+  } catch (err) {
+    log.warn('board tools: item-touched emit failed', {
+      itemId: item.id,
+      err: err instanceof Error ? err.message : String(err),
+    })
+  }
+}
+
 // ─── Văn bản tool (một nguồn, mức chính sách — nhánh Pi dựng schema TypeBox,
 // nhánh Claude SDK dựng schema zod từ đây) ───────────────────────────────────
 export const BOARD_TOOLS_TEXT = {
@@ -94,7 +132,8 @@ export const BOARD_TOOLS_TEXT = {
   createDescription:
     'Add a work item to the project board. Use it to dispatch work to a team member (set assignee_session_id) or to park an idea. ' +
     'An item created with an assignee starts at todo — work they should start — and the assignee is woken automatically; without one it lands in backlog, the no-parking-lot nothing gets woken for. ' +
-    'Set `stage` to place the item in a wave: when every item of the lowest stage is done the lead is woken to orchestrate the next one.',
+    'Set `stage` to place the item in a wave: when every item of the lowest stage is done the lead is woken to orchestrate the next one. ' +
+    'Splitting work? Do NOT spawn loose siblings: create each piece with `parent_id` pointing at the item it belongs to (type "subtask" for slices of one item, or stories under an epic) so the board shows the real hierarchy.',
   createTitle: 'One line naming the work (max ~140 chars). It shows up as the card title on the board.',
   createDesc:
     'Optional detail: goal, constraints, file pointers (max 8000 chars). The assignee reads this cold — write it self-contained.',
@@ -103,9 +142,22 @@ export const BOARD_TOOLS_TEXT = {
   createAssigneeMember:
     'Title or agent id of a member of this run\'s team spec (the bench list in your <team> block). ' +
     'That member\'s session is spawned ON this assignment — never ahead of need — and woken with the item. ' +
-    'Requires the item to go live (todo); a parked backlog item wakes nobody.',
+    'Requires the item to go live (todo); a parked backlog item wakes nobody. ' +
+    'A spec member is a ROLE, not a singleton: pass member_instance to seat a parallel instance of the same member.',
+  memberInstance:
+    'Seat number (integer ≥ 2) for a PARALLEL instance of the spec member in assignee_member — e.g. assignee_member "Dev" + member_instance 2 dispatches to a second Dev titled "Dev 2" while Dev keeps its own item. ' +
+    'Use it when independent workstreams would queue on one member (frontend vs backend, build vs fix), not for sequential work — every seat is a full session burning real tokens. ' +
+    'Reusing a seat number that is already live dispatches to that existing session.',
   createStage: 'Optional wave number (integer). Items of the lowest stage run first; later waves are unlocked as earlier ones complete.',
   createStatus: "'todo' when the assignee should start now (default when an assignee is set); 'backlog' parks it without waking anyone.",
+  createType:
+    'Issue kind (default "task"): epic = a large scope to break down; story = user-facing need; task = technical work; ' +
+    'subtask = a slice of a parent item (use with parent_id); bug = a defect (pair it with severity).',
+  createParent:
+    'Id of the PARENT item (bi-…) this belongs under — the way to split one item into pieces WITHOUT cluttering the board with loose siblings. ' +
+    'When you decompose an epic or your own item into parts, create each child with parent_id set to it (and usually type "subtask").',
+  createPriority: 'How it should be queued: urgent | high | medium (default) | low.',
+  createSeverity: 'Impact level for defects/blocking work: blocker | major | minor | trivial.',
   updateDescription:
     'Update a work item: move it between columns (status), reassign it, retitle it, or move it to another stage wave. ' +
     'Status contract: backlog parks (nobody is woken); todo = ready to start; in_progress = you are on it; ' +
@@ -117,10 +169,15 @@ export const BOARD_TOOLS_TEXT = {
   updateAssignee: 'Reassign to another session id, or null to return the item to the unassigned pool. For a bench member without a session yet, use assignee_member instead.',
   updateAssigneeMember:
     'Title or agent id of a member of this run\'s team spec — their session spawns on this assignment and is woken with the item. ' +
-    'Only for an item that is (or becomes, via status) live: todo, in_progress, in_review, changes or blocked.',
+    'Only for an item that is (or becomes, via status) live: todo, in_progress, in_review, changes or blocked. ' +
+    'A spec member is a ROLE, not a singleton: pass member_instance to seat a parallel instance of the same member.',
   updateStage: 'Move to another wave (integer), or null to take it off the stage plan.',
   updateTitle: 'New one-line title.',
   updateDesc: 'New description (replaces the old one; empty string clears it).',
+  updateType: 'Change the issue kind: epic | story | task | subtask | bug.',
+  updateParent: 'Re-parent the item under another item id (bi-…), or null to detach it back to the top level.',
+  updatePriority: 'Re-queue priority: urgent | high | medium | low.',
+  updateSeverity: 'Re-grade severity: blocker | major | minor | trivial.',
   commentDescription:
     'Add a comment to a work item — progress notes, why it is blocked, what the reviewer should look at, answers to questions, and replies to the user. ' +
     'Comments are the item\'s shared memory AND its live conversation: the lead, the user and the next member to touch it all read them, and the other side of the thread is woken when you post. ' +
@@ -151,10 +208,30 @@ const CreateParams = Type.Object({
   assignee_member: Type.Optional(
     Type.String({ description: BOARD_TOOLS_TEXT.createAssigneeMember }),
   ),
+  member_instance: Type.Optional(
+    Type.Integer({ minimum: 2, description: BOARD_TOOLS_TEXT.memberInstance }),
+  ),
   stage: Type.Optional(Type.Integer({ description: BOARD_TOOLS_TEXT.createStage })),
   status: Type.Optional(
     Type.Union([Type.Literal('backlog'), Type.Literal('todo')], {
       description: BOARD_TOOLS_TEXT.createStatus,
+    }),
+  ),
+  type: Type.Optional(
+    Type.Union(
+      ['epic', 'story', 'task', 'subtask', 'bug'].map((v) => Type.Literal(v)),
+      { description: BOARD_TOOLS_TEXT.createType },
+    ),
+  ),
+  parent_id: Type.Optional(Type.String({ description: BOARD_TOOLS_TEXT.createParent })),
+  priority: Type.Optional(
+    Type.Union(['urgent', 'high', 'medium', 'low'].map((v) => Type.Literal(v)), {
+      description: BOARD_TOOLS_TEXT.createPriority,
+    }),
+  ),
+  severity: Type.Optional(
+    Type.Union(['blocker', 'major', 'minor', 'trivial'].map((v) => Type.Literal(v)), {
+      description: BOARD_TOOLS_TEXT.createSeverity,
     }),
   ),
 })
@@ -174,11 +251,33 @@ const UpdateParams = Type.Object({
   assignee_member: Type.Optional(
     Type.String({ description: BOARD_TOOLS_TEXT.updateAssigneeMember }),
   ),
+  member_instance: Type.Optional(
+    Type.Integer({ minimum: 2, description: BOARD_TOOLS_TEXT.memberInstance }),
+  ),
   stage: Type.Optional(
     Type.Union([Type.Integer(), Type.Null()], { description: BOARD_TOOLS_TEXT.updateStage }),
   ),
   title: Type.Optional(Type.String({ description: BOARD_TOOLS_TEXT.updateTitle })),
   desc: Type.Optional(Type.String({ description: BOARD_TOOLS_TEXT.updateDesc })),
+  type: Type.Optional(
+    Type.Union(
+      ['epic', 'story', 'task', 'subtask', 'bug'].map((v) => Type.Literal(v)),
+      { description: BOARD_TOOLS_TEXT.updateType },
+    ),
+  ),
+  parent_id: Type.Optional(
+    Type.Union([Type.String(), Type.Null()], { description: BOARD_TOOLS_TEXT.updateParent }),
+  ),
+  priority: Type.Optional(
+    Type.Union(['urgent', 'high', 'medium', 'low'].map((v) => Type.Literal(v)), {
+      description: BOARD_TOOLS_TEXT.updatePriority,
+    }),
+  ),
+  severity: Type.Optional(
+    Type.Union(['blocker', 'major', 'minor', 'trivial'].map((v) => Type.Literal(v)), {
+      description: BOARD_TOOLS_TEXT.updateSeverity,
+    }),
+  ),
 })
 
 const CommentParams = Type.Object({
@@ -202,17 +301,27 @@ export interface BoardCreateInput {
   desc?: string | undefined
   assignee_session_id?: string | undefined
   assignee_member?: string | undefined
+  member_instance?: number | undefined
   stage?: number | undefined
   status?: 'backlog' | 'todo' | undefined
+  type?: BoardItem['type'] | undefined
+  parent_id?: string | undefined
+  priority?: BoardItem['priority'] | undefined
+  severity?: BoardItem['severity'] | undefined
 }
 export interface BoardUpdateInput {
   item_id: string
   status?: BoardItemStatus | undefined
   assignee_session_id?: string | null | undefined
   assignee_member?: string | undefined
+  member_instance?: number | undefined
   stage?: number | null | undefined
   title?: string | undefined
   desc?: string | undefined
+  type?: BoardItem['type'] | undefined
+  parent_id?: string | null | undefined
+  priority?: BoardItem['priority'] | undefined
+  severity?: BoardItem['severity'] | undefined
 }
 export interface BoardCommentInput {
   item_id: string
@@ -252,22 +361,33 @@ interface BoardToolDetails {
 interface RunContext {
   projectId: string
   runId: string
+  // Phiên board-worker lẻ (agents.run origin 'board'): runId === sessionId —
+  // "run một người": không lead để báo cáo, không ê-kíp/bench để điều phối,
+  // nhưng hợp đồng của nó vẫn là board item nên được board tools.
+  boardWorker?: true
 }
 
-// Resolve phiên → (projectId, runId) từ bản đồ ấm. `null` khi phiên không
-// nhìn thấy được (chưa persist ⇒ chưa thể nằm trong nhóm nào — setGroup từ chối
-// id lạ), không thuộc nhóm (không cha VÀ không con), hoặc không có project (board
-// là THEO PROJECT — một nhóm không project không có chỗ đặt backlog).
+// Resolve phiên → (projectId, runId) từ bản đồ ấm — gốc nhóm qua resolver
+// chung `runRootId` (sessions/run-root.ts: member → cha, lead → link spec
+// `teamId` hoặc con đang có). `null` khi phiên không nhìn thấy được (chưa
+// persist ⇒ chưa thể nằm trong nhóm nào — setGroup từ chối id lạ), không thuộc
+// nhóm/board, hoặc không có project (board là THEO PROJECT — một phiên không
+// project không có chỗ đặt backlog). Fallback `origin:'board'` PHẢI đứng sau
+// runRootId: member của một run cũng có thể mang origin 'board' nếu spec đẻ
+// nó qua đường board — membership thắng, marker nguồn chỉ là kế cuối.
 function resolveRunContext(
   summaries: SessionSummary[],
   sessionId: string,
 ): RunContext | null {
   const me = summaries.find((s) => s.id === sessionId)
   if (!me) return null
-  const runId =
-    me.teamRunId ??
-    (summaries.some((s) => s.teamRunId === sessionId) ? sessionId : undefined)
-  if (!runId) return null
+  const runId = runRootId(summaries, sessionId)
+  if (!runId) {
+    if (me.origin === 'board' && me.projectId) {
+      return { projectId: me.projectId, runId: me.id, boardWorker: true }
+    }
+    return null
+  }
   // Member kế thừa projectId của cha (spec §1.2: 1 run = 1 board) — fallback
   // lên project của gốc cho header cũ chưa ghi field.
   const projectId =
@@ -310,6 +430,7 @@ export function createBoardRunners(input: {
         : { projectId: input.projectId, runId: input.runId }
   if (!ctx) return null
   const { projectId, runId } = ctx
+  const boardWorker = ctx.boardWorker === true
 
   // Tiêu đề session → tên hiển thị cho assignee/comment (một lần mỗi gọi).
   async function titleById(): Promise<Map<string, string>> {
@@ -319,9 +440,12 @@ export function createBoardRunners(input: {
 
   // Wake phiên GỐC bằng một tin inbox — cha↔con là run edge nên đi trọn
   // pipeline dedup sẵn có (spec §6). Self-target (chính lead đổi status) bị
-  // postSessionMessage từ chối — đúng: lead không cần tự đánh thức mình. Luôn
-  // nuốt lỗi: board đã ghi xong, một wake tắc không đổi được điều đó.
+  // postSessionMessage từ chối — đúng: lead không cần tự đánh thức mình.
+  // Board-worker lẻ KHÔNG có lead: "reviewer" của nó là người dùng, họ thấy
+  // in_review/blocked qua UI — bỏ luôn nhịp gọi này. Luôn nuốt lỗi: board đã
+  // ghi xong, một wake tắc không đổi được điều đó.
   async function wakeLead(text: string): Promise<boolean> {
+    if (boardWorker) return false
     try {
       await postSessionMessage({ from: input.sessionId, to: runId, text })
       return true
@@ -336,9 +460,31 @@ export function createBoardRunners(input: {
   }
 
   // Assignee có thuộc nhóm này không — là member (cha = gốc) hoặc chính gốc.
+  // Board-worker lẻ: "run" của nó chỉ có một người, nhưng mọi chuyển giao nó
+  // quyết định đều hợp lệ (giống đường user boards.upsert wake mọi assignee)
+  // — nới thành "phiên tồn tại là được" thay vì chặt theo runId.
   function assigneeInRun(summaries: SessionSummary[], assigneeId: string): boolean {
     const s = summaries.find((x) => x.id === assigneeId)
+    if (boardWorker) return !!s
     return !!s && (s.id === runId || s.teamRunId === runId)
+  }
+
+  // Auto-route model/effort của phiên nhận việc theo tính chất ITEM — gọi NGAY
+  // TRƯỚC wake để phiên tỉnh dậy đã chạy đúng cấu hình (model-route.ts). Gán
+  // cho chính gốc run ⇒ giữ sàn tầm giữa của lead. Best-effort trọn vẹn: route
+  // tắc không được làm hỏng việc giao đã ghi.
+  async function routeAssignee(assigneeId: string, item: BoardItem): Promise<void> {
+    try {
+      const assignee = (await listSessionSummaries()).find((s) => s.id === assigneeId)
+      if (assignee) {
+        await routeSessionForItem(assignee, item, { lead: assigneeId === runId })
+      }
+    } catch (err) {
+      log.warn('board tools: assignee model route failed', {
+        to: assigneeId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
   }
 
   // Wake ASSIGNEE khi một item vừa được đặt vào tay họ — đối xứng wake-lead.
@@ -347,13 +493,14 @@ export function createBoardRunners(input: {
   // này tự giao như mọi tin trong run; tự gán cho chính mình bị bỏ qua ở điểm
   // gọi (postSessionMessage từ chối self-target). Best-effort như wake-lead.
   async function wakeAssignee(assigneeId: string, item: BoardItem): Promise<boolean> {
+    await routeAssignee(assigneeId, item)
     try {
       await postSessionMessage({
         from: input.sessionId,
         to: assigneeId,
         text:
           `[board] "${item.title}" (${item.id}) was assigned to you — status ${item.status}. ` +
-          'Call team_item_get for the full brief and thread, acknowledge with team_item_comment, then move it to in_progress when you start. ' +
+          'Acknowledge FIRST with team_item_comment in the thread — before any other work — then call team_item_get for the full brief and move it to in_progress when you start. ' +
           'Keep the thread posted as you make progress — it is the team\'s shared view of your work.',
       })
       return true
@@ -370,11 +517,18 @@ export function createBoardRunners(input: {
   // Resolve `assignee_member` → sessionId. Member của spec mà CHƯA có phiên
   // thì materialize ngay tại đây (spawnChildSession dưới gốc run — tin đầu
   // inbox của member chính là lời giao việc mang title+id item, nên caller
-  // KHÔNG wake thêm). Member đã sống ⇒ dùng lại phiên đó. Lỗi resolve/spec/spawn
-  // trả về dạng text để caller bọc thành isError thay vì ném.
+  // KHÔNG wake thêm). Member đã sống ⇒ dùng lại phiên đó. `instance` (≥2) =
+  // ghế song song của cùng role: tái dùng "Dev 2" đang sống, hoặc spawn nó —
+  // lead chọn khi các luồng việc độc lập sẽ phải xếp hàng trên một member.
+  // Lỗi resolve/spec/spawn trả về dạng text để caller bọc thành isError thay
+  // vì ném.
   async function resolveMemberAssignee(
     key: string,
-    item: { id?: string; title: string },
+    item: { id?: string; title: string } & Pick<
+      BoardItem,
+      'type' | 'priority' | 'severity' | 'desc'
+    >,
+    instance?: number,
   ): Promise<{ sessionId: string; spawned: boolean; title: string } | { error: string }> {
     const summaries = await listSessionSummaries()
     const root = summaries.find((s) => s.id === runId)
@@ -393,11 +547,19 @@ export function createBoardRunners(input: {
         error: `No member "${key}" in team "${team.name}". Members: ${roster || '(the spec has no members)'}.`,
       }
     }
+    if (instance !== undefined && instance > MAX_MEMBER_INSTANCES) {
+      return {
+        error:
+          `member_instance ${instance} is over the seat cap — a spec member seats at most ${MAX_MEMBER_INSTANCES} parallel instances ` +
+          `(the base seat plus ${MAX_MEMBER_INSTANCES - 1} numbered seats). Reuse a live seat, or split the work differently.`,
+      }
+    }
+    const seat = memberSeatTitle(member, instance)
     const actor = (await titleById()).get(input.sessionId) ?? input.sessionId
     const prompt =
-      `You are "${member.title}" — a member of the "${team.name}" session team. ` +
+      `You are "${seat}" — a member of the "${team.name}" session team. ` +
       `${actor} assigned "${item.title}"${item.id ? ` (${item.id})` : ''} on the project board to you — ` +
-      'call team_item_get for the full brief and thread, acknowledge with team_item_comment, then move it to in_progress when you start. ' +
+      'acknowledge FIRST with team_item_comment in the thread — before any other work — then call team_item_get for the full brief and move it to in_progress when you start. ' +
       'Narrate progress on the item thread — the board is the team\'s shared view of your work.'
     try {
       return await materializeMember({
@@ -408,7 +570,17 @@ export function createBoardRunners(input: {
         dispatchPrompt: prompt,
         // Override LLM người dùng đặt ở Advanced của item (nếu có) — lead gọi
         // assignee_member sau khi item đã tồn tại nên item.id luôn có thể tra.
-        llmOverride: await loadMemberLlmOverride(projectId, item.id, member.title),
+        // Ghế instance: key member:<seat> thắng, rồi tới member:<title>.
+        llmOverride: await loadMemberLlmOverride(
+          projectId,
+          item.id,
+          member.title,
+          seat !== member.title ? seat : undefined,
+        ),
+        // Auto-route theo tính chất item: đè modelId/level lên override ở
+        // materializeMember — cùng hành vi với wakeAssignee của phiên sống.
+        routeItem: item,
+        ...(instance !== undefined ? { instance } : {}),
       })
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) }
@@ -424,9 +596,14 @@ export function createBoardRunners(input: {
       const wave = await checkStageWave(projectId)
       if (!wave) return null
       const text = `[board] stage ${wave.completedStage} complete — stage ${wave.nextStage} ready`
-      await postSystemChannelEntry(runId, text)
-      const woke = await wakeLead(text)
-      return woke ? text : `${text} (lead wake queued or unavailable)`
+      // Board-worker lẻ: không channel ê-kíp để ghi cũng không lead để gọi —
+      // kết quả wave vẫn trả về cho chính tool call.
+      if (!boardWorker) {
+        await postSystemChannelEntry(runId, text)
+        const woke = await wakeLead(text)
+        return woke ? text : `${text} (lead wake queued or unavailable)`
+      }
+      return text
     } catch (err) {
       log.warn('board tools: stage wave check failed', {
         projectId,
@@ -467,7 +644,11 @@ export function createBoardRunners(input: {
               : ' · unassigned'
           const stage = it.stage !== undefined ? ` · stage ${it.stage}` : ''
           const comments = it.comments.length > 0 ? ` · ${it.comments.length} comment(s)` : ''
-          lines.push(`- ${it.id} · "${it.title}"${assignee}${stage}${comments}`)
+          const kind = it.type && it.type !== 'task' ? `[${it.type}] ` : ''
+          const parent = it.parentId ? ` · child of ${it.parentId}` : ''
+          const prio = it.priority && it.priority !== 'medium' ? ` · ${it.priority}` : ''
+          const sev = it.severity ? ` · sev:${it.severity}` : ''
+          lines.push(`- ${it.id} · ${kind}"${it.title}"${assignee}${stage}${parent}${prio}${sev}${comments}`)
         }
       }
       const tag = `board-items-${randomBytes(6).toString('hex')}`
@@ -508,9 +689,13 @@ export function createBoardRunners(input: {
           ? ` · queued for spec "${item.assigneeRef}"`
           : ' · unassigned'
       const stage = item.stage !== undefined ? ` · stage ${item.stage}` : ''
+      const kind = ` · ${item.type ?? 'task'}`
+      const prio = item.priority ? ` · priority ${item.priority}` : ''
+      const sev = item.severity ? ` · severity ${item.severity}` : ''
+      const parent = item.parentId ? ` · child of ${item.parentId}` : ''
       const creator = item.createdBy ? (titles.get(item.createdBy) ?? item.createdBy) : 'user'
       const header =
-        `${item.id} · "${item.title}" — status ${item.status}${assignee}${stage} · ` +
+        `${item.id} · "${item.title}" — status ${item.status}${kind}${assignee}${stage}${parent}${prio}${sev} · ` +
         `created by ${creator} · updated ${item.updatedAt.slice(0, 16).replace('T', ' ')}`
       const desc = item.desc?.trim() ? item.desc : '(no description)'
       // Thread comment: MỚI NHẤT quan trọng nhất (wake trỏ vào tin mới đến), nên
@@ -556,6 +741,12 @@ export function createBoardRunners(input: {
         }
       }
       const memberKey = params.assignee_member?.trim()
+      if (params.member_instance !== undefined && !memberKey) {
+        return {
+          text: 'member_instance selects a parallel seat of a spec member — pass assignee_member (the member title) alongside it.',
+          isError: true,
+        }
+      }
       if (memberKey && params.assignee_session_id) {
         return {
           text: 'Pass either assignee_session_id (a live session) or assignee_member (a bench member by name) — not both.',
@@ -578,6 +769,10 @@ export function createBoardRunners(input: {
         assigneeSessionId: params.assignee_session_id,
         stage: params.stage,
         status: targetStatus,
+        type: params.type,
+        parentId: params.parent_id,
+        priority: params.priority,
+        severity: params.severity,
         createdBy: input.sessionId,
       })
 
@@ -586,7 +781,7 @@ export function createBoardRunners(input: {
       // upsert thứ hai (transition assignee ghi đúng bubble + wake ở dưới).
       let memberSpawned = false
       if (memberKey) {
-        const mat = await resolveMemberAssignee(memberKey, item)
+        const mat = await resolveMemberAssignee(memberKey, item, params.member_instance)
         if ('error' in mat) {
           return {
             text: `Item ${item.id} was created, but the member could not be dispatched: ${mat.error}`,
@@ -650,6 +845,7 @@ export function createBoardRunners(input: {
           parts.push(woke ? 'assignee was woken' : 'assignee wake queued or unavailable')
         }
       }
+      emitItemTouched(projectId, item, titles.get(input.sessionId) ?? 'agent', 'created')
       return { text: `${parts.join(', ')}.`, itemId: item.id }
     } catch (err) {
       if (err instanceof BoardError) return { text: err.message, isError: true }
@@ -689,6 +885,13 @@ export function createBoardRunners(input: {
           isError: true,
         }
       }
+      if (params.member_instance !== undefined && !memberKey) {
+        return {
+          text: 'member_instance selects a parallel seat of a spec member — pass assignee_member (the member title) alongside it.',
+          itemId: params.item_id,
+          isError: true,
+        }
+      }
       if (memberKey && params.assignee_session_id) {
         return {
           text: 'Pass either assignee_session_id (a live session) or assignee_member (a bench member by name) — not both.',
@@ -711,7 +914,19 @@ export function createBoardRunners(input: {
             isError: true,
           }
         }
-        const mat = await resolveMemberAssignee(memberKey, before)
+        const mat = await resolveMemberAssignee(
+          memberKey,
+          {
+            ...before,
+            // Route theo giá trị HIỆU DỤNG của chính call này — một update có
+            // thể vừa gán member vừa nâng priority/severity trong cùng nhát.
+            ...(params.type !== undefined ? { type: params.type } : {}),
+            ...(params.priority !== undefined ? { priority: params.priority } : {}),
+            ...(params.severity !== undefined ? { severity: params.severity } : {}),
+            ...(params.desc !== undefined ? { desc: params.desc } : {}),
+          },
+          params.member_instance,
+        )
         if ('error' in mat) {
           return { text: mat.error, itemId: params.item_id, isError: true }
         }
@@ -728,6 +943,10 @@ export function createBoardRunners(input: {
         stage: params.stage,
         title: params.title,
         desc: params.desc,
+        type: params.type,
+        parentId: params.parent_id,
+        priority: params.priority,
+        severity: params.severity,
       })
       const changes: string[] = []
       if (before.status !== item.status) changes.push(`status ${before.status} → ${item.status}`)
@@ -741,8 +960,23 @@ export function createBoardRunners(input: {
       if (before.stage !== item.stage) changes.push(`stage ${before.stage ?? 'none'} → ${item.stage ?? 'none'}`)
       if (before.title !== item.title) changes.push('title updated')
       if (before.desc !== item.desc) changes.push('description updated')
+      if (before.type !== item.type) changes.push(`type → ${item.type ?? 'task'}`)
+      if (before.parentId !== item.parentId) {
+        changes.push(item.parentId ? `parent → ${item.parentId}` : 'detached from parent')
+      }
+      if (before.priority !== item.priority) changes.push(`priority → ${item.priority}`)
+      if (before.severity !== item.severity) changes.push(`severity → ${item.severity}`)
       let text =
         changes.length > 0 ? `Item ${item.id}: ${changes.join(', ')}.` : `Item ${item.id}: no change.`
+      if (changes.length > 0) {
+        emitItemTouched(
+          projectId,
+          item,
+          titles.get(input.sessionId) ?? 'agent',
+          'updated',
+          changes,
+        )
+      }
 
       // Ghi lại transition assignee/status/stage lên thread "Trao đổi". GIAO
       // VIỆC là một tin nhắn THẬT từ người giao (bubble của assigner — thread

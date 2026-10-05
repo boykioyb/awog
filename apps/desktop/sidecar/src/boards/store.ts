@@ -29,7 +29,10 @@ import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import type {
   BoardItem,
   BoardItemComment,
+  BoardItemPriority,
+  BoardItemSeverity,
   BoardItemStatus,
+  BoardItemType,
   ProjectBoard,
   SessionLlmOverride,
 } from '../types/shared.js'
@@ -175,6 +178,54 @@ function cleanItemId(raw: string): string {
   return raw
 }
 
+const TYPE_SET: ReadonlySet<string> = new Set(['epic', 'story', 'task', 'subtask', 'bug'])
+const PRIORITY_SET: ReadonlySet<string> = new Set(['urgent', 'high', 'medium', 'low'])
+const SEVERITY_SET: ReadonlySet<string> = new Set(['blocker', 'major', 'minor', 'trivial'])
+
+function cleanEnum(raw: string, allowed: ReadonlySet<string>, field: string): string {
+  if (!allowed.has(raw)) {
+    throw new BoardError('invalid-input', `Unknown ${field} "${raw}".`)
+  }
+  return raw
+}
+
+const cleanType = (raw: string): BoardItemType =>
+  cleanEnum(raw, TYPE_SET, 'issue type') as BoardItemType
+const cleanPriority = (raw: string): BoardItemPriority =>
+  cleanEnum(raw, PRIORITY_SET, 'priority') as BoardItemPriority
+const cleanSeverity = (raw: string): BoardItemSeverity =>
+  cleanEnum(raw, SEVERITY_SET, 'severity') as BoardItemSeverity
+
+// Kiểm một `parentId` đặt cho `itemId` trong `items`: cha phải tồn tại, không
+// tự trỏ về mình, và đi lên chuỗi cha từ cha dự kiến không được gặp lại chính
+// item (vòng). null/undefined ⇒ không kiểm (gỡ cha).
+export function checkParentLink(
+  items: readonly BoardItem[],
+  itemId: string | null,
+  parentId: string,
+): string {
+  const pid = cleanItemId(parentId)
+  if (pid === itemId) {
+    throw new BoardError('invalid-input', 'An item cannot be its own parent.')
+  }
+  if (!items.some((i) => i.id === pid)) {
+    throw new BoardError('unknown-item', `No board item "${pid}" to use as parent.`)
+  }
+  // Leo lên chuỗi cha từ cha dự kiến: gặp lại itemId ⇒ vòng. Trần lặp chống
+  // dữ liệu hỏng có sẵn (vòng trên đĩa từ bug cũ) làm treo vòng lặp.
+  let cursor: string | undefined = pid
+  for (let depth = 0; depth <= items.length && cursor; depth++) {
+    if (cursor === itemId) {
+      throw new BoardError(
+        'invalid-input',
+        `Making "${pid}" a parent of "${itemId}" would create a cycle.`,
+      )
+    }
+    cursor = items.find((i) => i.id === cursor)?.parentId
+  }
+  return pid
+}
+
 // Key hợp lệ của assigneeConfig: 'self' | 'lead' | 'member:<title>' — title
 // mang theo để map vào member spec lúc materialize lười.
 const ASSIGNEE_CFG_KEY_RE = /^(self|lead|member:[^|]{1,120})$/
@@ -265,6 +316,18 @@ function sanitizeItems(raw: unknown, projectId: string, file: string): BoardItem
       continue
     }
     out.push(it as BoardItem)
+  }
+  // Field mới (type/priority/severity/parentId) cũng do tay sửa được — giá trị
+  // lạ chỉ làm nhiễu UI nên gỡ nhẹ thay vì bỏ cả item. parentId trỏ hụt (cha
+  // đã xoá bằng tay, hoặc file gộp) cũng bị gỡ.
+  const ids = new Set(out.map((i) => i.id))
+  for (const it of out) {
+    if (it.type !== undefined && !TYPE_SET.has(it.type)) delete it.type
+    if (it.priority !== undefined && !PRIORITY_SET.has(it.priority)) delete it.priority
+    if (it.severity !== undefined && !SEVERITY_SET.has(it.severity)) delete it.severity
+    if (it.parentId !== undefined && (it.parentId === it.id || !ids.has(it.parentId))) {
+      delete it.parentId
+    }
   }
   if (dropped > 0) {
     log.warn('boards: dropped malformed/foreign items on load', { file, dropped })
@@ -369,6 +432,13 @@ export interface UpsertBoardItemInput {
   // Override LLM per-slot (BoardItem.assigneeConfig). null = xoá hẳn cả map.
   assigneeConfig?: Record<string, SessionLlmOverride> | null | undefined
   status?: BoardItemStatus | undefined
+  // Loại việc (khuôn Jira) + cây cha-con + ưu tiên/mức độ. parentId: null =
+  // gỡ khỏi cha (thành item cấp trên); priority/severity null = gỡ nhãn
+  // (về "không đặt"); type không nhận null — luôn có một loại.
+  type?: string | undefined
+  parentId?: string | null | undefined
+  priority?: string | null | undefined
+  severity?: string | null | undefined
   // null = gỡ stage (item không còn thuộc đợt nào).
   stage?: number | null | undefined
   // Chỉ áp lúc TẠO: sessionId của bên tạo, null = người dùng. Update không được
@@ -419,6 +489,19 @@ export async function upsertBoardItem(
         else item.assigneeConfig = cleanAssigneeConfig(input.assigneeConfig)
       }
       if (input.status !== undefined) item.status = cleanStatus(input.status)
+      if (input.type !== undefined) item.type = cleanType(input.type)
+      if (input.priority !== undefined) {
+        if (input.priority === null) delete item.priority
+        else item.priority = cleanPriority(input.priority)
+      }
+      if (input.severity !== undefined) {
+        if (input.severity === null) delete item.severity
+        else item.severity = cleanSeverity(input.severity)
+      }
+      if (input.parentId !== undefined) {
+        if (input.parentId === null) delete item.parentId
+        else item.parentId = checkParentLink(board.items, item.id, input.parentId)
+      }
       if (input.stage !== undefined) {
         if (input.stage === null) delete item.stage
         else item.stage = cleanStage(input.stage)
@@ -455,6 +538,16 @@ export async function upsertBoardItem(
       comments: [],
     }
     if (input.desc !== undefined && input.desc !== '') item.desc = cleanDesc(input.desc)
+    if (input.type !== undefined) item.type = cleanType(input.type)
+    if (input.priority !== undefined && input.priority !== null) {
+      item.priority = cleanPriority(input.priority)
+    }
+    if (input.severity !== undefined && input.severity !== null) {
+      item.severity = cleanSeverity(input.severity)
+    }
+    if (input.parentId !== undefined && input.parentId !== null) {
+      item.parentId = checkParentLink(board.items, item.id, input.parentId)
+    }
     if (input.assigneeSessionId) item.assigneeSessionId = input.assigneeSessionId
     if (input.assigneeRef) item.assigneeRef = oneLine(input.assigneeRef, 200)
     if (input.assigneeConfig) item.assigneeConfig = cleanAssigneeConfig(input.assigneeConfig)
@@ -477,6 +570,14 @@ export async function deleteBoardItem(
     const idx = board.items.findIndex((i) => i.id === itemId)
     if (idx < 0) return null
     const [item] = board.items.splice(idx, 1)
+    // Con của item vừa xoá mất liên kết cha (mồ côi) chứ không chết theo —
+    // xoá cả nhánh là hành vi khó đoán nên board giữ con, chỉ gỡ parentId.
+    for (const child of board.items) {
+      if (child.parentId === itemId) {
+        delete child.parentId
+        child.updatedAt = new Date().toISOString()
+      }
+    }
     await saveBoard(projectId, board)
     emitBoardChanged(projectId)
     return item

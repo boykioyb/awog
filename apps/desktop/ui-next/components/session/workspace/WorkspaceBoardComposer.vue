@@ -193,7 +193,8 @@ const emit = defineEmits<{
   'add-att': [att: SessionAttachment]
   'add-files': [files: FileList | File[]]
   'remove-att': [i: number]
-  // Chord gửi (Enter / Shift+Enter theo composerSendKey) → cha chạy đường "Giao việc".
+  // Chord gửi (Enter / Shift+Enter theo composerSendKey) → cha chạy nhịp mặc
+  // định = "Xếp vào backlog" (đỗ spec, spawn khi item được bốc).
   submit: []
 }>()
 
@@ -283,7 +284,9 @@ const mentionMatches = computed<MentionRow[]>(() => {
   const qWiki = unprefixed('wiki:')
   const agents: MentionRow[] = data.agents.value
     .filter(
-      (a) => q === '' || agentHandle(a.name).startsWith(q) || a.name.toLowerCase().includes(q),
+      (a) =>
+        inScope(a.source, a.projectId) &&
+        (q === '' || agentHandle(a.name).startsWith(q) || a.name.toLowerCase().includes(q)),
     )
     .map((a) => ({
       key: `a:${a.id}`,
@@ -291,6 +294,22 @@ const mentionMatches = computed<MentionRow[]>(() => {
       insert: agentHandle(a.name),
       label: a.name,
       hint: a.source === 'project' ? t('sessions.composer.kind.project') : undefined,
+    }))
+  // Team spec cũng là đích @ hợp lệ trên board: comment đánh thức được spec
+  // (boards.comment materialize thành run mới) — liệt kê để người dùng khỏi
+  // nhớ slug. Slug cùng luật agentHandle.
+  const teams: MentionRow[] = (data.teams?.value ?? [])
+    .filter(
+      (s) =>
+        inScope(s.source, s.projectId) &&
+        (q === '' || agentHandle(s.name).startsWith(q) || s.name.toLowerCase().includes(q)),
+    )
+    .map((s) => ({
+      key: `t:${s.id}`,
+      kind: 'team',
+      insert: agentHandle(s.name),
+      label: s.name,
+      hint: s.source === 'project' ? t('sessions.composer.kind.project') : undefined,
     }))
   const skills: MentionRow[] = data.skills.value
     .filter(
@@ -338,7 +357,7 @@ const mentionMatches = computed<MentionRow[]>(() => {
     label: f.name,
     hint: f.path,
   }))
-  return [...agents, ...skills, ...wikiRows, ...files].slice(0, RESULT_CAP)
+  return [...agents, ...teams, ...skills, ...wikiRows, ...files].slice(0, RESULT_CAP)
 })
 
 function refreshAutocomplete() {

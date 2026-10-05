@@ -75,6 +75,8 @@ register('sessions.integrateMember', async (raw) => {
         fromTitle: 'system',
         kind: 'system',
         text: `merged ${wt.branch}`,
+        // Merge là sự kiện CỦA item — tag để nó hiện trên Discuss của item đó.
+        ...(params.itemId ? { itemId: params.itemId } : {}),
       })
     } catch (err) {
       log.warn('channel note after member merge failed', {

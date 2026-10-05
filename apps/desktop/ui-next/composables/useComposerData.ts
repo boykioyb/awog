@@ -13,6 +13,13 @@ import type { FsEntry } from '~/composables/useFsApi'
 
 // ── Entity shapes (mirror apps/desktop/sidecar/src/types/shared.ts) ───────────
 // FsEntry is owned by useFsApi (the fs.* contract layer) — re-imported here.
+export type ComposerTeam = {
+  id: string
+  name: string
+  desc?: string
+  source?: 'global' | 'project'
+  projectId?: string
+}
 export type ComposerAgent = {
   id: string
   name: string
@@ -57,6 +64,7 @@ type CacheEntry<T> = {
 }
 const fileCache = new Map<string, CacheEntry<FsEntry>>()
 const agentCache = new Map<string, CacheEntry<ComposerAgent>>()
+const teamCache = new Map<string, CacheEntry<ComposerTeam>>()
 const commandCache = new Map<string, CacheEntry<ComposerCommand>>()
 const skillCache = new Map<string, CacheEntry<ComposerSkill>>()
 const cliCommandCache = new Map<string, CacheEntry<ComposerCliCommand>>()
@@ -175,6 +183,16 @@ export function useComposerData(
       }).value,
   )
 
+  const teams = computed<ComposerTeam[]>(
+    () =>
+      ensure(teamCache, cacheKey.value, async () => {
+        const res = await sc.request<{ teams: ComposerTeam[] }>('teams.list', {
+          projectIds: projectIds.value,
+        })
+        return res.teams
+      }).value,
+  )
+
   const userCommands = computed<ComposerCommand[]>(
     () =>
       ensure(commandCache, cacheKey.value, async () => {
@@ -232,5 +250,5 @@ export function useComposerData(
     void files.value
   }
 
-  return { agents, userCommands, skills, cliCommands, files, ensureCatalogs, ensureFiles }
+  return { agents, teams, userCommands, skills, cliCommands, files, ensureCatalogs, ensureFiles }
 }

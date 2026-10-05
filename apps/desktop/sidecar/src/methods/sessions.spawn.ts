@@ -42,6 +42,7 @@ import {
   loadSession,
   setSessionSpawnConfig,
 } from '../sessions/store.js'
+import { listBoardItems } from '../boards/store.js'
 import { emit } from '../transport/stdio.js'
 import { completePi } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
@@ -286,16 +287,29 @@ register('sessions.materializeMember', async (raw) => {
   const prompt = params.itemTitle
     ? `You are "${member.title}" — a member of the "${team.name}" session team. ` +
       `The user assigned "${params.itemTitle}"${params.itemId ? ` (${params.itemId})` : ''} on the project board to you — ` +
-      'call team_item_get for the full brief and thread, acknowledge with team_item_comment, then move it to in_progress when you start. ' +
+      'acknowledge FIRST with team_item_comment in the thread — before any other work — then call team_item_get for the full brief and move it to in_progress when you start. ' +
       "Narrate progress on the item thread — the board is the team's shared view of your work."
     : `You are "${member.title}" — a member of the "${team.name}" session team. ` +
       'The user just spawned your session for this run — a board item is being assigned to you; watch your inbox and the project board.'
+  // Item đích (khi có) → auto-route model/effort của member theo tính chất
+  // việc, đè lên override tay — cùng đường routeSession của dispatch tools.
+  let routeItem
+  if (params.itemId && root.projectId) {
+    try {
+      routeItem = (await listBoardItems(root.projectId)).find(
+        (i) => i.id === params.itemId,
+      )
+    } catch {
+      /* board đọc hỏng ⇒ member vẫn spawn theo override tay */
+    }
+  }
   const res = await materializeMember({
     runId: root.id,
     team,
     member,
     summaries,
     dispatchPrompt: prompt,
+    ...(routeItem ? { routeItem } : {}),
     // Override LLM của người dùng: param gửi thẳng thắng (editor dispatch vừa
     // ghi assigneeConfig xong, hoặc item chưa ghi kịp); vắng ⇒ tra lại trên
     // item theo `member:<title>` — phủ đường applyStatus kéo-cột.

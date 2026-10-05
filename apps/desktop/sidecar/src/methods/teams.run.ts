@@ -145,7 +145,8 @@ register('teams.run', async (raw) => {
         ? `\n\nOperating instructions:\n${team.instructions.trim()}`
         : '') +
       `\n\nMember roster (spawned lazily — a member's session only exists once work is assigned to them):\n${roster}\n\n` +
-      'To dispatch: assign a board item to a member by title via assignee_member on team_item_create/team_item_update — that member\'s session spawns on the assignment and is woken with the item. Never materialize members ahead of need.',
+      'To dispatch: assign a board item to a member by title via assignee_member on team_item_create/team_item_update — that member\'s session spawns on the assignment and is woken with the item. Never materialize members ahead of need. ' +
+      'A member title is a ROLE: member_instance:<N≥2> seats a parallel instance of it ("Dev 2" — a second Dev for an independent workstream) when one member would otherwise serialize the work.',
   }).catch((err) =>
     log.warn('teams.run: could not deliver lead briefing', {
       err: err instanceof Error ? err.message : String(err),

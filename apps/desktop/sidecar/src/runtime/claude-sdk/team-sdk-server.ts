@@ -97,11 +97,30 @@ export function buildTeamSdkServer(sessionId: string): McpSdkServerConfigWithIns
                   .string()
                   .optional()
                   .describe(BOARD_TOOLS_TEXT.createAssigneeMember),
+                member_instance: z
+                  .number()
+                  .int()
+                  .min(2)
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.memberInstance),
                 stage: z.number().int().optional().describe(BOARD_TOOLS_TEXT.createStage),
                 status: z
                   .enum(['backlog', 'todo'])
                   .optional()
                   .describe(BOARD_TOOLS_TEXT.createStatus),
+                type: z
+                  .enum(['epic', 'story', 'task', 'subtask', 'bug'])
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.createType),
+                parent_id: z.string().optional().describe(BOARD_TOOLS_TEXT.createParent),
+                priority: z
+                  .enum(['urgent', 'high', 'medium', 'low'])
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.createPriority),
+                severity: z
+                  .enum(['blocker', 'major', 'minor', 'trivial'])
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.createSeverity),
               },
               async (args) => mcpResult(await board.createItem(args)),
             ),
@@ -122,6 +141,12 @@ export function buildTeamSdkServer(sessionId: string): McpSdkServerConfigWithIns
                   .string()
                   .optional()
                   .describe(BOARD_TOOLS_TEXT.updateAssigneeMember),
+                member_instance: z
+                  .number()
+                  .int()
+                  .min(2)
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.memberInstance),
                 stage: z
                   .number()
                   .int()
@@ -130,6 +155,23 @@ export function buildTeamSdkServer(sessionId: string): McpSdkServerConfigWithIns
                   .describe(BOARD_TOOLS_TEXT.updateStage),
                 title: z.string().optional().describe(BOARD_TOOLS_TEXT.updateTitle),
                 desc: z.string().optional().describe(BOARD_TOOLS_TEXT.updateDesc),
+                type: z
+                  .enum(['epic', 'story', 'task', 'subtask', 'bug'])
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.updateType),
+                parent_id: z
+                  .string()
+                  .nullable()
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.updateParent),
+                priority: z
+                  .enum(['urgent', 'high', 'medium', 'low'])
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.updatePriority),
+                severity: z
+                  .enum(['blocker', 'major', 'minor', 'trivial'])
+                  .optional()
+                  .describe(BOARD_TOOLS_TEXT.updateSeverity),
               },
               async (args) => mcpResult(await board.updateItem(args)),
             ),
@@ -159,13 +201,23 @@ export function buildTeamSdkServer(sessionId: string): McpSdkServerConfigWithIns
                   .enum(['chat', 'status'])
                   .optional()
                   .describe(CHANNEL_TOOLS_TEXT.sayKind),
+                item_id: z
+                  .string()
+                  .optional()
+                  .describe(CHANNEL_TOOLS_TEXT.sayItemId),
               },
               async (args) => mcpResult(await channel.say(args)),
             ),
             tool(
               'team_note',
               CHANNEL_TOOLS_TEXT.noteDescription,
-              { text: z.string().max(4000).describe(CHANNEL_TOOLS_TEXT.noteText) },
+              {
+                text: z.string().max(4000).describe(CHANNEL_TOOLS_TEXT.noteText),
+                item_id: z
+                  .string()
+                  .optional()
+                  .describe(CHANNEL_TOOLS_TEXT.noteItemId),
+              },
               async (args) => mcpResult(await channel.note(args)),
             ),
             tool(

@@ -2258,6 +2258,24 @@ export interface BoardItemComment {
   text: string
 }
 
+// Loại việc theo khuôn Jira — nhãn phân cấp/tính chất của item:
+//   epic    — phạm vi lớn, thường bao nhiêu story/task con (parent của cây)
+//   story   — việc theo góc nhìn người dùng ("là …, tôi muốn …")
+//   task    — việc kỹ thuật mặc định (item cũ không type đọc như 'task')
+//   subtask — mảnh của một item cha (parentId) — con đường agent chia nhỏ
+//             việc từ một item cha thay vì đẻ thêm item ngang hàng
+//   bug     — lỗi cần sửa; đi kèm severity để nói mức độ ảnh hưởng
+// `type` chỉ là NHÃN — ràng buộc thật nằm ở `parentId` (một cha, không vòng).
+export type BoardItemType = 'epic' | 'story' | 'task' | 'subtask' | 'bug'
+
+// Mức ưu tiên xếp hàng — thang bốn nấc (Linear-style): 'medium' là mặc định
+// ngầm khi field vắng mặt trên item cũ.
+export type BoardItemPriority = 'urgent' | 'high' | 'medium' | 'low'
+
+// Mức độ nghiêm trọng — chủ yếu cho `bug` nhưng giữ độc lập type (một task
+// chặn cả đợt cũng đáng ghi blocker).
+export type BoardItemSeverity = 'blocker' | 'major' | 'minor' | 'trivial'
+
 export interface BoardItem {
   id: string
   // Chủ sở hữu = project (file nằm ở ~/.awog/boards/<projectId>.json). Giữ lại
@@ -2282,6 +2300,17 @@ export interface BoardItem {
   // override sửa trước giờ spawn luôn kịp áp.
   assigneeConfig?: Record<string, SessionLlmOverride>
   status: BoardItemStatus
+  // Loại việc (khuôn Jira). Vắng mặt = 'task' — item cũ trên đĩa không có
+  // field này, reader coi undefined là task.
+  type?: BoardItemType
+  // Item CHA — cây sub-issue (một cha, không vòng; store kiểm khi ghi). Đây
+  // là con đường agent tách việc: lead nhận epic rồi tạo các item con trỏ
+  // parentId về nó thay vì đẻ item ngang hàng lẻ loi. Cha bị xoá thì con mất
+  // liên kết (con không chết theo).
+  parentId?: string
+  // Ưu tiên / mức độ nghiêm trọng — vắng mặt = không đặt (UI hiện mặc định).
+  priority?: BoardItemPriority
+  severity?: BoardItemSeverity
   // Đợt chạy (stage waves): khi mọi item của stage sớm nhất done/cancelled thì
   // hệ thống đánh thức lead để điều phối đợt sau. Vắng mặt = không chia đợt.
   stage?: number
@@ -2324,4 +2353,14 @@ export interface TeamChannelEntry {
   text: string
   // sessionId của member được @-mention — những phiên này được wake qua hộp thư.
   mentions?: string[]
+  // Board item mà entry này nói về — thẻ tùy chọn: tool team_say/team_note
+  // truyền khi nội dung gắn một item cụ thể, hệ thống tag cho sự kiện của item
+  // (merge…). UI "Discuss" của item lọc theo field này; entry không tag =
+  // trao đổi chung của ê-kíp, chỉ hiện ở kênh run (cockpit/channel_read).
+  itemId?: string
+  // Các item KHÁC được nhắc trong text — sidecar tự extract `bi-<hex>` từ
+  // nội dung (agent hay nhắc id mà quên tag); itemId là thẻ chính, itemIds là
+  // thẻ phụ. UI "Discuss" khớp cả hai — tin "Duyệt bi-A, liên quan bi-B" hiện
+  // trên Discuss của cả A lẫn B.
+  itemIds?: string[]
 }

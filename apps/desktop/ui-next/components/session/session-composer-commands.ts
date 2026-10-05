@@ -118,7 +118,7 @@ export type MentionRow = {
   // 'page' KHÔNG chèn token nào: nó là một hành động (như built-in của menu `/`) —
   // chọn nó thì trang đang mở trong trình duyệt nhúng được chèn thành khối context
   // (useBrowserContext().attachPage). Vì thế `insert` của nó không bao giờ được dùng.
-  kind: 'agent' | 'skill' | 'file' | 'wiki' | 'page'
+  kind: 'agent' | 'team' | 'skill' | 'file' | 'wiki' | 'page'
   insert: string
   label: string
   hint?: string

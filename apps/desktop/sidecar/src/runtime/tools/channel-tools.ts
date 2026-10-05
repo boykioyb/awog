@@ -20,6 +20,7 @@ import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { postChannelEntry, readChannelTail } from '../../sessions/channel.js'
 import { sessionManager } from '../../sessions/session-manager.js'
+import { runRootId } from '../../sessions/run-root.js'
 import type { TeamChannelEntry } from '../../types/shared.js'
 
 export const CHANNEL_TOOL_NAMES = ['team_say', 'team_note', 'channel_read'] as const
@@ -36,10 +37,14 @@ export const CHANNEL_TOOLS_TEXT = {
   sayMentions:
     'Session ids of teammates to wake immediately via their inbox (see the roster in your <team> block). Omit for a normal broadcast.',
   sayKind: "'chat' for conversation (default); 'status' for a structured progress/handoff report.",
+  sayItemId:
+    'Board item id this message is about — tagged messages surface on that item\'s Discuss view. Pass it whenever the message concerns a specific item (status, handoff, question about it); omit for general team talk.',
   noteDescription:
     'Record an evaluation or decision for the team — the lead\'s running log of what moved, what is stuck, and what was decided (kind "eval"). ' +
     'Eval entries are recorded on the shared channel and never wake anyone.',
   noteText: 'The evaluation or decision to record (max 4000 chars).',
+  noteItemId:
+    'Board item id this evaluation is about — tagged notes surface on that item\'s Discuss view. Omit for team-wide observations.',
   readDescription:
     'Read the most recent entries on the team channel — use it when your <team> block was truncated or you need more history than it carried.',
   readLimit: 'Max characters of channel history to return (default ~4000).',
@@ -55,10 +60,12 @@ const SayParams = Type.Object({
       description: CHANNEL_TOOLS_TEXT.sayKind,
     }),
   ),
+  item_id: Type.Optional(Type.String({ description: CHANNEL_TOOLS_TEXT.sayItemId })),
 })
 
 const NoteParams = Type.Object({
   text: Type.String({ description: CHANNEL_TOOLS_TEXT.noteText }),
+  item_id: Type.Optional(Type.String({ description: CHANNEL_TOOLS_TEXT.noteItemId })),
 })
 
 const ReadParams = Type.Object({
@@ -71,19 +78,16 @@ interface ChannelToolDetails {
   isError?: true
 }
 
-// Gốc nhóm của một phiên, resolve ĐỒNG BỘ từ bản đồ ấm: cha nó (member) hoặc
-// chính nó khi có con (lead). null = phiên lẻ ⇒ không có tool. GIỮ NGUYÊN
-// semantic của `runRootOf` trong chat-toolset (không lọc con archived): lead
-// chỉ còn con đã archive vẫn còn kênh/member_diff trên Pi — SDK phải khớp 1:1,
-// con archived vẫn giữ teamRunId nên kênh của nhóm vẫn "tồn tại" về mặt tool.
+// Gốc nhóm của một phiên, resolve ĐỒNG BỘ từ bản đồ ấm qua resolver chung
+// `runRootId` (sessions/run-root.ts — member → cha, lead → chính nó qua link
+// spec `teamId` HOẶC qua con đang có). null = phiên lẻ ⇒ không có tool. Phía
+// tool KHÔNG lọc con archived (khác team-context): lead chỉ còn con đã archive
+// vẫn còn kênh/member_diff — con archived vẫn giữ teamRunId nên kênh của nhóm
+// vẫn "tồn tại" về mặt tool, và hai runtime khớp 1:1.
 // Export cho member-tools và team-sdk-server — một resolver duy nhất cho mọi
 // tool "trong nhóm hay không".
 export function resolveRunRoot(sessionId: string): string | null {
-  const summaries = sessionManager.getSessions()
-  const me = summaries.find((s) => s.id === sessionId)
-  if (!me) return null
-  if (me.teamRunId) return me.teamRunId
-  return summaries.some((s) => s.teamRunId === sessionId) ? sessionId : null
+  return runRootId(sessionManager.getSessions(), sessionId)
 }
 
 // ─── Runners (thân dùng chung cho cả hai runtime) ────────────────────────────
@@ -103,8 +107,9 @@ export interface ChannelRunners {
     text: string
     mentions?: string[] | undefined
     kind?: 'chat' | 'status' | undefined
+    item_id?: string | undefined
   }) => Promise<ChannelToolRunResult>
-  note: (params: { text: string }) => Promise<ChannelToolRunResult>
+  note: (params: { text: string; item_id?: string | undefined }) => Promise<ChannelToolRunResult>
   read: (params: { limit?: number | undefined }) => Promise<ChannelToolRunResult>
 }
 
@@ -135,6 +140,7 @@ export function createChannelRunners(input: {
     text: string
     mentions?: string[] | undefined
     kind?: 'chat' | 'status' | undefined
+    item_id?: string | undefined
   }): Promise<ChannelToolRunResult> {
     const text = params.text.trim()
     if (!text) return { text: 'Nothing to post — the message is empty.', isError: true }
@@ -145,6 +151,7 @@ export function createChannelRunners(input: {
         kind: params.kind ?? 'chat',
         text,
         ...(params.mentions?.length ? { mentions: params.mentions } : {}),
+        ...(params.item_id ? { itemId: params.item_id } : {}),
       })
       const woke =
         (entry.mentions?.length ?? 0) > 0 ? ` — woke ${(entry.mentions ?? []).join(', ')}` : ''
@@ -160,7 +167,10 @@ export function createChannelRunners(input: {
     }
   }
 
-  async function note(params: { text: string }): Promise<ChannelToolRunResult> {
+  async function note(params: {
+    text: string
+    item_id?: string | undefined
+  }): Promise<ChannelToolRunResult> {
     const text = params.text.trim()
     if (!text) return { text: 'Nothing to record — the note is empty.', isError: true }
     try {
@@ -169,6 +179,7 @@ export function createChannelRunners(input: {
         fromTitle: selfTitle(),
         kind: 'eval',
         text,
+        ...(params.item_id ? { itemId: params.item_id } : {}),
       })
       return {
         text: `recorded as an eval entry on the team channel (${entry.id})`,

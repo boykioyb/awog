@@ -4,14 +4,15 @@ import { listSessionSummaries } from '../sessions/store.js'
 import { MAX_CHANNEL_TEXT_LEN, postChannelEntry } from '../sessions/channel.js'
 
 // `team.channelPost` — NGƯỜI DÙNG post lên kênh chung của nhóm (Session
-// Teams, docs/features/session-teams.md §7): ô nhập kênh trên "team cockpit".
+// Teams, docs/features/session-teams.md §7): ô nhập kênh trên "team cockpit"
+// / tab Discuss của board item.
 //
 // `from` KHÔNG có trong payload — RPC này luôn là "người dùng nói" (`from:
 // null, fromTitle: 'user'`), nên không có cách nào giả danh một member để né
-// luật re-trigger: entry của user không wake ai trừ khi kind 'chat' mang
-// mentions... mà kind ở đây chỉ được phép 'note' (mặc định — ghi chú của người
-// dùng, KHÔNG bao giờ wake ai) hoặc 'chat' (vẫn from=null ⇒ không wake; luật
-// wake của channel chỉ áp cho post của MEMBER — xem sessions/channel.ts).
+// luật re-trigger. Luật wake cho tin của user (xem sessions/channel.ts):
+// kind 'chat' kèm `mentions` ⇒ wake đúng những phiên được tag (comm turn —
+// trả lời nhanh, kẹp model rẻ); broadcast không mention và kind 'note' (ghi
+// chú) không lôi ai vào câu chuyện.
 const SESSION_ID_RE = /^[a-z0-9-]+$/
 
 const Params = z.object({
@@ -19,9 +20,11 @@ const Params = z.object({
   rootId: z.string().min(1).regex(SESSION_ID_RE),
   text: z.string().min(1).max(MAX_CHANNEL_TEXT_LEN),
   kind: z.enum(['note', 'chat']).optional(),
-  // Id phiên cần lôi vào câu chuyện — với entry của user nó chỉ là nhãn trên
-  // kênh (wake vẫn không xảy ra: `from` là null).
+  // Id phiên cần lôi vào câu chuyện — post 'chat' mang mentions sẽ wake đúng
+  // những phiên đó qua hộp thư.
   mentions: z.array(z.string().regex(SESSION_ID_RE)).max(16).optional(),
+  // Board item mà post nói về — UI "Discuss" của item lọc theo tag này.
+  itemId: z.string().regex(SESSION_ID_RE).max(64).optional(),
 })
 
 register('team.channelPost', async (raw) => {
@@ -34,6 +37,7 @@ register('team.channelPost', async (raw) => {
     kind: params.kind ?? 'note',
     text: params.text,
     ...(params.mentions ? { mentions: params.mentions } : {}),
+    ...(params.itemId ? { itemId: params.itemId } : {}),
   })
   return { entry }
 })

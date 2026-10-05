@@ -48,6 +48,26 @@ Khi một Session dài tới mức **sắp đầy context window**, tự động
 4. **Cắt context** — `runtime/context-builder.ts#buildContext`: khi có `compaction`, chỉ replay từ `firstKeptMessageId`, inject `summary` vào system prompt (`## Summary of earlier conversation`).
 5. **Forward** — `sessions.sendMessage` nhận `compaction` (UI gửi kèm `history`, cùng trust model) → lượt thường chạy trên context đã cắt.
 
+## Tự cứu khi tràn (reactive overflow recovery)
+
+Auto-compact chủ động do **UI** lái (`usagePct` đo ở `stores/sessions.ts`) — nên
+nó chỉ chạy khi có người mở session. Phiên điều phối (lead của Session Teams)
+và mọi phiên bị wake qua inbox **không ai mở** → gauge không đo, ngưỡng 85%
+không bao giờ chạm → một lượt `Prompt is too long` là phiên chết vĩnh viễn
+(mọi wake sau đập vào cùng bức tường).
+
+`sessions.sendMessage` vá bằng lưới an toàn **phản ứng** ở chính chỗ gọi
+`runStream`: lượt kết thúc với `stopReason:'error'`/`errorMessage` (hoặc Pi ném
+exception) khớp pattern tràn ngữ cảnh (`prompt is too long`, `context_length`,
+`maximum context`, `too many tokens`, `request_too_large`…) → chạy cùng máy móc
+`/compact` (`runStream` với `slashCommand:'compact'`, settings level low/mode
+ask) → `compactSession` persist checkpoint (fold xoá `sdkSessionId` +
+`codexThreadId`) → **retry lượt đúng MỘT lần** — checkpoint mới được truyền lại
+vào lần gọi thứ hai nên phiên SDK/ thread Codex mới re-seed từ
+[summary + kept turns]. Cổng giống `sessions.compact`: CLI đang gắn hoặc lệnh
+native → không cứu (compact sẽ làm transcript của CLI lệch). Compact không ra
+checkpoint, hoặc retry vẫn overflow → lỗi gốc đứng yên, không lặp vô hạn.
+
 ## File chính
 
 | Lớp | File | Vai trò |

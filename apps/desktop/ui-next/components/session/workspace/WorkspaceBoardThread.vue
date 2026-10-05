@@ -13,7 +13,7 @@
       @contextmenu="onQuoteContextMenu"
       @mousedown="onFeedMouseDown"
     >
-      <div v-if="!comments.length" class="flex-1 py-8 text-center text-xs text-faint">
+      <div v-if="!messages.length" class="flex-1 py-8 text-center text-xs text-faint">
         {{ t('sessions.workspace.group.threadEmpty') }}
       </div>
       <SessionTranscript v-else :messages="messages" :fallback-when="''" readonly />
@@ -45,31 +45,14 @@
       </button>
     </div>
 
-    <!-- Strip "ai đang làm gì" — assignee luôn hiện, lead chỉ hiện khi bận:
-         icon trạng thái sống + lastPreview khi đang chạy, nên thread không
-         "đứng im" trong lúc agent làm. Click một hàng → peek agent.
-         Hàng ĐẦU là trạng thái giao tin của comment user cuối ("đã chuyển /
-         xếp hàng / không ai nhận") — phản hồi tức thì khi user nhắn. -->
-    <div
-      v-if="awaitRow || actors.length"
-      class="flex shrink-0 flex-col gap-1 border-t border-border px-4 py-1.5"
-    >
-      <div v-if="awaitRow" class="btawait flex items-center gap-1.5" :data-tone="awaitRow.tone">
+    <!-- Trạng thái giao tin của comment user cuối ("đã chuyển / xếp hàng /
+         không ai nhận") — phản hồi tức thì khi user nhắn. Roster member đã có
+         sẵn trong header của item modal nên không liệt kê lại ở đây. -->
+    <div v-if="awaitRow" class="flex shrink-0 border-t border-border px-4 py-1.5">
+      <div class="btawait flex items-center gap-1.5" :data-tone="awaitRow.tone">
         <component :is="awaitRow.icon" class="size-3 shrink-0" />
         <span class="truncate text-[11px]">{{ awaitRow.line }}</span>
       </div>
-      <button
-        v-for="a in actors"
-        :key="a.id"
-        type="button"
-        class="flex min-w-0 items-center gap-1.5 text-left transition-opacity hover:opacity-70"
-        :title="a.title"
-        @click="emit('peek', a.id)"
-      >
-        <component :is="a.icon" class="mstat size-3 shrink-0" :data-st="a.st" />
-        <span class="shrink-0 text-[11px] font-medium text-muted-foreground">{{ a.title }}</span>
-        <span class="truncate text-[11px] text-faint">{{ a.line }}</span>
-      </button>
     </div>
 
     <!-- Composer khuôn session: @ tag agent/skill/file, `/` bung command,
@@ -106,18 +89,11 @@
 // (step, tool đang chạy) qua peek drawer/agent detail.
 // Post NGAY qua `boards.comment` — bản ghi bền vững + wake "bên kia".
 import { computed, nextTick, ref } from 'vue'
-import {
-  CircleAlert,
-  CircleCheck,
-  CircleDashed,
-  Hourglass,
-  LoaderCircle,
-  Send,
-} from 'lucide-vue-next'
+import { CircleAlert, CircleDashed, Hourglass, Send } from 'lucide-vue-next'
 import { useI18n } from '~/composables/useI18n'
 import { useBoardStore, type BoardItemComment } from '~/stores/board'
 import { useSessionsStore } from '~/stores/sessions'
-import type { SessionMessage, SessionStatus } from '~/composables/useSessionsData'
+import type { SessionMessage } from '~/composables/useSessionsData'
 import { provideQuoteSink } from '~/composables/useQuoteSink'
 import { provideTranscriptSurface } from '~/composables/useTranscriptSurface'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
@@ -134,8 +110,6 @@ const props = defineProps<{
   comments: BoardItemComment[]
   assigneeSessionId?: string
 }>()
-const emit = defineEmits<{ peek: [sessionId: string] }>()
-
 const { t } = useI18n()
 const board = useBoardStore()
 const sessionsStore = useSessionsStore()
@@ -151,8 +125,34 @@ provideTranscriptSurface()
 provideGhCommentLink(() => props.projectId)
 
 // Comment → SessionMessage (utils/board-comment-message — dùng chung với tab
-// Media của editor).
-const messages = computed<SessionMessage[]>(() => props.comments.map(boardCommentToMessage))
+// Media của editor). Thread này CHỈ hiển thị comment của item — trao đổi nội
+// bộ ê-kíp nằm ở tab Channel riêng (WorkspaceChannel).
+const messages = computed<SessionMessage[]>(() => {
+  const msgs = props.comments.map(boardCommentToMessage)
+  // Assignee đang streaming (generate thật) → ghost bubble cuối feed y hệt
+  // turn đang chạy của màn session: avatar + byline title + transcript tự
+  // hiện "working" indicator chữ xoay + elapsed. Hàng awaitRow bên dưới chỉ
+  // còn nói trạng thái GIAO TIN ("đã chuyển / xếp hàng") — phần "ai đang
+  // soạn" đã được bubble này diễn đạt. `startedAt` mượn từ turn streaming
+  // thật nếu msgs của phiên đã nạp; chưa nạp thì indicator vẫn chạy, chỉ
+  // thiếu elapsed.
+  const me = byEngine(props.assigneeSessionId)
+  if (me?.status === 'streaming') {
+    const live = me.msgs?.findLast(
+      (m): m is Extract<SessionMessage, { role: 'assistant' }> =>
+        m.role === 'assistant' && !!m.streaming,
+    )
+    msgs.push({
+      role: 'assistant',
+      blocks: [],
+      streaming: true,
+      author: me.title,
+      at: live?.at ?? new Date().toISOString(),
+      startedAt: live?.startedAt,
+    })
+  }
+  return msgs
+})
 
 const draft = ref('')
 const busy = ref(false)
@@ -269,50 +269,8 @@ async function onCopyMd(): Promise<void> {
   }, 1400)
 }
 
-// ── "Ai đang làm gì" ────────────────────────────────────────────────────────
-// Icon trạng thái giống member dropdown của editor — animation nằm trong CSS
-// .mstat (scoped bên dưới, cùng rule với WorkspaceBoardEditor).
-const STATUS_ICONS: Record<SessionStatus, unknown> = {
-  streaming: LoaderCircle,
-  awaiting: Hourglass,
-  done: CircleCheck,
-  error: CircleAlert,
-  idle: CircleDashed,
-}
-
-interface ActorRow {
-  id: string
-  title: string
-  st: SessionStatus
-  icon: unknown
-  line: string
-}
-
 const byEngine = (id?: string) =>
   id ? sessionsStore.sessions.find((x) => x.engineId === id) : undefined
-
-const busySt = (st?: SessionStatus): boolean => st === 'streaming' || st === 'awaiting'
-
-const actorRow = (s: NonNullable<ReturnType<typeof byEngine>>): ActorRow => {
-  const st = s.status ?? 'idle'
-  const id = s.engineId ?? ''
-  // Khi đang chạy thì "đang làm gì" (lastPreview) nói nhiều hơn tên trạng
-  // thái; các trạng thái còn lại lấy nhãn i18n chung của app.
-  const line = st === 'streaming' && s.lastPreview ? s.lastPreview : t(`sessions.status.${st}`)
-  return { id, title: s.title || id, st, icon: STATUS_ICONS[st], line }
-}
-
-// Assignee luôn hiện (chủ việc — biết ai đang giữ + rảnh hay bận); lead chỉ
-// hiện khi nó BẬN, vì lead rảnh không nói gì thêm.
-const actors = computed<ActorRow[]>(() => {
-  const me = byEngine(props.assigneeSessionId)
-  if (!me) return []
-  const rows: ActorRow[] = []
-  const lead = me.teamRunId ? byEngine(me.teamRunId) : undefined
-  if (lead && lead.engineId !== me.engineId && busySt(lead.status)) rows.push(actorRow(lead))
-  rows.push(actorRow(me))
-  return rows
-})
 
 // ── "Chờ phản hồi" — tương tác thật của thread ──────────────────────────────
 // Quét ngược comments: nếu tin MỚI NHẤT vẫn là của user (fromTitle 'You') và
@@ -321,7 +279,7 @@ const actors = computed<ActorRow[]>(() => {
 // phản hồi cũng không xoá trạng thái chờ. Suy ra từ dữ liệu bền vững nên
 // reload vẫn đúng; `board.lastWake` chỉ thêm nét "inbox lỗi" lúc vừa gửi.
 interface AwaitRow {
-  icon: unknown
+  icon?: unknown
   tone: 'info' | 'warn'
   line: string
 }
@@ -348,13 +306,18 @@ const awaitRow = computed<AwaitRow | null>(() => {
   if (board.lastWake[props.itemId] === 'failed') {
     return { icon: CircleAlert, tone: 'warn', line: t('sessions.workspace.group.await.failed') }
   }
-  const queued = busySt(me?.status) || board.lastWake[props.itemId] === 'queued'
+  const name = me?.title || aid
+  // 'awaiting' = turn đỗ trên câu hỏi/permission — aborter còn giữ nên tin của
+  // user xếp sau lượt hiện tại, đúng nghĩa "đang trong một lượt". 'streaming'
+  // (generate thật) không cần chữ — ghost bubble cuối feed đã diễn đạt "đang
+  // soạn"; nếu tin user xếp sau lượt khác thì hàng này vẫn nói xếp hàng.
+  const queued = me?.status === 'awaiting' || board.lastWake[props.itemId] === 'queued'
   return {
     icon: queued ? Hourglass : Send,
     tone: 'info',
     line: t(
       queued ? 'sessions.workspace.group.await.queued' : 'sessions.workspace.group.await.sent',
-      { name: me?.title || aid },
+      { name },
     ),
   }
 })
@@ -389,33 +352,6 @@ async function post(): Promise<void> {
 </script>
 
 <style scoped>
-/* Icon trạng thái trong strip "ai đang làm gì" — cùng rule .mstat của
-   WorkspaceBoardEditor (scoped CSS không chia sẻ được). */
-.mstat {
-  color: var(--textFaint);
-}
-.mstat[data-st='streaming'] {
-  color: var(--accent);
-  animation: mstat-spin 1.6s linear infinite;
-}
-.mstat[data-st='awaiting'] {
-  color: var(--amber);
-  animation: mstat-pulse 1.6s ease-in-out infinite;
-}
-.mstat[data-st='error'] {
-  color: var(--danger);
-}
-@keyframes mstat-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-@keyframes mstat-pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-
 /* Hàng "đã chuyển/chờ phản hồi" — mức info mờ nhẹ (trạng thái giao tin, không
    phải lỗi); mức warn (không ai nhận / inbox lỗi / phiên đã đóng) nổi amber. */
 .btawait {

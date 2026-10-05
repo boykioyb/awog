@@ -94,7 +94,11 @@ async function draftWithFallback(input: {
   modelId: string
   accountId?: string
   prompt: string
+  systemPrompt?: string
+  // Nhãn method trong log/lỗi — teams.draft hay teams.instructionsDraft.
+  label?: string
 }): Promise<string> {
+  const label = input.label ?? 'teams.draft'
   const cheap = CHEAP_MODEL[input.provider]
   const candidates =
     cheap && cheap !== input.modelId ? [cheap, input.modelId] : [input.modelId]
@@ -106,19 +110,19 @@ async function draftWithFallback(input: {
         provider: input.provider,
         ...(input.accountId ? { accountId: input.accountId } : {}),
         modelId,
-        systemPrompt: SYS,
+        systemPrompt: input.systemPrompt ?? SYS,
         prompt: input.prompt,
       })
       if (out.trim()) return out
       lastErr = 'empty response'
     } catch (err) {
       lastErr = err instanceof Error ? err.message : String(err)
-      log.warn('teams.draft attempt failed', { model: modelId, err: lastErr })
+      log.warn(`${label} attempt failed`, { model: modelId, err: lastErr })
     }
   }
   // Surface the underlying cause (expired credential, quota, …) — "produced no
   // draft" alone sends the user debugging the model when it's usually auth.
-  throw new RpcError(-32021, `teams.draft: model produced no draft${lastErr ? ` — ${lastErr}` : ''}`)
+  throw new RpcError(-32021, `${label}: model produced no draft${lastErr ? ` — ${lastErr}` : ''}`)
 }
 
 interface DraftShape {
@@ -214,4 +218,69 @@ register('teams.draft', async (raw) => {
   const draft = parseDraft(out, roster)
   if (!draft) throw new RpcError(-32021, 'teams.draft: could not parse model output')
   return { draft }
+})
+
+// ── teams.instructionsDraft — AI chỉnh riêng ô "chỉ dẫn cấp đội" ────────────
+// Khác teams.draft (revise cả spec): chỉ viết lại text instructions theo lời
+// yêu cầu của user trong tab Instructions — trả text, editor đổ vào textarea
+// và user duyệt/lưu như tay gõ.
+
+const InstructionsParams = z.object({
+  prompt: z.string().min(1).max(MAX_TEXT_LEN),
+  // Instructions đang có — có thì model revise thay vì viết mới.
+  current: z.string().max(8000).optional(),
+  // Ngữ cảnh đội để model gọi đúng tên member/vai trò trong rule.
+  context: z
+    .object({
+      name: z.string().max(120).optional(),
+      desc: z.string().max(2000).optional(),
+      members: z.array(z.string().max(80)).max(24).optional(),
+    })
+    .optional(),
+  settings: z.object({
+    provider: z.enum(['anthropic', 'openai', 'google']),
+    modelId: z.string().min(1).max(200),
+    accountId: z.string().max(64).optional(),
+  }),
+})
+
+const INS_SYS = `You write "team instructions" for AWOG, a local-first AI team OS. Team instructions are routing rules and collaboration norms delivered ONLY to the team's lead session on each run — members never read them. The lead coordinates members on a shared kanban board (team_item_* tools: list/get/create/update/comment with assignee_member, member_instance, parent_id for sub-tasks) and a team channel (team_say for posts, member_diff to read a member's worktree diff).
+
+Output ONLY the instructions text — no prose, no markdown fence, no heading, no JSON.
+
+Rules:
+- When CURRENT instructions are provided, revise them per the request — keep what isn't mentioned.
+- Imperative and concrete: who may do what, routing rules, when to decompose into sub-tasks, review and escalation flow. Name real member titles when relevant.
+- Under ~250 words unless the request asks for more.
+- Match the language of the request.`
+
+register('teams.instructionsDraft', async (raw) => {
+  const params = InstructionsParams.parse(raw)
+  const ctx = params.context
+  const body = [
+    ctx?.name ? `TEAM: ${ctx.name}${ctx.desc ? ` — ${ctx.desc}` : ''}` : '',
+    ctx?.members?.length ? `MEMBERS:\n${ctx.members.map((m) => `- ${m}`).join('\n')}` : '',
+    params.current?.trim()
+      ? `CURRENT INSTRUCTIONS (revise, keep unmentioned rules):\n${params.current.trim()}`
+      : '',
+    `REQUEST:\n${params.prompt.trim()}`,
+    'Write the instructions now.',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  const out = await draftWithFallback({
+    provider: params.settings.provider,
+    modelId: params.settings.modelId,
+    ...(params.settings.accountId ? { accountId: params.settings.accountId } : {}),
+    prompt: body,
+    systemPrompt: INS_SYS,
+    label: 'teams.instructionsDraft',
+  })
+  // Model đôi khi vẫn bọc fence dù đã dặn — gỡ một lớp ngoài nếu có.
+  let instructions = out.trim()
+  const fence = instructions.match(/^```[a-z]*\n([\s\S]*?)\n?```$/)
+  if (fence?.[1]) instructions = fence[1].trim()
+  if (!instructions) throw new RpcError(-32021, 'teams.instructionsDraft: empty instructions')
+  return { instructions: instructions.slice(0, 8000) }
 })

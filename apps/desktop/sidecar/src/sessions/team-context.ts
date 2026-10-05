@@ -22,6 +22,7 @@ import { listSessionSummaries } from './store.js'
 import { activeSessionIds } from './runner.js'
 import { readChannelTail } from './channel.js'
 import { oneLineLabel } from './inbox.js'
+import { runRootId } from './run-root.js'
 import { benchMembers, loadRunTeam } from './team-members.js'
 import { BOARD_STATUS_ORDER, listBoardItems } from '../boards/store.js'
 import { log } from '../util/logger.js'
@@ -42,7 +43,9 @@ const LEAD_PROTOCOL = [
   '- Read the board below and decide what to dispatch — the board is the team\'s single source of truth.',
   '- Dispatch by creating or updating board items (set an assignee, move to todo). Assigning an item wakes the assignee automatically — no extra message is needed to notify them. NEVER do member work yourself: do not write code, run builds, or edit files on their behalf.',
   '- Members spawn LAZILY: a bench member (listed below) has no session until you assign them an item via assignee_member:"<member title>" — that call creates their session and hands them the item. Never create sessions for members ahead of need.',
+  '- A spec member is a ROLE, not a singleton: member_instance:<N≥2> on team_item_create/team_item_update seats a PARALLEL instance of the same member ("Dev 2" is a second Dev sharing the role and agent — e.g. one does frontend, the other backend). Evaluate before every dispatch: spawn a parallel seat when independent workstreams would queue on one member or the member is already busy on another live item; reuse the live seat when work serializes. Every seat is a full session burning real tokens — parallelize deliberately, and say your reasoning on the channel.',
   '- After dispatching, STOP — do not start the task; the member picks it up.',
+  '- Announce dispatches and decisions on the channel with team_say — who got what, what changed, what you decided. The user follows the team\'s work there, so say it where they can read it; pass item_id when the post concerns a specific item so it lands on that item\'s Discuss view.',
   '- After every wake, record your evaluation with team_note — what moved, what is stuck, what you decided.',
   '- Review a member\'s work with member_diff. When it is good, tell the user it is ready to merge — merging is the user\'s action, never yours. When it needs fixing, move the item to changes with a comment saying what to fix.',
   '- An item reaches in_review only when its goal is genuinely met — do not rubber-stamp.',
@@ -55,6 +58,14 @@ const MEMBER_CHANNEL_GUIDE =
   'use team_say to talk to the whole team; send_session_message for a direct DM; ' +
   'mention a member with team_say mentions to wake them'
 
+// Tác phong phối hợp — người dùng đọc channel để theo dõi ê-kíp làm việc, nên
+// "làm việc như một đồng đội" là một phần của công việc chứ không phải phụ.
+const MEMBER_TEAMWORK_NORM =
+  'Work like a human teammate: post a brief team_say status when you start and when you finish an item; ' +
+  'when you need input, ask a specific teammate by name via team_say mentions (that wakes them now); ' +
+  'answer teammates who ask you. Always pass item_id when a post is about a specific item so it lands on that item\'s Discuss view. ' +
+  'The user reads this channel — make the teamwork visible there.'
+
 // Tiêu đề phiên/item là L1 với phiên đang đọc (model hoặc người khác viết) —
 // oneLineLabel đã làm phẳng ký tự điều khiển + cắt ngắn, y hệt danh bạ hộp thư.
 const oneLine = (raw: string): string => oneLineLabel(raw, MAX_TITLE_LEN)
@@ -66,14 +77,21 @@ function fmtTime(at: string): string {
 
 function fmtChannelEntry(e: TeamChannelEntry): string {
   const kindTag = e.kind === 'chat' ? '' : ` [${e.kind}]`
-  return `[${fmtTime(e.at)}] ${e.fromTitle}${kindTag}: ${e.text}`
+  // Tag item hiện trong tail để member thấy entry nói về item nào — đồng thời
+  // là mẫu cho chính họ tag `item_id` khi post về một item cụ thể.
+  const itemTag = e.itemId ? ` [item ${e.itemId}]` : ''
+  return `[${fmtTime(e.at)}] ${e.fromTitle}${kindTag}${itemTag}: ${e.text}`
 }
 
-// Gốc nhóm của một phiên: cha nó (member), chính nó khi có con (lead), null khi
-// phiên lẻ. Con LƯU TRỮ không tính — một nhóm toàn con đã archive coi như lẻ.
+// Gốc nhóm của một phiên qua resolver chung `runRootId` — riêng ở đây con LƯU
+// TRỮ không tính vào nhận diện "có con" (nhóm ad-hoc toàn con đã archive coi
+// như lẻ), nên danh sách được lọc trước khi gọi. Lead của run spec thì không
+// phụ thuộc điều đó: `teamId` của nó nhận diện gốc ngay cả khi chưa có member.
 function runRootOf(summaries: SessionSummary[], me: SessionSummary): string | null {
-  if (me.teamRunId) return me.teamRunId
-  return summaries.some((s) => s.teamRunId === me.id && !s.archived) ? me.id : null
+  return runRootId(
+    summaries.filter((s) => !s.archived),
+    me.id,
+  )
 }
 
 function rosterLine(s: SessionSummary, busy: Set<string>): string {
@@ -214,6 +232,7 @@ export async function buildTeamBlock(sessionId: string): Promise<string | null> 
     'Status contract: claim work — move your item to in_progress when you start it, to in_review when finished, to blocked with the reason in a comment when stuck. Never set done or cancelled — closing work is the user\'s call.',
     rosterOneLiner,
     MEMBER_CHANNEL_GUIDE,
+    MEMBER_TEAMWORK_NORM,
     channel,
   ].filter((p): p is string => typeof p === 'string' && p.length > 0)
   return capBlock(parts, { boardItems, titles })

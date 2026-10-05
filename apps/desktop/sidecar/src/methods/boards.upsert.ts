@@ -11,6 +11,7 @@ import {
 import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import { listSessionSummaries } from '../sessions/store.js'
 import { postSessionMessage } from '../sessions/inbox.js'
+import { routeSessionForItem } from '../boards/model-route.js'
 import { log } from '../util/logger.js'
 import type { BoardItem } from '../types/shared.js'
 
@@ -71,12 +72,25 @@ async function wakeAssignee(item: BoardItem, prev: BoardItem | undefined): Promi
     const summaries = await listSessionSummaries()
     const assignee = summaries.find((s) => s.id === assigneeId)
     if (!assignee || assignee.archived) return
+    // Auto-route model/effort của phiên nhận theo tính chất item — dispatch là
+    // lúc quyết lại cấu hình (model-route.ts). Gốc của một run (có member trỏ
+    // về nó) giữ sàn tầm giữa của lead. Best-effort: route tắc không được làm
+    // hỏng wake.
+    try {
+      const lead = summaries.some((s) => s.teamRunId === assignee.id)
+      await routeSessionForItem(assignee, item, { lead })
+    } catch (err) {
+      log.warn('boards.upsert: assignee model route failed', {
+        to: assigneeId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
     await postSessionMessage({
       from: assignee.teamRunId ?? null,
       to: assigneeId,
       text:
         `[board] "${item.title}" (${item.id}) was assigned to you — status ${item.status}. ` +
-        'Call team_item_get for the full brief and thread, acknowledge with team_item_comment, then move it to in_progress when you start. ' +
+        'Acknowledge FIRST with team_item_comment in the thread — before any other work — then call team_item_get for the full brief and move it to in_progress when you start. ' +
         'Keep the thread posted as you make progress — it is the team\'s shared view of your work.',
     })
   } catch (err) {
@@ -112,6 +126,21 @@ async function recordTransitions(item: BoardItem, prev: BoardItem | undefined): 
   // Status/stage chỉ tính là transition khi item đã tồn tại — giá trị đầu lúc
   // tạo là trạng thái khởi đầu, không phải sự kiện.
   if (prev && item.status !== prev.status) parts.push(`${prev.status} → ${item.status}`)
+  if (prev && item.parentId !== prev.parentId) {
+    if (item.parentId) {
+      let parent = item.parentId
+      try {
+        parent =
+          (await listBoardItems(item.projectId)).find((i) => i.id === item.parentId)?.title ??
+          item.parentId
+      } catch {
+        // Tên cha tắc tra — rơi về id, vạch vẫn ghi được.
+      }
+      parts.push(`moved under "${parent}"`)
+    } else {
+      parts.push('detached from parent')
+    }
+  }
   if (prev && item.stage !== prev.stage) {
     parts.push(`stage ${prev.stage ?? 'none'} → ${item.stage ?? 'none'}`)
   }
@@ -160,6 +189,11 @@ const Params = z.object({
       .nullable()
       .optional(),
     status: STATUS_ENUM.optional(),
+    // Khuôn Jira: loại việc + cây cha-con (null = gỡ cha) + ưu tiên/mức độ.
+    type: z.enum(['epic', 'story', 'task', 'subtask', 'bug']).optional(),
+    parentId: z.string().max(64).regex(MESSAGE_ID_RE).nullable().optional(),
+    priority: z.enum(['urgent', 'high', 'medium', 'low']).nullable().optional(),
+    severity: z.enum(['blocker', 'major', 'minor', 'trivial']).nullable().optional(),
     // null = item không còn thuộc đợt (stage) nào.
     stage: z.number().int().min(0).nullable().optional(),
   }),

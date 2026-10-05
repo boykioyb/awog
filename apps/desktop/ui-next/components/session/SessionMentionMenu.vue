@@ -42,6 +42,7 @@ const { t } = useI18n()
 // adding a mention kind is one line and the two stay in sync.
 const TAG_KEY: Record<MentionRow['kind'], string> = {
   agent: 'sessions.composer.mentionAgent',
+  team: 'sessions.composer.mentionTeam',
   skill: 'sessions.composer.mentionSkill',
   wiki: 'sessions.composer.mentionWiki',
   file: 'sessions.composer.mentionFile',
@@ -49,6 +50,7 @@ const TAG_KEY: Record<MentionRow['kind'], string> = {
 }
 const GLYPH_COLOR: Partial<Record<MentionRow['kind'], string>> = {
   agent: 'var(--violet)',
+  team: 'var(--accent)',
   skill: 'var(--info)',
   wiki: 'var(--primary)',
   // `@page` là hành động (chèn trang đang mở trong trình duyệt nhúng), không phải một

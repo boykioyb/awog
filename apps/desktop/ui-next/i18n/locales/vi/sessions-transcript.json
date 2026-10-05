@@ -3,6 +3,7 @@
   "sessions.transcript.mark.tooltip": "Đã trích làm follow-up {n}",
   "sessions.transcript.fold.expand": "Mở tất cả bước",
   "sessions.transcript.fold.collapse": "Gập tất cả bước",
+  "sessions.transcript.typing": "Đang soạn…",
   "sessions.bookmark.add": "Đánh dấu",
   "sessions.bookmark.remove": "Bỏ đánh dấu",
   "sessions.bookmark.barTitle": "Đã đánh dấu",

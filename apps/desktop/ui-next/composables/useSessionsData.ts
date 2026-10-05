@@ -647,6 +647,10 @@ export type QueuedMessage = {
   // chi phí chỉ ghi khi item này THỰC SỰ mở turn (placeholder push trong
   // runEngineTurn), chứ không tính lúc nó chỉ nằm chờ phiên đang bận.
   autoDelivered?: boolean
+  // Tin wake "chỉ trò chuyện" của kênh ê-kíp ([channel]…) — lượt nó mở ra là để
+  // trả lời nhanh: sendMessage đánh dấu comm để sidecar kẹp model rẻ + effort
+  // thấp cho đúng lượt đó.
+  comm?: boolean
 }
 
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.

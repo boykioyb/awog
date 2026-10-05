@@ -166,5 +166,30 @@ export const useTeamsStore = defineStore('teams', () => {
     }
   }
 
-  return { teams, loaded, teamKey, teamByKey, load, upsert, remove, run, draft }
+  // teams.instructionsDraft — AI viết lại RIÊNG ô instructions theo lời yêu
+  // cầu của user (tab Instructions). Không đụng name/desc/members; trả text
+  // để editor đổ vào textarea — user duyệt rồi Save như thường.
+  async function draftInstructions(input: {
+    prompt: string
+    current?: string
+    context?: { name?: string; desc?: string; members?: string[] }
+    settings: { provider: string; modelId: string; accountId?: string | null }
+  }): Promise<string | null> {
+    if (!available.value) return null
+    try {
+      const res = await sc.request<{ instructions?: string }>('teams.instructionsDraft', {
+        ...input,
+        settings: {
+          ...input.settings,
+          accountId: input.settings.accountId ?? undefined,
+        },
+      })
+      return res?.instructions ?? null
+    } catch (err) {
+      console.warn('[teams] teams.instructionsDraft failed', err)
+      throw err
+    }
+  }
+
+  return { teams, loaded, teamKey, teamByKey, load, upsert, remove, run, draft, draftInstructions }
 })

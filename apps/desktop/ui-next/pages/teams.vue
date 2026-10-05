@@ -345,6 +345,31 @@
           <!-- INSTRUCTIONS — chỉ dẫn cấp đội, chỉ lead nhận (Multica). -->
           <div v-else-if="detailTab === 'instructions'" class="tpd-pane">
             <p class="tpd-hint">{{ t('teams.detail.instructionsHint') }}</p>
+            <!-- Chỉnh bằng AI — user gõ yêu cầu, model viết lại riêng ô
+                 instructions (teams.instructionsDraft); áp vào textarea để
+                 duyệt, Save như tay gõ. -->
+            <div class="tpd-insai">
+              <Input
+                v-model="insAiPrompt"
+                class="flex-1"
+                :placeholder="t('teams.detail.insAiPh')"
+                :disabled="insAiBusy"
+                @keydown.enter.prevent="runInstructionsDraft"
+              />
+              <Button
+                variant="outline"
+                class="flex-shrink-0"
+                :disabled="insAiBusy || !insAiPrompt.trim()"
+                @click="runInstructionsDraft"
+              >
+                <Icon
+                  :name="insAiBusy ? 'refresh' : 'sparkles'"
+                  class="size-3.5"
+                  :class="{ spin: insAiBusy }"
+                />
+                {{ insAiBusy ? t('teams.aiDrafting') : t('teams.detail.insAiGo') }}
+              </Button>
+            </div>
             <Textarea
               v-model="draft.instructions"
               rows="12"
@@ -984,6 +1009,29 @@ function onRevise(tm: TeamSpec): void {
   openDetail(tm)
   openAi()
 }
+// Lỗi credential (token hết hạn/bị rotate) → toast kèm action mở thẳng
+// Settings → Models & Keys để re-auth, thay vì dead-end "AI draft failed".
+// Dùng chung cho draft spec lẫn draft instructions.
+function toastAiError(err: unknown): void {
+  const msg = err instanceof Error ? err.message : String(err)
+  toast.add({
+    title: t('teams.aiFailed'),
+    description: msg,
+    color: 'error',
+    ...(isAuthError(err)
+      ? {
+          duration: 0,
+          actions: [
+            {
+              label: t('common.openSettings'),
+              icon: 'settings',
+              onClick: () => openSettings('models'),
+            },
+          ],
+        }
+      : {}),
+  })
+}
 async function runDraft(): Promise<void> {
   if (aiBusy.value || !aiBrief.value.trim()) return
   aiBusy.value = true
@@ -1044,28 +1092,39 @@ async function runDraft(): Promise<void> {
     }
     aiOpen.value = false
   } catch (err) {
-    // Lỗi credential (token hết hạn/bị rotate) → toast kèm action mở thẳng
-    // Settings → Models & Keys để re-auth, thay vì dead-end "AI draft failed".
-    const msg = err instanceof Error ? err.message : String(err)
-    toast.add({
-      title: t('teams.aiFailed'),
-      description: msg,
-      color: 'error',
-      ...(isAuthError(err)
-        ? {
-            duration: 0,
-            actions: [
-              {
-                label: t('common.openSettings'),
-                icon: 'settings',
-                onClick: () => openSettings('models'),
-              },
-            ],
-          }
-        : {}),
-    })
+    toastAiError(err)
   } finally {
     aiBusy.value = false
+  }
+}
+
+// ── Instructions — AI chỉnh riêng ô chỉ dẫn theo yêu cầu ngắn của user. ──────
+const insAiPrompt = ref('')
+const insAiBusy = ref(false)
+async function runInstructionsDraft(): Promise<void> {
+  if (insAiBusy.value || !insAiPrompt.value.trim()) return
+  insAiBusy.value = true
+  try {
+    const out = await teamsStore.draftInstructions({
+      prompt: insAiPrompt.value.trim(),
+      ...(draft.value.instructions.trim() ? { current: draft.value.instructions.trim() } : {}),
+      context: {
+        ...(draft.value.name.trim() ? { name: draft.value.name.trim() } : {}),
+        ...(draft.value.desc.trim() ? { desc: draft.value.desc.trim() } : {}),
+        members: draft.value.members.map((m) => m.title.trim()).filter(Boolean),
+      },
+      settings: settings.resolveAuthoringLlm(),
+    })
+    if (out === null) {
+      toast.add({ title: t('teams.aiFailed'), color: 'error' })
+      return
+    }
+    draft.value.instructions = out
+    insAiPrompt.value = ''
+  } catch (err) {
+    toastAiError(err)
+  } finally {
+    insAiBusy.value = false
   }
 }
 
@@ -1373,6 +1432,11 @@ watch(
   font-size: var(--fs-sm);
   padding: 24px 0;
   text-align: center;
+}
+.tpd-insai {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 /* ── Members tab ── */
