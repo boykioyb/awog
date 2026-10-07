@@ -30,6 +30,44 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.41.0',
+    date: '2026-10-08',
+    highlight: {
+      en: 'Sessions get a real tab bar — chat and every page the agent opens sit side by side — and adding a connection becomes a two-click "quick connect" for the services you actually use.',
+      vi: 'Phiên có hàng tab thật kiểu trình duyệt — chat và mọi trang agent mở nằm cạnh nhau — và thêm connection trở thành "kết nối nhanh" hai cú bấm cho đúng những dịch vụ bạn dùng.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'A browser-style tab bar now sits above every session: the chat lives in a "Discuss" tab, and each page the agent (or you) opens gets its own tab next to it. Right-click a tab for new, reload, duplicate, or close others/left/right/all; "+" starts a blank tab.',
+        vi: 'Hàng tab kiểu trình duyệt nay nằm ngay trên mỗi phiên: chat nằm ở tab "Trao đổi", còn mỗi trang agent (hoặc bạn) mở có tab riêng kế bên. Chuột phải lên tab để mở mới, tải lại, nhân bản, hay đóng các tab khác/trái/phải/tất cả; nút "+" mở tab trắng.',
+      },
+      {
+        kind: 'added',
+        en: 'The agent browser gains an overflow menu (⋯): page zoom with ⌘±/⌘0, a mobile emulation toggle, detached DevTools, and moving the browser-profile import there. Importing your Chrome/Edge/Brave profile now finds the real profile folder itself instead of failing with "no profile found".',
+        vi: 'Trình duyệt của agent có thêm menu ⋯: thu phóng trang bằng ⌘±/⌘0, bật giả lập mobile, mở DevTools tách riêng, và phần nhập profile trình duyệt được đưa vào đây. Nhập profile Chrome/Edge/Brave nay tự tìm đúng thư mục profile thay vì báo "không tìm thấy profile".',
+      },
+      {
+        kind: 'added',
+        en: 'Quick Connect on the Connections page: pick a service and connect in two clicks, with real brand icons for each source — no form until a service actually needs one.',
+        vi: 'Kết nối nhanh ở trang Connections: chọn dịch vụ rồi nối trong hai cú bấm, kèm icon thương hiệu thật của từng nguồn — không còn form nào cho tới khi dịch vụ thật sự cần.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Switching back to the chat tab no longer flickers — the page the agent had open used to keep painting over the conversation for a blink before letting go.',
+        vi: 'Quay lại tab chat không còn nháy nữa — trước đây trang agent đang mở vẫn vẽ đè lên cuộc trò chuyện trong một chớp mắt rồi mới nhường.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Popovers opened from the header chips (checklist, bookmarks, SSH, infrastructure) no longer run off the right edge of the window.',
+        vi: 'Popover mở từ các chip trên header (checklist, bookmark, SSH, hạ tầng) không còn tràn ra khỏi mép phải cửa sổ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'OAuth sign-in for connections is more reliable: deleting a source cleans up its stored secrets, and the sign-in flow handles stale state instead of hanging.',
+        vi: 'Đăng nhập OAuth cho connection đáng tin hơn: xoá một source dọn luôn secret đã lưu, và luồng đăng nhập xử lý trạng thái cũ thay vì treo.',
+  },
+  {
     version: '0.40.2',
     date: '2026-10-07',
     highlight: {
