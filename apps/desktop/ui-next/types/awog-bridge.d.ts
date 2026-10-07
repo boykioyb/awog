@@ -46,6 +46,11 @@ export type AwogBrowserTab = {
   shown: boolean
   // On screen somewhere else — the popout window, or another app window.
   shownElsewhere: boolean
+  // Trạng thái view per-tab cho menu ⋯ của chrome: hệ số zoom (1 = 100%),
+  // DevTools đang mở, emulation mobile đang bật.
+  zoom: number
+  devtools: boolean
+  mobile: boolean
 }
 // `activeTabId` là active của scope mà lời gọi `tabs(scope)` mang theo (global
 // khi không scope); `activeByScope` là map đầy đủ per-scope — một cửa sổ chứa
@@ -90,6 +95,9 @@ export type AwogBrowserImportSource = {
   id: string
   label: string
   profiles: AwogBrowserProfile[]
+  // The browser's data dir exists but the OS refused to list it (macOS app-data
+  // protection). The manual folder pick is the way through.
+  blocked?: boolean
 }
 export type AwogBrowserImportParts = {
   cookies: boolean
@@ -295,7 +303,9 @@ export interface AwogBridge {
   browser: {
     attach(rect: AwogBrowserRect, tabId?: string, scope?: string): Promise<AwogBrowserTab>
     setBounds(rect: AwogBrowserRect, tabId?: string, scope?: string): Promise<void>
-    detach(): Promise<void>
+    // Giấu view tại `rect` của bề mặt đang gọi — main giấu-tại-chỗ chứ không
+    // nhổ khỏi window, nên bật lại không reparent/reflow.
+    detach(rect?: AwogBrowserRect): Promise<void>
     tabs(scope?: string): Promise<AwogBrowserTabList>
     open(url: string, tabId?: string, scope?: string): Promise<AwogBrowserTab>
     // `wait: false` trả về ngay khi tab đã tạo + điều hướng đã bắt đầu (đường
@@ -310,12 +320,29 @@ export interface AwogBridge {
     back(tabId?: string, scope?: string): Promise<void>
     forward(tabId?: string, scope?: string): Promise<void>
     reload(tabId?: string, scope?: string): Promise<void>
+    // Menu ⋯ của chrome: zoom theo bậc Chromium ('in' | 'out' | 'reset'), mở/đóng
+    // cửa sổ DevTools rời (`open` vắng = toggle), và bật/tắt emulation mobile
+    // (CDP: metrics + touch + UA iPhone — tái dùng preset của browser_tool).
+    zoom(
+      tabId: string | undefined,
+      scope: string | undefined,
+      action: 'in' | 'out' | 'reset',
+    ): Promise<unknown>
+    devTools(tabId: string | undefined, scope: string | undefined, open?: boolean): Promise<unknown>
+    mobileEmulation(
+      tabId: string | undefined,
+      scope: string | undefined,
+      on: boolean,
+    ): Promise<{ mobile: boolean }>
     // `scope` khoá cửa sổ popout về đúng session đang pop out (vắng = pool global).
     popout(scope?: string): Promise<void>
     onChanged(handler: (list: AwogBrowserTabList) => void): () => void
     // Installed Chromium browsers + their profiles. Ids only travel over IPC;
     // main resolves them to paths itself (invariant #2).
     listBrowsers(): Promise<AwogBrowserImportSource[]>
+    // Let the user point at a Chromium profile dir via the native picker — the
+    // path through the macOS app-data wall. Synthetic source or null on cancel.
+    pickProfile(): Promise<AwogBrowserImportSource | null>
     importProfile(
       browserId: string,
       profileDir: string,
@@ -339,6 +366,10 @@ export interface AwogBridge {
     // Save a PNG of the page into the workspace. `root` is the workspace root the
     // renderer resolved; main re-validates the write stays inside it (invariant #2).
     saveScreenshot(root: string, tabId?: string, scope?: string): Promise<{ path: string }>
+    // Freeze-frame JPEG dataURL of the tab — renderer paints it where the native
+    // view just had to hide (a DOM overlay covering the viewport) so the surface
+    // doesn't flash white. null = nothing capturable yet.
+    frameDataUrl(tabId?: string, scope?: string): Promise<{ dataUrl: string | null }>
     // Host policy (⋮ → Manage allowed sites).
     sites(): Promise<AwogBrowserSites>
     setSites(sites: AwogBrowserSites): Promise<void>

@@ -12,6 +12,7 @@
        không phải ẩn. -->
   <span v-if="variant === 'chip' && session.loaded && count" class="ctxwrap2">
     <button
+      ref="chipEl"
       class="ctxchip"
       :class="{ on: expanded }"
       :title="t('sessions.bookmark.barTitle')"
@@ -21,9 +22,9 @@
       <span class="bmb-n">{{ count }}</span>
       <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
-    <template v-if="expanded">
-      <div class="ctxbackdrop2" @click="expanded = false" />
-      <div class="pop bmbpop" @click.stop>
+    <Teleport to="body">
+      <div v-if="expanded" class="ctxbackdrop2" @click="expanded = false" />
+      <div v-if="expanded" ref="popEl" class="pop bmbpop" :style="popStyle" @click.stop>
         <div class="pl">{{ t('sessions.bookmark.barTitle') }}</div>
         <div class="bmb-list">
           <div v-for="row in rows" :key="row.id" class="bmb-row" :class="{ dead: row.dangling }">
@@ -50,7 +51,7 @@
           </div>
         </div>
       </div>
-    </template>
+    </Teleport>
   </span>
 
   <div v-else-if="variant === 'bar' && session.loaded && count" class="bmb">
@@ -114,6 +115,7 @@
 // dangling) lives in useSessionBookmarks; this file is the markup for it.
 import type { Session } from '~/composables/useSessionsData'
 import type { BookmarkRow } from '~/composables/useSessionBookmarks'
+import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
 import { formatRelativeAgo } from '~/utils/relative-time'
 
 const props = withDefaults(defineProps<{ session: Session; variant?: 'bar' | 'chip' }>(), {
@@ -123,6 +125,15 @@ const { t } = useI18n()
 const now = useNow()
 
 const { rows, count, latest, expanded, jump, remove } = useSessionBookmarks(() => props.session)
+
+// Chip nằm trên hàng header `.dh` — neo fixed + kẹp viewport (align 'right' giữ
+// thói quen neo mép phải của popover cũ, nhưng giờ sát mép nào cũng không tràn).
+const chipEl = ref<HTMLElement | null>(null)
+const popEl = ref<HTMLElement | null>(null)
+const { style: popStyle } = usePopoverAnchor(chipEl, popEl, expanded, {
+  align: 'right',
+  maxHeight: 340,
+})
 
 // Chọn một mục cũng thu thanh lại (AC-B6): sau khi đã nhảy tới đích thì danh
 // sách mở rộng chỉ còn che transcript. Thu NGAY, không chờ `jump` — nó await
@@ -281,14 +292,9 @@ const onJump = (row: BookmarkRow) => {
   inset: 0;
   z-index: 40;
 }
-/* Strip nằm ở ĐẦU cột chat nên popover mở XUỐNG. */
+/* Neo `fixed` qua usePopoverAnchor — `.pop` lo position/z-index; đây chỉ còn skin. */
 .bmbpop {
-  position: absolute;
-  top: 128%;
-  right: 0;
-  z-index: 50;
   width: 320px;
-  max-height: 340px;
   overflow-y: auto;
 }
 .bmbpop .bmb-list {

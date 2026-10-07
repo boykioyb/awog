@@ -37,11 +37,15 @@ const props = withDefaults(
     tabId?: string | null
     // Scope của tab đang xem (session sở hữu nó) — main kiểm ownership khi chụp.
     scope?: string
+    // Mục ghép phía TRÊN (surface 'main' gộp menu ⋯ trang vào một menu duy nhất
+    // vì không còn hàng tab để đặt ⋮). Id không thuộc nhóm của menu này được
+    // đẩy lên qua emit `action`.
+    prepend?: MenuItem[]
   }>(),
-  { root: null, tabId: null, scope: undefined },
+  { root: null, tabId: null, scope: undefined, prepend: undefined },
 )
 
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; action: [id: string] }>()
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
@@ -53,7 +57,11 @@ const bridge = computed(() =>
 const importOpen = ref(false)
 const sitesOpen = ref(false)
 
+const OWN_IDS = new Set(['screenshot', 'import', 'sites', 'link-app', 'clear'])
+
 const items = computed<MenuItem[]>(() => [
+  ...(props.prepend ?? []),
+  ...(props.prepend?.length ? [{ separator: true } as MenuItem] : []),
   {
     id: 'screenshot',
     label: t('browser.menu.screenshot'),
@@ -120,6 +128,12 @@ const onClearData = async (): Promise<void> => {
 }
 
 const onSelect = (id: string): void => {
+  // Mục của menu ⋯ ghép vào (surface 'main') không phải việc của menu này —
+  // đẩy ngược lên NavBar → useBrowserActions.
+  if (!OWN_IDS.has(id)) {
+    emit('action', id)
+    return
+  }
   if (id === 'import') importOpen.value = true
   else if (id === 'sites') sitesOpen.value = true
   else if (id === 'screenshot') void onScreenshot()

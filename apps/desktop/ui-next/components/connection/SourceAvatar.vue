@@ -4,6 +4,7 @@
       {{ emojiValue }}
     </span>
     <img v-else-if="imgSrc" class="savatar-img" :src="imgSrc" :alt="alt" />
+    <BrandIcon v-else-if="brand" :provider="source.provider" :size="glyphSize" />
     <component :is="fallbackIcon" v-else :size="glyphSize" :stroke-width="1.75" />
     <span
       v-if="showStatus"
@@ -18,12 +19,15 @@
 // Source icon (ADR 0060 P5 + UI-parity area 1 — Craft's source-avatar, adapted to
 // ui-next). Priority: emoji `config.icon` (fast client path, no RPC) > a resolved
 // icon from the sidecar (`source.resolveIcon`: local file / downloaded config.icon
-// URL / provider favicon, all returned as a base64 data URI — CSP-safe) > a lucide
-// glyph chosen by provider/type. The resolve is lazy (on mount) and memoized in
-// the store so a list of rows resolves each source once. An optional status-dot
-// overlay uses the shared derived status + palette.
+// URL / provider favicon, all returned as a base64 data URI — CSP-safe) > a bundled
+// brand mark for a known provider (utils/brand-icons — real logo, offline) > a
+// lucide glyph chosen by provider/type. The resolve is lazy (on mount) and
+// memoized in the store so a list of rows resolves each source once. An optional
+// status-dot overlay uses the shared derived status + palette.
 import { computed, onMounted, ref, watch } from 'vue'
 import { Globe, HardDrive, Mail, Plug, Server, type LucideIcon } from 'lucide-vue-next'
+import BrandIcon from '~/components/connection/BrandIcon.vue'
+import { brandIcon } from '~/utils/brand-icons'
 import {
   deriveStatus,
   SOURCE_STATUS_COLORS,
@@ -69,6 +73,12 @@ const emojiValue = computed(() =>
 )
 const imgSrc = computed(() =>
   !emojiFast.value && resolved.value?.kind === 'dataUri' ? resolved.value.value : null,
+)
+
+// Bundled brand mark — shown when the sidecar resolved nothing (offline, unknown
+// favicon) or hasn't answered yet; a resolved dataUri still wins over it.
+const brand = computed(() =>
+  emojiFast.value || imgSrc.value ? undefined : brandIcon(props.source.provider),
 )
 
 // lucide fallback by provider (gmail/google → Mail) then source kind.

@@ -153,7 +153,33 @@
             :label="t('connections.editor.headers')"
             :secret-mode="secretMode"
           />
-          <div v-else class="cne-hint">{{ t('connections.editor.oauthHeadersNote') }}</div>
+          <template v-else>
+            <div class="cne-hint">{{ t('connections.editor.oauthHeadersNote') }}</div>
+            <!-- BYO OAuth app creds — chỉ cần khi provider không có Dynamic
+                 Client Registration (Slack): user tự đăng ký app rồi nhập
+                 client_id/secret. Provider có DCR (Linear, Notion) bỏ trống. -->
+            <div class="cne-field">
+              <label class="cne-label">{{ t('connections.editor.oauthClientId') }}</label>
+              <Input
+                v-model="oauthClientId"
+                :placeholder="t('connections.editor.oauthClientIdPh')"
+                spellcheck="false"
+                class="mono"
+              />
+            </div>
+            <div class="cne-field">
+              <label class="cne-label">{{ t('connections.editor.oauthClientSecret') }}</label>
+              <Input
+                v-model="oauthClientSecret"
+                type="password"
+                :placeholder="t('connections.editor.oauthClientSecretPh')"
+                spellcheck="false"
+                autocomplete="off"
+                class="mono"
+              />
+              <div class="cne-hint">{{ oauthClientSecretHint }}</div>
+            </div>
+          </template>
         </template>
 
         <!-- auth probe (optional) — Verify calls this tool after the handshake to
@@ -665,6 +691,15 @@ const credPassword = ref('')
 // is added at the send layer (sidecar applyBearerScheme).
 const mcpBearerToken = ref('')
 
+// BYO OAuth app creds for providers without Dynamic Client Registration (Slack —
+// "MCP clients must be backed by a registered Slack app"). clientId is public
+// config → seeds from the source and round-trips; clientSecret follows the
+// bearer pattern (write-only, blank keeps the stored keychain ref).
+const mcpClientIdOf = (s: Source | null): string =>
+  s && s.type === 'mcp' ? (s.mcp.clientId ?? '') : ''
+const oauthClientId = ref<string>(mcpClientIdOf(seedOf()))
+const oauthClientSecret = ref('')
+
 // Optional mcp auth probe (healthCheck): a tool name + JSON args Verify runs after
 // the handshake to verify the token actually authenticates.
 const healthTool = ref<string>(seedOf()?.healthCheck?.tool ?? '')
@@ -786,6 +821,8 @@ watch(
     credValue.value = ''
     credUsername.value = ''
     credPassword.value = ''
+    oauthClientId.value = mcpClientIdOf(seed)
+    oauthClientSecret.value = ''
     healthTool.value = seed?.healthCheck?.tool ?? ''
     healthArgsText.value = healthArgsToText(seed?.healthCheck?.args)
     detectedTools.value = []
@@ -817,6 +854,16 @@ const mcpBearerHint = computed(() =>
   mcpBearerStored.value
     ? t('connections.editor.mcpBearerHintKeep')
     : t('connections.editor.mcpBearerHint'),
+)
+
+// Same "blank keeps" hint for the OAuth client secret (write-only field).
+const oauthClientSecretStored = computed(
+  () => props.source?.type === 'mcp' && !!props.source.mcp.clientSecret,
+)
+const oauthClientSecretHint = computed(() =>
+  oauthClientSecretStored.value
+    ? t('connections.editor.oauthClientSecretHintKeep')
+    : t('connections.editor.oauthClientSecretHint'),
 )
 
 // mcp auth-probe tool picker: the detected tools (populated after Verify) plus a
@@ -930,9 +977,21 @@ const buildMcpPayload = (): McpSource => {
       const headers = fromEntries(headerEntries.value)
       if (Object.keys(headers).length > 0) mcp.headers = headers
     }
-    // Preserve the (non-secret) OAuth client id across edits so refresh reuses it.
-    if (props.source?.type === 'mcp' && props.source.mcp.clientId) {
-      mcp.clientId = props.source.mcp.clientId
+    // OAuth client identity: a typed value wins (BYO app — Slack); blank keeps
+    // the stored one so a DCR-registered or previously saved id/secret is never
+    // silently dropped. clientSecret plaintext is keychainized by saveSource —
+    // config persists only `secret:OAUTH_CLIENT_SECRET`.
+    if (draft.value.authType === 'oauth') {
+      const cid = oauthClientId.value.trim()
+      if (cid) mcp.clientId = cid
+      const csec = oauthClientSecret.value.trim()
+      if (csec) mcp.clientSecret = csec
+    }
+    if (props.source?.type === 'mcp') {
+      if (!mcp.clientId && props.source.mcp.clientId) mcp.clientId = props.source.mcp.clientId
+      if (!mcp.clientSecret && props.source.mcp.clientSecret) {
+        mcp.clientSecret = props.source.mcp.clientSecret
+      }
     }
   }
 

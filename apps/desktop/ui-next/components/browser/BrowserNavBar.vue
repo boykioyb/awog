@@ -72,12 +72,16 @@
          nút. Mục nào không dùng được ở trạng thái hiện tại thì `disabled` ngay
          trong menu — nhìn thấy được LÝ DO thay vì một nút xám không giải thích. -->
     <div class="bch-grp">
+      <!-- MỘT nút menu duy nhất. Panel/popout: mở menu ⋯ cấp-trang (⋮ cấp
+           trình-duyệt sống ở hàng tab của BrowserChrome). Surface 'main' không
+           có BrowserChrome nên cùng nút này mở menu gộp — mục cấp-trang prepend
+           vào đầu menu cấp-trình-duyệt (BrowserOverflowMenu). -->
       <button
         type="button"
         class="bch-act"
-        :class="{ on: actionsAt !== null }"
-        :title="t('browser.actions.title')"
-        @click.stop="openActions"
+        :class="{ on: (surface === 'main' ? overflowAt : actionsAt) !== null }"
+        :title="t(surface === 'main' ? 'browser.menu.title' : 'browser.actions.title')"
+        @click.stop="surface === 'main' ? openOverflow($event) : openActions($event)"
       >
         <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
       </button>
@@ -109,7 +113,9 @@
     :root="root"
     :tab-id="tabId"
     :scope="tab?.scope"
+    :prepend="surface === 'main' ? actionItems : undefined"
     @close="overflowAt = null"
+    @action="onActionSelect"
   />
 </template>
 
@@ -186,6 +192,7 @@ const {
     canExpand: () => props.canExpand,
     dock: () => props.dock,
     isPanel: () => props.surface === 'panel',
+    isMain: () => props.surface === 'main',
   },
   emit,
 )

@@ -85,6 +85,15 @@ export interface EmbeddedBrowserOptions {
   // hiển thị. Getter (không phải giá trị tĩnh) vì panel được KeepAlive và scope
   // của nó có thể đến muộn khi session hydrate.
   scope?: () => string | undefined
+  // PIN THEO TAB (session-main-tabs): khi được truyền, mặt này hiển thị đúng tab
+  // mà caller chọn — strip tab ngang hàng của session — thay vì bám theo con trỏ
+  // `activeByScope` của agent. Trả null = không có tab nào được chọn (người dùng
+  // đang ở tab discuss), `activeTab` rỗng → empty/detach như thường.
+  //
+  // Khác biệt cốt lõi với follow-mode: agent `selectTab`/`tab_new` KHÔNG được kéo
+  // trang người dùng đang xem đi — strip là của người dùng, pointer của agent chỉ
+  // đồng bộ ngược chiều (attach() ở main tự `activate()` tab được pin).
+  pinnedTabId?: () => string | null
 }
 
 export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
@@ -106,6 +115,60 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   const holding = ref(false)
   // Có bề mặt nổi nào của app đang chồng lên khung không? Xem `OVERLAYS`.
   const covered = ref(false)
+  // Frame "đông cứng": mọi cú nhả view (overlay che, về discuss, nhường chỗ bề
+  // mặt khác) đều để lại một khoảng trắng cho tới khi view kế tiếp attach — kể
+  // cả khoảng ngắn. Chụp một frame JPEG của chính tab vừa hiện để component phủ
+  // lên trong lúc đó; người dùng thấy trang "đứng hình" thay vì nháy trắng/nháy
+  // re-layout. Giữ cho tới khi `holding` quay lại — attach là async IPC, xoá
+  // ảnh ngay lúc detach xong lại nháy trắng một frame.
+  const frozen = ref<string | null>(null)
+  // Tab đang được phủ trong `frozen` + tab THẬT vừa nhả view (`activeTabId` có
+  // thể đã đổi trước khi watcher `holding` kịp bắn — ví dụ về discuss).
+  let frozenTab: string | null = null
+  let lastHeldTab: string | null = null
+  // Capture đang bay theo tab — gom các lời gọi trùng (sync trước-detach +
+  // watcher holding sau-detach + prefetch pointerdown) về MỘT cú IPC. ĐÃ TỪNG
+  // gộp vào `frozenTab` (đặt sớm trước await): một capture ném/trả null để cờ
+  // kẹt mãi → mọi prefetch sau bị chặn → `concealEarly` không bao giờ có ảnh.
+  const captureInFlight = new Set<string>()
+  // Frame đã capture + decode xong nhưng CHƯA publish — prefetch (`prefetchFrame`
+  // trên pointerdown tab Trao đổi) chạy lúc view còn gắn; publish sớm chỉ che
+  // khuất không-nhìn-thấy nên cất ở đây, tới lúc detach (`publishFrozen`) mới
+  // lên `frozen`. Như vậy ảnh luôn có sẵn tại lúc swap mà không phải ĐỢI capture
+  // trong đường detach — cái await đó từng là cú "delay 0.2s".
+  let pendingFrame: { tabId: string; dataUrl: string } | null = null
+  const publishFrozen = (tabId: string): void => {
+    if (pendingFrame?.tabId === tabId) frozen.value = pendingFrame.dataUrl
+  }
+  // "Giấu sớm do pointerdown" — cờ sống trong khe press→click/cancel của tab
+  // đích (xem `concealEarly`). Trong khe đó `wanted` phải tính là false: nếu
+  // không, broadcast `browser:changed` của chính cú detach sẽ cho `applyList`
+  // thấy tab `!shown` → reclaim → `sync` → `visible()` còn true (chưa click)
+  // → RE-ATTACH view ngay trước khi người dùng nhả nút — mất hết lợi ích.
+  // Gỡ cờ: `visible()` thành false (click đã đổi tab — `syncOnce` tự dọn) hoặc
+  // `resync()` (nhấn bị hủy → gắn lại).
+  let earlyConcealed = false
+  // `concealed` = "rect của mặt này hiện KHÔNG có view native nào đang vẽ".
+  // Khác `holding` — cờ quyết định tắt NGAY khi chọn detach, còn concealed chỉ
+  // bật sau khi IPC giấu thật sự về + compositor đã có một nhịp để gỡ layer
+  // (`settleConceal` nhường một frame). Bật sớm thì DOM phía dưới hiện ra trong
+  // ĐÚNG frame mà WebContentsView (vẽ TRÊN DOM) còn phủ trang lên — frame hỗn
+  // hợp "chat trên, trang dưới"; bật khi pane DOM đã rỗng thì trắng một nhịp.
+  const concealed = ref(true)
+  // Chờ HAI frame sau khi lệnh giấu view đã áp ở main — việc gỡ surface khỏi
+  // frame hiển thị là của compositor, không cùng nhịp với DOM patch. RAF chạy
+  // ngay TRƯỚC khi frame kế commit nên một RAF vẫn để DOM patch lọt vào đúng
+  // frame mà lệnh gỡ chưa kịp land (vsync lệch một nhịp) → frame hỗn hợp. Hai
+  // RAF đẩy DOM sang frame N+2 — view chắc chắn đã gỡ. Khi cửa sổ không paint
+  // (occluded/minimized) RAF ngừng — lúc đó không ai nhìn thấy gì, concealed
+  // sẽ được sửa đúng ở lần attach tới.
+  const settleConceal = async (): Promise<void> => {
+    await new Promise<void>((r) => requestAnimationFrame(() => r()))
+    await new Promise<void>((r) => requestAnimationFrame(() => r()))
+    // Re-attach đã xong trong lúc chờ frame (resync nhanh hơn settle) thì không
+    // được đánh dấu "trống" nữa — rect đang có view vẽ.
+    if (!holding.value) concealed.value = true
+  }
   // Text the user has highlighted INSIDE the page. Two chrome buttons (translate,
   // quote into the chat) are disabled without it, and there is no event to learn it
   // from: the selection lives in another webContents, so the only way to know is to
@@ -127,10 +190,11 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   // Cùng một phán đoán cho selection poll: hỏi một webContents chưa commit
   // document làm `executeJavaScript` treo vô hạn ở main (main giờ cũng tự chặn,
   // đây là lớp thứ hai để khỏi tốn IPC mỗi 1,2s).
-  const hasPage = (): boolean => {
-    const url = activeTab.value?.url?.trim() ?? ''
-    return !!url && url !== 'about:blank'
+  const pageUrlOf = (tabId: string | null): string => {
+    const url = tabs.value.find((t) => t.tabId === tabId)?.url?.trim() ?? ''
+    return url === 'about:blank' ? '' : url
   }
+  const hasPage = (): boolean => !!pageUrlOf(activeTabId.value)
   // Empty-state của viewport: chưa có tab nào, hoặc tab active là trang trắng.
   // DOM bên trong khung tự render hướng dẫn — view native không bao giờ gắn vào.
   const empty = computed(() => !hasPage())
@@ -179,8 +243,19 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     // `hasPage` nằm trong `wanted`: tab trắng thì DOM empty-state hiện thay,
     // attach một trang trắng lên chỉ để che nó đi. Khi tab commit URL thật,
     // watcher `empty` bên dưới + nhánh reclaim trong `applyList` lo phần gắn lại.
-    const wanted = onScreen(el) && options.visible() && !covered.value && isOwner.value && hasPage()
+    // `earlyConcealed` chỉ có nghĩa trong khe press→click/cancel: qua điểm đó,
+    // `visible()` false nghĩa là click ĐÃ đổi tab — cờ xong việc, gỡ để các
+    // lần sync sau (khi người dùng quay lại tab browser) attach bình thường.
+    if (!options.visible()) earlyConcealed = false
+    const wanted =
+      onScreen(el) &&
+      options.visible() &&
+      !covered.value &&
+      isOwner.value &&
+      hasPage() &&
+      !earlyConcealed
     if (!wanted) {
+      const detachRect = lastRect ?? undefined
       lastRect = null
       // `holding` chỉ là cờ lạc quan — `selectTab`/`newTab`/`closeTab` dọn nó
       // TRƯỚC khi sync trong khi main vẫn còn vẽ view của mình. `owner === id`
@@ -190,13 +265,28 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
       if (holding.value || owner.value === id) {
         holding.value = false
         if (owner.value === id) owner.value = null
+        // Chụp frame đông cứng TRƯỚC detach nhưng KHÔNG đợi: view còn sống nên
+        // capture hợp lệ, còn ảnh chỉ cần về trước nhịp DOM đổi chỗ — prefetch
+        // (pointerdown) thường đã có sẵn trong `pendingFrame` → publish ngay,
+        // không cần chờ IPC nào cả.
+        if (lastHeldTab) {
+          publishFrozen(lastHeldTab)
+          void captureFrozen(lastHeldTab)
+        }
         // CHỈ detach khi view thật sự "về nhà" (không ai giữ nữa). `owner` vừa
         // chuyển sang instance KHÁC cùng cửa sổ (dock mép kia, BrowserPip) thì
         // view đang nằm trong rect của chủ mới — `detachFrom(window)` của main
         // park MỌI tab của cửa sổ, nên một lời detach trễ ở đây sẽ gỡ nhầm view
         // của chủ mới: cú nhấp nháy đen + một vòng reclaim IPC ngay lúc bàn giao.
-        if (owner.value === null) await api.detach().catch(() => {})
+        // `detachRect` định danh rect của CHÍNH bề mặt này — main chỉ giấu view
+        // trong rect đó (concealAt), không đụng view của bề mặt bên cạnh.
+        if (owner.value === null) await api.detach(detachRect).catch(() => {})
       }
+      // Đến đây: detach đã về (view giấu xong), hoặc chủ mới đã lấy view sang
+      // rect khác — rect của mình chắc chắn trống. `concealed` là cờ THẬT sau
+      // IPC, khác `holding` vừa tắt lạc quan ở trên. Nhường thêm một frame để
+      // compositor gỡ xong layer native rồi mới báo DOM phía dưới hiện ra.
+      await settleConceal()
       return
     }
     try {
@@ -212,8 +302,12 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
         owner.value = id
         const info = await api.attach(rect, activeTabId.value ?? undefined, myScope())
         holding.value = true
+        concealed.value = false
         lastRect = rect
         applyOne(info)
+        // Tab THẬT vừa được gắn (info có thể là tab khác khi id xin đã cũ) —
+        // nguồn để chụp frame đông cứng lúc view này bị nhả ra sau.
+        lastHeldTab = info.tabId
       } else if (!sameRect(lastRect, rect)) {
         lastRect = rect
         await api.setBounds(rect, activeTabId.value ?? undefined, myScope())
@@ -278,20 +372,38 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     const scope = myScope()
     const mine = scope === undefined ? list.tabs : list.tabs.filter((t) => t.scope === scope)
     tabs.value = mine
-    const scopedActive =
-      scope === undefined ? list.activeTabId : (list.activeByScope?.[scope] ?? null)
-    // FOLLOW THE AGENT. When a tool call opens a tab or switches tabs, the panel
-    // moves with it — that is the whole point of showing the browser next to the
-    // transcript. Only while we hold the view: a panel that isn't showing anything
-    // must not yank the view over on a background navigation.
-    const followed = holding.value && !!scopedActive && scopedActive !== activeTabId.value
-    if (scopedActive && mine.some((t) => t.tabId === scopedActive)) {
-      activeTabId.value = scopedActive
-    } else if (!mine.some((t) => t.tabId === activeTabId.value)) {
-      // Con trỏ active của scope trỏ vào tab đã chết (webContents crash) hoặc
-      // scope chưa có con trỏ — rơi về tab đầu của scope thay vì treo ở trạng
-      // thái trống dù còn tab.
-      activeTabId.value = mine[0]?.tabId ?? null
+    // Frame đông cứng của một tab vừa bị đóng thì không còn trang để phủ — gỡ.
+    if (frozenTab !== null && !mine.some((t) => t.tabId === frozenTab)) {
+      if (lastHeldTab === frozenTab) lastHeldTab = null
+      frozen.value = null
+      frozenTab = null
+    }
+    const pin = options.pinnedTabId?.()
+    let followed = false
+    if (pin !== undefined) {
+      // PINNED MODE: con trỏ active là của STRIP, không phải của agent. Pin trỏ
+      // vào tab đã đóng thì giữ nguyên — `activeTab` null → `hasPage` false →
+      // view nhả ra + empty-state, chủ strip (SessionDetail) tự gỡ tab đó.
+      if (pin !== activeTabId.value) {
+        activeTabId.value = pin
+        holding.value = false
+      }
+    } else {
+      const scopedActive =
+        scope === undefined ? list.activeTabId : (list.activeByScope?.[scope] ?? null)
+      // FOLLOW THE AGENT. When a tool call opens a tab or switches tabs, the panel
+      // moves with it — that is the whole point of showing the browser next to the
+      // transcript. Only while we hold the view: a panel that isn't showing anything
+      // must not yank the view over on a background navigation.
+      followed = holding.value && !!scopedActive && scopedActive !== activeTabId.value
+      if (scopedActive && mine.some((t) => t.tabId === scopedActive)) {
+        activeTabId.value = scopedActive
+      } else if (!mine.some((t) => t.tabId === activeTabId.value)) {
+        // Con trỏ active của scope trỏ vào tab đã chết (webContents crash) hoặc
+        // scope chưa có con trỏ — rơi về tab đầu của scope thay vì treo ở trạng
+        // thái trống dù còn tab.
+        activeTabId.value = mine[0]?.tabId ?? null
+      }
     }
     const active = mine.find((t) => t.tabId === activeTabId.value)
     // Don't clobber what the user is typing.
@@ -300,6 +412,7 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     // so this instance stops pushing bounds at a view it no longer holds.
     if (holding.value && active && !active.shown) {
       holding.value = false
+      concealed.value = true
       if (owner.value === id) owner.value = null
     }
     if (followed) {
@@ -390,6 +503,10 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     guard(() => bridge.value!.forward(activeTabId.value ?? undefined, myScope()))
   const reload = (): Promise<void> =>
     guard(() => bridge.value!.reload(activeTabId.value ?? undefined, myScope()))
+  // Reload một tab BẤT KỲ — context menu chuột phải của strip tác động đúng tab
+  // được bấm, không phải tab đang active.
+  const reloadTab = (tabId: string): Promise<void> =>
+    guard(() => bridge.value!.reload(tabId, myScope()))
   // Pop out mang theo scope của mặt này: cửa sổ popout mở ra chỉ thấy tab của
   // đúng session đã bấm nút (main ghi query `?scope=` vào route `/browser`).
   const popout = (): Promise<void> => guard(() => bridge.value!.popout(myScope()))
@@ -398,16 +515,30 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   // đã ghim), nên phải thấy khung đổi ngay. Chờ `loadURL` xong mới trả về là 208ms
   // với trang nhẹ nhất và vài giây với một trang thật (đo được), tức UI đứng im
   // đúng lúc người ta vừa bấm. Trạng thái tải theo về sau qua event `changed`.
-  const newTab = (url?: string): Promise<void> =>
-    guard(async () => {
+  // Trả về tabId vừa tạo — strip main cần id để pin tab mới lên thanh tab.
+  // (không qua `guard`: nó nuốt giá trị trả về thành void)
+  const newTab = async (url?: string): Promise<string | null> => {
+    error.value = ''
+    try {
       const created = await bridge.value!.newTab(url, { wait: false, scope: myScope() })
       activeTabId.value = created.tabId
+      // Tab mới thường là trang trắng — xoá URL draft ngay khỏi thanh địa chỉ,
+      // chờ `browser:changed` mới ghi thì navbar cứ hiện URL của tab cũ.
+      urlDraft.value = created.url ?? ''
       holding.value = false
       await sync()
-    })
+      return created.tabId
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : String(err)
+      return null
+    }
+  }
 
   const selectTab = (tabId: string): Promise<void> =>
     guard(async () => {
+      // PINNED MODE: strip đổi tab bằng pin, không qua `selectTab` — con trỏ
+      // của agent (`activeByScope`) phải đứng yên khi người dùng lật tab.
+      if (options.pinnedTabId !== undefined) return
       applyOne(await bridge.value!.selectTab(tabId, myScope()))
       // Re-attach: a different tab means a different view in our rect.
       holding.value = false
@@ -429,6 +560,57 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
       await sync()
     })
 
+  // Chụp sớm frame của tab đang giữ view — gọi từ `pointerdown`/`pointerenter`
+  // của tab sắp được chọn (vd Trao đổi). Khoảng press→click ~80-150ms cho
+  // capture + decode kịp xong, nên tới lúc swap `pendingFrame` đã sẵn: detach
+  // publish ngay mà không phải ĐỢI IPC — đó là cách màn hình đổi tức thì mà
+  // nhịp "view gỡ trễ" vẫn được phủ bằng ảnh của trang.
+  const prefetchFrame = (): void => {
+    if (lastHeldTab && (holding.value || owner.value === id)) void captureFrozen(lastHeldTab)
+  }
+
+  // Giấu view NGAY tại `pointerdown` của tab đích (vd Trao đổi) — trước cả khi
+  // `click`/swap DOM xảy ra. Press→click cho người dùng ~80-150ms, đủ để IPC
+  // `detach` + compositor gỡ layer xong; tới lúc `click` đổi `mainTab`, view đã
+  // đi hẳn nên chat hiện trong đúng frame đầu — không còn nhịp "browser đứng
+  // một nhịp" nữa.
+  //
+  // Chờ TỐI ĐA 2 frame cho capture đang bay trước khi giấu: có ảnh thì pane
+  // phủ `.mbfrozen` liền mạch với view sống (bấm-huỷ cũng không lộ trống);
+  // quá 2 frame vẫn giấu — swap sạch quan trọng hơn pane trống trong khe hiếm
+  // (bấm mà huỷ + capture thất bại). Chờ lâu hơn nữa thì hide trượt qua click,
+  // mất hết lợi ích.
+  const concealEarly = async (): Promise<void> => {
+    if (earlyConcealed || (!holding.value && owner.value !== id)) return
+    // Giấu view NGAY LẬP TỨC — trước cả khi frame đông cứng về và trước click.
+    // Đo được: `pointerdown → click` chỉ ~70-150ms, còn `capturePage` của
+    // prefetch nghẹt main đúng lúc đó (~130-380ms một RAF). Chờ ảnh rồi mới
+    // detach thì lệnh `setVisible` đến main TRỄ hơn click — view còn vẽ đè lên
+    // chat ~200-270ms = chính cú nháy đang dập. Ngược lại detach trước, ảnh
+    // (nếu có) publish sau: `frozen` lên chỉ 1 frame sau khi view gỡ, pane
+    // trống ngắn hơn hẳn nhịp view-đè-chat.
+    if (lastHeldTab) publishFrozen(lastHeldTab)
+    earlyConcealed = true
+    const detachRect = lastRect ?? undefined
+    lastRect = null
+    holding.value = false
+    const wasOwner = owner.value === id
+    if (wasOwner) owner.value = null
+    // Chủ mới đã lấy view sang rect khác thì không detach (giống `syncOnce`).
+    if (owner.value === null) {
+      await bridge.value?.detach(detachRect).catch(() => {})
+    }
+    await settleConceal()
+  }
+
+  // Gắn lại view sau `concealEarly` mà click không tới (nhấn rồi drag hủy).
+  // `sync` tự kiểm lại `wanted` — pin vẫn là tab browser thì attach trở lại,
+  // ảnh frozen đang phủ bị live view thay thế liền mạch.
+  const resync = (): void => {
+    earlyConcealed = false
+    void sync()
+  }
+
   // ── Wiring ────────────────────────────────────────────────────────────────
 
   // "Get it off the screen", for the paths that must not wait for a sync trigger:
@@ -442,11 +624,17 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   // the rest.
   const detachNow = async (): Promise<void> => {
     const wasOwner = owner.value === id
+    if (holding.value && lastHeldTab) void captureFrozen(lastHeldTab)
+    const rect = lastRect ?? undefined
     holding.value = false
     lastRect = null
-    if (!wasOwner) return
+    if (!wasOwner) {
+      concealed.value = true
+      return
+    }
     owner.value = null
-    await bridge.value?.detach().catch(() => {})
+    await bridge.value?.detach(rect).catch(() => {})
+    await settleConceal()
   }
 
   let stopChanged: (() => void) | null = null
@@ -528,10 +716,99 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
       void sync()
     },
   )
+  // PIN ĐỔI KHI USER BẤM TAB KHÁC TRÊN STRIP — đây chính là cơ chế chuyển tab
+  // của pinned mode (strip không đi qua `selectTab` IPC): re-render theo list
+  // đã có rồi resync — attach tab mới hoặc nhả view khi pin về null (discuss).
+  watch(
+    () => options.pinnedTabId?.(),
+    () => {
+      if (lastList) applyList(lastList)
+      void sync()
+    },
+  )
+
   // `empty` cũng là một trigger: tab đang giữ view mà navigate về about:blank
   // thì `applyList` không gọi sync (tab vẫn `shown`), nên watcher này là nơi
   // duy nhất gỡ view ra để nhường chỗ cho empty-state — và ngược lại.
   watch([() => options.visible(), covered, isOwner, empty], () => void sync())
+
+  // Chụp frame của `tabId` — KHÔNG đọc `activeTabId` ở đây: watcher `holding`
+  // bắn SAU khi applyList đã đổi con trỏ (pin → discuss = null), nên caller
+  // truyền đúng tab vừa nhả view (`lastHeldTab`) hoặc tab mới (đổi pin khi
+  // đang vắng view). `frameDataUrl` trả null khi tab chưa từng lên màn hình —
+  // giữ nền trống như hành vi cũ.
+  const captureFrozen = async (tabId: string): Promise<void> => {
+    const api = bridge.value
+    // `captureInFlight` gom các lời gọi trùng trong một cú detach (sync trước-
+    // detach + watcher holding sau-detach + prefetch) về MỘT cú IPC capture.
+    if (!api || captureInFlight.has(tabId) || !pageUrlOf(tabId)) return
+    // Frame của tab VỪA NHẢ chỉ đáng chụp khi mặt này vẫn định hiện nó. Pin đã
+    // sang tab KHÁC (đổi tab, "+ tab mới") thì chụp frame cũ sẽ phủ trang cũ
+    // lên tab mới — đúng bug "Tab mới hiện nội dung tab khác". Pin về discuss
+    // (null) vẫn chụp — quay lại đúng tab đó dùng ngay.
+    const stillCurrent = (): boolean => activeTabId.value === null || activeTabId.value === tabId
+    if (!stillCurrent()) return
+    captureInFlight.add(tabId)
+    try {
+      const r = await api.frameDataUrl(tabId, myScope())
+      // Staleness SAU await: pin có thể đã đổi trong lúc IPC đi — frame của tab
+      // cũ về trễ không được phủ lên tab mới.
+      if (!r.dataUrl || !stillCurrent()) return
+      // DECODE trước khi cất: <img src=data:> đứng rỗng tới khi JPEG decode
+      // xong (~10-30ms) — ảnh phải sẵn-sàng-paint ngay lúc cần phủ.
+      try {
+        const im = new Image()
+        im.src = r.dataUrl
+        await im.decode()
+      } catch {
+        // decode lỗi → vẫn cất: img hỏng cũng chỉ là nền trống, không tệ hơn
+        // trạng thái "không có frame" hiện tại.
+      }
+      if (!stillCurrent()) return
+      frozenTab = tabId
+      // Ảnh luôn vào `pendingFrame`; chỉ PUBLISH lên `frozen` khi view đã rời —
+      // prefetch chạy lúc view còn gắn, publish sớm sẽ mount ảnh phủ lên pane
+      // đang được view che.
+      pendingFrame = { tabId, dataUrl: r.dataUrl }
+      if (!holding.value) frozen.value = r.dataUrl
+    } catch {
+      // Capture thất bại (view chưa từng composite / host đang ẩn) — giữ nền
+      // trống như hành vi cũ, không phải lỗi đáng hiện. KHÔNG đặt `frozenTab`
+      // ở đây (trước đây nó được đặt SỚM trước await, nên một lần ném khoá
+      // luôn mọi lần chụp sau — `concealEarly` không bao giờ có ảnh).
+    } finally {
+      captureInFlight.delete(tabId)
+    }
+  }
+  // Trigger DUY NHẤT là `holding` rơi: watcher này độc lập thứ tự đăng ký với
+  // watcher sync (sync xoá `holding` đồng bộ trước khi một watcher `covered`
+  // chạy — nên bắt `covered` sẽ không bao giờ thấy view còn đang giữ).
+  watch(holding, (on) => {
+    if (on) {
+      frozen.value = null
+      frozenTab = null
+      pendingFrame = null
+      return
+    }
+    if (lastHeldTab) void captureFrozen(lastHeldTab)
+  })
+  // Đang vắng view mà active tab đổi (pin A→B lúc covered hay vừa detach):
+  // frame của A phủ sai trang — chụp B thay (B trắng thì capture tự bỏ). Pin về
+  // discuss (null) thì GIỮ frame: nó là của tab người dùng sẽ quay lại, và
+  // `.mbpane` đang ẩn nên ảnh không thừa thãi.
+  watch(activeTabId, (tabId) => {
+    if (holding.value || tabId === null || tabId === frozenTab) return
+    frozen.value = null
+    frozenTab = null
+    pendingFrame = null
+    void captureFrozen(tabId)
+  })
+  onDeactivated(() => {
+    frozen.value = null
+    frozenTab = null
+    lastHeldTab = null
+    pendingFrame = null
+  })
 
   // Poll only while the page is on screen in THIS instance: a parked panel has no
   // selection to report, and asking would cost an IPC round-trip per tick per dock.
@@ -582,15 +859,22 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
     elsewhere,
     isOwner,
     empty,
+    covered,
+    frozen,
+    concealed,
     selectionText,
     submitUrl,
     back,
     forward,
     reload,
+    reloadTab,
     popout,
     newTab,
     selectTab,
     closeTab,
     takeOver,
+    prefetchFrame,
+    concealEarly,
+    resync,
   }
 }

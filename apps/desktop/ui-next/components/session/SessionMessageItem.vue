@@ -770,7 +770,6 @@ const regen = () => void guarded('regen', store.regenerate)
 const retry = () => act(store.retryModel)
 const rewind = () => void guarded('rewind', store.rewind)
 const fork = () => act((id, i) => store.fork(id, i, 'fork'))
-const branch = () => act((id, i) => store.fork(id, i, 'branch'))
 
 // Full screen → open the message body in the shared full-window PreviewModal
 // (usePreview, the SAME instance mounted in SessionDetail) as rendered markdown:
@@ -924,7 +923,14 @@ const userOverflow = computed<(MsgAction | MsgSep)[]>(() =>
 
 const asstPrimary = computed<MsgAction[]>(() =>
   props.readonly
-    ? [copyAction.value, { icon: 'quote', title: t('sessions.message.quote'), run: quote }]
+    ? [
+        copyAction.value,
+        { icon: 'quote', title: t('sessions.message.quote'), run: quote },
+        ...(plainText.value.trim()
+          ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
+          : []),
+        { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
+      ]
     : [
         copyAction.value,
         { icon: 'quote', title: t('sessions.message.quote'), run: quote },
@@ -939,38 +945,25 @@ const asstPrimary = computed<MsgAction[]>(() =>
               },
             ]
           : []),
-      ],
-)
-const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
-  // Readonly: chỉ giữ hai ông xem fullscreen (response + cả turn) — publishReport
-  // ghi file wiki, branch/fork/regen/retry/rewind ghi transcript → đều loại.
-  props.readonly
-    ? [
-        ...(plainText.value.trim()
-          ? [
-              {
-                icon: 'maximize',
-                title: t('sessions.message.fullscreen'),
-                run: openFullscreen,
-              },
-            ]
-          : []),
-        { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
-      ]
-    : [
-        // Response-only fullscreen only earns a row when there's prose to read.
+        // Hai nút fullscreen (response / cả lượt) là hành động tần suất cao — nằm
+        // ngoài hàng primary, không núp sau ⋯.
         ...(plainText.value.trim()
           ? [{ icon: 'maximize', title: t('sessions.message.fullscreen'), run: openFullscreen }]
           : []),
-        // Xuất thành báo cáo hạ tầng — cũng chỉ khi có văn xuôi: một lượt chỉ có tool thì
+        { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
+      ],
+)
+const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
+  // Readonly: primary đã ôm cả hai nút fullscreen; overflow không còn gì an toàn
+  // để giữ (publishReport ghi wiki, fork/regen/retry/rewind ghi transcript).
+  props.readonly
+    ? []
+    : [
+        // Xuất thành báo cáo hạ tầng — chỉ khi có văn xuôi: một lượt chỉ có tool thì
         // không có gì để thành báo cáo, và `publishReport` sẽ trả false mà không nói gì.
         ...(plainText.value.trim()
           ? [{ icon: 'file', title: t('sessions.message.report'), run: publishReport }]
           : []),
-        // Whole-turn fullscreen (activities + gates + response) — always available for an
-        // assistant turn, incl. tool-only turns with no final response (AC3.9).
-        { icon: 'layers', title: t('sessions.message.fullscreenTurn'), run: openTurnFullscreen },
-        { icon: 'branch', title: t('sessions.message.branch'), run: branch },
         { icon: 'fork', title: t('sessions.message.forkShort'), run: fork },
         { sep: true },
         { icon: 'refresh', title: t('sessions.message.regen'), run: regen, danger: true },

@@ -29,6 +29,7 @@
          gây ra nó chứ không phải một dải chữ đỏ ngang màn hình. -->
     <span v-if="session.aboutSshHostId" class="ctxwrap">
       <button
+        ref="sshChipEl"
         class="ctxchip"
         :class="{ warn: sshApprovalMode === 'auto', on: open === 'ssh' }"
         :title="t('sessions.detail.aboutSshHost')"
@@ -39,7 +40,25 @@
         <span class="ctxchip-sub">· {{ sshApprovalShort }}</span>
         <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
-      <div v-if="open === 'ssh'" class="pop ctxpop" @click.stop>
+    </span>
+
+    <!-- Hạ tầng (ADR 0088): chip tự quản popover + màu của nó, đúng khuôn chip SSH
+         phía trên. Nó cũng tự ẩn khi phiên không ghim ngữ cảnh nào. -->
+    <InfraChip :session="session" />
+    <!-- kubectl + Terraform (ADR 0088 §7, P1/P2): cùng hàng, mỗi chip tự ẩn khi
+         máy/project không có gì để chọn. -->
+    <InfraKubectlChip :session="session" />
+    <InfraTerraformChip :session="session" />
+
+    <SessionTodoPanel :session="session" variant="chip" />
+    <SessionBookmarkBar :session="session" variant="chip" />
+
+    <!-- Popover + backdrop teleport ra <body> và neo `fixed` qua usePopoverAnchor:
+         chip giờ nằm trên hàng header `.dh` nên `absolute; left:0` sát mép phải
+         sẽ thò ra ngoài cửa sổ. -->
+    <Teleport to="body">
+      <div v-if="open" class="ctxbackdrop" @click="open = null" />
+      <div v-if="open === 'ssh'" ref="sshPopEl" class="pop ctxpop" :style="sshPopStyle" @click.stop>
         <div class="pl">{{ t('sessions.detail.sshApproval.label') }}</div>
         <AppSelect
           :model-value="sshApprovalMode"
@@ -56,20 +75,7 @@
           <Icon name="chev" class="ctxpop-chev" />
         </button>
       </div>
-    </span>
-
-    <!-- Hạ tầng (ADR 0088): chip tự quản popover + màu của nó, đúng khuôn chip SSH
-         phía trên. Nó cũng tự ẩn khi phiên không ghim ngữ cảnh nào. -->
-    <InfraChip :session="session" />
-    <!-- kubectl + Terraform (ADR 0088 §7, P1/P2): cùng hàng, mỗi chip tự ẩn khi
-         máy/project không có gì để chọn. -->
-    <InfraKubectlChip :session="session" />
-    <InfraTerraformChip :session="session" />
-
-    <SessionTodoPanel :session="session" variant="chip" />
-    <SessionBookmarkBar :session="session" variant="chip" />
-
-    <div v-if="open" class="ctxbackdrop" @click="open = null" />
+    </Teleport>
   </div>
 </template>
 
@@ -79,6 +85,7 @@
 // riêng — SessionDetail chỉ còn lo header + chat + panel.
 import type { Session, SshApprovalMode } from '~/composables/useSessionsData'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
+import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
@@ -153,6 +160,12 @@ const open = ref<'ssh' | null>(null)
 function toggle(k: 'ssh') {
   open.value = open.value === k ? null : k
 }
+
+// Neo popover SSH: fixed + kẹp viewport — chip đứng sát mép phải vẫn không tràn.
+const sshPopOpen = computed(() => open.value === 'ssh')
+const sshChipEl = ref<HTMLElement | null>(null)
+const sshPopEl = ref<HTMLElement | null>(null)
+const { style: sshPopStyle } = usePopoverAnchor(sshChipEl, sshPopEl, sshPopOpen)
 </script>
 
 <style scoped>
@@ -162,14 +175,9 @@ function toggle(k: 'ssh') {
   flex: 0 1 auto;
   min-width: 0;
 }
-/* Popover của chip SSH. `bottom` không dùng được: strip nằm ở ĐẦU cột chat nên menu
-   mở XUỐNG. Skin popover chuẩn (`.pop` global vẫn viền borderStrong — siết về
-   hairline --border + bg-popover). */
+/* Popover của chip SSH — neo `fixed` qua usePopoverAnchor (`.pop` lo position +
+   z-index); đây chỉ còn skin: siết viền về hairline --border + bg-popover. */
 .ctxpop {
-  position: absolute;
-  top: 128%;
-  left: 0;
-  z-index: 50;
   min-width: 232px;
   background: var(--popover);
   border-color: var(--border);

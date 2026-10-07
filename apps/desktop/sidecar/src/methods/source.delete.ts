@@ -6,7 +6,8 @@ import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { SOURCE_SLUG_RE } from '../sources/schema.js'
 import { deleteSource, loadSource } from '../sources/store.js'
-import { purgeServerSecrets } from '../mcp/secrets.js'
+import { purgeServerSecrets, secretKeyFromReference } from '../mcp/secrets.js'
+import { deleteSecret } from '../credentials/keychain.js'
 import { deleteToken } from '../sources/oauth-store.js'
 import { deleteApiCredential } from '../sources/api-credentials.js'
 
@@ -22,6 +23,11 @@ register('source.delete', async (raw) => {
   await deleteSource(slug)
   if (source && source.type === 'mcp') {
     await purgeServerSecrets(source.id, source.mcp.env, source.mcp.headers)
+    // mcp.clientSecret is a scalar field, not part of the env/header records —
+    // purge its `secret:` ref explicitly so a deleted source leaves no orphan.
+    const clientSecretKey =
+      source.mcp.clientSecret && secretKeyFromReference(source.mcp.clientSecret)
+    if (clientSecretKey) await deleteSecret(source.id, clientSecretKey).catch(() => {})
     // Also drop any OAuth token bundle stored under the distinct
     // `awog-source-oauth` service (ADR 0060 D-4) — best-effort, own namespace.
     await deleteToken(source.id)
@@ -30,6 +36,9 @@ register('source.delete', async (raw) => {
     // Drop the api credential stored under the `awog-source-api` service (ADR
     // 0060 P3) so a deleted api source leaves no orphan secret — best-effort.
     await deleteApiCredential(source.id)
+    const apiClientSecretKey =
+      source.api.oauth?.clientSecret && secretKeyFromReference(source.api.oauth.clientSecret)
+    if (apiClientSecretKey) await deleteSecret(source.id, apiClientSecretKey).catch(() => {})
   }
   return { ok: true }
 })

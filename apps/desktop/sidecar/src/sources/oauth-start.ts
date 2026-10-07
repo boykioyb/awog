@@ -15,6 +15,7 @@
 // public authorize URL is surfaced (via onAuthorizeUrl → the UI opens it).
 
 import { putFlow, removeFlow } from '../auth/oauth-flow-store.js'
+import { resolveSecretValue } from '../mcp/secrets.js'
 import { loadSource, saveSource } from './store.js'
 import { runOAuthFlow, type OAuthMetadata } from './oauth.js'
 import { saveToken } from './oauth-store.js'
@@ -148,6 +149,16 @@ export async function startSourceOAuth(
   }
   const oauthSource = source
   const target = resolved.target
+
+  // OAuth client_secret lives as a `secret:KEY` keychain ref in config (mcp
+  // field; api.oauth copy already sits on target) — resolve to plaintext for
+  // the token exchange. A missing entry surfaces as an auth failure at the
+  // provider's token endpoint.
+  if (source.type === 'mcp' && source.mcp.clientSecret) {
+    target.clientSecret = source.mcp.clientSecret
+  }
+  const resolvedSecret = await resolveSecretValue(source.id, target.clientSecret)
+  if (resolvedSecret) target.clientSecret = resolvedSecret
 
   // Already have a usable (or refreshable) token → silent success, no browser.
   const existing = await getFreshToken(oauthSource)

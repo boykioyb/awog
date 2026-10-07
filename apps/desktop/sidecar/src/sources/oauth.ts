@@ -41,6 +41,12 @@ export interface OAuthMetadata {
   authorization_endpoint: string
   token_endpoint: string
   registration_endpoint?: string
+  // RFC 8414 — when present and missing 'none', the AS only accepts
+  // confidential clients (client_secret_post/…). Slack is the canonical case:
+  // no registration_endpoint AND only client_secret_post, so the fixed public
+  // client id below can never work — we fail fast instead of opening a browser
+  // tab to a guaranteed "invalid client_id" page.
+  token_endpoint_auth_methods_supported?: string[]
 }
 
 // Result of a completed authorization: the token bundle + the client id used
@@ -377,10 +383,11 @@ export async function refreshMcpToken(
   mcpUrl: string,
   refreshToken: string,
   clientId: string,
+  clientSecret?: string,
 ): Promise<OAuthTokenBundle> {
   const metadata = await discoverMcpOAuth(mcpUrl)
   if (!metadata) throw new Error('could not discover token endpoint for refresh')
-  return refreshOAuthTokenAt(metadata.token_endpoint, refreshToken, clientId)
+  return refreshOAuthTokenAt(metadata.token_endpoint, refreshToken, clientId, clientSecret)
 }
 
 // Resolve OAuth server metadata for a generic api-oauth source (ADR 0060 D-4,
@@ -572,6 +579,19 @@ export async function runOAuthFlow(opts: RunOAuthFlowOptions): Promise<OAuthFlow
         }
       } else {
         clientId = FALLBACK_CLIENT_ID
+      }
+      // The sentinel prefix lets the UI map this to its "bring your own OAuth
+      // app" prompt instead of a generic error. A user-supplied clientId skips
+      // this entirely — a registered app may still work without a secret when
+      // the provider accepts PKCE-only exchanges for it.
+      if (
+        clientId === FALLBACK_CLIENT_ID &&
+        metadata.token_endpoint_auth_methods_supported !== undefined &&
+        !metadata.token_endpoint_auth_methods_supported.includes('none')
+      ) {
+        throw new Error(
+          'oauth-client-required: provider has no dynamic client registration and only accepts confidential clients — set mcp.clientId (+ clientSecret) for a registered app',
+        )
       }
     }
 

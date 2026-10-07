@@ -9,6 +9,7 @@
        (hoặc khi phiên đã ghim sẵn) — repo không có Terraform không thấy gì. -->
   <span v-if="visible" class="iwrap">
     <button
+      ref="chipEl"
       type="button"
       class="ctxchip"
       :class="{ on: open, acc: !pinned }"
@@ -21,9 +22,9 @@
       <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
 
-    <template v-if="open">
-      <div class="ibackdrop" @click="open = false" />
-      <div class="pop ipop" @click.stop>
+    <Teleport to="body">
+      <div v-if="open" class="ibackdrop" @click="open = false" />
+      <div v-if="open" ref="popEl" class="pop ipop" :style="popStyle" @click.stop>
         <div class="pl">{{ t('infra.tf.pop.title') }}</div>
 
         <!-- Công tắc on/off của tool Terraform cho phiên (2026-09-15). Tắt = xoá
@@ -104,7 +105,7 @@
           <p v-if="saveError" class="ierr">{{ saveError }}</p>
         </template>
       </div>
-    </template>
+    </Teleport>
   </span>
 </template>
 
@@ -116,6 +117,7 @@
 import type { Session } from '~/composables/useSessionsData'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { InfraContext } from '~/types'
+import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
 
 const props = defineProps<{ session: Session }>()
 
@@ -137,6 +139,12 @@ type TerraformDirEntry = {
 }
 
 const open = ref(false)
+// Chip đứng trên hàng header `.dh`, có thể sát mép phải — neo `fixed` + kẹp
+// viewport thay vì `absolute` trong `.iwrap`.
+const chipEl = ref<HTMLElement | null>(null)
+const popEl = ref<HTMLElement | null>(null)
+const { style: popStyle } = usePopoverAnchor(chipEl, popEl, open)
+
 const loading = ref(false)
 const loadError = ref('')
 const saveError = ref('')

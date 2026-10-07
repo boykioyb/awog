@@ -32,6 +32,8 @@ Ba mảnh, không mảnh nào thay thế catalog tĩnh:
 
 **Một đường ra duy nhất.** Tab Khám phá không có luồng lưu riêng: nó `emit('pick', id)` đúng như tab tĩnh. `source.discoverPreset` nhận cả `github` (tĩnh) lẫn `reg:io.github.foo/bar` (động) và trả về cùng một hình `{ preset, meta }`. Nhờ vậy `pages/connections.vue` và `useConnectionsPage.ts` **không phải sửa một dòng nào**, và luồng đồng ý của người dùng vẫn là đúng luồng cũ.
 
+> **Cập nhật (quick connect).** Màn đồng ý giờ có hai nút: **"Kết nối"** chạy guided flow — upsert → hỏi đúng các khoá còn thiếu (keychain qua `source.setSecret`, config giữ `secret:KEY`) → `source.test` (auto-enable khi sạch) → tự mở OAuth khi server báo `needs_auth` — không qua editor, xem [`useQuickConnect.ts`](../../apps/desktop/ui-next/composables/useQuickConnect.ts). **"Tuỳ chỉnh"** giữ đường cũ mở `ConnectionEditor` với bản nháp. Mọi chốt chặn dưới đây (consent screen, allowlist lệnh, env gieo rỗng, enabled:false) giữ nguyên.
+
 ## Bảo mật
 
 Xem `.claude/rules/security.md`. Đây là phần nặng nhất của tính năng vì registry là host ngoài và nội dung là L1 hoàn toàn không tin.
@@ -58,7 +60,7 @@ Ràng buộc cứng, thực hiện bằng bốn chốt chặn:
 
 1. **Registry không bao giờ chọn được `command`.** Lệnh suy ra từ `registryType` qua bảng allowlist cứng: `npm → npx`, `pypi → uvx`. `runtimeHint` (chuỗi tự do của bên thứ ba) bị **bỏ qua**. Loại khác (`oci`, `nuget`, `mcpb`…) ⇒ `install.kind = 'unsupported'`, UI chỉ hiện link repo và **không có nút cài**.
 2. **Không có gì được ghi hay chạy trong luồng khám phá.** `source.discoverRegistry` / `source.suggestSources` / `source.discoverPreset` đều chỉ *trả về dữ liệu*. Việc ghi vẫn nằm ở `source.upsert`; việc chạy vẫn nằm ở `source.test` / runtime.
-3. **Màn hình đồng ý bắt buộc.** Trước khi bấm được "Dùng cái này", người dùng nhìn thấy `ConnectionDiscoverDetail`: dòng lệnh đầy đủ (`npx -y @foo/bar@1.2.3 …`) hoặc URL đầy đủ, danh sách env var, danh sách khoá bí mật cần điền, repo nguồn, kèm câu cảnh báo "entry này do bên thứ ba công bố". Sau đó vẫn còn **một lần bấm Lưu** trong `ConnectionEditor` (nơi command/args vẫn sửa được) mới có gì chạm đĩa.
+3. **Màn hình đồng ý bắt buộc.** Trước khi bấm được "Kết nối", người dùng nhìn thấy `ConnectionDiscoverDetail`: dòng lệnh đầy đủ (`npx -y @foo/bar@1.2.3 …`) hoặc URL đầy đủ, danh sách env var, danh sách khoá bí mật cần điền, repo nguồn, kèm câu cảnh báo "entry này do bên thứ ba công bố". "Kết nối" mới là lúc config được ghi (và chỉ sau đó test/OAuth mới chạy); "Tuỳ chỉnh" vẫn mở `ConnectionEditor` (nơi command/args sửa được) cho ai muốn soi tay trước.
 4. **Bản nháp luôn `enabled: false`.** Bật là một hành động riêng của người dùng.
 
 ### Bí mật (invariant #1)

@@ -31,8 +31,9 @@
   "connectionsDiscover.detail.secrets": "Cần khoá bí mật",
   "connectionsDiscover.detail.repo": "Repo nguồn",
   "connectionsDiscover.detail.version": "Phiên bản",
-  "connectionsDiscover.detail.review": "Entry này do bên thứ ba công bố. Hãy xem kỹ đúng thứ sẽ chạy ở dưới. Không có gì được lưu hay khởi chạy cho tới khi bạn bấm Dùng cái này rồi bấm Lưu trong trình soạn thảo.",
+  "connectionsDiscover.detail.review": "Entry này do bên thứ ba công bố. Hãy xem kỹ đúng thứ sẽ chạy ở dưới. Không có gì được lưu hay khởi chạy cho tới khi bạn bấm Kết nối.",
   "connectionsDiscover.detail.unsupported": "AWOG không dựng được lệnh an toàn cho entry này ({reason}). Mở repo để tự cài bằng tay.",
-  "connectionsDiscover.detail.use": "Dùng cái này — mở trình soạn thảo",
-  "connectionsDiscover.detail.verifyHint": "Sau khi lưu, bấm Test trên connection để kiểm chứng nó chạy thật."
+  "connectionsDiscover.detail.connect": "Kết nối",
+  "connectionsDiscover.detail.customize": "Tuỳ chỉnh (editor)",
+  "connectionsDiscover.detail.verifyHint": "Kết nối sẽ lưu cấu hình, hỏi các khoá còn thiếu, tự kiểm tra và mở đăng nhập nếu server yêu cầu."
 }

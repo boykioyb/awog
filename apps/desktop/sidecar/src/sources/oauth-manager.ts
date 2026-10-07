@@ -24,6 +24,7 @@ import {
   type OAuthTokenBundle,
 } from './oauth-store.js'
 import { refreshMcpToken, refreshOAuthTokenAt, resolveApiOAuthMetadata } from './oauth.js'
+import { resolveSecretValue } from '../mcp/secrets.js'
 import { log } from '../util/logger.js'
 import type { ApiSource, McpSource, SourceConnectionStatus } from '../types/shared.js'
 
@@ -91,7 +92,10 @@ async function doRefreshMcp(source: McpSource, bundle: OAuthTokenBundle): Promis
   }
 
   try {
-    const next = await refreshMcpToken(url, bundle.refreshToken, clientId)
+    // Confidential-client sources (BYO app — Slack) keep the secret as a
+    // `secret:KEY` ref; resolve it so the refresh can authenticate.
+    const clientSecret = await resolveSecretValue(source.id, source.mcp.clientSecret)
+    const next = await refreshMcpToken(url, bundle.refreshToken, clientId, clientSecret)
     await saveToken(source.id, next)
     failedAt.delete(source.id)
     await markStatus(source, 'connected', { authenticated: true })
@@ -132,7 +136,7 @@ async function doRefreshApi(source: ApiSource, bundle: OAuthTokenBundle): Promis
       metadata.token_endpoint,
       bundle.refreshToken,
       clientId,
-      source.api.oauth?.clientSecret,
+      await resolveSecretValue(source.id, source.api.oauth?.clientSecret),
     )
     await saveToken(source.id, next)
     failedAt.delete(source.id)

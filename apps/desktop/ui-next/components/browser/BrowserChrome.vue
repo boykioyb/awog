@@ -9,6 +9,7 @@
         @select-tab="emit('select-tab', $event)"
         @close-tab="emit('close-tab', $event)"
         @new-tab="emit('new-tab')"
+        @tab-menu="emit('tab-menu', $event)"
       />
 
       <!-- Nhóm cửa sổ còn ĐÚNG HAI nút (session-ui-refactor §3.6). Dock · popout ·
@@ -84,8 +85,10 @@ import type { AwogBrowserTab } from '~/types/awog-bridge'
 import type { WorkspaceDockSide } from '~/stores/settings'
 
 // 'panel' = view của workspace panel (có dock/expand/popout), 'window' = cửa sổ
-// popout (những nút đó vô nghĩa: OS lo, và nó đã ở cửa sổ riêng rồi).
-export type BrowserChromeSurface = 'panel' | 'window'
+// popout (những nút đó vô nghĩa: OS lo, và nó đã ở cửa sổ riêng rồi),
+// 'main' = tab trình duyệt trên main strip của session (session-main-tabs):
+// không dock/expand (nó KHÔNG nằm trong dock) nhưng vẫn có PiP/popout.
+export type BrowserChromeSurface = 'panel' | 'window' | 'main'
 
 const props = withDefaults(
   defineProps<{
@@ -120,6 +123,9 @@ const emit = defineEmits<{
   'select-tab': [tabId: string]
   'close-tab': [tabId: string]
   'new-tab': [url?: string]
+  // Chuột phải trên tab của strip — forward lên bề mặt chứa (WorkspaceBrowser /
+  // popout), nơi useBrowserTabMenu + AppContextMenu sống.
+  'tab-menu': [payload: { tab: AwogBrowserTab; ev: MouseEvent }]
   back: []
   forward: []
   reload: []

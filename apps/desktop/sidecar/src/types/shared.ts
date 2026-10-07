@@ -1118,6 +1118,9 @@ export interface McpSourceBlock {
   url?: string | undefined
   authType?: 'oauth' | 'bearer' | 'none' | undefined
   clientId?: string | undefined
+  // OAuth client_secret for providers without dynamic registration (Slack) —
+  // stored as a `secret:KEY` keychain ref, never plaintext on disk.
+  clientSecret?: string | undefined
   headers?: Record<string, string> | undefined
   headerNames?: string[] | undefined
   command?: string | undefined

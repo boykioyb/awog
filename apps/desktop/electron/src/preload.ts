@@ -17,6 +17,11 @@ type BrowserTabInfo = {
   canGoForward: boolean
   shown: boolean
   shownElsewhere: boolean
+  // Per-tab view state for the chrome ⋯ menu (zoom factor, DevTools open,
+  // mobile emulation flag).
+  zoom: number
+  devtools: boolean
+  mobile: boolean
 }
 // `activeTabId` is the active tab OF THE SCOPE the list was requested with
 // (global active when unscoped); `activeByScope` is the full per-scope map so a
@@ -261,8 +266,11 @@ const awog = {
     setBounds: (rect: BrowserRect, tabId?: string, scope?: string): Promise<void> =>
       ipcRenderer.invoke('browser:bounds', { rect, tabId, scope }),
     // Take the view off screen (tab switched away, panel closed, modal opened over
-    // it). The page keeps running — this is geometry, not a close.
-    detach: (): Promise<void> => ipcRenderer.invoke('browser:detach'),
+    // it). The page keeps running — this is geometry, not a close. `rect` là
+    // khung của CHÍNH bề mặt gọi: main giấu đúng view trong rect đó thay vì
+    // nhổ khỏi window, nên bật lại không tốn reparent/reflow.
+    detach: (rect?: BrowserRect): Promise<void> =>
+      ipcRenderer.invoke('browser:detach', { rect }),
     tabs: (scope?: string): Promise<BrowserTabList> =>
       ipcRenderer.invoke('browser:tabs', { scope }),
     open: (url: string, tabId?: string, scope?: string): Promise<BrowserTabInfo> =>
@@ -288,11 +296,28 @@ const awog = {
       ipcRenderer.invoke('browser:forward', { tabId, scope }),
     reload: (tabId?: string, scope?: string): Promise<void> =>
       ipcRenderer.invoke('browser:reload', { tabId, scope }),
+    // Chrome ⋯ menu: zoom theo bậc Chromium, DevTools rời, emulation mobile
+    // (CDP). `open` vắng = toggle DevTools.
+    zoom: (tabId: string | undefined, scope: string | undefined, action: 'in' | 'out' | 'reset') =>
+      ipcRenderer.invoke('browser:zoom', { tabId, scope, action }),
+    devTools: (tabId: string | undefined, scope: string | undefined, open?: boolean) =>
+      ipcRenderer.invoke('browser:devtools', { tabId, scope, open }),
+    mobileEmulation: (
+      tabId: string | undefined,
+      scope: string | undefined,
+      on: boolean,
+    ): Promise<{ mobile: boolean }> =>
+      ipcRenderer.invoke('browser:mobile', { tabId, scope, on }),
     popout: (scope?: string): Promise<void> =>
       ipcRenderer.invoke('browser:popout', { scope }),
     // Profile import: read the user's real Chrome/Edge/Brave/Arc profile into the
     // agent's jar. Ids only — main resolves them to paths itself.
     listBrowsers: (): Promise<BrowserImportSource[]> => ipcRenderer.invoke('browser:listBrowsers'),
+    // The TCC workaround: let the user point at a Chromium profile dir through the
+    // native picker (the dialog grants access). Returns a synthetic source whose
+    // profile dir is an opaque token, or null when cancelled.
+    pickProfile: (): Promise<BrowserImportSource | null> =>
+      ipcRenderer.invoke('browser:pickProfile'),
     importProfile: (
       browserId: string,
       profileDir: string,
@@ -320,6 +345,10 @@ const awog = {
       ipcRenderer.invoke('browser:pageContext', { tabId, scope }),
     saveScreenshot: (root: string, tabId?: string, scope?: string): Promise<{ path: string }> =>
       ipcRenderer.invoke('browser:saveScreenshot', { root, tabId, scope }),
+    // Freeze-frame JPEG của tab — placeholder phủ lên khi overlay DOM bắt view
+    // native ẩn đi (context menu chồng viewport). null = chưa có gì để chụp.
+    frameDataUrl: (tabId?: string, scope?: string): Promise<{ dataUrl: string | null }> =>
+      ipcRenderer.invoke('browser:frameDataUrl', { tabId, scope }),
     sites: (): Promise<BrowserSites> => ipcRenderer.invoke('browser:sites'),
     setSites: (sites: BrowserSites): Promise<void> => ipcRenderer.invoke('browser:setSites', sites),
     // Tab list changes — including the ones the AGENT causes. Returns unsubscribe.

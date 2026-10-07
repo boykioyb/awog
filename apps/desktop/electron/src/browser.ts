@@ -678,6 +678,10 @@ interface BrowserTab {
   // khai (L1): renderer chỉ được gán nó vào attribute `src` của <img>, không
   // innerHTML.
   favicon: string
+  // Emulation mobile đang bật (toggle của người dùng trong chrome, hoặc preset
+  // mobile/tablet của browser_tool qua `viewport`). Phản chiếu trong TabInfo để
+  // menu hiện dấu tick.
+  mobile: boolean
 }
 
 // Picker đang chờ người dùng bấm. Chỉ có MỘT tại một thời điểm (xem pickElement),
@@ -713,6 +717,12 @@ export interface TabInfo {
   // renders a "showing elsewhere" placeholder instead of fighting for the view,
   // because one webContents cannot be in two rects.
   shownElsewhere: boolean
+  // Per-tab view state for the chrome menus: zoom factor (1 = 100%), DevTools
+  // đang mở, và cờ emulation mobile (đặt bởi setMobileEmulation hoặc preset
+  // mobile của browser_tool).
+  zoom: number
+  devtools: boolean
+  mobile: boolean
 }
 
 // ADR 0086 phần E. Mirrored in ui-next/types/awog-bridge.d.ts (Awog* names) and in
@@ -865,8 +875,17 @@ class BrowserController {
     if (tab.host && !tab.host.isDestroyed()) tab.host.contentView.removeChildView(tab.view)
     tab.host = null
     holder.contentView.addChildView(tab.view)
-    const [w, h] = holder.getContentSize()
-    tab.view.setBounds({ x: 0, y: 0, width: w, height: h })
+    // A view that was already on screen KEEPS its bounds: bounds unchanged
+    // means no resize event, so the page does not re-layout on park — and a
+    // later attachTo() back to the same rect costs zero reflow too. Only a
+    // never-shown view (zero-ish bounds) gets the holder size, because a page
+    // still needs a sane layout to run in the background (media queries, JS
+    // resize observers) before its first attach.
+    const b = tab.view.getBounds()
+    if (b.width < 8 || b.height < 8) {
+      const [w, h] = holder.getContentSize()
+      tab.view.setBounds({ x: 0, y: 0, width: w, height: h })
+    }
   }
 
   // capturePage, or null when this view has no display surface to capture. Asking
@@ -945,6 +964,7 @@ class BrowserController {
       painted: false,
       host: null,
       favicon: '',
+      mobile: false,
       ...(scope !== undefined ? { scope } : {}),
     }
     const wc = view.webContents
@@ -1035,6 +1055,25 @@ class BrowserController {
     })
     wc.on('console-message', (_event, level, message, line, sourceId) => {
       this.pushConsole(tab, level, message, line, sourceId)
+    })
+    // DevTools (Inspect trên chrome) + phím zoom: mở/đóng từ cửa sổ DevTools
+    // rời cũng phải cập nhật dấu tick trong menu ⇒ cần `changed`. Đóng DevTools
+    // còn detach debugger nội bộ của ta (một webContents một phiên CDP) → gắn
+    // lại để network recording của tab sống tiếp.
+    wc.on('devtools-opened', notify)
+    wc.on('devtools-closed', () => {
+      notify()
+      if (!tab.debuggerOk) this.attachDebugger(tab)
+    })
+    // Phím zoom kiểu trình duyệt — chỉ chạy khi người dùng ĐANG tương tác trang
+    // này (before-input-event chỉ bắn trên webContents được focus, nên phím của
+    // renderer host không bị nuốt). ⌘= ⌘- ⌘0, kèm '+' cho phím US cần Shift.
+    wc.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown' || !(input.meta || input.control) || input.alt) return
+      const k = input.key
+      if (k !== '=' && k !== '+' && k !== '-' && k !== '0') return
+      event.preventDefault()
+      this.applyZoom(tab, k === '0' ? 'reset' : k === '-' ? 'out' : 'in')
     })
     this.attachDebugger(tab)
     this.tabs.set(id, tab)
@@ -1556,6 +1595,11 @@ class BrowserController {
           userAgent: preset?.ua ?? tab.view.webContents.getUserAgent(),
         })
         emulated = true
+        // Giữ cờ TabInfo.mobile khớp với emulation thật: preset desktop/wide của
+        // agent (mobile:false) cũng là một lần "tắt mobile" với chrome của người
+        // dùng.
+        tab.mobile = mobile
+        this.changed()
       } catch (err) {
         log.warn('browser viewport emulation failed', {
           tab: tab.id,
@@ -1586,6 +1630,9 @@ class BrowserController {
       canGoForward: wc.navigationHistory.canGoForward(),
       shown: forWindow ? host === forWindow : host !== null,
       shownElsewhere: forWindow ? host !== null && host !== forWindow : false,
+      zoom: wc.getZoomFactor(),
+      devtools: wc.isDevToolsOpened(),
+      mobile: tab.mobile,
     }
   }
 
@@ -1700,11 +1747,27 @@ class BrowserController {
         ? known
         : this.tab(undefined, scope)
     // One webContents cannot be in two rects, so attaching hands the tab over:
-    // any other window showing it loses it, and any other tab in THIS window is
-    // parked. Whoever lost it sees `shown: false` on the next change event and
-    // renders the "showing elsewhere" placeholder.
+    // any other window showing it loses it. Other tabs in THIS window are only
+    // parked when their rect overlaps the target rect — i.e. they occupied the
+    // SAME surface (a tab switch inside one panel). A window can host several
+    // surfaces at different rects (main tab pane + dock + future ones), each
+    // showing its own tab's view; a surface must not evict another surface's
+    // view just because it attached. Whoever lost a tab sees `shown: false` on
+    // the next change event and renders the "showing elsewhere" placeholder.
+    const target = clampRect(rect)
     for (const other of this.tabs.values()) {
-      if (other.id !== tab.id && other.host === host) this.park(other)
+      if (other.id === tab.id || other.host !== host) continue
+      const ob = other.view.getBounds()
+      const ox = Math.min(ob.x + ob.width, target.x + target.width) - Math.max(ob.x, target.x)
+      const oy = Math.min(ob.y + ob.height, target.y + target.height) - Math.max(ob.y, target.y)
+      // Chỉ giấu tab chiếm GẦN NHƯ TRỌN rect đích — tức chuyển tab trong CÙNG
+      // một bề mặt. View ở lại trong window với bounds y nguyên: lượt bấm quay
+      // lại chỉ là setVisible — không reparent, không reflow, không nháy trắng.
+      // Chồng lấn MỘT PHẦN (PiP đè góc viewport) thì để cả hai vẽ — view thêm
+      // sau nằm trên trong vùng chồng, đúng ý nghĩa "thẻ nổi".
+      if (ox > 0 && oy > 0 && (ox * oy) / (ob.width * ob.height || 1) >= 0.9) {
+        other.view.setVisible(false)
+      }
     }
     if (!this.hookedHosts.has(host)) {
       this.hookedHosts.add(host)
@@ -1717,7 +1780,10 @@ class BrowserController {
       host.contentView.addChildView(tab.view)
       tab.host = host
     }
-    tab.view.setBounds(clampRect(rect))
+    tab.view.setBounds(target)
+    // View có thể đang bị giấu tại chỗ (concealAt / overlap ở trên) — bật lại
+    // SAU setBounds để frame đầu đã ở đúng rect.
+    tab.view.setVisible(true)
     tab.painted = true
     this.activate(tab)
     this.changed()
@@ -1742,6 +1808,36 @@ class BrowserController {
     if (!tab || tab.view.webContents.isDestroyed() || tab.host !== host) return
     if (scope !== undefined && tab.scope !== scope) return
     tab.view.setBounds(clampRect(rect))
+  }
+
+  // Hide (NOT unpaint) every tab occupying `rect` of this window: the view
+  // stays a child of the window with its bounds intact, so showing it again is
+  // a setBounds-with-same-bounds + setVisible — no reparent, no compositor
+  // surface rebuild, no page reflow. This is how a surface "detaches" in the
+  // multi-surface model.
+  //
+  // `rect` scopes the hide to ONE surface: a window hosts several (main pane,
+  // dock, PiP card) and only the caller's own rect may be hidden — hiding all
+  // tabs in the window would yank a sibling surface's view (e.g. the PiP card
+  // holding a tab this surface just released).
+  concealAt(host: BrowserWindow, rect: Rect): void {
+    const target = clampRect(rect)
+    let hid = false
+    for (const tab of this.tabs.values()) {
+      if (tab.host !== host) continue
+      const b = tab.view.getBounds()
+      const ox = Math.min(b.x + b.width, target.x + target.width) - Math.max(b.x, target.x)
+      const oy = Math.min(b.y + b.height, target.y + target.height) - Math.max(b.y, target.y)
+      // ≥90% của bounds VIEW nằm trong rect đích — cùng ngưỡng với vòng conceal
+      // của attachTo. Bề mặt chỉ được giấu view chiếm GẦN TRỌN rect của nó (tab
+      // nó đang giữ); chồng lấn MỘT PHẦN (PiP đè góc viewport) thuộc bề mặt khác
+      // — giấu nó khiến instance kia reclaim ngay → view tắt-bật = nháy.
+      if (ox > 0 && oy > 0 && (ox * oy) / (b.width * b.height || 1) >= 0.9) {
+        tab.view.setVisible(false)
+        hid = true
+      }
+    }
+    if (hid) this.changed()
   }
 
   // Take every tab this window shows off screen (tab switched away, panel closed,
@@ -1814,6 +1910,85 @@ class BrowserController {
 
   reload(tabId?: string, scope?: string): void {
     this.tab(tabId, scope).view.webContents.reload()
+  }
+
+  // ── Zoom / DevTools / mobile emulation (chrome ⋯ menu) ─────────────────────
+
+  // Zoom level (không phải factor): các bậc của Chromium, 0 = 100%. Nằm trên
+  // webContents nên sống theo tab qua mọi lần điều hướng.
+  private applyZoom(tab: BrowserTab, action: 'in' | 'out' | 'reset'): void {
+    const wc = tab.view.webContents
+    const cur = wc.getZoomLevel()
+    const next = action === 'reset' ? 0 : Math.max(-8, Math.min(9, cur + (action === 'in' ? 1 : -1)))
+    if (next === cur) return
+    wc.setZoomLevel(next)
+    this.changed()
+  }
+
+  zoom(tabId: string | undefined, scope: string | undefined, action: 'in' | 'out' | 'reset'): void {
+    this.applyZoom(this.tab(tabId, scope), action)
+  }
+
+  // DevTools rời — `open` vắng = toggle. Mở DevTools detach phiên CDP nội bộ
+  // (một webContents một session inspector) → nhả chủ động trước khi mở, và
+  // `devtools-closed` ở createTab gắn lại để network recording không chết dần
+  // sau mỗi lần Inspect.
+  devTools(tabId: string | undefined, scope: string | undefined, open?: boolean): void {
+    const tab = this.tab(tabId, scope)
+    const wc = tab.view.webContents
+    const want = open ?? !wc.isDevToolsOpened()
+    if (want === wc.isDevToolsOpened()) return
+    if (want) {
+      if (tab.debuggerOk) wc.debugger.detach()
+      wc.openDevTools({ mode: 'detach' })
+    } else {
+      wc.closeDevTools()
+    }
+    this.changed()
+  }
+
+  // Chế độ mobile kiểu DevTools device-mode: CDP emulation (metrics + touch +
+  // UA iPhone) tái dùng đúng preset của browser_tool.viewport. Bật lại sau khi
+  // đã bật là no-op; tắt = clear override + trả UA gốc.
+  async setMobileEmulation(
+    tabId: string | undefined,
+    scope: string | undefined,
+    on: boolean,
+  ): Promise<{ mobile: boolean }> {
+    const tab = this.tab(tabId, scope)
+    const wc = tab.view.webContents
+    if (on === tab.mobile || !tab.debuggerOk) {
+      if (!tab.debuggerOk)
+        log.warn('mobile emulation skipped — debugger not attached', { tab: tab.id })
+      return { mobile: tab.mobile }
+    }
+    const dbg = wc.debugger
+    try {
+      if (on) {
+        const p = VIEWPORT_PRESETS.mobile
+        await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
+          width: p.width,
+          height: p.height,
+          deviceScaleFactor: p.scale,
+          mobile: true,
+        })
+        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true })
+        await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: p.ua ?? '' })
+      } else {
+        await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
+        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false })
+        // '' = bỏ override, trở về UA thật của session.
+        await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
+      }
+      tab.mobile = on
+    } catch (err) {
+      log.warn('browser mobile emulation failed', {
+        tab: tab.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+    this.changed()
+    return { mobile: tab.mobile }
   }
 
   // ── Popout window (tray toggle) ──────────────────────────────────────────
@@ -2061,6 +2236,22 @@ class BrowserController {
     await writeFile(path, img.toPNG())
     log.info('browser screenshot saved', { tab: tab.id, path })
     return { path }
+  }
+
+  // Khung "đông cứng" cho renderer: khi một overlay DOM (context menu, dialog)
+  // che viewport, view native phải ẩn đi để menu đọc/click được — và khoảng bên
+  // dưới là một mảng trắng. Renderer chụp một frame JPEG phủ lên cho tới khi
+  // view reattach. KHÁC saveScreenshot: đây là placeholder thoáng qua nên
+  // downscale về đúng DIP của view + JPEG nhẹ, không phải PNG lưu đĩa. null khi
+  // tab chưa từng có display surface (chưa hiện lần nào) — renderer giữ nền
+  // trống như cũ.
+  async frameDataUrl(tabId?: string, scope?: string): Promise<{ dataUrl: string | null }> {
+    const tab = this.tab(tabId, scope)
+    const img = await this.tryCapture(tab)
+    if (!img) return { dataUrl: null }
+    const w = Math.round(tab.view.getBounds().width)
+    const sized = w > 0 && img.getSize().width > w ? img.resize({ width: w }) : img
+    return { dataUrl: `data:image/jpeg;base64,${sized.toJPEG(72).toString('base64')}` }
   }
 
   sites(): SitePolicy {

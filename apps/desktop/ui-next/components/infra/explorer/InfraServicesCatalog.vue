@@ -362,8 +362,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 
 /* Neo phải: nút ⓘ sát mép phải header, neo trái thì popover thò ra ngoài cửa sổ.
-   Rộng hơn `.ipop` mặc định (296px) vì ở đây có ba đoạn giải thích. */
+   `position:absolute` tự khai — `.ipop` giờ chỉ còn skin vì ba chip phiên đã
+   chuyển sang neo fixed qua usePopoverAnchor. Rộng hơn `.ipop` mặc định (296px)
+   vì ở đây có ba đoạn giải thích. */
 .ixc-ipop {
+  position: absolute;
   left: auto;
   right: 0;
   top: 128%;

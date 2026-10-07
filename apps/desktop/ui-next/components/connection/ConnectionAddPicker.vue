@@ -32,6 +32,7 @@
         v-if="discoverMounted"
         v-show="tab === 'discover'"
         @pick="emit('pick', $event)"
+        @quick="(id, entry) => emit('quick', id, entry)"
       />
 
       <div v-show="tab === 'presets'" class="cap-presets">
@@ -65,7 +66,7 @@
             :key="p.id"
             type="button"
             class="cap-card"
-            @click="emit('pick', p.id)"
+            @click="emit('quick', p.id)"
           >
             <SourceAvatar :source="pseudoSource(p)" size="md" />
             <span class="cap-card-tx">
@@ -98,7 +99,8 @@ import { ref } from 'vue'
 import LibraryEntityModal from '~/components/library/LibraryEntityModal.vue'
 import SourceAvatar from '~/components/connection/SourceAvatar.vue'
 import ConnectionDiscoverPanel from '~/components/connection/ConnectionDiscoverPanel.vue'
-import type { Source, SourcePresetMeta } from '~/stores/connections'
+import { brandIcon } from '~/utils/brand-icons'
+import type { RegistryEntry, Source, SourcePresetMeta } from '~/stores/connections'
 
 defineProps<{
   open: boolean
@@ -110,6 +112,10 @@ const emit = defineEmits<{
   scratch: []
   ai: []
   pick: [id: string]
+  // "Kết nối" — đường nhanh: preset card click và nút Kết nối của màn đồng ý đều
+  // đi qua đây. `entry` chỉ có khi đến từ registry (kèm secretFields để quick
+  // connect đánh dấu ô bắt buộc); trang quyết định quick hay editor theo kind.
+  quick: [id: string, entry?: RegistryEntry]
 }>()
 
 const { t } = useI18n()
@@ -124,8 +130,9 @@ const openDiscover = () => {
 }
 
 // A minimal Source built from the preset meta so SourceAvatar can render the row
-// icon. Presets carry an emoji `icon`, so SourceAvatar's fast path renders it
-// without touching the sidecar (source.resolveIcon is never hit for a preset).
+// icon. For a known brand the emoji is dropped so the bundled brand mark wins;
+// providers without a mark keep their emoji fast path (source.resolveIcon is
+// never hit either way — presets aren't persisted yet).
 function pseudoSource(p: SourcePresetMeta): Source {
   const base = {
     id: p.id,
@@ -133,7 +140,7 @@ function pseudoSource(p: SourcePresetMeta): Source {
     name: p.name,
     provider: p.provider,
     enabled: true,
-    icon: p.icon,
+    icon: brandIcon(p.provider) ? undefined : p.icon,
     tagline: p.tagline,
     timeoutMs: 30000,
     trust: 'prompt' as const,

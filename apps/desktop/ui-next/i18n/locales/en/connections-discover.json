@@ -31,8 +31,9 @@
   "connectionsDiscover.detail.secrets": "Needs a secret",
   "connectionsDiscover.detail.repo": "Source repository",
   "connectionsDiscover.detail.version": "Version",
-  "connectionsDiscover.detail.review": "This entry is published by a third party. Review exactly what will run below. Nothing is saved or started until you press Use and then Save in the editor.",
+  "connectionsDiscover.detail.review": "This entry is published by a third party. Review exactly what will run below. Nothing is saved or started until you press Connect.",
   "connectionsDiscover.detail.unsupported": "AWOG cannot build a safe command for this entry ({reason}). Open the repository to install it by hand.",
-  "connectionsDiscover.detail.use": "Use this — open the editor",
-  "connectionsDiscover.detail.verifyHint": "After saving, use Test on the connection to verify it really works."
+  "connectionsDiscover.detail.connect": "Connect",
+  "connectionsDiscover.detail.customize": "Customize (editor)",
+  "connectionsDiscover.detail.verifyHint": "Connect saves the config, asks only for the keys still missing, then tests and opens sign-in if the server requires it."
 }

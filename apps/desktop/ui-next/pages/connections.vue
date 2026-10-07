@@ -97,6 +97,27 @@
       @scratch="startFromScratch"
       @ai="startFromAi"
       @pick="onPickPreset"
+      @quick="onQuickPick"
+    />
+
+    <!-- "Kết nối" guided flow — upsert → secrets → test → OAuth, không qua
+         editor (Claude Connectors parity). Editor vẫn là đường thoát nâng cao. -->
+    <ConnectionQuickConnect
+      :open="quick.open.value"
+      :phase="quick.phase.value"
+      :draft="quick.draft.value"
+      :meta="quick.meta.value"
+      :secret-fields="quick.secretFields.value"
+      :secret-note-key="quick.secretNoteKey.value"
+      :busy-key="quick.busyKey.value"
+      :error-text="quick.errorText.value"
+      :error-stderr="quick.errorStderr.value"
+      :done-tools="quick.doneTools.value"
+      @close="quick.close"
+      @advance="quick.advance"
+      @open-in-editor="quick.openInEditor"
+      @retry="quick.retry"
+      @submit-secrets="quick.submitSecrets"
     />
 
     <!-- create / refine (chat-driven config authoring) -->
@@ -141,6 +162,7 @@ import ConnectionAddPicker from '~/components/connection/ConnectionAddPicker.vue
 import ConnectionDetail from '~/components/connection/ConnectionDetail.vue'
 import ConnectionEditor from '~/components/connection/ConnectionEditor.vue'
 import ConnectionPromptCreator from '~/components/connection/ConnectionPromptCreator.vue'
+import ConnectionQuickConnect from '~/components/connection/ConnectionQuickConnect.vue'
 import SourceAvatar from '~/components/connection/SourceAvatar.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
 import { computed, onMounted } from 'vue'
@@ -191,6 +213,8 @@ const {
   startFromScratch,
   startFromAi,
   onPickPreset,
+  onQuickPick,
+  quick,
   creatorOpen,
   creatorEditSource,
   openCreatorForEdit,

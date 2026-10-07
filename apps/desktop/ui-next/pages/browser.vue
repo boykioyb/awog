@@ -21,6 +21,7 @@
         @reload="reload"
         @submit-url="submitUrl"
         @close="onClose"
+        @tab-menu="onTabMenu"
       />
 
       <div v-if="error" class="bwin-err">{{ error }}</div>
@@ -34,6 +35,16 @@
         <BrowserElsewhere v-if="elsewhere" where="window" @takeover="takeOver" />
         <BrowserEmptyState v-else-if="empty" @open="onEmptyOpen" />
       </div>
+
+      <Teleport to="body">
+        <AppContextMenu
+          :open="!!tabMenuPos"
+          :position="tabMenuPos ?? { x: 0, y: 0 }"
+          :items="tabMenuItems"
+          @close="closeTabMenu"
+          @select="onTabMenuSelect"
+        />
+      </Teleport>
     </template>
 
     <!-- Bộ host modal/toast/popover mà app shell thường mount. Cửa sổ này không có
@@ -56,6 +67,8 @@
 // giữa cửa sổ này và cửa sổ chính, thứ phân xử là `shownElsewhere` do main báo về —
 // đúng mô hình hand-off của session popout.
 import { useEmbeddedBrowser } from '~/composables/useEmbeddedBrowser'
+import { useBrowserTabMenu } from '~/composables/useBrowserTabMenu'
+import type { AwogBrowserTab } from '~/types/awog-bridge'
 
 definePageMeta({ layout: false, keepalive: false })
 defineOptions({ name: 'BrowserWindowPage' })
@@ -87,6 +100,7 @@ const {
   back,
   forward,
   reload,
+  reloadTab,
   newTab,
   selectTab,
   closeTab,
@@ -112,6 +126,24 @@ const onEmptyOpen = (url: string): Promise<void> => {
   urlDraft.value = url
   return submitUrl()
 }
+
+// Chuột phải lên tab của strip — cùng composable với panel (đóng theo vị trí,
+// reload, nhân bản). Không `adopt`: newTab tự active qua con trỏ scope.
+const {
+  menuPos: tabMenuPos,
+  items: tabMenuItems,
+  open: openTabMenu,
+  closeMenu: closeTabMenu,
+  onSelect: onTabMenuSelect,
+} = useBrowserTabMenu({
+  tabs: () => tabs.value,
+  newTab,
+  closeTab,
+  reloadTab,
+  shownTabId: () => activeTabId.value,
+  focus: (id) => selectTab(id),
+})
+const onTabMenu = (p: { tab: AwogBrowserTab; ev: MouseEvent }): void => openTabMenu(p.ev, p.tab)
 
 // Tiêu đề cửa sổ = tiêu đề trang đang xem, để nhiều cửa sổ phân biệt được trong
 // danh sách cửa sổ của OS.

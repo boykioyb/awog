@@ -36,6 +36,10 @@ export interface BrowserActionsInput {
   dock: () => WorkspaceDockSide
   // 'panel' mới có dock/expand/popout; 'window' (popout) thì OS lo mấy thứ đó.
   isPanel: () => boolean
+  // 'main' = tab trên main strip (session-main-tabs): không có dock/expand —
+  // nó không nằm trong dock — nhưng PiP/popout vẫn có nghĩa (nhả trang ra card
+  // nổi hay cửa sổ riêng từ chính tab đang xem).
+  isMain?: () => boolean
 }
 
 // Tập emit mà menu đụng tới — NavBar forward emit thật của nó xuống đây.
@@ -130,9 +134,17 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
 
   const overflowAt = ref<{ x: number; y: number } | null>(null)
   const dockAt = ref<{ x: number; y: number } | null>(null)
+  const actionsAt = ref<{ x: number; y: number } | null>(null)
+  // Rect của chính nút `⋯`, giữ lại để bản dịch có điểm neo (menu select không
+  // mang theo event nào).
+  const actionsRect = ref<DOMRect | null>(null)
   // Nút ⋮ sống ở hàng TAB (BrowserChrome) còn menu render ở NavBar — chrome gọi
   // qua defineExpose, event được forward nguyên vẹn để neo đúng vị trí.
   const openOverflow = (ev: MouseEvent): void => {
+    // Surface 'main' gộp menu ⋯ vào menu này — mục 'translate' trong đó cần một
+    // rect neo giống khi mở từ ⋯, nên ghi luôn ở đây (menu ⋮ của chrome panel
+    // không mục nào đọc actionsRect, ghi thừa cũng vô hại).
+    actionsRect.value = (ev.currentTarget as HTMLElement).getBoundingClientRect()
     overflowAt.value = anchorOf(ev)
   }
 
@@ -158,10 +170,6 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
   // Gom năm nút hành-động-trên-trang + ba nút cửa sổ. Handler vốn nằm trong cục
   // chrome nên không phải luồn prop xuống BrowserOverflowMenu — menu kia là "cấp
   // trình duyệt" (ảnh chụp, nhập cookie, xoá dữ liệu), menu này là "cấp trang".
-  const actionsAt = ref<{ x: number; y: number } | null>(null)
-  // Rect của chính nút `⋯`, giữ lại để bản dịch có điểm neo (menu select không
-  // mang theo event nào).
-  const actionsRect = ref<DOMRect | null>(null)
   const openActions = (ev: MouseEvent): void => {
     actionsRect.value = (ev.currentTarget as HTMLElement).getBoundingClientRect()
     actionsAt.value = anchorOf(ev)
@@ -199,22 +207,55 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
       ...(hasSelection.value ? {} : { hint: t('browser.noSelection') }),
     },
     { id: 'pick', label: t('browser.pick'), icon: 'inspect' },
+    { id: 'sep-view', label: '', separator: true },
+    // Nhóm hiển thị của trang — zoom/DevTools/emulation mobile, trạng thái đọc
+    // từ TabInfo (main push qua `browser:changed`) nên dấu tick luôn đúng cả khi
+    // user zoom bằng ⌘± ngay trong trang hay đóng DevTools bằng nút của nó.
+    {
+      id: 'zoom',
+      label: t('browser.menu.zoom'),
+      icon: 'search',
+      hint: `${Math.round((input.tab()?.zoom ?? 1) * 100)}%`,
+      children: [
+        { id: 'zoom-in', label: t('browser.menu.zoomIn'), icon: 'plus', hint: '⌘+' },
+        { id: 'zoom-out', label: t('browser.menu.zoomOut'), icon: 'minus', hint: '⌘−' },
+        { id: 'zoom-reset', label: t('browser.menu.zoomReset'), icon: 'revert', hint: '⌘0' },
+      ],
+    },
+    {
+      id: 'mobile',
+      label: t('browser.menu.mobile'),
+      icon: 'smartphone',
+      active: !!input.tab()?.mobile,
+      disabled: !input.tab(),
+    },
+    {
+      id: 'devtools',
+      label: t('browser.menu.devtools'),
+      icon: 'code',
+      active: !!input.tab()?.devtools,
+      disabled: !input.tab(),
+    },
     ...(input.isPanel()
-      ? [
-          { id: 'sep', label: '', separator: true } as MenuItem,
+      ? ([
           {
             id: 'expand',
             label: input.expanded() ? t('browser.shrink') : t('browser.expand'),
             icon: input.expanded() ? 'fullscreen-exit' : 'fullscreen',
             disabled: !input.canExpand(),
             ...(input.canExpand() ? {} : { hint: t('browser.expandNoRoom') }),
-          } as MenuItem,
+          },
           { id: 'dock', label: t('sessions.workspace.dock.change'), icon: `dock-${input.dock()}` },
-          // PiP giật view về card nổi trong app — chỉ ở panel: trong popout thì
-          // `open` của PiP thuộc renderer khác, mở ở đây chẳng hiện gì.
+        ] as MenuItem[])
+      : []),
+    // PiP giật view về card nổi trong app — chỉ ở panel/main-tab: trong popout
+    // thì `open` của PiP thuộc renderer khác, mở ở đây chẳng hiện gì.
+    ...(input.isPanel() || (input.isMain?.() ?? false)
+      ? ([
+          { id: 'sep', label: '', separator: true },
           { id: 'pip', label: t('browser.pip.open'), icon: 'pip' },
           { id: 'popout', label: t('sessions.workspace.browser.popout'), icon: 'external' },
-        ]
+        ] as MenuItem[])
       : []),
   ])
   const onActionSelect = (id: string): void => {
@@ -225,6 +266,20 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
       void browserCtx.quoteSelectionToChat(input.tabId() ?? undefined, input.tab()?.scope)
     else if (id === 'pick')
       void browserCtx.pickToChat(input.tabId() ?? undefined, input.tab()?.scope)
+    else if (id === 'zoom-in' || id === 'zoom-out' || id === 'zoom-reset')
+      void bridge.value?.zoom(
+        input.tabId() ?? undefined,
+        input.tab()?.scope,
+        id === 'zoom-reset' ? 'reset' : id === 'zoom-in' ? 'in' : 'out',
+      )
+    else if (id === 'mobile')
+      void bridge.value?.mobileEmulation(
+        input.tabId() ?? undefined,
+        input.tab()?.scope,
+        !input.tab()?.mobile,
+      )
+    else if (id === 'devtools')
+      void bridge.value?.devTools(input.tabId() ?? undefined, input.tab()?.scope)
     else if (id === 'expand') emit('toggle-expand')
     else if (id === 'pip') useBrowserPip().openPip()
     else if (id === 'popout') emit('popout')

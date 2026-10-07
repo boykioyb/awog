@@ -57,9 +57,9 @@
 </template>
 
 <script setup lang="ts">
-// Action set below one transcript turn. Three controls stay inline (copy · quote ·
-// bookmark for the assistant, copy · fullscreen · bookmark for the user); everything
-// rare or transcript-cutting moves behind `⋯`.
+// Action set below one transcript turn. Frequent controls stay inline (assistant:
+// copy · quote · bookmark · fullscreen · fullscreen-turn; user: copy · fullscreen ·
+// bookmark); everything rare or transcript-cutting moves behind `⋯`.
 //
 // Owning this as a component (rather than two hard-coded rows in SessionMessageItem)
 // keeps the user and assistant footers identical by construction — they drifted apart

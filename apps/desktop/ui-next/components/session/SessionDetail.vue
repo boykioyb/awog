@@ -57,6 +57,14 @@
           </span>
         </div>
 
+        <!-- Chips ngữ cảnh (task · SSH · infra AWS/k8s · checklist · đánh dấu)
+             gộp LÊN hàng header (session-main-tabs): trước đây là một hàng riêng
+             đầu chat, giờ header là nơi duy nhất chứa meta — strip tab ngay bên
+             dưới đỡ phải xếp sau một hàng chrome thứ ba. `.dh` không wrap nên
+             strip co bằng min-width:0 + chip tự cắt ellipsis; overflow ra popover
+             của từng chip như cũ. -->
+        <SessionContextStrip :session="session" />
+
         <!-- Bubble toggle (proto `MessagesSquare`): production bubbles user rows
              permanently — the pref điều khiển khối card của reply assistant
              (settings.sessions.assistantBubble, cùng một nút trong Settings →
@@ -267,6 +275,95 @@
         </span>
       </div>
 
+      <!-- MAIN TAB STRIP (session-main-tabs): "Trao đổi" (task discuss, pin cố
+           định đầu hàng) + mỗi trang web một tab ngang hàng — strip trải ngang
+           cột chính kiểu tab bar trình duyệt, tab đang chọn "dính" vào vùng
+           content ngay dưới. Danh sách tab = tab của scope phiên này (agent mở
+           cũng hiện — chỉ là không giật focus). Luôn render: mất nó thì mất chỗ
+           nút "+" và strip nhảy layout lúc link đầu tiên mở. -->
+      <div class="mtabs" role="tablist">
+        <button
+          type="button"
+          class="mtab mtab-discuss"
+          :class="{ on: mainTab === DISCUSS_TAB }"
+          role="tab"
+          :aria-selected="mainTab === DISCUSS_TAB"
+          @pointerenter="mbPrefetchFrame"
+          @focus="mbPrefetchFrame"
+          @pointerdown="onDiscussPressStart"
+          @pointerup="onDiscussPressEnd"
+          @pointercancel="onDiscussPressEnd"
+          @pointerleave="onDiscussPressEnd"
+          @keydown.enter="onDiscussKeyPress"
+          @keydown.space="onDiscussKeyPress"
+          @keyup.space="onDiscussPressEnd"
+          @click="selectMainTab(DISCUSS_TAB)"
+        >
+          <span class="mtab-lbl">{{ t('sessions.mainTabs.discuss') }}</span>
+        </button>
+        <button
+          v-for="tab in mbTabs"
+          :key="tab.tabId"
+          type="button"
+          class="mtab"
+          :class="{ on: mainTab === tab.tabId }"
+          role="tab"
+          :aria-selected="mainTab === tab.tabId"
+          :title="tab.url || tab.title"
+          @click="selectMainTab(tab.tabId)"
+          @contextmenu="openMainTabMenu($event, tab)"
+        >
+          <Icon
+            v-if="tab.loading"
+            name="refresh"
+            class="mtab-spin"
+            style="width: var(--icon-xs); height: var(--icon-xs)"
+          />
+          <img v-else-if="tab.favicon" class="mtab-fav" :src="tab.favicon" alt="" />
+          <Icon
+            v-else
+            name="globe"
+            style="width: var(--icon-xs); height: var(--icon-xs); flex-shrink: 0"
+          />
+          <span class="mtab-lbl">{{ tab.title || tab.url || t('sessions.mainTabs.newTab') }}</span>
+          <!-- Activity: tab NỀN đang tải (agent vừa mở/điều hướng mà không giật
+               focus) — chấm nhỏ báo "có gì mới ở đó". Tab active thì spinner đã
+               thay favicon nói điều đó rồi. -->
+          <span v-if="tab.loading && mainTab !== tab.tabId" class="mtab-dot" aria-hidden="true" />
+          <span
+            class="mtab-x"
+            role="button"
+            :aria-label="t('sessions.mainTabs.closeTab')"
+            @click.stop="closeMainTab(tab.tabId)"
+          >
+            ×
+          </span>
+        </button>
+        <button
+          v-if="mbAvailable"
+          type="button"
+          class="mtab-add"
+          :title="t('sessions.mainTabs.newTab')"
+          :aria-label="t('sessions.mainTabs.newTab')"
+          @click="addMainTab"
+        >
+          <Icon name="plus" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </button>
+      </div>
+
+      <!-- Menu chuột phải của một tab web trên strip — Teleport ra body giống
+           popover của hàng chip: fixed-position không thể bị ancestor
+           overflow/transform bẻ kẹp viewport. -->
+      <Teleport to="body">
+        <AppContextMenu
+          :open="!!mainTabMenuPos"
+          :position="mainTabMenuPos ?? { x: 0, y: 0 }"
+          :items="mainTabMenuItems"
+          @close="closeMainTabMenu"
+          @select="onMainTabMenuSelect"
+        />
+      </Teleport>
+
       <!-- chat + right-docked panel share a row (.wptop); the bottom-docked panel
            stacks full-width beneath them. Right and bottom are independent panel
            instances so e.g. Terminal (bottom) and Files (right) coexist. -->
@@ -275,24 +372,20 @@
       <div class="chatwrap">
         <div class="wptop">
           <div
+            v-show="mainTab === DISCUSS_TAB"
             class="chat"
             @mouseup="onSelectQuote"
             @mousedown="onChatMouseDown"
             @contextmenu="onQuoteContextMenu"
           >
+            <!-- Chuyển browser→Trao đổi sạch nhờ `concealEarly` (pointerdown đã
+                 bắn giấu view — tới lúc click đổi `mainTab` thì layer native đã
+                 đi). KHÔNG đặt cover ảnh ở đây: ảnh trang phủ lên chat dù chỉ
+                 1-2 frame cũng chính là cú "nháy" người dùng nhìn thấy. -->
             <!-- Cute family only (spec §13): a brief "Done!" celebration when a turn
                  finishes. `.chat` is its positioned ancestor (below) so it floats over
                  the top of the conversation without shifting layout. -->
             <SessionDoneFlash v-if="isCute" :status="session.status" />
-            <!-- Hàng ngữ cảnh gộp (session-ui-refactor §3.2): task · host SSH + mức
-                 duyệt · checklist · đánh dấu trên MỘT dòng thay vì tối đa sáu hàng
-                 banner chồng nhau.
-
-                 Nằm TRONG `.chat`, không phải anh em của `.chatwrap`: ở ngoài nó trải
-                 ngang cả cột detail — tính luôn phần nằm trên workspace panel — nên
-                 panel bị đẩy xuống và để lại một dải chết ở đỉnh. Đây cũng đúng chỗ
-                 cũ của SessionTodoPanel / SessionBookmarkBar mà nó thay thế. -->
-            <SessionContextStrip :session="session" />
             <!-- Find-in-session (⌘/Ctrl+F): floats over the top-right of the chat column,
                  left of the transcript's fold-all button, so nothing shifts when it opens. -->
             <div v-if="findOpen" class="findwrap">
@@ -398,6 +491,52 @@
               @preview="previewAtt"
               @open-more="moreOpen = true"
             />
+          </div>
+
+          <!-- MAIN TAB: nội dung một tab trình duyệt (session-main-tabs). Sibling
+               của `.chat`, thay chỗ nó khi pin ≠ discuss — navbar chỉ tồn tại
+               trong mặt này nên tab Trao đổi không bao giờ thấy thanh địa chỉ.
+               `v-show` chứ không `v-if`: viewport phải luôn mounted để element
+               giữ rect cho native view, còn việc nhả view khi discuss là của
+               `visible()` trong useEmbeddedBrowser. Pane ẩn TỨC THÌ theo mainTab
+               — view native đã được giấu từ `pointerdown` của tab Trao đổi nên
+               không còn nhịp phủ trễ nào để che. -->
+          <div v-show="mainTab !== DISCUSS_TAB" class="mbpane">
+            <BrowserNavBar
+              v-model:url="mbUrlDraft"
+              :tab="mbActiveTab"
+              :tab-id="browserTabId"
+              :root="codeRoot"
+              :project="projName"
+              :selection-text="mbSelectionText"
+              surface="main"
+              @back="mbBack"
+              @forward="mbForward"
+              @reload="mbReload"
+              @submit-url="mbSubmitUrl"
+              @popout="mbPopout"
+            />
+            <div
+              v-if="mbError"
+              class="shrink-0 bg-destructive/10 px-2.5 py-1.5 text-xs text-destructive"
+            >
+              {{ mbError }}
+            </div>
+            <div ref="mbVpEl" class="mbview">
+              <!-- Frame đông cứng: menu/dialog phủ lên bắt view native ẩn đi —
+                   ảnh JPEG của trang đứng thay chỗ cho tới khi view reattach,
+                   khỏi nháy trắng cả viewport. -->
+              <img v-if="mbFrozen" class="mbfrozen" :src="mbFrozen" alt="" />
+              <!-- Tab trắng (Tab mới) → empty-state thắng: không có trang thì
+                   "hiện ở chỗ khác" là vô nghĩa — elsewhere chỉ dành cho tab có
+                   nội dung bị bề mặt khác chiếm. -->
+              <BrowserEmptyState v-if="mbEmpty" @open="mbOnEmptyOpen" />
+              <BrowserElsewhere
+                v-else-if="mbElsewhere"
+                :where="mbElsewhereWhere"
+                @takeover="mbTakeOver"
+              />
+            </div>
           </div>
         </div>
         <template v-if="wpOpen && bottomTabs.length">
@@ -1582,6 +1721,164 @@ function toggleView(view: string) {
   else openView(view)
   menu.value = null // close the picker on selection (single pick per open)
 }
+// ── Main tab strip (session-main-tabs) ──────────────────────────────────────
+//
+// "Trao đổi" (discuss) + mỗi trang web là MỘT tab ngang hàng — mô hình flat,
+// không phải một tab "Browser" chứa tab con. Con trỏ `mainTab` sống ở
+// useSessionMainTabs (cấp module, khoá = engineId) vì useLinkOpen cần pin tab
+// từ ngoài cây component này.
+//
+// Khác biệt cốt lõi vs view Browser trong dock: mặt này PIN THEO TAB
+// (`pinnedTabId`) thay vì bám `activeByScope` của agent. Agent mở/chuyển tab
+// (browser_tool) chỉ làm tab xuất hiện trên strip — con trỏ của người dùng đứng
+// yên. Ngược lại, attach() ở main tự activate() tab được pin ⇒ agent lượt sau
+// làm việc đúng trên trang người dùng đang nhìn.
+const mtabs = useSessionMainTabs()
+const mainTab = computed({
+  get: () => mtabs.mainTabOf(props.session.engineId),
+  set: (v: string) => mtabs.setMainTab(props.session.engineId, v),
+})
+const browserTabId = computed(() => (mainTab.value === DISCUSS_TAB ? null : mainTab.value))
+const mbVpEl = useTemplateRef<HTMLElement>('mbVpEl')
+const {
+  available: mbAvailable,
+  tabs: mbTabs,
+  activeTab: mbActiveTab,
+  urlDraft: mbUrlDraft,
+  error: mbError,
+  elsewhere: mbElsewhere,
+  empty: mbEmpty,
+  frozen: mbFrozen,
+  selectionText: mbSelectionText,
+  submitUrl: mbSubmitUrl,
+  back: mbBack,
+  forward: mbForward,
+  reload: mbReload,
+  reloadTab: mbReloadTab,
+  popout: mbPopout,
+  newTab: mbNewTab,
+  closeTab: mbCloseTab,
+  takeOver: mbTakeOver,
+  prefetchFrame: mbPrefetchFrame,
+  concealEarly: mbConcealEarly,
+  resync: mbResync,
+} = useEmbeddedBrowser({
+  viewport: mbVpEl,
+  // "Đang hiện" = session này đang được xem VÀ strip đang pin một tab browser.
+  // Discuss/composer/CLI/grid nằm trong `.chat` (v-show khi pin là discuss) —
+  // view native phải nhả ra trong cả hai chiều chuyển.
+  visible: () => isActive.value && mainTab.value !== DISCUSS_TAB,
+  scope: () => props.session.engineId,
+  pinnedTabId: () => browserTabId.value,
+})
+
+// Pin trỏ vào tab vừa đóng (user ×, agent đóng, crash) → rơi về discuss. Strip
+// liệt kê `mbTabs` trực tiếp nên tab chết tự biến khỏi hàng.
+watch(mbTabs, (list) => {
+  if (mainTab.value !== DISCUSS_TAB && !list.some((t) => t.tabId === mainTab.value)) {
+    mainTab.value = DISCUSS_TAB
+  }
+})
+
+// Thanh Trích dẫn/Dịch/Copy MD của selection trong transcript chỉ sống trong tab
+// Trao đổi: `.selactions` render `position:fixed` ở ROOT nên `v-show` của `.chat`
+// không kéo nó đi — đổi sang tab web mà giữ `quoteSel` thì nó nổi đè viewport.
+watch(mainTab, (tab) => {
+  if (tab !== DISCUSS_TAB) quoteSel.value = null
+})
+// ⚠ KHÔNG phủ ảnh lên `.chat` lúc swap (đã từng — `.swapcover`): `concealed`
+// bật sau IPC + 2 RAF thường TRỄ hơn click, nên ảnh trang mount lên phủ chat
+// 1-3 frame rồi mới nhấc — đó chính là cú nháy. Giấu sớm từ pointerdown đã đủ.
+
+// Nhấn tab Trao đổi: `concealEarly` giấu view NGAY tại pointerdown — không chờ
+// ảnh frozen về (đo được: chờ ảnh + capture để detach trễ hơn click ~200ms,
+// view vẽ đè chat đúng là cú nháy). `mbPrefetchFrame` chạy song song để chuẩn
+// bị frame cho lần sau; nếu nhấn bị hủy (trượt ra ngoài / cancel trước click)
+// thì `.mbview` đang phủ ảnh frozen — `mbResync` gắn lại view vô hình dưới đó.
+let discussArmed = false
+function onDiscussPressStart(e: PointerEvent): void {
+  if (e.button !== 0) return
+  discussArmed = true
+  mbPrefetchFrame()
+  void mbConcealEarly()
+}
+// Kích hoạt bằng bàn phím: Enter bắn click trên keydown, Space trên keyup — nên
+// conceal + prefetch phải đặt ở keydown để cả hai đường đều có press→click gap.
+function onDiscussKeyPress(): void {
+  discussArmed = true
+  mbPrefetchFrame()
+  void mbConcealEarly()
+}
+function onDiscussPressEnd(): void {
+  if (!discussArmed) return
+  discussArmed = false
+  // `click` (nếu cú nhấn hợp lệ) dispatch ngay sau pointerup trong cùng chuỗi
+  // event — setTimeout 0 chạy sau khi nó đã xử lý xong.
+  setTimeout(() => {
+    if (mainTab.value !== DISCUSS_TAB) mbResync()
+  }, 0)
+}
+
+function selectMainTab(tabId: string) {
+  mainTab.value = tabId
+  // Bấm một tab web = claim TƯỜNG MINH cái view đó về strip: nếu nó đang hiện ở
+  // dock panel / PiP / popout thì phải giật về — giống nút "Hiện ở đây" của
+  // elsewhere-placeholder, chỉ là không bắt user bấm thêm một lần.
+  if (tabId !== DISCUSS_TAB) void mbTakeOver()
+}
+
+function closeMainTab(tabId: string) {
+  void mbCloseTab(tabId)
+  // Pin rơi về discuss qua watcher mbTabs phía trên khi list mất tab này.
+}
+
+async function addMainTab() {
+  const id = await mbNewTab()
+  if (id) mainTab.value = id
+}
+
+// Chuột phải lên một tab web trên strip (đóng trái/phải/khác/tất cả + reload /
+// nhân bản). `adopt` PIN tab vừa sinh: strip này đi theo con trỏ `mainTab` chứ
+// không theo con trỏ của agent.
+const {
+  menuPos: mainTabMenuPos,
+  items: mainTabMenuItems,
+  open: openMainTabMenu,
+  closeMenu: closeMainTabMenu,
+  onSelect: onMainTabMenuSelect,
+} = useBrowserTabMenu({
+  tabs: () => mbTabs.value,
+  newTab: mbNewTab,
+  closeTab: mbCloseTab,
+  reloadTab: mbReloadTab,
+  shownTabId: () => browserTabId.value,
+  focus: (id) => selectMainTab(id),
+  adopt: (id) => {
+    if (id) selectMainTab(id)
+  },
+})
+
+// "Ở chỗ khác" cụ thể là đâu: `shownElsewhere` (main báo) ⇒ popout/cửa sổ khác;
+// chỉ `!isOwner` thì dock panel hoặc card PiP TRONG CÙNG cửa sổ đang giữ view.
+const mbElsewhereWhere = computed<'dock' | 'window'>(() =>
+  mbActiveTab.value?.shownElsewhere ? 'window' : 'dock',
+)
+
+// Bấm pin ở empty-state (tab trắng): navigate luôn tab đang pin, đừng sinh thêm.
+const mbOnEmptyOpen = (url: string): Promise<void> => {
+  mbUrlDraft.value = url
+  return mbSubmitUrl()
+}
+
+// CLI pane và chế độ lưới nằm TRONG `.chat` (vùng của tab discuss) — bật chúng
+// khi đang pin một tab web sẽ ẩn hẳn pane vừa mở. Mở chúng = "về trao đổi".
+watch(cliMode, (on) => {
+  if (on) mainTab.value = DISCUSS_TAB
+})
+watch(gridMode, (on) => {
+  if (on) mainTab.value = DISCUSS_TAB
+})
+
 // Status-bar bridge: the footer's Files/Terminal buttons request a view toggle here;
 // publish the open views back so those footer chips can reflect active state.
 const wpBridge = useWorkspacePanel()
@@ -1601,26 +1898,9 @@ watch(
   },
   { immediate: true },
 )
-// "View Browser đang thực sự hiển thị" — cờ cho auto-PiP (useBrowserPip). Khác
-// openViews (chỉ liệt kê view MỞ): để che được trang thì view phải đang là tab
-// active của dock nó, workspace panel phải đang mở (wpOpen=false = panel sập,
-// view vẫn nằm trong openViews nhưng không render), VÀ session này đang được
-// xem. Đổi route / đổi session (bị KeepAlive giấu) thì deactivate → cờ rơi →
-// card được phép hiện lại.
-const browserViewActive = computed(() => {
-  if (!isActive.value || !wpOpen.value || !openViews.value.includes('Browser')) return false
-  const side = settings.workspaceDockOf('Browser')
-  const active =
-    side === 'left' ? activeLeft.value : side === 'right' ? activeRight.value : activeBottom.value
-  return active === 'Browser'
-})
-watch(browserViewActive, (v) => wpBridge.publishBrowserActive(v), { immediate: true })
-onDeactivated(() => wpBridge.publishBrowserActive(false))
-onActivated(() => wpBridge.publishBrowserActive(browserViewActive.value))
 onBeforeUnmount(() => {
   if (isActive.value) {
     wpBridge.publishOpenViews([])
-    wpBridge.publishBrowserActive(false)
   }
 })
 // Panel "×": close every view docked on that side.
@@ -2076,6 +2356,185 @@ function onWpResize(ev: PointerEvent, side: WorkspaceDockSide) {
   background: color-mix(in srgb, var(--primary) 90%, transparent);
   color: var(--primary-foreground);
 }
+/* ── Main tab strip (session-main-tabs) ────────────────────────────────────
+   Hàng tab ngang dưới `.dh`, trước `.chatwrap`: tab đang chọn nhận nền content
+   + bo góc trên nên nó đọc như "đầu của vùng content" (idiom browser/Orca).
+   Cuộn ngang khi nhiều tab; nút × chỉ lóe khi hover để hàng gọn. */
+.mtabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 37px;
+  padding: 0 8px;
+  box-shadow: inset 0 -1px 0 var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.mtabs::-webkit-scrollbar {
+  display: none;
+}
+.mtab {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 200px;
+  height: 31px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.mtab:hover {
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+/* Tab ON: nền = nền vùng content dưới nó + hai cạnh viền dọc để "chảy" vào
+   content — không có viền dưới vì `.mtabs` đã vẽ đường chân hàng. */
+.mtab.on {
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow:
+    inset 1px 0 0 var(--border),
+    inset -1px 0 0 var(--border),
+    inset 0 1px 0 var(--border);
+}
+.mtab:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.mtab-lbl {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mtab-fav {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  border-radius: var(--r-xs);
+  flex-shrink: 0;
+}
+.mtab-spin {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  animation: mtab-spin 1s linear infinite;
+}
+@keyframes mtab-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mtab-spin,
+  .mtab-dot {
+    animation: none;
+  }
+}
+/* Activity dot: tab nền đang tải (agent mở mà không giật focus). */
+.mtab-dot {
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+  animation: mtab-pulse 1.4s ease-in-out infinite;
+}
+@keyframes mtab-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.mtab-x {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-xs);
+  font-size: var(--fs-md);
+  color: var(--muted-foreground);
+  opacity: 0;
+}
+.mtab:hover .mtab-x,
+.mtab.on .mtab-x,
+.mtab-x:focus-visible {
+  opacity: 0.9;
+}
+.mtab-x:hover {
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+.mtab-add {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 0 0 2px 2px;
+  align-self: center;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.mtab-add:hover {
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+/* Pane nội dung của tab web — sibling của `.chat` trong `.wptop`, chiếm đúng
+   chỗ `.chat` để lại. Navbar + khung placeholder cho native view. */
+.mbpane {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.mbview {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--background);
+}
+/* Ảnh đông cứng phủ nguyên viewport trong lúc view native bị overlay bắt ẩn.
+   pointer-events none: menu bấm-nơi-khác-để-đóng phải nhìn xuyên qua nó. */
+.mbfrozen {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+}
+/* Chips ngữ cảnh giờ sống TRONG header — `.ctxstrip` gốc là một hàng 30px với
+   lề + đường kẻ riêng; trong `.dh` nó chỉ là một cụm chip inline co được. Popover
+   của chip vẫn neo absolute trong `.ctxwrap` nên không cần đụng thêm. */
+.dh :deep(.ctxstrip) {
+  flex: 0 1 auto;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  box-shadow: none;
+  /* theme-cute skin `.ctxstrip` bằng border-bottom (không phải box-shadow) —
+     phải xoá cả hai nếu không chips trong header lòi một đường kẻ dưới. */
+  border-bottom: 0;
+}
+
 /* Bottom-right resize handle (single corner — AN-2 / OQ-B3). */
 .npresize {
   position: absolute;

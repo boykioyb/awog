@@ -4,6 +4,7 @@
     :entry="selected"
     @back="selected = null"
     @use="emit('pick', $event)"
+    @connect="emit('quick', $event.id, $event)"
   />
 
   <div v-else class="cdp">
@@ -107,9 +108,11 @@
 // một khu gợi ý theo project đang chọn (`source.suggestSources`).
 //
 // Panel KHÔNG tự cài gì. Bấm một entry mở màn hình chi tiết (đủ command/args/url)
-// và chỉ từ đó mới `emit('pick')` — picker chuyển tiếp lên trang, trang gọi
-// `source.discoverPreset` để lấy bản nháp và mở ConnectionEditor. Người dùng vẫn
-// phải tự bấm Lưu, rồi tự bấm Test để probe.
+// và chỉ từ đó mới đi tiếp, theo hai đường:
+//  - `emit('quick', id, entry)` — nút "Kết nối": guided flow (useQuickConnect)
+//    upsert → hỏi secrets → test → OAuth nếu cần, không qua editor.
+//  - `emit('pick', id)` — nút "Tuỳ chỉnh": trang gọi `source.discoverPreset` để
+//    lấy bản nháp và mở ConnectionEditor (đường tay đầy đủ).
 import { computed, onMounted, ref, watch } from 'vue'
 import AppSelect from '~/components/common/AppSelect.vue'
 import ConnectionDiscoverDetail from '~/components/connection/ConnectionDiscoverDetail.vue'
@@ -124,7 +127,7 @@ import {
 import { useProjectsStore } from '~/stores/projects'
 import Input from '~/components/ui/input/Input.vue'
 
-const emit = defineEmits<{ pick: [id: string] }>()
+const emit = defineEmits<{ pick: [id: string]; quick: [id: string, entry?: RegistryEntry] }>()
 
 const { t } = useI18n()
 const store = useConnectionsStore()

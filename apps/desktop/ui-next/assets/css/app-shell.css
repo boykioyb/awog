@@ -1073,12 +1073,10 @@ textarea.gcpta {
   inset: 0;
   z-index: 40;
 }
-/* Hàng ngữ cảnh nằm ở ĐẦU cột chat nên popover mở XUỐNG (`.pop` mặc định fixed). */
+/* Popover của ba chip hạ tầng neo `fixed` qua usePopoverAnchor + teleport ra
+   <body> (`.pop` lo position + z-index) — chỉ còn bề rộng ở đây. `.ixc-ipop` của
+   trang Infra tự khai `position:absolute` riêng vì nó vẫn neo trong wrapper. */
 .ipop {
-  position: absolute;
-  top: 128%;
-  left: 0;
-  z-index: 50;
   width: 296px;
 }
 /* Công tắc on/off ở đầu popover của ba chip hạ tầng (AWS · kubectl · Terraform).

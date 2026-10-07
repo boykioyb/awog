@@ -8,6 +8,7 @@ import {
   clearImportedData,
   importProfile,
   listBrowsers,
+  pickProfile,
   type BrowserEntry,
   type ImportReport,
 } from './browser-import'
@@ -447,8 +448,14 @@ function registerBrowserViewIpc(): void {
   ipcMain.handle('browser:bounds', async (e, payload: BrowserViewPayload): Promise<void> => {
     browser.setViewBounds(senderWindow(e), payload?.tabId, payload?.rect, optScope(payload))
   })
-  ipcMain.handle('browser:detach', async (e): Promise<void> => {
-    browser.detachFrom(senderWindow(e))
+  ipcMain.handle('browser:detach', async (e, payload?: { rect?: Rect }): Promise<void> => {
+    // Detach của một bề mặt = GIẤU view tại rect của nó (concealAt) chứ không
+    // park: giấu-tại-chỗ giữ bounds + compositor surface nên bật lại tức thì.
+    // Park toàn window (detachFrom) chỉ còn đúng khi cửa sổ đóng. Không có rect
+    // nghĩa là caller chưa từng attach — không có gì để giấu.
+    const rect = payload?.rect
+    if (!rect) return
+    browser.concealAt(senderWindow(e), rect)
   })
   ipcMain.handle('browser:tabs', async (e, payload?: { scope?: string }) =>
     browser.listTabs(senderWindow(e), optScope(payload)),
@@ -485,6 +492,30 @@ function registerBrowserViewIpc(): void {
   ipcMain.handle('browser:reload', async (_e, payload?: BrowserTabPayload) => {
     browser.reload(optTab(payload?.tabId), optScope(payload))
   })
+  // Menu ⋯ của chrome: zoom/DevTools/emulation mobile — cùng lớp trust với
+  // reload (user-initiated, tabId + scope được main kiểm cặp với nhau).
+  ipcMain.handle(
+    'browser:zoom',
+    async (_e, payload?: BrowserTabPayload & { action?: string }) => {
+      const a = payload?.action
+      browser.zoom(optTab(payload?.tabId), optScope(payload), a === 'out' || a === 'reset' ? a : 'in')
+    },
+  )
+  ipcMain.handle(
+    'browser:devtools',
+    async (_e, payload?: BrowserTabPayload & { open?: boolean }) => {
+      browser.devTools(
+        optTab(payload?.tabId),
+        optScope(payload),
+        typeof payload?.open === 'boolean' ? payload.open : undefined,
+      )
+    },
+  )
+  ipcMain.handle(
+    'browser:mobile',
+    async (_e, payload?: BrowserTabPayload & { on?: boolean }) =>
+      browser.setMobileEmulation(optTab(payload?.tabId), optScope(payload), payload?.on === true),
+  )
   // "Open it in its own window" — the panel hands the tab to the popout, which is
   // the same window the tray item toggles. `scope` khoá cửa sổ popout về đúng
   // session: popout từ panel của session A thì cửa sổ chỉ thấy tab của A.
@@ -498,6 +529,15 @@ function registerBrowserViewIpc(): void {
   // click and the payload is an ID from the enumerated list — browser-import.ts
   // resolves it back to a path itself and never joins renderer input (invariant #2).
   ipcMain.handle('browser:listBrowsers', async (): Promise<BrowserEntry[]> => listBrowsers())
+  // The TCC escape hatch: when macOS refuses to even list a browser's data dir
+  // (entries come back `blocked`), the native open dialog grants this process
+  // access to exactly the folder the user picks. Returns a synthetic entry whose
+  // profile `dir` is an opaque token — `importProfile('picked', token)` resolves
+  // it back in main; no path crosses IPC (invariant #2 still holds).
+  ipcMain.handle('browser:pickProfile', async (e): Promise<BrowserEntry | null> => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    return win ? pickProfile(win) : null
+  })
   ipcMain.handle(
     'browser:importProfile',
     async (_e, payload: ImportPayload): Promise<ImportReport> =>
@@ -554,6 +594,12 @@ function registerBrowserViewIpc(): void {
       if (!root) throw new Error('saveScreenshot needs a workspace root')
       return browser.saveScreenshot(root, optTab(payload?.tabId), optScope(payload))
     },
+  )
+  // Freeze-frame cho lúc overlay DOM che viewport — xem browser.frameDataUrl.
+  ipcMain.handle(
+    'browser:frameDataUrl',
+    async (_e, payload?: BrowserTabPayload): Promise<{ dataUrl: string | null }> =>
+      browser.frameDataUrl(optTab(payload?.tabId), optScope(payload)),
   )
   ipcMain.handle('browser:sites', async () => browser.sites())
   ipcMain.handle('browser:setSites', async (_e, sites: unknown) => {

@@ -77,6 +77,8 @@ export type McpSourceBlock = {
   url?: string
   authType?: 'oauth' | 'bearer' | 'none'
   clientId?: string
+  // `secret:KEY` ref — BYO OAuth app secret for providers without DCR (Slack).
+  clientSecret?: string
   headers?: Record<string, string>
   headerNames?: string[]
   // stdio
@@ -585,12 +587,18 @@ export const useConnectionsStore = defineStore('connections', () => {
   }
 
   // Persist a single mcp secret to the OS keychain (source.setSecret). Keyed by
-  // the source's STABLE id; the value NEVER round-trips (write-only). The config
-  // already holds the matching `secret:<KEY>` ref, so no config write is needed.
-  // Browser-dev is a no-op (no keychain).
-  async function setSecret(sourceId: string, key: string, value: string): Promise<void> {
-    if (!available.value) return
-    await sc.request('source.setSecret', { sourceId, key, value })
+  // the source's STABLE id; the value NEVER round-trips (write-only). Returns the
+  // `secret:<KEY>` placeholder to write into env/headers — the same contract the
+  // editor's kv-lock uses (the caller then upserts the config holding only the
+  // ref). Browser-dev has no keychain → returns the placeholder unwritten.
+  async function setSecret(sourceId: string, key: string, value: string): Promise<string> {
+    if (!available.value) return `secret:${key}`
+    const res = await sc.request<{ placeholder: string }>('source.setSecret', {
+      sourceId,
+      key,
+      value,
+    })
+    return res.placeholder
   }
 
   // Re-fetch a single source and patch it in place (used after an OAuth flow so

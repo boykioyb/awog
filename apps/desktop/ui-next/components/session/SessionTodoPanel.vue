@@ -5,6 +5,7 @@
        đủ vẫn là một cú bấm, y như strip `done/total` trước đây. -->
   <span v-if="variant === 'chip' && bannerVisible && !dismissed" class="ctxwrap2">
     <button
+      ref="chipEl"
       type="button"
       class="ctxchip"
       :class="{ acc: allDone, on: popOpen }"
@@ -18,9 +19,9 @@
       <span class="tdn">{{ doneCount }}/{{ total }}</span>
       <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
-    <template v-if="popOpen">
-      <div class="ctxbackdrop2" @click="popOpen = false" />
-      <div class="pop todopop" @click.stop>
+    <Teleport to="body">
+      <div v-if="popOpen" class="ctxbackdrop2" @click="popOpen = false" />
+      <div v-if="popOpen" ref="popEl" class="pop todopop" :style="popStyle" @click.stop>
         <div class="pl todopop-h">
           {{ t('sessions.todo.title') }}
           <button type="button" class="todox" :title="t('sessions.todo.hide')" @click="hide">
@@ -29,7 +30,7 @@
         </div>
         <SessionTodoList :todos="todos" editable @cycle="cycleTodo" />
       </div>
-    </template>
+    </Teleport>
   </span>
 
   <!-- Session-level pinned checklist. Docked above the composer, it shows the LATEST
@@ -75,12 +76,18 @@
 // rows are editable — a click cycles a row's status and persists the whole list — see
 // useSessionTodo for the shared source-of-truth and banner/inline rules.
 import type { Session } from '~/composables/useSessionsData'
+import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
 
 const props = withDefaults(defineProps<{ session: Session; variant?: 'bar' | 'chip' }>(), {
   variant: 'bar',
 })
 const { t } = useI18n()
 const popOpen = ref(false)
+// Chip nằm trên hàng header `.dh` và có thể đứng sát mép phải cửa sổ — neo fixed
+// kẹp viewport thay vì `absolute` trong wrapper (thò ra ngoài là bị cắt).
+const chipEl = ref<HTMLElement | null>(null)
+const popEl = ref<HTMLElement | null>(null)
+const { style: popStyle } = usePopoverAnchor(chipEl, popEl, popOpen, { maxHeight: 360 })
 function hide() {
   popOpen.value = false
   dismissed.value = true
@@ -202,14 +209,9 @@ watch(total, (n, prev) => {
   inset: 0;
   z-index: 40;
 }
-/* Strip nằm ở ĐẦU cột chat nên popover mở XUỐNG. */
+/* Neo `fixed` qua usePopoverAnchor — `.pop` lo position/z-index; đây chỉ còn skin. */
 .todopop {
-  position: absolute;
-  top: 128%;
-  left: 0;
-  z-index: 50;
   width: 340px;
-  max-height: 360px;
   overflow-y: auto;
 }
 .todopop-h {

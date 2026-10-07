@@ -44,8 +44,19 @@
         <div v-if="loading" class="text-sm text-muted-foreground">
           {{ t('common.loading') }}
         </div>
-        <div v-else-if="!sources.length" class="text-sm text-muted-foreground">
-          {{ t('sessions.workspace.browser.import.noBrowsers') }}
+        <div v-else-if="!sources.length" class="flex flex-col gap-2 text-sm text-muted-foreground">
+          <p>{{ t('sessions.workspace.browser.import.noBrowsers') }}</p>
+          <!-- macOS can refuse to even LIST another app's data dir (app-data
+               protection): detection comes back empty although the browser is
+               installed. The folder picker is the sanctioned way through. -->
+          <p class="text-xs">{{ t('sessions.workspace.browser.import.pickHint') }}</p>
+          <Button
+            variant="outline"
+            class="h-auto p-0 w-fit rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+            @click="pick"
+          >
+            {{ t('sessions.workspace.browser.import.pick') }}
+          </Button>
         </div>
 
         <template v-else>
@@ -54,9 +65,41 @@
               {{ t('sessions.workspace.browser.import.browser') }}
             </span>
             <AppSelect v-model="browserId" :options="browserOptions" width="100%" />
+            <!-- Cứu cánh khi macOS chặn liệt kê (entry `blocked`) hoặc browser
+                 không nằm trong danh sách — picker là đường được cấp quyền. -->
+            <button
+              type="button"
+              class="w-fit text-xs text-muted-foreground underline transition-colors hover:text-foreground"
+              @click="pick"
+            >
+              {{ t('sessions.workspace.browser.import.pick') }}
+            </button>
           </label>
 
-          <label class="flex flex-col gap-1.5 text-sm">
+          <!-- Data dir tồn tại nhưng OS từ chối liệt kê (EPERM) — profile picker
+               vô nghĩa với entry này; hướng dẫn đi đường chọn thủ công. CTA phải
+               là NÚT THẬT ngay trong cảnh báo: một link chữ nhỏ dưới dropdown
+               bị bỏ sót, và người dùng kẹt ở đúng thông báo này. -->
+          <div
+            v-if="currentSource?.blocked"
+            class="flex flex-col gap-2 rounded-lg border border-warning/50 bg-warning/10 p-3 text-xs text-foreground"
+          >
+            <p class="m-0">
+              {{
+                t('sessions.workspace.browser.import.blocked', {
+                  browser: currentSource.label,
+                })
+              }}
+            </p>
+            <Button
+              variant="outline"
+              class="h-auto p-0 w-fit rounded-md border border-input px-3 py-1.5 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              @click="pick"
+            >
+              {{ t('sessions.workspace.browser.import.pick') }}
+            </Button>
+          </div>
+          <label v-else class="flex flex-col gap-1.5 text-sm">
             <span class="text-xs font-medium text-muted-foreground">
               {{ t('sessions.workspace.browser.import.profile') }}
             </span>
@@ -226,7 +269,15 @@ const browserId = ref('')
 const profileDir = ref('')
 const parts = ref({ cookies: true, localStorage: true, indexedDb: true })
 
-const browserOptions = computed(() => sources.value.map((s) => ({ label: s.label, value: s.id })))
+const browserOptions = computed(() =>
+  sources.value.map((s) => ({
+    label: s.blocked
+      ? `${s.label} · ${t('sessions.workspace.browser.import.blockedTag')}`
+      : s.label,
+    value: s.id,
+  })),
+)
+const currentSource = computed(() => sources.value.find((s) => s.id === browserId.value))
 const profileOptions = computed(() => {
   const source = sources.value.find((s) => s.id === browserId.value)
   return (source?.profiles ?? []).map((p) => ({
@@ -276,6 +327,29 @@ watch(
 )
 
 const close = (): void => emit('close')
+
+// Đường vòng qua tường TCC của macOS: khi OS từ chối LIỆT KÊ data dir của
+// browser (entry `blocked`, hay danh sách rỗng hẳn), hộp chọn thư mục native là
+// cách hợp lệ duy nhất — folder user chọn được cấp quyền cho process này. Main
+// trả về một entry synthetic (`id: 'picked'`, `dir` là token opaque) nên renderer
+// vẫn không bao giờ cầm đường dẫn — invariant #2 giữ nguyên.
+const pick = async (): Promise<void> => {
+  const api = bridge.value
+  if (!api) return
+  try {
+    const src = await api.pickProfile()
+    if (!src) return
+    // Mỗi lượt pick thay entry 'picked' trước đó — token cũ vẫn sống trong main
+    // nhưng danh sách không nên chồng các bản chọn cũ.
+    sources.value = [...sources.value.filter((s) => s.id !== 'picked'), src]
+    browserId.value = src.id
+    profileDir.value = src.profiles[0]?.dir ?? ''
+    error.value = ''
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    error.value = msg.includes('Chromium') ? t('sessions.workspace.browser.import.notProfile') : msg
+  }
+}
 
 const runImport = async (): Promise<void> => {
   const api = bridge.value

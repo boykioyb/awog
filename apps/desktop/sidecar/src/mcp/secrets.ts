@@ -44,6 +44,22 @@ export function makeReference(key: string): string {
   return `${PREFIX}${key}`
 }
 
+// Resolve ONE scalar `secret:KEY` value (e.g. mcp.clientSecret) to plaintext
+// via the keychain. Non-reference values pass through verbatim — same literal
+// semantics expandSecrets gives env/header values. Missing entries → undefined
+// (the OAuth call then fails loudly at the token endpoint, same philosophy as
+// expandSecrets passing '').
+export async function resolveSecretValue(
+  serverId: string,
+  value: string | undefined,
+): Promise<string | undefined> {
+  if (!value) return undefined
+  const key = secretKeyFromReference(value)
+  if (!key) return value
+  const secret = await getSecret(serverId, key)
+  return secret ?? undefined
+}
+
 // Persist a single secret to OS keychain and return the placeholder to write
 // to the JSON config. Throws on keychain failure (callers wrap in try/catch).
 export async function persistSecret(

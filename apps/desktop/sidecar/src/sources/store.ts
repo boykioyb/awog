@@ -11,7 +11,7 @@ import { mkdir, readdir, readFile, writeFile, chmod, rename, rm, stat } from 'no
 import { join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
 import { log } from '../util/logger.js'
-import { keychainizeRecord } from '../mcp/secrets.js'
+import { isSecretReference, keychainizeRecord, persistSecret } from '../mcp/secrets.js'
 import { SourceConfigSchema, SourcePermissionsSchema } from './schema.js'
 import type { SourcePermissions } from './schema.js'
 import type { SourceConfig } from '../types/shared.js'
@@ -169,7 +169,40 @@ export async function saveSource(cfg: SourceConfig): Promise<void> {
     const mcp = { ...cfg.mcp }
     if (cfg.mcp.env) mcp.env = env.record
     if (cfg.mcp.headers) mcp.headers = headers.record
+    // mcp.clientSecret follows the same rule as env/header secrets: callers may
+    // pass plaintext (editor field, BYO OAuth app), we persist only the
+    // `secret:KEY` ref. Fixed key — one secret slot per source.
+    if (cfg.mcp.clientSecret && !isSecretReference(cfg.mcp.clientSecret)) {
+      try {
+        mcp.clientSecret = await persistSecret(cfg.id, 'OAUTH_CLIENT_SECRET', cfg.mcp.clientSecret)
+      } catch (err) {
+        log.warn('sources: clientSecret keychainize failed, leaving value as-is', {
+          id: cfg.id,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
     toWrite = { ...cfg, mcp }
+  }
+  if (cfg.type === 'api' && cfg.api.oauth?.clientSecret) {
+    // Same rule for api.oauth.clientSecret — persist only the `secret:KEY` ref.
+    const secret = cfg.api.oauth.clientSecret
+    if (!isSecretReference(secret)) {
+      try {
+        toWrite = {
+          ...cfg,
+          api: {
+            ...cfg.api,
+            oauth: { ...cfg.api.oauth, clientSecret: await persistSecret(cfg.id, 'OAUTH_CLIENT_SECRET', secret) },
+          },
+        }
+      } catch (err) {
+        log.warn('sources: api clientSecret keychainize failed, leaving value as-is', {
+          id: cfg.id,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
   }
   await writeConfigAtomic(cfg.slug, toWrite)
 }

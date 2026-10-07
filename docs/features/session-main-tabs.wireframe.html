@@ -1,0 +1,666 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wireframe — Session main tabs (discuss + browser, ngang hàng)</title>
+<style>
+  :root {
+    --bg: #0e1014;
+    --panel: #15181e;
+    --panel2: #1a1e26;
+    --hover: #21262f;
+    --border: #262b34;
+    --text: #e8eaf0;
+    --dim: #9aa0af;
+    --faint: #666c7b;
+    --accent: #7c6cf0;
+    --accent-wash: rgba(124, 108, 240, 0.13);
+    --ok: #3fb27f;
+    --warn: #d9a13b;
+    --danger: #e05656;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: #06070a;
+    color: var(--text);
+    font: 13px/1.55 -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+    padding: 30px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+  }
+  .frame {
+    width: 1220px;
+    max-width: 100%;
+    border: 1px solid #2c313b;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--bg);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+  }
+  svg.i { display: block; flex: 0 0 auto; }
+
+  /* ── title bar ── */
+  .titlebar {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: #12141a;
+  }
+  .tl { width: 12px; height: 12px; border-radius: 50%; }
+  .tl.r { background: #ff5f57; } .tl.y { background: #febc2e; } .tl.g { background: #28c840; }
+  .titlebar .tt { margin: 0 auto; color: var(--faint); font-size: 12px; transform: translateX(-30px); }
+  .wf-tag {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em;
+    color: var(--warn); border: 1px dashed rgba(217,161,59,.55);
+    border-radius: 4px; padding: 1px 6px; margin-left: 10px;
+  }
+
+  /* ── app top bar ── */
+  .topbar {
+    height: 46px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .rail-ico {
+    width: 28px; height: 28px; border-radius: 7px;
+    background: var(--panel2);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--dim);
+  }
+  .rail-ico.on { color: var(--accent); background: var(--accent-wash); }
+  .search {
+    margin-left: auto;
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 12px;
+    color: var(--faint);
+    font-size: 12px;
+    min-width: 250px;
+  }
+  .search kbd { font: 10px var(--mono); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: auto; }
+  .newbtn { background: var(--accent); color: #fff; border: 0; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; }
+
+  /* ── project tabs (giữ nguyên hiện trạng) ── */
+  .ptabs {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--border);
+    background: #12141a;
+    overflow: hidden;
+  }
+  .ptab {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 7px;
+    color: var(--dim); font-size: 12px; white-space: nowrap;
+  }
+  .ptab .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .ptab.on { background: var(--accent-wash); color: var(--text); }
+  .ptab .x { color: var(--faint); font-size: 10px; margin-left: 2px; }
+
+  /* ── body ── */
+  .body { display: flex; height: 600px; }
+  .slist {
+    width: 216px; flex: 0 0 auto;
+    border-right: 1px solid var(--border);
+    background: var(--panel);
+    padding: 8px;
+    display: flex; flex-direction: column; gap: 5px;
+    overflow: hidden;
+  }
+  .ssearch {
+    background: var(--panel2); border: 1px solid var(--border); border-radius: 7px;
+    padding: 6px 10px; color: var(--faint); font-size: 12px; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .sitem { border-radius: 8px; padding: 8px 9px; border: 1px solid transparent; }
+  .sitem .t { font-size: 12.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 7px; }
+  .sitem .m { font-size: 10.5px; color: var(--faint); margin-top: 3px; display: flex; gap: 7px; align-items: center; padding-left: 14px; }
+  .sitem.on { background: var(--accent-wash); border-color: rgba(124,108,240,.35); }
+  .st { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+  .st.done { background: var(--ok); } .st.err { background: var(--danger); } .st.run { background: var(--accent); }
+  .chip { font-size: 9.5px; font-family: var(--mono); padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); color: var(--dim); }
+
+  /* ── detail ── */
+  .detail { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .shead {
+    padding: 7px 16px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .shead h1 { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .done-chip { font-size: 10px; color: var(--ok); border: 1px solid rgba(63,178,127,.4); padding: 1px 7px; border-radius: 99px; flex: 0 0 auto; }
+  .prov { font-size: 11px; color: var(--faint); flex: 0 0 auto; display: flex; align-items: center; gap: 5px; }
+  /* Context chips (task · SSH · infra · todo · bookmark) gộp lên header —
+     trước là một row riêng đầu chat (SessionContextStrip), nay tab bar chiếm
+     một hàng nên header gom hết metadata về một dòng. */
+  .hchips { margin-left: auto; display: flex; gap: 5px; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+  .hchip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10.5px; color: var(--dim);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 8px; white-space: nowrap;
+    background: var(--panel);
+  }
+  .hchip i { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); font-style: normal; }
+  .hchip.todo { color: var(--ok); border-color: rgba(63,178,127,.4); }
+  .shead .acts { display: flex; gap: 5px; flex: 0 0 auto; }
+  .icobtn {
+    width: 26px; height: 26px; border-radius: 6px;
+    color: var(--dim);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .icobtn:hover { background: var(--hover); color: var(--text); }
+
+  /* ══════════ MAIN TAB BAR — thứ mới ══════════ */
+  .mtabs {
+    display: flex; align-items: flex-end;
+    height: 37px;
+    padding: 0 8px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .mtabs::-webkit-scrollbar { display: none; }
+  .mtab {
+    position: relative;
+    display: flex; align-items: center; gap: 7px;
+    height: 31px;
+    padding: 0 11px;
+    margin-bottom: -1px;
+    font-size: 12.5px;
+    color: var(--dim);
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 220px;
+    user-select: none;
+    flex: 0 0 auto;
+    border-radius: 8px 8px 0 0;
+    border: 1px solid transparent;
+    border-bottom: none;
+  }
+  .mtab:hover { background: var(--hover); }
+  .mtab.on {
+    background: var(--bg);
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .mtab.on::before {
+    content: "";
+    position: absolute; top: 0; left: 8px; right: 8px;
+    height: 2px; border-radius: 0 0 2px 2px;
+    background: var(--accent);
+  }
+  .mtab .fv {
+    width: 15px; height: 15px; border-radius: 4px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: #fff;
+  }
+  .mtab .tt { overflow: hidden; text-overflow: ellipsis; }
+  .mtab .x {
+    width: 16px; height: 16px; border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--faint); font-size: 10px; flex: 0 0 auto;
+    opacity: 0;
+  }
+  .mtab:hover .x, .mtab.on .x { opacity: 1; }
+  .mtab .x:hover { background: rgba(255,255,255,.1); color: var(--text); }
+  .mtab .spin {
+    width: 11px; height: 11px; flex: 0 0 auto;
+    border: 1.5px solid var(--border); border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: rot .8s linear infinite;
+  }
+  @keyframes rot { to { transform: rotate(360deg); } }
+  .mtab .act-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); flex: 0 0 auto; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .2; } }
+  .mplus {
+    flex: 0 0 auto; width: 32px; height: 34px; margin-bottom: -1px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--faint); cursor: pointer;
+    border-radius: 8px 8px 0 0;
+  }
+  .mplus:hover { color: var(--text); background: var(--hover); }
+  .mtabs .fill { flex: 1; }
+
+  /* ── navbar (web tab) ── */
+  .navbar {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    position: relative;
+    flex: 0 0 auto;
+  }
+  /* display:flex phía trên đè [hidden] của UA — phải khai báo lại, không thì
+     navbar hiện mãi kể cả khi tab discuss đang active. */
+  .navbar[hidden], .navbar .prog[hidden] { display: none; }
+  .navbtn {
+    width: 26px; height: 26px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--dim);
+  }
+  .navbtn:hover { background: var(--hover); color: var(--text); }
+  .urlbox {
+    flex: 1; display: flex; align-items: center; gap: 8px;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 11px;
+    font-size: 12px; color: var(--dim);
+    font-family: var(--mono);
+    overflow: hidden; white-space: nowrap;
+  }
+  .urlbox b { color: var(--text); font-weight: 500; }
+  .urlbox .lock { color: var(--ok); }
+  .navbar .prog {
+    position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    background-size: 200% 100%;
+    animation: indet 1.1s linear infinite;
+  }
+  @keyframes indet { from { background-position: 200% 0; } to { background-position: -100% 0; } }
+
+  /* ── content: discuss ── */
+  .content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .chat { flex: 1; overflow-y: auto; padding: 16px 20px 10px; display: flex; flex-direction: column; gap: 14px; }
+  .msg-u {
+    align-self: flex-end;
+    background: var(--accent-wash);
+    border: 1px solid rgba(124,108,240,.32);
+    border-radius: 12px 12px 4px 12px;
+    padding: 8px 13px;
+    max-width: 65%;
+    font-size: 12.5px;
+  }
+  .msg-a { max-width: 88%; font-size: 12.5px; }
+  .msg-a .green { color: var(--ok); }
+  .msg-a p { margin-bottom: 7px; }
+  .msg-a a { color: #9d90ff; text-decoration: none; border-bottom: 1px dotted rgba(157,144,255,.5); cursor: pointer; }
+  .msg-a a:hover { background: var(--accent-wash); }
+  .steps {
+    color: var(--faint); font-size: 11px; font-family: var(--mono);
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 0; margin: 4px 0;
+    border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  }
+  .tbl { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; font-size: 11.5px; margin: 6px 0; }
+  .tbl .h, .tbl .r { display: flex; }
+  .tbl .h { background: var(--panel2); color: var(--dim); font-weight: 600; }
+  .tbl .h div, .tbl .r div { padding: 6px 10px; }
+  .tbl .h div:first-child, .tbl .r div:first-child { width: 130px; flex: 0 0 auto; }
+  .tbl .r { border-top: 1px solid var(--border); color: var(--dim); }
+  .composer-wrap { padding: 0 16px 12px; }
+  .composer {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--panel2);
+    padding: 10px 12px;
+  }
+  .composer .ph { color: var(--faint); font-size: 12.5px; }
+  .composer .row2 { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+  .mchip {
+    font-size: 10.5px; color: var(--dim);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 7px; display: flex; gap: 5px; align-items: center;
+    background: var(--panel);
+  }
+  .send {
+    margin-left: auto;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .simrow { padding: 0 20px 12px; }
+
+  /* ── content: web page ── */
+  .pageview { flex: 1; background: #fff; overflow-y: auto; display: flex; flex-direction: column; }
+  .gh-head { padding: 20px 30px 0; }
+  .gh-crumb { font-size: 12px; color: #57606a; margin-bottom: 6px; }
+  .gh-crumb b { color: #0969da; font-weight: 500; }
+  .gh-title { font-size: 19px; color: #1f2328; font-weight: 400; margin-bottom: 10px; }
+  .gh-title .num { color: #57606a; }
+  .gh-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: #8250df; color: #fff; font-size: 12px; font-weight: 500;
+    border-radius: 99px; padding: 3px 11px;
+  }
+  .gh-tabs { display: flex; gap: 4px; padding: 12px 30px 0; border-bottom: 1px solid #d8dee4; }
+  .gh-tab { font-size: 13.5px; color: #1f2328; padding: 6px 12px; border: 1px solid transparent; border-bottom: none; border-radius: 6px 6px 0 0; }
+  .gh-tab.on { border-color: #d8dee4; font-weight: 600; position: relative; top: 1px; background: #fff; }
+  .gh-tab .cnt { font-size: 11px; background: #eaeef2; border-radius: 99px; padding: 0 7px; margin-left: 5px; }
+  .gh-body { padding: 18px 30px; display: flex; gap: 20px; }
+  .gh-main { flex: 1; }
+  .gh-card { border: 1px solid #d8dee4; border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+  .gh-card .hd { background: #f6f8fa; padding: 9px 14px; font-size: 12.5px; color: #1f2328; border-bottom: 1px solid #d8dee4; }
+  .gh-card .bd { padding: 14px; font-size: 12.5px; color: #57606a; }
+  .gh-side { width: 250px; flex: 0 0 auto; }
+  .gh-side .sec { border-bottom: 1px solid #eaeef2; padding: 12px 0; font-size: 12px; color: #57606a; }
+  .pv-line { height: 10px; border-radius: 5px; background: #eaeef2; margin: 7px 0; }
+  .pv-line.w50 { width: 50%; } .pv-line.w70 { width: 70%; } .pv-line.w40 { width: 40%; }
+  .empty-web { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--faint); }
+  .empty-web .globe { width: 52px; height: 52px; border-radius: 50%; border: 1.5px solid var(--border); display: flex; align-items: center; justify-content: center; color: var(--faint); }
+  .empty-web .pins { display: flex; gap: 8px; margin-top: 6px; }
+  .empty-web .pin { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 11.5px; color: var(--dim); display: flex; gap: 6px; align-items: center; }
+
+  .statusbar {
+    height: 26px; border-top: 1px solid var(--border); background: var(--panel);
+    display: flex; align-items: center; gap: 14px; padding: 0 12px;
+    font-size: 10.5px; color: var(--faint); font-family: var(--mono);
+  }
+  .toast {
+    position: absolute; right: 16px; bottom: 14px;
+    background: #1d2230; border: 1px solid var(--accent);
+    border-radius: 9px; padding: 9px 13px; font-size: 11.5px; color: var(--text);
+    box-shadow: 0 12px 34px rgba(0,0,0,.55);
+    opacity: 0; transform: translateY(6px);
+    transition: opacity .22s, transform .22s;
+    pointer-events: none; max-width: 330px; z-index: 5;
+  }
+  .toast.on { opacity: 1; transform: none; }
+  .rel { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+  /* ── notes ── */
+  .notes { width: 1220px; max-width: 100%; border: 1px dashed #333945; border-radius: 12px; padding: 16px 20px; color: var(--dim); font-size: 12.5px; }
+  .notes h2 { font-size: 13px; color: var(--text); margin-bottom: 8px; }
+  .notes ol { padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+  .notes code { font-family: var(--mono); font-size: 11.5px; color: var(--text); background: var(--panel2); padding: 0 5px; border-radius: 4px; }
+  .notes b { color: var(--text); }
+  .hint { color: var(--faint); font-size: 11.5px; margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="titlebar">
+    <span class="tl r"></span><span class="tl y"></span><span class="tl g"></span>
+    <span class="tt">AWOG — Sessions<span class="wf-tag">WIREFRAME</span></span>
+  </div>
+
+  <div class="topbar">
+    <span class="rail-ico"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg></span>
+    <span class="rail-ico on"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+    <span class="rail-ico"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></span>
+    <span class="rail-ico"><svg class="i" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
+    <div class="search"><svg class="i" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg> Search or jump to <kbd>⌘K</kbd></div>
+    <button class="newbtn">+ New</button>
+  </div>
+
+  <div class="ptabs">
+    <span class="ptab"><span class="dot" style="background:#e05656"></span>Auto-Create-Video</span>
+    <span class="ptab"><span class="dot" style="background:#d9a13b"></span>168-yahagi-panwall<span class="x">✕</span></span>
+    <span class="ptab on"><span class="dot" style="background:#3fb27f"></span>tmdt</span>
+    <span class="ptab"><span class="dot" style="background:#7c6cf0"></span>Interview</span>
+    <span class="ptab"><span class="dot" style="background:#4aa8e0"></span>genba-bento</span>
+  </div>
+
+  <div class="body">
+    <div class="slist">
+      <div class="ssearch"><svg class="i" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Search sessions…</div>
+      <div class="sitem on">
+        <div class="t"><span class="st done"></span>VTVSHOP-255_IS: Cập Nhật…</div>
+        <div class="m">Claude Opus 5.5 <span class="chip">done</span> 311k · 13h</div>
+      </div>
+      <div class="sitem">
+        <div class="t"><span class="st done"></span>#76_PR: Viết Runbook Triển…</div>
+        <div class="m">Claude Opus 5.5 <span class="chip">done</span> 8d</div>
+      </div>
+      <div class="sitem">
+        <div class="t"><span class="st run"></span>Deployment Strategy Pla…</div>
+        <div class="m">Claude Opus… <span class="chip">+8 insi…</span> 8d</div>
+      </div>
+      <div class="sitem">
+        <div class="t"><span class="st done"></span>Kiểm Tra Lỗ Hổng Email N…</div>
+        <div class="m">Claude Opus 5.5 <span class="chip">done</span> 10d</div>
+      </div>
+      <div class="sitem">
+        <div class="t"><span class="st err"></span>Vendor Webhook Signature…</div>
+        <div class="m">Claude Opus 4.8 <span class="chip">error</span> 14d</div>
+      </div>
+    </div>
+
+    <div class="detail">
+      <div class="shead">
+        <h1>VTVSHOP-255_IS: Cập Nhật Trạng Thái Subtask</h1>
+        <span class="done-chip">done</span>
+        <span class="prov">
+          <svg class="i" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/></svg>
+          Anthropic · Claude Opus 5.5
+        </span>
+        <div class="hchips">
+          <span class="hchip"><i style="background:var(--warn)"></i>AWS · off</span>
+          <span class="hchip"><i></i>Kubernetes · off</span>
+          <span class="hchip todo">✓ 4/4</span>
+        </div>
+        <div class="acts">
+          <span class="icobtn"><svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v6h-6"/></svg></span>
+          <span class="icobtn"><svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+        </div>
+      </div>
+
+      <!-- ★ MAIN TAB BAR -->
+      <div class="mtabs" id="mstrip"></div>
+
+      <!-- navbar: chỉ khi tab web active -->
+      <div class="navbar" id="navbar" hidden>
+        <span class="navbtn"><svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5m7-7-7 7 7 7"/></svg></span>
+        <span class="navbtn"><svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14m-7-7 7 7-7 7"/></svg></span>
+        <span class="navbtn"><svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg></span>
+        <div class="urlbox"><span class="lock"><svg class="i" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><span id="urltext"></span></div>
+        <span class="navbtn"><svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+        <span class="navbtn"><svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></span>
+        <div class="prog" id="navprog" hidden></div>
+      </div>
+
+      <div class="rel">
+        <div class="content" id="content"></div>
+        <div class="toast" id="toast"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span style="color:var(--dim)">⑂ feat/255-notify-email</span>
+    <span>131</span>
+    <span style="margin-left:auto">28k/1M</span>
+    <span>tmdt</span>
+    <span>Normal</span>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>Mô hình: session là một hàng tab ngang hàng — mỗi tab là một "task" có loại</h2>
+  <ol>
+    <li>Tab <b><code>Trao đổi</code> (loại <code>discuss</code>)</b>: transcript + composer tương tác với model — tab đầu tiên, pin, không đóng. Về sau strip có thể nhận thêm loại tab khác (terminal, preview…) mà không đổi khung.</li>
+    <li>Mỗi <b>trang web</b> = một tab <code>browser</code> ngang hàng, favicon + title + × thật. Bấm link trong transcript (mode <code>'app'</code>) → tab mới <b>focus luôn</b> — thử bấm link PR trong khung chat.</li>
+    <li><b>Agent tự mở tab</b> → tab xuất hiện với spinner + chấm activity, <b>không chiếm focus</b> — thay vai trò auto-PiP. Nút "Giả lập agent mở tab" để xem.</li>
+    <li>Navbar (back/forward/URL/⋯) chỉ hiện khi tab <code>browser</code> active; tab <code>discuss</code> không có navbar — đúng kiểu browser: thanh địa chỉ thuộc về tab web.</li>
+    <li>View <code>Browser</code> dock 3 mép vẫn giữ cho side-by-side; <code>browserAutoPip</code> default → off, PiP chỉ mở thủ công (⋯ / ⇧⌘B).</li>
+    <li><b>Header gộp một hàng:</b> chips ngữ cảnh (task · SSH · AWS/k8s · todo · bookmark — hiện là <code>SessionContextStrip</code> một row riêng đầu chat) dời lên header, bù lại chiều cao mà tab bar chiếm. Hẹp quá thì chip tràn vào popover ⋯.</li>
+    <li>Overflow → strip scroll ngang, × hiện khi hover/active; <code>+</code> = tab trắng + autofocus ô URL.</li>
+  </ol>
+  <p class="hint">Wireframe mô phỏng bố cục + tương tác, không phải pixel cuối — màu/typography theo token <code>useTheme()</code> khi implement. Điểm chạm code: <code>SessionDetail.vue</code> (tab bar + vùng content), <code>useEmbeddedBrowser.ts</code> (mode pin theo <code>tabId</code>), <code>useLinkOpen.ts</code> (mở tab mới), <code>useBrowserPip.ts</code> (tắt auto), <code>BrowserNavBar.vue</code> (dùng lại trong content tab).</p>
+</div>
+
+<script>
+  const state = { active: 'work', seq: 0, tabs: [] };
+  const FAV = {
+    'github.com': ['G', '#1f2328'],
+    'docs.aws.amazon.com': ['A', '#dd9944'],
+    'default': ['●', '#5a6474'],
+  };
+  const favFor = (url) => {
+    try { const h = new URL(url).host; return FAV[h] ?? FAV.default; } catch { return FAV.default; }
+  };
+
+  const mstrip = document.getElementById('mstrip');
+  const navbar = document.getElementById('navbar');
+  const navprog = document.getElementById('navprog');
+  const urltext = document.getElementById('urltext');
+  const content = document.getElementById('content');
+  const toast = document.getElementById('toast');
+  let toastTimer = null;
+
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove('on'), 2600);
+  }
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  function renderStrip() {
+    mstrip.innerHTML = '';
+    const work = document.createElement('div');
+    work.className = 'mtab' + (state.active === 'work' ? ' on' : '');
+    work.innerHTML = '<span class="tt">Trao đổi</span>';
+    work.title = 'Trao đổi';
+    work.onclick = () => { state.active = 'work'; render(); };
+    mstrip.appendChild(work);
+
+    for (const t of state.tabs) {
+      const el = document.createElement('div');
+      el.className = 'mtab' + (state.active === t.id ? ' on' : '');
+      el.title = t.title || t.url || 'Tab mới';
+      const [letter, color] = favFor(t.url);
+      const fv = t.loading
+        ? '<span class="spin"></span>'
+        : '<span class="fv" style="background:' + color + '">' + esc(letter) + '</span>';
+      el.innerHTML = fv +
+        '<span class="tt">' + esc(t.title || t.url || 'Tab mới') + '</span>' +
+        (t.fresh ? '<span class="act-dot" title="Agent vừa mở tab này"></span>' : '') +
+        '<span class="x" title="Đóng tab">✕</span>';
+      el.onclick = () => { t.fresh = false; state.active = t.id; render(); };
+      el.querySelector('.x').onclick = (e) => {
+        e.stopPropagation();
+        const i = state.tabs.indexOf(t);
+        state.tabs.splice(i, 1);
+        if (state.active === t.id) state.active = state.tabs[Math.min(i, state.tabs.length - 1)]?.id ?? 'work';
+        render();
+      };
+      mstrip.appendChild(el);
+    }
+
+    const plus = document.createElement('div');
+    plus.className = 'mplus';
+    plus.innerHTML = '<svg class="i" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>';
+    plus.title = 'Tab trình duyệt mới';
+    plus.onclick = () => addTab({ url: '', title: '', focus: true });
+    mstrip.appendChild(plus);
+    const fill = document.createElement('div');
+    fill.className = 'fill';
+    mstrip.appendChild(fill);
+  }
+
+  function renderContent() {
+    const t = state.tabs.find((x) => x.id === state.active);
+    if (!t) {
+      content.innerHTML =
+        '<div class="chat">' +
+        '<div class="msg-u">một số subtask theo status mà chưa xong hẳn, xử lý thế nào?</div>' +
+        '<div class="msg-a">' +
+        '<p><span class="green">✓</span> Mình đã chuyển 23 subtask của VTVSHOP-255 sang Chờ kiểm thử.</p>' +
+        '<div class="steps">› 26 steps completed</div>' +
+        '<div class="tbl"><div class="h"><div>Trạng thái</div><div>Subtask</div></div>' +
+        '<div class="r"><div>Chờ kiểm thử (23)</div><div>BL-01→BL-11 (331–341), BL-13→BL-19 (352–358), SPIKE-S1→S5 (359–363)</div></div>' +
+        '<div class="r"><div>Giữ Cần làm</div><div>BL-12 (342): thông báo in-app bị hoàn tới khi có đặc tả</div></div></div>' +
+        '<p>3 PR liên quan vẫn đang mở, chờ duyệt lại: ' +
+        '<a id="dl1">#195</a>, <a id="dl2">#76</a>, argocd#1.</p>' +
+        '</div>' +
+        '</div>' +
+        '<div class="composer-wrap"><div class="composer">' +
+        '<span class="ph">Type a message…</span>' +
+        '<div class="row2"><span class="mchip">＋</span><span class="mchip">⚡ Claude Opus 5.5</span><span class="mchip">High</span><span class="mchip">▷ Execute</span>' +
+        '<span class="send"><svg class="i" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 19V5m-7 7 7-7 7 7"/></svg></span></div>' +
+        '</div></div>' +
+        '<div class="simrow"><button id="agentSim" style="background:transparent;border:1px dashed rgba(124,108,240,.5);color:var(--accent);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer">Giả lập agent mở tab (tab_new)</button></div>';
+      document.getElementById('dl1').onclick = () =>
+        addTab({ url: 'https://github.com/structuralengine/vtvshop/pull/195', title: 'feat: notify email · PR #195', focus: true, toast: 'Mở link → tab browser mới + focus (useLinkOpen.openInApp)' });
+      document.getElementById('dl2').onclick = () =>
+        addTab({ url: 'https://github.com/structuralengine/vtvshop/pull/76', title: 'docs: runbook deploy · PR #76', focus: true });
+      document.getElementById('agentSim').onclick = () => {
+        addTab({ url: 'https://docs.aws.amazon.com/ses/latest/dg/send-email.html', title: '', loading: true, focus: false, fresh: true });
+        showToast('Agent gọi tab_new → tab hiện trên strip, KHÔNG chiếm focus');
+        setTimeout(() => {
+          const tab = state.tabs.find((x) => x.loading);
+          if (tab) { tab.loading = false; tab.title = 'Sending email - Amazon SES'; render(); }
+        }, 2000);
+      };
+      return;
+    }
+    if (!t.url) {
+      content.innerHTML =
+        '<div class="empty-web"><div class="globe"><svg class="i" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>' +
+        '<div>Nhập URL ở thanh trên, hoặc mở trang đã ghim</div>' +
+        '<div class="pins"><span class="pin">★ github.com</span><span class="pin">★ localhost:3031</span><span class="pin">★ wiki pms</span></div></div>';
+      return;
+    }
+    content.innerHTML =
+      '<div class="pageview">' +
+      '<div class="gh-head"><div class="gh-crumb"><b>structuralengine</b> / <b>vtvshop</b> / pull</div>' +
+      '<div class="gh-title">feat: notify email khi task chuyển trạng thái <span class="num">#195</span></div>' +
+      '<span class="gh-badge">● Open</span></div>' +
+      '<div class="gh-tabs"><span class="gh-tab on">Conversation<span class="cnt">12</span></span><span class="gh-tab">Commits<span class="cnt">5</span></span><span class="gh-tab">Checks<span class="cnt">3</span></span><span class="gh-tab">Files changed<span class="cnt">18</span></span></div>' +
+      '<div class="gh-body"><div class="gh-main">' +
+      '<div class="gh-card"><div class="hd">sora-hoa commented 3 days ago</div><div class="bd">Adds in-app + SES notify on subtask status transition…<div class="pv-line w70"></div><div class="pv-line w50"></div></div></div>' +
+      '<div class="gh-card"><div class="hd">✓ 3 checks passed</div><div class="bd"><div class="pv-line w40"></div><div class="pv-line w50"></div></div></div>' +
+      '</div>' +
+      '<div class="gh-side"><div class="sec"><b>Reviewers</b><div class="pv-line w70"></div><div class="pv-line w50"></div></div>' +
+      '<div class="sec"><b>Assignees</b><div class="pv-line w40"></div></div>' +
+      '<div class="sec"><b>Labels</b><div class="pv-line w70"></div></div></div>' +
+      '</div></div>';
+  }
+
+  function renderNavbar() {
+    const t = state.tabs.find((x) => x.id === state.active);
+    navbar.hidden = !t;
+    if (!t) return;
+    navprog.hidden = !t.loading;
+    if (!t.url) {
+      urltext.innerHTML = '<span style="color:var(--faint)">Nhập URL hoặc tìm kiếm…</span>';
+    } else {
+      try {
+        const u = new URL(t.url);
+        urltext.innerHTML = '<b>' + esc(u.host) + '</b><span>' + esc(u.pathname + u.search) + '</span>';
+      } catch { urltext.textContent = t.url; }
+    }
+  }
+
+  function addTab({ url, title, loading = false, focus = false, fresh = false, toast: msg }) {
+    const id = 't' + ++state.seq;
+    state.tabs.push({ id, url, title, loading, fresh });
+    if (focus) state.active = id;
+    render();
+    if (msg) showToast(msg);
+    if (loading) setTimeout(() => {
+      const tab = state.tabs.find((x) => x.id === id);
+      if (tab) { tab.loading = false; render(); }
+    }, 1600);
+  }
+
+  function render() { renderStrip(); renderNavbar(); renderContent(); }
+
+  // seed một tab web đang mở sẵn
+  addTab({ url: 'https://github.com/structuralengine/vtvshop/pull/195', title: 'feat: notify email · PR #195', focus: false });
+  state.active = 'work';
+  render();
+</script>
+</body>
+</html>

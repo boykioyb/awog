@@ -292,8 +292,6 @@
   "settings.workspace.linkOpen.ask": "Ask every time",
   "settings.workspace.linkOpen.app": "AWOG's browser",
   "settings.workspace.linkOpen.external": "My browser",
-  "settings.workspace.browserPip.name": "Browser Picture-in-Picture",
-  "settings.workspace.browserPip.desc": "When the agent browses while the Browser view is hidden, float a live mini window of the page — draggable, closable.",
   "settings.notifications.resources.name": "Resource alerts",
   "settings.notifications.resources.desc": "Measures CPU/RAM every minute and alerts on abnormal processes. One measurement is a single `ps` call — near-free.",
   "settings.notifications.resources.orphans.name": "Leftover AWOG processes",

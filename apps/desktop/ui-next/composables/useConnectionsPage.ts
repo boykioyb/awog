@@ -2,10 +2,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useContextMenu, type MenuItem } from '~/composables/useContextMenu'
 import { useI18n } from '~/composables/useI18n'
 import { useSidecar } from '~/composables/useSidecar'
+import { useQuickConnect } from '~/composables/useQuickConnect'
 import { useSettingsStore } from '~/stores/settings'
 import {
   useConnectionsStore,
   type ApiCredentialInput,
+  type RegistryEntry,
   type Source,
   type SourceInput,
   type SourceOAuthResult,
@@ -104,11 +106,8 @@ export function useConnectionsPage() {
     try {
       const res = await store.discoverPreset(id)
       if (!res) return
-      seedSource.value = res.preset
-      seedSetupHint.value = res.meta.setupHint ?? ''
-      editTarget.value = null
       addPickerOpen.value = false
-      editorOpen.value = true
+      openEditorSeeded(res.preset, res.meta)
     } catch (err) {
       console.error('[connections] discoverPreset failed', err)
       toast.add({
@@ -116,6 +115,22 @@ export function useConnectionsPage() {
         color: 'error',
       })
     }
+  }
+
+  // --- quick connect (Claude-style "Connect") -------------------------------
+  // Guided flow cho nút "Kết nối": upsert → hỏi đúng các khoá còn thiếu → test
+  // → OAuth nếu cần. State machine nằm trong useQuickConnect; editor là đường
+  // thoát cho draft không phải mcp và cho "Tuỳ chỉnh nâng cao".
+  const quick = useQuickConnect({
+    onFallbackToEditor: (draft, meta) => openEditorSeeded(draft, meta),
+    onOpenExisting: (source) => openEditor(source),
+    onDone: (slug) => {
+      selectedSlug.value = slug
+    },
+  })
+  const onQuickPick = (id: string, entry?: RegistryEntry) => {
+    addPickerOpen.value = false
+    void quick.start(id, entry)
   }
 
   // --- create / refine (chat-driven) ---------------------------------------
@@ -152,6 +167,14 @@ export function useConnectionsPage() {
   // clear whenever the editor opens for edit / scratch so a stale seed never leaks.
   const seedSource = ref<Source | null>(null)
   const seedSetupHint = ref('')
+  // Seed the editor with a ready draft — shared by the picker's "Tuỳ chỉnh" path
+  // and the quick-connect fallback ("Tuỳ chỉnh nâng cao" / api+local presets).
+  const openEditorSeeded = (draft: Source, meta: SourcePresetMeta | null) => {
+    seedSource.value = draft
+    seedSetupHint.value = meta?.setupHint ?? ''
+    editTarget.value = null
+    editorOpen.value = true
+  }
   const openEditor = (s: Source) => {
     editTarget.value = s
     seedSource.value = null
@@ -371,6 +394,8 @@ export function useConnectionsPage() {
     startFromScratch,
     startFromAi,
     onPickPreset,
+    onQuickPick,
+    quick,
     // create / refine
     creatorOpen,
     creatorEditSource,

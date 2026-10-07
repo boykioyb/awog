@@ -2,9 +2,9 @@ import { execFile } from 'node:child_process'
 import { createDecipheriv, createHash, pbkdf2Sync } from 'node:crypto'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join, sep } from 'node:path'
 import { promisify } from 'node:util'
-import { app, session } from 'electron'
+import { app, dialog, session, type BrowserWindow } from 'electron'
 import { BROWSER_PARTITION } from './browser'
 import { log } from './logger'
 
@@ -118,6 +118,11 @@ export interface BrowserEntry {
   id: string
   label: string
   profiles: ProfileEntry[]
+  // The browser's data dir exists but the OS refused to list it — on macOS 14+
+  // that is the TCC "app data" wall (EPERM on readdir). The fix is the manual
+  // folder pick below: the open dialog grants this process access to exactly
+  // the directory the user chose.
+  blocked?: boolean
 }
 
 export interface ImportParts {
@@ -169,7 +174,22 @@ async function exists(path: string): Promise<boolean> {
 // Profile display names live in the BROWSER-level `Local State`, under
 // `profile.info_cache` keyed by directory name. Fall back to a directory scan so a
 // profile the browser has not written to the cache yet still shows up.
-async function profilesOf(dataDir: string): Promise<ProfileEntry[]> {
+const isPermError = (err: unknown): boolean => {
+  const code = (err as NodeJS.ErrnoException | null)?.code
+  return code === 'EPERM' || code === 'EACCES'
+}
+
+// Profile display names live in the BROWSER-level `Local State`, under
+// `profile.info_cache` keyed by directory name. Fall back to a directory scan so a
+// profile the browser has not written to the cache yet still shows up.
+//
+// `blocked`: the data dir could not even be LISTED — macOS's app-data protection
+// (TCC) denies the read with EPERM/EACCES when the user never granted (or denied)
+// "Files and Folders" for this app. Distinct from "no profiles": it has a fix —
+// the native folder picker in pickProfile().
+async function profilesOf(
+  dataDir: string,
+): Promise<{ profiles: ProfileEntry[]; blocked: boolean }> {
   const names = new Map<string, { name: string; email: string }>()
   try {
     const raw = await readFile(join(dataDir, 'Local State'), 'utf8')
@@ -193,8 +213,12 @@ async function profilesOf(dataDir: string): Promise<ProfileEntry[]> {
     entries = (await readdir(dataDir, { withFileTypes: true }))
       .filter((e) => e.isDirectory())
       .map((e) => e.name)
-  } catch {
-    return out
+  } catch (err) {
+    if (isPermError(err)) {
+      log.warn('browser profile scan blocked by OS', { dir: dataDir })
+      return { profiles: [], blocked: true }
+    }
+    return { profiles: [], blocked: false }
   }
   for (const dir of entries) {
     if (dir !== 'Default' && !/^Profile \d+$/.test(dir)) continue
@@ -207,22 +231,120 @@ async function profilesOf(dataDir: string): Promise<ProfileEntry[]> {
     })
   }
   // Default first, then Profile N in numeric order.
-  return out.sort((a, b) => {
-    if (a.dir === 'Default') return -1
-    if (b.dir === 'Default') return 1
-    return a.dir.localeCompare(b.dir, undefined, { numeric: true })
-  })
+  return {
+    profiles: out.sort((a, b) => {
+      if (a.dir === 'Default') return -1
+      if (b.dir === 'Default') return 1
+      return a.dir.localeCompare(b.dir, undefined, { numeric: true })
+    }),
+    blocked: false,
+  }
 }
 
 export async function listBrowsers(): Promise<BrowserEntry[]> {
   const out: BrowserEntry[] = []
   for (const def of BROWSERS) {
     const dataDir = join(supportPath(), def.dataDir)
-    if (!(await exists(dataDir))) continue
-    const profiles = await profilesOf(dataDir)
-    if (profiles.length > 0) out.push({ id: def.id, label: def.label, profiles })
+    try {
+      await stat(dataDir)
+    } catch (err) {
+      // stat may be refused while the parent is still listable — same TCC wall,
+      // one step earlier. Report it as blocked instead of "not installed".
+      if (isPermError(err)) {
+        log.warn('browser data dir unreadable', { dir: dataDir })
+        out.push({ id: def.id, label: def.label, profiles: [], blocked: true })
+      }
+      continue
+    }
+    const { profiles, blocked } = await profilesOf(dataDir)
+    if (profiles.length > 0 || blocked) {
+      out.push({ id: def.id, label: def.label, profiles, ...(blocked ? { blocked } : {}) })
+    }
   }
   return out
+}
+
+// ─── Manual pick — the way through the TCC wall ──────────────────────────────
+//
+// When auto-detection comes back empty or `blocked`, the user can point at the
+// profile directory themselves. The native open dialog is the sanctioned grant:
+// the folder the user picks becomes readable by this process. The renderer still
+// never sends a path — `pickProfile` returns an opaque token in `profiles[].dir`
+// and `importProfile('picked', token)` resolves it back here.
+interface PickedProfile {
+  path: string
+  // Matched browser when the picked dir lives inside a known data dir — its
+  // keychain service can then still decrypt cookies. null = unknown fork: the
+  // cookie part reports keyUnavailable, LS/IndexedDB still import.
+  def: BrowserDef | null
+  name: string
+}
+const pickedProfiles = new Map<string, PickedProfile>()
+let pickedSeq = 0
+
+export async function pickProfile(win: BrowserWindow): Promise<BrowserEntry | null> {
+  const res = await dialog.showOpenDialog(win, {
+    defaultPath: supportPath(),
+    properties: ['openDirectory', 'showHiddenFiles'],
+  })
+  const dir = res.filePaths[0]
+  if (res.canceled || !dir) return null
+  // dir khớp browser nào? Bằng đúng dataDir (user chọn "…/Chrome") HOẶC nằm
+  // sâu hơn bên trong nó (user chọn "…/Chrome/Default").
+  const browserOf = (p: string): BrowserDef | null =>
+    BROWSERS.find((b) => {
+      const dataDir = join(supportPath(), b.dataDir)
+      return p === dataDir || p.startsWith(dataDir + sep)
+    }) ?? null
+  // A Chromium profile dir holds `Cookies` and/or `Local Storage`. Anything else
+  // would fail mid-import anyway — reject it up front with a clear signal the
+  // renderer can translate.
+  if (!(await exists(join(dir, 'Cookies'))) && !(await exists(join(dir, 'Local Storage')))) {
+    // …trừ khi người dùng chọn DATA DIR của browser (vd "~/Library/Application
+    // Support/Google/Chrome") thay vì profile con — lựa chọn tự nhiên nhất. Có
+    // profile bên trong thì liệt kê hết cho họ chọn, đừng báo lỗi.
+    const inner = await profilesOf(dir)
+    if (!inner.profiles.length) throw new Error('not a Chromium profile directory')
+    const def = browserOf(dir)
+    const entry: BrowserEntry = { id: 'picked', label: def?.label ?? 'Chromium', profiles: [] }
+    for (const p of inner.profiles) {
+      const token = `picked_${++pickedSeq}`
+      pickedProfiles.set(token, { path: join(dir, p.dir), def, name: p.name })
+      entry.profiles.push({ dir: token, name: p.name, email: p.email, hasCookies: p.hasCookies })
+    }
+    return entry
+  }
+  const def = browserOf(dir)
+  // Display name from the browser's own `Local State` when we know which browser
+  // this is — "Profile 3" means nothing to the user, "Work · me@x.com" does.
+  let name = basename(dir)
+  let email = ''
+  if (def) {
+    try {
+      const raw = await readFile(
+        join(supportPath(), def.dataDir, 'Local State'),
+        'utf8',
+      )
+      const parsed: unknown = JSON.parse(raw)
+      const info = (
+        (parsed as { profile?: { info_cache?: Record<string, unknown> } })?.profile
+          ?.info_cache?.[name] ?? {}
+      ) as { name?: unknown; user_name?: unknown }
+      if (typeof info.name === 'string' && info.name) name = info.name
+      if (typeof info.user_name === 'string') email = info.user_name
+    } catch {
+      // Local State unreadable — the directory name is a fine fallback.
+    }
+  }
+  const token = `picked_${++pickedSeq}`
+  pickedProfiles.set(token, { path: dir, def, name })
+  return {
+    id: 'picked',
+    label: def ? def.label : 'Chromium',
+    profiles: [
+      { dir: token, name, email, hasCookies: await exists(join(dir, 'Cookies')) },
+    ],
+  }
 }
 
 // ─── Cookie decryption ───────────────────────────────────────────────────────
@@ -371,7 +493,7 @@ async function dirBytes(path: string): Promise<number> {
 }
 
 async function importCookies(
-  def: BrowserDef,
+  def: BrowserDef | null,
   profilePath: string,
 ): Promise<NonNullable<ImportReport['cookies']>> {
   const report = {
@@ -399,7 +521,9 @@ async function importCookies(
     report.total = rows.length
     if (rows.length === 0) return report
 
-    const key = await safeStorageKey(def)
+    // `def` null = profile picked by hand outside a known browser's data dir —
+    // no keychain service name to look up, so cookie values stay undecryptable.
+    const key = def ? await safeStorageKey(def) : null
     report.keyUnavailable = key === null
 
     const jar = session.fromPartition(BROWSER_PARTITION).cookies
@@ -476,18 +600,39 @@ export async function importProfile(
   parts: ImportParts,
 ): Promise<ImportReport> {
   // Renderer input resolves against the enumerated list — no path from the UI ever
-  // reaches the filesystem (invariant #2).
-  const def = BROWSERS.find((b) => b.id === browserId)
-  if (!def) throw new Error(`unknown browser: ${browserId}`)
-  const dataDir = join(supportPath(), def.dataDir)
-  const known = await profilesOf(dataDir)
-  const profile = known.find((p) => p.dir === profileDir)
-  if (!profile) throw new Error(`unknown profile: ${profileDir}`)
-  const profilePath = join(dataDir, profile.dir)
+  // reaches the filesystem (invariant #2). Two sources are legal:
+  //   - a listed browser: `browserId` ∈ BROWSERS, `profileDir` re-checked against
+  //     the enumerated profiles;
+  //   - a manually PICKED directory: `browserId === 'picked'` and `profileDir` is
+  //     the token `pickProfile` issued — resolved through the same map, never
+  //     joined as a path.
+  let def: BrowserDef | null
+  let profilePath: string
+  let profileName: string
+  let profileDirName: string
+  if (browserId === 'picked') {
+    const rec = pickedProfiles.get(profileDir)
+    if (!rec) throw new Error(`unknown picked profile: ${profileDir}`)
+    def = rec.def
+    profilePath = rec.path
+    profileName = rec.name
+    profileDirName = basename(rec.path)
+  } else {
+    const found = BROWSERS.find((b) => b.id === browserId)
+    if (!found) throw new Error(`unknown browser: ${browserId}`)
+    def = found
+    const dataDir = join(supportPath(), def.dataDir)
+    const known = (await profilesOf(dataDir)).profiles
+    const profile = known.find((p) => p.dir === profileDir)
+    if (!profile) throw new Error(`unknown profile: ${profileDir}`)
+    profilePath = join(dataDir, profile.dir)
+    profileName = profile.name
+    profileDirName = profile.dir
+  }
 
   const report: ImportReport = {
-    browser: def.label,
-    profile: profile.name,
+    browser: def?.label ?? 'Chromium',
+    profile: profileName,
     cookies: null,
     localStorage: null,
     indexedDb: null,
@@ -510,7 +655,7 @@ export async function importProfile(
     if (report.needsRestart) {
       await writeFile(
         join(stageRoot, 'manifest.json'),
-        JSON.stringify({ browser: def.label, profile: profile.name, at: Date.now() }, null, 2),
+        JSON.stringify({ browser: report.browser, profile: profileName, at: Date.now() }, null, 2),
       )
     } else {
       await rm(stageRoot, { recursive: true, force: true })
@@ -518,8 +663,8 @@ export async function importProfile(
   }
 
   log.info('browser profile import', {
-    browser: def.id,
-    profile: profile.dir,
+    browser: def?.id ?? 'picked',
+    profile: profileDirName,
     cookiesImported: report.cookies?.imported ?? 0,
     cookiesAppBound: report.cookies?.appBound ?? 0,
     needsRestart: report.needsRestart,

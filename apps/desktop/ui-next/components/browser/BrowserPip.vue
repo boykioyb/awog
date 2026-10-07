@@ -92,14 +92,12 @@
       </header>
       <div v-if="error && !minimized" class="bpip-err">{{ error }}</div>
       <div v-if="!minimized" ref="viewportEl" class="bpip-view">
+        <img v-if="frozen" class="bpip-frozen" :src="frozen" alt="" />
         <div v-if="!available" class="bpip-empty">
           {{ t('sessions.workspace.browser.unavailable') }}
         </div>
-        <BrowserElsewhere
-          v-else-if="elsewhere"
-          :where="activeTab?.shownElsewhere ? 'window' : 'dock'"
-          @takeover="takeOver"
-        />
+        <!-- Tab trắng → empty-state thắng: "hiện ở chỗ khác" vô nghĩa khi tab
+             chưa có trang nào. -->
         <div v-else-if="empty" class="bpip-empty">
           <Icon
             name="globe"
@@ -108,6 +106,11 @@
           />
           <div class="bpip-emptytext">{{ t('browser.pip.empty') }}</div>
         </div>
+        <BrowserElsewhere
+          v-else-if="elsewhere"
+          :where="activeTab?.shownElsewhere ? 'window' : 'dock'"
+          @takeover="takeOver"
+        />
       </div>
       <!-- Tay resize nằm TRÊN khung DOM 5px của card (padding phải/dưới), không
            chồng lên .bpip-view — view native vẽ trên DOM nên bất kỳ handle nào
@@ -176,7 +179,7 @@ const workspace = useWorkspacePanel()
 const sessions = useSessionsStore()
 
 const viewportEl = useTemplateRef<HTMLElement>('viewportEl')
-const { available, activeTab, error, empty, elsewhere, holding, popout, reload, takeOver } =
+const { available, activeTab, error, empty, elsewhere, holding, frozen, popout, reload, takeOver } =
   useEmbeddedBrowser({
     viewport: viewportEl,
     // Card chỉ giữ view khi mở VÀ không thu nhỏ — v-if gỡ viewport el khỏi DOM
@@ -270,9 +273,9 @@ const onBarDblclick = (ev: MouseEvent): void => {
   returnToPanel()
 }
 
-// "Trả về panel" là đóng hệ thống (closePip, KHÔNG dismissed): người dùng chuyển
-// chỗ hiển thị chứ không gạt PiP — nếu sau đó view lại mồ côi thì auto-open được
-// phép đưa card quay lại. toggleView là TOGGLE nên phải kiểm openViews trước.
+// "Trả về panel" = đóng card + mở lại view Browser trong dock: người dùng chuyển
+// chỗ hiển thị chứ không bỏ trang. toggleView là TOGGLE nên phải kiểm openViews
+// trước — view đang mở sẵn thì gọi toggle là đóng nó đi.
 const returnToPanel = (): void => {
   closePip()
   if (!workspace.openViews.value.includes('Browser')) workspace.toggleView('Browser')
@@ -518,6 +521,16 @@ const onResizeKeydown = (ev: KeyboardEvent): void => {
   position: relative;
   overflow: hidden;
   background: var(--bg);
+}
+/* Frame đông cứng trong lúc một overlay DOM bắt view native ẩn (menu ⋯/⋮ của
+   chính card, dialog import…) — cùng cơ chế `frozen` của useEmbeddedBrowser. */
+.bpip-frozen {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
 }
 .bpip-empty {
   display: flex;

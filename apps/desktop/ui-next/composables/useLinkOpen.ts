@@ -96,7 +96,6 @@ export function useLinkOpen() {
     // Guard host vẫn chạy đồng bộ ở main trước khi trả về, nên URL bị chặn
     // (loopback/IP private/không trong allowlist) vẫn ném về đây — và phải NÓI RA:
     // người dùng vừa bấm và chọn "mở trong app", im lặng thì họ tưởng app treo.
-    const { openViews, toggleView } = useWorkspacePanel()
     const sessions = useSessionsStore()
     const inSession = !!sessions.active
     const failed = (err: unknown): void => {
@@ -108,18 +107,19 @@ export function useLinkOpen() {
       })
     }
 
-    // TRONG SESSION: mở khung TRƯỚC, không await gì cả.
+    // TRONG SESSION: link → MỘT TAB MỚI trên main tab strip (session-main-tabs),
+    // ngang hàng "Trao đổi" — KHÔNG còn đường mở view Browser của dock nữa (dock
+    // vẫn mở tay được để xem song song, nhưng click-link không qua đó).
     //
-    // Mở view Browser là việc thuần renderer (`toggleView` → SessionDetail), nên nó
-    // xảy ra ngay trong cú bấm. Tạo tab bắn sau và KHÔNG chặn: dù `newTab` mất bao
-    // lâu — hay bản main đang chạy còn là bản cũ vẫn await `loadURL` — khung vẫn
-    // hiện tức thì, và trang điền vào sau. Đây là thứ tự người dùng yêu cầu: "nhấn
-    // link mở browser luôn, load url là phần sau".
+    // Thứ tự giữ nguyên quyết định cũ "mở khung trước, tải sau": `newTab` bắn với
+    // `wait:false` và việc PIN tab mới lên strip nằm trong `.then` — strip vẽ
+    // spinner ngay khi `changed` về, trang điền vào sau. Guard host của main vẫn
+    // ném đồng bộ → toast báo lỗi thay vì im lặng.
     if (inSession) {
-      if (!openViews.value.includes('Browser')) toggleView('Browser')
+      const scope = sessions.active?.engineId
       // Tab phải sinh TRONG SCOPE của session đang xem — bỏ trống là nó rơi vào
-      // pool global, và chính view Browser vừa mở sẽ không bao giờ thấy tab này.
-      api.newTab(url, { wait: false, scope: sessions.active?.engineId }).catch(failed)
+      // pool global, và strip của session sẽ không bao giờ thấy tab này.
+      void useSessionMainTabs().openBrowserTab(scope, url).catch(failed)
       return
     }
 

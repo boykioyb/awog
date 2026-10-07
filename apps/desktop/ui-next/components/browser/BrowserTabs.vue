@@ -10,6 +10,7 @@
       :class="{ on: tab.tabId === activeTabId }"
       :title="tab.url || tabLabel(tab)"
       @click="emit('select-tab', tab.tabId)"
+      @contextmenu="emit('tab-menu', { tab, ev: $event })"
     >
       <!-- Loading thì spinner che chỗ favicon — đúng nơi mắt đang nhìn. -->
       <Icon
@@ -61,6 +62,10 @@ const emit = defineEmits<{
   'select-tab': [tabId: string]
   'close-tab': [tabId: string]
   'new-tab': []
+  // Chuột phải trên một tab — bề mặt chứa quyết định menu (reload/duplicate/
+  // đóng theo vị trí) vì nó ôm useEmbeddedBrowser. Event đi nguyên vẹn để menu
+  // neo đúng con trỏ.
+  'tab-menu': [payload: { tab: AwogBrowserTab; ev: MouseEvent }]
 }>()
 
 const { t } = useI18n()

@@ -10,12 +10,6 @@ import { ref } from 'vue'
 // watcher in SessionDetail (the ref identity changes each call).
 const requested = ref<{ view: string; nonce: number } | null>(null)
 const openViews = ref<string[]>([])
-// View Browser có đang là tab ACTIVE của dock trong session đang hiển thị không.
-// Khác với openViews (danh sách view mở, kể cả tab bị park): cờ này nói "panel
-// đang THỰC SỰ hiển thị trang" — auto-PiP gate theo nó, vì một tab Browser đang
-// park hay một session bị KeepAlive giấu đi đều không "che" trang, và card vẫn
-// được phép hiện ở đúng lúc đó (đúng semantics Codex).
-const browserActive = ref(false)
 
 export function useWorkspacePanel() {
   function toggleView(view: string): void {
@@ -24,8 +18,5 @@ export function useWorkspacePanel() {
   function publishOpenViews(views: string[]): void {
     openViews.value = [...views]
   }
-  function publishBrowserActive(v: boolean): void {
-    browserActive.value = v
-  }
-  return { requested, openViews, browserActive, toggleView, publishOpenViews, publishBrowserActive }
+  return { requested, openViews, toggleView, publishOpenViews }
 }

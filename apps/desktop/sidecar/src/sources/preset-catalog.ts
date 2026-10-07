@@ -62,7 +62,8 @@ function base(m: PresetMeta, enabled: boolean): PresetBase {
     timeoutMs: DEFAULT_TIMEOUT_MS,
     trust: 'prompt',
   }
-  if (m.icon) b.icon = m.icon
+  // `meta.icon` (emoji) stays picker-only: a persisted source resolves its real
+  // mark through icon.ts (favicon/brand), not a baked-in emoji.
   return b
 }
 
@@ -135,12 +136,12 @@ export const PRESET_CATALOG: Record<string, PresetEntry> = {
       tagline: 'Channels, messages, and files',
       icon: '💬',
       setupHint:
-        'Connect via OAuth from the connection detail after saving. Verify the MCP URL against Slack’s current docs — provider-OAuth specifics vary.',
+        'Slack has no dynamic client registration — create a Slack app (api.slack.com/apps) and enter its Client ID + Client Secret when connecting.',
     },
     build: (m) => ({
       ...base(m, false),
       type: 'mcp',
-      mcp: { transport: 'http', url: 'https://mcp.slack.com', authType: 'oauth' },
+      mcp: { transport: 'http', url: 'https://mcp.slack.com/mcp', authType: 'oauth' },
     }),
   },
 

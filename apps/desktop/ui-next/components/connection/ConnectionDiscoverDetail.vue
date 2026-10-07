@@ -64,9 +64,14 @@
 
     <div class="cdd-actions">
       <span class="cdd-hint">{{ t('connectionsDiscover.detail.verifyHint') }}</span>
-      <button v-if="installable" type="button" class="cdd-use" @click="emit('use', entry.id)">
-        {{ t('connectionsDiscover.detail.use') }}
-      </button>
+      <div v-if="installable" class="cdd-btns">
+        <button type="button" class="cdd-link" @click="emit('use', entry.id)">
+          {{ t('connectionsDiscover.detail.customize') }}
+        </button>
+        <button type="button" class="cdd-use" @click="emit('connect', entry)">
+          {{ t('connectionsDiscover.detail.connect') }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -76,9 +81,14 @@
 //
 // Đây là chỗ duy nhất mà nội dung bên thứ ba được trình bày đầy đủ trước khi nó
 // chạm vào bất cứ thứ gì: lệnh + toàn bộ argument, hoặc URL, kèm danh sách biến
-// môi trường (gieo rỗng) và khoá bí mật sẽ phải tự điền. Bấm "Dùng cái này" CHỈ
-// mở ConnectionEditor với bản nháp — vẫn còn một lần bấm Lưu nữa mới có gì được
-// ghi xuống đĩa, và không có gì được spawn cho tới khi người dùng Test.
+// môi trường (gieo rỗng) và khoá bí mật sẽ phải tự điền.
+//
+// Hai đường ra:
+//  - "Kết nối" (`connect`): quick-connect — upsert → hỏi đúng các khoá còn thiếu
+//    → test → OAuth nếu cần, không qua editor. Vẫn không có gì được ghi/spawn
+//    cho tới cú bấm này.
+//  - "Tuỳ chỉnh" (`use`): mở ConnectionEditor với bản nháp để sửa tay trước khi
+//    lưu — đường cũ, giữ nguyên cho use-case nâng cao.
 import { computed } from 'vue'
 import { useI18n } from '~/composables/useI18n'
 import type { RegistryEntry } from '~/stores/connections'
@@ -87,6 +97,7 @@ const props = defineProps<{ entry: RegistryEntry }>()
 const emit = defineEmits<{
   back: []
   use: [id: string]
+  connect: [entry: RegistryEntry]
 }>()
 
 const { t } = useI18n()
@@ -241,6 +252,12 @@ const openRepo = () => {
   gap: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
+}
+.cdd-btns {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
 }
 .cdd-hint {
   font-size: var(--fs-xs);

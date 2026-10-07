@@ -5,6 +5,7 @@
        tính năng người dùng chưa dùng. -->
   <span v-if="visible" class="iwrap">
     <button
+      ref="chipEl"
       type="button"
       class="ctxchip"
       :class="{
@@ -22,9 +23,9 @@
       <Icon name="chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
     </button>
 
-    <template v-if="open">
-      <div class="ibackdrop" @click="open = false" />
-      <div class="pop ipop" @click.stop>
+    <Teleport to="body">
+      <div v-if="open" class="ibackdrop" @click="open = false" />
+      <div v-if="open" ref="popEl" class="pop ipop" :style="popStyle" @click.stop>
         <div class="pl">
           <span>{{ t('infra.pop.title') }}</span>
           <span v-if="pinned && isProd" class="ibadge prod">{{ t('infra.pop.prod') }}</span>
@@ -108,7 +109,7 @@
           <p v-if="identityError" class="ierr">{{ identityError }}</p>
         </template>
       </div>
-    </template>
+    </Teleport>
   </span>
 </template>
 
@@ -132,6 +133,7 @@
 import type { Session } from '~/composables/useSessionsData'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { InfraContext } from '~/types'
+import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
 
 const props = defineProps<{ session: Session }>()
 
@@ -237,6 +239,11 @@ const identityRunning = ref(false)
 const saveError = ref<string | null>(null)
 
 const open = ref(false)
+// Chip đứng trên hàng header `.dh`, có thể sát mép phải — neo `fixed` + kẹp
+// viewport thay vì `absolute` trong `.iwrap` (thò ra ngoài là bị cắt).
+const chipEl = ref<HTMLElement | null>(null)
+const popEl = ref<HTMLElement | null>(null)
+const { style: popStyle } = usePopoverAnchor(chipEl, popEl, open)
 
 // "Đã BẬT cho phiên này" = có profile hoặc region ghim. Công tắc on/off của chip
 // phản chiếu đúng trạng thái này (không thêm state riêng): tắt thì xoá field AWS
