@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.40.2',
+    date: '2026-10-07',
+    highlight: {
+      en: 'Smoother chat: no more answers written twice, follow-up suggestions sit at the end of the reply, and the / and @ menus behave as you type.',
+      vi: 'Trò chuyện mượt hơn: không còn câu trả lời bị viết hai lần, gợi ý câu hỏi tiếp nằm ở cuối câu trả lời, và menu / với @ phản ứng đúng khi bạn gõ.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'The assistant no longer repeats its whole answer a second time after offering follow-up suggestions, and a Claude reply no longer hangs at the end of a turn waiting for a suggestion that never comes.',
+        vi: 'Trợ lý không còn viết lại toàn bộ câu trả lời lần hai sau khi đưa gợi ý câu hỏi tiếp, và lượt trả lời của Claude không còn bị treo ở cuối lượt để chờ một gợi ý không bao giờ tới.',
+      },
+      {
+        kind: 'improved',
+        en: 'Follow-up suggestion chips now appear at the very end of the reply, and only once the turn has finished.',
+        vi: 'Các chip gợi ý câu hỏi tiếp nay hiện ở cuối cùng của câu trả lời, và chỉ khi lượt đã kết thúc.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The / command and @ mention menus in the composer now open, filter and insert correctly wherever the cursor is — including when editing the middle of a message.',
+        vi: 'Menu lệnh / và nhắc @ trong ô soạn tin nay mở, lọc và chèn đúng ở bất kỳ vị trí con trỏ nào — kể cả khi sửa giữa tin nhắn.',
+      },
+      {
+        kind: 'added',
+        en: 'Find (⌘F) now works inside the full-screen view of a single turn.',
+        vi: 'Tìm kiếm (⌘F) nay dùng được trong chế độ xem toàn màn hình của một lượt.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The search box in find bars is back to its normal width.',
+        vi: 'Ô tìm kiếm trong thanh tìm đã trở lại độ rộng bình thường.',
+      },
+    ],
+  },
+  {
     version: '0.40.1',
     date: '2026-10-05',
     highlight: {
