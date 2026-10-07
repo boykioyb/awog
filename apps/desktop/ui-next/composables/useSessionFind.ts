@@ -243,6 +243,10 @@ export function useSessionFind(options: {
     // handler runs on bubble) and Monaco / xterm inside the workspace panel. The
     // composer textarea is NOT one of them — browser-find is useless there (AC-F18/19).
     if (preview.current.value) return
+    // Defer to a turn-fullscreen overlay on top — it wires its own ⌘F (SessionTurnFullscreen,
+    // teleported to <body> so it's outside this detail's subtree). Without this, both capture
+    // listeners fire and the transcript find opens behind the overlay.
+    if (document.querySelector('.ftovl')) return
     const el = document.activeElement
     if (el instanceof HTMLElement && el.closest('.monaco-editor, .xterm')) return
     e.preventDefault()

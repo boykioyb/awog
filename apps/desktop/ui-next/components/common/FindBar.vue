@@ -4,7 +4,8 @@
     <Input
       ref="inputRef"
       v-model="query"
-      :class="{ noresult }"
+      unstyled
+      :class="['pvfinput', { noresult }]"
       spellcheck="false"
       :placeholder="placeholder"
       @keydown.enter.prevent="onEnter"

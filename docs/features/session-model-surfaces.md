@@ -37,7 +37,7 @@ Tất cả đều **chỉ có trong chat session** (Pi: gate `ToolFilter.chatSes
 | `mark_chapter` | `title`, `summary?` | vạch phân chương trong transcript + một mục trong menu chương |
 | `send_user_file` | `files: string[]`, `caption?` | card file bấm mở được |
 | `suggest_task` | `title`, `prompt`, `tldr` | chip "việc ngoài phạm vi", bấm là mở phiên mới |
-| `suggest_followups` | `options: string[]` (2–3) | chip câu tiếp dưới câu trả lời cuối |
+| `suggest_followups` | `options: string[]` (2–3) | chip câu tiếp, **luôn vẽ ở cuối message** dù model gọi tool **trước** câu trả lời cuối (xem hợp đồng thứ tự ở #34) |
 | `report_findings` | `findings: Finding[]`, `scope?` | danh sách findings nặng-trước, mỗi dòng mở đúng file |
 
 ### #24 — Chương + mục lục
@@ -74,7 +74,101 @@ Tất cả đều **chỉ có trong chat session** (Pi: gate `ToolFilter.chatSes
 
 **Giá phải trả, nói thẳng:** độ phủ phụ thuộc việc model chịu gọi tool. Sẽ có lượt không có gợi ý nào. Đó là đánh đổi có chủ đích — thà không có thanh gợi ý còn hơn ba cái chip vô nghĩa, và mô tả tool nói đúng câu đó. Nếu sau này đo được độ phủ quá thấp, cần tăng bằng **prompt** (`runtime/prompts.ts`, ngoài phạm vi gói này), không phải bằng heuristic.
 
-Vòng đời: chips **chỉ hiện ở message CUỐI** (`isLastMessage` tính ở `SessionMessageItem`) và **biến mất ngay khi người dùng gõ** (`store.active.draft` không rỗng). Bấm → `store.seedComposer(text)` (composer của phiên hiện tại đang mount, không có race) → người dùng đọc/sửa rồi gửi; không bao giờ tự gửi lượt.
+Vòng đời: chips **luôn vẽ ở CUỐI message** bất kể surface `followups` nằm ở đâu trong `parts` (xem hợp đồng thứ tự ngay dưới), **chỉ hiện ở message CUỐI** (`isLastMessage` tính ở `SessionMessageItem`), **chỉ hiện khi lượt đã kết thúc** (message không còn `streaming`) và **biến mất ngay khi người dùng gõ** (`store.active.draft` không rỗng). Bấm → `store.seedComposer(text)` (composer của phiên hiện tại đang mount, không có race) → người dùng đọc/sửa rồi gửi; không bao giờ tự gửi lượt.
+
+> Lưu ý đặt tên: `followups` trong `SessionComposer.vue` / `Session.followups` / `SessionTextBlock.vue` là **trích dẫn của người dùng** (quote để hỏi tiếp), KHÔNG phải surface `suggest_followups`. Sửa ở đây không đụng tới chúng.
+
+#### Hợp đồng thứ tự: gọi `suggest_followups` TRƯỚC câu trả lời cuối
+
+Đây là bản vá lỗi "câu trả lời bị lặp hai lần" (P1, nhánh `fix/followups-duplicate-answer`, PO chốt hướng "đảo thứ tự" ngày 2026-10-06).
+
+**Hiện tượng (đo trên dữ liệu thật).** Phiên `261006-coral-dune-kol` (provider `anthropic`, model `claude-opus-5-5`, nhánh Claude SDK): cả 2 message của agent có `parts` = text (câu trả lời đầy đủ, 5288 / 8881 ký tự) → surface `followups` → text (**viết lại TOÀN BỘ** câu trả lời bằng câu chữ khác, 4843 / 8770 ký tự). Transcript CLI tương ứng không có lời nhắc nào chen giữa tool result và bản viết lại (chỉ có hook PostToolUse trả `{}` cùng `total_tokens_reminder`), tức là model **tự** viết lại.
+
+Quét toàn bộ `~/.awog/sessions/*` trên máy đo, chỉ tính message có `followups` (đây là baseline TRƯỚC bản vá):
+
+| Model | Message | Viết lại cả bài | Đuôi thừa | Sạch |
+|---|---|---|---|---|
+| `claude-opus-5-5` | 30 | 4 | 18 (kiểu "Bên dưới có gợi ý các bước tiếp theo.") | 8 |
+| `claude-opus-4-8` | 342 | 0 | 48 (3 đuôi ~600 ký tự + 45 đuôi ngắn) | 294 (≈ 86%) |
+
+**Hai cơ chế đẩy model viết thêm sau tool:**
+
+1. **Prompt tự mâu thuẫn** (đọc thẳng được trong code). Mô tả tool (`SURFACE_TOOL_TEXT.suggestFollowups.description`) bảo gọi *"as the LAST tool call of your reply"* ⇒ model viết câu trả lời trước rồi mới gọi tool. Kết quả tool (*"Offered N follow-up prompt(s) under your answer. Do not list them again in your text."*) vừa gieo cụm "under your answer" (nguồn của câu đuôi "Bên dưới có gợi ý…") vừa ngụ ý sắp có thêm text. **Đính chính ([ADR 0096](../decisions/0096-followups-before-final-answer.md)):** bản đầu của spec xếp cả `COMMUNICATION_PROMPT` (`runtime/prompts.ts`, chia văn bản thành *"WHILE YOU WORK — your text between tool calls"* và *"THE FINAL MESSAGE"*) vào cơ chế này. Nhưng block đó **chỉ có ở nhánh Pi**; nhánh Claude SDK cố ý không gửi nó vì preset `claude_code` đã có hợp đồng output riêng (`runtime/claude-sdk/run-stream.ts:461-466`). Phiên lỗi chạy trên nhánh SDK ⇒ ở đó cơ chế 1 chỉ gồm mô tả tool + kết quả tool.
+2. **CLI ép viết tiếp** — **đây là suy luận từ đúng 1 lần tái hiện, chưa phải sự thật đã chứng minh.** Binary CLI của Agent SDK 0.3.280 có chứa hằng `"[Your previous response had no visible output. Please continue and produce a user-visible response.]"`. Tái hiện được 1 lần trên nhánh SDK: model viết câu trả lời → gọi `suggest_followups` → kết thúc lượt mà không có text ⇒ CLI chèn lời nhắc trên ⇒ model viết lại. Chưa đọc logic điều kiện của CLI (khi nào thì coi là "no visible output", text đứng trước tool call có được tính không). Tiêu chí đo AC-FU-M3 bên dưới chính là để kiểm giả thuyết này.
+
+**Hợp đồng mới:**
+
+1. **Thời điểm gọi.** Model gọi `suggest_followups` **ngay trước khi viết câu trả lời cuối**, tức là khi việc đã xong và model **đã biết mình sẽ kết luận gì**, chỉ còn bước viết ra. Không gọi khi còn đang làm việc.
+2. **Câu trả lời cuối = text sau tool call cuối cùng của lượt.** Định nghĩa này trùng với `finalResponseIndex` (`utils/session-turns.ts`) đang dùng, và khớp với cách CLI hiểu "final message" (và cả `COMMUNICATION_PROMPT` ở nhánh Pi). Hợp đồng mới đi **xuôi** với cả ba, thay vì ngược. `COMMUNICATION_PROMPT` vì vậy **không** sửa ([ADR 0096](../decisions/0096-followups-before-final-answer.md) D2).
+3. **Kết quả tool** là một câu xác nhận ngắn, **không nhắc tới chip / gợi ý / vị trí của chúng** (PO siết thêm: cấm cả việc *nhắc tới*, không chỉ cấm *liệt kê lại*, vì model hay chép lời nhắc thành câu đuôi "Bên dưới có gợi ý…"). Câu đó bảo model viết câu trả lời cuối và **không mời viết lại** câu trả lời đã có; với ca model đã lỡ viết câu trả lời trước khi gọi, nó cấm viết lần hai nhưng bắt kết bằng một câu ngắn (để lượt vẫn có text sau tool result). Câu chữ nguyên văn chốt ở [ADR 0096](../decisions/0096-followups-before-final-answer.md) D1, là hằng `SURFACE_TOOL_TEXT.suggestFollowups.recorded`.
+4. **Hiển thị.** UI **luôn** vẽ chip ở **cuối** message, bất kể surface `followups` nằm ở vị trí nào trong `parts`. Không làm vậy thì khi model gọi tool trước, chip sẽ nằm TRÊN câu trả lời. Đây là việc của lớp hiển thị và phải phủ đủ ba bề mặt: transcript (`SessionMessageItem.vue`), fullscreen (`SessionTurnFullscreen.vue`), export (`useSessionExport.ts`). Việc này **không** đổi thứ tự `parts` trên đĩa và **không** ghi lại JSONL.
+5. **Chip chỉ hiện và bấm được khi lượt đã kết thúc** (`streaming` = false). Đây là điều kiện thêm bên cạnh `isLastMessage`; cổng đặt ở computed `grouped` của `SessionMessageItem` (không phát group chip khi `streaming`), không ở `SessionFollowupSuggestions` — xem [ADR 0096](../decisions/0096-followups-before-final-answer.md) D3 mục 3. Lý do: theo hợp đồng mới, chip tới TRƯỚC câu trả lời, nên trong lúc text cuối còn đang stream thì chip đã có trong `parts` rồi; bấm vào lúc đó nghĩa là chọn câu tiếp trước khi đọc xong câu trả lời.
+6. **Một nguồn text cho hai runtime.** Mô tả tool và kết quả tool nằm ở `SURFACE_TOOL_TEXT` + `runSuggestFollowups`, cả nhánh Pi lẫn nhánh Claude SDK cùng dùng (§4) ⇒ hai nhánh đổi cùng lúc, không có bản thứ hai.
+7. **Phiên cũ khi resume nhận hợp đồng mới ngay**, vì mô tả tool đi theo định nghĩa tool của từng request chứ không nằm trong `systemPrompt.append` bị đóng băng (§4).
+
+**Vì sao KHÔNG chọn "bảo model dừng hẳn sau `suggest_followups`".** Phương án trực giác là giữ thứ tự cũ (trả lời → tool) và cấm viết thêm sau tool. Loại, vì ba lý do:
+
+- (a) Theo cơ chế 2, lượt kết thúc bằng một tool call mà không có text chính là điều kiện để CLI chèn lời nhắc "no visible output". Làm vậy chỉ chuyển việc ép viết lại từ prompt sang CLI, lỗi vẫn còn nguyên.
+- (b) Nó đi ngược `finalResponseIndex` (và `COMMUNICATION_PROMPT` ở nhánh Pi), vì cả hai đều coi text đứng trước tool call là text tiến độ.
+- (c) Logic của CLI nằm ngoài tầm điều khiển của AWOG (sửa CLI là ngoài phạm vi).
+
+Kể cả khi cơ chế 2 hoá ra sai (mới chỉ tái hiện được 1 lần), lý do (b) vẫn đứng, nên đảo thứ tự vẫn là hướng đúng.
+
+Cũng ngoài phạm vi (theo PO): dedupe heuristic phía client (cùng họ lỗi "bịa lời cho model" đã loại ở bảng trên), đụng tới `prompt_suggestion` / `sawFollowups` của SDK, và viết lại transcript cũ.
+
+**Rủi ro còn lại, nói thẳng:**
+
+- **Độ phủ có thể giảm.** Gọi tool trước khi viết buộc model phải quyết định sớm hơn ⇒ đo bằng AC-FU-M4.
+- **Model vẫn giữ thói quen cũ** (viết trước rồi mới gọi tool). Kết quả tool là lưới thứ hai. Nhưng nếu kết quả tool chỉ bảo "đã viết rồi thì đừng viết lại", lượt sẽ lại kết thúc mà không có text ⇒ có thể kích hoạt cơ chế 2. Đã chốt (OQ-FU-4, [ADR 0096](../decisions/0096-followups-before-final-answer.md) D1): cấm viết lần hai **và** bắt kết bằng một câu ngắn; còn sót thì M1/M3 bắt được.
+- **Model gọi thêm tool khác SAU `suggest_followups`** (phát hiện ra vẫn còn việc) ⇒ chip có thể lỗi thời so với kết luận thật. Chấp nhận rủi ro này, không thêm guard (YAGNI); nếu đo thấy thì xử lý sau.
+
+#### Acceptance criteria — hợp đồng thứ tự (#34)
+
+Hành vi (kiểm được bằng test / review):
+
+- **AC-FU-1 — Chip ở cuối, transcript thường, dữ liệu theo thứ tự mới.** *Given* message assistant cuối cùng của phiên, lượt đã kết thúc, draft rỗng, `parts` = [step…, surface `followups`, text B]. *When* transcript render. *Then* chip được vẽ sau text B (là phần tử cuối của thân message), và text B hiện thành câu trả lời chính (không bị gom vào nhóm activities).
+- **AC-FU-2 — Chip ở cuối, fullscreen.** *Given* cùng message đó được mở ở `SessionTurnFullscreen`. *When* overlay render. *Then* không có chip nào nằm giữa hay phía trên các khối text; nếu chip được vẽ thì nó là phần tử cuối. (Fullscreen truyền cứng `is-last="false"` nên chip không hiện ở đây — **giữ ẩn**, đã chốt ở OQ-FU-1.)
+- **AC-FU-3 — Chip ở cuối, export.** *Given* một message có surface `followups` ở bất kỳ vị trí nào trong `parts`. *When* export markdown/HTML. *Then* dòng `_Suggested next:_ …` là dòng cuối của phần nội dung message đó.
+- **AC-FU-4 — Chip ẩn khi lượt còn chạy.** *Given* lượt đang chạy (`streaming` = true) và surface `followups` đã tới. *When* text cuối đang stream, HOẶC có tool khác đang chạy, HOẶC lượt đang dừng chờ một gate (AskUserQuestion / permission). *Then* chip không hiện và không bấm được. *When* lượt kết thúc (`streaming` = false), message vẫn là message cuối và draft rỗng. *Then* chip hiện ở cuối message.
+- **AC-FU-5 — Message cũ vẫn hiện chip ở cuối.** *Given* JSONL lưu trước bản vá có `parts` = [text A, surface `followups`, text B] (ca lặp câu trả lời). *When* mở lại phiên (reload / restart app / popout). *Then* chip hiện ở cuối message (sau B), file JSONL không bị ghi lại. Bản viết lại B vẫn hiển thị như cũ (không dedupe, ngoài phạm vi).
+- **AC-FU-6 — Mô tả tool nói đúng thời điểm gọi.** *Given* định nghĩa tool `suggest_followups` gửi cho model. *Then* mô tả nói gọi **ngay trước khi viết câu trả lời cuối, khi đã biết mình sẽ kết luận gì**, và không còn câu "as the LAST tool call of your reply" hay bất kỳ câu nào bảo gọi tool sau khi đã viết câu trả lời.
+- **AC-FU-7 — Kết quả tool không mời model viết lại.** *Given* một lời gọi hợp lệ. *When* tool trả kết quả. *Then* text kết quả (a) không nhắc tới chip, gợi ý, hay vị trí của chúng (không có "under your answer", "below", "shown"…); (b) không chứa lời mời viết lại, tóm tắt lại hay nhắc lại câu trả lời; (c) bảo model viết câu trả lời cuối. Kiểm bằng unit test trên chuỗi trả về của `runSuggestFollowups`.
+- **AC-FU-8 — Nhánh Pi dùng chung text.** *Given* provider khác `anthropic` (nhánh Pi). *Then* mô tả tool và text kết quả **giống từng byte** với nhánh Claude SDK, vì cùng lấy từ `SURFACE_TOOL_TEXT` / `runSuggestFollowups`; không có chuỗi nào riêng cho Pi.
+- **AC-FU-9 — Gọi lần 2 trong một lượt vẫn bị từ chối.** *Given* model đã gọi `suggest_followups` hợp lệ một lần trong lượt. *When* nó gọi lần 2. *Then* kết quả là `isError` với câu từ chối như cũ ("already offered in this reply"), không sinh surface thứ hai, và hàng đó render thành tool row lỗi (không bị đưa xuống cuối như chip).
+- **AC-FU-10 — Hành vi cũ giữ nguyên.** Chip vẫn chỉ hiện ở message cuối của phiên; vẫn biến mất khi người dùng bắt đầu gõ; bấm vẫn chỉ seed composer của đúng phiên (chế độ lưới), không tự gửi lượt. Gợi ý `prompt_suggestion` của SDK vẫn chỉ hiện khi model không tự gọi tool (`sawFollowups`), và khi hiện thì cũng nằm ở cuối message.
+
+Đo thủ công sau merge (**không** chặn merge bằng CI; QA/PO đo trên phiên thật, dùng đúng cách quét như baseline ở trên):
+
+- **AC-FU-M1 — opus-5-5.** Trên ≥ 30 message **mới** có `followups` **do tool sinh** (part id `toolu_*`, không tính chip `prompt_suggestion` id `suggest-*` của SDK) của `claude-opus-5-5`: 0 message viết lại cả bài; đuôi thừa ≤ 5%.
+- **AC-FU-M2 — opus-4-8.** Tỉ lệ message sạch của `claude-opus-4-8` ≥ 86%, **chỉ tính message có `followups` do tool sinh** — baseline 294/342 gộp cả chip SDK nên gần như đạt sẵn bất kể bản vá; phải phân loại lại baseline theo cùng bộ lọc ở T8.
+- **AC-FU-M3 — Không còn lời nhắc của CLI.** Không có chuỗi `[Your previous response had no visible output` trong transcript CLI (`~/.claude/projects/…/*.jsonl`) của các phiên đo ở M1 và M2.
+- **AC-FU-M4 — Độ phủ.** Tỉ lệ lượt có `followups` **do tool sinh** không giảm quá 20% (tương đối) so với baseline — KHÔNG đo trên "mọi nguồn": 86% part followups là `prompt_suggestion` của SDK, tự hiện khi model không gọi tool nên che mất đúng sự sụt cần bắt. Baseline đã đo ở T6a của [plan](./session-model-surfaces-followups-order.tasks.md): opus-4-8 8,1% (43/532), opus-5-5 84,6% (11/13 — mẫu nhỏ).
+- **AC-FU-M5 — Vị trí chip.** Trên các phiên đo của M1 và M2, kiểm tay: chip luôn ở cuối message trong transcript và export; ở fullscreen thì theo AC-FU-2.
+
+> Cách phân loại khi đo phải **đổi theo hợp đồng mới**. Baseline phân loại theo *text đứng sau surface* (rỗng = sạch, câu ngắn = đuôi thừa, dài = viết lại). Theo hợp đồng mới thì text sau surface **chính là** câu trả lời, nên dùng lại cách cũ sẽ đếm mọi message đúng thành "viết lại". Đã xác nhận (OQ-FU-3): **viết lại** = có ≥ 2 khối text dài mang cùng nội dung (một trước, một sau surface); **đuôi thừa** = có câu nhắc tới chip/gợi ý ở bất kỳ đâu trong message; còn lại = **sạch**.
+
+#### Edge case
+
+| Ca | Hành vi mong đợi |
+|---|---|
+| **Không có text sau chip** — model giữ thói quen cũ, `parts` = [text A, `followups`] | Chip ở cuối (trùng vị trí cũ). A vẫn là câu trả lời chính, vì `finalResponseIndex` không coi block `followups` là việc chặn phía sau. Trên nhánh SDK đây đúng là điều kiện có thể kích hoạt cơ chế 2 ⇒ được AC-FU-M3 bắt. |
+| **Message chỉ có chip** — `parts` = [step…, `followups`], không có text nào | Chip vẫn hiện ở cuối khi lượt đã kết thúc (giữ như hiện tại). Không có bubble câu trả lời. Không coi là lỗi của gói này; lượt không có câu trả lời là chuyện riêng. |
+| **Lượt bị huỷ giữa chừng** — surface đã tới, text cuối chưa xong hoặc chưa bắt đầu | Sau khi huỷ, `streaming` = false ⇒ chip hiện ở cuối như mọi message đã kết thúc (OQ-FU-2). |
+| **Lượt lỗi** — surface đã tới, sau đó có block `error` (thẻ lỗi + nút Thử lại) | Chip hiện ở cuối, **sau** thẻ lỗi (OQ-FU-2). Không thêm cờ "kết thúc bình thường", không đọc `stopReason`. |
+| Model gọi tool khác **sau** `suggest_followups` | Chip vẫn được đưa xuống cuối; có thể lỗi thời so với kết luận. Rủi ro đã chấp nhận (xem trên), không có guard. |
+| Lời gọi bị từ chối (lần 2, hoặc `options` rỗng) | Không phải surface ⇒ render thành tool row lỗi tại chỗ, không đưa xuống cuối (AC-FU-9). |
+| `prompt_suggestion` của SDK tới **sau** `result` | Message có thể đã hết `streaming` trước khi chip tới ⇒ chip xuất hiện muộn một nhịp, ở cuối. Chấp nhận được. |
+| **Nhiều block `followups` trong một message** — lượt dài, mỗi `result` nội bộ của SDK phát một `prompt_suggestion` (đo: 88/375 lượt có chip mang 2–6 block) | Chỉ block `followups` **cuối** được hiện (transcript + export), ở cuối message; các block trước là gợi ý lỗi thời của đoạn trước nên bị bỏ khỏi hiển thị. `parts` trên đĩa giữ nguyên. |
+| Reload / restart / popout / fork | Việc đưa chip xuống cuối thuần tuý là hiển thị, tính lại từ `parts` ⇒ kết quả giống hệt, không cần migration. |
+
+#### Open question (đã chốt 2026-10-06)
+
+Cả bốn đã chốt — bảng quyết định ở [plan](./session-model-surfaces-followups-order.tasks.md#quyết-định-cho-open-question-chốt-2026-10-06), câu chữ ở [ADR 0096](../decisions/0096-followups-before-final-answer.md).
+
+- **OQ-FU-1 — Fullscreen có hiện chip không?** **Giữ ẩn** (phương án a): `SessionTurnFullscreen` vẫn truyền `is-last="false"`. Fullscreen dùng lại `grouped` của `SessionMessageItem` nên thứ tự hiển thị mới tự áp dụng ⇒ không có chip nào giữa/trên text (AC-FU-2).
+- **OQ-FU-2 — Lượt bị huỷ hoặc lỗi có hiện chip không?** **Hiện** (phương án A) khi `streaming` = false; lượt lỗi thì chip nằm **sau** thẻ lỗi. Không thêm cờ "kết thúc bình thường".
+- **OQ-FU-3 — Đo đạc.** Dùng cách phân loại mới (ghi chú dưới AC-FU-M5). QA đo baseline độ phủ M4 **trước khi merge** trên `~/.awog/sessions/*` của máy đo, chỉ tính message tạo trước ngày merge (T6a), đo lại sau merge bằng đúng cách đó (T8).
+- **OQ-FU-4 — Câu chữ kết quả tool.** Chọn phương án (c) trong [ADR 0096](../decisions/0096-followups-before-final-answer.md) D1: cấm viết lần hai **nhưng** bắt kết bằng một câu ngắn — loại (a) vì để lượt rỗng (M3), loại (b) vì mời viết lại ở ca thói quen cũ (M1). Thiết kế UI (hàm `displayBlockOrder` + cổng streaming ở `grouped`) ở D3.
 
 ### #8 — Findings có cấu trúc
 
@@ -173,7 +267,7 @@ Hệ quả (theo hướng tốt, hiếm gặp ở nhánh này): **phiên cũ t�
 
 **Đã:** 4 tool đầu trên **cả hai runtime** (Pi + Claude SDK, §4) + `report_findings` trên nhánh Pi (§6), 3 lớp guard dùng chung, `SessionSurface` trong `types/shared.ts`, map ở `step-mapper.ts` (nhận cả tên trần lẫn tên bridge), fold ở `stores/sessions.ts`, 6 component (`SessionChapterMark`, `SessionChapterNav`, `SessionSharedFiles`, `SessionTaskSuggestion`, `SessionFollowupSuggestions`, `SessionFindings`), i18n en+vi (`sessionsSurfaces.*`).
 
-**Ba bề mặt hiển thị, findings phủ đủ cả ba:** transcript ([SessionMessageItem.vue](../../apps/desktop/ui-next/components/session/SessionMessageItem.vue)), overlay fullscreen một lượt ([SessionTurnFullscreen.vue](../../apps/desktop/ui-next/components/session/SessionTurnFullscreen.vue)), export markdown/HTML ([useSessionExport.ts](../../apps/desktop/ui-next/composables/useSessionExport.ts)). Bốn surface land trước **sót đúng hai chỗ sau** ở lần đầu — không vẽ gì trong fullscreen, biến mất khỏi export — và đã được vá; findings làm đủ cả ba ngay từ đầu vì đó là bài học vừa trả giá. Ngoài app còn **Remote PWA** (`StepRow.vue`), chưa biết `kind: 'surface'` cho **bất kỳ** surface nào.
+**Ba bề mặt hiển thị, findings phủ đủ cả ba:** transcript ([SessionMessageItem.vue](../../apps/desktop/ui-next/components/session/SessionMessageItem.vue)), overlay fullscreen một lượt ([SessionTurnFullscreen.vue](../../apps/desktop/ui-next/components/session/SessionTurnFullscreen.vue)), export markdown/HTML ([useSessionExport.ts](../../apps/desktop/ui-next/composables/useSessionExport.ts)). Bốn surface land trước **sót đúng hai chỗ sau** ở lần đầu — không vẽ gì trong fullscreen, biến mất khỏi export — và đã được vá; findings làm đủ cả ba ngay từ đầu vì đó là bài học vừa trả giá. Cùng bài học đó áp dụng cho việc đưa chip follow-up xuống cuối message (#34, hợp đồng thứ tự): phải sửa đủ cả ba bề mặt trong cùng một thay đổi. Ngoài app còn **Remote PWA** (`StepRow.vue`), chưa biết `kind: 'surface'` cho **bất kỳ** surface nào.
 
 **Chưa (cố ý, ngoài phạm vi sở hữu file của gói này):**
 

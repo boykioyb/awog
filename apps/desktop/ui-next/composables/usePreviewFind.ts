@@ -109,5 +109,9 @@ export function usePreviewFind(getRoot: () => HTMLElement | null) {
     closeFind,
     nextMatch,
     prevMatch,
+    // Re-run against the CURRENT DOM — callers whose search surface mutates outside a
+    // query/match-case change (e.g. a turn still streaming into the fullscreen overlay)
+    // call this on settle to re-wrap marks the re-render wiped.
+    runFind,
   }
 }

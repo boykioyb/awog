@@ -9,6 +9,7 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "check:tokens": "node scripts/check-design-tokens.mjs",
+    "test:unit": "node --test \"utils/__tests__/*.test.mjs\"",
     "katex:inline": "node scripts/inline-katex-fonts.mjs",
     "postinstall": "nuxt prepare && node scripts/inline-katex-fonts.mjs && node scripts/prebundle-monaco.mjs",
     "typecheck": "nuxt typecheck",

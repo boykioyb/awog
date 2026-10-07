@@ -28,7 +28,7 @@ Mỗi command là một file Markdown (YAML frontmatter + body). 4 tier:
 
 ## Expansion (runtime)
 
-- Gõ `/name` trong composer → autocomplete `/` gợi ý (cùng chỗ với session-command `/plan`,`/compact` + skills). Pick → chèn `/id ` (text, KHÔNG dispatch).
+- Gõ `/name` trong composer → autocomplete `/` gợi ý (cùng chỗ với session-command `/plan`,`/compact` + skills). Pick → chèn `/id ` (text, KHÔNG dispatch), con trỏ đứng sau khoảng trắng nên menu đóng và phần gõ tiếp là args. Menu chỉ mở khi con trỏ còn nằm trong token lệnh đầu tin ([composer-trigger-fixes.md](./composer-trigger-fixes.md) R-B1).
 - Khi **gửi** (`SessionComposer.onSend`): nếu draft là `/name [args]` khớp một command **enabled** trong scope (global/claude-user luôn; project/claude-project khi session gắn đúng project) → bung body:
   - `$ARGUMENTS` → toàn bộ phần text sau name.
   - `$1`…`$9` → tham số theo vị trí (tách theo khoảng trắng). Thiếu → rỗng.

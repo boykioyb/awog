@@ -878,7 +878,7 @@ export type SessionSurface =
   | { kind: 'files'; files: SessionSharedFile[]; caption?: string }
   // suggest_task — out-of-scope work, one click away from its own session.
   | { kind: 'suggestion'; title: string; prompt: string; tldr: string }
-  // suggest_followups — 2–3 clickable next prompts under the last reply.
+  // suggest_followups — 2–3 clickable next prompts at the end of the last reply.
   | { kind: 'followups'; options: string[] }
 
 export type SessionStepDetail =

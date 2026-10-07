@@ -147,7 +147,7 @@
         @input="onInput"
         @keydown.down="onAcArrow($event, 1)"
         @keydown.up="onAcArrow($event, -1)"
-        @keydown.esc="closeAutocomplete"
+        @keydown.esc="onEsc"
         @keydown.enter="onEnter"
         @paste="onPaste"
       />
@@ -553,7 +553,7 @@
             class="cicon"
             variant="default"
             size="iconSm"
-            @click="sendNow"
+            @click="send"
           >
             <SendHorizontal />
           </Button>
@@ -659,6 +659,16 @@ import {
   findInvocableCommand,
   expandCommandBody,
 } from '~/utils/slash-command'
+import {
+  mentionTokenAt,
+  removeMention,
+  replaceMention,
+  replaceSlashToken,
+  slashHead,
+  slashTokenAt,
+  slashTokenEnd,
+  type TextEdit,
+} from '~/utils/composer-trigger'
 // Toàn bộ icon composer dùng lucide trực tiếp (proto parity): nét stroke 2 của
 // lucide sắc hơn glyph sprite `<Icon>` ở cỡ 14–16px mà footer/chip/menu cần.
 import {
@@ -1306,21 +1316,47 @@ function pickQueue() {
   void onQueue()
 }
 
-// A draft that IS a built-in invocation carrying an argument (`/browser example.com`).
-// Parsed here, not only in the menu: plain Enter with the autocomplete closed (Esc, or
-// a query that matched nothing) would otherwise SEND the line to the model, and these
-// built-ins are user actions — never prompts. Returns true when it dispatched.
+// A draft that IS a built-in invocation (`/browser example.com`, or `/plan fix bug` via
+// dispatchBareBuiltinDraft). Parsed here, not only in the menu: plain Enter with the
+// autocomplete closed (Esc, args already typed, or a query that matched nothing) would
+// otherwise SEND the line to the model, and built-ins are user actions — never prompts.
+// Returns true when it dispatched.
 function dispatchBuiltinDraft(): boolean {
   const m = /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(draft.value.trim())
-  if (!m) return false
+  if (!m) return dispatchBareBuiltinDraft()
   const cmd = BUILTIN_COMMANDS.find((c) => c.name === m[1] && c.takesArg)
-  if (!cmd) return false
+  if (!cmd) return dispatchBareBuiltinDraft()
   draft.value = ''
   userSizedManually.value = false
   closeAutocomplete()
   onCommand(cmd.id, (m[2] ?? '').trim())
   nextTick(grow)
   return true
+}
+
+// R-B7: built-in KHÔNG đối số gõ tay (`/plan fix bug`) khi menu đã đóng. Trước đây ca
+// này luôn đi qua menu (menu mở với mọi draft bắt đầu `/`); nay menu chỉ mở khi con trỏ
+// còn trong token đầu, nên thiếu nhánh này thì `/plan fix bug` thành prompt gửi model.
+// Khớp CHÍNH XÁC tên (lowercase như query của menu cũ) — tiền tố `/pla` gửi như văn bản.
+// Draft giữ phần sau token, đúng ngữ nghĩa nhánh built-in của applySlash.
+// Trùng tên với user command / skill trong scope (`~/.claude/commands/plan.md`) ⇒ nhường
+// cho thực thể của người dùng: menu liệt kê cả hai hàng, người dùng chọn hàng command
+// thì Enter phải gửi command; built-in vẫn chạy được qua hàng của nó (dispatch theo id).
+function dispatchBareBuiltinDraft(): boolean {
+  const head = slashHead(draft.value)
+  if (!head) return false
+  const name = head.name.toLowerCase()
+  const cmd = BUILTIN_COMMANDS.find((c) => !c.takesArg && c.name === name)
+  if (!cmd || isUserSlashName(head.name)) return false
+  draft.value = head.rest
+  closeAutocomplete()
+  onCommand(cmd.id, '')
+  nextTick(grow)
+  return true
+}
+function isUserSlashName(name: string): boolean {
+  if (findInvocableCommand(data.userCommands.value, name, projectIdRef.value)) return true
+  return data.skills.value.some((s) => s.id === name && inScope(s.source, s.projectId))
 }
 
 // Enter / primary action router: idle → fresh turn; streaming → steer or queue.
@@ -1336,6 +1372,8 @@ function send() {
   void sendNow()
 }
 function onEnter(e: KeyboardEvent) {
+  // R-X4: Enter chốt chữ của IME thuộc về IME — không chọn mục, không gửi.
+  if (isImeKey(e)) return
   // An open autocomplete steals plain Enter to accept the highlighted item (never
   // Shift+Enter — that chord is reserved for the send/newline logic below).
   if (autocomplete.value && !e.shiftKey) {
@@ -1391,12 +1429,22 @@ const RESULT_CAP = 80
 // would hide exactly the commands this list exists to expose. The dropdown scrolls.
 const SLASH_RESULT_CAP = 240
 
-function caretText(): string {
+// Từ khoá của token `/` (đoạn từ sau `/` tới con trỏ) — cùng vai trò với mentionQuery.
+const slashQuery = ref('')
+
+// Con trỏ THU GỌN, hoặc `null` khi có vùng chọn khác rỗng — khi đó coi như không có
+// token tại con trỏ và menu đóng (E12). Toán học token nằm ở utils/composer-trigger.
+function collapsedCaret(): number | null {
   const el = ta.value
-  const v = draft.value
-  if (!el) return v
-  const pos = el.selectionStart ?? v.length
-  return v.slice(0, pos)
+  if (!el || el.selectionStart !== el.selectionEnd) return null
+  return el.selectionStart
+}
+// Text mà con trỏ đang chỉ vào. Trong lúc soạn IME, v-model CHƯA ghi `draft` (Vue bỏ qua
+// input khi `composing`) nhưng selectionStart đã tính trên value thật của textarea ⇒ đọc
+// `draft` sẽ lệch vị trí (`Xem @` + caret 7 ⇒ chèn ra `Xem @@tiny.ts`). Ngoài IME hai
+// nguồn trùng nhau.
+function caretSource(): string {
+  return ta.value?.value ?? draft.value
 }
 
 // In-scope check: global always; project entries only when bound to that project.
@@ -1408,7 +1456,7 @@ function inScope(source: 'global' | 'project' | undefined, projId: string | unde
 // `/` results: built-in commands (dispatched) + user commands + skills (inserted).
 const slashMatches = computed<SlashItem[]>(() => {
   if (autocomplete.value !== 'slash') return []
-  const q = draft.value.slice(1).toLowerCase().split(/\s/)[0] ?? ''
+  const q = slashQuery.value.toLowerCase()
   const builtins: SlashItem[] = BUILTIN_COMMANDS.filter(
     (c) => q === '' || c.name.startsWith(q),
   ).map((c) => ({
@@ -1578,31 +1626,51 @@ const mentionMatches = computed<MentionRow[]>(() => {
   return [...pageRows, ...agents, ...skills, ...wikiRows, ...files].slice(0, RESULT_CAP)
 })
 
-function refreshAutocomplete() {
-  const v = draft.value
-  // Slash: only when the whole draft starts with `/` (a leading command token).
-  if (v.startsWith('/')) {
-    data.ensureCatalogs() // lazy-load user commands + skills on first `/`
-    autocomplete.value = 'slash'
-    if (acIndex.value >= slashMatches.value.length) acIndex.value = 0
-    if (!slashMatches.value.length) autocomplete.value = null
+// R-X1…R-X3: đánh giá menu theo token TẠI CON TRỎ, không theo cả draft.
+// - 'input' (gõ/xoá/dán): được MỞ menu; onInput đã đưa highlight về mục đầu.
+// - 'caret' (selectionchange — click, mũi tên, kéo chọn…): chỉ chạy khi menu ĐANG mở,
+//   tức đóng hoặc lọc lại chứ không bao giờ mở (người dùng chỉ đi ngang một mention cũ
+//   thì không muốn menu bật lên giành phím Enter). Menu đóng ⇒ thoát ngay, nên gõ trong
+//   draft dài không tốn gì thêm. Query không đổi ⇒ giữ highlight (R-X3).
+// Token `/` không chứa khoảng trắng nên không thể đồng thời là token `@`: không có token
+// lệnh thì rơi xuống menu `@` (R-B8 — mention dùng được trong draft có lệnh).
+function refreshAutocomplete(cause: 'input' | 'caret') {
+  if (cause === 'caret' && !autocomplete.value) return
+  const prevKind = autocomplete.value
+  const prevQuery = prevKind === 'slash' ? slashQuery.value : mentionQuery.value
+  const caret = collapsedCaret()
+  const v = caretSource()
+  let kind: Autocomplete = null
+  let query = ''
+  if (caret != null) {
+    const slashQ = slashTokenAt(v, caret)
+    const mention = slashQ == null ? mentionTokenAt(v, caret) : null
+    if (slashQ != null) {
+      kind = 'slash'
+      query = slashQ
+    } else if (mention) {
+      kind = 'mention'
+      query = mention.query
+    }
+  }
+  if (!kind) {
+    autocomplete.value = null
     return
   }
-  // Mention: the caret word starts with `@` (preceded by start-of-line or space).
-  // `:` is part of the token so `@wiki:architecture/…` keeps the menu open while the
-  // user narrows (ADR 0073).
-  const m = /(^|\s)@([\w./:-]*)$/.exec(caretText())
-  if (m) {
+  if (kind === 'slash') {
+    data.ensureCatalogs() // lazy-load user commands + skills on first `/`
+    slashQuery.value = query
+  } else {
     data.ensureCatalogs() // agents + skills
     data.ensureFiles() // workspace file index
     if (!wiki.loaded) void wiki.loadTree() // wiki pages (ADR 0073)
-    mentionQuery.value = m[2] ?? ''
-    autocomplete.value = 'mention'
-    if (acIndex.value >= mentionMatches.value.length) acIndex.value = 0
-    if (!mentionMatches.value.length) autocomplete.value = null
-    return
+    mentionQuery.value = query
   }
-  autocomplete.value = null
+  if (cause === 'caret' && (kind !== prevKind || query !== prevQuery)) acIndex.value = 0
+  autocomplete.value = kind
+  const len = kind === 'slash' ? slashMatches.value.length : mentionMatches.value.length
+  if (acIndex.value >= len) acIndex.value = 0
+  if (!len) autocomplete.value = null
 }
 function closeAutocomplete() {
   autocomplete.value = null
@@ -1612,13 +1680,35 @@ function closeAutocomplete() {
 function onInput() {
   grow()
   acIndex.value = 0
-  refreshAutocomplete()
+  refreshAutocomplete('input')
+}
+
+// Di chuyển con trỏ không qua input: một nguồn `selectionchange` phủ mọi kiểu (click,
+// kéo chọn kể cả thả chuột ngoài textarea, ←/→/Home/End/⌘/⌥, Shift+mũi tên, ⌘A,
+// setSelectionRange bằng code) thay vì giữ danh sách phím. Chốt `activeElement` để chỉ
+// composer đang focus xử lý (lưới / KeepAlive có nhiều instance). Không lặp với
+// onAcArrow: ↑/↓ lúc menu mở đã preventDefault nên con trỏ không đổi, không có event.
+function onSelectionChange() {
+  if (document.activeElement === ta.value) refreshAutocomplete('caret')
+}
+onMounted(() => document.addEventListener('selectionchange', onSelectionChange))
+onBeforeUnmount(() => document.removeEventListener('selectionchange', onSelectionChange))
+
+// R-X4: phím đang thuộc về IME (chốt chữ, chọn ứng viên, huỷ soạn) — composer bỏ qua,
+// KHÔNG preventDefault. Electron là Chromium: keydown trong lúc soạn (kể cả Enter chốt
+// chữ) có isComposing. Gom một chỗ để nếu máy thật lọt thì chỉ thêm `keyCode === 229`.
+function isImeKey(e: KeyboardEvent): boolean {
+  return e.isComposing
+}
+function onEsc(e: KeyboardEvent) {
+  if (isImeKey(e)) return
+  closeAutocomplete()
 }
 
 // Arrow keys cycle the highlighted item while a menu is open (else fall through to
 // default textarea caret movement).
 function onAcArrow(e: KeyboardEvent, dir: 1 | -1) {
-  if (!autocomplete.value) return
+  if (isImeKey(e) || !autocomplete.value) return
   const len =
     autocomplete.value === 'slash' ? slashMatches.value.length : mentionMatches.value.length
   if (!len) return
@@ -1629,77 +1719,93 @@ function acceptActive() {
   if (autocomplete.value === 'slash') applySlash(acIndex.value)
   else if (autocomplete.value === 'mention') applyMention(acIndex.value)
 }
+
+// Gán draft đã biên tập rồi đặt con trỏ tại `edit.caret` (R-B4/R-D3/R-D5). Phải chờ
+// nextTick: draft ghi qua store, Vue patch `el.value` ở lượt render và việc gán value bằng
+// code đẩy con trỏ về cuối. grow() trước setSelectionRange vì `height: auto` có thể reset
+// scrollTop; đặt con trỏ sau cùng để Chromium cuộn nó vào tầm nhìn. Menu đóng trước nên
+// selectionchange do setSelectionRange sinh ra là no-op.
+function applyDraftEdit(edit: TextEdit) {
+  draft.value = edit.text
+  closeAutocomplete()
+  nextTick(() => {
+    const el = ta.value
+    if (!el) return
+    el.focus()
+    grow()
+    el.setSelectionRange(edit.caret, edit.caret)
+  })
+}
+
 function applySlash(i: number) {
   const item = slashMatches.value[i]
   if (!item) return
-  const rest = draft.value.replace(/^\/\S*\s?/, '')
   if (item.kind === 'builtin' && item.builtinId) {
     // Built-ins are actions: strip the typed token and dispatch (no text insert).
     // Built-in có đối số (`/browser <url>`) ăn luôn phần còn lại: đó là tham số, không
     // phải text người dùng còn muốn giữ trong ô soạn.
+    const src = caretSource()
+    const rest = slashHead(src)?.rest ?? src
     const takesArg = findBuiltin(item.builtinId)?.takesArg === true
     draft.value = takesArg ? '' : rest
     closeAutocomplete()
     onCommand(item.builtinId, takesArg ? rest.trim() : '')
-  } else {
-    // User command / skill → insert `/id ` (expanded into the prompt on send).
-    draft.value = `/${item.label} ${rest}`.trimEnd() + (rest ? '' : ' ')
-    closeAutocomplete()
-  }
-  nextTick(() => {
-    ta.value?.focus()
-    grow()
-  })
-}
-function applyMention(i: number) {
-  const item = mentionMatches.value[i]
-  if (!item) return
-  if (item.kind === 'page') {
-    // Hành động, không phải token: gỡ `@…` đang gõ rồi để useBrowserContext chèn khối
-    // context của trang — cùng một nguồn với nút trong chrome của tab Browser.
-    draft.value = draft.value.replace(/(^|\s)@([\w./:-]*)$/, (_m, pre: string) => pre)
-    closeAutocomplete()
-    void browserCtx.attachPage()
     nextTick(() => {
       ta.value?.focus()
       grow()
     })
     return
   }
-  // Replace the caret's `@query` word with the full `@insert` token + trailing space.
-  draft.value = draft.value.replace(
-    // `:` is included so re-typing over a partial `@wiki:arch…` token replaces the
-    // whole thing instead of leaving `@wiki:` behind.
-    /(^|\s)@([\w./:-]*)$/,
-    (_m, pre: string) => `${pre}@${item.insert} `,
-  )
-  closeAutocomplete()
-  nextTick(() => {
-    ta.value?.focus()
-    grow()
-  })
+  // User command / skill / CLI → `/id ` thay token đầu, con trỏ ngay sau khoảng trắng
+  // chèn kèm (không nhảy về cuối) ⇒ menu đóng và gõ tiếp là args (expand lúc gửi).
+  applyDraftEdit(replaceSlashToken(caretSource(), item.label))
+}
+function applyMention(i: number) {
+  const item = mentionMatches.value[i]
+  if (!item) return
+  // Token tính lại TẠI LÚC CHỌN từ con trỏ hiện tại — không regex neo cuối draft, nên
+  // mention ở đầu/giữa câu thay đúng chỗ và các `@…` khác không bị đụng (R-D2).
+  const src = caretSource()
+  const caret = collapsedCaret()
+  const token = caret == null ? null : mentionTokenAt(src, caret)
+  if (!token) {
+    closeAutocomplete()
+    return
+  }
+  if (item.kind === 'page') {
+    // Hành động, không phải token: gỡ `@…` đang gõ rồi để useBrowserContext chèn khối
+    // context của trang — cùng một nguồn với nút trong chrome của tab Browser. Gỡ TRƯỚC
+    // vì insertBlock đọc draft trong store (setter của draft ghi đồng bộ) — R-D5.
+    applyDraftEdit(removeMention(src, token))
+    void browserCtx.attachPage()
+    return
+  }
+  applyDraftEdit(replaceMention(src, token, item.insert))
 }
 
 // ── `+` menu → Insert (proto parity) ──────────────────────────────────────────
 // The autocomplete menus trigger off the character itself, so an Insert item just
 // types the trigger and lets the normal input path open the matching menu — no
 // parallel picker to keep in sync. Focus moves on a macrotask so it wins over the
-// dropdown's own focus-restore-to-trigger on close.
-function refocusDraft() {
+// dropdown's own focus-restore-to-trigger on close. `caret` mặc định là cuối draft.
+function refocusDraft(caret?: number) {
   setTimeout(() => {
     const el = ta.value
     if (!el) return
     el.focus()
-    el.setSelectionRange(el.value.length, el.value.length)
+    const pos = caret ?? el.value.length
+    el.setSelectionRange(pos, pos)
     onInput()
   }, 0)
 }
 function insertSlash() {
   // The slash menu keys on the first token after `/`: an empty draft gets a bare
   // `/`; a typed draft gets `/` prepended so its first word becomes the live
-  // filter (picking a command then replaces that token, keeping the rest).
-  draft.value = draft.value.startsWith('/') ? draft.value : `/${draft.value}`
-  refocusDraft()
+  // filter (picking a command then replaces that token, keeping the rest). Con trỏ
+  // đặt ở cuối token đầu (R-B6) — ở cuối draft thì đã qua khoảng trắng, menu không mở.
+  const next = draft.value.startsWith('/') ? draft.value : `/${draft.value}`
+  draft.value = next
+  refocusDraft(slashTokenEnd(next))
 }
 function insertMention() {
   // The mention regex needs `@` at the caret preceded by start-of-line or space.
@@ -1708,7 +1814,7 @@ function insertMention() {
 }
 
 // Expand a `/command args` draft into the user command's body on send (built-ins
-// are dispatched via the menu, never sent as text). Returns the expanded `text`
+// are dispatched — via the menu or dispatchBuiltinDraft — never sent as text). Returns the expanded `text`
 // for the model plus the `command` invocation for the compact bubble; a
 // non-invocation (or unknown command) passes the raw text through with no command.
 function buildOutgoing(raw: string): { text: string; command?: SlashCommandRef } {

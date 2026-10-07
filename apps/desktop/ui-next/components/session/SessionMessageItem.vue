@@ -31,12 +31,18 @@
         </div>
       </div>
       <!-- Slash command: show the compact invocation, not the expanded body
-           (full body sent to the model lives in message.text, shown on hover). -->
-      <span v-if="message.command" class="ucmd" :title="message.text">
-        <Icon name="commands" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        <span class="ucmd-name">/{{ message.command.name }}</span>
-        <span v-if="message.command.args" class="ucmd-args">{{ message.command.args }}</span>
-      </span>
+           (full body sent to the model lives in message.text, shown on hover).
+           Chip chỉ chứa `/name`; args là văn xuôi ở dòng dưới, render như text thường
+           của bubble để đọc lại được đầy đủ (R-C1/R-C4). -->
+      <template v-if="message.command">
+        <span class="ucmd" :title="message.text">
+          <Icon name="commands" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          <span class="ucmd-name">/{{ message.command.name }}</span>
+        </span>
+        <div v-if="message.command.args" class="ucmd-args">
+          <SessionLinkedText :text="message.command.args" />
+        </div>
+      </template>
       <!-- Tin đến từ NGOÀI phiên (phiên khác gửi, người dùng chuyển tiếp, PR đang
            theo dõi): thân tin nằm trong một khối hàng rào kèm lời dẫn dành cho model.
            In nguyên văn thì người đọc phải lội qua cả bộ khung + một thẻ nonce 48 bit
@@ -244,6 +250,7 @@ import {
   deriveTurnPhase,
   getPreviewText,
   blockRole,
+  displayBlockOrder,
 } from '~/utils/session-turns'
 import { parseFencedMessages } from '~/utils/fenced-message'
 
@@ -384,14 +391,22 @@ const grouped = computed<Grouped[]>(() => {
     const prev = out.findLast((g) => g.type === 'text')
     return prev && WORD_CHAR.test(prev.text.at(-1) ?? '') && CONT_OPENER.test(tail) ? prev : null
   }
-  blocks.forEach((b, bi) => {
+  // Duyệt theo thứ tự HIỂN THỊ (ADR 0096 D3): `followups` dồn xuống cuối, `bi` vẫn là
+  // chỉ số gốc nên blockIndex/key/blockRole không đổi.
+  for (const bi of displayBlockOrder(blocks)) {
+    const b = blocks[bi]
+    if (!b) continue
+    // Chip chỉ là lời mời khi lượt đã kết thúc. Cổng đặt ở đây chứ không ở
+    // SessionFollowupSuggestions: group chip ẩn mà vẫn đứng cuối sẽ cướp caret của
+    // text đang stream và làm autoscroll của fullscreen đọc nhầm group cuối.
+    if (b.kind === 'followups' && props.message.streaming) continue
     // Text run bắt đầu giữa từ = đuôi của prose trước bị step chẻ — dán về
     // group text trước (không flush: step phía sau vẫn vào run đang mở).
     if (b.kind === 'text') {
       const prev = midWordTail(b.text)
       if (prev) {
         prev.text += b.text
-        return
+        continue
       }
     }
     // TodoWrite note steps carry the checklist for the docked SessionTodoPanel. Render
@@ -403,7 +418,7 @@ const grouped = computed<Grouped[]>(() => {
         flush()
         out.push({ key: blockKey(b, bi), type: 'todo', step: b })
       }
-      return
+      continue
     }
     // Collapsible activity = tool step + thinking + intermediate commentary text.
     if (blockRole(b, bi, finalIdx) === 'activity') {
@@ -413,14 +428,14 @@ const grouped = computed<Grouped[]>(() => {
         run.push({ key: blockKey(b, bi), kind: 'thinking', text: b.text })
       else if (b.kind === 'text') run.push({ key: `text-${bi}`, kind: 'text', text: b.text })
       runBlocks.push(b)
-      return
+      continue
     }
     flush()
     if (b.kind === 'error') out.push({ key: blockKey(b, bi), type: 'error', text: b.text })
     else if (b.kind === 'text')
       out.push({ key: `text-${bi}`, type: 'text', text: b.text, blockIndex: bi })
     else out.push({ key: blockKey(b, bi), type: 'gate', gate: b })
-  })
+  }
   flush()
   return out
 })
@@ -966,11 +981,11 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
 </script>
 
 <style scoped>
-/* Slash-command invocation chip in the user bubble — compact `/name args` pill in
-   place of the expanded body (which is still sent to the model). Giữ primary-tint:
+/* Slash-command invocation chip in the user bubble — compact `/name` pill in place
+   of the expanded body (which is still sent to the model); args render below it. Giữ primary-tint:
    nó là "lệnh đã nhận", không phải văn xuôi — đọc trên nền wash vẫn nổi. */
 .ucmd {
-  /* mono-ok: slash command — a literal string the user types */
+  /* mono-ok: tên lệnh là chuỗi người dùng gõ/copy vào CLI */
   font-family: var(--code);
   display: inline-flex;
   align-items: center;
@@ -981,16 +996,24 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
   background: color-mix(in srgb, var(--primary) 10%, transparent);
   border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
   color: var(--primary);
-  vertical-align: middle;
 }
+.ucmd > svg {
+  flex: none;
+}
+/* Tên không bao giờ bẻ dòng (kể cả ở `-`/`:`), tên dài hơn bubble thì cắt `…` ở cuối
+   (R-C2/R-C3). `min-width: 0` là bắt buộc: item flex mặc định `min-width: auto` không
+   chịu co nên không bao giờ ra `…`. */
 .ucmd-name {
   font-weight: 650;
-}
-.ucmd-args {
-  color: var(--foreground);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+/* Args kế thừa font hệ thống, cỡ/leading/màu và `overflow-wrap: anywhere` từ `.mu` —
+   cố ý không khai gì để giống hệt text thường của bubble (R-C4). */
+.ucmd-args {
+  margin-top: 6px;
 }
 
 /* Quote được trích từ reply, in đầu bubble user. Global `.uq` tô nền bằng alpha

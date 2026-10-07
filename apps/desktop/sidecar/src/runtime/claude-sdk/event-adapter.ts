@@ -627,8 +627,10 @@ export function createClaudeEventAdapter(
       }
       // Gợi ý prompt kế tiếp do SDK sinh sau mỗi lượt (`promptSuggestions`). Nó
       // đến SAU message `result` nên chỉ tới nơi nhờ vòng lặp của run-stream còn
-      // chạy tiếp sau `result` (nó đợi `session_state_changed: idle`). Render bằng
-      // đúng surface follow-up sẵn có, một lựa chọn.
+      // chạy tiếp sau `result` (nó đợi `session_state_changed: idle`). Message này
+      // là THỤ ĐỘNG (isPassiveAfterResult ở run-stream) nên không huỷ hạn settle —
+      // CLI không gửi `idle` thì lượt vẫn tự đóng. Render bằng đúng surface
+      // follow-up sẵn có, một lựa chọn.
       case 'prompt_suggestion': {
         const m = msg as { suggestion?: string; uuid?: string }
         const text = typeof m.suggestion === 'string' ? m.suggestion.trim() : ''

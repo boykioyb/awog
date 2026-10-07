@@ -125,8 +125,9 @@ const DEFAULT_BACKGROUND_WAIT_MS = 30 * 60_000
 
 // Grace window after the LAST background task settles: if the CLI doesn't wake the
 // model within it (ambient tasks are skipped, a failed one may produce no
-// continuation), end the turn rather than sit until the cap. Any message cancels it.
-const BACKGROUND_GRACE_MS = 45_000
+// continuation), end the turn rather than sit until the cap. Any message cancels it
+// except the passive ones (isPassiveAfterResult).
+export const BACKGROUND_GRACE_MS = 45_000
 
 // How long we wait, after `result`, for the CLI's authoritative `session_state_changed:
 // idle` before closing stdin ourselves. `result` is NOT turn-over: the CLI can deliver
@@ -135,7 +136,23 @@ const BACKGROUND_GRACE_MS = 45_000
 // this process's live set). Closing on `result` cut those continuations off; see the
 // closeInput comment for what that costs. Short, because on a genuinely finished turn
 // this is dead time before the reply is released.
-const IDLE_SETTLE_MS = 4_000
+export const IDLE_SETTLE_MS = 4_000
+
+// Messages the CLI emits AFTER `result` that say nothing about the model waking up.
+// They must not cancel the post-result settle/grace timers. Everything else —
+// including types this list has never heard of — still counts as activity, because
+// missing a wake-up cuts a continuation off, while missing a passive type only
+// leaves the turn waiting (and the cancel log in the stream loop names the culprit).
+//
+// Lỗi thật đã dẫn tới danh sách này: `promptSuggestions` làm CLI phát
+// `prompt_suggestion` SAU `result`, nó huỷ `idleTimer`, CLI không gửi `idle` ⇒ lượt
+// treo tới khi người dùng bấm Stop. Chỉ xét `type`: mọi `system/*` vẫn là hoạt động
+// (`task_notification` là tiền đề đánh thức thật, tới trước `stream_event` cả TTFT).
+const PASSIVE_AFTER_RESULT = new Set<SDKMessage['type']>(['prompt_suggestion', 'rate_limit_event'])
+
+export function isPassiveAfterResult(msg: SDKMessage): boolean {
+  return PASSIVE_AFTER_RESULT.has(msg.type)
+}
 
 // After the wait cap fires we ask the CLI to stop its own background tasks and wait
 // for their notifications, so the turn ends through the normal `idle` path instead of
@@ -781,8 +798,9 @@ export async function runStreamClaude(
         } finally {
           humanParks -= 1
           // Trả lời xong mà CLI vì lý do nào đó không phát thêm message nào thì lượt
-          // sẽ treo — nên arm lại nhịp settle. Bất kỳ message nào tới cũng huỷ nó
-          // (khối clearTimeout trong vòng lặp), nên đây chỉ là lưới an toàn.
+          // sẽ treo — nên arm lại nhịp settle. Mọi message KHÔNG thụ động tới sau đều
+          // huỷ nó (khối clearTimeout trong vòng lặp, xem isPassiveAfterResult), nên
+          // đây chỉ là lưới an toàn.
           if (sawResult && waitingCount() === 0 && !humanParked()) armIdleSettle()
         }
       }
@@ -970,7 +988,7 @@ export async function runStreamClaude(
   // documents as firing after the held-back result flushes and its background loop
   // exits. `result` is merely "a reply was produced"; the CLI can and does wake the
   // model again afterwards. So `result` only arms a short settle timer (any further
-  // message cancels it) — it never closes stdin directly.
+  // non-passive message cancels it) — it never closes stdin directly.
   //
   // `background_tasks_changed` is a LEVEL signal (replace the set wholesale); the
   // task_started/task_notification bookends are the fallback for a CLI that
@@ -1069,11 +1087,17 @@ export async function runStreamClaude(
     closeInput(`${reason} (tools settled)`)
   }
   // `result` is not turn-over. Wait a beat for `session_state_changed: idle`; if the
-  // CLI wakes the model instead, the next message cancels this and the continuation
-  // streams into the same turn.
+  // CLI wakes the model instead, the next non-passive message cancels this and the
+  // continuation streams into the same turn. Passive messages (isPassiveAfterResult)
+  // leave it alone, so the deadline stays measured from when it was armed.
   const armIdleSettle = (): void => {
     if (idleTimer || closed) return
-    idleTimer = setTimeout(() => closeInput('result, no idle signal'), IDLE_SETTLE_MS)
+    // Gỡ handle khi bắn: close có thể bị defer (tool đang bay), và một handle đã bắn
+    // còn treo ở đây làm message kế tiếp bị log nhầm "settle cancelled".
+    idleTimer = setTimeout(() => {
+      idleTimer = undefined
+      closeInput('result, no idle signal')
+    }, IDLE_SETTLE_MS)
   }
   // Hard cap so a wedged background task can't hold the turn (and the session lock)
   // forever. Honours the per-turn wallclock budget when the caller set one. We don't
@@ -1104,14 +1128,14 @@ export async function runStreamClaude(
   }
   // Every parked task settled but the CLI didn't wake the model (it skips ambient
   // tasks, and a failed task may produce no continuation). Give it a short grace
-  // window — any message cancels it — then end the turn instead of sitting until
-  // the cap.
+  // window — any non-passive message cancels it — then end the turn instead of
+  // sitting until the cap.
   const armGrace = (): void => {
     if (graceTimer || closed || !parked || waitingCount() > 0 || humanParked()) return
-    graceTimer = setTimeout(
-      () => closeInput('background settled, no continuation'),
-      BACKGROUND_GRACE_MS,
-    )
+    graceTimer = setTimeout(() => {
+      graceTimer = undefined
+      closeInput('background settled, no continuation')
+    }, BACKGROUND_GRACE_MS)
   }
   // A user cancel is the one close that cannot wait for a tool call to answer —
   // cancelling IS the point, and the partial reply is persisted as canceled.
@@ -1348,22 +1372,39 @@ export async function runStreamClaude(
 
   try {
     for await (const msg of q) {
-      // Any message is activity: the CLI is alive and working, so a pending
-      // "settled but nothing followed" grace window no longer applies — and
+      // Any non-passive message is activity: the CLI is alive and working, so a
+      // pending "settled but nothing followed" grace window no longer applies — and
       // neither does a post-`result` settle timer, since the CLI just proved the
       // turn wasn't over (it woke the model, or is about to say `idle` itself).
-      if (graceTimer) {
-        clearTimeout(graceTimer)
-        graceTimer = undefined
+      // Passive messages (prompt_suggestion…) prove nothing of the sort and must not
+      // touch either timer — doing so is what left turns hanging with no `idle`.
+      const passive = isPassiveAfterResult(msg)
+      const settleCancelled = !passive && idleTimer !== undefined
+      if (!passive) {
+        if (graceTimer) {
+          clearTimeout(graceTimer)
+          graceTimer = undefined
+        }
+        if (idleTimer) {
+          clearTimeout(idleTimer)
+          idleTimer = undefined
+        }
       }
-      if (idleTimer) {
-        clearTimeout(idleTimer)
-        idleTimer = undefined
-      }
+      // The adapter still sees EVERY message — passive ones too (the suggestion chip).
       adapter.handle(msg)
       trackBackground(msg)
       trackToolFlight(msg)
       trackShellOutputPath(msg)
+      // Rare by construction (the turn really went on after `result`), and it names
+      // the message that held the turn open — the data a future hang needs. `!closed`
+      // drops the `idle` case, which closes within this same iteration.
+      if (settleCancelled && !closed) {
+        log.info('claude-sdk settle cancelled — turn continues', {
+          sessionId: args.sessionId,
+          type: msg.type,
+          subtype: (msg as { subtype?: string }).subtype,
+        })
+      }
       if (msg.type === 'result') {
         sawResult = true
         const waiting = waitingCount()
