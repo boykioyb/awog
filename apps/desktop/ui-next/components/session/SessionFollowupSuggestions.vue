@@ -14,7 +14,11 @@
 </template>
 
 <script setup lang="ts">
-// Clickable next prompts under the model's answer (#34, suggest_followups).
+// Clickable next prompts (#34, suggest_followups) — drawn at the END of the
+// message, only once the turn has finished. Both rules live in `grouped` of
+// SessionMessageItem (displayBlockOrder + streaming gate, ADR 0096 D3), not here:
+// the model now calls the tool BEFORE its final answer, so in `parts` the block
+// sits mid-message.
 //
 // They exist only where they are still an offer: on the LAST message of the
 // session, and only until the user starts typing their own message (the draft is

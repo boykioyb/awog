@@ -13,9 +13,35 @@
             {{ t('sessions.message.waiting') }}
           </span>
           <span style="flex: 1" />
+          <button
+            class="ftx"
+            :class="{ on: findOpen }"
+            :title="t('common.search')"
+            :aria-label="t('common.search')"
+            @click="toggleFind"
+          >
+            <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </button>
           <button class="ftx" :title="t('common.close')" @click="emit('close')">
             <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
           </button>
+        </div>
+
+        <!-- Find-in-turn (⌘/Ctrl+F or the header search button): floats below the header,
+             clear of the OS window controls, over the body without shifting layout. Same
+             FindBar + DOM-wrap engine as the PreviewModal / transcript find. -->
+        <div v-if="findOpen" class="ftfind">
+          <FindBar
+            v-model:query="findQuery"
+            v-model:match-case="findMatchCase"
+            :total="findMatches.length"
+            :current="findMatches.length ? findCurrentIndex + 1 : 0"
+            :focus-tick="findFocusTick"
+            :placeholder="t('sessions.find.placeholder')"
+            @next="nextMatch"
+            @prev="prevMatch"
+            @close="closeFind"
+          />
         </div>
 
         <!-- Internal scroll region. Renders the SAME `.abody` tree as the transcript by
@@ -127,20 +153,72 @@ watch(
   },
 )
 
+// Find-in-turn — DOM-based over the scroll body, same engine as the PreviewModal find.
+// Destructure so the template unwraps the refs.
+const {
+  findOpen,
+  query: findQuery,
+  matchCase: findMatchCase,
+  matches: findMatches,
+  currentIndex: findCurrentIndex,
+  focusTick: findFocusTick,
+  openFind,
+  closeFind,
+  nextMatch,
+  prevMatch,
+  runFind,
+} = usePreviewFind(() => scrollEl.value)
+
+function toggleFind() {
+  if (findOpen.value) closeFind()
+  else openFind()
+}
+
+// The turn may still be streaming: SessionMarkdownHtml rebuilds the trailing block's
+// innerHTML on each delta, wiping find marks there (finalized blocks keep theirs). Re-wrap
+// when the structure changes or streaming ends so the counter + highlights settle.
+watch(
+  () => [props.grouped.length, props.streaming] as const,
+  () => {
+    if (findOpen.value) nextTick(() => runFind())
+  },
+)
+
+// ⌘/Ctrl+F opens find. Capture + preventDefault so the browser's own find never opens;
+// SessionDetail's transcript find (also a window-capture listener) defers to this overlay
+// via its `.ftovl` guard, so it won't open behind us.
+function onFindKey(e: KeyboardEvent) {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+  if (e.key !== 'f' && e.key !== 'F') return
+  e.preventDefault()
+  e.stopPropagation()
+  openFind()
+}
+
+// Esc closes the find bar first (if open), then the overlay on a second press.
 const onKey = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') {
+  if (e.key !== 'Escape') return
+  if (findOpen.value) {
+    e.preventDefault()
     e.stopPropagation()
-    emit('close')
+    closeFind()
+    return
   }
+  e.stopPropagation()
+  emit('close')
 }
 onMounted(() => {
+  window.addEventListener('keydown', onFindKey, true)
   window.addEventListener('keydown', onKey)
   nextTick(() => {
     const el = scrollEl.value
     if (el) el.scrollTop = el.scrollHeight
   })
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onFindKey, true)
+  window.removeEventListener('keydown', onKey)
+})
 </script>
 
 <style scoped>
@@ -210,9 +288,22 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   background: var(--accent-wash);
   color: var(--foreground);
 }
+.ftx.on {
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
 .ftx:focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: -2px;
+}
+/* Zero-size anchor for the floating FindBar (its `.pvfind` is absolute top:10/right:14).
+   Offsets it below the header row so it clears the close/search buttons; the card is the
+   positioned ancestor (position: relative). Mirrors SessionDetail's `.findwrap`. */
+.ftfind {
+  position: absolute;
+  top: 44px;
+  right: 16px;
+  z-index: 5;
 }
 .ftbody {
   flex: 1;

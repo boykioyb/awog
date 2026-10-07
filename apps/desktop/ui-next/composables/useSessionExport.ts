@@ -14,6 +14,7 @@ import { findingLocation, sortFindings } from '~/composables/useSessionsData'
 import type { AssistantBlock, Session } from '~/composables/useSessionsData'
 import { useMarkdown, type MdSegment } from '~/composables/useMarkdown'
 import { useSidecar } from '~/composables/useSidecar'
+import { displayBlockOrder } from '~/utils/session-turns'
 
 // 'md' / 'html' are built client-side from the transcript; 'prompt' is an LLM-generated
 // summary the modal supplies directly (buildContent never renders it). All three are
@@ -133,7 +134,14 @@ export function useSessionExport() {
     for (const m of session.msgs) {
       out.push(roleHeading(m.role))
       if (m.role === 'assistant') {
-        const body = m.blocks
+        // Cùng thứ tự hiển thị với transcript (ADR 0096 D3): dòng gợi ý là dòng cuối.
+        // Không có cổng streaming — export là bản ghi, không phải lời mời. Bản ghi của
+        // phần HIỂN THỊ: chỉ dòng gợi ý cuối, gợi ý lỗi thời của đoạn trước bị bỏ như ở
+        // transcript; `parts` trên đĩa vẫn đủ.
+        const blocks = m.blocks
+        const body = displayBlockOrder(blocks)
+          .map((i) => blocks[i])
+          .filter((b): b is AssistantBlock => !!b)
           .map(blockToMd)
           .filter((s) => s.trim())
           .join('\n\n')

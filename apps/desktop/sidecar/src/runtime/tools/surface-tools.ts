@@ -4,7 +4,7 @@
 //   mark_chapter       phase boundary → divider + jump menu in the transcript
 //   send_user_file     workspace files → openable cards (shared PreviewModal)
 //   suggest_task       out-of-scope work → one-click new session, dismissible
-//   suggest_followups  2–3 clickable next prompts under the last reply
+//   suggest_followups  2–3 clickable next prompts at the end of the last reply
 //   report_findings    review findings → severity-sorted list, each row opens its file
 //
 // They share one seam: each call carries a `SessionSurface` payload that
@@ -140,15 +140,25 @@ export const SURFACE_TOOL_TEXT = {
       'conversation: name the files/paths, state the goal and the constraints in full.',
   },
   suggestFollowups: {
+    // Câu chữ chốt ở ADR 0096 D1 — gọi TRƯỚC câu trả lời cuối, không một chữ nào
+    // về vị trí của chip (model chép "under your answer" thành câu đuôi thừa).
     description:
-      'Offer 2–3 short next prompts the user can click instead of typing, shown under your answer. ' +
-      'Call it AT MOST ONCE, as the LAST tool call of your reply, and only when the next steps are ' +
-      'concrete and specific to what you just said. Skip it when your answer stands on its own or when ' +
-      'the options would be generic filler ("Tell me more") — no follow-up bar is better than three ' +
-      'useless chips. The user sees them only until they start typing.',
+      'Give the user 2–3 short next prompts they can click instead of typing. Call it AT MOST ONCE ' +
+      'per reply, when your work is done and you know what you will conclude — right BEFORE you ' +
+      'write your final answer, never after it. Offer only next steps that are concrete and specific ' +
+      'to that conclusion; skip it when your answer stands on its own or when the options would be ' +
+      'generic filler ("Tell me more") — no prompts at all are better than three useless ones. The ' +
+      'user sees them without your help: never mention, list or point to them in your text.',
     options:
       'Two or three short next prompts, written as the USER would type them ("Run the tests", ' +
       '"Show me the diff for auth.ts"). Max 3.',
+    // Kết quả khi gọi hợp lệ (ADR 0096 D1). Không nhắc chip; vế điều kiện chặn viết
+    // lại lần hai, vế "one short closing sentence" giữ lượt có text SAU tool result
+    // để CLI của Agent SDK không chèn lời nhắc "no visible output".
+    recorded:
+      'Recorded. Now write your final answer to the user, as the last thing in this reply. If you ' +
+      'already wrote the full answer earlier in this reply, do not write it a second time — end ' +
+      'with one short closing sentence instead.',
   },
   reportFindings: {
     description:
@@ -556,10 +566,7 @@ export function runSuggestFollowups(
     .slice(0, MAX_FOLLOWUPS)
   if (options.length === 0) return refused('Rejected: no follow-up text was given.')
   turn.followups += 1
-  return shown(
-    `Offered ${options.length} follow-up prompt(s) under your answer. Do not list them again in your text.`,
-    { kind: 'followups', options },
-  )
+  return shown(SURFACE_TOOL_TEXT.suggestFollowups.recorded, { kind: 'followups', options })
 }
 
 // ── report_findings ────────────────────────────────────────────────────────────

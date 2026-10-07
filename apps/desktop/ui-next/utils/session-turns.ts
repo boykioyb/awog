@@ -146,6 +146,24 @@ export function blockRole(block: AssistantBlock, index: number, finalIdx: number
   return 'gate' // plan | question | perm | steer | error
 }
 
+// Thứ tự HIỂN THỊ của các block (ADR 0096 D3): surface `followups` luôn đứng sau mọi
+// block khác, bất kể vị trí trong `parts` — model gọi `suggest_followups` TRƯỚC câu trả
+// lời cuối nên trên đĩa chip nằm giữa message. Trả về CHỈ SỐ GỐC (không phải mảng block
+// đã sắp lại) để `blockIndex` / key `text-${bi}` / highlight trích dẫn vẫn trỏ đúng block;
+// `parts` trên đĩa không đổi. Lời gọi bị từ chối là block `step` nên đứng yên tại chỗ.
+// Chỉ giữ block `followups` CUỐI: một lượt dài có thể mang 2–6 block (mỗi `result` nội
+// bộ của SDK phát một `prompt_suggestion`) — dồn hết xuống cuối thành chồng hàng chip
+// mà các hàng đầu đã lỗi thời (đo: 88/375 lượt có chip).
+export function displayBlockOrder(blocks: readonly AssistantBlock[]): number[] {
+  const rest: number[] = []
+  let lastFollowups = -1
+  blocks.forEach((b, i) => {
+    if (b.kind === 'followups') lastFollowups = i
+    else rest.push(i)
+  })
+  return lastFollowups < 0 ? rest : [...rest, lastFollowups]
+}
+
 // ============================================================================
 // Collapsed-header preview text (adapted from craft TurnCard.tsx:709-774)
 // ============================================================================
