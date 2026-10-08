@@ -1,19 +1,12 @@
 <template>
-  <TooltipRoot v-bind="forwarded">
+  <TooltipRoot v-bind="$attrs">
     <slot />
   </TooltipRoot>
 </template>
 
 <script setup lang="ts">
-import {
-  TooltipRoot,
-  type TooltipRootEmits,
-  type TooltipRootProps,
-  useForwardPropsEmits,
-} from 'reka-ui'
+// See TooltipContent.vue — no reka types; `onUpdate:open` rides in `$attrs`.
+import { TooltipRoot } from 'reka-ui'
 
-const props = defineProps<TooltipRootProps>()
-const emits = defineEmits<TooltipRootEmits>()
-
-const forwarded = useForwardPropsEmits(props, emits)
+defineOptions({ inheritAttrs: false })
 </script>

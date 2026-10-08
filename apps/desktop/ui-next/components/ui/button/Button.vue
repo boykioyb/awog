@@ -1,27 +1,31 @@
 <template>
   <Primitive
+    v-bind="rest"
     :as="as"
     :as-child="asChild"
     data-slot="button"
     :data-variant="variant ?? 'default'"
     :data-size="size ?? 'default'"
-    :class="cn(buttonVariants({ variant, size }), props.class)"
+    :class="cn(buttonVariants({ variant, size }), $attrs.class)"
   >
     <slot />
   </Primitive>
 </template>
 
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
-import { Primitive, type PrimitiveProps } from 'reka-ui'
+// `PrimitiveProps` has the same unresolvable-extends problem — declare the
+// three fields we actually read locally and forward the rest as attrs.
+import { computed } from 'vue'
+import { Primitive } from 'reka-ui'
 import { cn } from '~/lib/utils'
 import { buttonVariants, type ButtonVariants } from './index'
+import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
-interface Props extends PrimitiveProps {
-  variant?: ButtonVariants['variant']
-  size?: ButtonVariants['size']
-  class?: HTMLAttributes['class']
-}
+defineOptions({ inheritAttrs: false })
 
-const props = withDefaults(defineProps<Props>(), { as: 'button' })
+const rest = useForwardAttrs('class', 'variant', 'size', 'as', 'asChild')
+const variant = computed(() => rest.value.variant as ButtonVariants['variant'] | undefined)
+const size = computed(() => rest.value.size as ButtonVariants['size'] | undefined)
+const as = computed(() => (rest.value.as as string | undefined) ?? 'button')
+const asChild = computed(() => rest.value.asChild === true || rest.value.asChild === '')
 </script>

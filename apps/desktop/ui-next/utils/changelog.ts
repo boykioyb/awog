@@ -66,6 +66,8 @@ export const CHANGELOG: Release[] = [
         kind: 'fixed',
         en: 'OAuth sign-in for connections is more reliable: deleting a source cleans up its stored secrets, and the sign-in flow handles stale state instead of hanging.',
         vi: 'Đăng nhập OAuth cho connection đáng tin hơn: xoá một source dọn luôn secret đã lưu, và luồng đăng nhập xử lý trạng thái cũ thay vì treo.',
+      },
+    ],
   },
   {
     version: '0.40.2',

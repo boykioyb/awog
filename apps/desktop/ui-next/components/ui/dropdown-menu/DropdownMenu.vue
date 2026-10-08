@@ -1,19 +1,11 @@
 <template>
-  <DropdownMenuRoot v-bind="forwarded">
+  <DropdownMenuRoot v-bind="$attrs">
     <slot />
   </DropdownMenuRoot>
 </template>
 
 <script setup lang="ts">
-import {
-  DropdownMenuRoot,
-  type DropdownMenuRootEmits,
-  type DropdownMenuRootProps,
-  useForwardPropsEmits,
-} from 'reka-ui'
+import { DropdownMenuRoot } from 'reka-ui'
 
-const props = defineProps<DropdownMenuRootProps>()
-const emits = defineEmits<DropdownMenuRootEmits>()
-
-const forwarded = useForwardPropsEmits(props, emits)
+defineOptions({ inheritAttrs: false })
 </script>

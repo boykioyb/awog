@@ -1,11 +1,11 @@
 <template>
-  <TooltipProvider v-bind="props">
+  <TooltipProvider v-bind="$attrs">
     <slot />
   </TooltipProvider>
 </template>
 
 <script setup lang="ts">
-import { TooltipProvider, type TooltipProviderProps } from 'reka-ui'
+import { TooltipProvider } from 'reka-ui'
 
-const props = defineProps<TooltipProviderProps>()
+defineOptions({ inheritAttrs: false })
 </script>

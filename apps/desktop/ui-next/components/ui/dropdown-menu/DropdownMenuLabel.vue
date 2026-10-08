@@ -1,8 +1,8 @@
 <template>
   <DropdownMenuLabel
-    v-bind="forwarded"
+    v-bind="rest"
     :class="
-      cn('px-2 py-1.5 text-xs font-medium text-muted-foreground', inset && 'pl-8', props.class)
+      cn('px-2 py-1.5 text-xs font-medium text-muted-foreground', inset && 'pl-8', $attrs.class)
     "
   >
     <slot />
@@ -10,19 +10,14 @@
 </template>
 
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
+// `inset` is a wrapper-only style flag — kept out of the forward.
 import { computed } from 'vue'
-import { DropdownMenuLabel, type DropdownMenuLabelProps, useForwardProps } from 'reka-ui'
+import { DropdownMenuLabel } from 'reka-ui'
 import { cn } from '~/lib/utils'
+import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
-const props = defineProps<
-  DropdownMenuLabelProps & { class?: HTMLAttributes['class']; inset?: boolean }
->()
+defineOptions({ inheritAttrs: false })
 
-const delegatedProps = computed(() => {
-  const { class: _c, inset: _i, ...delegated } = props
-  return delegated
-})
-
-const forwarded = useForwardProps(delegatedProps)
+const rest = useForwardAttrs('class', 'inset')
+const inset = computed(() => rest.value.inset === true || rest.value.inset === '')
 </script>

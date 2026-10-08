@@ -1,19 +1,11 @@
 <template>
-  <SplitterPanel v-bind="forwarded">
+  <SplitterPanel v-bind="$attrs">
     <slot />
   </SplitterPanel>
 </template>
 
 <script setup lang="ts">
-import {
-  SplitterPanel,
-  type SplitterPanelEmits,
-  type SplitterPanelProps,
-  useForwardPropsEmits,
-} from 'reka-ui'
+import { SplitterPanel } from 'reka-ui'
 
-const props = defineProps<SplitterPanelProps>()
-const emits = defineEmits<SplitterPanelEmits>()
-
-const forwarded = useForwardPropsEmits(props, emits)
+defineOptions({ inheritAttrs: false })
 </script>

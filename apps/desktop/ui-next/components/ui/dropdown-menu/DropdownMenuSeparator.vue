@@ -1,20 +1,13 @@
 <template>
-  <DropdownMenuSeparator
-    v-bind="delegatedProps"
-    :class="cn('-mx-1 my-1 h-px bg-border', props.class)"
-  />
+  <DropdownMenuSeparator v-bind="rest" :class="cn('-mx-1 my-1 h-px bg-border', $attrs.class)" />
 </template>
 
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
-import { computed } from 'vue'
-import { DropdownMenuSeparator, type DropdownMenuSeparatorProps } from 'reka-ui'
+import { DropdownMenuSeparator } from 'reka-ui'
 import { cn } from '~/lib/utils'
+import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
-const props = defineProps<DropdownMenuSeparatorProps & { class?: HTMLAttributes['class'] }>()
+defineOptions({ inheritAttrs: false })
 
-const delegatedProps = computed(() => {
-  const { class: _c, ...delegated } = props
-  return delegated
-})
+const rest = useForwardAttrs('class')
 </script>

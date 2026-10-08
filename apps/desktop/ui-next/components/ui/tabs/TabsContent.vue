@@ -4,23 +4,25 @@
        `display:none` on [hidden] loses to `.flex`, so inactive panels kept
        stacking real height above the active one (the browser-tab gap). -->
   <TabsContent
-    v-bind="delegatedProps"
-    :class="cn('focus-visible:outline-none data-[state=inactive]:hidden', props.class)"
+    v-bind="$attrs"
+    :value="value"
+    :class="cn('focus-visible:outline-none data-[state=inactive]:hidden', $attrs.class)"
   >
     <slot />
   </TabsContent>
 </template>
 
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
-import { computed } from 'vue'
-import { TabsContent, type TabsContentProps } from 'reka-ui'
+// No reka *Props — see Tabs.vue for why; `$attrs` carries every prop.
+// `value` is required by TabsContent: read it out of attrs with a computed so
+// the cast stays in the script (a bare `as` in the template trips the eslint
+// no-deprecated-filter rule on the `|`).
+import { computed, useAttrs } from 'vue'
+import { TabsContent } from 'reka-ui'
 import { cn } from '~/lib/utils'
 
-const props = defineProps<TabsContentProps & { class?: HTMLAttributes['class'] }>()
+defineOptions({ inheritAttrs: false })
 
-const delegatedProps = computed(() => {
-  const { class: _c, ...delegated } = props
-  return delegated
-})
+const attrs = useAttrs()
+const value = computed(() => attrs.value as string | number)
 </script>

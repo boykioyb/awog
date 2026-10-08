@@ -1,19 +1,11 @@
 <template>
-  <DialogRoot v-bind="forwarded">
+  <DialogRoot v-bind="$attrs">
     <slot />
   </DialogRoot>
 </template>
 
 <script setup lang="ts">
-import {
-  DialogRoot,
-  type DialogRootEmits,
-  type DialogRootProps,
-  useForwardPropsEmits,
-} from 'reka-ui'
+import { DialogRoot } from 'reka-ui'
 
-const props = defineProps<DialogRootProps>()
-const emits = defineEmits<DialogRootEmits>()
-
-const forwarded = useForwardPropsEmits(props, emits)
+defineOptions({ inheritAttrs: false })
 </script>

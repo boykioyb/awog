@@ -1,14 +1,15 @@
 <template>
-  <TabsRoot v-bind="forwarded">
+  <TabsRoot v-bind="$attrs">
     <slot />
   </TabsRoot>
 </template>
 
 <script setup lang="ts">
-import { TabsRoot, type TabsRootEmits, type TabsRootProps, useForwardPropsEmits } from 'reka-ui'
+// reka *Props types chain through internal .d.ts `extends` that compiler-sfc
+// cannot resolve in production builds — declare nothing and forward attrs:
+// `onUpdate:*` listeners ride inside `$attrs`, so v-model still reaches the
+// reka root untouched.
+import { TabsRoot } from 'reka-ui'
 
-const props = defineProps<TabsRootProps>()
-const emits = defineEmits<TabsRootEmits>()
-
-const forwarded = useForwardPropsEmits(props, emits)
+defineOptions({ inheritAttrs: false })
 </script>

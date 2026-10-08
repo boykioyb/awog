@@ -1,15 +1,15 @@
 <template>
-  <ContextMenuTrigger v-bind="forwarded" :class="cn('block', props.class)">
+  <ContextMenuTrigger v-bind="rest" :class="cn('block', $attrs.class)">
     <slot />
   </ContextMenuTrigger>
 </template>
 
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
-import { ContextMenuTrigger, type ContextMenuTriggerProps, useForwardProps } from 'reka-ui'
+import { ContextMenuTrigger } from 'reka-ui'
 import { cn } from '~/lib/utils'
+import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
-const props = defineProps<ContextMenuTriggerProps & { class?: HTMLAttributes['class'] }>()
+defineOptions({ inheritAttrs: false })
 
-const forwarded = useForwardProps(props)
+const rest = useForwardAttrs('class')
 </script>

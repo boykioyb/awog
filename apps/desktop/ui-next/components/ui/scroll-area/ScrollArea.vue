@@ -1,5 +1,5 @@
 <template>
-  <ScrollAreaRoot v-bind="delegatedProps" :class="cn('relative overflow-hidden', props.class)">
+  <ScrollAreaRoot v-bind="rest" :class="cn('relative overflow-hidden', $attrs.class)">
     <ScrollAreaViewport class="h-full w-full rounded-[inherit]">
       <slot />
     </ScrollAreaViewport>
@@ -9,21 +9,12 @@
 </template>
 
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
-import { computed } from 'vue'
-import {
-  ScrollAreaCorner,
-  ScrollAreaRoot,
-  type ScrollAreaRootProps,
-  ScrollAreaViewport,
-} from 'reka-ui'
+import { ScrollAreaCorner, ScrollAreaRoot, ScrollAreaViewport } from 'reka-ui'
 import { cn } from '~/lib/utils'
 import ScrollBar from './ScrollBar.vue'
+import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
-const props = defineProps<ScrollAreaRootProps & { class?: HTMLAttributes['class'] }>()
+defineOptions({ inheritAttrs: false })
 
-const delegatedProps = computed(() => {
-  const { class: _c, ...delegated } = props
-  return delegated
-})
+const rest = useForwardAttrs('class')
 </script>

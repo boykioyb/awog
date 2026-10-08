@@ -1,19 +1,11 @@
 <template>
-  <ContextMenuRoot v-bind="forwarded">
+  <ContextMenuRoot v-bind="$attrs">
     <slot />
   </ContextMenuRoot>
 </template>
 
 <script setup lang="ts">
-import {
-  ContextMenuRoot,
-  type ContextMenuRootEmits,
-  type ContextMenuRootProps,
-  useForwardPropsEmits,
-} from 'reka-ui'
+import { ContextMenuRoot } from 'reka-ui'
 
-const props = defineProps<ContextMenuRootProps>()
-const emits = defineEmits<ContextMenuRootEmits>()
-
-const forwarded = useForwardPropsEmits(props, emits)
+defineOptions({ inheritAttrs: false })
 </script>

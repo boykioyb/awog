@@ -1,11 +1,11 @@
 <template>
   <DropdownMenuItem
-    v-bind="forwarded"
+    v-bind="rest"
     :class="
       cn(
         'relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground',
         inset && 'pl-8',
-        props.class,
+        $attrs.class,
       )
     "
   >
@@ -14,19 +14,14 @@
 </template>
 
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue'
+// `inset` is a wrapper-only style flag: read it, keep it out of the forward.
 import { computed } from 'vue'
-import { DropdownMenuItem, type DropdownMenuItemProps, useForwardProps } from 'reka-ui'
+import { DropdownMenuItem } from 'reka-ui'
 import { cn } from '~/lib/utils'
+import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
-const props = defineProps<
-  DropdownMenuItemProps & { class?: HTMLAttributes['class']; inset?: boolean }
->()
+defineOptions({ inheritAttrs: false })
 
-const delegatedProps = computed(() => {
-  const { class: _c, inset: _i, ...delegated } = props
-  return delegated
-})
-
-const forwarded = useForwardProps(delegatedProps)
+const rest = useForwardAttrs('class', 'inset')
+const inset = computed(() => rest.value.inset === true || rest.value.inset === '')
 </script>
