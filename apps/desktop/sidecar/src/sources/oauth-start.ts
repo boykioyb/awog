@@ -41,16 +41,12 @@ export interface OAuthTarget {
   extraParams?: Record<string, string>
 }
 
-// Every scope Slack's hosted MCP server advertises (the `scopes_supported` of
-// https://mcp.slack.com/.well-known/oauth-authorization-server). Slack's MCP
-// authorize endpoint is `oauth/v2_user/authorize` and accepts ONLY `user_scope`
-// (comma-joined) — a bare `scope` or no scope at all fails with
-// "Invalid permissions requested / No scopes requested". Override per source
-// via `mcp.oauthParams.user_scope` when the registered Slack app has a smaller
-// scope set enabled.
+// Default scope set for Slack's hosted MCP server (oauth/v2_user/authorize).
+// NOT the full scopes_supported list — Slack rejects the request when an app
+// asks for scopes it hasn't enabled under "User Token Scopes", and most apps
+// only flip on a subset. Cover the core read/write/chat surface; a source can
+// widen or narrow it via `mcp.oauthParams.user_scope` (comma-joined).
 const SLACK_MCP_USER_SCOPES = [
-  'canvases:read',
-  'canvases:write',
   'channels:history',
   'channels:read',
   'channels:write',
@@ -64,18 +60,16 @@ const SLACK_MCP_USER_SCOPES = [
   'im:history',
   'im:read',
   'im:write',
-  'lists:read',
-  'lists:write',
   'mpim:history',
   'mpim:read',
   'mpim:write',
   'reactions:read',
   'reactions:write',
-  'search:read.files',
+  'search:read.public',
+  'search:read.private',
   'search:read.im',
   'search:read.mpim',
-  'search:read.private',
-  'search:read.public',
+  'search:read.files',
   'search:read.users',
   'users:read',
   'users:read.email',
