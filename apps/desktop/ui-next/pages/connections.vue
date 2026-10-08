@@ -22,6 +22,14 @@
             >
               {{ t('connections.statusBadge.' + deriveStatus(item)) }}
             </span>
+          </div>
+          <!-- 2×2: the ⋯ rides the second row's dead space on the right instead
+               of reserving a slot on row 1 (leaving an empty gap between the
+               badges and the row edge when it's hidden). -->
+          <div class="sub">
+            <span class="sub-txt">
+              {{ item.tagline || item.provider || sourceTransport(item) }}
+            </span>
             <Button
               :title="t('connections.menu.more')"
               class="crow-menu"
@@ -31,9 +39,6 @@
             >
               <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
             </Button>
-          </div>
-          <div class="sub">
-            {{ item.tagline || item.provider || sourceTransport(item) }}
           </div>
         </div>
       </template>
@@ -208,14 +213,24 @@ const {
   padding: 1px 6px;
   background: transparent;
 }
-/* Per-source ⋯ menu button — reveals on row hover (mirrors the app's .hoveract
-   pattern: kept in layout so fading it in never shifts the badges). */
+/* Per-source ⋯ menu button — sits on the second row (right end of .sub),
+   reveals on row hover so the slug line keeps its full width when idle. */
+.sub {
+  justify-content: space-between;
+}
+.sub-txt {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .crow-menu {
   width: 22px;
-  height: 22px;
+  height: 18px;
   border: none;
   border-radius: var(--r-xs);
   flex: 0 0 auto;
+  margin: -1px -4px -1px 0;
   opacity: 0;
   transition: opacity 0.12s;
 }
