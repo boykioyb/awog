@@ -2,9 +2,16 @@
   <div class="md libwrap">
     <div class="list" style="flex: 0 0 288px">
       <div class="ltop">
-        <div class="srch">
-          <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          <Input v-model="q" unstyled :placeholder="placeholder ?? t('common.search')" />
+        <!-- Search: real shadcn Input (bordered, --ctrl-h, focus ring) with the
+             icon overlaid inside — replaces the hand-rolled .srch wrapper that
+             sized the box taller than every other control in the header. -->
+        <div class="relative flex-1">
+          <Icon
+            name="search"
+            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            style="width: var(--icon-sm); height: var(--icon-sm)"
+          />
+          <Input v-model="q" class="pl-9" :placeholder="placeholder ?? t('common.search')" />
         </div>
         <Button
           v-if="groupBy"

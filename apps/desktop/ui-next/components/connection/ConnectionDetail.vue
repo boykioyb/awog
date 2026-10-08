@@ -246,7 +246,19 @@
             />
             <div class="cnd-banner-body">
               <div class="cnd-banner-title">{{ t('connections.tools.errorTitle') }}</div>
-              <div class="mono cnd-banner-sum">{{ toolsError }}</div>
+              <div class="mono cnd-banner-sum cnd-err-text">
+                <template v-for="(part, i) in toolsErrorParts" :key="i">
+                  <a
+                    v-if="part.isUrl"
+                    :href="part.text"
+                    class="cnd-err-link"
+                    @click.prevent="openErrorLink(part.text)"
+                  >
+                    {{ part.text }}
+                  </a>
+                  <template v-else>{{ part.text }}</template>
+                </template>
+              </div>
             </div>
           </div>
           <ConnectionToolsLog v-if="toolsLog.length" class="cnd-log" :lines="toolsLog" />
@@ -582,8 +594,7 @@ const tabs = computed<CndTab[]>(() => [
 // through sc.openExternal so they land in the system browser, never the
 // agent's embedded jar.
 const URL_RE = /https?:\/\/[^\s"'<>\\)]+/g
-const errorParts = computed(() => {
-  const msg = connectionError.value
+const splitErrorLinks = (msg: string | null | undefined) => {
   if (!msg) return []
   const parts: { text: string; isUrl: boolean }[] = []
   let last = 0
@@ -599,7 +610,9 @@ const errorParts = computed(() => {
   }
   if (last < msg.length) parts.push({ text: msg.slice(last), isUrl: false })
   return parts
-})
+}
+const errorParts = computed(() => splitErrorLinks(connectionError.value))
+const toolsErrorParts = computed(() => splitErrorLinks(toolsError.value))
 const openErrorLink = (url: string) => {
   void sc.openExternal(url).catch((err) => console.warn('[connection] openExternal failed', err))
 }
