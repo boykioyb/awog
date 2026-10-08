@@ -23,9 +23,9 @@ import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
 defineOptions({ inheritAttrs: false })
 
-const rest = useForwardAttrs('class', 'variant', 'size', 'as', 'asChild')
-const variant = computed(() => rest.value.variant as ButtonVariants['variant'] | undefined)
-const size = computed(() => rest.value.size as ButtonVariants['size'] | undefined)
-const as = computed(() => (rest.value.as as string | undefined) ?? 'button')
-const asChild = computed(() => rest.value.asChild === true || rest.value.asChild === '')
+const [rest, attrs] = useForwardAttrs('class', 'variant', 'size', 'as', 'asChild')
+const variant = computed(() => attrs.variant as ButtonVariants['variant'] | undefined)
+const size = computed(() => attrs.size as ButtonVariants['size'] | undefined)
+const as = computed(() => (attrs.as as string | undefined) ?? 'button')
+const asChild = computed(() => attrs.asChild === true || attrs.asChild === '')
 </script>

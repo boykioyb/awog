@@ -22,10 +22,11 @@ import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
 defineOptions({ inheritAttrs: false })
 
-const rest = useForwardAttrs('class')
+const [rest, attrs] = useForwardAttrs('class')
 // `orientation` defaults to vertical (reka's own default is the same — we keep
-// it explicit because the class list branches on it).
+// it explicit because the class list branches on it). Read the raw attrs —
+// `rest` only drops `class`, so it works too, but `attrs` is the convention.
 const orientation = computed(
-  () => (rest.value.orientation as 'vertical' | 'horizontal' | undefined) ?? 'vertical',
+  () => (attrs.orientation as 'vertical' | 'horizontal' | undefined) ?? 'vertical',
 )
 </script>

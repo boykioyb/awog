@@ -19,8 +19,8 @@
 </template>
 
 <script setup lang="ts">
-// Attrs-only wrapper: `orientation`, `decorative` and `label` are declared
-// locally because the template reads them; everything else passes through.
+// Attrs-only wrapper: `orientation`/`decorative`/`label` live in attrs (the
+// template reads them); `label` is a wrapper-only flag kept out of `rest`.
 import { computed } from 'vue'
 import { Separator } from 'reka-ui'
 import { cn } from '~/lib/utils'
@@ -28,12 +28,12 @@ import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
 defineOptions({ inheritAttrs: false })
 
-const attrs = useForwardAttrs('class', 'label')
+const [baseRest, attrs] = useForwardAttrs('class', 'label')
 const rest = computed(() => ({
   decorative: true,
   orientation: 'horizontal' as const,
-  ...attrs.value,
+  ...baseRest.value,
 }))
-const orientation = computed(() => rest.value.orientation as string)
-const label = computed(() => attrs.value.label as string | undefined)
+const orientation = computed(() => (attrs.orientation as string | undefined) ?? 'horizontal')
+const label = computed(() => attrs.label as string | undefined)
 </script>

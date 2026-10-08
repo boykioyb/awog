@@ -24,6 +24,6 @@ import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
 defineOptions({ inheritAttrs: false })
 
-const attrs = useForwardAttrs('class')
-const rest = computed(() => ({ sideOffset: 6, ...attrs.value }))
+const [baseRest] = useForwardAttrs('class')
+const rest = computed(() => ({ sideOffset: 6, ...baseRest.value }))
 </script>

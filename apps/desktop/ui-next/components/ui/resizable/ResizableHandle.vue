@@ -26,6 +26,13 @@ import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
 defineOptions({ inheritAttrs: false })
 
-const rest = useForwardAttrs('class', 'withHandle')
-const withHandle = computed(() => rest.value.withHandle === true || rest.value.withHandle === '')
+// attrs keys are NOT camelized — `with-handle` arrives as `with-handle`.
+const [rest, attrs] = useForwardAttrs('class', 'withHandle', 'with-handle')
+const withHandle = computed(
+  () =>
+    attrs.withHandle === true ||
+    attrs.withHandle === '' ||
+    attrs['with-handle'] === true ||
+    attrs['with-handle'] === '',
+)
 </script>
