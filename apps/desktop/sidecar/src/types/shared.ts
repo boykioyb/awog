@@ -1121,6 +1121,10 @@ export interface McpSourceBlock {
   // OAuth client_secret for providers without dynamic registration (Slack) —
   // stored as a `secret:KEY` keychain ref, never plaintext on disk.
   clientSecret?: string | undefined
+  // Extra parameters merged into the OAuth authorize request (e.g. Slack's
+  // `user_scope` — Slack advertises no `scope` parameter, only user scopes).
+  // Forwarded verbatim as query params; values are config, not secrets.
+  oauthParams?: Record<string, string> | undefined
   headers?: Record<string, string> | undefined
   headerNames?: string[] | undefined
   command?: string | undefined

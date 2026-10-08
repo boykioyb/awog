@@ -992,6 +992,8 @@ const buildMcpPayload = (): McpSource => {
       if (!mcp.clientSecret && props.source.mcp.clientSecret) {
         mcp.clientSecret = props.source.mcp.clientSecret
       }
+      // Round-trip fields the form doesn't own (e.g. oauthParams.user_scope).
+      if (props.source.mcp.oauthParams) mcp.oauthParams = props.source.mcp.oauthParams
     }
   }
 

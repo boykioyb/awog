@@ -136,7 +136,7 @@ export const PRESET_CATALOG: Record<string, PresetEntry> = {
       tagline: 'Channels, messages, and files',
       icon: '💬',
       setupHint:
-        'Slack has no dynamic client registration — create a Slack app (api.slack.com/apps) and enter its Client ID + Client Secret when connecting.',
+        'Slack has no dynamic client registration — create a Slack app (api.slack.com/apps), enable the user scopes you need under "OAuth & Permissions → User Token Scopes" (the connection requests every scope the MCP server advertises by default; narrow via mcp.oauthParams.user_scope in the saved config), allow redirect URL http://localhost:8914-8924/oauth/callback, then enter its Client ID + Client Secret when connecting.',
     },
     build: (m) => ({
       ...base(m, false),

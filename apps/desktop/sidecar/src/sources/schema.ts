@@ -57,6 +57,8 @@ export const McpSourceBlockSchema = z.object({
   // `secret:KEY` ref (keychain) — providers without DCR (Slack) need a
   // registered app's client_id + client_secret.
   clientSecret: z.string().max(2000).optional(),
+  // Extra authorize-request params for the OAuth flow (Slack `user_scope`…).
+  oauthParams: z.record(z.string().max(2000)).optional(),
   headers: z.record(z.string().max(8000)).optional(),
   headerNames: z.array(z.string().max(200)).max(50).optional(),
   // stdio

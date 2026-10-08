@@ -41,6 +41,46 @@ export interface OAuthTarget {
   extraParams?: Record<string, string>
 }
 
+// Every scope Slack's hosted MCP server advertises (the `scopes_supported` of
+// https://mcp.slack.com/.well-known/oauth-authorization-server). Slack's MCP
+// authorize endpoint is `oauth/v2_user/authorize` and accepts ONLY `user_scope`
+// (comma-joined) — a bare `scope` or no scope at all fails with
+// "Invalid permissions requested / No scopes requested". Override per source
+// via `mcp.oauthParams.user_scope` when the registered Slack app has a smaller
+// scope set enabled.
+const SLACK_MCP_USER_SCOPES = [
+  'canvases:read',
+  'canvases:write',
+  'channels:history',
+  'channels:read',
+  'channels:write',
+  'chat:write',
+  'emoji:read',
+  'files:read',
+  'files:write',
+  'groups:history',
+  'groups:read',
+  'groups:write',
+  'im:history',
+  'im:read',
+  'im:write',
+  'lists:read',
+  'lists:write',
+  'mpim:history',
+  'mpim:read',
+  'mpim:write',
+  'reactions:read',
+  'reactions:write',
+  'search:read.files',
+  'search:read.im',
+  'search:read.mpim',
+  'search:read.private',
+  'search:read.public',
+  'search:read.users',
+  'users:read',
+  'users:read.email',
+].join(',')
+
 // Classify a source as OAuth-capable and resolve its flow parameters, or explain
 // why it is not an OAuth source. Both the RPC (→ RpcError) and the tool (→ tool
 // error text) call this so their validation stays identical.
@@ -63,6 +103,12 @@ export function resolveOAuthTarget(
     }
     const target: OAuthTarget = { discoverUrl: source.mcp.url }
     if (source.mcp.clientId) target.existingClientId = source.mcp.clientId
+    if (source.mcp.oauthParams) target.extraParams = { ...source.mcp.oauthParams }
+    // Slack's hosted MCP only mints USER tokens — send `user_scope`, and default
+    // it to everything the server advertises when the source doesn't say.
+    if (source.provider === 'slack' && !target.extraParams?.user_scope) {
+      target.extraParams = { ...target.extraParams, user_scope: SLACK_MCP_USER_SCOPES }
+    }
     return { ok: true, target }
   }
 

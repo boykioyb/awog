@@ -79,6 +79,8 @@ export type McpSourceBlock = {
   clientId?: string
   // `secret:KEY` ref — BYO OAuth app secret for providers without DCR (Slack).
   clientSecret?: string
+  // Extra OAuth authorize-request params (e.g. Slack `user_scope` override).
+  oauthParams?: Record<string, string>
   headers?: Record<string, string>
   headerNames?: string[]
   // stdio

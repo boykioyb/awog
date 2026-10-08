@@ -289,6 +289,12 @@ interface TokenResponse {
   refresh_token?: unknown
   expires_in?: unknown
   token_type?: unknown
+  // Slack's oauth.v2.user.access nests the user token under `authed_user`
+  // (top-level fields belong to the bot grant we never ask for), and answers
+  // failures with HTTP 200 + `ok: false` — both handled in postToken().
+  authed_user?: TokenResponse
+  ok?: unknown
+  error?: unknown
 }
 
 function bundleFromTokenResponse(
@@ -332,7 +338,23 @@ async function postToken(tokenEndpoint: string, params: URLSearchParams): Promis
     const text = await res.text().catch(() => '')
     throw new Error(`token endpoint returned ${res.status}${text ? `: ${text.slice(0, 200)}` : ''}`)
   }
-  return (await res.json()) as TokenResponse
+  const data = (await res.json()) as TokenResponse
+  // Slack-style envelope: `{ ok: false, error }` on failure, user token under
+  // `authed_user` on success (oauth.v2.user.access — the authorize endpoint is
+  // v2_user, so only the authed_user branch carries our token).
+  if (data.ok === false) {
+    throw new Error(
+      `token endpoint returned error: ${typeof data.error === 'string' ? data.error : 'unknown'}`,
+    )
+  }
+  if (
+    typeof data.access_token !== 'string' &&
+    data.authed_user &&
+    typeof data.authed_user.access_token === 'string'
+  ) {
+    return data.authed_user
+  }
+  return data
 }
 
 async function exchangeCode(
