@@ -205,7 +205,23 @@
               name="alert"
               style="width: var(--icon-sm); height: var(--icon-sm); flex: 0 0 auto; margin-top: 2px"
             />
-            <span class="mono">{{ connectionError }}</span>
+            <!-- URLs inside a provider error (e.g. Slack's "enable it here:
+                 https://api.slack.com/apps/…/app-assistant") become real links
+                 opening in the system browser — the raw JSON string was
+                 unreadable and unclickable. -->
+            <span class="mono cnd-err-text">
+              <template v-for="(part, i) in errorParts" :key="i">
+                <a
+                  v-if="part.isUrl"
+                  :href="part.text"
+                  class="cnd-err-link"
+                  @click.prevent="openErrorLink(part.text)"
+                >
+                  {{ part.text }}
+                </a>
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </span>
           </div>
         </div>
       </template>
@@ -507,6 +523,7 @@ const { t } = useI18n()
 // "Show in folder" only works inside the Electron shell (main derives the path).
 // In browser dev the bridge is absent, so hide the affordance rather than fail.
 const canReveal = useSidecar().available
+const sc = useSidecar()
 
 // Derived display + the three read-only sections (Connection/Tools/Permissions/Doc).
 const {
@@ -558,6 +575,34 @@ const tabs = computed<CndTab[]>(() => [
   'permissions',
   'documentation',
 ])
+
+// Provider error strings sometimes carry URLs the user must follow (Slack's
+// "enable MCP access" app-assistant link, OAuth consoles…). Split the message
+// into text/url parts so the template can render real anchors; clicks go
+// through sc.openExternal so they land in the system browser, never the
+// agent's embedded jar.
+const URL_RE = /https?:\/\/[^\s"'<>\\)]+/g
+const errorParts = computed(() => {
+  const msg = connectionError.value
+  if (!msg) return []
+  const parts: { text: string; isUrl: boolean }[] = []
+  let last = 0
+  for (const m of msg.matchAll(URL_RE)) {
+    const idx = m.index ?? 0
+    // Trim trailing punctuation that was never part of the URL (JSON `"`, `)`, `.`).
+    const url = m[0].replace(/[.,;:!?'")\]}]+$/, '')
+    if (idx > last) parts.push({ text: msg.slice(last, idx), isUrl: false })
+    parts.push({ text: url, isUrl: true })
+    last = idx + url.length
+    // If the regex grabbed more than the trimmed url, re-append the tail as text.
+    if (m[0].length > url.length) parts.push({ text: m[0].slice(url.length), isUrl: false })
+  }
+  if (last < msg.length) parts.push({ text: msg.slice(last), isUrl: false })
+  return parts
+})
+const openErrorLink = (url: string) => {
+  void sc.openExternal(url).catch((err) => console.warn('[connection] openExternal failed', err))
+}
 
 // After a successful/empty run the activity transcript collapses behind a toggle
 // (it stays expanded while loading and on error, where it's the primary content).
@@ -856,6 +901,18 @@ watch(
   color: var(--danger);
   background: var(--dangerDim);
   border-top: 1px solid var(--dangerBorder);
+}
+.cnd-err-text {
+  word-break: break-word;
+}
+.cnd-err-link {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cnd-err-link:hover {
+  opacity: 0.85;
 }
 .cnd-banner {
   display: flex;
