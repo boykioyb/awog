@@ -84,7 +84,9 @@ export const PRESET_CATALOG: Record<string, PresetEntry> = {
     build: (m) => ({
       ...base(m, false),
       type: 'mcp',
-      mcp: { transport: 'http', url: 'https://mcp.linear.app', authType: 'oauth' },
+      // Streamable-HTTP endpoint lives at /mcp — the bare origin only serves the
+      // OAuth well-known docs, so OAuth "succeeds" and the handshake then 404s.
+      mcp: { transport: 'http', url: 'https://mcp.linear.app/mcp', authType: 'oauth' },
     }),
   },
 
@@ -122,7 +124,8 @@ export const PRESET_CATALOG: Record<string, PresetEntry> = {
     build: (m) => ({
       ...base(m, false),
       type: 'mcp',
-      mcp: { transport: 'http', url: 'https://mcp.notion.com', authType: 'oauth' },
+      // Same as Linear: endpoint is /mcp, bare origin 404s after OAuth passes.
+      mcp: { transport: 'http', url: 'https://mcp.notion.com/mcp', authType: 'oauth' },
     }),
   },
 
