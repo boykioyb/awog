@@ -1,11 +1,5 @@
 {
   "connections.search": "Search sources…",
-  "connections.ssh.name": "SSH",
-  "connections.ssh.builtin": "Built-in",
-  "connections.ssh.sub": "{n} host(s) available to agents · manage on the SSH page",
-  "connections.ssh.detail": "Remote hosts for your agents",
-  "connections.ssh.body": "Sessions with an SSH-enabled host can run commands and read/write files on it via the ssh_* tools (gated by the session's SSH approval mode). {n} host(s) are currently available to agents. Add or manage hosts — and toggle which are available — on the SSH page.",
-  "connections.ssh.manage": "Manage SSH hosts",
   "connections.new": "Add new",
   "connections.enableToggle": "Toggle source",
   "connections.sech.command": "Command / URL",

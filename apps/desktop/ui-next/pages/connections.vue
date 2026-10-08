@@ -1,7 +1,7 @@
 <template>
   <section class="page on" data-page="connections">
     <LibraryView
-      :items="itemsWithSsh"
+      :items="sources"
       :item-key="(c) => c.slug"
       :search-text="(c) => c.slug + c.name + (c.description ?? '')"
       :placeholder="t('connections.search')"
@@ -9,19 +9,7 @@
       @new="openAddPicker"
     >
       <template #row="{ item }">
-        <!-- Built-in SSH entry: a pointer to the SSH page (hosts are managed there);
-             it isn't a configurable source, so no type/status/menu. -->
-        <div v-if="item.slug === SSH_SLUG" class="crow">
-          <div class="lrow">
-            <span class="ssh-src-ic">
-              <Icon name="ssh" style="width: var(--icon-md); height: var(--icon-md)" />
-            </span>
-            <span class="ttl">{{ t('connections.ssh.name') }}</span>
-            <span class="tag crow-type">{{ t('connections.ssh.builtin') }}</span>
-          </div>
-          <div class="sub">{{ t('connections.ssh.sub', { n: agentHostCount }) }}</div>
-        </div>
-        <div v-else class="crow" @contextmenu.prevent="openRowMenu($event, item)">
+        <div class="crow" @contextmenu.prevent="openRowMenu($event, item)">
           <div class="lrow">
             <SourceAvatar :source="item" size="sm" />
             <span class="ttl">{{ item.name || item.slug }}</span>
@@ -51,22 +39,7 @@
       </template>
 
       <template #detail="{ item }">
-        <div v-if="item.slug === SSH_SLUG" class="ssh-src-detail">
-          <div class="ssh-src-hero">
-            <span class="ssh-src-ic lg"><Icon name="ssh" style="width: 22px; height: 22px" /></span>
-            <div>
-              <div class="ssh-src-title">{{ t('connections.ssh.name') }}</div>
-              <div class="ssh-src-desc">{{ t('connections.ssh.detail') }}</div>
-            </div>
-          </div>
-          <p class="ssh-src-body">{{ t('connections.ssh.body', { n: agentHostCount }) }}</p>
-          <Button variant="default" @click="goSsh">
-            <Icon name="ssh" style="width: var(--icon-sm); height: var(--icon-sm)" />
-            {{ t('connections.ssh.manage') }}
-          </Button>
-        </div>
         <ConnectionDetail
-          v-else
           :source="item"
           @edit="openEditor(item)"
           @delete="askDelete(item)"
@@ -165,9 +138,7 @@ import ConnectionPromptCreator from '~/components/connection/ConnectionPromptCre
 import ConnectionQuickConnect from '~/components/connection/ConnectionQuickConnect.vue'
 import SourceAvatar from '~/components/connection/SourceAvatar.vue'
 import LibraryConfirmDelete from '~/components/library/LibraryConfirmDelete.vue'
-import { computed, onMounted } from 'vue'
 import { useConnectionsPage } from '~/composables/useConnectionsPage'
-import { useSshStore } from '~/stores/ssh'
 import Button from '~/components/ui/button/Button.vue'
 import {
   deriveStatus,
@@ -177,27 +148,6 @@ import {
 } from '~/stores/connections'
 
 const { t } = useI18n()
-
-// Built-in SSH entry surfaced in the Sources list (ADR 0064 unified model). SSH
-// isn't a configurable source — hosts are managed on the /ssh page — so this is a
-// read-only pointer. Injected as a synthetic list item (cast: it's never passed to
-// the source helpers except sourceTransport, which just returns its type string).
-const SSH_SLUG = '__ssh__'
-const sshStore = useSshStore()
-const agentHostCount = computed(() => sshStore.hosts.filter((h) => h.agentEnabled !== false).length)
-const sshEntry = computed(
-  () =>
-    ({
-      slug: SSH_SLUG,
-      name: t('connections.ssh.name'),
-      type: 'builtin',
-      description: 'ssh remote host terminal exec sftp',
-    }) as unknown as Source,
-)
-const goSsh = () => navigateTo('/ssh')
-onMounted(() => {
-  void sshStore.loadAll()
-})
 
 // Theme color for a source's derived status — drives the list-row status badge
 // (text + border), matching Craft's colored status label.
@@ -243,9 +193,6 @@ const {
   rowMenuItems,
   onRowMenuSelect,
 } = useConnectionsPage()
-
-// Built-in SSH entry first, then the configured sources.
-const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value])
 </script>
 
 <style scoped>
@@ -278,51 +225,5 @@ const itemsWithSsh = computed<Source[]>(() => [sshEntry.value, ...sources.value]
 .crow-menu:hover {
   background: var(--bgHover);
   color: var(--text);
-}
-/* Built-in SSH entry — accent-tinted icon tile, distinct from configurable sources. */
-.ssh-src-ic {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  flex: 0 0 auto;
-  border-radius: var(--r-xs);
-  background: var(--accentDim);
-  color: var(--accent);
-}
-.ssh-src-ic.lg {
-  width: 44px;
-  height: 44px;
-  border-radius: var(--r-btn);
-}
-.ssh-src-detail {
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  align-items: flex-start;
-}
-.ssh-src-hero {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.ssh-src-title {
-  font-size: var(--fs-lg);
-  line-height: var(--lh-lg);
-  font-weight: 650;
-  color: var(--text);
-}
-.ssh-src-desc {
-  font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
-  color: var(--textDim);
-  margin-top: 2px;
-}
-.ssh-src-body {
-  font-size: 1em;
-  line-height: var(--lh-prose);
-  color: var(--textDim);
-  max-width: 60ch;
 }
 </style>

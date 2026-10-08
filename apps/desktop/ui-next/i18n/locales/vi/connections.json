@@ -1,11 +1,5 @@
 {
   "connections.search": "Tìm nguồn…",
-  "connections.ssh.name": "SSH",
-  "connections.ssh.builtin": "Tích hợp sẵn",
-  "connections.ssh.sub": "{n} host cho agent dùng · quản lý ở trang SSH",
-  "connections.ssh.detail": "Host remote cho agent",
-  "connections.ssh.body": "Session có host SSH bật cho agent có thể chạy lệnh và đọc/ghi file trên đó qua tool ssh_* (chịu chế độ duyệt SSH của session). Hiện có {n} host cho agent dùng. Thêm/quản lý host — và bật/tắt host nào khả dụng — ở trang SSH.",
-  "connections.ssh.manage": "Quản lý host SSH",
   "connections.new": "Thêm mới",
   "connections.enableToggle": "Bật/tắt nguồn",
   "connections.sech.command": "Command / URL",
