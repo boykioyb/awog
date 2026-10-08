@@ -105,8 +105,20 @@ export function resolveOAuthTarget(
     if (source.mcp.clientId) target.existingClientId = source.mcp.clientId
     if (source.mcp.oauthParams) target.extraParams = { ...source.mcp.oauthParams }
     // Slack's hosted MCP only mints USER tokens — send `user_scope`, and default
-    // it to everything the server advertises when the source doesn't say.
-    if (source.provider === 'slack' && !target.extraParams?.user_scope) {
+    // it to everything the server advertises when the source doesn't say. Match
+    // on provider OR the mcp.slack.com host so a custom source aimed at Slack's
+    // URL gets the same treatment.
+    // `mcp.url` may be malformed (schema only checks non-empty) — a parse
+    // failure means "not Slack".
+    let isSlack = source.provider === 'slack'
+    if (!isSlack) {
+      try {
+        isSlack = /^mcp\.slack\.com$/i.test(new URL(source.mcp.url).hostname)
+      } catch {
+        /* malformed url → not slack */
+      }
+    }
+    if (isSlack && !target.extraParams?.user_scope) {
       target.extraParams = { ...target.extraParams, user_scope: SLACK_MCP_USER_SCOPES }
     }
     return { ok: true, target }
