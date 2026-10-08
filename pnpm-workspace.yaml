@@ -3,6 +3,7 @@ packages:
   - apps/desktop/sidecar
   - apps/desktop/electron
   - apps/desktop/remote-pwa
+  - apps/cli
 
 allowBuilds:
   '@google/genai': true

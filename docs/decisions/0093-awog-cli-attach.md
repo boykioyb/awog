@@ -1,6 +1,6 @@
 # 0093 — AWOG CLI Attach: shim ống-byte qua unix socket thay vì spawn-process từ xa
 
-- **Trạng thái:** Proposed
+- **Trạng thái:** Accepted (transport + `--print` implemented 2026-10-08; PTY attach `sessions.attachCli` = việc mở)
 - **Ngày:** 2026-09-29
 - **Người quyết định:** kyro (chốt hướng "native terminal" = phase 2), devin (phác thảo)
 
@@ -32,6 +32,8 @@ Ràng buộc định hình:
 - **Tích cực:** render/buffer rời Electron hoàn toàn khi dùng shim; toàn bộ security posture của ADR 0092 (pinned env, remote containment, busy-gate) được kế thừa vì PTY vẫn thuộc sidecar; socket transport mở đường cho mọi client ngoài sau này (IDE plugin, CI notify…).
 - **Tiêu cực / Trade-off:** thêm một đường vào engine → thêm mặt audit (RPC surface qua socket phải siết ngay từ đầu — whitelist method, không mở `fs.*`/credential methods cho shim); PTY vẫn tốn tài nguyên ở sidecar (nhỏ — buffer ring + process, không render); shim trên conhost cũ của Windows hạn chế (khuyên Windows Terminal).
 - **Việc cần làm trước khi Accepted→implement:** chọn ngôn ngữ shim (Node script vs single-file binary), whitelist method trên socket, quyết `--detach-kills` semantics với `terminal.detach`.
+
+> **Cập nhật 2026-10-08 — transport + CLI shipped.** `transport/socket.ts` (unix socket + `engine.endpoint` token) và `transport/socket-policy.ts` (default-deny allowlist) đã implement trong sidecar. Package `apps/cli` (`awog` bin) cung cấp `chat` (REPL + `-p`), `session ls`, `session cli --print`, `task run --watch`, `login` — attach trước, spawn engine riêng khi app không chạy (`AWOG_ATTACH_SOCKET=0` giữ endpoint cho app). PTY-bridge `sessions.attachCli` + `awog session attach` còn trong "việc mở" — socket transport đã sẵn để nó plug vào.
 
 ## Tham chiếu
 

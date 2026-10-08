@@ -13,6 +13,16 @@ export function emit(type: string, payload: unknown): void {
     method: 'event',
     params: { type, payload },
   })
+  // Second-door fan-out: external clients on the unix socket transport
+  // (ADR 0093) get the same event stream, filtered by their subscription.
+  eventSink?.(type, payload)
+}
+
+// Registered by transport/socket.ts at boot. One sink is enough — a second
+// external transport would mean redesigning, not appending.
+let eventSink: ((type: string, payload: unknown) => void) | null = null
+export function setEventSink(fn: (type: string, payload: unknown) => void): void {
+  eventSink = fn
 }
 
 // ─── Reverse channel: sidecar → Electron main request/response ──────────────

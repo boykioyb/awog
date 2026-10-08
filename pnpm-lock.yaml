@@ -8,6 +8,15 @@ importers:
 
   .: {}
 
+  apps/cli:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   apps/desktop/electron:
     dependencies:
       electron-log:
@@ -12243,7 +12252,7 @@ snapshots:
   electron@33.4.11:
     dependencies:
       '@electron/get': 2.0.3
-      '@types/node': 20.19.41
+      '@types/node': 20.19.43
       extract-zip: 2.0.1
     transitivePeerDependencies:
       - supports-color

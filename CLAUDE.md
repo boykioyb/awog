@@ -82,6 +82,11 @@ pnpm format         # Prettier toàn bộ
 pnpm build
 ```
 
+```bash
+# CLI (terminal client, chạy độc lập)
+cd apps/cli && pnpm build && node dist/cli.js --help
+```
+
 > Repo dùng **pnpm workspaces** ([pnpm-workspace.yaml](pnpm-workspace.yaml)). Khi thêm dependency, chạy trong đúng package.
 
 ## File / thư mục quan trọng
@@ -107,6 +112,7 @@ pnpm build
 | [apps/desktop/ui-next/types/index.ts](apps/desktop/ui-next/types/index.ts) | Entity types (Task, Project, Agent, Skill, Workflow) |
 | [apps/desktop/sidecar/src/skills/](apps/desktop/sidecar/src/skills/) | Skill storage: 2-tier scan trên `.claude` (ADR 0070) + atomic SKILL.md write + `loadSkillByIdAnyTier` |
 | [apps/desktop/sidecar/src/agents/](apps/desktop/sidecar/src/agents/) | Agent storage: 2-tier AGENT.md trên `.claude` (ADR 0070; both single-file + folder/AGENT.md layout) |
+| [apps/cli/](apps/cli/) | Terminal client `awog` ([spec](docs/features/cli.md), [ADR 0093](docs/decisions/0093-awog-cli-attach.md)): socket attach qua `transport/socket.ts` + `socket-policy.ts`, fallback spawn engine (`AWOG_ATTACH_SOCKET=0` giữ endpoint cho app). Lệnh: `chat` (REPL/`-p`), `session ls|cli|set`, `project ls|use|add`, `source|mcp ls|add|rm|on|off|test|tools|secret`, `account ls|use`, `models ls`, `task run --watch`, `login` |
 | [apps/desktop/sidecar/src/mcp/](apps/desktop/sidecar/src/mcp/) | McpManager (stdio+http+idle stop), HttpMcpClient + SSRF guard, secrets helper, store |
 | [apps/desktop/sidecar/src/credentials/keychain.ts](apps/desktop/sidecar/src/credentials/keychain.ts) | OS keychain wrapper qua `@napi-rs/keyring` (dynamic import + graceful fallback) |
 | [apps/desktop/sidecar/src/watcher.ts](apps/desktop/sidecar/src/watcher.ts) | Filesystem watcher chokidar — emit `*.fs-changed` events (watch `.claude` cho skills/agents/commands, `.awog` cho phần còn lại) |

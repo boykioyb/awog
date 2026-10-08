@@ -1,0 +1,25 @@
+{
+  "name": "@awog/cli",
+  "private": true,
+  "version": "0.41.0",
+  "type": "module",
+  "bin": {
+    "awog": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "prepublishOnly": "pnpm run build",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "typescript": "^5.9.3"
+  }
+}

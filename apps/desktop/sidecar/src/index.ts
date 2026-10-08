@@ -1,6 +1,12 @@
-import { startStdioLoop, send, resolveHostResponse } from './transport/stdio.js'
+import { startStdioLoop, send, resolveHostResponse, setEventSink } from './transport/stdio.js'
 import { dispatch, RpcError } from './transport/rpc.js'
 import { log } from './util/logger.js'
+import {
+  startSocketServer,
+  stopSocketServer,
+  setSocketRequestHandler,
+  emitToSockets,
+} from './transport/socket.js'
 
 // Side-effect imports register methods into the RPC registry.
 import './methods/ping.js'
@@ -521,6 +527,14 @@ async function gracefulShutdown(code: number): Promise<void> {
   } catch {
     /* the module was never loaded (no OpenAI turn this run) — nothing to stop */
   }
+  // Socket transport goes down WITH the engine (ADR 0093 — no standalone
+  // daemon): close the listener + remove the endpoint file so a CLI doesn't
+  // attach to a dead address.
+  try {
+    await stopSocketServer()
+  } catch {
+    /* best-effort: process is exiting anyway */
+  }
   process.exit(code)
 }
 process.on('SIGTERM', () => void gracefulShutdown(0))
@@ -575,9 +589,20 @@ async function handleLine(line: string): Promise<void> {
     return
   }
 
+  await handleRequest(msg, send)
+}
+
+// Shared JSON-RPC request execution for both transports (stdio + socket). The
+// `reply` callback is transport-specific: stdout for stdio, socket.write for
+// external clients. Frame-level concerns (host-response routing, malformed
+// input) stay in handleLine / socket.handleConnLine — this only runs dispatch.
+async function handleRequest(
+  msg: { id: number; method: string; params?: unknown },
+  reply: (frame: object) => void,
+): Promise<void> {
   try {
     const result = await dispatch(msg.method, msg.params)
-    send({ jsonrpc: '2.0', id: msg.id, result })
+    reply({ jsonrpc: '2.0', id: msg.id, result })
   } catch (err) {
     if (err instanceof RpcError) {
       const error: { code: number; message: string; data?: unknown } = {
@@ -585,13 +610,13 @@ async function handleLine(line: string): Promise<void> {
         message: err.message,
       }
       if (err.data !== undefined) error.data = err.data
-      send({ jsonrpc: '2.0', id: msg.id, error })
+      reply({ jsonrpc: '2.0', id: msg.id, error })
       return
     }
     log.error('unhandled handler error', {
       err: err instanceof Error ? err.message : String(err),
     })
-    send({
+    reply({
       jsonrpc: '2.0',
       id: msg.id,
       error: { code: -32603, message: 'Internal error' },
@@ -617,17 +642,23 @@ log.info('sidecar starting', { pid: process.pid, node: process.version })
 // session writes before the process exits (mirrors the SIGTERM path).
 startStdioLoop(handleLine, () => gracefulShutdown(0))
 
-// One-time boot migrations, run STRICTLY IN SEQUENCE (must await — `void a(); void b()`
-// would race them):
-//   1. migrateMcpPlaintextSecrets — move any plaintext secret-looking MCP env/header
-//      values in the LEGACY mcp-servers/*.json to the OS keychain (ADR 0018,
-//      invariant 1), rewriting them to `secret:` refs.
-//   2. migrateMcpServersToSources — copy legacy mcp-servers/<id>.json into the new
-//      per-source folder layout ~/.awog/sources/<slug>/config.json (ADR 0060).
-//   3. migrateToClaudeHome — move skills/agents/commands out of ~/.awog (and each
-//      project's .awog) into the SHARED `.claude` home, plus the SDK transcripts
-//      out of ~/.awog/claude-sdk, then delete the emptied legacy dirs (ADR 0070).
-//      Independent of 1+2; kicked off here only so a fresh boot does the work
+
+// Second door for external clients (ADR 0093): unix socket + endpoint file +
+// per-boot token. Same dispatch as stdio via handleRequest; the method surface
+// is gated by transport/socket-policy.ts. Failure here must NOT kill the
+// engine — the desktop app only ever uses stdio.
+// AWOG_ATTACH_SOCKET=0 opts the engine out of the socket entirely: a CLI-spawned
+// child sets it so it never claims ~/.awog/engine.endpoint away from the app's
+// engine (two engines racing the discovery file = attach roulette).
+if (process.env.AWOG_ATTACH_SOCKET !== '0') {
+  setSocketRequestHandler(handleRequest)
+  setEventSink(emitToSockets)
+  void startSocketServer().catch((err) => {
+    log.warn('socket transport failed to start — CLI attach unavailable', {
+      err: err instanceof Error ? err.message : String(err),
+    })
+  })
+}
 //      up-front. It does NOT gate the RPC loop (that would risk the host's
 //      heartbeat timeout on a slow move) — instead each of skills/agents/
 //      commands.list awaits ITS OWN kind's gate (awaitKindMigration), so a list
