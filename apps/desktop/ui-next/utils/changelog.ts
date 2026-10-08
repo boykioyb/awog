@@ -30,6 +30,41 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.41.1',
+    date: '2026-10-08',
+    highlight: {
+      en: 'Slack, Notion and Linear now actually connect from Sources, and when a connection fails the error tells you what went wrong — with a link you can click.',
+      vi: 'Slack, Notion và Linear nay kết nối được thật từ trang Sources, và khi kết nối hỏng thì thông báo nói rõ chuyện gì xảy ra — kèm link bấm được.',
+    },
+    items: [
+      {
+        kind: 'fixed',
+        en: 'Connecting Slack no longer stops at Slack’s “No scopes requested” or “Invalid permissions requested” page. AWOG now asks for a sensible core set of permissions instead of every one Slack lists, and you can narrow it further to match the scopes your Slack app has turned on.',
+        vi: 'Kết nối Slack không còn dừng ở trang “No scopes requested” hay “Invalid permissions requested” của Slack. AWOG nay xin một bộ quyền cốt lõi hợp lý thay vì mọi quyền Slack liệt kê, và bạn có thể thu hẹp thêm cho khớp với các quyền app Slack của bạn đã bật.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Notion and Linear added from Quick Connect showed as signed in but then failed with “404 Not Found”. They now point at the right address and load their tools.',
+        vi: 'Notion và Linear thêm từ Kết nối nhanh báo đã đăng nhập nhưng sau đó hỏng với lỗi “404 Not Found”. Nay chúng trỏ đúng địa chỉ và tải được tool.',
+      },
+      {
+        kind: 'improved',
+        en: 'Connection errors are readable: instead of a raw block of server JSON you see the actual message, and any link in it — such as Slack’s “enable your app for MCP here” — opens in your browser with one click.',
+        vi: 'Lỗi kết nối đọc được: thay vì một khối JSON thô từ server, bạn thấy đúng câu thông báo, và mọi link trong đó — như link “bật app của bạn cho MCP tại đây” của Slack — mở ra trình duyệt chỉ với một cú bấm.',
+      },
+      {
+        kind: 'changed',
+        en: 'The Sources list no longer shows a fixed SSH entry at the top; SSH hosts stay on their own SSH page.',
+        vi: 'Danh sách Sources không còn mục SSH cố định ở đầu; host SSH vẫn nằm ở trang SSH riêng.',
+      },
+      {
+        kind: 'improved',
+        en: 'Tidier library lists: the search box matches the height of the buttons beside it, and each source’s ⋯ menu sits on the second line instead of leaving an empty gap at the end of the first.',
+        vi: 'Danh sách thư viện gọn hơn: ô tìm kiếm cao bằng các nút bên cạnh, và menu ⋯ của từng nguồn nằm ở dòng thứ hai thay vì để một khoảng trống ở cuối dòng đầu.',
+      },
+    ],
+  },
+  {
     version: '0.41.0',
     date: '2026-10-08',
     highlight: {
