@@ -589,26 +589,50 @@ const tabs = computed<CndTab[]>(() => [
 ])
 
 // Provider error strings sometimes carry URLs the user must follow (Slack's
-// "enable MCP access" app-assistant link, OAuth consoles…). Split the message
+// "enable MCP access" app-assistant link, OAuth consoles…). Split a message
 // into text/url parts so the template can render real anchors; clicks go
 // through sc.openExternal so they land in the system browser, never the
 // agent's embedded jar.
 const URL_RE = /https?:\/\/[^\s"'<>\\)]+/g
+// MCP servers return the raw HTTP body, which is a JSON-RPC envelope whose
+// inner message is *escaped* ("https:\/\/api.slack.com\/…" — backslashes in the
+// URL, quotes escaped too). A URL regex can't match that, so the earlier pass
+// rendered zero anchors. Parse the envelope first — error.message is already
+// unescaped by JSON.parse — and fall back to unescaping the raw text when it
+// isn't JSON.
+const humanizeError = (msg: string): string => {
+  const brace = msg.indexOf('{')
+  if (brace !== -1) {
+    try {
+      const parsed: unknown = JSON.parse(msg.slice(brace))
+      const err = (parsed as { error?: { message?: unknown; code?: unknown } })?.error
+      if (typeof err?.message === 'string') {
+        const head = msg.slice(0, brace).trim()
+        const code = err.code != null ? ` (code ${String(err.code)})` : ''
+        return `${head ? head + ' ' : ''}${err.message}${code}`
+      }
+    } catch {
+      /* not JSON — fall through to unescape */
+    }
+  }
+  return msg.replace(/\\(["/\\])/g, '$1')
+}
 const splitErrorLinks = (msg: string | null | undefined) => {
-  if (!msg) return []
+  const text = humanizeError(msg ?? '')
+  if (!text) return []
   const parts: { text: string; isUrl: boolean }[] = []
   let last = 0
-  for (const m of msg.matchAll(URL_RE)) {
+  for (const m of text.matchAll(URL_RE)) {
     const idx = m.index ?? 0
     // Trim trailing punctuation that was never part of the URL (JSON `"`, `)`, `.`).
     const url = m[0].replace(/[.,;:!?'")\]}]+$/, '')
-    if (idx > last) parts.push({ text: msg.slice(last, idx), isUrl: false })
+    if (idx > last) parts.push({ text: text.slice(last, idx), isUrl: false })
     parts.push({ text: url, isUrl: true })
     last = idx + url.length
     // If the regex grabbed more than the trimmed url, re-append the tail as text.
     if (m[0].length > url.length) parts.push({ text: m[0].slice(url.length), isUrl: false })
   }
-  if (last < msg.length) parts.push({ text: msg.slice(last), isUrl: false })
+  if (last < text.length) parts.push({ text: text.slice(last), isUrl: false })
   return parts
 }
 const errorParts = computed(() => splitErrorLinks(connectionError.value))
