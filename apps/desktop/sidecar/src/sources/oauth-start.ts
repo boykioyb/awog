@@ -112,8 +112,13 @@ export function resolveOAuthTarget(
         /* malformed url → not slack */
       }
     }
-    if (isSlack && !target.extraParams?.user_scope) {
-      target.extraParams = { ...target.extraParams, user_scope: SLACK_MCP_USER_SCOPES }
+    // Slack's consent gate reads BOTH params: `user_scope` mints the user
+    // token, but an empty `scope` still trips "No scopes requested" on
+    // v2_user/authorize (same failure Kiro hit in kirodotdev/Kiro#8760).
+    // Send the same list in both; an explicit oauthParams override always wins.
+    if (isSlack) {
+      const userScope = target.extraParams?.user_scope ?? target.extraParams?.scope ?? SLACK_MCP_USER_SCOPES
+      target.extraParams = { scope: userScope, user_scope: userScope, ...target.extraParams }
     }
     return { ok: true, target }
   }
