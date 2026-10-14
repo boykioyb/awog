@@ -5359,13 +5359,25 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Public wrapper for the session context menu: regenerate the title by id.
   async function regenerateTitle(id: number): Promise<void> {
     const s = byId(id)
-    if (s) await autoGenerateTitle(s)
+    if (!s) return
+    const tg = new Set(titleGenerating.value)
+    tg.add(id)
+    titleGenerating.value = tg
+    try {
+      await autoGenerateTitle(s)
+    } finally {
+      const done = new Set(titleGenerating.value)
+      done.delete(id)
+      titleGenerating.value = done
+    }
   }
 
   // Engine ids whose auto-title generation has already been kicked off, so the early
   // (parallel-with-turn) trigger and the post-turn fallback never double-fire. Cleared
   // on failure so a later turn can retry. Manual regenerate bypasses this entirely.
   const autoTitleStarted = new Set<string>()
+  // Đang sinh title (UI spinner/shimmer trên hàng phiên; reactive vì render theo).
+  const titleGenerating = ref(new Set<number>())
 
   // Fire-and-forget auto title for a still-unnamed first-turn session, deduped across
   // the early + fallback triggers. `userText` lets it run BEFORE the turn finishes
@@ -5845,6 +5857,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     remove,
     rename,
     regenerateTitle,
+    titleGenerating,
     summarizeToPrompt,
     setProject,
     setWorkspaceFolder,

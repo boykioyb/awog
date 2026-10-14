@@ -63,12 +63,13 @@
       <span
         v-else
         class="ttl"
-        :class="{ unread: session.unread }"
+        :class="{ unread: session.unread, tgen: store.titleGenerating.has(session.id) }"
         :title="t('sessions.item.rename')"
         @dblclick.stop="startRename"
       >
         {{ session.title }}
       </span>
+      <Loader2 v-if="store.titleGenerating.has(session.id) && !editing" class="ttlspin" />
       <span v-if="session.unread && !editing" class="undot" :title="t('sessions.item.unread')" />
       <!-- ⋯ từng hàng — mở ĐÚNG menu chuột phải chung của danh sách (emit
            `ctxmenu` lên parent như right-click). Trước đây là một DropdownMenu
@@ -805,6 +806,35 @@ input.ttl:focus-visible {
 .pinmark {
   cursor: pointer;
   color: var(--warning);
+}
+/* Title shimmer while the model is regenerating it — a thin accent sheen that
+   sweeps left→right over the text (color-mix'd with the title color so it stays
+   readable on every theme), plus a tiny Loader2 spinner at the end of the line.
+   `tgen` on the title swaps its text color to the animated gradient. */
+.ttl.tgen {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--textMuted) 0%,
+    var(--primary) 50%,
+    var(--textMuted) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: ttlshimmer 1.4s linear infinite;
+}
+.ttlspin {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--primary);
+  animation: spin 0.9s linear infinite;
+  flex: none;
+}
+@keyframes ttlshimmer {
+  to {
+    background-position: -200% 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .ddbtn {

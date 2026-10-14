@@ -63,7 +63,7 @@
       <div
         v-for="s in filteredRows"
         :key="s.id"
-        class="group flex h-[30px] cursor-pointer items-center gap-2.5 rounded-[var(--r-xs)] px-2.5 hover:bg-[var(--bgHover)]"
+        class="group relative flex h-[30px] cursor-pointer items-center gap-2.5 rounded-[var(--r-xs)] px-2.5 hover:bg-[var(--bgHover)]"
         :class="{
           'bg-[var(--accentDim)] text-[var(--text)]': s.id === sessions.activeId,
           'text-[var(--textMuted)]': s.id !== sessions.activeId,
@@ -94,9 +94,18 @@
           @keydown.esc.prevent.stop="cancelRename"
           @blur="commitRename"
         />
-        <span v-else class="min-w-0 flex-1 truncate" @dblclick.stop="startRename(s)">
+        <span
+          v-else
+          class="min-w-0 flex-1 truncate"
+          :class="{ tgen: sessions.titleGenerating.has(s.id) }"
+          @dblclick.stop="startRename(s)"
+        >
           {{ s.title }}
         </span>
+        <Loader2
+          v-if="sessions.titleGenerating.has(s.id) && renamingId !== s.id"
+          class="size-3 flex-none animate-spin text-[var(--primary)]"
+        />
         <!-- Đã ghim: icon nhỏ ngay sau tên (phiên ghim cũng được đưa lên đầu list). -->
         <span
           v-if="s.pinned"
@@ -128,7 +137,7 @@
           {{ fmtTokens(ctxTokens(s)) }}
         </span>
         <span
-          class="hidden flex-none cursor-pointer rounded-[var(--r-xs)] p-0.5 text-[var(--textFaint)] hover:bg-[var(--bgActive)] hover:text-[var(--text)] group-hover:grid"
+          class="absolute right-1.5 cursor-pointer rounded-[var(--r-xs)] bg-[var(--bgHover)] p-0.5 text-[var(--textFaint)] opacity-0 transition-opacity hover:bg-[var(--bgActive)] hover:text-[var(--text)] group-hover:opacity-100"
           role="button"
           :title="t('wb.strip.close')"
           :aria-label="t('wb.strip.close')"
@@ -151,7 +160,7 @@
       <div
         v-for="s in filteredTabs"
         :key="s.id"
-        class="group flex cursor-pointer items-center gap-2 px-[11px] py-[5px] text-sm text-[var(--textMuted)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
+        class="group relative flex cursor-pointer items-center gap-2 px-[11px] py-[5px] text-sm text-[var(--textMuted)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
         :title="`${s.title}${costLabel(s)}`"
         @click="activateRow(s.id)"
       >
@@ -164,9 +173,13 @@
           class="size-1.5 flex-none rounded-full"
           :style="{ background: STATUS_COLOR[s.status] }"
         />
-        <span class="min-w-0 flex-1 truncate">
+        <span class="min-w-0 flex-1 truncate" :class="{ tgen: sessions.titleGenerating.has(s.id) }">
           {{ s.title }}{{ s.id === sessions.activeId ? ' •' : '' }}
         </span>
+        <Loader2
+          v-if="sessions.titleGenerating.has(s.id)"
+          class="size-3 flex-none animate-spin text-[var(--primary)]"
+        />
         <span
           class="h-1 w-[34px] flex-none overflow-hidden rounded-[var(--r-xs)] bg-[var(--bgActive)]"
         >
@@ -179,7 +192,9 @@
         <span class="flex-none font-mono text-xs text-[var(--textFaint)]">
           {{ fmtTokens(ctxTokens(s)) }}
         </span>
-        <span class="hidden flex-none gap-0.5 group-hover:flex">
+        <span
+          class="absolute inset-y-0 right-0 flex items-center gap-0.5 bg-[var(--bgHover)] pl-1 pr-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+        >
           <ScmIconBtn
             :size="18"
             hover="active"
@@ -224,7 +239,7 @@
         <div
           v-for="s in filteredArchived"
           :key="s.id"
-          class="group flex cursor-pointer items-center gap-2 px-[11px] py-[5px] text-sm text-[var(--textMuted)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
+          class="group relative flex cursor-pointer items-center gap-2 px-[11px] py-[5px] text-sm text-[var(--textMuted)] hover:bg-[var(--bgHover)] hover:text-[var(--text)]"
           :title="t('wb.strip.reopen')"
           @click="restore(s)"
         >
@@ -236,7 +251,9 @@
           <span class="flex-none font-mono text-xs text-[var(--textFaint)]">
             {{ fmtTokens(ctxTokens(s)) }}
           </span>
-          <span class="hidden flex-none gap-0.5 group-hover:flex">
+          <span
+            class="absolute inset-y-0 right-0 flex items-center gap-0.5 bg-[var(--bgHover)] pl-1 pr-1.5 opacity-0 transition-opacity group-hover:opacity-100"
+          >
             <ScmIconBtn
               :size="18"
               danger
@@ -277,6 +294,7 @@
 // cùng một nguồn phiên. Menu chuột phải = thao tác trên phiên (useSessionActions,
 // dùng chung với cột /sessions) + thao tác tab (đóng / đóng các tab khác / clear ctx…).
 import { computed, nextTick, ref, useTemplateRef } from 'vue'
+import { Loader2 } from 'lucide-vue-next'
 import ScmIconBtn from './ScmIconBtn.vue'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
@@ -469,7 +487,27 @@ function onRowCtx(id: number, x: number, y: number) {
     box-shadow: 0 0 0 6px color-mix(in srgb, var(--st, var(--accent)) 0%, transparent);
   }
   100% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--st, var(--accent)) 0%, transparent);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--st, var(--accent)) 0%, transparent);
+  }
+}
+/* Title shimmer while the model is regenerating it — same sheen as
+   SessionListItem (accent sweep on transparent-clipped text). */
+.tgen {
+  color: transparent;
+  background-image: linear-gradient(
+    90deg,
+    var(--textMuted) 0%,
+    var(--primary) 50%,
+    var(--textMuted) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: ttlshimmer 1.4s linear infinite;
+}
+@keyframes ttlshimmer {
+  to {
+    background-position: -200% 0;
   }
 }
 @media (prefers-reduced-motion: reduce) {
