@@ -30,6 +30,46 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.41.2',
+    date: '2026-10-14',
+    highlight: {
+      en: 'A full IDE-style Workbench (files, sessions, docks, ⌘K switcher), a built-in pentest tab in Network Capture, browser profiles + bookmarks, and one-click Claude session import.',
+      vi: 'Workbench kiểu IDE đầy đủ (file, phiên, dock, ⌘K), tab pentest ngay trong Network Capture, hồ sơ trình duyệt + bookmark, và nhập phiên Claude bằng một cú bấm.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'New /workbench route: VS Code-style layout — view rail (Files / Source control / GitHub / Sessions), file explorer with fuzzy finder, doc tabs (chat, file, markdown, mermaid, image, video, web, monitor, settings), bottom dock (terminal, diff, tasks, team, cost) and a session strip; ⌘K switches session, ⌘J toggles the dock, ⌘B collapses the explorer.',
+        vi: 'Route /workbench mới: bố cục kiểu VS Code — rail bên (Files / Source control / GitHub / Sessions), cây file có tìm nhanh (fuzzy), tab tài liệu (chat, file, markdown, mermaid, ảnh, video, web, monitor, settings), dock đáy (terminal, diff, tasks, team, cost) và dải phiên; ⌘K đổi phiên, ⌘J đóng/mở dock, ⌘B gấp explorer.',
+      },
+      {
+        kind: 'added',
+        en: 'Network Capture → Security: a real pentest tab — OWASP A01–A10 scenarios (SQLi, XSS, SSTI, LFI, IDOR, CRLF, XXE, CORS, open-redirect…), a per-probe table showing the payload sent, a detail dialog on click, baseline filtering, and a markdown report you can preview and save.',
+        vi: 'Network Capture → Bảo mật: tab pentest thật — kịch bản OWASP A01–A10 (SQLi, XSS, SSTI, LFI, IDOR, CRLF, XXE, CORS, open-redirect…), bảng từng probe cho thấy payload đã gửi, modal chi tiết khi bấm, lọc baseline, và báo cáo markdown xem trước + lưu được.',
+      },
+      {
+        kind: 'added',
+        en: 'Browser profiles: separate Chrome-like profiles (own cookies/storage) with per-profile proxy, a bookmark bar + folders, a mobile-emulation mode, and userscripts; the browser panel no longer flashes when you open the ⋯ menu.',
+        vi: 'Hồ sơ trình duyệt: profile riêng (cookie/storage riêng) kèm proxy theo profile, thanh bookmark + thư mục, chế độ giả lập mobile và userscripts; panel trình duyệt không còn nháy khi mở menu ⋯.',
+      },
+      {
+        kind: 'added',
+        en: 'Import Claude Desktop/CLI sessions: bring your existing Claude conversations into AWOG with dedupe, resume them, and see them in the session list by real last-activity.',
+        vi: 'Nhập phiên Claude Desktop/CLI: đưa hội thoại Claude sẵn có vào AWOG, bỏ trùng, tiếp tục được, và xếp trong danh sách theo hoạt động cuối.',
+      },
+      {
+        kind: 'improved',
+        en: 'Anthropic sessions run on a persistent Claude process with native /compact and prewarmed one-shots — replies start faster and long chats compact in place.',
+        vi: 'Phiên Anthropic chạy trên tiến trình Claude thường trực với /compact gốc và one-shot được làm nóng sẵn — phản hồi nhanh hơn và phiên dài compact ngay tại chỗ.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Network capture scans no longer die on Chromium-managed headers, the probe table no longer overflows off the right edge, and clicking a probe opens a dialog instead of jumping away.',
+        vi: 'Quét capture không còn chết vì header do Chromium quản, bảng probe không còn tràn khỏi mép phải, và bấm vào probe mở dialog thay vì nhảy đi chỗ khác.',
+      },
+    ],
+  },
+  {
     version: '0.41.1',
     date: '2026-10-08',
     highlight: {
