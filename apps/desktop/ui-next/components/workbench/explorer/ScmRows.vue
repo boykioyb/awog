@@ -19,7 +19,7 @@
       <span class="truncate font-[560]">{{ n.name }}</span>
       <span
         v-if="onUnstageDir || onStageDir || onDiscardDir"
-        class="ml-auto hidden gap-1 group-hover/row:flex"
+        class="ml-auto flex gap-1 opacity-0 transition-opacity group-hover/row:opacity-100"
       >
         <ScmIconBtn
           v-if="onUnstageDir"
@@ -53,7 +53,7 @@
     <!-- File row: click → diff; actions hiện khi hover, đè lên dir suffix. -->
     <div
       v-else
-      class="group/row flex h-[24px] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
+      class="group/row relative flex h-[24px] cursor-pointer items-center gap-1.5 whitespace-nowrap pr-2.5 text-[var(--textMuted)] hover:bg-[var(--bgHover)]"
       :style="{ paddingLeft: 8 + n.depth * 12 + 'px' }"
       :title="n.file!.f"
       @click="emit('openDiff', n.file!.f)"
@@ -63,13 +63,13 @@
       <span class="truncate">{{ n.name }}</span>
       <span
         v-if="!treeMode"
-        class="min-w-0 flex-1 truncate text-xs text-[var(--textFaint)] group-hover/row:hidden"
+        class="min-w-0 flex-1 truncate text-xs text-[var(--textFaint)] opacity-100 transition-opacity group-hover/row:opacity-0"
       >
         {{ scmDirOf(n.file!.f) }}
       </span>
       <span
         v-if="onOpenFile || onUnstageFile || onDiscardFile || onStageFile"
-        class="ml-auto hidden gap-1 group-hover/row:flex"
+        class="absolute right-2.5 flex gap-1 bg-[var(--bgHover)] pl-1 opacity-0 transition-opacity group-hover/row:opacity-100"
       >
         <ScmIconBtn
           v-if="onOpenFile"

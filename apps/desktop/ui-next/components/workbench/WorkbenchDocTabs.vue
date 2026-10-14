@@ -28,7 +28,7 @@
         <span v-if="d.pin" class="pn" :title="t('workbench.tab.pin')" v-html="PIN_SVG" />
         <span
           v-else
-          class="hidden rounded-[var(--r-xs)] p-px text-[var(--fs-xs)] leading-[var(--lh-xs)] text-[var(--textFaint)] hover:bg-[var(--bgHover)] hover:text-[var(--text)] group-hover:inline-block"
+          class="rounded-[var(--r-xs)] p-px text-[var(--fs-xs)] leading-[var(--lh-xs)] text-[var(--textFaint)] opacity-0 transition-opacity hover:bg-[var(--bgHover)] hover:text-[var(--text)] group-hover:opacity-100"
           @click.stop="void wbDocs.requestCloseDoc(d)"
         >
           ✕

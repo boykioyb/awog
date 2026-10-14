@@ -91,7 +91,7 @@
               {{ bHint(r.branch) }}
             </span>
             <span
-              class="hidden flex-none items-center gap-0.5 bg-[var(--bgEl)] pl-1 group-hover/row:flex"
+              class="flex flex-none items-center gap-0.5 bg-[var(--bgEl)] pl-1 opacity-0 transition-opacity group-hover/row:opacity-100"
             >
               <ScmIconBtn
                 :size="18"
@@ -118,8 +118,12 @@
               {{ bHint(r.branch) }}
             </span>
             <span
-              class="absolute inset-y-0 right-0 flex-none items-center gap-0.5 bg-[var(--bgHover)] pl-1 pr-1.5"
-              :class="isPinned(r.branch.name) ? 'flex' : 'hidden group-hover/row:flex'"
+              class="absolute inset-y-0 right-0 flex-none items-center gap-0.5 bg-[var(--bgHover)] pl-1 pr-1.5 transition-opacity"
+              :class="
+                isPinned(r.branch.name)
+                  ? 'flex opacity-100'
+                  : 'flex opacity-0 group-hover/row:opacity-100'
+              "
             >
               <ScmIconBtn
                 :size="18"

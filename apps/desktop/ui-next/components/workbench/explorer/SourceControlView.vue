@@ -101,7 +101,7 @@
             class="group/sec flex h-[22px] cursor-pointer select-none items-center gap-[5px] px-2 text-xs font-[640] text-[var(--textDim)]"
           >
             Staged Changes
-            <span class="hidden gap-0.5 group-hover/sec:flex">
+            <span class="flex gap-0.5 opacity-0 transition-opacity group-hover/sec:opacity-100">
               <ScmIconBtn
                 :size="16"
                 hover="active"
@@ -135,7 +135,7 @@
             class="group/sec flex h-[22px] cursor-pointer select-none items-center gap-[5px] px-2 text-xs font-[640] text-[var(--textDim)]"
           >
             Changes
-            <span class="hidden gap-0.5 group-hover/sec:flex">
+            <span class="flex gap-0.5 opacity-0 transition-opacity group-hover/sec:opacity-100">
               <ScmIconBtn :size="16" hover="active" title="Stage tất cả ✓" @click="git.stageAll">
                 <Check :size="14" />
               </ScmIconBtn>
