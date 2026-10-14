@@ -18,7 +18,7 @@ import { ANTHROPIC_MODELS } from '../providers/anthropic/models-map.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { awogHome } from '../util/path.js'
-import { authorPi } from '../runtime/complete.js'
+import { author } from '../runtime/complete.js'
 
 const ModelSchema = z.string().min(1).max(200)
 
@@ -38,10 +38,7 @@ const Params = z.object({
   scope: z.string().min(1).max(64).default('global'),
 })
 
-function renderTranscript(
-  history: { role: 'user' | 'agent'; text: string }[],
-  userText: string,
-): string {
+function renderTranscript(history: { role: 'user' | 'agent'; text: string }[], userText: string): string {
   const turns: string[] = []
   for (const m of history) {
     const text = m.text.trim()
@@ -127,7 +124,7 @@ register('agents.author', async (raw) => {
 
   // Author through the Pi runtime. Writes an AGENT.md via the Write tool (cwd
   // bounds it to the chosen scope's dir), forwarding text/step events below.
-  const res = await authorPi(
+  const res = await author(
     {
       accountId: params.accountId,
       modelId,

@@ -8,7 +8,8 @@
   "settingsKeymap.act.toggleBrowserPip": "Bật/tắt trình duyệt Picture-in-Picture",
   "settingsKeymap.act.nextSession": "Phiên kế tiếp",
   "settingsKeymap.act.prevSession": "Phiên trước đó",
-  "settingsKeymap.act.goSessions": "Tới trang Phiên",
+  "settingsKeymap.act.lastProject": "Project dùng gần nhất",
+  "settingsKeymap.act.sessionTab1": "Tab trao đổi đầu tiên",
   "settingsKeymap.act.goTasks": "Tới trang Tác vụ",
   "settingsKeymap.act.goProjects": "Tới trang Dự án"
 }

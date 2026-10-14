@@ -117,10 +117,7 @@ function headerMetadataSignature(header: SessionHeader): string {
 // so a disk edit that CLEARS a flag keeps the local value (an accepted minor deviation).
 // EXCEPT archived/archivedAt: xoá key CHÍNH LÀ cách bỏ lưu trữ, nên cặp đó lấy trọn
 // theo đĩa (xem trong thân hàm).
-function mergeHeaderWithExternalMetadata(
-  local: SessionHeader,
-  disk: SessionHeader,
-): SessionHeader {
+function mergeHeaderWithExternalMetadata(local: SessionHeader, disk: SessionHeader): SessionHeader {
   // Bỏ lưu trữ = XOÁ HẲN cặp archived/archivedAt khỏi header (session-manager.ts
   // setArchived), nên "chỉ copy khi đĩa có" sẽ giữ lại `archived: true` của bản local
   // và hoàn tác đúng thao tác vừa làm bên ngoài. Vì vậy cặp này lấy TRỌN VẸN theo đĩa:
@@ -176,8 +173,7 @@ function mergeHeaderWithExternalMetadata(
           ...(disk.teamProjectId !== undefined ? { teamProjectId: disk.teamProjectId } : {}),
         }
       : {}
-  const diskOrigin: Pick<SessionHeader, 'origin'> =
-    disk.origin !== undefined ? { origin: disk.origin } : {}
+  const diskOrigin: Pick<SessionHeader, 'origin'> = disk.origin !== undefined ? { origin: disk.origin } : {}
   const diskSpawn: Pick<SessionHeader, 'spawnConfig'> =
     disk.spawnConfig !== undefined ? { spawnConfig: disk.spawnConfig } : {}
   // `agent` lấy TRỌN theo đĩa, cùng lý do với bộ nhóm + spawnConfig:
@@ -185,8 +181,7 @@ function mergeHeaderWithExternalMetadata(
   // cặp parentId/role vì field này còn sống trên phiên GỐC (lead được bind qua
   // sessions.setAgent trên gốc) — nơi `teamRunId` luôn vắng mặt, nên
   // gộp vào `diskGroup` sẽ đánh mất binding của lead ngay trên phiên mang nó.
-  const diskAgent: Pick<SessionHeader, 'agent'> =
-    disk.agent !== undefined ? { agent: disk.agent } : {}
+  const diskAgent: Pick<SessionHeader, 'agent'> = disk.agent !== undefined ? { agent: disk.agent } : {}
   return {
     ...restNoGroup,
     ...diskGroup,
@@ -291,16 +286,21 @@ class SessionPersistenceQueue {
       // prior signature is treated as local (first write of this process).
       const hasExternalChange = !!diskHeader && !!diskSig && !!previousSig && diskSig !== previousSig
       const header =
-        hasExternalChange && diskHeader
-          ? mergeHeaderWithExternalMetadata(localHeader, diskHeader)
-          : localHeader
+        hasExternalChange && diskHeader ? mergeHeaderWithExternalMetadata(localHeader, diskHeader) : localHeader
 
       // Record the signature BEFORE the write so a watcher event fired during the
       // rename is recognised as our own write, not an external edit.
       this.lastWrittenHeaderSignature.set(sessionId, headerMetadataSignature(header))
 
       const tHeader = Date.now()
-      const body = serializeSessionJsonl(data, attachmentsDir(sessionId), header)
+      // ADR 0097: a session with transcriptSource === 'sdk' keeps its messages in
+      // the Claude CLI transcript — the AWOG file is index-only, so the write is
+      // just the (already merged) header line. A full body still serializes
+      // through jsonl so legacy sessions + Pi/Codex sessions stay on the old path.
+      const sdkSourced = header.transcriptSource === 'sdk'
+      const body = sdkSourced
+        ? `${JSON.stringify(header)}\n`
+        : serializeSessionJsonl(data, attachmentsDir(sessionId), header)
       const tSerialize = Date.now()
       const tmpFile = `${filePath}.tmp`
       await writeFile(tmpFile, body, { encoding: 'utf-8', mode: 0o600 })

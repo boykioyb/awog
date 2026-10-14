@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import { runGit } from '../git/runner.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 
 const ModelSchema = z.string().min(1).max(200)
 
@@ -118,12 +118,7 @@ register('git.generatePrSummary', async (raw) => {
   const commitLog = logRes.stdout.trim()
 
   // Three-dot diff: what changed on head since it diverged from base (the PR view).
-  const diffRes = await runGit(workspaceRoot, [
-    'diff',
-    `${base}...${head}`,
-    '--no-color',
-    '--find-renames',
-  ])
+  const diffRes = await runGit(workspaceRoot, ['diff', `${base}...${head}`, '--no-color', '--find-renames'])
   let diffText = diffRes.stdout
   let truncated = false
   if (diffText.length > DIFF_MAX_CHARS) {
@@ -138,12 +133,7 @@ register('git.generatePrSummary', async (raw) => {
   // Requirement/plan docs the branch added or modified → inline their content at
   // head so the model can ground the summary in the intended behavior. Skip
   // deletions (no content at head) and cap count + total size.
-  const nameStatus = await runGit(workspaceRoot, [
-    'diff',
-    `${base}...${head}`,
-    '--name-status',
-    '--find-renames',
-  ])
+  const nameStatus = await runGit(workspaceRoot, ['diff', `${base}...${head}`, '--name-status', '--find-renames'])
   const docPaths = parseNameStatus(nameStatus.stdout)
     .filter((f) => f.status !== 'D' && isDocFile(f.path))
     .map((f) => f.path)
@@ -195,7 +185,7 @@ register('git.generatePrSummary', async (raw) => {
     truncated,
   })
 
-  const collected = await completePi({
+  const collected = await complete({
     accountId: params.accountId,
     modelId,
     systemPrompt: buildSystemPrompt(params.titleRule),

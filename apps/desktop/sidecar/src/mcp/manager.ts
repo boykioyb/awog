@@ -129,11 +129,7 @@ function resolveCwd(params: McpConnectParams): string | undefined {
     throw new Error('cwd must not contain ".."')
   }
   const expanded =
-    params.cwd === '~'
-      ? homedir()
-      : params.cwd.startsWith('~/')
-        ? resolve(homedir(), params.cwd.slice(2))
-        : params.cwd
+    params.cwd === '~' ? homedir() : params.cwd.startsWith('~/') ? resolve(homedir(), params.cwd.slice(2)) : params.cwd
   if (!isAbsolute(expanded)) {
     throw new Error('cwd must be absolute (or start with "~/")')
   }
@@ -277,11 +273,7 @@ function extractCallText(content: CallToolResult['content']): string {
 // read-only tool and report whether it authenticated. A tool-level failure
 // (isError, or a JSON-RPC error like a 401 relayed by the server) → ok:false so
 // the caller shows "connected but token rejected" instead of a bare "OK".
-async function probeHealth(
-  client: McpClient,
-  hc: McpHealthCheck,
-  timeoutMs: number,
-): Promise<McpProbeResult> {
+async function probeHealth(client: McpClient, hc: McpHealthCheck, timeoutMs: number): Promise<McpProbeResult> {
   try {
     const res = (await client.request(
       'tools/call',
@@ -335,10 +327,7 @@ class McpManager {
   // `opts.onLog` (optional) receives coarse-grained progress lines + the child's
   // raw stderr live, so a caller (source.tools) can stream a "what it's doing"
   // console to the UI. It is a pure observer — never affects the outcome.
-  async test(
-    params: McpConnectParams,
-    opts: { timeoutMs?: number; onLog?: SourceLog } = {},
-  ): Promise<McpTestOutcome> {
+  async test(params: McpConnectParams, opts: { timeoutMs?: number; onLog?: SourceLog } = {}): Promise<McpTestOutcome> {
     const timeoutMs = opts.timeoutMs ?? params.timeoutMs
     const onLog = opts.onLog
     if (params.transport === 'sse') {
@@ -350,11 +339,7 @@ class McpManager {
     return this.testStdio(params, timeoutMs, onLog)
   }
 
-  private async testStdio(
-    params: McpConnectParams,
-    timeoutMs: number,
-    onLog?: SourceLog,
-  ): Promise<McpTestOutcome> {
+  private async testStdio(params: McpConnectParams, timeoutMs: number, onLog?: SourceLog): Promise<McpTestOutcome> {
     const cmd = [params.command ?? '', ...(params.args ?? [])].filter(Boolean).join(' ')
     // Command + args are safe to echo (already shown in the Connection info table);
     // the child's env — where `secret:` refs expand — is NEVER logged.
@@ -375,7 +360,10 @@ class McpManager {
     })
     const client = new StdioMcpClient(child)
     try {
-      onLog?.({ level: 'info', message: `Handshake — initialize + tools/list (timeout ${timeoutMs}ms)` })
+      onLog?.({
+        level: 'info',
+        message: `Handshake — initialize + tools/list (timeout ${timeoutMs}ms)`,
+      })
       const { tools, resources } = await handshake(client, timeoutMs)
       onLog?.({
         level: 'info',
@@ -385,7 +373,10 @@ class McpManager {
       // the token env — then tear the child down.
       let probe: McpProbeResult | undefined
       if (params.healthCheck) {
-        onLog?.({ level: 'info', message: `Auth probe — calling ${params.healthCheck.tool}` })
+        onLog?.({
+          level: 'info',
+          message: `Auth probe — calling ${params.healthCheck.tool}`,
+        })
         probe = await probeHealth(client, params.healthCheck, timeoutMs)
         onLog?.({
           level: probe.ok ? 'info' : 'error',
@@ -417,11 +408,7 @@ class McpManager {
     }
   }
 
-  private async testHttp(
-    params: McpConnectParams,
-    timeoutMs: number,
-    onLog?: SourceLog,
-  ): Promise<McpTestOutcome> {
+  private async testHttp(params: McpConnectParams, timeoutMs: number, onLog?: SourceLog): Promise<McpTestOutcome> {
     if (!params.url) {
       onLog?.({ level: 'error', message: 'http transport requires url' })
       return { ok: false, error: 'http transport requires url' }
@@ -436,13 +423,13 @@ class McpManager {
     // Header values (Authorization bearer, `secret:` header refs) are NEVER logged.
     // Prefix a bare `authType:'bearer'` token with `Bearer ` (post-expand; no-op
     // for oauth/none or an already-schemed value).
-    const expandedHeaders = applyBearerScheme(
-      params.authType,
-      await expandSecrets(params.id, params.headers),
-    )
+    const expandedHeaders = applyBearerScheme(params.authType, await expandSecrets(params.id, params.headers))
     const client = new HttpMcpClient(params.url, expandedHeaders)
     try {
-      onLog?.({ level: 'info', message: `Handshake — initialize + tools/list (timeout ${timeoutMs}ms)` })
+      onLog?.({
+        level: 'info',
+        message: `Handshake — initialize + tools/list (timeout ${timeoutMs}ms)`,
+      })
       const { tools, resources } = await handshake(client, timeoutMs)
       onLog?.({
         level: 'info',
@@ -450,7 +437,10 @@ class McpManager {
       })
       let probe: McpProbeResult | undefined
       if (params.healthCheck) {
-        onLog?.({ level: 'info', message: `Auth probe — calling ${params.healthCheck.tool}` })
+        onLog?.({
+          level: 'info',
+          message: `Auth probe — calling ${params.healthCheck.tool}`,
+        })
         probe = await probeHealth(client, params.healthCheck, timeoutMs)
         onLog?.({
           level: probe.ok ? 'info' : 'error',

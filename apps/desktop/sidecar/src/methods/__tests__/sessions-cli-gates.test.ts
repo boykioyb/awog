@@ -23,13 +23,11 @@ const h = vi.hoisted(() => ({
   active: [] as string[],
   customEndpoint: false,
   attached: false,
-  openCliLink: vi.fn(
-    async (args: { sessionId: string; kind: string }) => ({
-      terminalId: 'term-1',
-      kind: args.kind,
-      linked: args.kind !== 'devin',
-    }),
-  ),
+  openCliLink: vi.fn(async (args: { sessionId: string; kind: string }) => ({
+    terminalId: 'term-1',
+    kind: args.kind,
+    linked: args.kind !== 'devin',
+  })),
   appendMessage: vi.fn(async () => {}),
   updateSessionMetadata: vi.fn(async () => {}),
   truncateSession: vi.fn(async () => {}),
@@ -72,10 +70,7 @@ vi.mock('../../sessions/cli-registry.js', async () => {
     // đã được phủ trong cli-registry.test.ts (registry thật).
     assertCliDetachedForDelete: () => {
       if (h.attached) {
-        throw new RpcError(
-          -32021,
-          'A CLI is still attached to this session — close it before deleting the session',
-        )
+        throw new RpcError(-32021, 'A CLI is still attached to this session — close it before deleting the session')
       }
     },
   }
@@ -165,9 +160,7 @@ describe('sessions.openCli — định tuyến runtime', () => {
     const res = (await dispatch('sessions.openCli', OPEN)) as Record<string, unknown>
     expect(res.cli).toBe('claude')
     expect(res.linked).toBe(true)
-    expect(h.openCliLink).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 'ses-gate', kind: 'claude' }),
-    )
+    expect(h.openCliLink).toHaveBeenCalledWith(expect.objectContaining({ sessionId: 'ses-gate', kind: 'claude' }))
   })
 
   it('openai không custom endpoint + cli vắng → kind codex', async () => {
@@ -188,31 +181,22 @@ describe('sessions.openCli — định tuyến runtime', () => {
     h.session = makeSession({ settings: { provider: 'google' } })
     await expect(dispatch('sessions.openCli', OPEN)).rejects.toMatchObject({ code: -32021 })
     // Kể cả devin — cổng `!native` ném trước nhánh cho phép devin
-    await expect(
-      dispatch('sessions.openCli', { ...OPEN, cli: 'devin' }),
-    ).rejects.toMatchObject({ code: -32021 })
+    await expect(dispatch('sessions.openCli', { ...OPEN, cli: 'devin' })).rejects.toMatchObject({ code: -32021 })
     expect(h.openCliLink).not.toHaveBeenCalled()
   })
 
   it('anthropic + cli=codex → -32021 (không phải runtime của phiên)', async () => {
-    await expect(
-      dispatch('sessions.openCli', { ...OPEN, cli: 'codex' }),
-    ).rejects.toMatchObject({ code: -32021 })
+    await expect(dispatch('sessions.openCli', { ...OPEN, cli: 'codex' })).rejects.toMatchObject({ code: -32021 })
     expect(h.openCliLink).not.toHaveBeenCalled()
   })
 
   it('openai + cli=claude → -32021', async () => {
     h.session = makeSession({ settings: { provider: 'openai' } })
-    await expect(
-      dispatch('sessions.openCli', { ...OPEN, cli: 'claude' }),
-    ).rejects.toMatchObject({ code: -32021 })
+    await expect(dispatch('sessions.openCli', { ...OPEN, cli: 'claude' })).rejects.toMatchObject({ code: -32021 })
   })
 
   it('anthropic + cli=devin → được phép (unlinked option)', async () => {
-    const res = (await dispatch('sessions.openCli', { ...OPEN, cli: 'devin' })) as Record<
-      string,
-      unknown
-    >
+    const res = (await dispatch('sessions.openCli', { ...OPEN, cli: 'devin' })) as Record<string, unknown>
     expect(res.cli).toBe('devin')
     expect(res.linked).toBe(false)
     expect(h.openCliLink).toHaveBeenCalledWith(expect.objectContaining({ kind: 'devin' }))
@@ -255,15 +239,9 @@ describe('sessions.openCli — cổng chặn', () => {
   })
 
   it('params thiếu cols/rows → -32602 (zod)', async () => {
-    await expect(
-      dispatch('sessions.openCli', { sessionId: 'ses-gate' }),
-    ).rejects.toMatchObject({ code: -32602 })
-    await expect(
-      dispatch('sessions.openCli', { ...OPEN, cols: 0 }),
-    ).rejects.toMatchObject({ code: -32602 })
-    await expect(
-      dispatch('sessions.openCli', { ...OPEN, cli: 'gemini' }),
-    ).rejects.toMatchObject({ code: -32602 })
+    await expect(dispatch('sessions.openCli', { sessionId: 'ses-gate' })).rejects.toMatchObject({ code: -32602 })
+    await expect(dispatch('sessions.openCli', { ...OPEN, cols: 0 })).rejects.toMatchObject({ code: -32602 })
+    await expect(dispatch('sessions.openCli', { ...OPEN, cli: 'gemini' })).rejects.toMatchObject({ code: -32602 })
   })
 })
 
@@ -293,9 +271,7 @@ describe('sessions.sendMessage — cổng CLI attached', () => {
 
   it('params vẫn validate trước cổng (text rỗng + attached → -32602 không phải -32021)', async () => {
     h.attached = true
-    await expect(
-      dispatch('sessions.sendMessage', { ...SEND, text: '' }),
-    ).rejects.toMatchObject({ code: -32602 })
+    await expect(dispatch('sessions.sendMessage', { ...SEND, text: '' })).rejects.toMatchObject({ code: -32602 })
   })
 
   it('CLI gắn vào trong khe registerAborter→persist (TOCTOU) → -32021, aborter gỡ + abort', async () => {
@@ -321,7 +297,15 @@ describe('sessions.sendMessage — cổng CLI attached', () => {
 describe('mutator gates — CLI attached', () => {
   const SES_WITH_MSG = () =>
     makeSession({
-      messages: [{ id: 'msg_1', role: 'user', text: 'hi', at: '2026-01-01T00:00:00.000Z' }],
+      sdkSessionId: 'sdk-1', // Anthropic compact needs a CLI session to rewrite
+      messages: [
+        {
+          id: 'msg_1',
+          role: 'user',
+          text: 'hi',
+          at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
     })
 
   it('sessions.compact → -32021 khi CLI attached (compact chạy được khi detached)', async () => {
@@ -354,9 +338,9 @@ describe('mutator gates — CLI attached', () => {
   it('sessions.truncate → -32021 khi CLI attached, không đụng transcript', async () => {
     h.session = SES_WITH_MSG()
     h.attached = true
-    await expect(
-      dispatch('sessions.truncate', { sessionId: 'ses-gate', keepThroughId: null }),
-    ).rejects.toMatchObject({ code: -32021 })
+    await expect(dispatch('sessions.truncate', { sessionId: 'ses-gate', keepThroughId: null })).rejects.toMatchObject({
+      code: -32021,
+    })
     expect(h.truncateSession).not.toHaveBeenCalled()
 
     h.attached = false
@@ -371,9 +355,9 @@ describe('mutator gates — CLI attached', () => {
   it('sessions.rewind → -32021 khi CLI attached', async () => {
     h.session = SES_WITH_MSG()
     h.attached = true
-    await expect(
-      dispatch('sessions.rewind', { sessionId: 'ses-gate', messageId: 'msg_1' }),
-    ).rejects.toMatchObject({ code: -32021 })
+    await expect(dispatch('sessions.rewind', { sessionId: 'ses-gate', messageId: 'msg_1' })).rejects.toMatchObject({
+      code: -32021,
+    })
     expect(h.truncateSession).not.toHaveBeenCalled()
 
     h.attached = false
@@ -388,9 +372,7 @@ describe('mutator gates — CLI attached', () => {
   it('sessions.delete → -32021 khi CLI link còn sống (gate của registry)', async () => {
     h.session = SES_WITH_MSG()
     h.attached = true
-    await expect(
-      dispatch('sessions.delete', { id: 'ses-gate' }),
-    ).rejects.toMatchObject({ code: -32021 })
+    await expect(dispatch('sessions.delete', { id: 'ses-gate' })).rejects.toMatchObject({ code: -32021 })
     expect(h.deleteSession).not.toHaveBeenCalled()
 
     h.attached = false // link đã detach (hoặc stale đã được registry gỡ)
@@ -417,6 +399,11 @@ describe('sendMessage — tự cứu khi tràn ngữ cảnh', () => {
     tokensBefore: 180_000,
     at: '2026-01-01T00:00:01.000Z',
   }
+  const NATIVE = {
+    trigger: 'auto' as const,
+    preTokens: 180_000,
+    postTokens: 4_000,
+  }
   const USAGE = { input_tokens: 0, output_tokens: 0 }
   const OVERFLOW = {
     text: '',
@@ -424,31 +411,46 @@ describe('sendMessage — tự cứu khi tràn ngữ cảnh', () => {
     errorMessage: 'Claude Code returned an error result: Prompt is too long',
     usage: USAGE,
   }
+  const isCompactRun = (a: Record<string, unknown>): boolean => a.slashCommand === 'compact' || a.nativeCommand === true
 
-  it('lượt overflow → auto-compact + retry: reply về đúng, retry re-seed (gỡ sdkSessionId, mang compaction)', async () => {
+  it('Anthropic: overflow → /compact native + retry trên CÙNG phiên SDK, marker về UI', async () => {
     h.session = SES_CTX()
     const calls: Array<Record<string, unknown>> = []
     h.runStream.mockImplementation(async (args: Record<string, unknown>) => {
       calls.push(args)
-      if (args.slashCommand === 'compact') return { compaction: COMPACTION }
-      if (calls.filter((c) => c.slashCommand !== 'compact').length === 1) return OVERFLOW
-      return { text: 'trả lời sau khi nén', stopReason: 'end_turn', modelUsed: 'm', usage: USAGE }
+      if (args.nativeCommand === true) return { nativeCompactions: [NATIVE], sdkSessionId: 'sdk-1' }
+      if (calls.filter((c) => !isCompactRun(c)).length === 1) return OVERFLOW
+      return {
+        text: 'trả lời sau khi nén',
+        stopReason: 'end_turn',
+        modelUsed: 'm',
+        usage: USAGE,
+      }
     })
-    const res = (await dispatch('sessions.sendMessage', SEND)) as { text?: string }
+    const res = (await dispatch('sessions.sendMessage', SEND)) as {
+      text?: string
+      nativeCompactions?: unknown[]
+    }
     expect(res.text).toBe('trả lời sau khi nén')
+    expect(res.nativeCompactions).toEqual([NATIVE])
     expect(h.runStream).toHaveBeenCalledTimes(3)
-    expect(calls[1]?.slashCommand).toBe('compact')
-    expect(h.compactSession).toHaveBeenCalledWith('ses-gate', COMPACTION)
-    // Lượt đầu resume phiên SDK cũ; lượt retry re-seed — không resume handle.
+    expect(calls[1]).toMatchObject({
+      nativeCommand: true,
+      pendingText: '/compact',
+      sdkSessionId: 'sdk-1',
+    })
+    expect(calls[1]?.slashCommand).toBeUndefined()
+    // AWOG không persist gì: không checkpoint, không gỡ resume handle.
+    expect(h.compactSession).not.toHaveBeenCalled()
     expect(calls[0]?.sdkSessionId).toBe('sdk-1')
-    expect(calls[2]?.sdkSessionId).toBeUndefined()
-    expect(calls[2]?.compaction).toMatchObject(COMPACTION)
+    expect(calls[2]?.sdkSessionId).toBe('sdk-1')
+    expect(calls[2]?.compaction).toBeUndefined()
   })
 
-  it('compact không ra checkpoint → giữ nguyên lỗi, không retry', async () => {
+  it('Anthropic: CLI không báo boundary → giữ nguyên lỗi, không retry', async () => {
     h.session = SES_CTX()
     h.runStream.mockImplementation(async (args: Record<string, unknown>) =>
-      args.slashCommand === 'compact' ? {} : OVERFLOW,
+      args.nativeCommand === true ? {} : OVERFLOW,
     )
     const res = (await dispatch('sessions.sendMessage', SEND)) as {
       errorMessage?: string
@@ -456,6 +458,53 @@ describe('sendMessage — tự cứu khi tràn ngữ cảnh', () => {
     expect(res.errorMessage).toContain('Prompt is too long')
     expect(h.runStream).toHaveBeenCalledTimes(2)
     expect(h.compactSession).not.toHaveBeenCalled()
+  })
+
+  it('Anthropic chưa có phiên SDK (lượt đầu tràn) → không có gì để nén, không retry', async () => {
+    h.session = makeSession({
+      messages: [
+        {
+          id: 'msg_1',
+          role: 'user',
+          text: 'hi',
+          at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    })
+    h.runStream.mockImplementation(async () => OVERFLOW)
+    await dispatch('sessions.sendMessage', SEND)
+    expect(h.runStream).toHaveBeenCalledTimes(1)
+  })
+
+  it('Pi (google): overflow → runCompact + persist checkpoint + retry re-seed (gỡ sdkSessionId, mang compaction)', async () => {
+    h.session = SES_CTX()
+    const calls: Array<Record<string, unknown>> = []
+    h.runStream.mockImplementation(async (args: Record<string, unknown>) => {
+      calls.push(args)
+      if (args.slashCommand === 'compact') return { compaction: COMPACTION }
+      if (calls.filter((c) => c.slashCommand !== 'compact').length === 1) return OVERFLOW
+      return {
+        text: 'trả lời sau khi nén',
+        stopReason: 'end_turn',
+        modelUsed: 'm',
+        usage: USAGE,
+      }
+    })
+    const res = (await dispatch('sessions.sendMessage', {
+      ...SEND,
+      settings: {
+        provider: 'google',
+        modelId: 'm',
+        level: 'medium',
+        mode: 'ask',
+      },
+    })) as { text?: string }
+    expect(res.text).toBe('trả lời sau khi nén')
+    expect(h.runStream).toHaveBeenCalledTimes(3)
+    expect(calls[1]?.slashCommand).toBe('compact')
+    expect(calls[1]?.nativeCommand).toBeUndefined()
+    expect(h.compactSession).toHaveBeenCalledWith('ses-gate', COMPACTION)
+    expect(calls[2]?.compaction).toMatchObject(COMPACTION)
   })
 
   it('CLI gắn giữa lượt → KHÔNG tự cứu (compact lệch transcript của CLI — cùng cổng sessions.compact)', async () => {
@@ -491,7 +540,7 @@ describe('sendMessage — tự cứu khi tràn ngữ cảnh', () => {
   it('retry vẫn overflow → chết, KHÔNG lặp vô hạn (đúng 1 lần cứu)', async () => {
     h.session = SES_CTX()
     h.runStream.mockImplementation(async (args: Record<string, unknown>) =>
-      args.slashCommand === 'compact' ? { compaction: COMPACTION } : OVERFLOW,
+      args.nativeCommand === true ? { nativeCompactions: [NATIVE] } : OVERFLOW,
     )
     const res = (await dispatch('sessions.sendMessage', SEND)) as {
       errorMessage?: string
@@ -499,6 +548,65 @@ describe('sendMessage — tự cứu khi tràn ngữ cảnh', () => {
     expect(res.errorMessage).toContain('Prompt is too long')
     // turn → compact → retry: đúng 3 lần gọi, không lần thứ 4.
     expect(h.runStream).toHaveBeenCalledTimes(3)
-    expect(h.compactSession).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ─── sessions.compact — Anthropic dùng /compact native ───────────────────────
+describe('sessions.compact — Anthropic native', () => {
+  const COMPACT = {
+    sessionId: 'ses-gate',
+    messageId: 'msg_cp_native',
+    provider: 'anthropic',
+    modelId: 'm',
+  }
+  const MSGS = [{ id: 'msg_1', role: 'user', text: 'hi', at: '2026-01-01T00:00:00.000Z' }]
+  const NATIVE = {
+    trigger: 'manual' as const,
+    preTokens: 17_181,
+    postTokens: 1_299,
+  }
+
+  it('gửi /compact như nativeCommand vào phiên SDK đang có; trả marker; KHÔNG persist checkpoint', async () => {
+    h.session = makeSession({ sdkSessionId: 'sdk-1', messages: MSGS })
+    h.runStream.mockImplementation(async () => ({
+      nativeCompactions: [NATIVE],
+    }))
+    const res = (await dispatch('sessions.compact', COMPACT)) as {
+      ok: boolean
+      native?: boolean
+      nativeCompaction?: unknown
+    }
+    expect(res).toMatchObject({
+      ok: true,
+      native: true,
+      nativeCompaction: NATIVE,
+    })
+    expect(h.runStream.mock.calls[0]?.[0]).toMatchObject({
+      pendingText: '/compact',
+      nativeCommand: true,
+      sdkSessionId: 'sdk-1',
+    })
+    expect(h.runStream.mock.calls[0]?.[0]).not.toHaveProperty('slashCommand')
+    expect(h.compactSession).not.toHaveBeenCalled()
+  })
+
+  it('chưa có phiên SDK → nothing-to-compact, không chạy CLI', async () => {
+    h.session = makeSession({ messages: MSGS })
+    const res = (await dispatch('sessions.compact', COMPACT)) as {
+      ok: boolean
+      reason?: string
+    }
+    expect(res).toEqual({ ok: false, reason: 'nothing-to-compact' })
+    expect(h.runStream).not.toHaveBeenCalled()
+  })
+
+  it('CLI không ghi boundary → nothing-to-compact (không phải lỗi)', async () => {
+    h.session = makeSession({ sdkSessionId: 'sdk-1', messages: MSGS })
+    h.runStream.mockImplementation(async () => ({ stopReason: 'end_turn' }))
+    const res = (await dispatch('sessions.compact', COMPACT)) as {
+      ok: boolean
+      reason?: string
+    }
+    expect(res).toEqual({ ok: false, reason: 'nothing-to-compact' })
   })
 })

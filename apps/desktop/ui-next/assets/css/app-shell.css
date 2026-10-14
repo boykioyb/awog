@@ -2339,8 +2339,18 @@ body[data-code-wrap='on'] .codewrap {
 .top [data-slot='button'],
 .top .kbd,
 .top .shelltgl,
-.top .ntf {
+.top .ntf,
+.top .stab,
+.top .stab-btn,
+.top .smenu {
   -webkit-app-region: no-drag;
+}
+/* Phần NỀN của strip tab là vùng kéo — đánh dấu drag tường minh để vùng trống
+   giữa các tab và đuôi scroll kéo được cửa sổ (giống VS Code/Chromium tab bar).
+   `.stab` + `.stab-btn` + `.smenu` vẫn no-drag nên click vẫn hoạt động. */
+.top .stabs,
+.top .stabs-scroll {
+  -webkit-app-region: drag;
 }
 
 /* macOS: grow the top bar to a real toolbar height, and keep a clear strip for the
@@ -2450,19 +2460,7 @@ body[data-platform='linux']:has(.app) {
    - `:active` uses `:is()` so it can beat the matching `:hover` rule (which is
      usually (0,2,0)); otherwise hover would keep painting over the press.
    ════════════════════════════════════════════════════════════════════════ */
-:where(
-  button,
-  [role='button'],
-  .ni,
-  .li,
-  .gsi,
-  .chip,
-  .chipbtn,
-  .act,
-  .cact,
-  .codetab,
-  .shelltgl
-) {
+:where(button, [role='button'], .ni, .li, .gsi, .chip, .chipbtn, .act, .cact, .codetab, .shelltgl) {
   transition:
     background-color var(--dur-fast) var(--ease),
     color var(--dur-fast) var(--ease),
@@ -2471,19 +2469,9 @@ body[data-platform='linux']:has(.app) {
 
 /* Pressed: controls with no fill of their own dip to the neutral press tint.
    `.pri` is excluded — a filled button keeps its accent and darkens instead. */
-:is(
-    button,
-    [role='button'],
-    .ni,
-    .li,
-    .gsi,
-    .chip,
-    .chipbtn,
-    .act,
-    .cact,
-    .codetab,
-    .shelltgl
-  ):not([data-variant='default']):active:not(:disabled) {
+:is(button, [role='button'], .ni, .li, .gsi, .chip, .chipbtn, .act, .cact, .codetab, .shelltgl):not(
+    [data-variant='default']
+  ):active:not(:disabled) {
   background-color: var(--accent-wash);
 }
 [data-slot='button'][data-variant='default']:active:not(:disabled) {

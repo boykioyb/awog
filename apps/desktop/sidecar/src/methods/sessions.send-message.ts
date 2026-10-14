@@ -2,18 +2,17 @@ import { randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { isCliAttached } from '../sessions/cli-registry.js'
-import {
-  runStream,
-  registerAborter,
-  unregisterAborter,
-  type RunStreamResult,
-} from '../sessions/runner.js'
+import { assertClaudeSessionIdle } from '../sessions/claude-busy-guard.js'
+import { runStream, registerAborter, unregisterAborter, type RunStreamResult } from '../sessions/runner.js'
 import {
   appendMessage,
   compactSession,
+  clearSdkTranscript,
   loadSession,
   updateSessionMetadata,
 } from '../sessions/store.js'
+import { findClaudeTranscriptFile } from '../sessions/cli-import.js'
+import { sdkTranscriptCoversSession } from '../sessions/sdk-transcript.js'
 import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.js'
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { buildLinkedSshHostBlock } from '../sessions/linked-ssh-host.js'
@@ -26,10 +25,7 @@ import { pickModel } from '../boards/model-route.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import { loadProject } from '../projects/store.js'
-import {
-  parkPermissionRequest,
-  rejectPermissionRequest,
-} from '../sessions/permissions.js'
+import { parkPermissionRequest, rejectPermissionRequest } from '../sessions/permissions.js'
 import { parkQuestionRequest, rejectQuestionRequest } from '../sessions/questions.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
@@ -56,15 +52,12 @@ import { SKIP_DIRS } from '../fs/skip-dirs.js'
 import { getEffectivePricing, cost as priceCost } from '../pricing/catalog.js'
 import { readFile as fsReadFile, readdir, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import type {
-  AskUserQuestionFn,
-  CanUseTool,
-  McpServersConfig,
-} from '../runtime/permission-types.js'
+import type { AskUserQuestionFn, CanUseTool, McpServersConfig } from '../runtime/permission-types.js'
 import type {
   Agent,
   ApiSource,
   ContextConfig,
+  NativeCompaction,
   ContextItemSize,
   LocalSource,
   Session,
@@ -138,151 +131,161 @@ const SessionAttachmentSchema = z.object({
 // buildContext (oversized images are dropped for the model, not rejected here).
 const MAX_ATTACHMENTS = 20
 
-const Params = z.object({
-  sessionId: z.string().min(1),
-  messageId: z.string().min(1),
-  // Id to persist THIS turn's user message under, minted by the UI so the message it
-  // just rendered already carries a durable anchor (ADR 0074) instead of only getting
-  // one on the next reload. Omitted → the sidecar mints `msg_u_<hex>` exactly as before.
-  //
-  // SECURITY (merge condition, ADR 0074 Q1): this is L1 input and the persisted
-  // message.id flows into a PATH sink — sessions/jsonl.ts externalizes attachments to
-  // sanitizeChild(`${message.id}-${att.id}`). sanitizeChild only rejects '/', '\' and
-  // '..', so it must not be the only defence: MESSAGE_ID_RE (shared with the bookmark
-  // RPC and the bookmark load path — see sessions/ids.ts) is the real boundary and
-  // rejects traversal, separators, whitespace and overlong ids.
-  userMessageId: z.string().regex(MESSAGE_ID_RE).optional(),
-  // May be empty when the turn carries only image attachments — the
-  // text-or-attachments invariant is enforced by the object-level .refine below.
-  text: z.string(),
-  attachments: z.array(SessionAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
-  // `text` is one of the Claude Code CLI's own slash commands (/goal, /context…)
-  // and must reach the CLI verbatim — no turn-prompt riders, no history prefix
-  // (see RunNonStreamArgs.nativeCommand). Anthropic branch only; the runner
-  // refuses it on other providers.
-  nativeCommand: z.boolean().optional(),
-  // Lượt "chỉ trò chuyện" — mở ra từ một tin wake của kênh ê-kíp ([channel]…)
-  // để TRẢ LỜI nhanh, không phải làm việc sâu. Set ⇒ sau mọi overlay settings
-  // (payload → agent pin → llmOverride) lượt này bị kẹp về effort 'low' + model
-  // rẻ nhất catalog của provider — chỉ lượt này, override persist không đội.
-  comm: z.boolean().optional(),
-  history: z.array(SessionMessageSchema).default([]),
-  settings: SessionSettingsSchema,
-  systemPrompt: z.string().optional(),
-  // Session defaults / behaviour prefs (Settings → Defaults / Sessions). Functional
-  // — each is consumed by the runtime below:
-  //   • instructions — extra guidance appended after the base system prompt (folded
-  //     into systemPromptAppend so it augments, never replaces, the prompt). Bounded
-  //     so an oversized IPC payload can't blow the prompt.
-  instructions: z.string().max(20000).optional(),
-  //   • autoApprove — when true, gated tool calls (Write/Edit/Bash/…) are auto-
-  //     allowed without parking a permission prompt (the runtime skips the gate).
-  autoApprove: z.boolean().optional(),
-  //   • refeedImages — when false, prior-turn image attachments are NOT re-fed to
-  //     the model each turn (only the turn that sent them carries them). Default true
-  //     (omitted) keeps the current re-feed behaviour.
-  refeedImages: z.boolean().optional(),
-  //   • commitCoAuthor — Git setting. Controls the AWOG `Co-Authored-By` trailer on
-  //     model-made commits: the Claude SDK path sets the SDK's native `attribution`
-  //     (overriding the claude_code preset's Claude trailer); the Pi path appends
-  //     CO_AUTHOR_INSTRUCTION. Omitted → on (default).
-  commitCoAuthor: z.boolean().optional(),
-  // Optional project linkage. When present, sidecar resolves the project's
-  // on-disk path and passes it as the runtime tools' fs root so Read/Bash/Edit
-  // operate against the user's repo instead of process.cwd().
-  projectId: z.string().optional(),
-  // Wiki / memory context switches from Settings (ADR 0073 D-12). Absent = the
-  // documented defaults (both injected, agent memory writes OFF), so an older UI
-  // build keeps behaving sanely.
-  contextConfig: z
-    .object({
-      wikiEnabled: z.boolean().optional(),
-      wikiBudgetChars: z.number().int().positive().max(40_000).optional(),
-      wikiAutoWrite: z.boolean().optional(),
-      memoryEnabled: z.boolean().optional(),
-      memoryAutoWrite: z.boolean().optional(),
-      memoryBudgetChars: z.number().int().positive().max(40_000).optional(),
-      agentsCatalogEnabled: z.boolean().optional(),
-      skillsCatalogEnabled: z.boolean().optional(),
-    })
-    .optional(),
-  // Working folder dragged into the session (absolute on-disk path). Takes
-  // precedence over the project-derived path as the runtime tools' cwd: the user
-  // explicitly chose this folder. Validated (absolute + existing directory) below;
-  // invalid → ignored, never errors the chat. A compact <workspace_tree> block is
-  // injected so the model orients without a blind filesystem scan.
-  workspacePath: z.string().optional(),
-  // Folders attached to THIS turn as read-only context (absolute paths). Unlike
-  // workspacePath these do NOT change the cwd — each is rendered as its own compact
-  // <workspace_tree> block so the model can see the layout of every attached folder
-  // (multi-folder). Bounded (count + validated absolute existing dir below) so a
-  // hostile payload can't blow the prompt. Tools still operate in the resolved cwd.
-  contextFolders: z.array(z.string().max(4096)).max(12).optional(),
-  // Session-scoped tool denylist (Claude Code tool names). Removes these tools
-  // from the runtime tool set so the model never even sees them.
-  disabledTools: z.array(z.string()).optional(),
-  // Session-scoped MCP server whitelist. `undefined` = legacy behaviour: use
-  // all globally-enabled servers. `[]` = explicitly none. `[ids]` = only these
-  // (intersected with the globally-enabled set).
-  mcpServerIds: z.array(z.string()).optional(),
-  // Discuss link (ADR 0055): the task this session discusses. When set, a
-  // <linked_task> block (the task's status + per-phase output) is injected into
-  // this turn's systemPromptAppend so the agent can reason about the results.
-  aboutTaskId: z.string().optional(),
-  // Work link (ADR 0064, P1): the SSH host this session works with. When set, a
-  // <linked_ssh_host> block (the host's connection info + metadata, NO secrets) is
-  // injected into this turn's systemPromptAppend so the agent knows the machine.
-  aboutSshHostId: z.string().optional(),
-  // SSH terminal co-pilot (ADR 0064): the connId of the interactive shell the user
-  // is watching (docked session in /ssh). When set, the agent gets ssh_terminal_run
-  // (drives THIS visible terminal) instead of the headless ssh_exec. Ephemeral —
-  // the UI sends the currently-targeted terminal each turn (not persisted).
-  sshTerminalConnId: z.string().optional(),
-  // Session-pinned working-set: files (workspace-relative paths, read fresh each
-  // turn) + free-text notes, injected as a <pinned_context> block. Mirrors the
-  // session's persisted pinnedContext; forwarded each turn (same trust model as
-  // disabledTools/mcpServerIds). Files are path-sanitized against cwd below.
-  pinnedContext: z
-    .object({
-      files: z.array(z.string()).max(20).optional(),
-      notes: z.string().max(20000).optional(),
-      notePresets: z.array(z.string().max(20000)).max(20).optional(),
-    })
-    .optional(),
-  // Hard budget caps (Pha 3). `hardLimitUsd` refuses a turn once the session's
-  // cumulative cost reaches it (cost computed sidecar-side from persisted turns —
-  // the limit is the user's config intent, forwarded here). `maxToolCalls` /
-  // `maxWallclockMs` cap a single turn (enforced in the runtime beforeToolCall).
-  budget: z
-    .object({
-      hardLimitUsd: z.number().nonnegative().optional(),
-      maxToolCalls: z.number().int().nonnegative().optional(),
-      maxWallclockMs: z.number().int().nonnegative().optional(),
-    })
-    .optional(),
-  // Active compaction checkpoint (ADR 0047), forwarded by the UI alongside
-  // `history` (same trust model). When present, the runtime feeds the model the
-  // summary + messages from `firstKeptMessageId` onward instead of full history.
-  compaction: z
-    .object({
-      summary: z.string(),
-      firstKeptMessageId: z.string(),
-      tokensBefore: z.number(),
-      at: z.string(),
-    })
-    .optional(),
-  // Active agent for this turn. Identifies the AGENT.md by (id, source,
-  // projectId?) tuple because the same slug can exist in multiple tiers.
-  // When present + resolves to an agent with non-empty systemPrompt, that
-  // prompt replaces `params.systemPrompt` for this turn. ADR 0015.
-  agent: z
-    .object({
-      id: z.string().min(1).max(64),
-      source: z.enum(['global', 'project']),
-      projectId: z.string().min(1).max(64).optional(),
-    })
-    .optional(),
-})
+const Params = z
+  .object({
+    sessionId: z.string().min(1),
+    messageId: z.string().min(1),
+    // Id to persist THIS turn's user message under, minted by the UI so the message it
+    // just rendered already carries a durable anchor (ADR 0074) instead of only getting
+    // one on the next reload. Omitted → the sidecar mints `msg_u_<hex>` exactly as before.
+    //
+    // SECURITY (merge condition, ADR 0074 Q1): this is L1 input and the persisted
+    // message.id flows into a PATH sink — sessions/jsonl.ts externalizes attachments to
+    // sanitizeChild(`${message.id}-${att.id}`). sanitizeChild only rejects '/', '\' and
+    // '..', so it must not be the only defence: MESSAGE_ID_RE (shared with the bookmark
+    // RPC and the bookmark load path — see sessions/ids.ts) is the real boundary and
+    // rejects traversal, separators, whitespace and overlong ids.
+    userMessageId: z.string().regex(MESSAGE_ID_RE).optional(),
+    // May be empty when the turn carries only image attachments — the
+    // text-or-attachments invariant is enforced by the object-level .refine below.
+    text: z.string(),
+    attachments: z.array(SessionAttachmentSchema).max(MAX_ATTACHMENTS).optional(),
+    // `text` is one of the Claude Code CLI's own slash commands (/goal, /context…)
+    // and must reach the CLI verbatim — no turn-prompt riders, no history prefix
+    // (see RunNonStreamArgs.nativeCommand). Anthropic branch only; the runner
+    // refuses it on other providers.
+    nativeCommand: z.boolean().optional(),
+    // Background wake (ADR 0099): the Claude CLI process the previous turn left running has
+    // already started a model turn by itself — this turn ADOPTS it instead of sending
+    // `text` to the model. Anthropic branch only; `text` is the user-visible echo of the wake
+    // and the fallback prompt when there is nothing left to adopt.
+    attachWake: z.boolean().optional(),
+    // Lượt "chỉ trò chuyện" — mở ra từ một tin wake của kênh ê-kíp ([channel]…)
+    // để TRẢ LỜI nhanh, không phải làm việc sâu. Set ⇒ sau mọi overlay settings
+    // (payload → agent pin → llmOverride) lượt này bị kẹp về effort 'low' + model
+    // rẻ nhất catalog của provider — chỉ lượt này, override persist không đội.
+    comm: z.boolean().optional(),
+    history: z.array(SessionMessageSchema).default([]),
+    settings: SessionSettingsSchema,
+    systemPrompt: z.string().optional(),
+    // Session defaults / behaviour prefs (Settings → Defaults / Sessions). Functional
+    // — each is consumed by the runtime below:
+    //   • instructions — extra guidance appended after the base system prompt (folded
+    //     into systemPromptAppend so it augments, never replaces, the prompt). Bounded
+    //     so an oversized IPC payload can't blow the prompt.
+    instructions: z.string().max(20000).optional(),
+    //   • autoApprove — when true, gated tool calls (Write/Edit/Bash/…) are auto-
+    //     allowed without parking a permission prompt (the runtime skips the gate).
+    autoApprove: z.boolean().optional(),
+    //   • refeedImages — when false, prior-turn image attachments are NOT re-fed to
+    //     the model each turn (only the turn that sent them carries them). Default true
+    //     (omitted) keeps the current re-feed behaviour.
+    refeedImages: z.boolean().optional(),
+    //   • commitCoAuthor — Git setting. Controls the AWOG `Co-Authored-By` trailer on
+    //     model-made commits: the Claude SDK path sets the SDK's native `attribution`
+    //     (overriding the claude_code preset's Claude trailer); the Pi path appends
+    //     CO_AUTHOR_INSTRUCTION. Omitted → on (default).
+    commitCoAuthor: z.boolean().optional(),
+    // Optional project linkage. When present, sidecar resolves the project's
+    // on-disk path and passes it as the runtime tools' fs root so Read/Bash/Edit
+    // operate against the user's repo instead of process.cwd().
+    projectId: z.string().optional(),
+    // Wiki / memory context switches from Settings (ADR 0073 D-12). Absent = the
+    // documented defaults (both injected, agent memory writes OFF), so an older UI
+    // build keeps behaving sanely.
+    contextConfig: z
+      .object({
+        wikiEnabled: z.boolean().optional(),
+        wikiBudgetChars: z.number().int().positive().max(40_000).optional(),
+        wikiAutoWrite: z.boolean().optional(),
+        memoryEnabled: z.boolean().optional(),
+        memoryAutoWrite: z.boolean().optional(),
+        memoryBudgetChars: z.number().int().positive().max(40_000).optional(),
+        agentsCatalogEnabled: z.boolean().optional(),
+        skillsCatalogEnabled: z.boolean().optional(),
+        // Claude CLI native auto-compact (Anthropic): on/off + the ~token threshold.
+        // 0 = leave the CLI's own default. See runtime/claude-sdk/shared.ts.
+        autoCompact: z.boolean().optional(),
+        compactAtTokens: z.number().int().min(0).max(1_000_000).optional(),
+      })
+      .optional(),
+    // Working folder dragged into the session (absolute on-disk path). Takes
+    // precedence over the project-derived path as the runtime tools' cwd: the user
+    // explicitly chose this folder. Validated (absolute + existing directory) below;
+    // invalid → ignored, never errors the chat. A compact <workspace_tree> block is
+    // injected so the model orients without a blind filesystem scan.
+    workspacePath: z.string().optional(),
+    // Folders attached to THIS turn as read-only context (absolute paths). Unlike
+    // workspacePath these do NOT change the cwd — each is rendered as its own compact
+    // <workspace_tree> block so the model can see the layout of every attached folder
+    // (multi-folder). Bounded (count + validated absolute existing dir below) so a
+    // hostile payload can't blow the prompt. Tools still operate in the resolved cwd.
+    contextFolders: z.array(z.string().max(4096)).max(12).optional(),
+    // Session-scoped tool denylist (Claude Code tool names). Removes these tools
+    // from the runtime tool set so the model never even sees them.
+    disabledTools: z.array(z.string()).optional(),
+    // Session-scoped MCP server whitelist. `undefined` = legacy behaviour: use
+    // all globally-enabled servers. `[]` = explicitly none. `[ids]` = only these
+    // (intersected with the globally-enabled set).
+    mcpServerIds: z.array(z.string()).optional(),
+    // Discuss link (ADR 0055): the task this session discusses. When set, a
+    // <linked_task> block (the task's status + per-phase output) is injected into
+    // this turn's systemPromptAppend so the agent can reason about the results.
+    aboutTaskId: z.string().optional(),
+    // Work link (ADR 0064, P1): the SSH host this session works with. When set, a
+    // <linked_ssh_host> block (the host's connection info + metadata, NO secrets) is
+    // injected into this turn's systemPromptAppend so the agent knows the machine.
+    aboutSshHostId: z.string().optional(),
+    // SSH terminal co-pilot (ADR 0064): the connId of the interactive shell the user
+    // is watching (docked session in /ssh). When set, the agent gets ssh_terminal_run
+    // (drives THIS visible terminal) instead of the headless ssh_exec. Ephemeral —
+    // the UI sends the currently-targeted terminal each turn (not persisted).
+    sshTerminalConnId: z.string().optional(),
+    // Session-pinned working-set: files (workspace-relative paths, read fresh each
+    // turn) + free-text notes, injected as a <pinned_context> block. Mirrors the
+    // session's persisted pinnedContext; forwarded each turn (same trust model as
+    // disabledTools/mcpServerIds). Files are path-sanitized against cwd below.
+    pinnedContext: z
+      .object({
+        files: z.array(z.string()).max(20).optional(),
+        notes: z.string().max(20000).optional(),
+        notePresets: z.array(z.string().max(20000)).max(20).optional(),
+      })
+      .optional(),
+    // Hard budget caps (Pha 3). `hardLimitUsd` refuses a turn once the session's
+    // cumulative cost reaches it (cost computed sidecar-side from persisted turns —
+    // the limit is the user's config intent, forwarded here). `maxToolCalls` /
+    // `maxWallclockMs` cap a single turn (enforced in the runtime beforeToolCall).
+    budget: z
+      .object({
+        hardLimitUsd: z.number().nonnegative().optional(),
+        maxToolCalls: z.number().int().nonnegative().optional(),
+        maxWallclockMs: z.number().int().nonnegative().optional(),
+      })
+      .optional(),
+    // Active compaction checkpoint (ADR 0047), forwarded by the UI alongside
+    // `history` (same trust model). When present, the runtime feeds the model the
+    // summary + messages from `firstKeptMessageId` onward instead of full history.
+    compaction: z
+      .object({
+        summary: z.string(),
+        firstKeptMessageId: z.string(),
+        tokensBefore: z.number(),
+        at: z.string(),
+      })
+      .optional(),
+    // Active agent for this turn. Identifies the AGENT.md by (id, source,
+    // projectId?) tuple because the same slug can exist in multiple tiers.
+    // When present + resolves to an agent with non-empty systemPrompt, that
+    // prompt replaces `params.systemPrompt` for this turn. ADR 0015.
+    agent: z
+      .object({
+        id: z.string().min(1).max(64),
+        source: z.enum(['global', 'project']),
+        projectId: z.string().min(1).max(64).optional(),
+      })
+      .optional(),
+  })
   // A turn must carry something the model can act on: composer text, an image
   // attachment, or a text/pasted-text attachment (content in `preview`). A
   // file-only message with no readable content has nothing to act on. Fail-fast
@@ -291,9 +294,7 @@ const Params = z.object({
     (p) =>
       p.text.trim().length > 0 ||
       (p.attachments?.some(
-        (a) =>
-          (a.type === 'image' && !!a.url) ||
-          (a.type === 'file' && !!a.preview && a.preview.trim().length > 0),
+        (a) => (a.type === 'image' && !!a.url) || (a.type === 'file' && !!a.preview && a.preview.trim().length > 0),
       ) ??
         false),
     { message: 'a message must have text, an image, or a text attachment' },
@@ -379,9 +380,7 @@ const MAX_PINNED_TOTAL_CHARS = 80_000
 // so the model never silently sees stale or partial content as complete. Returns
 // undefined when nothing pins. Best-effort: never throws.
 async function buildPinnedContextBlock(
-  pinned:
-    | { files?: string[] | undefined; notes?: string | undefined; notePresets?: string[] | undefined }
-    | undefined,
+  pinned: { files?: string[] | undefined; notes?: string | undefined; notePresets?: string[] | undefined } | undefined,
   cwd: string | undefined,
 ): Promise<string | undefined> {
   if (!pinned) return undefined
@@ -524,6 +523,13 @@ async function buildBulkLoad(
   // Bound agent's skill whitelist — filters the <available_skills> catalogue so
   // an agent sees only the skills it was granted (undefined = all skills).
   agentSkillIds: string[] | undefined,
+  // Claude SDK path (provider anthropic): the CLI runs with settingSources
+  // user/project/local and ALREADY loads CLAUDE.md (+ @imports, ~/.claude/CLAUDE.md,
+  // AGENTS.md), .claude/skills and .claude/agents — measured with the native
+  // `/context` (ADR 0099). Injecting them again duplicated ~35k tokens on every
+  // request, so this path skips exactly those three blocks. Wiki / memory are
+  // AWOG-only and stay.
+  claudeNative: boolean,
 ): Promise<BulkLoadResult> {
   const result: BulkLoadResult = {
     memoryFilesChars: 0,
@@ -547,16 +553,18 @@ async function buildBulkLoad(
   // Path-gating (invariant #2) and best-effort skipping live in loadMemoryFiles;
   // the global file applies even when no project is linked, so this is not
   // gated on `cwd`.
-  const memoryFiles = await loadMemoryFiles(cwd)
-  if (memoryFiles.length > 0) {
-    const fileBlocks = memoryFiles.map(({ label, content }) => {
-      const fileBlock = `<file path="${label}">\n${content}\n</file>`
-      result.memoryFilesList.push({ label, chars: fileBlock.length })
-      return fileBlock
-    })
-    const block = `<project_context_files>\n${fileBlocks.join('\n')}\n</project_context_files>`
-    blocks.push(block)
-    result.memoryFilesChars = block.length
+  if (!claudeNative) {
+    const memoryFiles = await loadMemoryFiles(cwd)
+    if (memoryFiles.length > 0) {
+      const fileBlocks = memoryFiles.map(({ label, content }) => {
+        const fileBlock = `<file path="${label}">\n${content}\n</file>`
+        result.memoryFilesList.push({ label, chars: fileBlock.length })
+        return fileBlock
+      })
+      const block = `<project_context_files>\n${fileBlocks.join('\n')}\n</project_context_files>`
+      blocks.push(block)
+      result.memoryFilesChars = block.length
+    }
   }
 
   // Custom agents — name + compact description of the in-scope agents (Task
@@ -565,7 +573,7 @@ async function buildBulkLoad(
   // Both catalogues are opt-OUT (Settings → Sessions → Context injection). They ride
   // in the cached system prefix, but the prefix is re-read on EVERY request of every
   // turn, so a user who never delegates to a subagent pays for the menu each time.
-  if (contextConfig?.agentsCatalogEnabled !== false) {
+  if (!claudeNative && contextConfig?.agentsCatalogEnabled !== false) {
     try {
       const { agents } = await listAgents(projectIds)
       if (agents.length > 0) {
@@ -586,15 +594,13 @@ async function buildBulkLoad(
   }
 
   // Skills — name + compact description of the in-scope skills.
-  if (contextConfig?.skillsCatalogEnabled !== false) {
+  if (!claudeNative && contextConfig?.skillsCatalogEnabled !== false) {
     try {
       const { skills } = await listSkills(projectIds)
       // Per-agent whitelist: an agent scoped to a few skills should not see (or
       // be able to invoke) the rest of the catalogue.
       const usable =
-        agentSkillIds && agentSkillIds.length > 0
-          ? skills.filter((s) => agentSkillIds.includes(s.id))
-          : skills
+        agentSkillIds && agentSkillIds.length > 0 ? skills.filter((s) => agentSkillIds.includes(s.id)) : skills
       if (usable.length > 0) {
         const lines = usable.map((s) => {
           const line = compactLine(s.name, s.description)
@@ -618,6 +624,15 @@ async function buildBulkLoad(
         err: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+
+  // Claude SDK path: the CLI lists the skills itself (narrowed to the bound agent's
+  // whitelist by the SDK `skills` option), but it knows nothing about AWOG's
+  // `@skill:<id>` composer token — keep that one sentence.
+  if (claudeNative) {
+    blocks.push(
+      `<skill_mentions>\nWhen the user's message contains \`@skill:<id>\`, they are pointing you at that skill on purpose — follow it for this task.\n</skill_mentions>`,
+    )
   }
 
   // Wiki (ADR 0073) — a TABLE OF CONTENTS of the user's own documentation, never
@@ -698,6 +713,11 @@ register('sessions.sendMessage', async (raw) => {
     })
   }
 
+  // Phiên nhập từ Claude Desktop/CLI dùng CHUNG transcript với bên kia: từ chối (-32021
+  // CLAUDE_SESSION_BUSY) khi file vừa được ghi mà AWOG không sở hữu tiến trình CLI nào. Ném
+  // trước mọi persist bên dưới. Xem sessions/claude-busy-guard.ts.
+  await assertClaudeSessionIdle(groupSession)
+
   // agent — "vai có thật" của member/lead (session-teams §3): resolve phía
   // sidecar mỗi lượt. `params.agent` (người dùng chỉ tay) THẮNG — khi nó có mặt,
   // boundAgent giữ null và không overlay gì. `source` vắng ⇒ dò global trước
@@ -710,10 +730,10 @@ register('sessions.sendMessage', async (raw) => {
     try {
       boundAgent = ref.source
         ? await loadAgent(ref.id, ref.source, ref.projectId)
-        : (await loadAgent(ref.id, 'global')) ??
+        : ((await loadAgent(ref.id, 'global')) ??
           // 'project' mà không có projectId ném "requires a projectId" — chỉ dò
           // khi thật sự có project để tra.
-          (refProjectId ? await loadAgent(ref.id, 'project', refProjectId) : null)
+          (refProjectId ? await loadAgent(ref.id, 'project', refProjectId) : null))
       if (!boundAgent) {
         log.warn('agent ref did not resolve to an agent file', {
           sessionId: params.sessionId,
@@ -830,10 +850,7 @@ register('sessions.sendMessage', async (raw) => {
   // vì chỉ chỗ này có cả trần (config) lẫn phần đã tiêu (usage đã persist).
   let remainingUsd: number | undefined
   if (hardLimitUsd && hardLimitUsd > 0) {
-    const spentUsd = historyForRun.reduce(
-      (sum, m) => sum + (m.role === 'agent' ? (m.usage?.costUsd ?? 0) : 0),
-      0,
-    )
+    const spentUsd = historyForRun.reduce((sum, m) => sum + (m.role === 'agent' ? (m.usage?.costUsd ?? 0) : 0), 0)
     remainingUsd = Math.max(0, hardLimitUsd - spentUsd)
     if (spentUsd >= hardLimitUsd) {
       const errorMessage = `Session budget exceeded: $${spentUsd.toFixed(2)} ≥ $${hardLimitUsd.toFixed(2)} hard cap. Raise the cap in session config to continue.`
@@ -924,6 +941,18 @@ register('sessions.sendMessage', async (raw) => {
     }
   }
 
+  // Phiên nhập: CLI tìm file resume theo slug của cwd, và cwd gốc có thể là thư mục CON của
+  // project — chạy ở project root thì `--resume` không thấy transcript. Dùng lại đúng cwd đã
+  // ghi lúc nhập (trừ khi người dùng kéo thư mục làm việc khác vào phiên, hoặc thư mục đã mất).
+  const importedCwd = groupSession?.importedFrom?.cwd
+  if (importedCwd && !params.workspacePath && cwd !== importedCwd) {
+    try {
+      if (isAbsolute(importedCwd) && (await stat(importedCwd)).isDirectory()) cwd = importedCwd
+    } catch {
+      // thư mục đã bị xoá/di chuyển — giữ cwd của project
+    }
+  }
+
   // Session Teams §4 — worktree riêng của MEMBER thắng mọi cwd phía trên
   // (worktree.worktreePath > workspacePath > project.path): member làm
   // việc trên branch riêng; lead (không teamRunId) KHÔNG BAO GIỜ vào đây —
@@ -974,11 +1003,7 @@ register('sessions.sendMessage', async (raw) => {
   let overlayAgent: Agent | null = null
   if (params.agent) {
     try {
-      const agent = await loadAgent(
-        params.agent.id,
-        params.agent.source,
-        params.agent.projectId,
-      )
+      const agent = await loadAgent(params.agent.id, params.agent.source, params.agent.projectId)
       overlayAgent = agent
       if (agent?.systemPrompt) resolvedSystemPrompt = agent.systemPrompt
       if (agent?.tools && agent.tools.length > 0) resolvedAllowedTools = agent.tools
@@ -1019,9 +1044,7 @@ register('sessions.sendMessage', async (raw) => {
   // there the boundary text is the enforcement).
   if (overlayAgent?.repos && overlayAgent.repos.length > 0) {
     const block = repoAccessBlock(overlayAgent.repos)
-    resolvedSystemPrompt = resolvedSystemPrompt
-      ? `${resolvedSystemPrompt}\n\n${block}`
-      : block
+    resolvedSystemPrompt = resolvedSystemPrompt ? `${resolvedSystemPrompt}\n\n${block}` : block
   }
   // Effective fs roots for the same whitelist (undefined = unrestricted cwd).
   const agentFsRoots =
@@ -1058,8 +1081,7 @@ register('sessions.sendMessage', async (raw) => {
     // Two whitelist layers (ADR 0016): session-level (params.mcpServerIds) and
     // agent-level (resolvedAgentMcpIds). Intersect both when present so the
     // narrower scope wins. undefined = "no restriction at this layer".
-    const sessionWhitelist =
-      params.mcpServerIds !== undefined ? new Set(params.mcpServerIds) : null
+    const sessionWhitelist = params.mcpServerIds !== undefined ? new Set(params.mcpServerIds) : null
     const agentWhitelist = resolvedAgentMcpIds ? new Set(resolvedAgentMcpIds) : null
     const entries: [string, McpServersConfig[string]][] = []
     for (const s of all) {
@@ -1109,10 +1131,7 @@ register('sessions.sendMessage', async (raw) => {
       } else if (transport === 'http') {
         if (!s.mcp.url) continue
         // eslint-disable-next-line no-await-in-loop
-        const expandedHeaders = applyBearerScheme(
-          s.mcp.authType,
-          await expandSecrets(s.id, s.mcp.headers),
-        )
+        const expandedHeaders = applyBearerScheme(s.mcp.authType, await expandSecrets(s.id, s.mcp.headers))
         // Layer a fresh `Authorization: Bearer <token>` (refreshed if near
         // expiry) on top of the static headers for oauth sources — ADR 0060 D-4.
         // No-op for bearer/none. Runs per turn, so a refreshed token takes effect
@@ -1147,8 +1166,7 @@ register('sessions.sendMessage', async (raw) => {
   // (`gh`, `gcloud`, `kubectl`) because they're heavily represented in
   // training data. Forwarded to subagents so Task-spawned children honour it.
   let systemPromptAppend: string | undefined
-  const hasExplicitWhitelist =
-    params.mcpServerIds !== undefined || resolvedAgentMcpIds !== undefined
+  const hasExplicitWhitelist = params.mcpServerIds !== undefined || resolvedAgentMcpIds !== undefined
   if (hasExplicitWhitelist && attachedMcpServers.length > 0) {
     const lines = attachedMcpServers.map((s) => `- mcp__${s.id}__* (${s.name})`).join('\n')
     systemPromptAppend = `<mcp-preference>
@@ -1166,9 +1184,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // deferred (see buildLocalSourcesNote).
   const localSourcesNote = buildLocalSourcesNote(localSources)
   if (localSourcesNote) {
-    systemPromptAppend = systemPromptAppend
-      ? `${systemPromptAppend}\n\n${localSourcesNote}`
-      : localSourcesNote
+    systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${localSourcesNote}` : localSourcesNote
   }
 
   // User instructions (Settings → Defaults → instructions). Extra always-on
@@ -1190,11 +1206,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     cwd,
     params.contextConfig,
     overlayAgent?.skillIds,
+    sessionSettings.provider === 'anthropic',
   )
   if (bulkLoad.block) {
-    systemPromptAppend = systemPromptAppend
-      ? `${systemPromptAppend}\n\n${bulkLoad.block}`
-      : bulkLoad.block
+    systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${bulkLoad.block}` : bulkLoad.block
   }
 
   // Discuss link (ADR 0055): when this session discusses a task, inject the task's
@@ -1203,9 +1218,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   if (params.aboutTaskId) {
     const linkedTask = await buildLinkedTaskBlock(params.aboutTaskId)
     if (linkedTask) {
-      systemPromptAppend = systemPromptAppend
-        ? `${systemPromptAppend}\n\n${linkedTask}`
-        : linkedTask
+      systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${linkedTask}` : linkedTask
     }
   }
 
@@ -1246,9 +1259,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   if (params.aboutSshHostId) {
     const linkedSshHost = await buildLinkedSshHostBlock(params.aboutSshHostId)
     if (linkedSshHost) {
-      systemPromptAppend = systemPromptAppend
-        ? `${systemPromptAppend}\n\n${linkedSshHost}`
-        : linkedSshHost
+      systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${linkedSshHost}` : linkedSshHost
     }
   }
 
@@ -1259,9 +1270,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   try {
     const teamBlock = await buildTeamBlock(params.sessionId)
     if (teamBlock) {
-      systemPromptAppend = systemPromptAppend
-        ? `${systemPromptAppend}\n\n${teamBlock}`
-        : teamBlock
+      systemPromptAppend = systemPromptAppend ? `${systemPromptAppend}\n\n${teamBlock}` : teamBlock
     }
   } catch (err) {
     log.warn('failed to build team context block', {
@@ -1275,9 +1284,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   // turn so edits to a pinned file take effect on the next message.
   const pinnedBlock = await buildPinnedContextBlock(params.pinnedContext, cwd)
   if (pinnedBlock) {
-    systemPromptAppend = systemPromptAppend
-      ? `${pinnedBlock}\n\n${systemPromptAppend}`
-      : pinnedBlock
+    systemPromptAppend = systemPromptAppend ? `${pinnedBlock}\n\n${systemPromptAppend}` : pinnedBlock
   }
 
   // Dragged working folder → compact tree so the model uses real paths instead of
@@ -1286,9 +1293,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   if (params.workspacePath && cwd === params.workspacePath) {
     const treeBlock = await buildWorkspaceTreeBlock(cwd)
     if (treeBlock) {
-      systemPromptAppend = systemPromptAppend
-        ? `${treeBlock}\n\n${systemPromptAppend}`
-        : treeBlock
+      systemPromptAppend = systemPromptAppend ? `${treeBlock}\n\n${systemPromptAppend}` : treeBlock
     }
   }
 
@@ -1509,12 +1514,8 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
         // Measured window occupancy of the turn's last request — what the gauge
         // and auto-compact read after a reload (contextChars can't see tool
         // schemas or the tool results the loop accumulated).
-        ...(opts.result.usage.context_tokens !== undefined
-          ? { contextTokens: opts.result.usage.context_tokens }
-          : {}),
-        ...(opts.result.usage.base_tokens !== undefined
-          ? { baseTokens: opts.result.usage.base_tokens }
-          : {}),
+        ...(opts.result.usage.context_tokens !== undefined ? { contextTokens: opts.result.usage.context_tokens } : {}),
+        ...(opts.result.usage.base_tokens !== undefined ? { baseTokens: opts.result.usage.base_tokens } : {}),
         ...(costUsd !== undefined ? { costUsd } : {}),
         ...(opts.result.contextChars ? { contextChars: opts.result.contextChars } : {}),
       }
@@ -1632,24 +1633,50 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   let overflowRecovered = false
   const recoverFromOverflow = async (): Promise<boolean> => {
     if (params.nativeCommand || isCliAttached(params.sessionId)) return false
+    const native = sessionSettings.provider === 'anthropic'
+    // Anthropic without a CLI session has nothing to compact (the overflow was the
+    // very first turn) — retrying would only repeat the failure.
+    if (native && !sdkSessionId) return false
     log.warn('turn hit context overflow — auto-compact then retry once', {
       sessionId: params.sessionId,
+      native,
     })
+    const compactSettings: SessionSettings = {
+      provider: sessionSettings.provider,
+      modelId: sessionSettings.modelId,
+      level: 'low',
+      mode: 'ask',
+      ...(sessionSettings.accountId ? { accountId: sessionSettings.accountId } : {}),
+    }
     try {
+      if (native) {
+        const res = await runStream(
+          {
+            sessionId: params.sessionId,
+            pendingText: '/compact',
+            nativeCommand: true,
+            history: historyForRun,
+            settings: compactSettings,
+            ...(sdkSessionId ? { sdkSessionId } : {}),
+            abortController: new AbortController(),
+            // Same env as the turn → the live CLI process is reused, not respawned.
+            ...(params.contextConfig ? { contextConfig: params.contextConfig } : {}),
+            ...(cwd ? { cwd } : {}),
+            ...(params.projectId ? { projectId: params.projectId } : {}),
+          },
+          { onChunk: () => {} },
+        )
+        if (res.stopReason === 'error' || !res.nativeCompactions?.length) return false
+        recoveredCompactions.push(...res.nativeCompactions)
+        if (res.sdkSessionId) sdkSessionId = res.sdkSessionId
+        return true
+      }
       const res = await runStream(
         {
           sessionId: params.sessionId,
           pendingText: '/compact',
           history: historyForRun,
-          settings: {
-            provider: sessionSettings.provider,
-            modelId: sessionSettings.modelId,
-            level: 'low',
-            mode: 'ask',
-            ...(sessionSettings.accountId
-              ? { accountId: sessionSettings.accountId }
-              : {}),
-          },
+          settings: compactSettings,
           slashCommand: 'compact',
           abortController: new AbortController(),
           ...(compactionForRun ? { compaction: compactionForRun } : {}),
@@ -1673,155 +1700,153 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
       return false
     }
   }
+  // Native compactions that ran OUTSIDE the retried turn (the recovery /compact);
+  // folded into the result's `nativeCompactions` so the UI draws the marker.
+  const recoveredCompactions: NativeCompaction[] = []
 
   let result
   try {
     for (;;) {
       try {
         result = await runStream(
-      {
-        sessionId: params.sessionId,
-        pendingText: params.text,
-        ...(params.nativeCommand ? { nativeCommand: true } : {}),
-        ...(attachments && attachments.length ? { pendingAttachments: attachments } : {}),
-        // Prior turns: either what the UI sent (reference `ui`) or, when it sent
-        // none (`ui-next`), the transcript folded from JSONL above. The runner
-        // treats history as read-only SessionMessage[].
-        history: historyForRun,
-        settings: sessionInfra
-          ? { ...sessionSettings, infra: sessionInfra }
-          : sessionSettings,
-        ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
-        ...(cwd ? { cwd } : {}),
-        ...(params.projectId ? { projectId: params.projectId } : {}),
-        // Wiki / memory switches ride with the turn (ADR 0073 D-12): the runtime
-        // decides which tools to offer from them.
-        ...(params.contextConfig ? { contextConfig: params.contextConfig } : {}),
-        // Linked SSH host (ADR 0064 P2): the Pi runtime pushes the scoped SSH tools
-        // for this host. sshApprovalMode rides along in `settings`.
-        ...(params.aboutSshHostId ? { aboutSshHostId: params.aboutSshHostId } : {}),
-        ...(params.sshTerminalConnId ? { sshTerminalConnId: params.sshTerminalConnId } : {}),
-        ...(params.disabledTools && params.disabledTools.length
-          ? { disabledTools: params.disabledTools }
-          : {}),
-        ...(mcpServersForRuntime ? { mcpServers: mcpServersForRuntime } : {}),
-        // Enabled api sources (ADR 0060 P3) → mcp__<id>__api_<slug> tools (Pi).
-        ...(apiSourcesForRuntime.length ? { apiSources: apiSourcesForRuntime } : {}),
-        // Per-source Explore scoping (ADR 0060 P4): trust:'prompt' routes tools
-        // through the ask-gate; allowedMcpPatterns / allowedApiEndpoints restrict a
-        // source to its own tools/endpoints. All no-op when nothing was declared.
-        ...(gateAcc.promptSourceIds.length ? { promptSourceIds: gateAcc.promptSourceIds } : {}),
-        ...gateToolFilterFields(gateAcc),
-        ...(systemPromptAppend ? { systemPromptAppend } : {}),
-        ...(sessionChecklist ? { sessionChecklist } : {}),
-        ...(sessionTodos ? { sessionTodos } : {}),
-        // Bulk-load section sizes for the context-window breakdown (the runtime
-        // folds these into contextChars; it can't re-derive them from the joined
-        // systemPromptAppend string).
-        contextItems: {
-          memoryFilesChars: bulkLoad.memoryFilesChars,
-          customAgentsChars: bulkLoad.customAgentsChars,
-          skillsChars: bulkLoad.skillsChars,
-          wikiChars: bulkLoad.wikiChars,
-          memoryChars: bulkLoad.memoryChars,
-          memoryFilesList: bulkLoad.memoryFilesList,
-          customAgentsList: bulkLoad.customAgentsList,
-          skillsList: bulkLoad.skillsList,
-          wikiList: bulkLoad.wikiList,
-          memoryList: bulkLoad.memoryList,
-        },
-        ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
-        // Per-agent skill whitelist → SDK `skills` option (claude-sdk path); the
-        // Pi/Codex catalogue is already filtered inside buildBulkLoad.
-        ...(overlayAgent?.skillIds && overlayAgent.skillIds.length > 0
-          ? { skills: overlayAgent.skillIds }
-          : {}),
-        // Agent repo-access whitelist → fs-tool roots (Pi/Codex). Resolved
-        // against this session's cwd so member worktrees stay covered.
-        ...(agentFsRoots ? { fsRoots: agentFsRoots } : {}),
-        // Compaction checkpoint: explicit payload (reference `ui`) or folded from the
-        // persisted session (`ui-next` / auto-compact) — see compactionForRun above.
-        ...(compactionForRun ? { compaction: compactionForRun } : {}),
-        // Auto-approve (Settings → Sessions): skip the permission park for gated
-        // tools when the user opted in. The runtime's beforeToolCall bypasses
-        // canUseTool entirely (see makeBeforeToolCall).
-        ...(params.autoApprove ? { autoApprove: true } : {}),
-        // Re-feed images (Settings → Sessions): when false the context builder drops
-        // prior-turn image attachments (only the current turn carries them).
-        ...(params.refeedImages === false ? { refeedImages: false } : {}),
-        // Co-author trailer (Settings → Git). Forward only the explicit opt-OUT so
-        // the runtime keeps its default-on behaviour when the field is omitted.
-        ...(params.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
-        // Per-turn hard caps (tool-call count / wallclock) enforced in the runtime
-        // beforeToolCall. Forward only the defined fields.
-        ...(params.budget?.maxToolCalls !== undefined ||
-        params.budget?.maxWallclockMs !== undefined ||
-        remainingUsd !== undefined
-          ? {
-              budget: {
-                ...(params.budget?.maxToolCalls !== undefined
-                  ? { maxToolCalls: params.budget.maxToolCalls }
-                  : {}),
-                ...(params.budget?.maxWallclockMs !== undefined
-                  ? { maxWallclockMs: params.budget.maxWallclockMs }
-                  : {}),
-                ...(remainingUsd !== undefined ? { maxCostUsd: remainingUsd } : {}),
-              },
-            }
-          : {}),
-        canUseTool,
-        // JEV: phiên con không có người tương tác — để askUserQuestion vắng mặt
-        // làm AskUserQuestion trả "no interactive user" (Pi) / tool không được
-        // quảng cáo (Claude SDK), thay vì park một thẻ hỏi không ai đọc.
-        ...(isGroupChild ? {} : { askUserQuestion }),
-        ...(validatedFolders.length > 0 ? { extraDirs: validatedFolders } : {}),
-        abortController,
-        // Claude SDK resume handle (ADR 0058, Anthropic path). Ignored by Pi.
-        ...(sdkSessionId ? { sdkSessionId } : {}),
-        // Codex thread handle (ADR 0087, OpenAI path). Ignored elsewhere.
-        ...(codexThreadId ? { codexThreadId } : {}),
-        ...(codexToolSignature ? { codexToolSignature } : {}),
-        // Mid-turn steering: hand the loop the steers queued via sessions.steer
-        // for this assistant turn (Pi only — the Claude SDK path has no steering
-        // hook, see supportsSteering above). The drain clears them so each lands once.
-        ...(supportsSteering
-          ? { getSteeringMessages: async () => drainSteer(params.messageId) }
-          : {}),
-      },
-      {
-        onChunk: (delta) => {
-          accumulatedText += delta
-          appendTextPart(delta)
-          emit('session.chunk', {
+          {
             sessionId: params.sessionId,
-            messageId: params.messageId,
-            delta,
-          })
-          schedulePartialPersist()
-        },
-        onStep: (step) => {
-          // Stamp the reply position where this step fired (length of text
-          // streamed so far) so a JSONL reload can re-interleave text ↔ steps in
-          // chronological order. Preserve the first-seen offset across the
-          // running→done upsert (and thinking re-emits) — the tool fired once.
-          // Emit the stamped step so the live UI keeps the same value it persists.
-          const prev = collectedSteps.get(step.id)
-          const stamped: SessionStep = {
-            ...prev,
-            ...step,
-            textOffset: prev?.textOffset ?? step.textOffset ?? accumulatedText.length,
-          }
-          collectedSteps.set(step.id, stamped)
-          upsertStepPart(stamped)
-          emit('session.step', {
-            sessionId: params.sessionId,
-            messageId: params.messageId,
-            step: stamped,
-          })
-          schedulePartialPersist()
-        },
-      },
-    )
+            pendingText: params.text,
+            ...(params.nativeCommand ? { nativeCommand: true } : {}),
+            ...(params.attachWake ? { attachWake: true } : {}),
+            ...(attachments && attachments.length ? { pendingAttachments: attachments } : {}),
+            // Prior turns: either what the UI sent (reference `ui`) or, when it sent
+            // none (`ui-next`), the transcript folded from JSONL above. The runner
+            // treats history as read-only SessionMessage[].
+            history: historyForRun,
+            settings: sessionInfra ? { ...sessionSettings, infra: sessionInfra } : sessionSettings,
+            ...(resolvedSystemPrompt ? { systemPrompt: resolvedSystemPrompt } : {}),
+            ...(cwd ? { cwd } : {}),
+            ...(params.projectId ? { projectId: params.projectId } : {}),
+            // Wiki / memory switches ride with the turn (ADR 0073 D-12): the runtime
+            // decides which tools to offer from them.
+            ...(params.contextConfig ? { contextConfig: params.contextConfig } : {}),
+            // Linked SSH host (ADR 0064 P2): the Pi runtime pushes the scoped SSH tools
+            // for this host. sshApprovalMode rides along in `settings`.
+            ...(params.aboutSshHostId ? { aboutSshHostId: params.aboutSshHostId } : {}),
+            ...(params.sshTerminalConnId ? { sshTerminalConnId: params.sshTerminalConnId } : {}),
+            ...(params.disabledTools && params.disabledTools.length ? { disabledTools: params.disabledTools } : {}),
+            ...(mcpServersForRuntime ? { mcpServers: mcpServersForRuntime } : {}),
+            // Enabled api sources (ADR 0060 P3) → mcp__<id>__api_<slug> tools (Pi).
+            ...(apiSourcesForRuntime.length ? { apiSources: apiSourcesForRuntime } : {}),
+            // Per-source Explore scoping (ADR 0060 P4): trust:'prompt' routes tools
+            // through the ask-gate; allowedMcpPatterns / allowedApiEndpoints restrict a
+            // source to its own tools/endpoints. All no-op when nothing was declared.
+            ...(gateAcc.promptSourceIds.length ? { promptSourceIds: gateAcc.promptSourceIds } : {}),
+            ...gateToolFilterFields(gateAcc),
+            ...(systemPromptAppend ? { systemPromptAppend } : {}),
+            ...(sessionChecklist ? { sessionChecklist } : {}),
+            ...(sessionTodos ? { sessionTodos } : {}),
+            // Bulk-load section sizes for the context-window breakdown (the runtime
+            // folds these into contextChars; it can't re-derive them from the joined
+            // systemPromptAppend string).
+            contextItems: {
+              memoryFilesChars: bulkLoad.memoryFilesChars,
+              customAgentsChars: bulkLoad.customAgentsChars,
+              skillsChars: bulkLoad.skillsChars,
+              wikiChars: bulkLoad.wikiChars,
+              memoryChars: bulkLoad.memoryChars,
+              memoryFilesList: bulkLoad.memoryFilesList,
+              customAgentsList: bulkLoad.customAgentsList,
+              skillsList: bulkLoad.skillsList,
+              wikiList: bulkLoad.wikiList,
+              memoryList: bulkLoad.memoryList,
+            },
+            ...(resolvedAllowedTools ? { allowedTools: resolvedAllowedTools } : {}),
+            // Per-agent skill whitelist → SDK `skills` option (claude-sdk path); the
+            // Pi/Codex catalogue is already filtered inside buildBulkLoad.
+            ...(overlayAgent?.skillIds && overlayAgent.skillIds.length > 0 ? { skills: overlayAgent.skillIds } : {}),
+            // Agent repo-access whitelist → fs-tool roots (Pi/Codex). Resolved
+            // against this session's cwd so member worktrees stay covered.
+            ...(agentFsRoots ? { fsRoots: agentFsRoots } : {}),
+            // Compaction checkpoint: explicit payload (reference `ui`) or folded from the
+            // persisted session (`ui-next` / auto-compact) — see compactionForRun above.
+            ...(compactionForRun ? { compaction: compactionForRun } : {}),
+            // Auto-approve (Settings → Sessions): skip the permission park for gated
+            // tools when the user opted in. The runtime's beforeToolCall bypasses
+            // canUseTool entirely (see makeBeforeToolCall).
+            ...(params.autoApprove ? { autoApprove: true } : {}),
+            // Re-feed images (Settings → Sessions): when false the context builder drops
+            // prior-turn image attachments (only the current turn carries them).
+            ...(params.refeedImages === false ? { refeedImages: false } : {}),
+            // Co-author trailer (Settings → Git). Forward only the explicit opt-OUT so
+            // the runtime keeps its default-on behaviour when the field is omitted.
+            ...(params.commitCoAuthor === false ? { commitCoAuthor: false } : {}),
+            // Per-turn hard caps (tool-call count / wallclock) enforced in the runtime
+            // beforeToolCall. Forward only the defined fields.
+            ...(params.budget?.maxToolCalls !== undefined ||
+            params.budget?.maxWallclockMs !== undefined ||
+            remainingUsd !== undefined
+              ? {
+                  budget: {
+                    ...(params.budget?.maxToolCalls !== undefined ? { maxToolCalls: params.budget.maxToolCalls } : {}),
+                    ...(params.budget?.maxWallclockMs !== undefined
+                      ? { maxWallclockMs: params.budget.maxWallclockMs }
+                      : {}),
+                    ...(remainingUsd !== undefined ? { maxCostUsd: remainingUsd } : {}),
+                  },
+                }
+              : {}),
+            canUseTool,
+            // JEV: phiên con không có người tương tác — để askUserQuestion vắng mặt
+            // làm AskUserQuestion trả "no interactive user" (Pi) / tool không được
+            // quảng cáo (Claude SDK), thay vì park một thẻ hỏi không ai đọc.
+            ...(isGroupChild ? {} : { askUserQuestion }),
+            ...(validatedFolders.length > 0 ? { extraDirs: validatedFolders } : {}),
+            abortController,
+            // Claude SDK resume handle (ADR 0058, Anthropic path). Ignored by Pi.
+            ...(sdkSessionId ? { sdkSessionId } : {}),
+            // Codex thread handle (ADR 0087, OpenAI path). Ignored elsewhere.
+            ...(codexThreadId ? { codexThreadId } : {}),
+            ...(codexToolSignature ? { codexToolSignature } : {}),
+            // Mid-turn steering: hand the loop the steers queued via sessions.steer
+            // for this assistant turn (Pi only — the Claude SDK path has no steering
+            // hook, see supportsSteering above). The drain clears them so each lands once.
+            ...(supportsSteering
+              ? {
+                  getSteeringMessages: async () => drainSteer(params.messageId),
+                }
+              : {}),
+          },
+          {
+            onChunk: (delta) => {
+              accumulatedText += delta
+              appendTextPart(delta)
+              emit('session.chunk', {
+                sessionId: params.sessionId,
+                messageId: params.messageId,
+                delta,
+              })
+              schedulePartialPersist()
+            },
+            onStep: (step) => {
+              // Stamp the reply position where this step fired (length of text
+              // streamed so far) so a JSONL reload can re-interleave text ↔ steps in
+              // chronological order. Preserve the first-seen offset across the
+              // running→done upsert (and thinking re-emits) — the tool fired once.
+              // Emit the stamped step so the live UI keeps the same value it persists.
+              const prev = collectedSteps.get(step.id)
+              const stamped: SessionStep = {
+                ...prev,
+                ...step,
+                textOffset: prev?.textOffset ?? step.textOffset ?? accumulatedText.length,
+              }
+              collectedSteps.set(step.id, stamped)
+              upsertStepPart(stamped)
+              emit('session.step', {
+                sessionId: params.sessionId,
+                messageId: params.messageId,
+                step: stamped,
+              })
+              schedulePartialPersist()
+            },
+          },
+        )
       } catch (err) {
         // Pi path ném lỗi provider (kể cả overflow) thay vì trả stopReason.
         const errMsg = err instanceof Error ? err.message : String(err)
@@ -1850,12 +1875,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     // tin wake là mềm; marker đảm bảo kênh THẤY câu trả lời kể cả khi model
     // trả lời trong transcript riêng. Nuốt lỗi nội bộ, skip khi phiên đã tự
     // team_say trong lượt (xem sessions/channel.ts).
-    if (
-      params.comm &&
-      result.text &&
-      result.stopReason !== 'error' &&
-      result.stopReason !== 'aborted'
-    ) {
+    if (params.comm && result.text && result.stopReason !== 'error' && result.stopReason !== 'aborted') {
       await mirrorCommReply(params.sessionId, result.text)
     }
     // Graceful fail cũng gỡ việc khỏi board của member (spec §1.2): Pi nuốt một
@@ -1865,13 +1885,40 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     if (result.stopReason === 'error' || result.stopReason === 'aborted') {
       await rollbackMemberBoardItems()
     }
-    // Persist the (possibly rotated) Claude SDK session id so the next turn
-    // resumes this SDK session (ADR 0058, Anthropic path). Only when it changed.
-    if (result.sdkSessionId && result.sdkSessionId !== sdkSessionId) {
-      await updateSessionMetadata(params.sessionId, {
-        sdkSessionId: result.sdkSessionId,
-      }).catch((err) => {
-        log.warn('failed to persist sdk session id', {
+    // Persist the Claude SDK session id so the next turn resumes it (ADR 0058,
+    // Anthropic path) — and, when the CLI transcript already covers this
+    // session's AWOG history, flip it to pointer mode: transcriptSource='sdk' +
+    // sdkSessionPath make the CLI file the ONLY message store, so subsequent
+    // persists write just the index header (ADR 0097). Runs on every turn a
+    // handle exists (not only on rotation) so pre-pointer sessions migrate
+    // lazily on their next turn.
+    if (result.sdkSessionId) {
+      const sid = result.sdkSessionId
+      const current = await loadSession(params.sessionId).catch(() => null)
+      const alreadySdk = current?.transcriptSource === 'sdk'
+      if (!alreadySdk || sid !== sdkSessionId) {
+        const sdkPath = await findClaudeTranscriptFile(sid)
+        const covered =
+          alreadySdk ||
+          (sdkPath !== undefined && current !== null && sdkTranscriptCoversSession(sdkPath, current.messages))
+        await updateSessionMetadata(params.sessionId, {
+          sdkSessionId: sid,
+          ...(sdkPath ? { sdkSessionPath: sdkPath } : {}),
+          ...(covered ? { transcriptSource: 'sdk' as const } : {}),
+        }).catch((err) => {
+          log.warn('failed to persist sdk session id', {
+            sessionId: params.sessionId,
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
+      }
+    } else if (sessionSettings.provider !== 'anthropic' && sdkSessionId !== undefined) {
+      // This turn ran on a non-Anthropic runtime while a Claude transcript
+      // pointer is still pinned: the CLI file just stopped tracking history,
+      // so it can no longer be the source of truth — re-root the transcript
+      // in AWOG (full body) and drop the stale resume handle.
+      await clearSdkTranscript(params.sessionId).catch((err) => {
+        log.warn('failed to clear sdk transcript pointer', {
           sessionId: params.sessionId,
           err: err instanceof Error ? err.message : String(err),
         })
@@ -1926,6 +1973,10 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     endSteerTurn(params.messageId)
   }
 
+  // Native CLI compactions that happened in this turn (recovery /compact + any
+  // auto-compact inside the turn): the UI draws a divider marker for each.
+  const nativeCompactions = [...recoveredCompactions, ...(result.nativeCompactions ?? [])]
+
   // Terminal event so UI can clear "loading" state purely from the stream,
   // independent of RPC promise resolution timing.
   emit('session.message.done', {
@@ -1941,6 +1992,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     // session.message.done handler in the UI store), and the error alert must not
     // depend on it landing.
     ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
+    ...(nativeCompactions.length > 0 ? { nativeCompactions } : {}),
   })
 
   // Rewind snapshot (ADR 0038): capture the workspace state at the end of this
@@ -1976,6 +2028,7 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
     // Provider error cause on a graceful `error` stop — UI shows it in the turn's
     // error alert with a retry button.
     ...(result.errorMessage !== undefined ? { errorMessage: result.errorMessage } : {}),
+    ...(nativeCompactions.length > 0 ? { nativeCompactions } : {}),
     // Ordered timeline (ADR 0032). UI finalize stores this as the authoritative
     // message.parts; empty for a non-streaming reply with no steps (UI derives).
     ...(parts.length > 0 ? { parts } : {}),

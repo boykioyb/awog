@@ -15,6 +15,7 @@
         :selection-text="selectionText"
         surface="panel"
         :dock="dock"
+        :scope="session.engineId"
         :expanded="expanded"
         :can-expand="canExpand"
         @select-tab="selectTab"
@@ -56,7 +57,7 @@
         />
         <!-- Tab trắng → empty-state thắng: "hiện ở chỗ khác" vô nghĩa khi tab
              chưa có trang nào. -->
-        <BrowserEmptyState v-if="empty" @open="onEmptyOpen" />
+        <BrowserEmptyState v-if="empty" :scope="session.engineId" @open="onEmptyOpen" />
         <BrowserElsewhere v-else-if="elsewhere" :where="elsewhereWhere" @takeover="takeOver" />
       </div>
 

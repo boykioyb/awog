@@ -32,8 +32,9 @@ import { parseTodos } from '../todos.js'
 import { ASK_USER_QUESTION_TOOL } from './ask-user-question.js'
 import { TASK_CHECKLIST_TOOLS, createTaskChecklist } from './task-checklist.js'
 import type { StreamCallbacks } from '../../sessions/runner.js'
-import type { SessionStep, TodoItem } from '../../types/shared.js'
+import type { NativeCompaction, SessionStep, TodoItem } from '../../types/shared.js'
 import { resultErrorMessage } from './shared.js'
+import { nativeCompactionFromMetadata } from '../../sessions/claude-transcript.js'
 
 export interface ClaudeAccumulator {
   text: string
@@ -58,6 +59,9 @@ export interface ClaudeAccumulator {
   // Latest SDK session id seen this turn — the caller persists it so the next
   // turn resumes the same SDK session (conversation history + native compaction).
   sdkSessionId?: string
+  // Native CLI compactions seen this turn (`system/compact_boundary`) — the manual
+  // `/compact` turn yields one; an auto-compact mid-turn yields one on a normal turn.
+  compactions: NativeCompaction[]
 }
 
 // Anthropic per-request usage block, as it rides on an `assistant` SDK message
@@ -137,6 +141,15 @@ export interface ClaudeEventAdapter {
   markBackgroundTask: (taskId: string) => void
   // Close a row whose task was still running when the turn ended.
   settleBackgroundRow: (taskId: string) => void
+  // The adapter outlives a turn now (one per live CLI process, ADR 0099) — it holds the
+  // background-task rows and the checklist tracker that must survive from the turn
+  // that launched a task to the unsolicited turn that reports it. `beginTurn` points
+  // the output at this turn's callbacks and zeroes everything that is per-turn (the
+  // accumulator, thinking-block ids, the suggestion latch); `endTurn` parks the output
+  // on a sink so a message arriving BETWEEN turns still updates the row state but can
+  // never write into a bubble whose turn has already been finalised and persisted.
+  beginTurn: (cb: StreamCallbacks, sessionTodos?: readonly TodoItem[]) => void
+  endTurn: () => void
 }
 
 // Optional side-channels the runner owns. `onTodos` is the SDK-path twin of the
@@ -192,11 +205,7 @@ function formatDuration(ms: number): string {
 
 // The expandable body of a background-task row: what it has been doing, how much
 // work that took, and — once finished — its summary and captured output.
-function bgTaskBody(
-  view: BgTaskView,
-  summary: string | undefined,
-  output: string | undefined,
-): string {
+function bgTaskBody(view: BgTaskView, summary: string | undefined, output: string | undefined): string {
   const blocks: string[] = []
   if (view.activity.length > 0) blocks.push(view.activity.join('\n'))
   const stats: string[] = []
@@ -210,11 +219,31 @@ function bgTaskBody(
   return blocks.join('\n\n')
 }
 
+// Adapter options. `replay` (ADR 0097) switches the source from a LIVE stream
+// (text arrives as stream_event deltas) to a PERSISTED transcript read — the CLI
+// writes full assistant messages and never streams, so in replay mode the
+// adapter emits text + thinking straight from `assistant` content blocks (the
+// blocks live mode deliberately skips to avoid double-counting).
+export interface ClaudeAdapterOptions {
+  replay?: boolean
+}
+
+// Output sink for the gaps BETWEEN turns (see ClaudeEventAdapter.endTurn). It must expose
+// `onStep` — several branches below read `cb.onStep` as "is anyone listening" and skip
+// their STATE updates (the background-task views) when it is missing.
+const IDLE_CALLBACKS: StreamCallbacks = { onChunk: () => {}, onStep: () => {} }
+
 export function createClaudeEventAdapter(
-  cb: StreamCallbacks,
+  initialCb: StreamCallbacks,
   hooks: ClaudeAdapterHooks = {},
+  options: ClaudeAdapterOptions = {},
 ): ClaudeEventAdapter {
-  const acc: ClaudeAccumulator = {
+  const replay = options.replay === true
+  // Replay-only: thinking blocks are complete (no delta accumulation), so the
+  // step id just counts them per turn — mirrors the live thinking-<seq>-<idx>.
+  let replayThinkingSeq = 0
+  let cb = initialCb
+  const newAccumulator = (): ClaudeAccumulator => ({
     text: '',
     modelUsed: '',
     inputTokens: 0,
@@ -224,7 +253,9 @@ export function createClaudeEventAdapter(
     contextTokens: 0,
     baseTokens: 0,
     stopReason: null,
-  }
+    compactions: [],
+  })
+  let acc = newAccumulator()
   // toolCallId → { name, input } captured on the tool_use block so the matching
   // tool_result step can re-derive its target/diff stats without re-parsing.
   const toolInputs = new Map<string, { name: string; input: Record<string, unknown> }>()
@@ -244,7 +275,7 @@ export function createClaudeEventAdapter(
   // The main agent's checklist, replayed from the CLI's TaskCreate/TaskUpdate/
   // TaskList calls (task-checklist.ts). TodoWrite no longer exists on this
   // surface for current models, so this is where the checklist comes from.
-  const taskChecklist = createTaskChecklist(hooks.sessionTodos)
+  let taskChecklist = createTaskChecklist(hooks.sessionTodos)
   const checklistTools: ReadonlySet<string> = new Set(TASK_CHECKLIST_TOOLS)
   let assistantSeq = 0
   // Lượt này model đã tự gọi `suggest_followups` chưa. Gợi ý MIỄN PHÍ của SDK
@@ -464,9 +495,7 @@ export function createClaudeEventAdapter(
     // submitted, and its successful result is the CLI's prose restatement of those
     // answers — a generic row would bury the card under it.
     if (
-      (meta.name === 'ExitPlanMode' ||
-        meta.name === 'TodoWrite' ||
-        meta.name === ASK_USER_QUESTION_TOOL) &&
+      (meta.name === 'ExitPlanMode' || meta.name === 'TodoWrite' || meta.name === ASK_USER_QUESTION_TOOL) &&
       !failed
     ) {
       return
@@ -527,11 +556,21 @@ export function createClaudeEventAdapter(
           status?: string
           output_file?: string
           last_tool_name?: string
-          usage?: { total_tokens?: number; tool_uses?: number; duration_ms?: number }
+          usage?: {
+            total_tokens?: number
+            tool_uses?: number
+            duration_ms?: number
+          }
           skip_transcript?: boolean
+          compact_metadata?: unknown
         }
         if (m.subtype === 'init' && typeof m.model === 'string') acc.modelUsed = m.model
-        else emitBackgroundTask(m)
+        else if (m.subtype === 'compact_boundary') {
+          // Native compaction (manual `/compact` hoặc tự nén giữa lượt): CLI giữ nguyên
+          // sdkSessionId, chỉ ghi boundary. Ta chỉ cần số liệu để UI vẽ marker.
+          const compaction = nativeCompactionFromMetadata(m.compact_metadata)
+          if (compaction) acc.compactions.push(compaction)
+        } else emitBackgroundTask(m)
         break
       }
       case 'stream_event': {
@@ -595,9 +634,7 @@ export function createClaudeEventAdapter(
         if (!parentId && m.message?.usage) {
           const u = m.message.usage
           acc.contextTokens =
-            (u.input_tokens ?? 0) +
-            (u.cache_read_input_tokens ?? 0) +
-            (u.cache_creation_input_tokens ?? 0)
+            (u.input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0)
           // First request of the turn: the standing cost before any tool result.
           if (acc.baseTokens === 0) acc.baseTokens = acc.contextTokens
         }
@@ -605,6 +642,36 @@ export function createClaudeEventAdapter(
         if (Array.isArray(content)) {
           for (const raw of content as ContentBlock[]) {
             if (raw.type === 'tool_use') emitToolUse(raw, parentId)
+          }
+          // Replay mode (ADR 0097): a persisted transcript has no stream_events —
+          // text and thinking arrive as full content blocks, so emit them here.
+          // Live mode keeps skipping them: deltas already streamed via stream_event.
+          if (replay) {
+            const rm = m.message as {
+              model?: string
+              stop_reason?: string | null
+              usage?: RequestUsage
+            }
+            if (!parentId && rm.model) acc.modelUsed = rm.model
+            if (!parentId && rm.stop_reason) acc.stopReason = rm.stop_reason
+            if (!parentId && rm.usage) {
+              // No `result` frame on disk → per-turn totals come from summing
+              // each assistant request's usage (same buckets `result.usage`
+              // carries live).
+              acc.inputTokens += rm.usage.input_tokens ?? 0
+              acc.outputTokens += rm.usage.output_tokens ?? 0
+              acc.cacheReadTokens += rm.usage.cache_read_input_tokens ?? 0
+              acc.cacheWriteTokens += rm.usage.cache_creation_input_tokens ?? 0
+            }
+            for (const raw of content as ContentBlock[]) {
+              if (raw.type === 'text' && typeof raw.text === 'string' && raw.text && !parentId) {
+                acc.text += raw.text
+                cb.onChunk(raw.text)
+              } else if (raw.type === 'thinking' && cb.onStep) {
+                const id = `thinking-${assistantSeq}-${replayThinkingSeq++}`
+                cb.onStep(stepFromThinking(id, raw.thinking ?? '', true))
+              }
+            }
           }
         }
         break
@@ -635,9 +702,7 @@ export function createClaudeEventAdapter(
         const m = msg as { suggestion?: string; uuid?: string }
         const text = typeof m.suggestion === 'string' ? m.suggestion.trim() : ''
         if (!text || sawFollowups || !cb.onStep) break
-        cb.onStep(
-          stepFromSurface(`suggest-${m.uuid ?? assistantSeq}`, { kind: 'followups', options: [text] }, 'done'),
-        )
+        cb.onStep(stepFromSurface(`suggest-${m.uuid ?? assistantSeq}`, { kind: 'followups', options: [text] }, 'done'))
         break
       }
       case 'result': {
@@ -687,5 +752,23 @@ export function createClaudeEventAdapter(
     updateBackgroundOutput,
     markBackgroundTask,
     settleBackgroundRow,
+    beginTurn: (next, sessionTodos) => {
+      cb = next
+      acc = newAccumulator()
+      thinkingBlocks.clear()
+      assistantSeq = 0
+      replayThinkingSeq = 0
+      sawFollowups = false
+      // The user may have edited the checklist between turns (sessions.updateTodos) —
+      // reseed from the persisted list exactly as a fresh adapter used to.
+      taskChecklist = createTaskChecklist(sessionTodos ?? hooks.sessionTodos)
+      // Tool inputs only matter for the result that follows their call, except the
+      // ones that launched a background task (its row reads the raw command later).
+      // Without this a process that lives for hours keeps every Write's file body.
+      for (const id of [...toolInputs.keys()]) if (!taskIdByToolUse.has(id)) toolInputs.delete(id)
+    },
+    endTurn: () => {
+      cb = IDLE_CALLBACKS
+    },
   }
 }

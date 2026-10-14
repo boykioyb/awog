@@ -73,7 +73,10 @@ export function classify(command: string): Classified {
   // CLI của Claude Agent SDK. Nhận theo argv đặc trưng chứ không theo tên file:
   // `claude` là tên quá phổ biến để làm bằng chứng một mình.
   if (/--input-format\s+stream-json|claude-agent-sdk-[a-z0-9]+-[a-z0-9]+\/claude/.test(command)) {
-    const sdkSessionId = flagValue(command, '--resume', UUID)
+    // `--resume <uuid>` for a resumed session; `--session-id <uuid>` for the process AWOG
+    // spawned for a fresh one (runtime/claude-sdk/run-stream.ts mints the id so the live
+    // process — which now lives across turns — is attributable from its first byte).
+    const sdkSessionId = flagValue(command, '--resume', UUID) ?? flagValue(command, '--session-id', UUID)
     const model = flagValue(command, '--model')
     return {
       kind: 'claude-cli',

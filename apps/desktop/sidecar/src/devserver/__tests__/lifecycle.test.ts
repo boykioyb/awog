@@ -9,22 +9,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BgShellState, BgShellMeta } from '../../sessions/bg-registry.js'
 
 const listBackground = vi.fn<(sessionId: string) => BgShellState[]>()
-const startBackground =
-  vi.fn<(input: { sessionId: string; cwd: string; command: string }) => Promise<BgShellMeta>>()
+const startBackground = vi.fn<(input: { sessionId: string; cwd: string; command: string }) => Promise<BgShellMeta>>()
 const killBackground = vi.fn<(sessionId: string, shellId: string) => boolean>()
 const readBackground = vi.fn()
 
 vi.mock('../../sessions/bg-registry.js', () => ({
   listBackground: (sessionId: string) => listBackground(sessionId),
-  startBackground: (input: { sessionId: string; cwd: string; command: string }) =>
-    startBackground(input),
+  startBackground: (input: { sessionId: string; cwd: string; command: string }) => startBackground(input),
   killBackground: (sessionId: string, shellId: string) => killBackground(sessionId, shellId),
-  readBackground: (sessionId: string, shellId: string, opts?: unknown) =>
-    readBackground(sessionId, shellId, opts),
+  readBackground: (sessionId: string, shellId: string, opts?: unknown) => readBackground(sessionId, shellId, opts),
+  onBackgroundSettled: (l: (sessionId: string) => void) => settleListeners.push(l),
 }))
 
-const { listDevServers, startDevServer, stopDevServer, readDevServerLog, DevServerError } =
-  await import('../registry.js')
+// registry đẩy tập cổng loopback sang Electron main qua hostRequest.
+const hostRequest = vi.fn<(method: string, params: unknown) => Promise<unknown>>()
+vi.mock('../../transport/stdio.js', () => ({
+  hostRequest: (method: string, params: unknown) => hostRequest(method, params),
+}))
+const settleListeners: ((sessionId: string) => void)[] = []
+
+const {
+  listDevServers,
+  startDevServer,
+  stopDevServer,
+  readDevServerLog,
+  DevServerError,
+  syncBrowserLoopbackPorts,
+  installDevServerBrowserSync,
+} = await import('../registry.js')
 
 const SID = 'ses-1'
 let root: string
@@ -110,7 +122,12 @@ describe('listDevServers', () => {
 
 describe('startDevServer', () => {
   it('chưa chạy ⇒ spawn đúng một lần, cwd là gốc dự án do sidecar dựng', async () => {
-    const res = await startDevServer({ projectRoot: root, sessionId: SID, name: 'web', confirmCommand: 'AWOG_DEV_SERVER=web pnpm dev' })
+    const res = await startDevServer({
+      projectRoot: root,
+      sessionId: SID,
+      name: 'web',
+      confirmCommand: 'AWOG_DEV_SERVER=web pnpm dev',
+    })
     expect(res.outcome).toBe('started')
     expect(res.server).toMatchObject({ status: 'running', shellId: 'bg_new' })
     expect(startBackground).toHaveBeenCalledTimes(1)
@@ -123,7 +140,12 @@ describe('startDevServer', () => {
 
   it('ĐANG chạy ⇒ KHÔNG spawn thêm, trả về cái đang chạy', async () => {
     listBackground.mockReturnValue([shell()])
-    const res = await startDevServer({ projectRoot: root, sessionId: SID, name: 'web', confirmCommand: 'AWOG_DEV_SERVER=web pnpm dev' })
+    const res = await startDevServer({
+      projectRoot: root,
+      sessionId: SID,
+      name: 'web',
+      confirmCommand: 'AWOG_DEV_SERVER=web pnpm dev',
+    })
     expect(res.outcome).toBe('already-running')
     expect(res.server.shellId).toBe('bg_1')
     expect(startBackground).not.toHaveBeenCalled()
@@ -168,9 +190,9 @@ describe('stopDevServer', () => {
   })
 
   it('không chạy ⇒ not-running, không giết gì', async () => {
-    await expect(
-      stopDevServer({ projectRoot: root, sessionId: SID, name: 'web' }),
-    ).rejects.toMatchObject({ code: 'not-running' })
+    await expect(stopDevServer({ projectRoot: root, sessionId: SID, name: 'web' })).rejects.toMatchObject({
+      code: 'not-running',
+    })
     expect(killBackground).not.toHaveBeenCalled()
   })
 })
@@ -253,8 +275,89 @@ describe('readDevServerLog', () => {
 
   it('chưa từng chạy ⇒ nói rõ là chưa có log', async () => {
     listBackground.mockReturnValue([])
-    await expect(
-      readDevServerLog({ projectRoot: root, sessionId: SID, name: 'web' }),
-    ).rejects.toMatchObject({ code: 'not-running' })
+    await expect(readDevServerLog({ projectRoot: root, sessionId: SID, name: 'web' })).rejects.toMatchObject({
+      code: 'not-running',
+    })
+  })
+})
+
+describe('ngoại lệ loopback cho trình duyệt agent', () => {
+  const pushes = (): unknown[] => hostRequest.mock.calls.map((c) => c[1])
+  let sid = ''
+  let n = 0
+  beforeEach(() => {
+    n += 1
+    sid = `ses-loop-${n}`
+    hostRequest.mockReset().mockResolvedValue({ ok: true })
+  })
+
+  it('đã khai + đang chạy ⇒ đẩy cổng đúng scope; dừng ⇒ đẩy tập rỗng', async () => {
+    listBackground.mockReturnValue([shell()])
+    expect(await syncBrowserLoopbackPorts(root, sid)).toEqual([3000])
+    expect(pushes()).toEqual([{ scope: sid, ports: [3000] }])
+
+    listBackground.mockReturnValue([shell({ status: 'exited', exitCode: 0 })])
+    expect(await syncBrowserLoopbackPorts(root, sid)).toEqual([])
+    expect(pushes()).toEqual([
+      { scope: sid, ports: [3000] },
+      { scope: sid, ports: [] },
+    ])
+  })
+
+  it('đã khai nhưng chưa chạy, hoặc chạy mà không khai cổng ⇒ không có cổng', async () => {
+    listBackground.mockReturnValue([]) // web đã khai (3000) nhưng stopped
+    expect(await syncBrowserLoopbackPorts(root, sid)).toEqual([])
+    // `api` chạy nhưng không khai port.
+    listBackground.mockReturnValue([shell({ command: 'AWOG_DEV_SERVER=api node api.js' })])
+    expect(await syncBrowserLoopbackPorts(root, sid)).toEqual([])
+    expect(hostRequest).not.toHaveBeenCalled()
+  })
+
+  it('không đẩy lặp khi tập không đổi', async () => {
+    listBackground.mockReturnValue([shell()])
+    await syncBrowserLoopbackPorts(root, sid)
+    await syncBrowserLoopbackPorts(root, sid)
+    expect(hostRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('start ⇒ đẩy cổng (shell đã đăng ký); stop ⇒ thu hồi', async () => {
+    startBackground.mockImplementation(async () => {
+      listBackground.mockReturnValue([shell({ shellId: 'bg_new' })])
+      return {
+        shellId: 'bg_new',
+        command: 'AWOG_DEV_SERVER=web pnpm dev',
+        pid: 42,
+        startedAt: 'x',
+        sessionId: sid,
+      }
+    })
+    await startDevServer({
+      projectRoot: root,
+      sessionId: sid,
+      name: 'web',
+      confirmCommand: 'AWOG_DEV_SERVER=web pnpm dev',
+    })
+    expect(pushes()).toEqual([{ scope: sid, ports: [3000] }])
+    killBackground.mockImplementation(() => {
+      listBackground.mockReturnValue([shell({ status: 'exited-unknown' })])
+      return true
+    })
+    await stopDevServer({ projectRoot: root, sessionId: sid, name: 'web' })
+    expect(pushes().at(-1)).toEqual({ scope: sid, ports: [] })
+  })
+
+  it('shell của phiên hết chạy ⇒ listener thu hồi', async () => {
+    installDevServerBrowserSync()
+    listBackground.mockReturnValue([shell()])
+    await syncBrowserLoopbackPorts(root, sid)
+    listBackground.mockReturnValue([shell({ status: 'exited-unknown' })])
+    for (const l of settleListeners) l(sid)
+    await vi.waitFor(() => expect(pushes().at(-1)).toEqual({ scope: sid, ports: [] }))
+  })
+
+  it('đẩy lỗi (không có host) ⇒ không ném, vẫn trả tập cổng', async () => {
+    hostRequest.mockRejectedValue({ code: -32000, message: 'no host' })
+    listBackground.mockReturnValue([shell()])
+    await expect(syncBrowserLoopbackPorts(root, sid)).resolves.toEqual([3000])
   })
 })

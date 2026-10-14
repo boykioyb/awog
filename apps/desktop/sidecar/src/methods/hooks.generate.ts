@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { HOOK_EVENTS } from '../hooks/schema.js'
 import { extractJson } from '../util/json-extract.js'
 
@@ -70,13 +70,15 @@ function buildSystemPrompt(currentHook: unknown): string {
   return `${BASE_SYSTEM_PROMPT}${EDIT_INSTRUCTIONS}\n\nCurrent hook:\n${JSON.stringify(currentHook, null, 2)}`
 }
 
-
 register('hooks.generate', async (raw) => {
   const params = Params.parse(raw)
   const modelId = params.modelId ?? 'claude-haiku-4-5'
-  log.info('hooks.generate', { model: modelId, mode: params.currentHook ? 'edit' : 'create' })
+  log.info('hooks.generate', {
+    model: modelId,
+    mode: params.currentHook ? 'edit' : 'create',
+  })
 
-  const collected = await completePi({
+  const collected = await complete({
     accountId: params.accountId,
     modelId,
     systemPrompt: buildSystemPrompt(params.currentHook),

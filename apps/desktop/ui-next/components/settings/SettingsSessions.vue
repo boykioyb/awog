@@ -24,6 +24,14 @@
     </SettingsField>
 
     <SettingsField
+      v-if="autoCompact"
+      :name="t('settingsSessions.compactAt.name')"
+      :desc="t('settingsSessions.compactAt.desc')"
+    >
+      <SettingsNumber v-model="compactAtTokens" :min="0" :max="1000000" :step="10000" />
+    </SettingsField>
+
+    <SettingsField
       :name="t('settings.sessions.bubble.name')"
       :desc="t('settings.sessions.bubble.desc')"
     >
@@ -187,6 +195,13 @@ const contextToggle = (key: 'agentsCatalogEnabled' | 'skillsCatalogEnabled') =>
 
 const agentsCatalog = contextToggle('agentsCatalogEnabled')
 const skillsCatalog = contextToggle('skillsCatalogEnabled')
+
+// Claude CLI auto-compact threshold (tokens). Lives in settings.context because it
+// travels to the engine as contextConfig, like the catalogue switches above.
+const compactAtTokens = computed<number>({
+  get: () => settings.context.compactAtTokens,
+  set: (v) => settings.updateContext({ compactAtTokens: v }),
+})
 
 const quotaEnabled = computed<boolean>({
   get: () => settings.quota.enabled,

@@ -38,33 +38,113 @@
          lên trên — một cú bấm focus input + select-all đúng kiểu omnibox. Lớp
          đọc là <button> để tab/keyboard vẫn tới được. -->
     <div class="bch-url">
-      <Input
-        ref="urlEl"
-        v-model="url"
-        type="text"
-        spellcheck="false"
-        :placeholder="t('sessions.workspace.browser.urlPlaceholder')"
-        @keydown.enter.prevent="emit('submit-url')"
-        @focus="urlFocused = true"
-        @blur="urlFocused = false"
-      />
-      <button
-        v-if="!urlFocused"
-        type="button"
-        class="bch-urlread"
-        :title="tab?.url || t('sessions.workspace.browser.urlPlaceholder')"
-        @click="focusUrl"
-      >
-        <Icon :name="urlView.icon" class="bch-urlic" :class="{ warn: urlView.icon === 'warn' }" />
-        <span class="bch-urltext">
-          <span v-if="urlView.host" class="bch-host">{{ urlView.host }}</span>
-          <span class="bch-rest">
-            {{
-              urlView.rest || (urlView.host ? '' : t('sessions.workspace.browser.urlPlaceholder'))
-            }}
+      <!-- Phần ô chữ (input + lớp đọc phủ lên nó). Tách khỏi cụm nút bên phải để lớp đọc
+           phủ ĐÚNG ô chữ dù cụm nút rộng hẹp theo nội dung (đồng hồ tải đổi bề rộng). -->
+      <div class="bch-urlfield">
+        <!-- `unstyled`: vỏ .bch-url đã mang viền + nền. Để Input tự vẽ thì nó chồng
+             thêm khung h-[--ctrl-h] + viền thứ hai bên trong ⇒ ô URL dày gấp rưỡi
+             hàng nút cạnh nó; .bch-urlinp (padding 4px + --lh-sm) mới là chiều cao
+             thiết kế, lớp đọc .bch-urlread dùng cùng padding. -->
+        <Input
+          ref="urlEl"
+          v-model="url"
+          unstyled
+          class="bch-urlinp"
+          type="text"
+          spellcheck="false"
+          :placeholder="t('sessions.workspace.browser.urlPlaceholder')"
+          @keydown.enter.prevent="emit('submit-url')"
+          @focus="urlFocused = true"
+          @blur="urlFocused = false"
+        />
+        <button
+          v-if="!urlFocused"
+          type="button"
+          class="bch-urlread"
+          :title="tab?.url || t('sessions.workspace.browser.urlPlaceholder')"
+          @click="focusUrl"
+        >
+          <Icon :name="urlView.icon" class="bch-urlic" :class="{ warn: urlView.icon === 'warn' }" />
+          <span class="bch-urltext">
+            <span v-if="urlView.host" class="bch-host">{{ urlView.host }}</span>
+            <span class="bch-rest">
+              {{
+                urlView.rest || (urlView.host ? '' : t('sessions.workspace.browser.urlPlaceholder'))
+              }}
+            </span>
           </span>
+        </button>
+      </div>
+
+      <div class="bch-urltools">
+        <!-- Đồng hồ tải trang: đếm sống khi đang tải, giữ con số cuối khi xong. -->
+        <span
+          v-if="loadTimer.text.value"
+          class="bch-timer tnum"
+          :class="{ running: loadTimer.running.value }"
+          :title="loadTimer.title.value"
+          role="timer"
+        >
+          {{ loadTimer.text.value }}
         </span>
-      </button>
+        <!-- Network Capture (docs/features/network-capture.md): bấm = bật ghi nếu đang tắt rồi
+             mở cửa sổ inspector; đang ghi thì hiện chấm đỏ + số request. -->
+        <button
+          type="button"
+          class="bch-star bch-cap"
+          :class="{ rec: capture.state.value?.recording }"
+          :disabled="!tab"
+          :title="
+            capture.state.value?.recording
+              ? t('capture.nav.recording', { n: capture.state.value.count })
+              : t('capture.nav.open')
+          "
+          :aria-label="t('capture.nav.open')"
+          @pointerenter="prefetchBrowserFrame"
+          @click="capture.openInspector()"
+        >
+          <Icon name="act" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          <template v-if="capture.state.value?.recording">
+            <span class="bch-capdot" aria-hidden="true" />
+            <span class="bch-capn tnum">{{ capture.state.value.count }}</span>
+          </template>
+        </button>
+        <!-- Proxy / VPN của hồ sơ đang dùng (ADR 0103/0105): sáng khi đang bật. -->
+        <button
+          type="button"
+          class="bch-star"
+          :class="{ on: !!proxyTitle }"
+          :title="proxyTitle || t('browser.proxy.buttonOff')"
+          :aria-label="proxyTitle || t('browser.proxy.buttonOff')"
+          @pointerenter="prefetchBrowserFrame"
+          @pointerdown="prefetchBrowserFrame"
+          @click="proxyOpen = true"
+        >
+          <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        </button>
+        <!-- ☆/★ — bookmark trang đang xem vào hồ sơ hiện tại. Chưa có: thêm ngay vào thanh
+             rồi mở hộp sửa (tiêu đề + thư mục) như Chrome; đã có: mở hộp sửa. -->
+        <button
+          type="button"
+          class="bch-star"
+          :class="{ on: bookmarked }"
+          :disabled="!canBookmark"
+          :title="bookmarked ? t('browser.bookmarks.edit') : t('browser.bookmarks.add')"
+          :aria-label="bookmarked ? t('browser.bookmarks.edit') : t('browser.bookmarks.add')"
+          @pointerenter="prefetchBrowserFrame"
+          @pointerdown="prefetchBrowserFrame"
+          @click="onStar"
+        >
+          <Icon
+            name="bookmark"
+            :style="{
+              width: 'var(--icon-sm)',
+              height: 'var(--icon-sm)',
+              fill: bookmarked ? 'currentColor' : 'none',
+            }"
+          />
+        </button>
+      </div>
     </div>
 
     <!-- Hành động trên trang (ghim · chép URL · dịch · trích dẫn · chọn phần tử)
@@ -81,6 +161,8 @@
         class="bch-act"
         :class="{ on: (surface === 'main' ? overflowAt : actionsAt) !== null }"
         :title="t(surface === 'main' ? 'browser.menu.title' : 'browser.actions.title')"
+        @pointerenter="prefetchBrowserFrame"
+        @pointerdown="prefetchBrowserFrame"
         @click.stop="surface === 'main' ? openOverflow($event) : openActions($event)"
       >
         <Icon name="dots" style="width: var(--icon-sm); height: var(--icon-sm)" />
@@ -91,6 +173,21 @@
          Indeterminate: renderer không biết phần trăm tải của trang. -->
     <div v-if="tab?.loading" class="bch-prog" aria-hidden="true" />
   </div>
+
+  <BrowserBookmarkBar :profile-id="profileId" :current-url="tab?.url ?? ''" @open="onOpenUrl" />
+  <BrowserBookmarkDialog
+    :open="dialogOpen"
+    :profile-id="profileId"
+    :url="tab?.url ?? ''"
+    :title="tab?.title ?? ''"
+    :bookmark-id="dialogBookmarkId"
+    @close="dialogOpen = false"
+  />
+  <BrowserProxyModal
+    :open="proxyOpen"
+    :profile="profilesApi.resolve(profileId) ?? null"
+    @close="proxyOpen = false"
+  />
 
   <!-- Menu split-view: đổi mép dock của view Browser. -->
   <AppContextMenu
@@ -113,9 +210,12 @@
     :root="root"
     :tab-id="tabId"
     :scope="tab?.scope"
+    :page-url="tab?.url"
+    :profile-id="profileId"
     :prepend="surface === 'main' ? actionItems : undefined"
     @close="overflowAt = null"
     @action="onActionSelect"
+    @open-url="onOpenUrl"
   />
 </template>
 
@@ -129,6 +229,15 @@ import type { WorkspaceDockSide } from '~/stores/settings'
 import type { BrowserChromeSurface } from './BrowserChrome.vue'
 import { useBrowserActions } from '~/composables/useBrowserActions'
 import Input from '~/components/ui/input/Input.vue'
+import BrowserBookmarkBar from '~/components/browser/BrowserBookmarkBar.vue'
+import BrowserBookmarkDialog from '~/components/browser/BrowserBookmarkDialog.vue'
+import BrowserProxyModal from '~/components/browser/BrowserProxyModal.vue'
+import { useBookmarks } from '~/composables/useBookmarks'
+import { useBrowserProfiles, useScopeProfile } from '~/composables/useBrowserProfiles'
+import { sidecarErrorText } from '~/composables/useSidecar'
+import { prefetchBrowserFrame } from '~/composables/useEmbeddedBrowser'
+import { usePageLoadTimer } from '~/composables/usePageLoadTimer'
+import { useCaptureIndicator } from '~/composables/useCaptureIndicator'
 
 const props = withDefaults(
   defineProps<{
@@ -144,6 +253,9 @@ const props = withDefaults(
     expanded?: boolean
     canExpand?: boolean
     dock?: WorkspaceDockSide
+    // Scope sở hữu bề mặt — dùng khi CHƯA có tab nào (không có `tab.scope` để đọc) mà
+    // vẫn phải biết bookmark/hồ sơ của phiên. Vắng = pool global.
+    scope?: string
   }>(),
   {
     root: null,
@@ -153,6 +265,7 @@ const props = withDefaults(
     expanded: false,
     canExpand: true,
     dock: 'right',
+    scope: undefined,
   },
 )
 
@@ -164,6 +277,9 @@ const emit = defineEmits<{
   popout: []
   'set-dock': [side: WorkspaceDockSide]
   'toggle-expand': []
+  // Mở một URL từ bookmark (thanh / ☆ / menu "Tất cả bookmark"). Bề mặt quyết định
+  // 'current' = điều hướng tab đang xem, 'new' = tab mới.
+  'open-url': [url: string, mode: 'current' | 'new']
 }>()
 
 // Ô URL là thứ người dùng đang GÕ (khác `tab.url` = URL đang tải thật), nên nó
@@ -197,9 +313,65 @@ const {
   emit,
 )
 
+// ── Hồ sơ + bookmark ────────────────────────────────────────────────────────
+
+// Hồ sơ hiệu lực của scope này; tab đang xem cho gợi ý tức thì, main (`profileOf`) là
+// câu trả lời cuối — đúng cả khi scope chưa có tab nào.
+const { profileId } = useScopeProfile(
+  () => props.tab?.scope ?? props.scope,
+  () => props.tab?.profileId,
+)
+const bm = useBookmarks(() => profileId.value)
+
+const pageUrl = computed(() => props.tab?.url ?? '')
+const canBookmark = computed(() => /^https?:\/\//i.test(pageUrl.value))
+const bookmarked = computed(() => bm.isBookmarked(pageUrl.value))
+
+const dialogOpen = ref(false)
+const dialogBookmarkId = ref<string | undefined>(undefined)
+
+const onStar = async (): Promise<void> => {
+  if (!canBookmark.value) return
+  try {
+    if (!bm.isBookmarked(pageUrl.value)) {
+      await bm.add(pageUrl.value, props.tab?.title ?? '')
+    }
+    dialogBookmarkId.value = bm.find(pageUrl.value)?.node.id
+    dialogOpen.value = dialogBookmarkId.value !== undefined
+  } catch (err) {
+    useToast().add({
+      title: t('browser.toast.failed', { message: sidecarErrorText(err) }),
+      color: 'error',
+    })
+  }
+}
+
+const onOpenUrl = (u: string, mode: 'current' | 'new'): void => {
+  emit('open-url', u, mode)
+}
+
 // Nút ⋮ sống ở hàng TAB (BrowserChrome), menu render ở đây — expose để chrome
 // gọi mở đúng vị trí neo của nút.
 defineExpose({ openOverflow })
+
+// ── Proxy / VPN (ADR 0103/0105) ─────────────────────────────────────────────
+// Hồ sơ của tab này đi qua proxy? Cờ `proxied` của main là sự thật về tab; host:port chỉ
+// lấy từ danh sách hồ sơ (cùng thứ trang Settings đã hiện) — không từ đâu khác. Nút cạnh
+// ☆ vừa là chỉ báo (sáng khi bật) vừa là lối mở editor cho đúng hồ sơ này.
+const profilesApi = useBrowserProfiles()
+const proxyTitle = computed<string>(() => {
+  const p = profilesApi.resolve(profileId.value)?.proxy
+  if (p) return t('browser.proxy.indicator', { addr: `${p.host}:${p.port}` })
+  return props.tab?.proxied ? t('browser.proxy.indicatorNoAddr') : ''
+})
+const proxyOpen = ref(false)
+
+// ── Đồng hồ tải trang ───────────────────────────────────────────────────────
+const loadTimer = usePageLoadTimer(() => props.tab)
+const capture = useCaptureIndicator(
+  () => props.tab?.tabId ?? null,
+  () => props.tab?.scope ?? props.scope,
+)
 
 // ── Ô URL: chế độ đọc ───────────────────────────────────────────────────────
 
@@ -292,9 +464,39 @@ const urlView = computed<UrlView>(() => {
   border-radius: var(--r-btn);
   background: var(--bgInput);
   border: 1px solid var(--border);
+  /* Ô hẹp (panel 240px ⇒ ô ~120px) thì đồng hồ tải nhường chỗ cho chữ URL. */
+  container-type: inline-size;
 }
 .bch-url:focus-within {
   border-color: var(--accentBorder);
+}
+.bch-urlfield {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  border-radius: inherit;
+}
+.bch-urltools {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+.bch-timer {
+  align-self: center;
+  padding: 0 4px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  color: var(--textDim);
+  white-space: nowrap;
+}
+.bch-timer.running {
+  color: var(--accent);
+}
+@container (max-width: 220px) {
+  .bch-timer {
+    display: none;
+  }
 }
 .bch-urlinp {
   flex: 1 1 auto;
@@ -387,5 +589,53 @@ const urlView = computed<UrlView>(() => {
     animation: none;
     transform: translateX(80%);
   }
+}
+/* ☆/★ trong ô URL: nằm TRONG luồng cạnh input (lớp đọc chừa 26px bên phải cho nó). */
+.bch-star {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  border: none;
+  border-radius: var(--r-btn);
+  background: transparent;
+  color: var(--textDim);
+  cursor: pointer;
+}
+.bch-star:hover:not(:disabled) {
+  color: var(--text);
+}
+.bch-star.on {
+  color: var(--accent);
+}
+/* Network Capture: chấm đỏ + số request khi đang ghi. Rộng theo số, nên không ép width 26px. */
+.bch-star.bch-cap {
+  width: auto;
+  min-width: 26px;
+  gap: 4px;
+  padding: 0 4px;
+}
+.bch-star.bch-cap.rec {
+  color: var(--danger);
+}
+.bch-capdot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--danger);
+  flex: none;
+}
+.bch-capn {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+}
+.bch-star:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.bch-star:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 </style>

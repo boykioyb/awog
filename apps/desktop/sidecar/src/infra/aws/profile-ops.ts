@@ -21,12 +21,7 @@ import { recordInfraAction, type InfraSurface } from '../audit/store.js'
 import type { InfraCommandClass } from '../types.js'
 import { applyAwsIniEdits, type AwsIniTarget } from './write.js'
 import type { IniEdit } from './ini-edit.js'
-import {
-  AWS_PROFILE_NAME_RE,
-  listAwsProfiles,
-  type AwsProfile,
-  type AwsProfileSource,
-} from './profiles.js'
+import { AWS_PROFILE_NAME_RE, listAwsProfiles, type AwsProfile, type AwsProfileSource } from './profiles.js'
 
 /**
  * Kiểu profile AWOG ghi được. `process` chỉ ĐỌC ở v1 (ADR 0088 §1b luật 3).
@@ -150,21 +145,9 @@ const CONFIG_KEYS: ReadonlySet<string> = new Set([
  *
  * `region`/`output` KHÔNG thuộc nhóm nào — chúng chung cho mọi kiểu.
  */
-const SSO_CONFIG_KEYS = [
-  'sso_start_url',
-  'sso_region',
-  'sso_account_id',
-  'sso_role_name',
-  'sso_session',
-] as const
+const SSO_CONFIG_KEYS = ['sso_start_url', 'sso_region', 'sso_account_id', 'sso_role_name', 'sso_session'] as const
 
-const ASSUME_ROLE_CONFIG_KEYS = [
-  'role_arn',
-  'source_profile',
-  'mfa_serial',
-  'external_id',
-  'duration_seconds',
-] as const
+const ASSUME_ROLE_CONFIG_KEYS = ['role_arn', 'source_profile', 'mfa_serial', 'external_id', 'duration_seconds'] as const
 
 /**
  * Khoá `login_session` — do `console-login.ts` ghi, KHÔNG nhận từ form. Vẫn nằm
@@ -173,11 +156,7 @@ const ASSUME_ROLE_CONFIG_KEYS = [
  */
 const LOGIN_CONFIG_KEYS = ['login_session'] as const
 
-const SECRET_INI_KEYS = [
-  'aws_access_key_id',
-  'aws_secret_access_key',
-  'aws_session_token',
-] as const
+const SECRET_INI_KEYS = ['aws_access_key_id', 'aws_secret_access_key', 'aws_session_token'] as const
 
 /** Khoá config phải BIẾN MẤT khi profile chuyển sang `kind`. */
 function staleConfigKeysFor(kind: WritableProfileKind): string[] {
@@ -235,10 +214,7 @@ function pickConfigKeys(config: Readonly<Record<string, string>>): Record<string
 
 // ⚠ Hàm duy nhất trong file chạm vào giá trị secret. Không log, không đưa vào
 // thông báo lỗi, không giữ lại — kết quả đi thẳng vào `IniEdit` rồi ra đĩa.
-function pickSecrets(
-  kind: WritableProfileKind,
-  secrets: ProfileSecrets | undefined,
-): Record<string, string> {
+function pickSecrets(kind: WritableProfileKind, secrets: ProfileSecrets | undefined): Record<string, string> {
   const out: Record<string, string> = {}
   if (!secrets) return out
   const byIniKey: Record<string, string | undefined> = {
@@ -301,11 +277,7 @@ async function audited<T>(ctx: AuditCtx, fn: () => Promise<T>): Promise<T> {
 
 // `VERIFY_FAILED` của `write.ts` đã đúng khuôn mã lỗi nên đi thẳng lên; mọi lỗi
 // khác (quyền, đĩa đầy, tên section sai) gom về `WRITE_FAILED`.
-async function applyEdits(
-  target: AwsIniTarget,
-  edits: readonly IniEdit[],
-  backups: string[],
-): Promise<void> {
+async function applyEdits(target: AwsIniTarget, edits: readonly IniEdit[], backups: string[]): Promise<void> {
   if (edits.length === 0) return
   try {
     const { backup } = await applyAwsIniEdits(target, edits)
@@ -330,10 +302,7 @@ async function profileByName(name: string): Promise<AwsProfile | undefined> {
 function assertNoLoginSessionInPayload(config: Readonly<Record<string, string>>): void {
   const offending = Object.keys(config).find((k) => k.trim().toLowerCase() === 'login_session')
   if (offending === undefined) return
-  throw opError(
-    'LOGIN_READONLY',
-    'login_session is written by `aws login` (console-login.ts), not by the profile form',
-  )
+  throw opError('LOGIN_READONLY', 'login_session is written by `aws login` (console-login.ts), not by the profile form')
 }
 
 /**
@@ -371,9 +340,9 @@ function assertLoginEdit(
     if (previousName === undefined || source?.kind !== 'login') {
       throw opError(
         'LOGIN_READONLY',
-        `a login profile is created by \`aws login\`, not by saving ${
-          JSON.stringify(name)
-        } (edit an existing login profile to rename it)`,
+        `a login profile is created by \`aws login\`, not by saving ${JSON.stringify(
+          name,
+        )} (edit an existing login profile to rename it)`,
       )
     }
     return
@@ -381,9 +350,9 @@ function assertLoginEdit(
   if (source?.kind === 'login' || target?.kind === 'login') {
     throw opError(
       'LOGIN_READONLY',
-      `profile ${
-        JSON.stringify(source?.kind === 'login' ? (previousName ?? name) : name)
-      } is a Console sign-in profile — delete it first to replace it with another kind`,
+      `profile ${JSON.stringify(
+        source?.kind === 'login' ? (previousName ?? name) : name,
+      )} is a Console sign-in profile — delete it first to replace it with another kind`,
     )
   }
 }
@@ -397,15 +366,12 @@ function assertLoginEdit(
  */
 export async function saveProfile(input: SaveProfileInput): Promise<SaveProfileResult> {
   const name = assertProfileName(input.name)
-  const previousName =
-    input.previousName !== undefined ? assertProfileName(input.previousName) : undefined
+  const previousName = input.previousName !== undefined ? assertProfileName(input.previousName) : undefined
   assertNoLoginSessionInPayload(input.config)
   // Cờ cho nhật ký: "lượt này CÓ ghi khoá" — tính từ việc có giá trị thật hay
   // không, chứ không từ việc form có gửi object `secrets` hay không (form luôn
   // gửi, và một dòng nhật ký nói sai thì tệ hơn là không có dòng nào).
-  const hasSecretValues = Object.values(input.secrets ?? {}).some(
-    (v) => typeof v === 'string' && v.trim() !== '',
-  )
+  const hasSecretValues = Object.values(input.secrets ?? {}).some((v) => typeof v === 'string' && v.trim() !== '')
 
   return audited(
     {
@@ -435,10 +401,7 @@ export async function saveProfile(input: SaveProfileInput): Promise<SaveProfileR
         throw opError('NOT_FOUND', `profile ${JSON.stringify(previousName)} does not exist`)
       }
       if (source?.kind === 'process') {
-        throw opError(
-          'PROCESS_READONLY',
-          `profile ${JSON.stringify(previousName)} uses credential_process`,
-        )
+        throw opError('PROCESS_READONLY', `profile ${JSON.stringify(previousName)} uses credential_process`)
       }
 
       const target = byName.get(name)
@@ -468,11 +431,7 @@ export async function saveProfile(input: SaveProfileInput): Promise<SaveProfileR
       // cùng một lần ghi sẽ tự báo "section vẫn còn" và cuộn ngược cả hai.
       if (renaming && conflict && target) {
         if (inFile(target.source, 'config')) {
-          await applyEdits(
-            'config',
-            [{ op: 'deleteSection', section: configSection(name) }],
-            backups,
-          )
+          await applyEdits('config', [{ op: 'deleteSection', section: configSection(name) }], backups)
         }
         if (inFile(target.source, 'credentials')) {
           await applyEdits('credentials', [{ op: 'deleteSection', section: name }], backups)
@@ -539,10 +498,7 @@ export async function saveProfile(input: SaveProfileInput): Promise<SaveProfileR
  * trên một danh sách vừa cũ đi vài trăm ms). `credential_process` ⇒ từ chối:
  * v1 không ghi dòng đó, và xoá cũng là ghi.
  */
-export async function deleteProfile(
-  rawName: string,
-  surface: InfraSurface,
-): Promise<DeleteProfileResult> {
+export async function deleteProfile(rawName: string, surface: InfraSurface): Promise<DeleteProfileResult> {
   const name = assertProfileName(rawName)
 
   return audited(

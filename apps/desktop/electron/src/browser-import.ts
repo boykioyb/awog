@@ -1,11 +1,11 @@
 import { execFile } from 'node:child_process'
 import { createDecipheriv, createHash, pbkdf2Sync } from 'node:crypto'
-import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { app, dialog, session, type BrowserWindow } from 'electron'
-import { BROWSER_PARTITION } from './browser'
+import { DEFAULT_PROFILE_ID, isValidProfileId, partitionForProfile } from './browser-profile'
 import { log } from './logger'
 
 const execFileAsync = promisify(execFile)
@@ -187,15 +187,12 @@ const isPermError = (err: unknown): boolean => {
 // (TCC) denies the read with EPERM/EACCES when the user never granted (or denied)
 // "Files and Folders" for this app. Distinct from "no profiles": it has a fix —
 // the native folder picker in pickProfile().
-async function profilesOf(
-  dataDir: string,
-): Promise<{ profiles: ProfileEntry[]; blocked: boolean }> {
+async function profilesOf(dataDir: string): Promise<{ profiles: ProfileEntry[]; blocked: boolean }> {
   const names = new Map<string, { name: string; email: string }>()
   try {
     const raw = await readFile(join(dataDir, 'Local State'), 'utf8')
     const parsed: unknown = JSON.parse(raw)
-    const cache = (parsed as { profile?: { info_cache?: Record<string, unknown> } })?.profile
-      ?.info_cache
+    const cache = (parsed as { profile?: { info_cache?: Record<string, unknown> } })?.profile?.info_cache
     for (const [dir, infoRaw] of Object.entries(cache ?? {})) {
       const info = (infoRaw ?? {}) as { name?: unknown; user_name?: unknown }
       names.set(dir, {
@@ -210,9 +207,7 @@ async function profilesOf(
   const out: ProfileEntry[] = []
   let entries: string[] = []
   try {
-    entries = (await readdir(dataDir, { withFileTypes: true }))
-      .filter((e) => e.isDirectory())
-      .map((e) => e.name)
+    entries = (await readdir(dataDir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name)
   } catch (err) {
     if (isPermError(err)) {
       log.warn('browser profile scan blocked by OS', { dir: dataDir })
@@ -321,15 +316,10 @@ export async function pickProfile(win: BrowserWindow): Promise<BrowserEntry | nu
   let email = ''
   if (def) {
     try {
-      const raw = await readFile(
-        join(supportPath(), def.dataDir, 'Local State'),
-        'utf8',
-      )
+      const raw = await readFile(join(supportPath(), def.dataDir, 'Local State'), 'utf8')
       const parsed: unknown = JSON.parse(raw)
-      const info = (
-        (parsed as { profile?: { info_cache?: Record<string, unknown> } })?.profile
-          ?.info_cache?.[name] ?? {}
-      ) as { name?: unknown; user_name?: unknown }
+      const info = ((parsed as { profile?: { info_cache?: Record<string, unknown> } })?.profile?.info_cache?.[name] ??
+        {}) as { name?: unknown; user_name?: unknown }
       if (typeof info.name === 'string' && info.name) name = info.name
       if (typeof info.user_name === 'string') email = info.user_name
     } catch {
@@ -341,9 +331,7 @@ export async function pickProfile(win: BrowserWindow): Promise<BrowserEntry | nu
   return {
     id: 'picked',
     label: def ? def.label : 'Chromium',
-    profiles: [
-      { dir: token, name, email, hasCookies: await exists(join(dir, 'Cookies')) },
-    ],
+    profiles: [{ dir: token, name, email, hasCookies: await exists(join(dir, 'Cookies')) }],
   }
 }
 
@@ -378,10 +366,7 @@ async function safeStorageKey(def: BrowserDef): Promise<Buffer | null> {
   }
 }
 
-type DecryptOutcome =
-  | { kind: 'ok'; value: string }
-  | { kind: 'appBound' }
-  | { kind: 'undecryptable' }
+type DecryptOutcome = { kind: 'ok'; value: string } | { kind: 'appBound' } | { kind: 'undecryptable' }
 
 // `hostKey` is needed because recent Chromium versions prepend a SHA-256 of the
 // cookie's domain to the plaintext, binding a value to its host. Comparing that
@@ -466,9 +451,11 @@ const SAME_SITE: Record<number, 'unspecified' | 'no_restriction' | 'lax' | 'stri
 
 const PENDING_DIR = 'pending-browser-import'
 
+const stagingDir = (profileId: string): string => join(app.getPath('userData'), PENDING_DIR, profileId)
+
 // Where Electron keeps a `persist:<name>` partition's storage.
-const partitionDir = (): string =>
-  join(app.getPath('userData'), 'Partitions', BROWSER_PARTITION.replace(/^persist:/, ''))
+const partitionDir = (profileId: string): string =>
+  join(app.getPath('userData'), 'Partitions', partitionForProfile(profileId).replace(/^persist:/, ''))
 
 async function dirBytes(path: string): Promise<number> {
   let total = 0
@@ -495,6 +482,7 @@ async function dirBytes(path: string): Promise<number> {
 async function importCookies(
   def: BrowserDef | null,
   profilePath: string,
+  profileId: string,
 ): Promise<NonNullable<ImportReport['cookies']>> {
   const report = {
     total: 0,
@@ -526,7 +514,7 @@ async function importCookies(
     const key = def ? await safeStorageKey(def) : null
     report.keyUnavailable = key === null
 
-    const jar = session.fromPartition(BROWSER_PARTITION).cookies
+    const jar = session.fromPartition(partitionForProfile(profileId)).cookies
     for (const row of rows) {
       const hostKey = row.host_key ?? ''
       const name = row.name ?? ''
@@ -598,7 +586,10 @@ export async function importProfile(
   browserId: string,
   profileDir: string,
   parts: ImportParts,
+  profileId: string = DEFAULT_PROFILE_ID,
 ): Promise<ImportReport> {
+  // `profileId` đi vào tên partition + đường dẫn staging ⇒ validate trước mọi I/O.
+  partitionForProfile(profileId)
   // Renderer input resolves against the enumerated list — no path from the UI ever
   // reaches the filesystem (invariant #2). Two sources are legal:
   //   - a listed browser: `browserId` ∈ BROWSERS, `profileDir` re-checked against
@@ -639,10 +630,10 @@ export async function importProfile(
     needsRestart: false,
   }
 
-  if (parts.cookies) report.cookies = await importCookies(def, profilePath)
+  if (parts.cookies) report.cookies = await importCookies(def, profilePath, profileId)
 
   if (parts.localStorage || parts.indexedDb) {
-    const stageRoot = join(app.getPath('userData'), PENDING_DIR)
+    const stageRoot = stagingDir(profileId)
     await rm(stageRoot, { recursive: true, force: true })
     await mkdir(stageRoot, { recursive: true })
     if (parts.localStorage) {
@@ -675,9 +666,25 @@ export async function importProfile(
 // Called at boot BEFORE any partition session exists — the only moment a LevelDB
 // store can be replaced without racing Chromium for the lock.
 export async function applyPendingImport(): Promise<void> {
-  const stageRoot = join(app.getPath('userData'), PENDING_DIR)
+  const root = join(app.getPath('userData'), PENDING_DIR)
+  if (!(await exists(root))) return
+  if (await exists(join(root, 'manifest.json'))) {
+    // Dời bản staging kiểu cũ vào thư mục của `default` rồi xử lý như mọi profile.
+    const legacy = stagingDir(DEFAULT_PROFILE_ID)
+    await mkdir(legacy, { recursive: true })
+    for (const name of ['manifest.json', 'Local Storage', 'IndexedDB']) {
+      if (await exists(join(root, name))) await rename(join(root, name), join(legacy, name))
+    }
+  }
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !isValidProfileId(entry.name)) continue
+    await applyStaged(join(root, entry.name), entry.name)
+  }
+}
+
+async function applyStaged(stageRoot: string, profileId: string): Promise<void> {
   if (!(await exists(join(stageRoot, 'manifest.json')))) return
-  const target = partitionDir()
+  const target = partitionDir(profileId)
   try {
     await mkdir(target, { recursive: true })
     for (const relative of ['Local Storage', 'IndexedDB']) {
@@ -688,9 +695,10 @@ export async function applyPendingImport(): Promise<void> {
       await rm(join(target, relative), { recursive: true, force: true })
       await cp(staged, join(target, relative), { recursive: true })
     }
-    log.info('browser profile import applied')
+    log.info('browser profile import applied', { profile: profileId })
   } catch (err) {
     log.warn('browser profile import failed to apply', {
+      profile: profileId,
       err: err instanceof Error ? err.message : String(err),
     })
   } finally {
@@ -700,7 +708,7 @@ export async function applyPendingImport(): Promise<void> {
 
 // The undo. A full-profile import hands the agent every session in that profile,
 // so there has to be one button that takes it all back.
-export async function clearImportedData(): Promise<void> {
-  await session.fromPartition(BROWSER_PARTITION).clearStorageData()
-  await rm(join(app.getPath('userData'), PENDING_DIR), { recursive: true, force: true })
+export async function clearImportedData(profileId: string = DEFAULT_PROFILE_ID): Promise<void> {
+  await session.fromPartition(partitionForProfile(profileId)).clearStorageData()
+  await rm(stagingDir(profileId), { recursive: true, force: true })
 }

@@ -2,15 +2,18 @@ import type { AwogBrowserTab } from '~/types/awog-bridge'
 import type { MenuItem } from '~/composables/useContextMenu'
 import type { WorkspaceDockSide } from '~/stores/settings'
 import { useBrowserContext } from '~/composables/useBrowserContext'
-import { useBrowserPins } from '~/composables/useBrowserPins'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
+import { refreshBrowserFrame } from '~/composables/useEmbeddedBrowser'
+
+// Chờ renderer của trang áp mức zoom + layout lại trước khi chụp ảnh phủ mới.
+const ZOOM_SETTLE_MS = 150
 
 // Mọi hành động của chrome trình duyệt (ADR 0086) — logic sau nút `⋯` ở hàng URL
 // và menu `⋮` trên hàng tab. Tách khỏi BrowserNavBar để component chỉ còn
 // template + emit passthrough.
 //
 // Ba bề mặt menu nó sở hữu:
-//   - `actionsAt`   — menu "cấp trang" của nút ⋯ (ghim · copy · dịch · trích ·
+//   - `actionsAt`   — menu "cấp trang" của nút ⋯ (copy · dịch · trích ·
 //                     chọn phần tử · dock · popout · phóng to)
 //   - `dockAt`      — submenu đổi mép dock, mở TỪ menu ⋯ (giữ nguyên vị trí neo)
 //   - `overflowAt`  — menu ⋮ "cấp trình duyệt" (BrowserOverflowMenu): nút bấm
@@ -59,21 +62,12 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
   )
   const hasSelection = computed(() => !!input.selectionText()?.trim())
 
-  // ── Ghim + copy ───────────────────────────────────────────────────────────
+  // ── Copy ──────────────────────────────────────────────────────────────────
+  // (Bookmark/ghim đã chuyển sang ☆ trong ô URL của BrowserNavBar — ADR 0101.)
 
-  // Danh sách pin là state cấp module (localStorage), nên nút ghim ở đây, dải
-  // chip BrowserPinStrip và các card ở BrowserEmptyState nhìn cùng một sự thật.
-  const { isPinned, toggle } = useBrowserPins()
-
-  // URL đang TẢI THẬT, không phải draft trong ô nhập. Ghim và copy phải tác động
-  // lên trang đang trước mắt người dùng.
+  // URL đang TẢI THẬT, không phải draft trong ô nhập: copy phải tác động lên trang
+  // đang trước mắt người dùng.
   const currentUrl = computed(() => input.tab()?.url ?? '')
-  const currentPinned = computed(() => isPinned(currentUrl.value))
-
-  const onTogglePin = (): void => {
-    if (!currentUrl.value) return
-    toggle({ url: currentUrl.value, title: input.tab()?.title ?? '' })
-  }
 
   const copied = ref(false)
   let copyTimer: ReturnType<typeof setTimeout> | null = null
@@ -176,15 +170,6 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
   }
   const actionItems = computed<MenuItem[]>(() => [
     {
-      id: 'pin',
-      label: currentPinned.value
-        ? t('sessions.workspace.browser.unpin')
-        : t('sessions.workspace.browser.pin'),
-      icon: 'pin',
-      active: currentPinned.value,
-      disabled: !currentUrl.value,
-    },
-    {
       id: 'copy',
       label: t('sessions.workspace.browser.copyUrl'),
       icon: copied.value ? 'check' : 'copy',
@@ -211,15 +196,21 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
     // Nhóm hiển thị của trang — zoom/DevTools/emulation mobile, trạng thái đọc
     // từ TabInfo (main push qua `browser:changed`) nên dấu tick luôn đúng cả khi
     // user zoom bằng ⌘± ngay trong trang hay đóng DevTools bằng nút của nó.
+    // Thu phóng: ba nút ngay trên hàng (− · % · +), bấm % = về 100%. Không còn submenu;
+    // menu giữ mở để bấm liên tiếp.
     {
       id: 'zoom',
       label: t('browser.menu.zoom'),
       icon: 'search',
-      hint: `${Math.round((input.tab()?.zoom ?? 1) * 100)}%`,
-      children: [
-        { id: 'zoom-in', label: t('browser.menu.zoomIn'), icon: 'plus', hint: '⌘+' },
-        { id: 'zoom-out', label: t('browser.menu.zoomOut'), icon: 'minus', hint: '⌘−' },
-        { id: 'zoom-reset', label: t('browser.menu.zoomReset'), icon: 'revert', hint: '⌘0' },
+      disabled: !input.tab(),
+      buttons: [
+        { id: 'zoom-out', icon: 'minus', title: `${t('browser.menu.zoomOut')} (⌘−)` },
+        {
+          id: 'zoom-reset',
+          text: `${Math.round((input.tab()?.zoom ?? 1) * 100)}%`,
+          title: `${t('browser.menu.zoomReset')} (⌘0)`,
+        },
+        { id: 'zoom-in', icon: 'plus', title: `${t('browser.menu.zoomIn')} (⌘+)` },
       ],
     },
     {
@@ -259,19 +250,22 @@ export function useBrowserActions(input: BrowserActionsInput, emit: BrowserActio
       : []),
   ])
   const onActionSelect = (id: string): void => {
-    if (id === 'pin') onTogglePin()
-    else if (id === 'copy') void onCopyUrl()
+    if (id === 'copy') void onCopyUrl()
     else if (id === 'translate' && actionsRect.value) void onTranslate(actionsRect.value)
     else if (id === 'quote')
       void browserCtx.quoteSelectionToChat(input.tabId() ?? undefined, input.tab()?.scope)
     else if (id === 'pick')
       void browserCtx.pickToChat(input.tabId() ?? undefined, input.tab()?.scope)
     else if (id === 'zoom-in' || id === 'zoom-out' || id === 'zoom-reset')
-      void bridge.value?.zoom(
-        input.tabId() ?? undefined,
-        input.tab()?.scope,
-        id === 'zoom-reset' ? 'reset' : id === 'zoom-in' ? 'in' : 'out',
-      )
+      void bridge.value
+        ?.zoom(
+          input.tabId() ?? undefined,
+          input.tab()?.scope,
+          id === 'zoom-reset' ? 'reset' : id === 'zoom-in' ? 'in' : 'out',
+        )
+        // Menu vẫn mở ⇒ trang đang bị thay bằng ảnh chụp; chụp lại sau một nhịp layout
+        // để thấy ngay mức zoom mới thay vì ảnh cũ.
+        .then(() => setTimeout(refreshBrowserFrame, ZOOM_SETTLE_MS))
     else if (id === 'mobile')
       void bridge.value?.mobileEmulation(
         input.tabId() ?? undefined,

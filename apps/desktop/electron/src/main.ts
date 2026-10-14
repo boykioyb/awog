@@ -5,6 +5,7 @@ import { applyPendingImport } from './browser-import'
 import { registerIpc } from './ipc'
 import { registerLogTailIpc, setupLogging, stopLogTail } from './logger'
 import { loadShellEnv } from './shell-env'
+import { registerPreviewProtocol } from './html-preview'
 import { registerMediaProtocol } from './media'
 import { registerNotifyIpc } from './notify'
 import { installWakeBridge } from './wake'
@@ -143,6 +144,8 @@ if (!gotLock) {
     registerBrowserHostHandlers()
     // media:// stream protocol for in-app video/audio preview (must run post-ready).
     registerMediaProtocol()
+    // wspreview:// serves the Workbench HTML preview iframe (sandboxed, path-validated).
+    registerPreviewProtocol()
     registerIpc(getWindow)
     // Đánh thức khi cửa sổ đã đóng (ADR 0084): giữ hàng đợi wake ở main + thông
     // báo OS từ main. Cài TRƯỚC khi mở cửa sổ để không bỏ sót sự kiện nào.
@@ -217,7 +220,6 @@ function setupAppMenu(): void {
       ]),
     )
   } else {
-    Menu.setApplicationMenu(null)
   }
+  Menu.setApplicationMenu(null)
 }
-

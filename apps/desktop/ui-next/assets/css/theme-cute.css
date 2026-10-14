@@ -395,9 +395,12 @@ body[data-theme-family='cute'] .sfoot {
    ════════════════════════════════════════════════════════════════════════════ */
 body[data-theme-family='cute'] .stabs {
   min-height: 42px;
-  padding: 5px 8px 0;
+  padding: 0;
   gap: 5px;
-  background: var(--bgRail);
+  /* Trong `.top` của workbench — strip hoà vào top bar, không nền riêng
+     (--bgRail vẫn là nền của shell). width 100% để flex-1 của parent fill hết. */
+  background: transparent;
+  width: 100%;
 }
 body[data-theme-family='cute'] .stab {
   height: 30px;

@@ -5,10 +5,17 @@
       <div
         v-else
         class="mi"
-        :class="{ dmi: it.danger, mdisabled: it.disabled, msub: !!it.children, cur: it.active }"
+        :class="{
+          dmi: it.danger,
+          mdisabled: it.disabled,
+          msub: !!it.children,
+          cur: it.active,
+          mrow: !!it.buttons,
+        }"
         @mouseenter="onEnter(it, i, $event)"
         @click="onPick(it)"
       >
+        <span v-if="it.dot" class="ctxdot" :style="{ background: it.dot }" />
         <Icon
           v-if="it.icon"
           :name="it.icon"
@@ -16,6 +23,24 @@
         />
         <span style="flex: 1">{{ it.label }}</span>
         <span v-if="it.hint" class="mhint">{{ it.hint }}</span>
+        <span v-if="it.buttons" class="mbtns">
+          <button
+            v-for="b in it.buttons"
+            :key="b.id"
+            type="button"
+            class="mbtn"
+            :title="b.title"
+            :aria-label="b.title"
+            @click.stop="onButton(b.id)"
+          >
+            <Icon
+              v-if="b.icon"
+              :name="b.icon"
+              style="width: var(--icon-xs); height: var(--icon-xs)"
+            />
+            <span v-if="b.text" class="mbtntext tnum">{{ b.text }}</span>
+          </button>
+        </span>
         <Icon
           v-if="it.active"
           name="check"
@@ -40,6 +65,7 @@
               :class="{ dmi: c.danger, mdisabled: c.disabled, cur: c.active }"
               @click="onPick(c)"
             >
+              <span v-if="c.dot" class="ctxdot" :style="{ background: c.dot }" />
               <Icon
                 v-if="c.icon"
                 :name="c.icon"
@@ -148,10 +174,13 @@ function onEnter(it: MenuItem, i: number, ev: MouseEvent) {
 }
 
 function onPick(it: MenuItem) {
-  if (it.disabled || it.separator || it.children || !it.id) return
+  if (it.disabled || it.separator || it.children || it.buttons || !it.id) return
   emit('select', it.id)
   emit('close')
 }
+
+// Nút trên hàng: chọn nhưng KHÔNG đóng menu — thu phóng thường bấm vài lần liền.
+const onButton = (id: string) => emit('select', id)
 
 const onDocClick = () => emit('close')
 onMounted(() => document.addEventListener('click', onDocClick))
@@ -197,8 +226,49 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 .smenu.ctxm .mi .ck {
   color: var(--primary);
 }
+/* Hint (giá trị/phím tắt) căn PHẢI: luật toàn cục `.smenu .mi span { flex: 1 }` kéo cả
+   span hint giãn ra nên nó trôi vào giữa hàng. */
 .smenu.ctxm .mi .mhint {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 16px;
+  text-align: right;
   color: var(--muted-foreground);
+}
+.smenu.ctxm .mi.mrow {
+  cursor: default;
+}
+.smenu.ctxm .mi.mrow:hover {
+  background: transparent;
+  color: var(--popover-foreground);
+}
+.smenu.ctxm .mi .mbtns {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.smenu.ctxm .mi .mbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--popover-foreground);
+  cursor: pointer;
+}
+.smenu.ctxm .mi .mbtn:hover {
+  background: var(--accent-wash);
+}
+.smenu.ctxm .mi .mbtntext {
+  flex: 0 0 auto;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
 }
 .smenu.ctxm .mi .msubchev {
   color: var(--muted-foreground);
@@ -213,5 +283,12 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   /* shadcn separator: h-px, my-1, edge-to-edge (-mx-1 against the p-1 menu pad). */
   margin: 4px -4px;
   background: var(--border);
+}
+/* Specificity ngang `.smenu .mi span` toàn cục — thiếu thì luật `flex: 1` của nó kéo chấm giãn ngang. */
+.smenu.ctxm .mi .ctxdot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
 }
 </style>

@@ -10,7 +10,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { MAX_TEXT_LEN, oneLineLabel } from '../sessions/inbox.js'
 import type { ProviderName, SessionAgentRef, TeamSpec } from '../types/shared.js'
 
@@ -36,9 +36,7 @@ const CurrentTeam = z.object({
   desc: z.string().max(2000).optional(),
   instructions: z.string().max(8000).optional(),
   lead: AgentRef.optional(),
-  members: z
-    .array(z.object({ title: z.string().max(80), agent: AgentRef.optional() }))
-    .max(24),
+  members: z.array(z.object({ title: z.string().max(80), agent: AgentRef.optional() })).max(24),
 })
 
 const Params = z.object({
@@ -100,13 +98,12 @@ async function draftWithFallback(input: {
 }): Promise<string> {
   const label = input.label ?? 'teams.draft'
   const cheap = CHEAP_MODEL[input.provider]
-  const candidates =
-    cheap && cheap !== input.modelId ? [cheap, input.modelId] : [input.modelId]
+  const candidates = cheap && cheap !== input.modelId ? [cheap, input.modelId] : [input.modelId]
   let lastErr = ''
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential fallback
-      const out = await completePi({
+      const out = await complete({
         provider: input.provider,
         ...(input.accountId ? { accountId: input.accountId } : {}),
         modelId,
@@ -192,7 +189,9 @@ register('teams.draft', async (raw) => {
 
   const rosterText = params.agents.length
     ? params.agents
-        .map((a) => `- ${a.id}${a.name ? ` (${a.name})` : ''}${a.description ? ` — ${a.description.slice(0, 120)}` : ''}`)
+        .map(
+          (a) => `- ${a.id}${a.name ? ` (${a.name})` : ''}${a.description ? ` — ${a.description.slice(0, 120)}` : ''}`,
+        )
         .join('\n')
     : '(no agents registered — all agentIds must be null)'
 
@@ -201,9 +200,7 @@ register('teams.draft', async (raw) => {
     '',
     `ROSTER (bindable agent ids):\n${rosterText}`,
     '',
-    params.current
-      ? `CURRENT spec (revise it, keep unmentioned parts):\n${JSON.stringify(params.current)}`
-      : '',
+    params.current ? `CURRENT spec (revise it, keep unmentioned parts):\n${JSON.stringify(params.current)}` : '',
     params.current ? 'Revise the spec now.' : 'Draft the spec now.',
   ]
     .filter(Boolean)
@@ -260,9 +257,7 @@ register('teams.instructionsDraft', async (raw) => {
   const body = [
     ctx?.name ? `TEAM: ${ctx.name}${ctx.desc ? ` — ${ctx.desc}` : ''}` : '',
     ctx?.members?.length ? `MEMBERS:\n${ctx.members.map((m) => `- ${m}`).join('\n')}` : '',
-    params.current?.trim()
-      ? `CURRENT INSTRUCTIONS (revise, keep unmentioned rules):\n${params.current.trim()}`
-      : '',
+    params.current?.trim() ? `CURRENT INSTRUCTIONS (revise, keep unmentioned rules):\n${params.current.trim()}` : '',
     `REQUEST:\n${params.prompt.trim()}`,
     'Write the instructions now.',
   ]

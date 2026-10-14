@@ -65,7 +65,7 @@ describe('touchesProtectedPath — Bash', () => {
   it('chặn cả khi đường dẫn nằm giữa một lệnh dài', () => {
     expect(
       touchesProtectedPath('Bash', {
-        command: 'cd /tmp && jq \'.entries += [{}]\' ~/.awog/infra/account-ids.json | sponge x',
+        command: "cd /tmp && jq '.entries += [{}]' ~/.awog/infra/account-ids.json | sponge x",
       }),
     ).toBe(true)
   })

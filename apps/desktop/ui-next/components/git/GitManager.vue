@@ -720,11 +720,15 @@ async function onDiscard(file: string) {
   reloadDiff()
 }
 
-async function onDiscardAll(files: string[]) {
+async function onDiscardAll(files: string[], folder?: string) {
   if (!files.length) return
   const ok = await confirm({
     title: t('git.discard.allTitle'),
-    description: t('git.discard.all', { n: files.length }),
+    // Folder-scoped discard names the dir so the user doesn't read "all" as the
+    // whole working tree; plain multi-select discard keeps the generic text.
+    description: folder
+      ? t('git.discard.folder', { folder, n: files.length })
+      : t('git.discard.all', { n: files.length }),
     confirmLabel: t('git.discard.confirm'),
   })
   if (!ok) return

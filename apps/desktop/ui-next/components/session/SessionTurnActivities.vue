@@ -25,7 +25,7 @@
       <!-- Body: tree indent — a left hairline rail groups the run as one unit. -->
       <div class="tbody">
         <template v-for="e in entries" :key="e.key">
-          <SessionStepItem v-if="e.kind === 'step'" :block="e.step" />
+          <SessionStepItem v-if="e.kind === 'step'" :block="e.step" :msg-eid="msgEid" />
           <!-- Extended-thinking: collapsible reasoning, italic muted body —
                each block toggles independently by its stable key. -->
           <div
@@ -84,7 +84,14 @@ export type ActivityEntry =
   | { key: string; kind: 'thinking'; text: string }
   | { key: string; kind: 'text'; text: string }
 
-const props = defineProps<{ entries: ActivityEntry[]; preview: string; streaming?: boolean }>()
+const props = defineProps<{
+  entries: ActivityEntry[]
+  preview: string
+  streaming?: boolean
+  // Persisted id (eid, ADR 0074) của message chứa lượt này — SessionStepItem cần
+  // nó để fetch detail deferred qua sessions.stepDetail.
+  msgEid?: string
+}>()
 const { t } = useI18n()
 
 // Header counts (proto ProtoStepGroup parity): failed tint destructive, live

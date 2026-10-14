@@ -36,6 +36,7 @@
 Git Manager là module Native trong AWOG cho phép người dùng review, stage, commit, diff, push, pull, stash, branch và resolve conflict ngay trong app — không phải mở terminal hoặc Git client ngoài. Vì AWOG dùng Git làm cơ chế versioning duy nhất (no-database) và agent commit hàng chục lần per task, UI Git là điều kiện cần để "review artifact-driven" hoạt động.
 
 Module gồm:
+
 - 1 page `/git` với 5 section (Changes / History / Branches / Stash / Remotes).
 - 1 Pinia store `stores/git.ts` (state + actions, optimistic update qua sidecar).
 - 1 nhóm IPC method `git.*` ở sidecar — mỗi method spawn `git` với `cwd = workspaceRoot` (security invariant #3).
@@ -266,19 +267,19 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 
 ### Components dự kiến
 
-| Component | Path | Vai trò |
-|---|---|---|
-| `GitStatusList.vue` | `apps/desktop/ui/components/git/GitStatusList.vue` | List file change theo 4 section (Staged / Unstaged / Untracked / Conflicted). Mỗi item có checkbox stage, action menu, status badge. |
-| `GitDiffViewer.vue` | `apps/desktop/ui/components/git/GitDiffViewer.vue` | Render unified patch; tái dùng diff renderer từ Artifact System. Hỗ trợ multi-file. Cho phép expand/collapse hunk. Hover hunk hiện button "Stage hunk" / "Discard hunk". |
-| `GitCommitPanel.vue` | `apps/desktop/ui/components/git/GitCommitPanel.vue` | Textarea message (Monaco hoặc plain textarea với syntax highlight Git commit message). Footer: button Commit / Commit & Push / Amend. Hiển thị template auto-fill nếu user click "Use phase template". |
-| `GitBranchList.vue` | `apps/desktop/ui/components/git/GitBranchList.vue` | Local branches + Remote branches (collapsible group). Current branch highlight. Action menu: checkout / rename / delete / merge into current. |
-| `GitStashList.vue` | `apps/desktop/ui/components/git/GitStashList.vue` | List stash entries. Click → diff preview. Action: pop / apply / drop. |
-| `GitHistoryList.vue` | `apps/desktop/ui/components/git/GitHistoryList.vue` | Commit list (limit 100 ban đầu, pagination "Load more"). Mỗi item: avatar (initials), author, sha7, message line 1, date relative. Decoration label cho branch/tag. **Crosslink phase**: nếu commit có phase metadata → icon link clickable → navigate tới phase detail. |
-| `GitConflictResolver.vue` | `apps/desktop/ui/components/git/GitConflictResolver.vue` | Per-file resolver. List conflict block (parse `<<<<<<<` / `=======` / `>>>>>>>`). Mỗi block 2 nút "Take ours" / "Take theirs" (mutually exclusive). Footer: button "Mark resolved" (gọi git.resolveFile). |
-| `GitRemoteList.vue` | `apps/desktop/ui/components/git/GitRemoteList.vue` | List remote, readonly info. Button "Fetch this remote". |
-| `GitAuthErrorModal.vue` | `apps/desktop/ui/components/git/GitAuthErrorModal.vue` | Modal khi push/pull fail vì auth. Sanitize stderr. Có "Copy command" để user paste vào terminal. |
-| `GitProgressBar.vue` | `apps/desktop/ui/components/git/GitProgressBar.vue` | Realtime progress của fetch/pull/push (subscribe event stream). |
-| `NavRailGitBadge.vue` | (sửa component NavRail hiện có) | Dot indicator khi workspace dirty hoặc ahead/behind > 0. |
+| Component                 | Path                                                     | Vai trò                                                                                                                                                                                                                                                                  |
+| ------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GitStatusList.vue`       | `apps/desktop/ui/components/git/GitStatusList.vue`       | List file change theo 4 section (Staged / Unstaged / Untracked / Conflicted). Mỗi item có checkbox stage, action menu, status badge.                                                                                                                                     |
+| `GitDiffViewer.vue`       | `apps/desktop/ui/components/git/GitDiffViewer.vue`       | Render unified patch; tái dùng diff renderer từ Artifact System. Hỗ trợ multi-file. Cho phép expand/collapse hunk. Hover hunk hiện button "Stage hunk" / "Discard hunk".                                                                                                 |
+| `GitCommitPanel.vue`      | `apps/desktop/ui/components/git/GitCommitPanel.vue`      | Textarea message (Monaco hoặc plain textarea với syntax highlight Git commit message). Footer: button Commit / Commit & Push / Amend. Hiển thị template auto-fill nếu user click "Use phase template".                                                                   |
+| `GitBranchList.vue`       | `apps/desktop/ui/components/git/GitBranchList.vue`       | Local branches + Remote branches (collapsible group). Current branch highlight. Action menu: checkout / rename / delete / merge into current.                                                                                                                            |
+| `GitStashList.vue`        | `apps/desktop/ui/components/git/GitStashList.vue`        | List stash entries. Click → diff preview. Action: pop / apply / drop.                                                                                                                                                                                                    |
+| `GitHistoryList.vue`      | `apps/desktop/ui/components/git/GitHistoryList.vue`      | Commit list (limit 100 ban đầu, pagination "Load more"). Mỗi item: avatar (initials), author, sha7, message line 1, date relative. Decoration label cho branch/tag. **Crosslink phase**: nếu commit có phase metadata → icon link clickable → navigate tới phase detail. |
+| `GitConflictResolver.vue` | `apps/desktop/ui/components/git/GitConflictResolver.vue` | Per-file resolver. List conflict block (parse `<<<<<<<` / `=======` / `>>>>>>>`). Mỗi block 2 nút "Take ours" / "Take theirs" (mutually exclusive). Footer: button "Mark resolved" (gọi git.resolveFile).                                                                |
+| `GitRemoteList.vue`       | `apps/desktop/ui/components/git/GitRemoteList.vue`       | List remote, readonly info. Button "Fetch this remote".                                                                                                                                                                                                                  |
+| `GitAuthErrorModal.vue`   | `apps/desktop/ui/components/git/GitAuthErrorModal.vue`   | Modal khi push/pull fail vì auth. Sanitize stderr. Có "Copy command" để user paste vào terminal.                                                                                                                                                                         |
+| `GitProgressBar.vue`      | `apps/desktop/ui/components/git/GitProgressBar.vue`      | Realtime progress của fetch/pull/push (subscribe event stream).                                                                                                                                                                                                          |
+| `NavRailGitBadge.vue`     | (sửa component NavRail hiện có)                          | Dot indicator khi workspace dirty hoặc ahead/behind > 0.                                                                                                                                                                                                                 |
 
 ### Theme rule
 
@@ -294,58 +295,69 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 ### Nhóm 1 — Status + Stage + Commit
 
 **AC-01: List status file working tree**
+
 - **Given** workspace có Git init, current branch = `feature/x`, 2 file unstaged + 1 file untracked.
 - **When** user mở `/git` (tab Changes).
 - **Then** `GitStatusList` render đúng 3 section: 0 Staged, 2 Unstaged, 1 Untracked, 0 Conflicted; mỗi file hiển thị path relative tới workspace root, status badge (M/A/D/?/U), kích thước thay đổi (`+12 -3`).
 
 **AC-02: Stage single file**
+
 - **Given** file `architecture.md` ở Unstaged.
 - **When** user click checkbox stage trên item file đó.
 - **Then** trong < 500ms, file di chuyển sang section Staged; sidecar đã chạy `git add -- architecture.md`; store re-fetch status; KHÔNG có Toast (action nhẹ, không cần feedback explicit).
 
 **AC-03: Unstage single file**
+
 - **Given** file `architecture.md` ở Staged.
 - **When** user click checkbox stage (untick).
 - **Then** sidecar chạy `git reset HEAD -- architecture.md` (hoặc `git restore --staged` nếu Git >= 2.23), file về Unstaged.
 
 **AC-04: Stage hunk**
+
 - **Given** file `architecture.md` ở Unstaged có 3 hunk.
 - **When** user hover hunk #2 trong `GitDiffViewer` và click button "Stage hunk".
 - **Then** chỉ hunk #2 vào Staged; file vẫn xuất hiện ở Unstaged (do còn hunk #1 và #3 chưa staged) và đồng thời ở Staged. Re-render diff phải phản ánh đúng.
 - **Implementation note:** sidecar gọi `git apply --cached <patch>` với patch chỉ chứa hunk được chọn (BA decision: dùng `git apply --cached` thay vì `git add -p` interactive).
 
 **AC-05: Stage all**
+
 - **Given** ≥ 1 file Unstaged.
 - **When** user click button "Stage all" ở header section Unstaged.
 - **Then** sidecar chạy `git add -A -- <paths>` (paths = từng file unstaged được liệt kê, KHÔNG dùng `git add -A` không argument để tránh stage file ngoài ý muốn nếu working dir bị thay đổi giữa fetch và stage).
 
 **AC-06: Commit với message valid**
+
 - **Given** ≥ 1 file ở Staged, user gõ message "feat: add architecture doc".
 - **When** user click button Commit trong `GitCommitPanel`.
 - **Then** sidecar chạy `git commit -m "feat: add architecture doc"`; trả về sha mới; UI clear staged list; toast "Commit <sha7>"; History list update với commit mới ở đầu.
 
 **AC-07: Commit với message rỗng → block**
+
 - **Given** Staged có file, message textarea trống.
 - **When** user click Commit.
 - **Then** UI inline error "Commit message không được rỗng"; KHÔNG gọi IPC.
 
 **AC-08: Commit khi staged rỗng → block**
+
 - **Given** Staged section rỗng, có message.
 - **When** user click Commit.
 - **Then** UI inline warning "Không có thay đổi để commit"; button Commit disabled.
 
 **AC-09: Amend last commit**
+
 - **Given** có commit gần nhất, staged có file mới (hoặc chỉ thay message).
 - **When** user click overflow menu "Amend last commit" trong `GitCommitPanel`, sửa message, confirm.
 - **Then** sidecar chạy `git commit --amend -m "<new>"`; History list cập nhật (sha cũ disappear, sha mới ở đầu). Confirm dialog cảnh báo "Amend thay đổi hash commit — không amend commit đã push" nếu branch hiện tại có upstream và HEAD chưa ahead.
 
 **AC-10: Discard change uncommitted (per file)**
+
 - **Given** file ở Unstaged.
 - **When** user click action menu "Discard changes" trên file → confirm dialog.
 - **Then** sidecar chạy `git checkout -- <path>` (hoặc `git restore <path>`); file biến khỏi list; KHÔNG có undo.
 - Confirm dialog có copy: "Sẽ xóa vĩnh viễn change uncommitted của <path>. Tiếp tục?"
 
 **AC-10b: Discard hàng loạt (section / folder)**
+
 - **Given** section non-staged (Changes / Untracked / Conflicted) hoặc một folder trong tree view có ≥ 1 file.
 - **When** user click **Discard all** ở header section / **Discard folder** ở dir row / "Discard all ({count})" trong context-menu → confirm dialog count-aware ("{count} thay đổi chưa commit trong '{target}' sẽ mất vĩnh viễn. Tiếp tục?").
 - **Then** store gọi `discardPaths(paths)` → một IPC `git.discardFile` batch (checkout tracked + unlink untracked); các file biến khỏi list; rollback optimistic nếu IPC lỗi.
@@ -354,26 +366,31 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 ### Nhóm 2 — Diff viewer
 
 **AC-11: Diff uncommitted**
+
 - **Given** file `architecture.md` ở Unstaged.
 - **When** user click file trong `GitStatusList`.
 - **Then** `GitDiffViewer` load và render diff của file đó (gọi `git.diff { path, staged: false }`); hiển thị unified patch với syntax highlight + line numbers.
 
 **AC-12: Diff staged**
+
 - **Given** file ở Staged.
 - **When** user click file.
 - **Then** Diff viewer hiển thị diff giữa staged và HEAD (`git diff --cached -- <path>`).
 
 **AC-13: Diff của commit cụ thể**
+
 - **Given** History tab, có commit list.
 - **When** user click commit C.
 - **Then** `GitDiffViewer` hiển thị diff của C so với C^ (multi-file); mỗi file có header collapsible.
 
 **AC-14: Diff multi-file scroll**
+
 - **Given** commit C thay đổi 5 file.
 - **When** user click file trong sidebar list ở header diff viewer.
 - **Then** scroll smooth tới anchor của file đó trong diff viewer.
 
 **AC-15: Diff cho file binary**
+
 - **Given** commit C thay đổi 1 file `.png`.
 - **When** user click commit C.
 - **Then** Diff viewer hiển thị placeholder "Binary file changed (X bytes → Y bytes)"; không cố parse content.
@@ -381,36 +398,43 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 ### Nhóm 3 — Fetch / Pull / Push
 
 **AC-16: Fetch all remote**
+
 - **Given** workspace có 1 remote `origin`.
 - **When** user click button Fetch ở TopBar (hoặc auto-fetch định kỳ — xem [Performance budget](#performance-budget)).
 - **Then** sidecar chạy `git fetch --all --prune`; UI hiện progress bar; sau khi xong, branch list cập nhật remote-tracking; ahead/behind count cập nhật.
 
 **AC-17: Pull fast-forward**
+
 - **Given** branch local trước upstream 0 commit, sau 3 commit (behind 3).
 - **When** user click Pull.
 - **Then** sidecar `git pull --ff-only origin <branch>`; success → toast "Pulled 3 commits (fast-forward)"; History list update.
 
 **AC-18: Pull fail vì diverge**
+
 - **Given** branch diverge (cả ahead lẫn behind).
 - **When** user click Pull (mặc định ff-only).
 - **Then** sidecar exit != 0; UI modal "Branch đã diverge" với 2 nút Merge / Rebase + Cancel. Không tự ý chọn strategy.
 
 **AC-19: Push branch chưa có upstream**
+
 - **Given** branch `feature/x` chưa có upstream, ahead 2 commit.
 - **When** user click Push.
 - **Then** UI confirm dialog "Branch chưa có upstream. Push và set upstream tới origin/feature/x?"; user confirm → sidecar `git push --set-upstream origin feature/x`; success → toast.
 
 **AC-20: Push fail vì auth**
+
 - **Given** SSH key chưa add vào agent / token HTTPS hết hạn.
 - **When** push.
 - **Then** sidecar parse stderr → trả `GitAuthError { hint: 'ssh-key' | 'https-token' | 'unknown', sanitizedMessage }`; UI hiện `GitAuthErrorModal` với hint copy phù hợp. **Không** lưu credential trong AWOG. **Không** retry tự động.
 
 **AC-21: Push fail vì non-fast-forward**
+
 - **Given** remote có commit mới mà local chưa pull.
 - **When** push.
 - **Then** UI modal "Remote có commit mới. Pull trước rồi push?" với CTA "Pull then push" (auto-sequence) hoặc "Cancel". KHÔNG expose `--force` ở UI v1.
 
 **AC-22: Progress streaming**
+
 - **Given** push/pull/fetch lâu (> 1s).
 - **When** sidecar chạy.
 - **Then** UI hiển thị `GitProgressBar` cập nhật theo event stream (`git:push:progress` / `git:pull:progress` / `git:fetch:progress`); ít nhất 1 event / 250ms khi có progress. Khi không parse được percent → fallback indeterminate bar.
@@ -418,45 +442,54 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 ### Nhóm 4 — Stash + Branch + Resolve conflict
 
 **AC-23: Stash save**
+
 - **Given** workspace dirty (3 file unstaged + 1 file untracked).
 - **When** user click "Stash" ở header tab Changes, nhập message "WIP refactor".
 - **Then** sidecar `git stash push -u -m "WIP refactor"` (`-u` để include untracked); workspace clean; Stash tab có entry mới `stash@{0}` "WIP refactor".
 
 **AC-24: Stash pop**
+
 - **Given** Stash list có `stash@{0}`.
 - **When** user click entry → menu "Pop".
 - **Then** sidecar `git stash pop`; nếu apply sạch → entry biến mất, Changes tab có file trở lại. Nếu conflict → xem AC-32.
 
 **AC-25: Stash drop**
+
 - **Given** Stash list có ≥ 1 entry.
 - **When** user click "Drop" trên entry → confirm.
 - **Then** sidecar `git stash drop stash@{N}`; entry biến mất; KHÔNG có undo.
 
 **AC-26: Branch list**
+
 - **Given** workspace có 3 local branch + 2 remote-tracking.
 - **When** user mở tab Branches.
 - **Then** `GitBranchList` render 2 group: "Local (3)" và "Remote (2)"; branch hiện tại có icon riêng + label "current"; mỗi branch hiển thị upstream + ahead/behind.
 
 **AC-27: Branch create**
+
 - **Given** user ở `main`.
 - **When** click "New branch", nhập `feature/y`, check "Checkout sau khi tạo".
 - **Then** sidecar `git checkout -b feature/y`; current branch update; toast "Created feature/y from main".
 
 **AC-28: Branch create với tên invalid**
+
 - **Given** user nhập tên có space hoặc ký tự cấm (`~`, `^`, `:`, `?`, `*`, `[`, `..`, `@{`).
 - **When** click Create.
 - **Then** UI inline error "Tên branch không hợp lệ"; KHÔNG gọi IPC. (Validate ở UI lẫn sidecar — defense in depth.)
 
 **AC-29: Branch checkout — clean tree**
+
 - **Given** workspace clean, user click branch khác trong `GitBranchList` → "Checkout".
 - **Then** sidecar `git checkout <branch>`; current branch update; UI refresh status/history.
 
 **AC-30: Branch checkout — dirty tree (xem Flow 4)**
+
 - **Given** workspace dirty.
 - **When** user checkout branch khác.
 - **Then** sidecar trả `DIRTY_TREE` error; UI modal 3 lựa chọn (Stash & checkout / Force / Cancel); xem [Flow 4](#flow-4--stash-dirty-changes-trước-khi-switch-branch).
 
 **AC-31: Branch delete**
+
 - **Given** branch `feature/old` không phải current, đã merge.
 - **When** user click "Delete".
 - **Then** sidecar `git branch -d feature/old`; success → list update.
@@ -465,16 +498,19 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 - **Then** sidecar trả error `UNMERGED`; UI modal "Branch chưa merge. Force delete (mất commit)?" với CTA "Force delete" → `git branch -D` (DANGEROUS, có confirm thứ hai).
 
 **AC-32: Conflict resolver — open**
+
 - **Given** vừa merge fail (Flow 3) hoặc stash pop fail, có ≥ 1 file conflicted.
 - **When** user click file conflicted trong `GitStatusList`.
 - **Then** Right pane switch từ `GitDiffViewer` sang `GitConflictResolver`; parse file content, list các conflict block.
 
 **AC-33: Conflict resolver — choose ours/theirs per block**
+
 - **Given** file có 3 conflict block.
 - **When** user click "Take ours" cho block 1, "Take theirs" cho block 2, để block 3 chưa chọn.
 - **Then** UI hiển thị 2/3 block đã có lựa chọn; button "Mark resolved" disabled (vì block 3 chưa chọn).
 
 **AC-34: Conflict resolver — mark resolved**
+
 - **Given** tất cả block đã chọn ours/theirs.
 - **When** user click "Mark resolved".
 - **Then**
@@ -485,11 +521,13 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
   - Nếu tất cả file conflicted đã resolved → UI hiện button "Complete merge" để commit.
 
 **AC-35: Complete merge**
+
 - **Given** không còn file conflicted, đang ở giữa merge (file `.git/MERGE_HEAD` tồn tại).
 - **When** user click "Complete merge".
 - **Then** sidecar `git commit --no-edit` (dùng message merge mặc định) hoặc cho phép user edit message. Workspace clean. Toast "Merge completed".
 
 **AC-36: Merge abort**
+
 - **Given** đang giữa merge (chưa resolve hết).
 - **When** user click "Abort merge".
 - **Then** confirm dialog "Bỏ qua merge và quay lại trạng thái trước?"; sidecar `git merge --abort`; workspace về trước merge.
@@ -497,33 +535,39 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 ### Nhóm 5 — Cross-cutting (auto-commit, dirty policy, cross-link)
 
 **AC-37: Auto-commit per phase — ON**
+
 - **Given** Settings → Workspace → "Auto-commit per phase" = ON, format template = `[<phase-id>] <agent>: <summary>`.
 - **When** Engine hoàn tất phase Architect (artifact ghi `architecture.md`).
 - **Then** Engine tự gọi IPC nội bộ `git.commit { message: <template-filled>, paths: <artifacts của phase> }`. Commit message: `[N_arch] Architect: design partitioned scheduler`. Trace event `artifact.write` của phase đó được append thêm field `commitSha`.
 
 **AC-38: Auto-commit per phase — OFF**
+
 - **Given** "Auto-commit per phase" = OFF.
 - **When** Engine hoàn tất phase.
 - **Then** Artifact ghi xuống nhưng KHÔNG commit; NavRail Git icon có badge dot dirty; user chủ động vào `/git` commit.
 
 **AC-39: Cross-link commit ↔ phase**
+
 - **Given** commit do auto-commit tạo, message có pattern `[<phase-id>]`.
 - **When** user click commit trong `GitHistoryList`.
 - **Then** UI hiển thị bên phải diff + một block "Linked phase: N_arch (Task tsk-001)" với link clickable; click → navigate `/tasks/tsk-001#phase=N_arch`.
 - **Implementation note:** parse commit message regex `^\[(?<phaseId>[^\]]+)\]` ở UI để lookup phase. **Không** dùng git-notes (out of scope; quyết định BA — message-based parsing đủ cho v1).
 
 **AC-40: Workspace dirty badge ở NavRail**
+
 - **Given** workspace có ≥ 1 file uncommitted (unstaged / staged / untracked).
 - **When** UI subscribe event `git:status:changed` từ sidecar.
 - **Then** NavRail Git icon hiển thị dot (`t.warning`). Khi clean → dot biến mất.
 
 **AC-41: Workspace dirty warn khi chạy task mới**
+
 - **Given** workspace dirty, user click "New task" trong /tasks.
 - **When** Engine chuẩn bị start task.
 - **Then** Modal warning "Workspace có change uncommitted. Recommend commit hoặc stash trước. Tiếp tục?" với 3 nút: "Commit changes" (deeplink /git), "Stash & continue" (auto-stash), "Continue anyway". KHÔNG block hard. Có toggle "Đừng hỏi lại trong session này".
 - **Default policy quyết định BA:** warn (không block); user có thể bật "Auto-stash" trong Settings để skip dialog.
 
 **AC-42: Detached HEAD warning**
+
 - **Given** workspace ở detached HEAD (sau khi user checkout commit cụ thể từ History).
 - **When** UI render TopBar.
 - **Then** branch picker hiển thị badge "DETACHED at <sha7>" màu cảnh báo. Commit thử nghiệm vẫn cho phép nhưng modal cảnh báo "Commit ở detached HEAD sẽ mất nếu không tạo branch — Create branch?" trước khi commit.
@@ -531,51 +575,54 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 ### Nhóm 6 — Performance & resilience
 
 **AC-43: Status sub-200ms cho repo nhỏ-vừa**
+
 - **Given** repo có ≤ 2000 file tracked.
 - **When** gọi `git.status`.
 - **Then** response time end-to-end (sidecar spawn → UI render xong) < 200ms ở máy dev tham chiếu (M-class CPU). Đo qua trace.
 
 **AC-44: Status với repo lớn (> 10k file)**
+
 - **Given** repo có > 10k file tracked, > 1k file change.
 - **When** gọi `git.status`.
 - **Then** sidecar dùng `git status --porcelain=v2` (không `--ignored`); response time < 1s; UI render virtual scroll (chỉ render rows visible + 10 buffer); status list scroll mượt (60fps).
 
 **AC-45: Cancellation**
+
 - **Given** push đang chạy (> 5s).
 - **When** user click "Cancel" trong progress modal.
 - **Then** sidecar SIGTERM process git; UI revert về trạng thái trước; toast "Push cancelled". Repo state có thể không nhất quán nếu Git đã ghi một phần — sidecar tự `git.status` sau cancel để re-sync UI.
 
 ## Edge cases
 
-| Edge case | Behavior |
-|---|---|
-| Workspace chưa init Git (không có `.git/`) | Page `/git` hiển thị empty state với CTA "Initialize Git repo" → gọi `git.init` (IPC mới: `git.init`). Sau init, refresh page. |
-| Detached HEAD | Banner cảnh báo (AC-42); commit cho phép nhưng cảnh báo; push disabled (no upstream); checkout branch hoạt động bình thường. |
-| Empty repo (chưa có commit nào) | History tab empty state; Commit panel cho phép commit đầu tiên (`git commit`); Branches tab chỉ hiện branch mặc định chưa có ref. |
-| Untracked binary file | List bình thường; Diff viewer hiển thị placeholder "Binary file" như AC-15; staging vẫn được. |
-| Merge conflict trong file binary | Conflict resolver KHÔNG support (không parse được block). UI hiển thị message "Binary conflict — cần resolve qua tool ngoài. Sau khi resolve, click 'Mark resolved' để stage." Vẫn có nút "Take ours" / "Take theirs" ở mức file (gọi `git checkout --ours/--theirs -- <path>`). |
-| File rename detection | `git.status` dùng `-z` + parse rename record `R100`; UI hiển thị "renamed: old → new" thay vì add+delete. Diff viewer dùng `git diff --find-renames`. |
-| CRLF vs LF | Tôn trọng `core.autocrlf` của workspace. KHÔNG normalize trong AWOG. Khi hiển thị diff, hiện badge nhỏ nếu line ending thay đổi (`CRLF→LF`). |
-| Performance > 10k file | AC-44 — virtual scroll, không `--ignored`. |
-| Performance > 1000 file change | AC-44 — virtual scroll. Stage all / Discard all bật confirm dialog với count. |
-| Auth fail SSH | AC-20 — hint "ssh-key", copy "Hãy chạy `ssh-add` để add key vào agent". |
-| Auth fail HTTPS token | AC-20 — hint "https-token", copy "Cập nhật token qua git credential helper / Keychain". |
-| Remote không tồn tại | sidecar trả `REMOTE_NOT_FOUND`; UI modal "Remote 'origin' không tồn tại — cấu hình URL?". Add remote UI **out of scope v1** (user dùng CLI `git remote add`). |
-| Network offline | Fetch/pull/push fail với stderr "Could not resolve host"; sidecar map → `NETWORK_ERROR`; UI toast "Mạng không khả dụng — kiểm tra kết nối". KHÔNG retry tự động. |
-| Agent đang commit lúc user click commit thủ công | Sidecar dùng **mutex per workspace** (single in-flight git mutation). Lệnh thứ 2 chờ queue (tối đa 5s timeout) → trả `BUSY`. UI disable Commit button trong khi action đang chạy. |
-| File bị lock bởi OS (Windows) | `git add` fail với stderr "Permission denied"; sidecar trả `FILE_LOCKED { path }`; UI toast cụ thể "File <path> đang bị lock bởi process khác". |
-| Commit message empty | AC-07. |
-| Path có space / unicode / emoji | Sidecar luôn pass path qua arg array (KHÔNG shell string), dùng `git -z` với null-separated output để parse an toàn. Path quote khi hiển thị UI nhưng KHÔNG modify. |
-| Stash pop conflict | `git stash pop` exit != 0 với CONFLICT; sidecar KHÔNG drop stash (Git mặc định giữ stash nếu conflict); UI hiện modal "Pop có conflict — file đã apply (có conflict), stash@{0} vẫn còn. Resolve conflict, sau đó drop stash thủ công." |
-| Workspace path bị move/rename giữa session | Khi sidecar bắt `ENOENT` trên `cwd`, trả `WORKSPACE_NOT_FOUND`; UI hiện modal "Workspace folder không tồn tại — cập nhật path trong Settings"; disable mọi git action. |
-| Rất nhiều file change (> 1000) | Virtual scroll (AC-44); pagination Load more nếu cần; stage all confirm "Stage 1234 file?". |
-| Commit message có ký tự đặc biệt (`"`, `\n`, ``` ` ``` ) | Sidecar pass message qua arg array (`-m <msg>`), KHÔNG dùng shell string. Multi-line message: dùng `-F -` đọc từ stdin nếu message chứa `\n`. |
-| Phase trigger auto-commit nhưng artifact chưa thực sự thay đổi (no diff) | Sidecar detect `git diff --cached --quiet` trước commit; nếu không có diff → skip commit, log "No changes for phase X"; KHÔNG fail phase. |
-| 2 task chạy concurrent cùng auto-commit | Concurrency MVP = 1 worker (xem [execution-model](../architecture/execution-model.md)) → không xảy ra trong MVP. Ghi nhận v2: cần per-workspace mutex. |
-| Git binary không cài trên máy | Sidecar spawn fail `ENOENT`; UI hiện banner full-page "Git CLI không được tìm thấy. Cài Git rồi restart AWOG." với link tới `https://git-scm.com/downloads`. Block toàn bộ page `/git`. |
-| Git version quá cũ (< 2.23) | Một số command (`git restore`) không có; sidecar fallback (`git reset` / `git checkout`). Yêu cầu tối thiểu Git **>= 2.20** (BA decision, lý do: porcelain=v2 cần >= 2.11, một số option rename detection cần 2.20). Detect version qua `git --version` lúc bootstrap; nếu < 2.20 → banner warning. |
-| User Discard task đang waiting_approval | Task xử lý theo flow Task hiện có; KHÔNG ảnh hưởng Git workspace state. |
-| Workspace có submodule | Status hiển thị submodule như folder thường (modified); KHÔNG có UI sub-action cho submodule. User vẫn dùng CLI cho submodule. |
+| Edge case                                                                | Behavior                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workspace chưa init Git (không có `.git/`)                               | Page `/git` hiển thị empty state với CTA "Initialize Git repo" → gọi `git.init` (IPC mới: `git.init`). Sau init, refresh page.                                                                                                                                                                      |
+| Detached HEAD                                                            | Banner cảnh báo (AC-42); commit cho phép nhưng cảnh báo; push disabled (no upstream); checkout branch hoạt động bình thường.                                                                                                                                                                        |
+| Empty repo (chưa có commit nào)                                          | History tab empty state; Commit panel cho phép commit đầu tiên (`git commit`); Branches tab chỉ hiện branch mặc định chưa có ref.                                                                                                                                                                   |
+| Untracked binary file                                                    | List bình thường; Diff viewer hiển thị placeholder "Binary file" như AC-15; staging vẫn được.                                                                                                                                                                                                       |
+| Merge conflict trong file binary                                         | Conflict resolver KHÔNG support (không parse được block). UI hiển thị message "Binary conflict — cần resolve qua tool ngoài. Sau khi resolve, click 'Mark resolved' để stage." Vẫn có nút "Take ours" / "Take theirs" ở mức file (gọi `git checkout --ours/--theirs -- <path>`).                    |
+| File rename detection                                                    | `git.status` dùng `-z` + parse rename record `R100`; UI hiển thị "renamed: old → new" thay vì add+delete. Diff viewer dùng `git diff --find-renames`.                                                                                                                                               |
+| CRLF vs LF                                                               | Tôn trọng `core.autocrlf` của workspace. KHÔNG normalize trong AWOG. Khi hiển thị diff, hiện badge nhỏ nếu line ending thay đổi (`CRLF→LF`).                                                                                                                                                        |
+| Performance > 10k file                                                   | AC-44 — virtual scroll, không `--ignored`.                                                                                                                                                                                                                                                          |
+| Performance > 1000 file change                                           | AC-44 — virtual scroll. Stage all / Discard all bật confirm dialog với count.                                                                                                                                                                                                                       |
+| Auth fail SSH                                                            | AC-20 — hint "ssh-key", copy "Hãy chạy `ssh-add` để add key vào agent".                                                                                                                                                                                                                             |
+| Auth fail HTTPS token                                                    | AC-20 — hint "https-token", copy "Cập nhật token qua git credential helper / Keychain".                                                                                                                                                                                                             |
+| Remote không tồn tại                                                     | sidecar trả `REMOTE_NOT_FOUND`; UI modal "Remote 'origin' không tồn tại — cấu hình URL?". Add remote UI **out of scope v1** (user dùng CLI `git remote add`).                                                                                                                                       |
+| Network offline                                                          | Fetch/pull/push fail với stderr "Could not resolve host"; sidecar map → `NETWORK_ERROR`; UI toast "Mạng không khả dụng — kiểm tra kết nối". KHÔNG retry tự động.                                                                                                                                    |
+| Agent đang commit lúc user click commit thủ công                         | Sidecar dùng **mutex per workspace** (single in-flight git mutation). Lệnh thứ 2 chờ queue (tối đa 5s timeout) → trả `BUSY`. UI disable Commit button trong khi action đang chạy.                                                                                                                   |
+| File bị lock bởi OS (Windows)                                            | `git add` fail với stderr "Permission denied"; sidecar trả `FILE_LOCKED { path }`; UI toast cụ thể "File <path> đang bị lock bởi process khác".                                                                                                                                                     |
+| Commit message empty                                                     | AC-07.                                                                                                                                                                                                                                                                                              |
+| Path có space / unicode / emoji                                          | Sidecar luôn pass path qua arg array (KHÔNG shell string), dùng `git -z` với null-separated output để parse an toàn. Path quote khi hiển thị UI nhưng KHÔNG modify.                                                                                                                                 |
+| Stash pop conflict                                                       | `git stash pop` exit != 0 với CONFLICT; sidecar KHÔNG drop stash (Git mặc định giữ stash nếu conflict); UI hiện modal "Pop có conflict — file đã apply (có conflict), stash@{0} vẫn còn. Resolve conflict, sau đó drop stash thủ công."                                                             |
+| Workspace path bị move/rename giữa session                               | Khi sidecar bắt `ENOENT` trên `cwd`, trả `WORKSPACE_NOT_FOUND`; UI hiện modal "Workspace folder không tồn tại — cập nhật path trong Settings"; disable mọi git action.                                                                                                                              |
+| Rất nhiều file change (> 1000)                                           | Virtual scroll (AC-44); pagination Load more nếu cần; stage all confirm "Stage 1234 file?".                                                                                                                                                                                                         |
+| Commit message có ký tự đặc biệt (`"`, `\n`, `` ` `` )                   | Sidecar pass message qua arg array (`-m <msg>`), KHÔNG dùng shell string. Multi-line message: dùng `-F -` đọc từ stdin nếu message chứa `\n`.                                                                                                                                                       |
+| Phase trigger auto-commit nhưng artifact chưa thực sự thay đổi (no diff) | Sidecar detect `git diff --cached --quiet` trước commit; nếu không có diff → skip commit, log "No changes for phase X"; KHÔNG fail phase.                                                                                                                                                           |
+| 2 task chạy concurrent cùng auto-commit                                  | Concurrency MVP = 1 worker (xem [execution-model](../architecture/execution-model.md)) → không xảy ra trong MVP. Ghi nhận v2: cần per-workspace mutex.                                                                                                                                              |
+| Git binary không cài trên máy                                            | Sidecar spawn fail `ENOENT`; UI hiện banner full-page "Git CLI không được tìm thấy. Cài Git rồi restart AWOG." với link tới `https://git-scm.com/downloads`. Block toàn bộ page `/git`.                                                                                                             |
+| Git version quá cũ (< 2.23)                                              | Một số command (`git restore`) không có; sidecar fallback (`git reset` / `git checkout`). Yêu cầu tối thiểu Git **>= 2.20** (BA decision, lý do: porcelain=v2 cần >= 2.11, một số option rename detection cần 2.20). Detect version qua `git --version` lúc bootstrap; nếu < 2.20 → banner warning. |
+| User Discard task đang waiting_approval                                  | Task xử lý theo flow Task hiện có; KHÔNG ảnh hưởng Git workspace state.                                                                                                                                                                                                                             |
+| Workspace có submodule                                                   | Status hiển thị submodule như folder thường (modified); KHÔNG có UI sub-action cho submodule. User vẫn dùng CLI cho submodule.                                                                                                                                                                      |
 
 ## Data model
 
@@ -585,70 +632,70 @@ Mỗi flow viết dưới dạng step-by-step actor / system trao đổi qua IPC
 // ─── Git ────────────────────────────────────────────────────────────────────
 
 export type GitFileChangeType =
-  | 'added'        // A: file mới ở index
-  | 'modified'     // M
-  | 'deleted'      // D
-  | 'renamed'      // R
-  | 'copied'       // C
-  | 'untracked'    // ?
-  | 'ignored'      // !
-  | 'conflicted'   // U (unmerged)
+  | 'added' // A: file mới ở index
+  | 'modified' // M
+  | 'deleted' // D
+  | 'renamed' // R
+  | 'copied' // C
+  | 'untracked' // ?
+  | 'ignored' // !
+  | 'conflicted' // U (unmerged)
   | 'type_changed' // T
 
 export type GitFileStageState = 'staged' | 'unstaged' | 'untracked' | 'conflicted'
 
 export interface GitFileStatus {
-  path: string                  // relative tới workspace root
-  oldPath?: string              // chỉ khi rename / copy
+  path: string // relative tới workspace root
+  oldPath?: string // chỉ khi rename / copy
   changeType: GitFileChangeType
   stageState: GitFileStageState
   isBinary: boolean
-  additions?: number            // null nếu binary
+  additions?: number // null nếu binary
   deletions?: number
   lineEndingChanged?: 'CRLF→LF' | 'LF→CRLF'
 }
 
 export interface GitStatus {
-  branch: string | null         // null nếu detached
+  branch: string | null // null nếu detached
   detached: boolean
-  detachedAt?: string           // sha7 nếu detached
-  upstream: string | null       // ví dụ "origin/feature/x"
+  detachedAt?: string // sha7 nếu detached
+  upstream: string | null // ví dụ "origin/feature/x"
   ahead: number
   behind: number
   files: GitFileStatus[]
-  isMerging: boolean            // .git/MERGE_HEAD tồn tại
+  isMerging: boolean // .git/MERGE_HEAD tồn tại
   isRebasing: boolean
   conflictedCount: number
 }
 
 export interface GitCommit {
-  sha: string                   // full 40-char
-  sha7: string                  // short
+  sha: string // full 40-char
+  sha7: string // short
   authorName: string
   authorEmail: string
-  authorAt: string              // ISO
+  authorAt: string // ISO
   committerName: string
   committerAt: string
-  message: string               // full message (subject + body)
-  subject: string               // dòng đầu
-  parents: string[]             // sha của parent commit (≥ 2 nếu merge)
-  refs: GitRef[]                // decoration: branch / tag pointing tới commit này
+  message: string // full message (subject + body)
+  subject: string // dòng đầu
+  parents: string[] // sha của parent commit (≥ 2 nếu merge)
+  refs: GitRef[] // decoration: branch / tag pointing tới commit này
   // AWOG-specific (parse từ message):
-  linkedPhaseId?: string        // suy ra từ regex ^\[(phaseId)\]
-  linkedTaskId?: string         // suy ra từ context (current task khi commit) — out of scope auto-link, manual via message
+  linkedPhaseId?: string // suy ra từ regex ^\[(phaseId)\]
+  linkedTaskId?: string // suy ra từ context (current task khi commit) — out of scope auto-link, manual via message
 }
 
 export interface GitRef {
-  name: string                  // "main", "origin/main", "v1.0.0"
+  name: string // "main", "origin/main", "v1.0.0"
   kind: 'branch' | 'remote-branch' | 'tag' | 'HEAD'
 }
 
 export interface GitBranch {
-  name: string                  // local: "feature/x"; remote: "origin/feature/x"
+  name: string // local: "feature/x"; remote: "origin/feature/x"
   kind: 'local' | 'remote'
   isCurrent: boolean
-  upstream: string | null       // chỉ áp dụng cho local
-  ahead: number                 // so với upstream
+  upstream: string | null // chỉ áp dụng cho local
+  ahead: number // so với upstream
   behind: number
   lastCommitSha: string
   lastCommitSubject: string
@@ -656,26 +703,26 @@ export interface GitBranch {
 }
 
 export interface GitStashEntry {
-  index: number                 // 0, 1, 2 → "stash@{0}"
-  message: string               // "WIP on feature/x: <sha7> <subject>"
-  userMessage?: string          // message do user pass khi `stash push -m`
-  createdAt: string             // ISO
-  baseSha: string               // sha của HEAD lúc stash
+  index: number // 0, 1, 2 → "stash@{0}"
+  message: string // "WIP on feature/x: <sha7> <subject>"
+  userMessage?: string // message do user pass khi `stash push -m`
+  createdAt: string // ISO
+  baseSha: string // sha của HEAD lúc stash
   baseBranch: string
 }
 
 export interface GitRemote {
-  name: string                  // "origin"
+  name: string // "origin"
   fetchUrl: string
   pushUrl: string
 }
 
 // Repo phát hiện trong folder project (xem "Multi-repo trong project").
 export interface GitRepoEntry {
-  path: string                  // absolute path tới repo root (folder chứa .git)
-  name: string                  // basename(path)
-  relativePath: string          // path tương đối project root; '.' nếu root là repo
-  isRoot: boolean               // true khi path === project root
+  path: string // absolute path tới repo root (folder chứa .git)
+  name: string // basename(path)
+  relativePath: string // path tương đối project root; '.' nếu root là repo
+  isRoot: boolean // true khi path === project root
 }
 
 export interface GitDiffHunk {
@@ -683,7 +730,7 @@ export interface GitDiffHunk {
   oldLines: number
   newStart: number
   newLines: number
-  header: string                // "@@ -10,7 +10,8 @@"
+  header: string // "@@ -10,7 +10,8 @@"
   lines: GitDiffLine[]
 }
 
@@ -696,11 +743,11 @@ export interface GitDiffLine {
 
 export interface GitFileDiff {
   path: string
-  oldPath?: string              // rename
+  oldPath?: string // rename
   isBinary: boolean
   isRename: boolean
   hunks: GitDiffHunk[]
-  oldFileMode?: string          // "100644"
+  oldFileMode?: string // "100644"
   newFileMode?: string
 }
 
@@ -709,25 +756,24 @@ export interface GitDiff {
 }
 
 export interface GitMergeConflictBlock {
-  index: number                 // 0-based block index trong file
-  startLine: number             // line của <<<<<<< (1-based)
-  separatorLine: number         // line của =======
-  endLine: number               // line của >>>>>>>
-  ours: string[]                // lines giữa <<< và ===
-  theirs: string[]              // lines giữa === và >>>
-  oursLabel: string             // ví dụ "HEAD"
-  theirsLabel: string           // ví dụ "origin/main"
+  index: number // 0-based block index trong file
+  startLine: number // line của <<<<<<< (1-based)
+  separatorLine: number // line của =======
+  endLine: number // line của >>>>>>>
+  ours: string[] // lines giữa <<< và ===
+  theirs: string[] // lines giữa === và >>>
+  oursLabel: string // ví dụ "HEAD"
+  theirsLabel: string // ví dụ "origin/main"
 }
 
 export interface GitMergeConflictFile {
   path: string
   isBinary: boolean
-  blocks: GitMergeConflictBlock[]  // empty nếu binary
+  blocks: GitMergeConflictBlock[] // empty nếu binary
 }
 
 export type GitConflictResolution =
-  | { blockIndex: number; choice: 'ours' | 'theirs' }
-  | { blockIndex: number; choice: 'manual'; content: string }  // v2, không bắt buộc v1
+  { blockIndex: number; choice: 'ours' | 'theirs' } | { blockIndex: number; choice: 'manual'; content: string } // v2, không bắt buộc v1
 ```
 
 ### Cross-link với entity hiện có
@@ -756,15 +802,20 @@ File mới: `apps/desktop/ui/stores/git.ts`.
 
 ```ts
 // State (ref)
-const status = ref<GitStatus | null>(null)             // null = chưa load lần đầu
-const commits = ref<GitCommit[]>([])                   // history, paginate
+const status = ref<GitStatus | null>(null) // null = chưa load lần đầu
+const commits = ref<GitCommit[]>([]) // history, paginate
 const branches = ref<GitBranch[]>([])
 const stashes = ref<GitStashEntry[]>([])
 const remotes = ref<GitRemote[]>([])
-const currentDiff = ref<GitDiff | null>(null)          // diff đang hiển thị
+const currentDiff = ref<GitDiff | null>(null) // diff đang hiển thị
 const currentConflictFile = ref<GitMergeConflictFile | null>(null)
 const loading = reactive({
-  status: false, diff: false, history: false, push: false, pull: false, fetch: false,
+  status: false,
+  diff: false,
+  history: false,
+  push: false,
+  pull: false,
+  fetch: false,
 })
 const lastError = ref<{ kind: string; message: string } | null>(null)
 const progress = ref<{ op: 'fetch' | 'pull' | 'push'; pct: number | null } | null>(null)
@@ -778,10 +829,10 @@ const aheadBehind = computed(() => ({
   ahead: status.value?.ahead ?? 0,
   behind: status.value?.behind ?? 0,
 }))
-const stagedFiles = computed(() => status.value?.files.filter(f => f.stageState === 'staged') ?? [])
-const unstagedFiles = computed(() => status.value?.files.filter(f => f.stageState === 'unstaged') ?? [])
-const untrackedFiles = computed(() => status.value?.files.filter(f => f.stageState === 'untracked') ?? [])
-const conflictedFiles = computed(() => status.value?.files.filter(f => f.stageState === 'conflicted') ?? [])
+const stagedFiles = computed(() => status.value?.files.filter((f) => f.stageState === 'staged') ?? [])
+const unstagedFiles = computed(() => status.value?.files.filter((f) => f.stageState === 'unstaged') ?? [])
+const untrackedFiles = computed(() => status.value?.files.filter((f) => f.stageState === 'untracked') ?? [])
+const conflictedFiles = computed(() => status.value?.files.filter((f) => f.stageState === 'conflicted') ?? [])
 
 // Actions
 async function fetchStatus(): Promise<void>
@@ -792,7 +843,7 @@ async function fetchRemotes(): Promise<void>
 async function loadDiff(opts: { path?: string; staged?: boolean; commit?: string }): Promise<void>
 async function loadConflictFile(path: string): Promise<void>
 
-async function stageFile(path: string): Promise<void>            // optimistic
+async function stageFile(path: string): Promise<void> // optimistic
 async function unstageFile(path: string): Promise<void>
 async function stageHunk(path: string, hunkIndex: number): Promise<void>
 async function stageAll(paths: string[]): Promise<void>
@@ -815,16 +866,18 @@ async function resolveFile(path: string, resolutions: GitConflictResolution[]): 
 async function mergeAbort(): Promise<void>
 async function completeMerge(message?: string): Promise<void>
 
-async function checkoutFileAtCommit(path: string, ref: string): Promise<void>   // revert per file
-async function cancel(op: 'fetch' | 'pull' | 'push'): Promise<void>             // AC-45
+async function checkoutFileAtCommit(path: string, ref: string): Promise<void> // revert per file
+async function cancel(op: 'fetch' | 'pull' | 'push'): Promise<void> // AC-45
 ```
 
 **Quan hệ với store khác:**
+
 - `workspace`: khi `engine` complete một phase, engine emit event qua IPC; store `workspace` listen + dispatch `git.fetchStatus()` (debounced) để cập nhật badge dirty và history.
 - `settings`: đọc flag `autoCommitPerPhase`, `dirtyTaskPolicy` (`warn` / `auto-stash`), `autoFetchIntervalMs`.
 - `sessions`: không trực tiếp; sessions chat agent có thể trigger artifact write — nhưng commit do engine handle, không session.
 
 **Optimistic update:**
+
 - `stageFile` / `unstageFile`: cập nhật `status.files[*].stageState` ngay trên client, gọi IPC, nếu fail → rollback + toast.
 - `commit`: KHÔNG optimistic (commit là mutation lớn, đợi sidecar trả sha mới).
 - `branchCheckout`: optimistic switch tên branch, fail rollback.
@@ -854,7 +907,7 @@ async function cancel(op: 'fetch' | 'pull' | 'push'): Promise<void>             
 
 ### Methods
 
-> **Ngoại lệ contract:** `git.discoverRepos` (xem [Multi-repo trong project](#multi-repo-trong-project)) **không** nhận `workspaceRoot` mà nhận `root` (folder project, có thể không phải repo). Đây là method duy nhất chạy *trước* khi biết repo, nên không qua mutex/`assertWorkspace` của git runner — chỉ là walk filesystem read-only, không spawn git.
+> **Ngoại lệ contract:** `git.discoverRepos` (xem [Multi-repo trong project](#multi-repo-trong-project)) **không** nhận `workspaceRoot` mà nhận `root` (folder project, có thể không phải repo). Đây là method duy nhất chạy _trước_ khi biết repo, nên không qua mutex/`assertWorkspace` của git runner — chỉ là walk filesystem read-only, không spawn git.
 
 #### Read
 
@@ -1025,8 +1078,9 @@ implementation: gửi SIGTERM tới process git đang spawn cho op tương ứng
 // Phát khi mutation xong, UI auto-refresh status
 'git:status:changed' { reason: 'commit' | 'stage' | 'unstage' | 'pull' | 'merge' | 'stash' | 'checkout' | 'external' }
 
-// External change detection: sidecar dùng chokidar watch .git/index để detect git ops từ CLI ngoài
-// (out of scope MVP? — xem Open Question OQ-7)
+// External change detection (git/watcher.ts): watch CẢ `.git` qua fs/watch-tree.ts (FSEvents
+// native trên macOS — một handle; chokidar trên Linux), lọc HEAD/index/packed-refs/MERGE_HEAD/
+// REBASE_HEAD + mọi thứ dưới refs/ (không giới hạn độ sâu — branch `a/b/c/d` vẫn bắt được).
 
 // Auto-fetch event nếu Engine triggered
 'git:auto-fetch:done' { updated: number }
@@ -1045,6 +1099,7 @@ implementation: gửi SIGTERM tới process git đang spawn cho op tương ứng
 - KHÔNG có "block hard" — user vẫn quyết định.
 
 **Lý do chọn warn:**
+
 - KISS: không cản trở user power-user.
 - Local-first: user là solo builder, có quyền tự quyết.
 - Trace-friendly: nếu user "Continue anyway" → trace event ghi `task.started_dirty: true` để debug sau.
@@ -1083,12 +1138,12 @@ implementation: gửi SIGTERM tới process git đang spawn cho op tương ứng
 ```ts
 interface WorkspaceSettings {
   // ...
-  autoCommitPerPhase: boolean                          // default true
-  autoCommitMessageTemplate: string                    // default '[{phaseId}] {agentName}: {summary}'
-  autoCommitScope: 'workspace' | 'artifacts-only'      // default 'workspace'
-  autoStashDirtyBeforeTask: boolean                    // default false
-  dirtyTaskPolicy: 'warn' | 'auto-stash' | 'block'     // default 'warn' — 'block' giữ cho enterprise sau
-  autoFetchIntervalMs: number                          // default 300000 (5 phút); 0 = tắt
+  autoCommitPerPhase: boolean // default true
+  autoCommitMessageTemplate: string // default '[{phaseId}] {agentName}: {summary}'
+  autoCommitScope: 'workspace' | 'artifacts-only' // default 'workspace'
+  autoStashDirtyBeforeTask: boolean // default false
+  dirtyTaskPolicy: 'warn' | 'auto-stash' | 'block' // default 'warn' — 'block' giữ cho enterprise sau
+  autoFetchIntervalMs: number // default 300000 (5 phút); 0 = tắt
 }
 ```
 
@@ -1176,27 +1231,29 @@ interface WorkspaceSettings {
   - **Không** prompt nhập credential trong AWOG. User phải fix ngoài rồi retry.
 
 **Security:**
+
 - `git` process inherit env từ sidecar (chỉ pass `PATH`, `HOME`, `SSH_AUTH_SOCK`, không pass biến nhạy cảm khác).
 - KHÔNG log credential trong trace event.
 - KHÔNG export credential qua IPC.
 
 ## Performance budget
 
-| Operation | Budget | Notes |
-|---|---|---|
-| `git.status` (repo ≤ 2k file) | **< 200ms** end-to-end | AC-43. Đo từ UI dispatch → render xong. |
-| `git.status` (repo > 10k file) | < 1s | AC-44. Virtual scroll bắt buộc. |
-| `git.diff` cho 1 file | < 100ms parse + render | Monaco render diff incremental. |
-| `git.log` limit 100 | < 500ms | Initial load tab History. |
-| `git.fetch` | network-bound | Streaming progress, UI không block. |
-| Auto-fetch interval | **5 phút mặc định** (ON) | Chỉnh / tắt (0) ở Settings → Workspace. |
-| Status auto-refresh | Debounce 200ms khi nhận `git:status:changed` event | Tránh thrash khi user spam stage/unstage. |
-| Render `GitStatusList` | < 16ms per scroll frame (60fps) | Virtual scroll cho > 200 row. |
-| `git.commit` | < 500ms (commit nhỏ) | Bigger commit (>1k file) có thể chậm — chấp nhận. |
+| Operation                      | Budget                                             | Notes                                             |
+| ------------------------------ | -------------------------------------------------- | ------------------------------------------------- |
+| `git.status` (repo ≤ 2k file)  | **< 200ms** end-to-end                             | AC-43. Đo từ UI dispatch → render xong.           |
+| `git.status` (repo > 10k file) | < 1s                                               | AC-44. Virtual scroll bắt buộc.                   |
+| `git.diff` cho 1 file          | < 100ms parse + render                             | Monaco render diff incremental.                   |
+| `git.log` limit 100            | < 500ms                                            | Initial load tab History.                         |
+| `git.fetch`                    | network-bound                                      | Streaming progress, UI không block.               |
+| Auto-fetch interval            | **5 phút mặc định** (ON)                           | Chỉnh / tắt (0) ở Settings → Workspace.           |
+| Status auto-refresh            | Debounce 200ms khi nhận `git:status:changed` event | Tránh thrash khi user spam stage/unstage.         |
+| Render `GitStatusList`         | < 16ms per scroll frame (60fps)                    | Virtual scroll cho > 200 row.                     |
+| `git.commit`                   | < 500ms (commit nhỏ)                               | Bigger commit (>1k file) có thể chậm — chấp nhận. |
 
 **Auto-fetch (background):** trang `/git` chạy `fetchRemote(silent)` ngay khi mở, lặp lại mỗi `autoFetchIntervalMs` (default 300000ms = 5 phút), và fetch lại khi cửa sổ focus lại. Silent = không toast, không progress strip, lỗi (offline/auth) nuốt im; vẫn refresh branches/status để ahead/behind của main/develop/release luôn tươi. Bỏ qua khi đang busy hoặc tab ẩn. Wiring ở [`pages/git/index.vue`](../../apps/desktop/ui/pages/git/index.vue) + flag `silent` trong `fetchRemote` ([stores/git.ts](../../apps/desktop/ui/stores/git.ts)). Đặt interval = 0 để tắt.
 
 **Strategy:**
+
 - Parse output Git ở sidecar (Node.js), gửi UI **structured JSON** (không stream raw).
 - Cache `branches` / `remotes` 5s (vì ít đổi).
 - Status KHÔNG cache (luôn fresh).
@@ -1214,14 +1271,14 @@ interface WorkspaceSettings {
 
 **Cụ thể:**
 
-| Sink | Risk | Mitigation |
-|---|---|---|
-| `execFile('git', [...])` | Cmd injection | **Arg array luôn**; KHÔNG dùng `exec`/`spawn` với shell string. Validate subcommand qua allowlist (chỉ allow `status`, `add`, `commit`, `log`, `diff`, `fetch`, `pull`, `push`, `branch`, `checkout`, `stash`, `merge`, `restore`, `reset`, `apply`, `init`, `remote`, `show`, `for-each-ref`, `config`). |
-| Path từ UI (file stage, file diff) | Path traversal | Validate startsWith(workspaceRoot); reject symlink. |
-| Commit message từ UI | XSS / log injection | Render `GitHistoryList` qua text node, KHÔNG `v-html`. Sidecar pass message qua `-F -` stdin nếu chứa newline. |
-| stderr parsing | Verbose leak (token in URL) | Sanitize regex strip token in URL (`https://user:TOKEN@host` → `https://user:***@host`); strip request ID. |
-| Conflict resolver — overwrite file | TOCTOU | Sidecar lock file via `flock` (Linux/macOS) hoặc atomic rename (Windows) khi ghi resolved content. |
-| Branch name từ UI | Cmd-arg quirks | Validate regex Git ref name; reject `..`, `@{`, `~`, `^`, `:`, `?`, `*`, `[`, `\\`, control chars. |
+| Sink                               | Risk                        | Mitigation                                                                                                                                                                                                                                                                                                |
+| ---------------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `execFile('git', [...])`           | Cmd injection               | **Arg array luôn**; KHÔNG dùng `exec`/`spawn` với shell string. Validate subcommand qua allowlist (chỉ allow `status`, `add`, `commit`, `log`, `diff`, `fetch`, `pull`, `push`, `branch`, `checkout`, `stash`, `merge`, `restore`, `reset`, `apply`, `init`, `remote`, `show`, `for-each-ref`, `config`). |
+| Path từ UI (file stage, file diff) | Path traversal              | Validate startsWith(workspaceRoot); reject symlink.                                                                                                                                                                                                                                                       |
+| Commit message từ UI               | XSS / log injection         | Render `GitHistoryList` qua text node, KHÔNG `v-html`. Sidecar pass message qua `-F -` stdin nếu chứa newline.                                                                                                                                                                                            |
+| stderr parsing                     | Verbose leak (token in URL) | Sanitize regex strip token in URL (`https://user:TOKEN@host` → `https://user:***@host`); strip request ID.                                                                                                                                                                                                |
+| Conflict resolver — overwrite file | TOCTOU                      | Sidecar lock file via `flock` (Linux/macOS) hoặc atomic rename (Windows) khi ghi resolved content.                                                                                                                                                                                                        |
+| Branch name từ UI                  | Cmd-arg quirks              | Validate regex Git ref name; reject `..`, `@{`, `~`, `^`, `:`, `?`, `*`, `[`, `\\`, control chars.                                                                                                                                                                                                        |
 
 **Trust level:**
 
@@ -1260,20 +1317,20 @@ interface WorkspaceSettings {
 
 > Các câu này cần TL trả lời trong ADR trước khi PM decompose task.
 
-| ID | Câu hỏi | Đề xuất phương án |
-|---|---|---|
-| OQ-1 | **Granularity IPC**: 1 method per Git command (như spec hiện) hay grouped `git.exec { subcommand, args }`? | A. Per-command (typed, an toàn) — khuyến nghị. B. Grouped (linh hoạt, risk cmd injection). |
-| OQ-2 | **Streaming protocol cho progress**: dùng JSON-RPC notifications (`{ method, params }` không có `id`) hay channel riêng (event bus)? | Khuyến nghị notifications cùng channel để giảm bề mặt API. |
-| OQ-3 | **Auto-commit scope `artifacts-only`**: có implement ở v1 hay defer? | Defer v2; v1 chỉ `workspace`. |
-| OQ-4 | **Cancellation semantics**: SIGTERM có đủ để dừng `git push` giữa chừng? Có nên kèm SIGKILL sau timeout? | TERM trước, KILL sau 2s nếu không exit. |
-| OQ-5 | **External git ops detection**: nếu user dùng CLI `git` từ terminal khác trong cùng workspace, UI có auto-refresh không? Chokidar watch `.git/HEAD` + `.git/index`? | Khuyến nghị có (chokidar watch nhẹ); nếu phức tạp → defer v2, có button "Refresh" thủ công. |
-| OQ-6 | **Conflict resolver — encoding**: file UTF-8 đảm bảo OK; file encoding khác (UTF-16, Shift_JIS)? | v1 yêu cầu UTF-8; phát hiện encoding khác → hiển thị warning "Encoding không support, mở external editor". |
-| OQ-7 | **Mutex per workspace**: implement trong sidecar (in-memory queue) hay `.git/index.lock` của Git là đủ? | Khuyến nghị queue in-memory cho UX feedback (BUSY error) + Git lock là defense in depth. |
-| OQ-8 | **Bundle Git binary** hay yêu cầu user cài? | Yêu cầu user cài (giảm size Tauri); detect lúc bootstrap; banner hướng dẫn nếu missing. Brief Q. |
-| OQ-9 | **`gitnexus` semantic search**: liên quan gì tới Git Manager không? | Không — gitnexus là context provider (đọc code semantic), Git Manager chỉ thao tác `.git/`. Tách biệt hoàn toàn. |
-| OQ-10 | **Theme token cho conflict resolver**: thêm `diffOurs` / `diffTheirs` vào `utils/themes.ts`? | Yes, cần Designer chốt hex cho dark + light. |
-| OQ-11 | **Hỗ trợ commit message multi-line edit**: textarea plain hay Monaco với git-commit syntax highlight? | Plain textarea cho v1 (KISS); Monaco cho v2 nếu user feedback cần. |
-| OQ-12 | **Force push** có expose không? | ~~Không ở v1 (DANGEROUS); user dùng CLI.~~ **Cập nhật 2026-06-15:** đã expose qua `GitPushModal.vue` (dialog xác nhận remote + Push all tags + Force push). `force` map sang `--force-with-lease` (không bao giờ bare `--force`); `pushTags` → `--tags`. Xem [ADR 0017](../decisions/0017-git-manager-ipc-contract.md) OQ-12 (đã gỡ deferral). |
+| ID    | Câu hỏi                                                                                                                                                             | Đề xuất phương án                                                                                                                                                                                                                                                                                                                              |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OQ-1  | **Granularity IPC**: 1 method per Git command (như spec hiện) hay grouped `git.exec { subcommand, args }`?                                                          | A. Per-command (typed, an toàn) — khuyến nghị. B. Grouped (linh hoạt, risk cmd injection).                                                                                                                                                                                                                                                     |
+| OQ-2  | **Streaming protocol cho progress**: dùng JSON-RPC notifications (`{ method, params }` không có `id`) hay channel riêng (event bus)?                                | Khuyến nghị notifications cùng channel để giảm bề mặt API.                                                                                                                                                                                                                                                                                     |
+| OQ-3  | **Auto-commit scope `artifacts-only`**: có implement ở v1 hay defer?                                                                                                | Defer v2; v1 chỉ `workspace`.                                                                                                                                                                                                                                                                                                                  |
+| OQ-4  | **Cancellation semantics**: SIGTERM có đủ để dừng `git push` giữa chừng? Có nên kèm SIGKILL sau timeout?                                                            | TERM trước, KILL sau 2s nếu không exit.                                                                                                                                                                                                                                                                                                        |
+| OQ-5  | **External git ops detection**: nếu user dùng CLI `git` từ terminal khác trong cùng workspace, UI có auto-refresh không? Chokidar watch `.git/HEAD` + `.git/index`? | Khuyến nghị có (chokidar watch nhẹ); nếu phức tạp → defer v2, có button "Refresh" thủ công.                                                                                                                                                                                                                                                    |
+| OQ-6  | **Conflict resolver — encoding**: file UTF-8 đảm bảo OK; file encoding khác (UTF-16, Shift_JIS)?                                                                    | v1 yêu cầu UTF-8; phát hiện encoding khác → hiển thị warning "Encoding không support, mở external editor".                                                                                                                                                                                                                                     |
+| OQ-7  | **Mutex per workspace**: implement trong sidecar (in-memory queue) hay `.git/index.lock` của Git là đủ?                                                             | Khuyến nghị queue in-memory cho UX feedback (BUSY error) + Git lock là defense in depth.                                                                                                                                                                                                                                                       |
+| OQ-8  | **Bundle Git binary** hay yêu cầu user cài?                                                                                                                         | Yêu cầu user cài (giảm size Tauri); detect lúc bootstrap; banner hướng dẫn nếu missing. Brief Q.                                                                                                                                                                                                                                               |
+| OQ-9  | **`gitnexus` semantic search**: liên quan gì tới Git Manager không?                                                                                                 | Không — gitnexus là context provider (đọc code semantic), Git Manager chỉ thao tác `.git/`. Tách biệt hoàn toàn.                                                                                                                                                                                                                               |
+| OQ-10 | **Theme token cho conflict resolver**: thêm `diffOurs` / `diffTheirs` vào `utils/themes.ts`?                                                                        | Yes, cần Designer chốt hex cho dark + light.                                                                                                                                                                                                                                                                                                   |
+| OQ-11 | **Hỗ trợ commit message multi-line edit**: textarea plain hay Monaco với git-commit syntax highlight?                                                               | Plain textarea cho v1 (KISS); Monaco cho v2 nếu user feedback cần.                                                                                                                                                                                                                                                                             |
+| OQ-12 | **Force push** có expose không?                                                                                                                                     | ~~Không ở v1 (DANGEROUS); user dùng CLI.~~ **Cập nhật 2026-06-15:** đã expose qua `GitPushModal.vue` (dialog xác nhận remote + Push all tags + Force push). `force` map sang `--force-with-lease` (không bao giờ bare `--force`); `pushTags` → `--tags`. Xem [ADR 0017](../decisions/0017-git-manager-ipc-contract.md) OQ-12 (đã gỡ deferral). |
 
 ## Test scenarios (input cho QA)
 

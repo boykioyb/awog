@@ -53,7 +53,7 @@ export function useStatusRouting() {
     }
     if (cmd.kind === 'session') {
       // openByEngineId hydrates first, so this works before Sessions has ever loaded.
-      navigateTo('/sessions')
+      navigateTo('/workbench')
       void sessions.openByEngineId(cmd.engineId)
       return
     }

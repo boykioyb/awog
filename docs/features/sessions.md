@@ -6,13 +6,13 @@
 > `sessions/runner.ts:381-390`: `settings.provider === 'anthropic'` ⇒ `runStreamClaude`
 > (`@anthropic-ai/claude-agent-sdk`), mọi provider khác ⇒ `runStreamPi` (Pi SDK); riêng `/compact`
 > **luôn** đi qua Pi ([ADR 0047](../decisions/0047-auto-compact-context.md)). Vì vậy mọi câu nhắc
-> `@anthropic-ai/claude-agent-sdk` trong tài liệu này (sơ đồ §Flow, bảng *Tools support*) mô tả
+> `@anthropic-ai/claude-agent-sdk` trong tài liệu này (sơ đồ §Flow, bảng _Tools support_) mô tả
 > **nhánh Anthropic**, không phải toàn bộ. Xem [ADR 0029](../decisions/0029-migrate-llm-runtime-to-pi-sdk.md)
 > (migrate sang Pi) và [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)
 > (dual-runtime, revisit phần single-runtime của 0029).
 >
 > ⚠ **Drift chưa dọn (thuộc tech-lead, không thuộc tài liệu này):** ADR 0058 và
-> [dual-sdk-runtime.md](./dual-sdk-runtime.md) đều còn ghi *"implement phân kỳ, chưa bắt đầu"*,
+> [dual-sdk-runtime.md](./dual-sdk-runtime.md) đều còn ghi _"implement phân kỳ, chưa bắt đầu"_,
 > nhưng nhánh SDK **đã có trong code** (`runtime/claude-sdk/run-stream.ts`, và `runtime/invoke.ts:392`
 > cho Tasks). Cần tech-lead xác định P0–P5 đã ship tới đâu rồi cập nhật trạng thái + đoạn
 > "LLM runtime" trong [CLAUDE.md](../../CLAUDE.md).
@@ -56,6 +56,7 @@ sequenceDiagram
 ```
 
 **Khác biệt so với sessions.md cũ (pre-M7):**
+
 - Runner giờ dùng `@anthropic-ai/claude-agent-sdk` `query()` thay vì raw fetch `/v1/messages`.
 - SDK tự sinh child process Claude CLI (bundled) — sidecar không cần spawn riêng.
 - Tool-use chuyển từ "chưa support" sang "full support" (15 tools, mapping tới `SessionStep` union).
@@ -67,14 +68,14 @@ Tham chiếu kiến trúc: [ADR 0006](../decisions/0006-tauri-shell-for-nuxt.md)
 
 ## RPC methods
 
-| Method | Params | Trả về | Ghi chú |
-|---|---|---|---|
-| `sessions.list` | — | `Session[]` (snapshot fold) | Đọc toàn bộ `~/.awog/sessions/*.jsonl`, fold event → snapshot trong RAM. |
-| `sessions.upsert` | `{ mode: 'create' \| 'update-metadata', session }` | `Session` | Ghi event `session.created` hoặc `session.metadata.updated`. |
-| `sessions.delete` | `{ id }` | `{ ok: true }` | Ghi event `session.deleted` (tombstone), file JSONL giữ lại cho forensics. |
-| `sessions.sendMessage` | `{ sessionId, content, model?, projectId? }` | `{ messageId, text, modelUsed, usage, stopReason }` | Streaming. Sidecar invoke SDK query, emit chunks/steps/permissions via notifications. User + agent message tự append vào JSONL. Response RPC = source of truth khi xong. |
-| `sessions.cancel` | `{ sessionId, messageId }` | `{ ok: true }` | Trigger abort trên AbortController của messageId. SDK unwind gracefully → emit partial text + set `message.canceled: true`. |
-| `sessions.permission` | `{ requestId, decision: 'allow' \| 'deny', alwaysAllow?, updatedInput? }` | `{ ok: true }` | Resolve permission request (blocking call in SDK loop). |
+| Method                 | Params                                                                    | Trả về                                              | Ghi chú                                                                                                                                                                  |
+| ---------------------- | ------------------------------------------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `sessions.list`        | —                                                                         | `Session[]` (snapshot fold)                         | Đọc toàn bộ `~/.awog/sessions/*.jsonl`, fold event → snapshot trong RAM.                                                                                                 |
+| `sessions.upsert`      | `{ mode: 'create' \| 'update-metadata', session }`                        | `Session`                                           | Ghi event `session.created` hoặc `session.metadata.updated`.                                                                                                             |
+| `sessions.delete`      | `{ id }`                                                                  | `{ ok: true }`                                      | Ghi event `session.deleted` (tombstone), file JSONL giữ lại cho forensics.                                                                                               |
+| `sessions.sendMessage` | `{ sessionId, content, model?, projectId? }`                              | `{ messageId, text, modelUsed, usage, stopReason }` | Streaming. Sidecar invoke SDK query, emit chunks/steps/permissions via notifications. User + agent message tự append vào JSONL. Response RPC = source of truth khi xong. |
+| `sessions.cancel`      | `{ sessionId, messageId }`                                                | `{ ok: true }`                                      | Trigger abort trên AbortController của messageId. SDK unwind gracefully → emit partial text + set `message.canceled: true`.                                              |
+| `sessions.permission`  | `{ requestId, decision: 'allow' \| 'deny', alwaysAllow?, updatedInput? }` | `{ ok: true }`                                      | Resolve permission request (blocking call in SDK loop).                                                                                                                  |
 
 UI gọi qua composable `useSidecar()` ([apps/desktop/ui/composables/useSidecar.ts](../../apps/desktop/ui/composables/useSidecar.ts)), wrap `invoke('engine_call', …)`.
 
@@ -82,12 +83,12 @@ UI gọi qua composable `useSidecar()` ([apps/desktop/ui/composables/useSidecar.
 
 Append-only JSONL tại `~/.awog/sessions/<sessionId>.jsonl`. 3 event types (bên UI — steps **không** persist, chỉ lưu dưới RAM):
 
-| Event | Trigger | Body chính |
-|---|---|---|
-| `session.created` | `sessions.upsert` mode `create` | `{ id, title, createdAt }` |
-| `session.metadata.updated` | rename, pin, set model/settings | partial metadata (gồm `disabledTools` nếu user chỉnh tool allowlist) |
-| `message.appended` | trong `sessions.sendMessage` (cả user lẫn agent) | `{ messageId, role, content, model, tokensIn, tokensOut, durationMs, canceled?, steps? }` |
-| `session.deleted` | `sessions.delete` | `{ deletedAt }` |
+| Event                      | Trigger                                          | Body chính                                                                                |
+| -------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `session.created`          | `sessions.upsert` mode `create`                  | `{ id, title, createdAt }`                                                                |
+| `session.metadata.updated` | rename, pin, set model/settings                  | partial metadata (gồm `disabledTools` nếu user chỉnh tool allowlist)                      |
+| `message.appended`         | trong `sessions.sendMessage` (cả user lẫn agent) | `{ messageId, role, content, model, tokensIn, tokensOut, durationMs, canceled?, steps? }` |
+| `session.deleted`          | `sessions.delete`                                | `{ deletedAt }`                                                                           |
 
 **Limitation (M7):** `steps` field chưa có trong JSONL — khi reload session, step history không restore, chỉ có text message. Sẽ implement post-M7.
 
@@ -175,6 +176,7 @@ Cho phép user trích một đoạn trong message cũ của agent rồi đính k
 **State ownership:** `pendingFollowUps` thuộc `SessionChat` (parent của MessageList + Composer), expose qua `provide(FOLLOW_UP_KEY, …)`. Switch session → parent wipe, tránh stale state.
 
 **Files:**
+
 - [`utils/follow-up.ts`](../../apps/desktop/ui/utils/follow-up.ts) — `truncateForChip`, `formatFollowUp`, `composeOutgoingMessage`.
 - [`utils/follow-up-context.ts`](../../apps/desktop/ui/utils/follow-up-context.ts) — `FOLLOW_UP_KEY` injection.
 - [`components/session/SessionChat.vue`](../../apps/desktop/ui/components/session/SessionChat.vue) — orchestrator + state owner.
@@ -217,12 +219,19 @@ Chips chia **2 hàng** quanh ô nhập. Component [`SessionChipsPopover.vue`](..
 
 Hai catalogue bulk-load trở thành **opt-out** (2026-09-06, mặc định vẫn BẬT), đi qua `contextConfig` mỗi lượt như wiki/memory ([ADR 0073](../decisions/0073-wiki-as-llm-context-source.md) D-12):
 
-| Công tắc | Tắt thì mất gì | Cỡ đo được |
-|---|---|---|
+| Công tắc               | Tắt thì mất gì                                                                                | Cỡ đo được               |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ------------------------ |
 | `agentsCatalogEnabled` | Block `<available_agents>` — model **vẫn có** tool `Task`, chỉ là không được đưa sẵn thực đơn | ~3,3k char (~0,8k token) |
-| `skillsCatalogEnabled` | Block `<available_skills>` — `@skill:<id>` **vẫn chạy**, chỉ bỏ phần liệt kê | ~5,8k char (~1,5k token) |
+| `skillsCatalogEnabled` | Block `<available_skills>` — `@skill:<id>` **vẫn chạy**, chỉ bỏ phần liệt kê                  | ~5,8k char (~1,5k token) |
 
 Chúng nằm trong prefix được cache, nhưng prefix bị **đọc lại ở mọi request của mọi lượt**, nên người không bao giờ uỷ thác subagent vẫn trả tiền cho thực đơn đó ~8–20 lần mỗi lượt.
+
+**Nhánh Claude SDK (provider `anthropic`) không bơm gì trong số này nữa** ([ADR 0099](../decisions/0099-claude-native-runtime.md), 2026-10-13). CLI chạy với `settingSources: ['user','project','local']` nên **tự nạp** `~/.claude/CLAUDE.md`, `CLAUDE.md` + `@import` + `.claude/rules/*`, **`AGENTS.md`**, auto-memory, `.claude/skills`, `.claude/agents` — đo bằng lệnh `/context` gốc (haiku, cwd = repo này): trước đó `System prompt` 41k token (AWOG nhét lại 72k char memory file + 18,8k char skill + 3,5k char agent), sau đó 6,4k; tổng request **96,8k → 62,2k (−34,6k token/request)**, mục Memory files/Skills/Custom agents của CLI giữ nguyên (42,4k / 2,1k / 1,2k). `buildBulkLoad(…, claudeNative)` bỏ đúng 3 block đó; wiki + memory (chỉ AWOG có) và câu giải thích token `@skill:<id>` (đổi thành block `<skill_mentions>` riêng) vẫn giữ. Hệ quả:
+
+- Whitelist `agent.skillIds` do **option SDK `skills`** cưỡng chế (đã đo: `skills: ['humanizer','brand']` thu `/context` còn đúng hai skill); không còn catalogue AWOG để lọc.
+- Hai công tắc `agentsCatalogEnabled` / `skillsCatalogEnabled` **chỉ còn tác dụng với Pi/Codex** (CLI luôn nạp); mô tả ở Settings đã nói rõ.
+- `contextChars.memoryFiles/skills/customAgents` = 0 ở nhánh này (AWOG không bơm); phần CLI tự nạp rơi vào bucket còn lại (`baseTokens − itemised`), nhãn đổi thành "Tool definitions & runtime-loaded context".
+- Nhánh Tasks (`claude-sdk/invoke.ts`) vốn không bơm các block này (chỉ `systemPromptAppend` của agent + rules) và cũng chạy `settingSources` nên đã nhận chúng từ CLI.
 
 **Mặc định model cho session mới (2026-09-06):** `claude-sonnet-5` + thinking `medium` (trước: `claude-opus-5` + `high`). Cùng lý do nhân bội như trên — model được chọn nhân với số request của vòng lặp agentic, và cả hai đổi được ngay ở composer cho lượt cần mạnh. **Chỉ áp cho cài mới**: `settings.json` đã có giá trị thì đổi ở **Settings → Defaults**.
 
@@ -279,34 +288,35 @@ Mỗi refresh response trả `refresh_token` mới → overwrite cả token + re
 > **Năm dòng dưới đây đã HẾT hiệu lực và được gỡ khỏi danh sách ngày 2026-08-27** — chúng viết ở mốc M7+ và
 > nay đều đã ship. Giữ lại nguyên nhân + nơi verify để không ai "phát hiện lại" chúng như limitation:
 >
-> | Limitation cũ | Thực tế hiện tại |
-> |---|---|
-> | *"Attachment chưa forward content xuống model"* | `sessions.sendMessage` nhận `attachments` và runtime dựng lại image part; có cả cờ `refeedImages` cho ảnh của lượt trước (`sidecar/src/methods/sessions.send-message.ts:95, 139, 152`). |
-> | *"Steps không persist JSONL — reload mất step history"* | `SessionMessage.steps` + `SessionMessage.parts` persist, comment tại nguồn nói rõ: *"Persisted so a re-hydrate from JSONL restores the plan card"* (`sidecar/src/types/shared.ts:325-335`). |
-> | *"Chưa surface `thinking` blocks ra UI"* | `SessionTurnActivities.vue:14-24` render extended-thinking dạng collapsible, mỗi block một trạng thái mở riêng. |
-> | *"Multi-provider chưa có — chỉ Anthropic OAuth"* | `ProviderName = 'anthropic' \| 'openai' \| 'google'` + custom base URL / wire protocol (`sidecar/src/types/shared.ts:3-9`). Runtime chọn **theo provider** — xem ghi chú "Runtime" ở đầu tài liệu. |
-> | *"Chưa promote-session-to-task / fork / branch"* | `store.fork` với 3 suffix `copy` / `fork` / `branch` + cây fork (`useSessionForkTree`, `SessionForkNode.vue`); Session ↔ Task link 2 chiều qua `Session.aboutTaskId` ([ADR 0055](../decisions/0055-session-task-link.md)). |
+> | Limitation cũ                                           | Thực tế hiện tại                                                                                                                                                                                                           |
+> | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | _"Attachment chưa forward content xuống model"_         | `sessions.sendMessage` nhận `attachments` và runtime dựng lại image part; có cả cờ `refeedImages` cho ảnh của lượt trước (`sidecar/src/methods/sessions.send-message.ts:95, 139, 152`).                                    |
+> | _"Steps không persist JSONL — reload mất step history"_ | `SessionMessage.steps` + `SessionMessage.parts` persist, comment tại nguồn nói rõ: _"Persisted so a re-hydrate from JSONL restores the plan card"_ (`sidecar/src/types/shared.ts:325-335`).                                |
+> | _"Chưa surface `thinking` blocks ra UI"_                | `SessionTurnActivities.vue:14-24` render extended-thinking dạng collapsible, mỗi block một trạng thái mở riêng.                                                                                                            |
+> | _"Multi-provider chưa có — chỉ Anthropic OAuth"_        | `ProviderName = 'anthropic' \| 'openai' \| 'google'` + custom base URL / wire protocol (`sidecar/src/types/shared.ts:3-9`). Runtime chọn **theo provider** — xem ghi chú "Runtime" ở đầu tài liệu.                         |
+> | _"Chưa promote-session-to-task / fork / branch"_        | `store.fork` với 3 suffix `copy` / `fork` / `branch` + cây fork (`useSessionForkTree`, `SessionForkNode.vue`); Session ↔ Task link 2 chiều qua `Session.aboutTaskId` ([ADR 0055](../decisions/0055-session-task-link.md)). |
 
 ## Tools support
 
 Runner backend `@anthropic-ai/claude-agent-sdk` default tool preset (**nhánh Anthropic** — xem ghi chú Runtime ở đầu tài liệu):
 
-| Tool | Mapping tới SessionStep | Ghi chú |
-|---|---|---|
-| Read | `read` | Đọc file. |
-| Write | `write` | Tạo file mới. |
-| Edit / MultiEdit / NotebookEdit | `edit` | Sửa file / notebook. |
-| Bash / BashOutput | `terminal` | Chạy shell command. |
-| Glob | `find-files` | Tìm file theo pattern. |
-| Grep | `search` | Tìm text trong file. |
-| WebSearch / WebFetch | `search` | Tìm web resource. |
-| Task / TodoWrite / EnterPlanMode / ExitPlanMode | `task` | Generic task / plan toggle. |
+| Tool                                            | Mapping tới SessionStep | Ghi chú                     |
+| ----------------------------------------------- | ----------------------- | --------------------------- |
+| Read                                            | `read`                  | Đọc file.                   |
+| Write                                           | `write`                 | Tạo file mới.               |
+| Edit / MultiEdit / NotebookEdit                 | `edit`                  | Sửa file / notebook.        |
+| Bash / BashOutput                               | `terminal`              | Chạy shell command.         |
+| Glob                                            | `find-files`            | Tìm file theo pattern.      |
+| Grep                                            | `search`                | Tìm text trong file.        |
+| WebSearch / WebFetch                            | `search`                | Tìm web resource.           |
+| Task / TodoWrite / EnterPlanMode / ExitPlanMode | `task`                  | Generic task / plan toggle. |
 
 Default: **tất cả tools enabled**. User có thể disable từng tool qua Tools modal trong Composer (update `session.disabledTools`).
 
 Permission prompts: SDK emit `permission_request` event nếu `permissionMode: 'default'` + `canUseTool` callback từ chối. Sidecar map tới UI `session.permission-request` notification → UI render inline permission card.
 
 **Files:**
+
 - [`apps/desktop/sidecar/src/sessions/step-mapper.ts`](../../apps/desktop/sidecar/src/sessions/step-mapper.ts) — tool name → SessionStep mapping.
 - [`apps/desktop/ui/utils/tools-catalog.ts`](../../apps/desktop/ui/utils/tools-catalog.ts) — UI tool list + description.
 

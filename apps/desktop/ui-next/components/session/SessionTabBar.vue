@@ -5,7 +5,7 @@
          inside the list could only ever collapse it. Hidden in compact mode, where the
          list is already an off-canvas drawer toggled from the top bar. -->
     <Button
-      v-if="!compact"
+      v-if="!compact && !hideListToggle"
       variant="ghost"
       size="iconSm"
       class="stab-btn"
@@ -295,6 +295,7 @@ import Input from '~/components/ui/input/Input.vue'
 
 const { t } = useI18n()
 const { tabs, openableProjects, projectPath, setActiveTab, closeTab } = useSessionTabs()
+withDefaults(defineProps<{ hideListToggle?: boolean }>(), { hideListToggle: false })
 const store = useSessionsStore()
 const projectModal = useProjectModal()
 const { compact } = useResponsiveShell()
@@ -657,12 +658,11 @@ async function pDeleteAll() {
   align-items: center;
   gap: 4px;
   flex: 0 0 auto;
-  /* proto `px-2 py-1.5` over a 32px (h-8) tab lane lands the strip on 44px even —
-     the hairline stays an INSET shadow (the .top/.dh trick): a real border would
-     eat 1px of the content box and centre the 28px tabs on a half pixel. The
-     proto strip is TRANSPARENT (page background) — the muted/40 wash is gone. */
-  padding: 6px 8px;
-  box-shadow: inset 0 -1px 0 var(--border);
+  /* Trong top bar `.top` (row trên cùng app) — strip hoà vào bar, KHÔNG có nền
+     hay hairline riêng. Nằm riêng (WorkbencTopRow cũ) thì cần padding + hairline —
+     đã bỏ khi tab strip lên `.top`. */
+  padding: 0;
+  height: 100%;
 }
 .stabs-scroll {
   display: flex;
@@ -922,20 +922,30 @@ async function pDeleteAll() {
 .stabs-drop .stab-dot {
   margin-right: 2px;
 }
-/* Sticky search field pinned to the top of the "+" picker (list scrolls under it). */
+/* Sticky search field pinned to the top of the "+" picker (list scrolls under it).
+   `<Input>` shadcn mang `--ctrl-h` (36–40px) — popover đã chật nên giảm xuống 30px,
+   bỏ padding/border-radius của nó để đọc như một dòng sticky thay vì field đầy đủ. */
 .stabs-search {
   position: sticky;
   top: 0;
   z-index: 1;
   width: 100%;
-  padding: 7px 10px;
+  height: 30px;
+  min-height: 0;
+  padding: 5px 10px;
   border: 0;
   border-bottom: 1px solid var(--border);
+  border-radius: 0;
   background: var(--popover);
   color: var(--foreground);
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
   outline: none;
+}
+/* Ring focus của shadcn Input lộn thành border mint bao quanh — popover này đã có
+   hairline `border-bottom` làm indicator, gỡ hẳn shadow ring. */
+.stabs-search:focus-visible {
+  box-shadow: none;
 }
 .stabs-search::placeholder {
   color: var(--muted-foreground);

@@ -20,11 +20,7 @@
 // is unaffected — same as `mcp__awogwiki__*`.
 
 import { z } from 'zod'
-import {
-  createSdkMcpServer,
-  tool,
-  type McpSdkServerConfigWithInstance,
-} from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk'
 import {
   SURFACE_MCP_SERVER,
   SURFACE_TOOL_TEXT,
@@ -39,6 +35,7 @@ import {
 } from '../tools/surface-tools.js'
 import { WAKEUP_TEXT, createWakeupRunner } from '../tools/wakeup-tool.js'
 import { MAX_WAKEUP_NOTE_LEN } from '../../schedules/schema.js'
+import { TurnState } from './live-process.js'
 
 // A refused call (budget guard, no usable path) has no surface. It must come back
 // flagged `isError` — that is what makes step-mapper render it as a failed row
@@ -67,11 +64,14 @@ export function buildSurfaceToolsSdkServer(
   sessionId: string,
   // The session's workspace root: the only directory send_user_file may hand out.
   cwd: string,
+  // Process-lifetime state: the per-reply counters below are drawn from it per TURN.
+  turns: TurnState = new TurnState(),
 ): McpSdkServerConfigWithInstance {
-  // Guard layer 2. This server is rebuilt inside runStream, i.e. once per turn, so
-  // these counters are exactly "per reply" — the same property the Pi factory
-  // relies on.
-  const turn = createSurfaceTurnCounters()
+  // Guard layer 2. The CLI process now outlives a turn (ADR 0099) so this server is
+  // built once per process; the counters are fetched through `turns.once`, which hands
+  // out a fresh object the first time each turn asks — exactly "per reply", the same
+  // property the Pi factory relies on.
+  const counters = () => turns.once('surface-counters', createSurfaceTurnCounters)
   // `schedule_wakeup` đi nhờ server này thay vì có server riêng (gói #14). Nó
   // KHÔNG phải một "transcript surface", nhưng mọi thứ quyết định nơi đặt đều
   // trùng: cùng điều kiện cấp phát (chỉ chat session — file này CHÍNH LÀ đường
@@ -81,7 +81,7 @@ export function buildSurfaceToolsSdkServer(
   // phải viết thêm một cơ chế gấp tên nữa, hoặc liệt kê hai cách viết ở khắp nơi
   // như wiki/memory đang phải làm — tức tự tạo thêm bề mặt cho đúng lớp bug
   // "tool bắc cầu đổi tên" đã cắn ba lần.
-  const runWakeup = createWakeupRunner(sessionId)
+  const wakeup = () => turns.once('wakeup-runner', () => createWakeupRunner(sessionId))
 
   return createSdkMcpServer({
     name: SURFACE_MCP_SERVER,
@@ -100,7 +100,7 @@ export function buildSurfaceToolsSdkServer(
           title: z.string().describe(SURFACE_TOOL_TEXT.markChapter.title),
           summary: z.string().optional().describe(SURFACE_TOOL_TEXT.markChapter.summary),
         },
-        async (args) => finish('mark_chapter', args, runMarkChapter(args, sessionId, turn)),
+        async (args) => finish('mark_chapter', args, runMarkChapter(args, sessionId, counters())),
       ),
       tool(
         'send_user_file',
@@ -122,7 +122,7 @@ export function buildSurfaceToolsSdkServer(
           tldr: z.string().describe(SURFACE_TOOL_TEXT.suggestTask.tldr),
           prompt: z.string().describe(SURFACE_TOOL_TEXT.suggestTask.prompt),
         },
-        async (args) => finish('suggest_task', args, runSuggestTask(args, sessionId, turn)),
+        async (args) => finish('suggest_task', args, runSuggestTask(args, sessionId, counters())),
       ),
       tool(
         'suggest_followups',
@@ -130,7 +130,7 @@ export function buildSurfaceToolsSdkServer(
         {
           options: z.array(z.string()).describe(SURFACE_TOOL_TEXT.suggestFollowups.options),
         },
-        async (args) => finish('suggest_followups', args, runSuggestFollowups(args, turn)),
+        async (args) => finish('suggest_followups', args, runSuggestFollowups(args, counters())),
       ),
       tool(
         'schedule_wakeup',
@@ -144,7 +144,7 @@ export function buildSurfaceToolsSdkServer(
           note: z.string().max(MAX_WAKEUP_NOTE_LEN).describe(WAKEUP_TEXT.note),
         },
         async (args) => {
-          const r = await runWakeup(args.in_seconds, args.note)
+          const r = await wakeup()(args.in_seconds, args.note)
           // `isError` phải đi qua cầu: một lần đặt BỊ TỪ CHỐI (hết chỗ, note quá
           // dài) không phải một bước thành công — nhánh Pi phân biệt bằng
           // `details.isError`, còn ở đây chỉ có cờ này.
@@ -166,9 +166,7 @@ export function buildSurfaceToolsSdkServer(
                 // Tập ĐÓNG, khớp bản TypeBox của nhánh Pi. Giá trị lạ bị loại cả
                 // dòng chứ không ép về mặc định — xếp một lỗi chặn xuống `minor`
                 // là báo cáo sai, tệ hơn không báo.
-                severity: z
-                  .enum(['blocker', 'major', 'minor'])
-                  .describe(SURFACE_TOOL_TEXT.reportFindings.severity),
+                severity: z.enum(['blocker', 'major', 'minor']).describe(SURFACE_TOOL_TEXT.reportFindings.severity),
                 summary: z.string().describe(SURFACE_TOOL_TEXT.reportFindings.summary),
                 failure: z.string().describe(SURFACE_TOOL_TEXT.reportFindings.failure),
                 verdict: z.string().optional().describe(SURFACE_TOOL_TEXT.reportFindings.verdict),
@@ -180,8 +178,7 @@ export function buildSurfaceToolsSdkServer(
         // Ba lớp guard + `assertInsideWorkspace` + `stat` nằm trong runReportFindings,
         // dùng chung với nhánh Pi. Chỉ schema tồn tại hai bản (TypeBox vs zod), vì
         // hai runtime nói hai thư viện schema khác nhau.
-        async (args) =>
-          finish('report_findings', args, await runReportFindings(args, cwd, sessionId, turn)),
+        async (args) => finish('report_findings', args, await runReportFindings(args, cwd, sessionId, counters())),
       ),
     ],
   })

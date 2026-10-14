@@ -11,15 +11,17 @@
 // (see the externalization block) so the JSONL stays small; that move is invisible
 // above this layer — read rehydrates the inline `url` before returning.
 
+import { createHash } from 'node:crypto'
 import {
-  openSync,
-  readSync,
   closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
   readFileSync,
-  writeFileSync,
+  readSync,
   renameSync,
   unlinkSync,
-  mkdirSync,
+  writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { awogHome, sanitizeChild } from '../util/path.js'
@@ -28,6 +30,7 @@ import type {
   Session,
   SessionAttachment,
   SessionHeader,
+  SessionStep,
   SessionMessage,
   SessionRestingStatus,
 } from '../types/shared.js'
@@ -58,6 +61,12 @@ export function sessionFilePath(id: string): string {
 // ~/.awog/sessions/{id}/attachments/ (see the externalization block below).
 export function attachmentsDir(id: string): string {
   return join(sessionDir(id), ATTACHMENTS_DIR_NAME)
+}
+
+// Directory holding a session's externalized big step details:
+// ~/.awog/sessions/{id}/details/ (see the detail externalization block below).
+export function detailsDirForFile(sessionFile: string): string {
+  return join(dirname(sessionFile), 'details')
 }
 
 // ─── Path portability (deferred) ──────────────────────────────────────────────
@@ -96,11 +105,7 @@ function statusFromLast(last: SessionMessage | undefined): SessionRestingStatus 
   if (last.role !== 'agent') return 'done'
   if (last.error) return 'error'
   const awaiting = last.steps?.some(
-    (st) =>
-      !st.parentId &&
-      st.kind === 'question' &&
-      (st.questions?.length ?? 0) > 0 &&
-      !(st.answers?.length ?? 0),
+    (st) => !st.parentId && st.kind === 'question' && (st.questions?.length ?? 0) > 0 && !(st.answers?.length ?? 0),
   )
   return awaiting ? 'awaiting' : 'done'
 }
@@ -192,10 +197,7 @@ function attachmentsDirForFile(sessionFile: string): string {
 // NEVER mutated — the UI + context-builder still need `url` in this process; only the
 // persisted JSON drops it. A message with nothing to externalize is returned as-is (no
 // clone), so an all-text transcript pays nothing.
-function externalizeAttachmentsForWrite(
-  message: SessionMessage,
-  attsDir: string,
-): SessionMessage {
+function externalizeAttachmentsForWrite(message: SessionMessage, attsDir: string): SessionMessage {
   const atts = message.attachments
   if (!atts?.length) return message
   let changed = false
@@ -259,6 +261,107 @@ function rehydrateAttachmentsForRead(message: SessionMessage, attsDir: string): 
         err: err instanceof Error ? err.message : String(err),
       })
     }
+  }
+}
+
+// ─── Step-detail externalization (persistence boundary only) ────────────────
+// Tool steps can carry a heavy `detail` payload (full file content from
+// Read/Write, unified diffs, terminal output, Task reports — up to
+// FILE_DETAIL_MAX ≈ 200KB each). A spec-sync style session rewrites the same
+// ~100KB file dozens of times, so persisting every detail inline makes one
+// session.jsonl balloon to tens of MB and `sessions.get` stalls at ~1.4s just
+// moving it over the wire. The fix mirrors attachments: when a detail
+// serializes past DETAIL_EXTERNALIZE_MIN we write it once to
+// {sessionDir}/details/<sha256>.json and persist only `{kind, detailRef}`. The
+// same object in `parts` AND `steps` shares the step instance, so the hash
+// deduplicates the twin write for free; identical details across steps/messages
+// (re-writing the same file) collapse to ONE blob on disk. Read rehydrates
+// `detail` back in place — callers above never learn the bytes moved. A lost
+// blob degrades to "no detail body" in the UI, never loses the transcript.
+const DETAIL_EXTERNALIZE_MIN = 8 * 1024
+
+type PersistedStepDetail = NonNullable<SessionStep['detail']> & {
+  // Marker set on the persisted stub in place of the heavy fields.
+  deferred?: true
+  // On-disk reference: basename of {detailsDir}/<sha>.json holding the FULL
+  // detail object. Wire projection drops the ref so no filename leaks.
+  detailRef?: string
+}
+
+// `deferred` is the WIRE-only twin of the on-disk `detailRef` stub. Neither is
+// part of SessionStepDetail's union — the fields ride along structurally.
+function externalizeStepDetailForWrite(step: SessionStep, detailsDir: string): SessionStep {
+  const detail = step.detail as PersistedStepDetail | undefined
+  if (!detail || detail.detailRef) return step
+  try {
+    const body = JSON.stringify(detail)
+    if (body.length < DETAIL_EXTERNALIZE_MIN) return step
+    const sha = createHash('sha256').update(body, 'utf-8').digest('hex')
+    const fileName = `${sha}.json`
+    mkdirSync(detailsDir, { recursive: true, mode: 0o700 })
+    // Skip the write when an identical blob already exists (content dedupe).
+    if (!existsSync(join(detailsDir, fileName))) writeFileSync(join(detailsDir, fileName), body, { mode: 0o600 })
+    // The stub is not a valid SessionStepDetail union member (it carries the
+    // marker fields instead of content) — cast through unknown deliberately.
+    return {
+      ...step,
+      detail: {
+        kind: detail.kind,
+        deferred: true,
+        detailRef: fileName,
+      } as unknown as NonNullable<SessionStep['detail']>,
+    }
+  } catch (err) {
+    log.warn('jsonl: failed to externalize step detail, keeping inline', {
+      stepId: step.id,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    return step
+  }
+}
+
+// Copy-of-message externalization covering BOTH arrays: `parts` is the ordered
+// timeline and `steps` the flat fallback; on write they carry the SAME step
+// objects, but the arrays serialize separately so both need a pass (and steps
+// exists without parts on legacy turns).
+function externalizeDetailsForWrite(message: SessionMessage, detailsDir: string): SessionMessage {
+  const parts = message.parts?.map((p) => (p.kind === 'text' ? p : externalizeStepDetailForWrite(p, detailsDir)))
+  const steps = message.steps?.map((s) => externalizeStepDetailForWrite(s, detailsDir))
+  const partsChanged = parts?.some((p, i) => p !== message.parts![i]) ?? false
+  const stepsChanged = steps?.some((s, i) => s !== message.steps![i]) ?? false
+  if (!partsChanged && !stepsChanged) return message
+  // Mutable copy instead of a conditional spread: exactOptionalPropertyTypes
+  // rejects `steps?: SessionStep[] | undefined` in an object literal.
+  const out = { ...message }
+  if (partsChanged && parts) out.parts = parts
+  if (stepsChanged && steps) out.steps = steps
+  return out
+}
+
+// Reverse of the write path: load {detailsDir}/{detailRef} back into `detail`.
+// Runs on the freshly-parsed message; a missing/corrupt blob leaves the stub —
+// the step keeps kind/target and the UI can lazy-load via sessions.stepDetail.
+function rehydrateStepDetail(step: SessionStep, detailsDir: string): void {
+  resolveStepDetailBlob(step, detailsDir)
+}
+
+// The single read point for a deferred blob — rehydrate-on-parse and the
+// sessions.stepDetail lazy fetch both funnel here. The resolved object replaces
+// the stub on the step so a later persist sees the real detail, not the stub.
+
+export function resolveStepDetailBlob(step: SessionStep, detailsDir: string): void {
+  const detail = step.detail as PersistedStepDetail | undefined
+  if (!detail?.detailRef) return
+  try {
+    const file = join(detailsDir, sanitizeChild(detail.detailRef))
+    step.detail = JSON.parse(readFileSync(file, 'utf-8')) as NonNullable<SessionStep['detail']>
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException | null)?.code !== 'ENOENT')
+      log.warn('jsonl: step detail blob unreadable, leaving stub', {
+        stepId: step.id,
+        ref: detail.detailRef,
+        err: err instanceof Error ? err.message : String(err),
+      })
   }
 }
 
@@ -366,12 +469,16 @@ export function readSessionHeader(sessionFile: string): SessionHeader | null {
 // Parse message lines resiliently: skip a line that fails JSON.parse (e.g. one
 // truncated by a crash mid-write) rather than losing every message. Logs the line
 // length only — never the content (infosec F7: content stays out of the local log).
-function parseMessagesResilient(lines: string[], attsDir: string): SessionMessage[] {
+// `detailsDir` joins `attsDir` as the second rehydration root: persisted detail
+// stubs `{kind, detailRef}` get their blob read back into `detail` in place.
+function parseMessagesResilient(lines: string[], attsDir: string, detailsDir: string): SessionMessage[] {
   const messages: SessionMessage[] = []
   for (const line of lines) {
     try {
       const msg = JSON.parse(line) as SessionMessage
       rehydrateAttachmentsForRead(msg, attsDir)
+      for (const s of msg.steps ?? []) rehydrateStepDetail(s, detailsDir)
+      for (const p of msg.parts ?? []) if (p.kind !== 'text') rehydrateStepDetail(p, detailsDir)
       messages.push(msg)
     } catch {
       log.warn('jsonl: skipping corrupted message line', { length: line.length })
@@ -398,7 +505,7 @@ export function readSessionMessages(sessionFile: string): SessionMessage[] {
     throw err
   }
   const lines = content.split('\n').filter(Boolean)
-  return parseMessagesResilient(lines.slice(1), attachmentsDirForFile(sessionFile))
+  return parseMessagesResilient(lines.slice(1), attachmentsDirForFile(sessionFile), detailsDirForFile(sessionFile))
 }
 
 // Đọc THÔ từng dòng của session.jsonl, KHÔNG parse — nền cho `sessions.listEvents`
@@ -420,9 +527,7 @@ export function readSessionRawLines(sessionFile: string): string[] | null {
 // Read the full session (header + messages) in a single file read. Returns null on
 // missing/corrupt/old-format files so a per-file failure skips that session rather
 // than aborting a whole scan (used by listFullSessions / search).
-export function readSessionJsonl(
-  sessionFile: string,
-): { header: SessionHeader; messages: SessionMessage[] } | null {
+export function readSessionJsonl(sessionFile: string): { header: SessionHeader; messages: SessionMessage[] } | null {
   try {
     const content = readFileSync(sessionFile, 'utf-8')
     const lines = content.split('\n').filter(Boolean)
@@ -430,7 +535,11 @@ export function readSessionJsonl(
     if (!firstLine) return null
     const parsed: unknown = JSON.parse(firstLine)
     if (!isSessionHeader(parsed)) return null
-    const messages = parseMessagesResilient(lines.slice(1), attachmentsDirForFile(sessionFile))
+    const messages = parseMessagesResilient(
+      lines.slice(1),
+      attachmentsDirForFile(sessionFile),
+      detailsDirForFile(sessionFile),
+    )
     return { header: migrateLegacyTeamFields(parsed), messages }
   } catch (err) {
     log.warn('jsonl: failed to read session', {
@@ -449,15 +558,15 @@ export function readSessionJsonl(
 // externalized into it and their inline `url` dropped from the persisted line (the
 // live message keeps `url`; see externalizeAttachmentsForWrite). `headerOverride` lets
 // the queue pass a metadata-merged header.
-export function serializeSessionJsonl(
-  session: Session,
-  attsDir: string,
-  headerOverride?: SessionHeader,
-): string {
+export function serializeSessionJsonl(session: Session, attsDir: string, headerOverride?: SessionHeader): string {
   const header = headerOverride ?? createSessionHeader(session)
+  // details/ is a sibling of attachments/ (both under {sessionDir}/).
+  const detailsDir = join(dirname(attsDir), 'details')
   const lines = [
     JSON.stringify(header),
-    ...session.messages.map((m) => JSON.stringify(externalizeAttachmentsForWrite(m, attsDir))),
+    ...session.messages.map((m) =>
+      JSON.stringify(externalizeDetailsForWrite(externalizeAttachmentsForWrite(m, attsDir), detailsDir)),
+    ),
   ]
   return `${lines.join('\n')}\n`
 }

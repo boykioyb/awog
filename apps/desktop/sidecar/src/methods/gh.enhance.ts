@@ -6,7 +6,7 @@
 
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
 import type { ProviderName } from '../types/shared.js'
 
@@ -53,7 +53,7 @@ register('gh.enhance', async (raw): Promise<{ text: string }> => {
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential fallback
-      const out = await completePi({
+      const out = await complete({
         provider: params.provider,
         ...(params.accountId ? { accountId: params.accountId } : {}),
         modelId,

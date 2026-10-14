@@ -1,18 +1,5 @@
 <template>
   <div class="top">
-    <!-- Rail collapse toggle (the proto's SidebarTrigger): header-left, momentary
-         flip of the shared navCollapsed state — no .on state. Full width only;
-         in compact mode the rail is an off-canvas drawer with its own ☰ below. -->
-    <Button
-      v-if="!compact"
-      variant="ghost"
-      size="iconSm"
-      class="shelltgl"
-      :title="t('nav.collapse')"
-      @click="toggleNavCollapsed"
-    >
-      <Icon name="dock-left" style="width: var(--icon-md); height: var(--icon-md)" />
-    </Button>
     <!-- Compact-mode drawer toggles (≤1100px): ☰ reveals the nav rail; the
          panel-left icon reveals the page's secondary list. Hidden at full width. -->
     <Button
@@ -37,26 +24,36 @@
     >
       <Icon name="dock-left" style="width: var(--icon-md); height: var(--icon-md)" />
     </Button>
-    <span class="ptitle">{{ title }}</span>
+    <SessionTabBar v-if="isWorkbench" hide-list-toggle class="min-w-0 flex-1" />
+    <span v-else class="ptitle">{{ title }}</span>
     <span class="sp" />
-    <!-- GitHub notification inbox (bell + unread badge). Left of the search box so
-         the two live in the same "utilities" cluster before the primary action. -->
-    <TopBarNotifications />
-    <button
-      type="button"
-      class="kbd"
-      data-tour="cmdk-hint"
-      :title="t('topbar.searchHint')"
-      @click="openPalette"
-    >
-      <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
-      <span class="kbd-label">{{ t('topbar.search') }}</span>
-      <span class="kk">⌘K</span>
-    </button>
-    <Button size="sm" class="shrink-0" data-tour="new-btn" :title="t('topbar.new')" @click="onNew">
-      <Icon name="plus" />
-      <span>{{ t('topbar.new') }}</span>
-    </Button>
+    <template v-if="!isWorkbench">
+      <!-- GitHub notification inbox (bell + unread badge). Left of the search box
+           so the two live in the same "utilities" cluster before the primary
+           action. -->
+      <TopBarNotifications />
+      <button
+        type="button"
+        class="kbd"
+        data-tour="cmdk-hint"
+        :title="t('topbar.searchHint')"
+        @click="openPalette"
+      >
+        <Icon name="search" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <span class="kbd-label">{{ t('topbar.search') }}</span>
+        <span class="kk">⌘K</span>
+      </button>
+      <Button
+        size="sm"
+        class="shrink-0"
+        data-tour="new-btn"
+        :title="t('topbar.new')"
+        @click="onNew"
+      >
+        <Icon name="plus" />
+        <span>{{ t('topbar.new') }}</span>
+      </Button>
+    </template>
   </div>
 </template>
 
@@ -64,11 +61,13 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useCommandPalette } from '~/composables/useCommandPalette'
+import SessionTabBar from '~/components/session/SessionTabBar.vue'
+import TopBarNotifications from '~/components/shell/TopBarNotifications.vue'
 
 // Route → page-title i18n key (reuses the NavRail nav.* keys).
 const TITLE_KEYS: Record<string, string> = {
   '/': 'nav.home',
-  '/sessions': 'nav.sessions',
+  '/workbench': 'nav.sessions',
   '/tasks': 'nav.tasks',
   '/workflows': 'nav.workflows',
   '/agents': 'nav.agents',
@@ -88,8 +87,8 @@ const TITLE_KEYS: Record<string, string> = {
 
 const { t } = useI18n()
 const route = useRoute()
-const { compact, navOpen, listOpen, hasList, toggleNav, toggleList, toggleNavCollapsed } =
-  useResponsiveShell()
+const isWorkbench = computed(() => route.path.startsWith('/workbench'))
+const { compact, navOpen, listOpen, hasList, toggleNav, toggleList } = useResponsiveShell()
 
 // Search box opens the ⌘K command palette (the keyboard shortcut is bound in the
 // layout; this makes the visible box clickable too).
@@ -108,7 +107,7 @@ const title = computed(() => {
 const sessions = useSessionsStore()
 function onNew() {
   sessions.create()
-  if (!route.path.startsWith('/sessions')) navigateTo('/sessions')
+  if (!route.path.startsWith('/workbench')) navigateTo('/workbench')
 }
 </script>
 

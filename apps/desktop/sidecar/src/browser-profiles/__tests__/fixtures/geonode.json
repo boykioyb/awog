@@ -1,0 +1,77 @@
+{
+  "data": [
+    {
+      "ip": "143.20.37.32",
+      "port": "8080",
+      "protocols": ["http"],
+      "country": "DE",
+      "city": "Frankfurt am Main",
+      "anonymityLevel": "elite",
+      "upTime": 99.5,
+      "latency": 3.8,
+      "responseTime": 700,
+      "isp": "Freakhosting"
+    },
+    {
+      "ip": "88.135.36.246",
+      "port": "1080",
+      "protocols": ["socks5", "socks4"],
+      "country": "IR",
+      "city": "Tehran",
+      "anonymityLevel": "elite",
+      "upTime": 99.7,
+      "responseTime": 1956,
+      "isp": "Sefroyek"
+    },
+    {
+      "ip": "88.146.222.250",
+      "port": "8000",
+      "protocols": ["http"],
+      "country": "CZ",
+      "anonymityLevel": "transparent",
+      "upTime": 100
+    },
+    {
+      "ip": "10.1.2.3",
+      "port": "8000",
+      "protocols": ["http"],
+      "country": "CZ",
+      "anonymityLevel": "elite"
+    },
+    {
+      "ip": "100.64.1.1",
+      "port": "8000",
+      "protocols": ["http"],
+      "country": "CZ",
+      "anonymityLevel": "elite"
+    },
+    {
+      "ip": "127.0.0.1",
+      "port": "8000",
+      "protocols": ["http"],
+      "country": "CZ",
+      "anonymityLevel": "elite"
+    },
+    {
+      "ip": "224.0.0.1",
+      "port": "8000",
+      "protocols": ["http"],
+      "country": "CZ",
+      "anonymityLevel": "elite"
+    },
+    {
+      "ip": "1.2.3.4",
+      "port": "99999",
+      "protocols": ["http"],
+      "country": "CZ",
+      "anonymityLevel": "elite"
+    },
+    {
+      "ip": "example.com",
+      "port": "80",
+      "protocols": ["http"],
+      "country": "CZ",
+      "anonymityLevel": "elite"
+    }
+  ]
+}

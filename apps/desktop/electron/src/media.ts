@@ -42,8 +42,7 @@ const EXT_MIME: Record<string, string> = {
   '.opus': 'audio/opus',
   '.weba': 'audio/webm',
 }
-const mimeOf = (p: string): string =>
-  EXT_MIME[extname(p).toLowerCase()] ?? 'application/octet-stream'
+const mimeOf = (p: string): string => EXT_MIME[extname(p).toLowerCase()] ?? 'application/octet-stream'
 
 // Parse a single `bytes=start-end` range header against the known file size.
 // Returns null for a missing / malformed / unsatisfiable range → the caller
@@ -69,6 +68,40 @@ function parseRange(header: string | null, size: number): { start: number; end: 
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null
   if (start > end || start >= size) return null
   return { start, end: Math.min(end, size - 1) }
+}
+
+// Stream a validated absolute file path as an HTTP response with Range support
+// (206 for a satisfiable range, else 200). Shared by media:// and wspreview://.
+// Throws if the file can't be stat'd; a directory yields a 400 Response.
+export async function streamFileResponse(abs: string, mime: string, rangeHeader: string | null): Promise<Response> {
+  const st = await stat(abs)
+  if (st.isDirectory()) return new Response('not a file', { status: 400 })
+  const size = st.size
+  const range = parseRange(rangeHeader, size)
+
+  const headers: Record<string, string> = {
+    'Content-Type': mime,
+    'Accept-Ranges': 'bytes',
+    'Cache-Control': 'no-cache',
+  }
+
+  if (range) {
+    const { start, end } = range
+    const stream = createReadStream(abs, { start, end })
+    headers['Content-Range'] = `bytes ${start}-${end}/${size}`
+    headers['Content-Length'] = String(end - start + 1)
+    return new Response(Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>, {
+      status: 206,
+      headers,
+    })
+  }
+
+  const stream = createReadStream(abs)
+  headers['Content-Length'] = String(size)
+  return new Response(Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>, {
+    status: 200,
+    headers,
+  })
 }
 
 let registered = false
@@ -97,34 +130,7 @@ export function registerMediaProtocol(): void {
 
     // ── stream the file (with Range) ─────────────────────────────────────────
     try {
-      const st = await stat(abs)
-      if (st.isDirectory()) return new Response('not a file', { status: 400 })
-      const size = st.size
-      const range = parseRange(request.headers.get('range'), size)
-
-      const headers: Record<string, string> = {
-        'Content-Type': mime,
-        'Accept-Ranges': 'bytes',
-        'Cache-Control': 'no-cache',
-      }
-
-      if (range) {
-        const { start, end } = range
-        const stream = createReadStream(abs, { start, end })
-        headers['Content-Range'] = `bytes ${start}-${end}/${size}`
-        headers['Content-Length'] = String(end - start + 1)
-        return new Response(Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>, {
-          status: 206,
-          headers,
-        })
-      }
-
-      const stream = createReadStream(abs)
-      headers['Content-Length'] = String(size)
-      return new Response(Readable.toWeb(stream) as unknown as ReadableStream<Uint8Array>, {
-        status: 200,
-        headers,
-      })
+      return await streamFileResponse(abs, mime, request.headers.get('range'))
     } catch (err) {
       log.error(`[media] read failed: ${err instanceof Error ? err.message : String(err)}`)
       return new Response('not found', { status: 404 })

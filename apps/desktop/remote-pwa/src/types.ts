@@ -58,14 +58,7 @@ export type SessionStepDetail =
   | { kind: 'terminal'; command: string; output?: string; exitCode?: number }
   | { kind: 'text'; content: string }
 
-export type SessionStepKind =
-  | 'tool'
-  | 'group'
-  | 'thinking'
-  | 'note'
-  | 'plan'
-  | 'question'
-  | 'steer'
+export type SessionStepKind = 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer'
 
 export interface SessionStep {
   id: string
@@ -480,6 +473,9 @@ export interface BackgroundDonePayload {
   status: string
   exitCode?: number | null
   outputTail?: string
+  // The desktop's live Claude CLI restarted the agent by itself (ADR 0099). Not a task
+  // edge: its `shellId` can be synthetic, so it must never become a chip here.
+  native?: boolean
 }
 
 export interface GatewayEvent {

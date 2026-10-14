@@ -52,8 +52,10 @@ const lastPointer = { x: 0, y: 0, at: 0 }
 
 const mode = ref<LinkOpenMode>(readMode())
 // The link waiting on a choice, with the click position so the popover opens where
-// the user's eyes already are.
-const pending = ref<{ url: string; x: number; y: number } | null>(null)
+// the user's eyes already are. `openedAt` (performance.now(), cùng đồng hồ với
+// `Event.timeStamp`) để listener "bấm ra ngoài thì đóng" bỏ qua CHÍNH cú click đã
+// mở card — xem LinkOpenHost.onDocDismiss.
+const pending = ref<{ url: string; x: number; y: number; openedAt: number } | null>(null)
 let installed = false
 
 export function useLinkOpen() {
@@ -157,7 +159,7 @@ export function useLinkOpen() {
     const fresh = Date.now() - lastPointer.at < 2000
     const x = fromEvent ? evt.clientX : fresh ? lastPointer.x : Math.round(window.innerWidth / 2)
     const y = fromEvent ? evt.clientY : fresh ? lastPointer.y : Math.round(window.innerHeight / 3)
-    pending.value = { url: text, x, y }
+    pending.value = { url: text, x, y, openedAt: performance.now() }
   }
 
   const resolvePending = async (kind: 'app' | 'external', remember: boolean): Promise<void> => {

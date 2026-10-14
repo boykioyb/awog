@@ -57,10 +57,17 @@ Hệ quả: gauge đọc **200k mặc định** cho mọi model OpenAI/Google �
 
 Nay mỗi dòng SEED mang `contextWindow` lấy **đúng từ metadata pi-ai** (con số mà một lần Fetch sẽ trả về) nên seed và fetch không thể lệch nhau; `gemini-2.0-flash` không có trong catalog pi nên dùng số từ bảng model của Google (1.048.576) và ghi rõ nguồn tại chỗ.
 
-`hydrate()` còn một lỗ liên quan: `persist()` ghi catalog **as-is** nên một lần *toggle* model (không Fetch) cũng tạo cache — cache đó viết trước bản vá này thì không có `contextWindow`, và `JSON.stringify` bỏ `undefined` nên dòng cache "thắng metadata" sẽ **xoá** luôn cửa sổ vừa seed. Sửa: spread seed **nằm dưới** dòng cache (`{ ...seed, ...cached }`) — cache vẫn thắng ở field nó thực sự có, nhưng không xoá được field nó chưa từng mang.
+`hydrate()` còn một lỗ liên quan: `persist()` ghi catalog **as-is** nên một lần _toggle_ model (không Fetch) cũng tạo cache — cache đó viết trước bản vá này thì không có `contextWindow`, và `JSON.stringify` bỏ `undefined` nên dòng cache "thắng metadata" sẽ **xoá** luôn cửa sổ vừa seed. Sửa: spread seed **nằm dưới** dòng cache (`{ ...seed, ...cached }`) — cache vẫn thắng ở field nó thực sự có, nhưng không xoá được field nó chưa từng mang.
 
 ### Persist
+
 Enabled-subset per provider + snapshot catalog fetched + fetchedAt lưu **localStorage** `awog.providerModels.v1` (UI-presentation cache, không phải engine setting — model gửi đi vẫn theo lựa chọn per-session/task). `hydrate()` merge **seed trước** để model mặc định của bản app mới không bị cache cũ che. (Có thể chuyển sang `~/.awog/provider-models.json` sidecar-authoritative sau nếu cần đồng bộ đa thiết bị.)
+
+### Cross-window sync — sửa 2026-10-12
+
+`catalog`/`enabled` là **module-singleton per window** — mỗi cửa sổ (main, session popout, preview popout, tray popover) hydrate 1 lần lúc `useProviderModels.ts` được import. Trước bản vá này, Fetch/toggle ở Settings chỉ đổi bản in-memory **của window đó**; `persist()` ghi localStorage nhưng window khác **không re-hydrate** nên `catalog` của nó giữ snapshot cũ. Lỗi đo được: user enable `claude-opus-5-5` ở Settings (in-memory `enabled` có) nhưng `catalog` của session chip là bản hydrate trước lần Fetch thêm model đó ⇒ `providerModelsShown` lọc `enabled` trên catalog cũ ⇒ model không bao giờ xuất hiện trong picker.
+
+Sửa: lắng `storage` event trên `window` — event này fire ở **mọi window khác** cùng origin khi `localStorage.setItem` chạy — và gọi lại `hydrate()` khi `e.key === 'awog.providerModels.v1'` (hoặc `null` = `localStorage.clear()`). Không subscribe `enabled` theo chiều ngược lại vì `toggle` vẫn mutate trực tiếp trong cùng window.
 
 ## Bảo mật
 

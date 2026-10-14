@@ -1,6 +1,6 @@
 # 0029 — Migrate LLM runtime sang Pi SDK (single runtime, multi-provider)
 
-- **Trạng thái:** Accepted — Phase C hoàn tất (C0–C4 implement xong 2026-06-05); bảng mapping thinking của **item 6** amended by [0078](./0078-reasoning-effort-parity.md) (mapping 1:1 toàn thang, không còn dịch xuống một nấc — phần degrade của item 6 giữ nguyên)
+- **Trạng thái:** Accepted — Phase C hoàn tất (C0–C4 implement xong 2026-06-05); bảng mapping thinking của **item 6** amended by [0078](./0078-reasoning-effort-parity.md) (mapping 1:1 toàn thang, không còn dịch xuống một nấc — phần degrade của item 6 giữ nguyên); one-shot + `/compact` của provider `anthropic` chuyển sang Claude SDK theo [0099](./0099-anthropic-claude-native-runtime.md) — Pi chỉ còn cho `google` + gateway tuỳ chỉnh
 - **Ngày:** 2026-06-05
 - **Người quyết định:** Tech Lead + user (chốt hướng X — migrate toàn bộ sang Pi, 2026-06-05)
 - **Liên quan:** [0026](./0026-per-agent-multi-provider-llm.md) (multi-provider — ADR này **thay** lựa chọn runtime của 0026), [0023](./0023-sdk-session-resume-and-compact.md) (resume — **amend**), [0014](./0014-mcp-servers-stdio-runtime.md) (MCP Q4 — **amend**), [0018](./0018-mcp-secret-keychain.md) (secret keychain), [0008](./0008-stdio-ipc-for-sidecar.md) (stdio IPC)
@@ -52,16 +52,20 @@ Trong `pi-agent-core`, `agent-loop.js:188` resolve `const resolvedApiKey = (conf
 ## Phương án đã cân nhắc
 
 ### Option X — Migrate toàn bộ sang Pi (single runtime) — CHỌN
+
 - **Pros:** 1 runtime cho mọi provider, hành vi nhất quán; bỏ được claude-agent-sdk + Claude CLI binary (extraResources nhẹ hơn); Pi ESM thuần JS 0 native (đóng gói đơn giản); OAuth subscription đã verify chạy; prompt-cache + thinking + tool-use Anthropic giữ nguyên; thêm provider mới = `getModel` + cred. Loại bỏ "lớp dịch gateway" của ADR 0026 Option A.
 - **Cons:** rewrite orchestration seam (tool/permission/resume/`/compact` phải tái hiện đúng hợp đồng Claude Code); rủi ro tool-semantics drift + permission parity (xem §Hệ quả).
 
 ### Option A (ADR 0026) — Gateway dịch trong sidecar, giữ claude-agent-sdk
+
 - **Loại:** vẫn 1 runtime Anthropic-only + thêm lớp dịch API phải bảo trì; OpenAI/Google chỉ là "Anthropic giả" → mất tính năng native + dễ lệch. Pi đã có sẵn provider chính chủ cho cả ba.
 
 ### Option B (ADR 0026) — Native adapter per-provider tự viết loop
+
 - **Loại:** nhân bản orchestration (MCP/permission/stream/resume) cho từng provider — đúng thứ Pi cho sẵn. Vi phạm KISS/YAGNI.
 
 ### Giữ nguyên claude-agent-sdk (status quo)
+
 - **Loại:** chính là vấn đề — multi-provider không khả thi.
 
 ## Hệ quả
@@ -91,12 +95,12 @@ Lý do: catalog `openai-codex` của 0.79.9 dừng ở `gpt-5.5`, nên model GPT
 
 0.84 tái cấu trúc API (breaking). Cách AWOG hấp thụ, giữ nguyên nguyên tắc **credential thuộc về AWOG** (multi-account/provider — mô hình `CredentialStore` 1-credential/provider của pi không diễn tả được):
 
-| Thay đổi ở pi 0.84 | Cách xử lý ở AWOG |
-|---|---|
-| Root export bỏ `getModel`/`getModels`/`completeSimple`/`streamSimple` (chuyển sang collection `Models`) | Import từ `@earendil-works/pi-ai/compat` — cùng chữ ký, catalog tĩnh, không đụng `Models` |
-| `runAgentLoop(...)` thêm tham số thứ 6 `streamFn` | Truyền `streamSimple` (compat) — đúng dispatcher loop dùng nội bộ trước đây |
+| Thay đổi ở pi 0.84                                                                                                                           | Cách xử lý ở AWOG                                                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Root export bỏ `getModel`/`getModels`/`completeSimple`/`streamSimple` (chuyển sang collection `Models`)                                      | Import từ `@earendil-works/pi-ai/compat` — cùng chữ ký, catalog tĩnh, không đụng `Models`                                                                                                                                                                                                                       |
+| `runAgentLoop(...)` thêm tham số thứ 6 `streamFn`                                                                                            | Truyền `streamSimple` (compat) — đúng dispatcher loop dùng nội bộ trước đây                                                                                                                                                                                                                                     |
 | `/oauth` bỏ `loginOpenAICodex` + `getOAuthApiKey`, thay bằng object `OAuthAuth` (`login`/`refresh`/`toAuth`) lấy qua `openaiCodexProvider()` | [openai-codex-oauth.ts](../../apps/desktop/sidecar/src/auth/openai-codex-oauth.ts): login trả lời prompt `select` = `browser`, prompt `manual_code` chỉ dùng làm đòn bẩy huỷ; refresh khi `expires <= now + 60s` rồi `toAuth` → bearer. Header `chatgpt-account-id` pi tự trích từ JWT nên không cần plumb thêm |
-| `generateSummary` nhận `Models` (tự resolve auth) thay vì `apiKey`/`headers` | `/compact` truyền một `Models` tối giản chỉ hiện thực `completeSimple`, uỷ quyền về compat kèm key + headers của AWOG ([run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts)) |
+| `generateSummary` nhận `Models` (tự resolve auth) thay vì `apiKey`/`headers`                                                                 | `/compact` truyền một `Models` tối giản chỉ hiện thực `completeSimple`, uỷ quyền về compat kèm key + headers của AWOG ([run-stream.ts](../../apps/desktop/sidecar/src/runtime/run-stream.ts))                                                                                                                   |
 
 Union `AgentEvent` **không đổi** giữa 2 phiên bản (đã diff) → step/trace mapper giữ nguyên. Kèm theo: picker model của connection ChatGPT (Codex) nay đọc `account.models` như custom endpoint — trước đó chỉ custom endpoint được đọc, nên list curate trong "Sửa kết nối" không tới được chip session.
 

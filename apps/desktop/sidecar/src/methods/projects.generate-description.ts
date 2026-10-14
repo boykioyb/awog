@@ -5,7 +5,7 @@
 
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
 
 const ModelSchema = z.string().min(1).max(200)
@@ -41,7 +41,7 @@ register('projects.generateDescription', async (raw) => {
 
   log.info('projects.generateDescription', { model: modelId, hasHint: !!params.hint })
 
-  const collected = await completePi({
+  const collected = await complete({
     accountId: params.accountId,
     modelId,
     systemPrompt: SYSTEM_PROMPT,

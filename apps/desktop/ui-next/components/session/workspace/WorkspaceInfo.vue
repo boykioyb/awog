@@ -1,9 +1,9 @@
 <template>
-  <div class="flex flex-col">
+  <div class="wsi flex flex-col" :class="{ dock: compact }">
     <div
       v-for="row in infoRows"
       :key="row.k"
-      class="flex items-baseline gap-2.5 border-b border-border py-1.5"
+      class="wsi-row flex items-baseline gap-2.5 border-b border-border py-1.5"
     >
       <span class="w-24 shrink-0 text-dim">{{ row.k }}</span>
       <a
@@ -19,7 +19,7 @@
     </div>
 
     <!-- Context files: attachments + pinned working-set fed into the model. -->
-    <div class="mt-3.5">
+    <div class="wsi-ctx mt-3.5">
       <div class="mb-1.5 flex items-center gap-1.5 text-sm text-dim">
         {{ t('sessions.info.contextFiles') }}
         <span v-if="contextFiles.length" class="text-sm tabular-nums text-faint">
@@ -71,7 +71,10 @@ import { formatTokenCount } from '~/utils/context-window'
 import { formatBytes } from '~/utils/format-bytes'
 import Button from '~/components/ui/button/Button.vue'
 
-const props = defineProps<{ session: Session }>()
+const props = withDefaults(defineProps<{ session: Session; compact?: boolean }>(), {
+  compact: false,
+})
+const compact = props.compact
 
 const { t } = useI18n()
 const { projectName } = useProjects()
@@ -134,3 +137,24 @@ const infoRows = computed<{ k: string; v: string; href?: string }[]>(() => {
   return rows
 })
 </script>
+
+<style scoped>
+/* Dock variant — grid 2 cột, hàng gọn; trang session giữ nguyên. */
+.wsi.dock {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 20px;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.wsi.dock > .wsi-row {
+  padding: 3px 0;
+}
+.wsi.dock > .wsi-ctx,
+.wsi.dock > :deep(*) {
+  grid-column: 1 / -1;
+}
+.wsi.dock .wsi-ctx {
+  margin-top: 6px;
+}
+</style>

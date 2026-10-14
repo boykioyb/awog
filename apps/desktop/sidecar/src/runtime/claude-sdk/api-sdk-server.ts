@@ -25,11 +25,7 @@
 // (to keep Pi off the Anthropic SDK) — this is the CLAUDE SDK path, where the SDK's
 // own in-process tool mechanism is exactly the right vehicle.
 
-import {
-  createSdkMcpServer,
-  tool,
-  type McpSdkServerConfigWithInstance,
-} from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import {
   apiEndpointBlockedMessage,
@@ -54,10 +50,7 @@ const apiToolSchema = {
     .describe(
       'Request body (POST/PUT/PATCH) or query parameters (GET). For a non-JSON body pass { _rawBody: "raw content", _contentType: "text/plain" } — _rawBody is sent as-is without JSON encoding.',
     ),
-  _intent: z
-    .string()
-    .optional()
-    .describe('One or two sentences describing what this call is trying to accomplish.'),
+  _intent: z.string().optional().describe('One or two sentences describing what this call is trying to accomplish.'),
 }
 
 // Build one in-process SDK MCP server per enabled api source. `apiSources` is
@@ -70,38 +63,34 @@ const apiToolSchema = {
 // check the Pi tool runs (createApiTool), so both runtimes enforce P4 identically.
 export function buildApiSdkServers(
   apiSources: ApiSourcesConfig | undefined,
-  signal?: AbortSignal,
+  signal?: AbortSignal | (() => AbortSignal | undefined),
   endpointRules?: Record<string, CompiledApiEndpoint[]>,
 ): Record<string, McpSdkServerConfigWithInstance> {
   const out: Record<string, McpSdkServerConfigWithInstance> = {}
   if (!apiSources || apiSources.length === 0) return out
   for (const source of apiSources) {
     const rules = endpointRules?.[source.id]
-    const apiTool = tool(
-      `api_${source.slug}`,
-      buildToolDescription(source),
-      apiToolSchema,
-      async (args) => {
-        // Per-source Explore scoping (ADR 0060 P4): a source that declared
-        // allowedApiEndpoints restricts itself to GET + its whitelisted non-GET
-        // endpoints. Enforced here BEFORE the request with the SAME shared check
-        // as the Pi path; a blocked call returns a clear tool error, never a fetch.
-        if (rules && rules.length > 0 && !isApiCallAllowed(args.method, args.path, rules)) {
-          return {
-            content: [
-              { type: 'text' as const, text: apiEndpointBlockedMessage(source, args.method, args.path) },
-            ],
-            isError: true,
-          }
+    const apiTool = tool(`api_${source.slug}`, buildToolDescription(source), apiToolSchema, async (args) => {
+      // Per-source Explore scoping (ADR 0060 P4): a source that declared
+      // allowedApiEndpoints restricts itself to GET + its whitelisted non-GET
+      // endpoints. Enforced here BEFORE the request with the SAME shared check
+      // as the Pi path; a blocked call returns a clear tool error, never a fetch.
+      if (rules && rules.length > 0 && !isApiCallAllowed(args.method, args.path, rules)) {
+        return {
+          content: [{ type: 'text' as const, text: apiEndpointBlockedMessage(source, args.method, args.path) }],
+          isError: true,
         }
-        const r = await executeApiCall(
-          source,
-          { path: args.path, method: args.method, params: args.params },
-          signal,
-        )
-        return { content: [{ type: 'text' as const, text: r.text }], isError: r.isError }
-      },
-    )
+      }
+      const r = await executeApiCall(
+        source,
+        { path: args.path, method: args.method, params: args.params },
+        typeof signal === 'function' ? signal() : signal,
+      )
+      return {
+        content: [{ type: 'text' as const, text: r.text }],
+        isError: r.isError,
+      }
+    })
     out[source.id] = createSdkMcpServer({ name: source.id, version: '1.0.0', tools: [apiTool] })
   }
   return out

@@ -1149,7 +1149,7 @@ async function onRunProject(projectId: string): Promise<void> {
       return
     }
     await sessions.openByEngineId(res.rootId)
-    void navigateTo(`/sessions?id=${encodeURIComponent(res.rootId)}`)
+    void navigateTo(`/workbench?id=${encodeURIComponent(res.rootId)}`)
   } catch (err) {
     toast.add({
       title: t('teams.runFailed'),
@@ -1160,7 +1160,7 @@ async function onRunProject(projectId: string): Promise<void> {
 }
 function openRun(r: LiveRun): void {
   void sessions.openByEngineId(r.root.engineId ?? '')
-  void navigateTo(`/sessions?id=${encodeURIComponent(r.root.engineId ?? '')}`)
+  void navigateTo(`/workbench?id=${encodeURIComponent(r.root.engineId ?? '')}`)
 }
 
 // ── Delete (kebab list + detail dùng chung) ────────────────────────────────

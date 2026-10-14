@@ -23,9 +23,10 @@
 
          Dock DƯỚI ở lại trong cột chính: nó nằm dưới chat, không chui xuống dưới
          hai panel bên — đúng như bottom panel của VS Code. -->
-    <template v-if="wpOpen && leftTabs.length">
+    <template v-if="wpOpen && !embedded && leftTabs.length">
       <SessionWorkspacePanel
         :session="session"
+        :live="isActive"
         dock="left"
         :tabs="leftTabs"
         :active="activeLeft"
@@ -84,7 +85,7 @@
 
         <!-- Views. Điều khiển duy nhất ở ngoài, vì nó là thứ được bấm nhiều lần trong
              một phiên; mở/tắt từng khung làm việc, khung đang mở có dấu tick. -->
-        <span class="dhanchor">
+        <span v-if="!embedded" class="dhanchor">
           <Button
             variant="ghost"
             size="iconSm"
@@ -281,7 +282,7 @@
            content ngay dưới. Danh sách tab = tab của scope phiên này (agent mở
            cũng hiện — chỉ là không giật focus). Luôn render: mất nó thì mất chỗ
            nút "+" và strip nhảy layout lúc link đầu tiên mở. -->
-      <div class="mtabs" role="tablist">
+      <div v-if="!embedded" class="mtabs" role="tablist">
         <button
           type="button"
           class="mtab mtab-discuss"
@@ -372,7 +373,7 @@
       <div class="chatwrap">
         <div class="wptop">
           <div
-            v-show="mainTab === DISCUSS_TAB"
+            v-show="mainTab === DISCUSS_TAB || embedded"
             class="chat"
             @mouseup="onSelectQuote"
             @mousedown="onChatMouseDown"
@@ -501,7 +502,7 @@
                `visible()` trong useEmbeddedBrowser. Pane ẩn TỨC THÌ theo mainTab
                — view native đã được giấu từ `pointerdown` của tab Trao đổi nên
                không còn nhịp phủ trễ nào để che. -->
-          <div v-show="mainTab !== DISCUSS_TAB" class="mbpane">
+          <div v-if="!embedded" v-show="mainTab !== DISCUSS_TAB" class="mbpane">
             <BrowserNavBar
               v-model:url="mbUrlDraft"
               :tab="mbActiveTab"
@@ -510,11 +511,13 @@
               :project="projName"
               :selection-text="mbSelectionText"
               surface="main"
+              :scope="session.engineId"
               @back="mbBack"
               @forward="mbForward"
               @reload="mbReload"
               @submit-url="mbSubmitUrl"
               @popout="mbPopout"
+              @open-url="mbOpenUrl"
             />
             <div
               v-if="mbError"
@@ -530,7 +533,7 @@
               <!-- Tab trắng (Tab mới) → empty-state thắng: không có trang thì
                    "hiện ở chỗ khác" là vô nghĩa — elsewhere chỉ dành cho tab có
                    nội dung bị bề mặt khác chiếm. -->
-              <BrowserEmptyState v-if="mbEmpty" @open="mbOnEmptyOpen" />
+              <BrowserEmptyState v-if="mbEmpty" :scope="session.engineId" @open="mbOnEmptyOpen" />
               <BrowserElsewhere
                 v-else-if="mbElsewhere"
                 :where="mbElsewhereWhere"
@@ -539,7 +542,7 @@
             </div>
           </div>
         </div>
-        <template v-if="wpOpen && bottomTabs.length">
+        <template v-if="wpOpen && !embedded && bottomTabs.length">
           <div
             class="rszwp vert"
             :class="{ drag: wpDragging }"
@@ -548,6 +551,7 @@
           <SessionWorkspacePanel
             :session="session"
             dock="bottom"
+            :live="isActive"
             :tabs="bottomTabs"
             :active="activeBottom"
             :size="wpHeight"
@@ -562,7 +566,7 @@
       </div>
     </div>
 
-    <template v-if="wpOpen && rightTabs.length">
+    <template v-if="wpOpen && !embedded && rightTabs.length">
       <div
         class="rszwp"
         :class="{ drag: wpDragging }"
@@ -571,6 +575,7 @@
       <SessionWorkspacePanel
         :session="session"
         dock="right"
+        :live="isActive"
         :tabs="rightTabs"
         :active="activeRight"
         :size="wpWidth"
@@ -617,6 +622,19 @@
           style="width: var(--icon-sm); height: var(--icon-sm)"
         />
         {{ mdCopied ? t('common.copied') : t('common.copyMarkdown') }}
+      </button>
+      <!-- Chạy đoạn bôi đen trong terminal của phiên — chỉ mọc khi selection nằm
+           trong code block shell (`quoteSel.shell`), cùng luật với nút Run của
+           block: fence trần/output không có nút. ⌥-bấm = chỉ dán, không Enter. -->
+      <button
+        v-if="quoteSel?.shell"
+        class="selquote"
+        :disabled="runBusy"
+        :title="t('sessions.code.run')"
+        @click="onRunSelection"
+      >
+        <Icon name="play" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        {{ t('sessions.code.runShort') }}
       </button>
     </div>
 
@@ -680,11 +698,22 @@ import {
   previewRefFromAttachment,
   usePreview,
 } from '~/composables/usePreview'
+import { useFilePreview } from '~/composables/useFilePreview'
 import { useMinimizeDock } from '~/composables/useMinimizeDock'
 import { useSelectionTranslate } from '~/composables/useSelectionTranslate'
 import { rawMarkdownForSelection } from '~/utils/selection-markdown'
+import { isDestructiveCommand, useSessionTerminalRun } from '~/composables/useSessionTerminalRun'
+import { RUNNABLE_LANGS } from '~/utils/code-block-controls'
+import { useWorkbenchStore } from '~/stores/workbench'
+import { useWorkbenchDocs } from '~/composables/useWorkbenchDocs'
+import { useWorkbenchDock } from '~/composables/useWorkbenchDock'
+import type { DockView } from '~/types/workbench'
 
-const props = defineProps<{ session: Session }>()
+// `embedded` = nhúng trong Session Workbench (DocChat) — mặt workspace của riêng
+// mình tắt hết: panel 3 mép + nút Views + strip web mtabs (doc 'web' của
+// workbench thay vai trò nó, dock wb thay panel). Trang sessions/popout không
+// truyền → vẫn full như cũ.
+const props = defineProps<{ session: Session; embedded?: boolean }>()
 const { t } = useI18n()
 const { wpIcon } = useSessionsData()
 const { projects, projectName } = useProjects()
@@ -701,6 +730,11 @@ const { isCute } = useThemeFamily()
 // workspace footer bridge — gate on this. Otherwise every cached session would drain
 // the same "add to chat" queue and react to the footer's view toggles at once.
 const isActive = computed(() => props.session.id === store.activeId)
+
+// Workbench store: rẻ, luôn sẵn — chỉ ĐỌC khi `embedded` (doc-visible gate của
+// ⌘F + reroute wpBridge); ở trang sessions/popout biến này tồn tại mà không
+// tham gia quyết định nào.
+const wb = useWorkbenchStore()
 
 // Resolve this session's workspace root once and provide a file opener so file
 // paths in chat markdown (e.g. `docs/x.md`) open in the shared PreviewModal.
@@ -943,7 +977,17 @@ const moreOpen = ref(false)
 // nó là phiên của Ô người dùng bôi đen, đọc từ `[data-session-id]` mà SessionGridPane
 // gắn. Thiếu nó thì quote đi vào composer phiên cha còn `src` lại là chỉ số message của
 // ô con — hai toạ độ khác hệ quy chiếu.
-type SelQuote = { text: string; src: number | null; sid: number; x: number; y: number }
+type SelQuote = {
+  text: string
+  src: number | null
+  sid: number
+  // Selection nằm trong code block shell (`pre[data-lang]` thuộc RUNNABLE_LANGS)
+  // ⇒ thanh action mọc thêm nút "Chạy" — cùng luật với nút Run của code block:
+  // chỉ block ghi rõ ngôn ngữ mới chạy được, fence trần phần lớn là output.
+  shell: boolean
+  x: number
+  y: number
+}
 const quoteSel = ref<SelQuote | null>(null)
 const notePop = ref<SelQuote | null>(null)
 const noteText = ref('')
@@ -1006,6 +1050,7 @@ function resolveSelectionQuote(): {
   text: string
   src: number | null
   sid: number
+  shell: boolean
   rect: DOMRect
 } | null {
   const sel = window.getSelection()
@@ -1021,7 +1066,13 @@ function resolveSelectionQuote(): {
   const paneEl = startEl.closest('[data-session-id]')
   const paneSid = paneEl instanceof HTMLElement ? Number(paneEl.dataset.sessionId) : NaN
   const sid = Number.isFinite(paneSid) ? paneSid : props.session.id
-  return { text, src, sid, rect: range.getBoundingClientRect() }
+  // Đang bôi đen trong code block SHELL thì thanh action mọc nút "Chạy" — cùng
+  // luật với nút Run trên block (utils/code-block-controls): chỉ block ghi rõ
+  // ngôn ngữ (data-lang) mới chạy được, fence trần phần lớn là output không phải
+  // lệnh.
+  const pre = startEl.closest('pre')
+  const shell = !!pre && !!RUNNABLE_LANGS[pre.getAttribute('data-lang') ?? '']
+  return { text, src, sid, shell, rect: range.getBoundingClientRect() }
 }
 
 // mouseup: anchor the floating Quote button to the top-centre of the selection.
@@ -1040,6 +1091,7 @@ function onSelectQuote(e: MouseEvent) {
     text: q.text,
     src: q.src,
     sid: q.sid,
+    shell: q.shell,
     x: q.rect.left + q.rect.width / 2,
     y: q.rect.top - 8,
   }
@@ -1054,7 +1106,14 @@ function onQuoteContextMenu(e: MouseEvent) {
   if (!q) return
   e.preventDefault()
   mdCopied.value = false
-  quoteSel.value = { text: q.text, src: q.src, sid: q.sid, x: e.clientX, y: e.clientY }
+  quoteSel.value = {
+    text: q.text,
+    src: q.src,
+    sid: q.sid,
+    shell: q.shell,
+    x: e.clientX,
+    y: e.clientY,
+  }
 }
 
 // Left-click clears the floating Quote button; right-click must NOT clear it, or it
@@ -1134,6 +1193,34 @@ async function onCopyMarkdown() {
   mdCopiedTimer = setTimeout(() => {
     mdCopied.value = false
   }, 1400)
+}
+
+// "Chạy" trên thanh selection: đưa text đang bôi đen vào terminal của phiên —
+// cùng đường với nút Run của code block (open Terminal panel → chờ PTY → ghi).
+// ⌥-bấm = chỉ DÁN không Enter; lệnh khớp mẫu phá huỷ phải qua hộp xác nhận trước
+// vì text do model sinh ra và misclick không hoàn tác được (không phải hàng rào
+// bảo mật — terminal ngay đó vẫn gõ được mọi thứ).
+const terminalRun = useSessionTerminalRun()
+const runBusy = terminalRun.busy
+
+async function onRunSelection(e: MouseEvent): Promise<void> {
+  const q = quoteSel.value
+  if (!q) return
+  quoteSel.value = null
+  const cmd = q.text.trim()
+  if (!cmd) return
+  const alt = e.altKey
+  if (!alt && isDestructiveCommand(cmd)) {
+    const ok = await confirm({
+      title: t('sessions.code.confirmTitle'),
+      description: t('sessions.code.confirmDesc', { command: cmd }),
+      confirmLabel: t('sessions.code.confirmRun'),
+      kind: 'danger',
+    })
+    if (!ok) return
+  }
+  const wrote = await terminalRun.run(props.session.id, cmd, alt)
+  if (!wrote) useToast().add({ title: t('sessions.code.runFailed'), color: 'error' })
 }
 
 // Drag the popover by its header. Native pointer + setPointerCapture (mirrors
@@ -1249,7 +1336,10 @@ const {
 } = useSessionFind({
   session: () => props.session,
   surface: transcriptSurface,
-  isActive: () => isActive.value,
+  // Embedded: doc chat có thể bị doc khác che mà session vẫn "active" — ⌘F chỉ
+  // được mở khi doc chat đang hiện (`wb.isChatActive`). Non-embedded: không
+  // đổi (workbench store chưa mount vẫn trả true nhờ toShortcircuit dưới).
+  isActive: () => isActive.value && (!props.embedded || wb.isChatActive),
 })
 
 // Save → add the follow-up (with note). The in-place highlight is painted reactively by
@@ -1268,14 +1358,18 @@ function saveQuote() {
   noteText.value = ''
 }
 
-// Shared preview modal (mounted app-wide in the shell) — map an attachment into
-// the generic PreviewRef shape and open the shared viewer.
+// Attachment chip trong composer tray + message bubble: có `path` đĩa thật →
+// mở workbench doc tab (qua filePreview.open — tự resolve project, fallback
+// modal cho file ngoài workspace); ảnh dán/data inline → modal preview.
 const { open: openPreview } = usePreview()
+const filePreview = useFilePreview()
 function previewAtt(i: number) {
   const a = pendingAtt.value[i]
   if (!a) return
-  // Siblings = the other pending attachments, so ‹ › walks what the user just attached
-  // (these have no folder on disk to fall back to).
+  if (a.path) {
+    void filePreview.open(a.path)
+    return
+  }
   openPreview(previewRefFromAttachment(a), imageSiblingsFromAttachments(pendingAtt.value))
 }
 
@@ -1701,7 +1795,7 @@ watch([leftTabs, rightTabs, bottomTabs], ([l, r, b]) => {
 // it, and make it that side's active tab.
 function addView(view: string, side: WorkspaceDockSide) {
   settings.setWorkspaceDock(view, side)
-  if (!openViews.value.includes(view)) openViews.value.push(view)
+  if (!openViews.value.includes(view)) openViews.value = [...openViews.value, view]
   if (side === 'left') activeLeft.value = view
   else if (side === 'right') activeRight.value = view
   else activeBottom.value = view
@@ -1767,7 +1861,7 @@ const {
   // "Đang hiện" = session này đang được xem VÀ strip đang pin một tab browser.
   // Discuss/composer/CLI/grid nằm trong `.chat` (v-show khi pin là discuss) —
   // view native phải nhả ra trong cả hai chiều chuyển.
-  visible: () => isActive.value && mainTab.value !== DISCUSS_TAB,
+  visible: () => !props.embedded && isActive.value && mainTab.value !== DISCUSS_TAB,
   scope: () => props.session.engineId,
   pinnedTabId: () => browserTabId.value,
 })
@@ -1870,6 +1964,17 @@ const mbOnEmptyOpen = (url: string): Promise<void> => {
   return mbSubmitUrl()
 }
 
+// Bookmark từ thanh/☆/menu của main-tab: 'new' mở tab mới và chọn nó (như nút "+" ở strip),
+// 'current' điều hướng tab đang pin.
+const mbOpenUrl = async (url: string, mode: 'current' | 'new'): Promise<void> => {
+  if (mode === 'current') {
+    await mbOnEmptyOpen(url)
+    return
+  }
+  const id = await mbNewTab(url)
+  if (id) mainTab.value = id
+}
+
 // CLI pane và chế độ lưới nằm TRONG `.chat` (vùng của tab discuss) — bật chúng
 // khi đang pin một tab web sẽ ẩn hẳn pane vừa mở. Mở chúng = "về trao đổi".
 watch(cliMode, (on) => {
@@ -1885,7 +1990,26 @@ const wpBridge = useWorkspacePanel()
 watch(
   () => wpBridge.requested.value,
   (req) => {
-    if (req && isActive.value) toggleView(req.view)
+    if (!req || !isActive.value) return
+    if (!props.embedded) {
+      toggleView(req.view)
+      return
+    }
+    // Embedded (workbench): các view Terminal/Diff/Tasks/Team → dock wb;
+    // Files/Plan → explorer; Browser → doc web mới. Mở dock nếu đang ẩn.
+    const wbs = useWorkbenchStore()
+    if (req.view === 'Files' || req.view === 'Plan') {
+      wbs.sideClosed = false
+      wbs.sideView = 'files'
+      return
+    }
+    if (req.view === 'Browser') {
+      void useWorkbenchDocs().openNewWebDoc()
+      return
+    }
+    wbs.dockView = (req.view as DockView) ?? 'Terminal'
+    wbs.dockHidden = false
+    if (wbs.dockH <= wbs.DOCK_MIN + 1) useWorkbenchDock().expandDock()
   },
 )
 // Only the active instance owns the shared footer bridge: it publishes its open views
@@ -1894,7 +2018,7 @@ watch(
 watch(
   [openViews, isActive],
   ([v, active]) => {
-    if (active) wpBridge.publishOpenViews(v)
+    if (active && !props.embedded) wpBridge.publishOpenViews(v)
   },
   { immediate: true },
 )

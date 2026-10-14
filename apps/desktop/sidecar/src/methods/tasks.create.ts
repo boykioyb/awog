@@ -36,6 +36,14 @@ const Params = z.object({
   // Snapshot of the UI's `commitCoAuthor` Git setting. Omitted by legacy/older
   // callers → defaults to enabled (matches the UI default).
   commitCoAuthor: z.boolean().optional(),
+  // Snapshot of the Claude CLI auto-compact policy (Settings → Sessions); omitted →
+  // engine defaults (on, ~300k tokens). Anthropic nodes only.
+  compactConfig: z
+    .object({
+      autoCompact: z.boolean().optional(),
+      compactAtTokens: z.number().int().min(0).max(1_000_000).optional(),
+    })
+    .optional(),
   // Snapshot of the remaining auto-commit Git settings (settings live in the
   // renderer; the sidecar can't read them). Omitted by legacy callers → engine
   // defaults (per-phase on, workspace scope, default template).
@@ -84,6 +92,7 @@ register('tasks.create', async (raw) => {
     // Snapshot the co-author preference so per-phase auto-commit is consistent
     // across restart/rerun (default enabled when the caller omits it).
     commitCoAuthor: params.commitCoAuthor ?? true,
+    ...(params.compactConfig ? { compactConfig: params.compactConfig } : {}),
     // Snapshot the rest of the auto-commit settings (omitted → engine defaults).
     autoCommitPerPhase: params.autoCommitPerPhase ?? true,
     autoCommitScope: params.autoCommitScope ?? 'workspace',

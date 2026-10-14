@@ -24,7 +24,7 @@
              stops short of a page's leading rail via useDockInset (the Sessions list
              publishes its width). Single mount: its PTYs persist across navigation and
              across open/close (useGlobalTerminal). -->
-          <GlobalTerminalHost />
+          <GlobalTerminalHost v-if="!isWorkbench" />
         </div>
 
         <!-- Compact-mode drawer backdrop: dim the main content and dismiss the open
@@ -33,7 +33,7 @@
       </div>
 
       <!-- Global status bar — single app-lifetime mount, shows on every page. -->
-      <AppStatusBar />
+      <AppStatusBar v-if="!isWorkbench" />
 
       <!-- §9 globals: mounted once so they work on every page. The shared host stack
          (confirm/toast/preview/session modals) lives in AppGlobalHosts so a session
@@ -91,6 +91,8 @@ const route = useRoute()
 
 /** Bong bóng hạ tầng chỉ sống trên màn AWS — xem comment ở chỗ vẽ nó. */
 const onInfraPage = computed(() => route.path === '/infra')
+/** Workbench page tự quản dock riêng — ẩn global terminal dock để khỏi chồng (ADR 0098). */
+const isWorkbench = computed(() => route.path.startsWith('/workbench'))
 
 // Compact responsive shell (≤1100px): nav rail + list become off-canvas drawers.
 // initResponsiveShell binds the viewport listener once; closing on navigation means

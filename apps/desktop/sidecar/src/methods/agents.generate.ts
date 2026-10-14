@@ -7,7 +7,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { completePi, isModelRefusal } from '../runtime/complete.js'
+import { complete, isModelRefusal } from '../runtime/complete.js'
 import { extractJson } from '../util/json-extract.js'
 
 const ModelSchema = z.string().min(1).max(200)
@@ -121,9 +121,7 @@ function buildCatalogPrompt(catalogs?: Catalogs): string {
   if (!catalogs) return ''
   const parts: string[] = []
   if (catalogs.skills?.length) {
-    parts.push(
-      `Available skills (id — name):\n${catalogs.skills.map((s) => `- ${s.id} — ${s.name}`).join('\n')}`,
-    )
+    parts.push(`Available skills (id — name):\n${catalogs.skills.map((s) => `- ${s.id} — ${s.name}`).join('\n')}`)
   }
   if (catalogs.tools?.length) {
     parts.push(`Available tools:\n${catalogs.tools.map((tl) => `- ${tl}`).join('\n')}`)
@@ -159,7 +157,7 @@ register('agents.generate', async (raw) => {
   let collected: string
   let catalogDropped = false
   try {
-    collected = await completePi({
+    collected = await complete({
       accountId: params.accountId,
       modelId,
       systemPrompt: buildSystemPrompt(params.currentAgent, params.catalogs),
@@ -179,7 +177,7 @@ register('agents.generate', async (raw) => {
     })
     catalogDropped = true
     const current = params.currentAgent ? { ...params.currentAgent, skillIds: [] } : undefined
-    collected = await completePi({
+    collected = await complete({
       accountId: params.accountId,
       modelId,
       systemPrompt: buildSystemPrompt(current, cats.tools ? { tools: cats.tools } : undefined),

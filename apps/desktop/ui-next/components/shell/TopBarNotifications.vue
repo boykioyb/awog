@@ -1,11 +1,9 @@
 <template>
-  <span class="ntf">
+  <span ref="anchorEl" class="ntf" :class="`ntf-anchor-${anchor}`">
     <Button
       variant="ghost"
       size="iconSm"
       class="ntf-btn"
-      type="button"
-      :class="{ on: open, live: unreadCount > 0 }"
       :title="t('github.inbox.title')"
       :aria-expanded="open"
       @click.stop="toggle"
@@ -13,185 +11,193 @@
       <Icon name="bell" style="width: var(--icon-md); height: var(--icon-md)" />
       <span v-if="unreadCount > 0" class="ntf-badge">{{ badge }}</span>
     </Button>
+    <Teleport to="body">
+      <div
+        v-if="open"
+        ref="panelEl"
+        class="ntf-panel"
+        :style="panelStyle"
+        role="dialog"
+        :aria-label="t('github.inbox.title')"
+        @click.stop
+      >
+        <div class="ntf-head">
+          <span class="ntf-head-title">{{ t('github.inbox.title') }}</span>
+          <button
+            class="ntf-act"
+            type="button"
+            :disabled="loading"
+            :title="t('github.inbox.refresh')"
+            @click="refresh"
+          >
+            <Icon
+              name="refresh"
+              class="ntf-refresh-ic"
+              :class="{ spinning: loading }"
+              style="width: var(--icon-sm); height: var(--icon-sm)"
+            />
+          </button>
+          <button
+            class="ntf-act"
+            type="button"
+            :disabled="!unreadCount"
+            :title="t('github.inbox.markAllRead')"
+            @click="markAll"
+          >
+            <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </button>
+          <button
+            class="ntf-act"
+            type="button"
+            :title="t('github.inbox.settings')"
+            @click="goSettings"
+          >
+            <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
+          </button>
+        </div>
 
-    <div
-      v-if="open"
-      class="ntf-panel"
-      role="dialog"
-      :aria-label="t('github.inbox.title')"
-      @click.stop
-    >
-      <div class="ntf-head">
-        <span class="ntf-head-title">{{ t('github.inbox.title') }}</span>
-        <button
-          class="ntf-act"
-          type="button"
-          :disabled="loading"
-          :title="t('github.inbox.refresh')"
-          @click="refresh"
-        >
-          <Icon
-            name="refresh"
-            class="ntf-refresh-ic"
-            :class="{ spinning: loading }"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-        </button>
-        <button
-          class="ntf-act"
-          type="button"
-          :disabled="!unreadCount"
-          :title="t('github.inbox.markAllRead')"
-          @click="markAll"
-        >
-          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-        <button
-          class="ntf-act"
-          type="button"
-          :title="t('github.inbox.settings')"
-          @click="goSettings"
-        >
-          <Icon name="settings" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        </button>
-      </div>
-
-      <!-- Watched = repos of the projects opted in at Settings → Git (the only ones
+        <!-- Watched = repos of the projects opted in at Settings → Git (the only ones
            allowed to toast). The filter is only OFFERED when it would change the
            list: two tabs showing the same count taught the user nothing except that
            one of them was pointless. -->
-      <div v-if="visibleTabs.length > 1" class="ntf-tabs">
-        <button
-          v-for="tab in visibleTabs"
-          :key="tab"
-          class="ntf-tab"
-          :class="{ on: filter === tab }"
-          type="button"
-          :title="tabHint(tab)"
-          @click="filter = tab"
-        >
-          {{ tabLabel(tab) }}
-          <span class="ntf-tab-n tnum">{{ tabCount(tab) }}</span>
-        </button>
-      </div>
-
-      <div class="ntf-body">
-        <!-- Tab "PR" là một danh sách KHÁC (theo dõi CI + review của từng PR), nên
-             nó thay cả thân panel chứ không lọc danh sách thông báo. -->
-        <template v-if="filter === 'prs'">
-          <p v-if="prError" class="ntf-note err">{{ prError }}</p>
-          <!-- Rỗng là một KHẲNG ĐỊNH ("không có PR nào để theo dõi") — đừng nói nó
-               cạnh một lỗi, chỗ mà sự thật là "không biết". -->
-          <p v-else-if="!prRows.length" class="ntf-note">{{ t('ghWatch.empty') }}</p>
-          <GitPrWatchRow
-            v-for="row in prRows"
-            :key="row.key"
-            :repo="row.repo"
-            :number="row.number"
-            :title="row.title"
-            :watched="row.watched"
-            :item="row.item"
-            :session-label="row.sessionLabel"
-            :busy="prBusy"
-            @open="openPrExternal(row.url)"
-            @toggle="(watch) => onTogglePrWatch(row, watch)"
-          />
-        </template>
-        <!-- Tab "Triển khai": pipeline hỏng / đang chờ duyệt (useCicdNotify). Như
-             tab PR, đây là một danh sách KHÁC nên nó thay cả thân panel. -->
-        <template v-else-if="filter === 'cicd'">
-          <p v-if="cicdError" class="ntf-note err">{{ cicdError }}</p>
-          <p v-else-if="!cicdEnabled" class="ntf-note">{{ t('infra.cicd.notify.off') }}</p>
-          <p v-else-if="!cicdRuns.length" class="ntf-note">{{ t('infra.cicd.notify.empty') }}</p>
+        <div v-if="visibleTabs.length > 1" class="ntf-tabs">
           <button
-            v-for="run in cicdRuns"
-            :key="`${run.source}|${run.id}`"
-            class="ntf-cicd-row"
-            :class="{ wait: run.status === 'waiting' }"
+            v-for="tab in visibleTabs"
+            :key="tab"
+            class="ntf-tab"
+            :class="{ on: filter === tab }"
             type="button"
-            :title="t('infra.cicd.openOnHost')"
-            @click="openCicdRun(run)"
+            :title="tabHint(tab)"
+            @click="filter = tab"
           >
-            <span class="ntf-cicd-dot" :class="run.status" />
-            <span class="ntf-cicd-body">
-              <span class="ntf-cicd-title">{{ run.project }} · {{ run.title }}</span>
-              <span class="ntf-cicd-meta">
-                <span>{{ t(`infra.cicd.status.${run.status}`) }}</span>
-                <span v-if="run.stepName">
-                  · {{ t('infra.cicd.failedAtStep', { step: run.stepName }) }}
-                </span>
-                <span v-if="run.startedAt" class="ntf-cicd-when">
-                  · {{ formatRelativeAgo(run.startedAt, t, now) }}
+            {{ tabLabel(tab) }}
+            <span class="ntf-tab-n tnum">{{ tabCount(tab) }}</span>
+          </button>
+        </div>
+
+        <div class="ntf-body">
+          <!-- Tab "PR" là một danh sách KHÁC (theo dõi CI + review của từng PR), nên
+             nó thay cả thân panel chứ không lọc danh sách thông báo. -->
+          <template v-if="filter === 'prs'">
+            <p v-if="prError" class="ntf-note err">{{ prError }}</p>
+            <!-- Rỗng là một KHẲNG ĐỊNH ("không có PR nào để theo dõi") — đừng nói nó
+               cạnh một lỗi, chỗ mà sự thật là "không biết". -->
+            <p v-else-if="!prRows.length" class="ntf-note">{{ t('ghWatch.empty') }}</p>
+            <GitPrWatchRow
+              v-for="row in prRows"
+              :key="row.key"
+              :repo="row.repo"
+              :number="row.number"
+              :title="row.title"
+              :watched="row.watched"
+              :item="row.item"
+              :session-label="row.sessionLabel"
+              :busy="prBusy"
+              @open="openPrExternal(row.url)"
+              @toggle="(watch) => onTogglePrWatch(row, watch)"
+            />
+          </template>
+          <!-- Tab "Triển khai": pipeline hỏng / đang chờ duyệt (useCicdNotify). Như
+             tab PR, đây là một danh sách KHÁC nên nó thay cả thân panel. -->
+          <template v-else-if="filter === 'cicd'">
+            <p v-if="cicdError" class="ntf-note err">{{ cicdError }}</p>
+            <p v-else-if="!cicdEnabled" class="ntf-note">{{ t('infra.cicd.notify.off') }}</p>
+            <p v-else-if="!cicdRuns.length" class="ntf-note">{{ t('infra.cicd.notify.empty') }}</p>
+            <button
+              v-for="run in cicdRuns"
+              :key="`${run.source}|${run.id}`"
+              class="ntf-cicd-row"
+              :class="{ wait: run.status === 'waiting' }"
+              type="button"
+              :title="t('infra.cicd.openOnHost')"
+              @click="openCicdRun(run)"
+            >
+              <span class="ntf-cicd-dot" :class="run.status" />
+              <span class="ntf-cicd-body">
+                <span class="ntf-cicd-title">{{ run.project }} · {{ run.title }}</span>
+                <span class="ntf-cicd-meta">
+                  <span>{{ t(`infra.cicd.status.${run.status}`) }}</span>
+                  <span v-if="run.stepName">
+                    · {{ t('infra.cicd.failedAtStep', { step: run.stepName }) }}
+                  </span>
+                  <span v-if="run.startedAt" class="ntf-cicd-when">
+                    · {{ formatRelativeAgo(run.startedAt, t, now) }}
+                  </span>
                 </span>
               </span>
-            </span>
-            <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
-          </button>
-        </template>
-        <template v-else>
-          <p v-if="error" class="ntf-note err">{{ error }}</p>
-          <p v-else-if="!enabled" class="ntf-note">{{ t('github.inbox.off') }}</p>
-          <p v-else-if="!watchedProjectCount" class="ntf-note">{{ t('github.inbox.noWatched') }}</p>
+              <Icon name="external" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            </button>
+          </template>
+          <template v-else>
+            <p v-if="error" class="ntf-note err">{{ error }}</p>
+            <p v-else-if="!enabled" class="ntf-note">{{ t('github.inbox.off') }}</p>
+            <p v-else-if="!watchedProjectCount" class="ntf-note">
+              {{ t('github.inbox.noWatched') }}
+            </p>
 
-          <!-- The empty state is a CLAIM ("your inbox is clear") — never make it next
+            <!-- The empty state is a CLAIM ("your inbox is clear") — never make it next
              to an error, where the truth is "we don't know". -->
-          <p v-if="loading && !visible.length" class="ntf-note">{{ t('github.inbox.loading') }}</p>
-          <p v-else-if="!visible.length && !error" class="ntf-note">
-            {{ filter === 'watched' ? t('github.inbox.emptyWatched') : t('github.inbox.empty') }}
-          </p>
-          <!-- Grouped by repo: one inbox is usually 3 repos deep, so printing the
+            <p v-if="loading && !visible.length" class="ntf-note">
+              {{ t('github.inbox.loading') }}
+            </p>
+            <p v-else-if="!visible.length && !error" class="ntf-note">
+              {{ filter === 'watched' ? t('github.inbox.emptyWatched') : t('github.inbox.empty') }}
+            </p>
+            <!-- Grouped by repo: one inbox is usually 3 repos deep, so printing the
              owner/repo on every row spent the widest column on the least
              informative text. The header carries it once and sticks while its rows
              scroll; a group whose project isn't watched reads dimmer (it never
              would have interrupted you). -->
-          <div v-for="g in groups" :key="g.repo" class="ntf-grp">
-            <!-- The whole header is the collapse toggle (bigger target than a lone
+            <div v-for="g in groups" :key="g.repo" class="ntf-grp">
+              <!-- The whole header is the collapse toggle (bigger target than a lone
                chevron). A collapsed group keeps its unread dot + count visible, so
                folding a noisy repo away never hides that it has something new. -->
-            <button
-              class="ntf-grp-head"
-              type="button"
-              :aria-expanded="!isCollapsed(g.repo)"
-              :title="isCollapsed(g.repo) ? t('github.inbox.expand') : t('github.inbox.collapse')"
-              @click="toggleGroup(g.repo)"
-            >
-              <Icon
-                name="chev-right"
-                class="ntf-grp-chev"
-                :class="{ open: !isCollapsed(g.repo) }"
-              />
-              <span class="ntf-grp-name" :title="g.repo">{{ g.name }}</span>
-              <span v-if="g.owner" class="ntf-grp-owner">{{ g.owner }}</span>
-              <!-- Names the reason this group is dimmed, instead of leaving the user to
+              <button
+                class="ntf-grp-head"
+                type="button"
+                :aria-expanded="!isCollapsed(g.repo)"
+                :title="isCollapsed(g.repo) ? t('github.inbox.expand') : t('github.inbox.collapse')"
+                @click="toggleGroup(g.repo)"
+              >
+                <Icon
+                  name="chev-right"
+                  class="ntf-grp-chev"
+                  :class="{ open: !isCollapsed(g.repo) }"
+                />
+                <span class="ntf-grp-name" :title="g.repo">{{ g.name }}</span>
+                <span v-if="g.owner" class="ntf-grp-owner">{{ g.owner }}</span>
+                <!-- Names the reason this group is dimmed, instead of leaving the user to
                  infer it from an opacity value. -->
-              <span v-if="!g.watched" class="ntf-grp-tag">{{ t('github.inbox.notWatched') }}</span>
-              <span v-if="g.unread" class="ntf-grp-dot" />
-              <span class="ntf-grp-n tnum">{{ g.items.length }}</span>
-            </button>
-            <template v-if="!isCollapsed(g.repo)">
-              <TopBarNotifyRow
-                v-for="n in g.items"
-                :key="n.id"
-                :item="n"
-                :author="authorOf(n)"
-                @open="onOpen"
-                @external="onExternal"
-                @read="onRead"
-              />
-            </template>
-          </div>
-        </template>
-      </div>
+                <span v-if="!g.watched" class="ntf-grp-tag">
+                  {{ t('github.inbox.notWatched') }}
+                </span>
+                <span v-if="g.unread" class="ntf-grp-dot" />
+                <span class="ntf-grp-n tnum">{{ g.items.length }}</span>
+              </button>
+              <template v-if="!isCollapsed(g.repo)">
+                <TopBarNotifyRow
+                  v-for="n in g.items"
+                  :key="n.id"
+                  :item="n"
+                  :author="authorOf(n)"
+                  @open="onOpen"
+                  @external="onExternal"
+                  @read="onRead"
+                />
+              </template>
+            </div>
+          </template>
+        </div>
 
-      <div class="ntf-foot">
-        <span class="ntf-foot-when">{{ checkedLabel }}</span>
-        <button class="ntf-foot-link" type="button" @click="openOnGithub">
-          {{ t('github.inbox.openOnGithub') }}
-        </button>
+        <div class="ntf-foot">
+          <span class="ntf-foot-when">{{ checkedLabel }}</span>
+          <button class="ntf-foot-link" type="button" @click="openOnGithub">
+            {{ t('github.inbox.openOnGithub') }}
+          </button>
+        </div>
       </div>
-    </div>
-
-    <div v-if="open" class="ntf-backdrop" @click="close" />
+      <div v-if="open" class="ntf-backdrop" @click="close" />
+    </Teleport>
   </span>
 </template>
 
@@ -232,6 +238,9 @@ import { formatRelativeAgo } from '~/utils/relative-time'
 // / chờ duyệt (useCicdNotify). Cả hai là danh sách KHÁC, không phải một bộ lọc của
 // hộp thư — chúng thay cả thân panel.
 type InboxTab = 'all' | 'watched' | 'prs' | 'cicd'
+// Vị trí đặt nút: 'right-top' = AppTopBar (panel xổ xuống, neo mép phải),
+// 'left-bottom' = NavRail footer (panel bật lên, neo mép trái).
+const { anchor = 'right-top' } = defineProps<{ anchor?: 'right-top' | 'left-bottom' }>()
 
 const { t } = useI18n()
 const now = useNow()
@@ -452,6 +461,25 @@ function close(): void {
 }
 useEscToClose(open, close)
 
+// ─── Panel position ────────────────────────────────────────────────────────
+// Teleport body → `position: fixed`, cần toạ độ tính từ getBoundingClientRect
+// của nút bell. `panelEl` chỉ ref tới wrapper `.ntf` (vẫn trong cây DOM) —
+// tính trước khi `open` lật để lần mở đầu không nháy.
+const anchorEl = ref<HTMLElement | null>(null)
+const panelEl = ref<HTMLElement | null>(null)
+const panelStyle = computed(() => {
+  if (!anchorEl.value) return {}
+  const r = anchorEl.value.getBoundingClientRect()
+  const GAP = 6
+  const W = 420
+  if (anchor === 'left-bottom') {
+    return { left: `${r.left}px`, bottom: `${window.innerHeight - r.top + GAP}px`, width: `${W}px` }
+  }
+  // right-top: neo phải của panel với mép phải của nút, tràn trái tự do
+  const left = Math.max(12, Math.min(r.right - W, window.innerWidth - W - 12))
+  return { left: `${left}px`, top: `${r.bottom + GAP}px`, width: `${W}px` }
+})
+
 const refresh = (): void => void refreshGhInbox()
 
 function onOpen(n: GhNotification): void {
@@ -516,31 +544,32 @@ function openOnGithub(): void {
   border-color: var(--input);
   background: var(--accent-wash);
 }
+/* Huy hiệu đếm đè góc icon 16px: chữ 12px trong viên 16px chiếm gần trọn icon và
+   đè lên chuông. 10px trong viên 14px (hộp dòng chẵn) — px cố định vì huy hiệu
+   không scale theo Appearance (icon bên dưới cũng không). */
 .ntf-badge {
   position: absolute;
-  top: -3px;
+  top: -2px;
   right: -3px;
-  min-width: 16px;
-  height: 16px;
+  min-width: 14px;
+  height: 14px;
   padding: 0 3px;
   border-radius: var(--r-pill);
   background: var(--primary);
   color: var(--primary-foreground);
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
-  line-height: 16px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 14px;
   text-align: center;
 }
 
-/* Panel sits under the bell, anchored to its right edge so it never overflows the
-   window. z-index rides just above the page bands (≤61) but below modals (≥100),
-   with the backdrop one step lower so a click anywhere else closes it. */
+/* Teleport body → `position: fixed`, toạ độ do panelStyle tính từ nút bell
+   (`bottom` cho anchor left-bottom — bật LÊN từ rail; `top` cho right-top —
+   xổ XUỐNG từ topbar). */
 .ntf-panel {
-  position: absolute;
-  top: 34px;
-  right: 0;
+  position: fixed;
   z-index: 96;
-  width: 420px;
   max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;

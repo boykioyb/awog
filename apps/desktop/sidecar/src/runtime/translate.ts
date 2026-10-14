@@ -6,7 +6,7 @@
 // (app-wide selection-to-translate). Kept provider-agnostic and stateless — the
 // caller resolves provider/model/account and passes them in.
 
-import { completePi } from './complete.js'
+import { complete } from './complete.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { ProviderName } from '../types/shared.js'
@@ -67,10 +67,7 @@ function stripCodeFence(raw: string): string {
 // as a fallback. Without it (text.translate — on-demand selection, quality matters)
 // it uses the caller's resolved model directly so the user's translate-model
 // setting actually takes effect. Throws RpcError on total failure.
-export async function translateText(
-  args: TranslateArgs,
-  opts: { preferCheap?: boolean } = {},
-): Promise<string> {
+export async function translateText(args: TranslateArgs, opts: { preferCheap?: boolean } = {}): Promise<string> {
   const targetLang = args.targetLang?.trim() || DEFAULT_TARGET_LANG
   const systemPrompt = buildSystemPrompt(targetLang)
 
@@ -81,7 +78,7 @@ export async function translateText(
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential fallback
-      const out = await completePi({
+      const out = await complete({
         provider: args.provider,
         ...(args.accountId ? { accountId: args.accountId } : {}),
         modelId,

@@ -198,9 +198,7 @@ async function resolveRepoRoot(dir: string): Promise<string | null> {
 // Thư mục AWOG của owner. Task tái dùng đúng thư mục task sẵn có (không migration);
 // session có nhà riêng cạnh `tasks/`.
 function ownerDir(owner: WorkspaceOwner): string {
-  return owner.kind === 'task'
-    ? taskDir(owner.id)
-    : join(awogHome(), SESSION_OWNERS_DIR, sanitizeChild(owner.id))
+  return owner.kind === 'task' ? taskDir(owner.id) : join(awogHome(), SESSION_OWNERS_DIR, sanitizeChild(owner.id))
 }
 
 function worktreeRoot(owner: WorkspaceOwner): string {
@@ -252,11 +250,7 @@ async function readBaseBranch(owner: WorkspaceOwner): Promise<string | null> {
 // bao giờ có branch chờ merge mà thiếu neo. Neo được xoá khi mọi branch của owner
 // đã merge xong, nên lần resume sau (có thể trên nhánh khác) neo lại đúng nhánh
 // lúc đó. Ghi kèm repo root để sweeper ở boot biết prune ở đâu.
-async function rememberAnchor(
-  owner: WorkspaceOwner,
-  branch: string,
-  repoRoot: string,
-): Promise<void> {
+async function rememberAnchor(owner: WorkspaceOwner, branch: string, repoRoot: string): Promise<void> {
   await mkdir(ownerDir(owner), { recursive: true, mode: 0o700 })
   await writeFile(repoFile(owner), `${repoRoot}\n`, { encoding: 'utf8', mode: 0o600 })
   if (await readBaseBranch(owner)) return
@@ -340,10 +334,7 @@ export async function acquireWorkspace(args: AcquireArgs): Promise<IsolatedWorks
   return { cwd: dir, isolated: true, branch, repoRoot, claimKey: '' }
 }
 
-type RescueResult =
-  | { kind: 'clean' }
-  | { kind: 'rescued'; files: number }
-  | { kind: 'retained'; detail: string }
+type RescueResult = { kind: 'clean' } | { kind: 'rescued'; files: number } | { kind: 'retained'; detail: string }
 
 // Auto-commit BẬT chỉ nói commit ĐƯỢC PHÉP, không nói commit ĐÃ XẢY RA: lượt chạy
 // fail giữa chừng, hook `pre-commit` chặn, `add` trượt… đều để lại một cây còn
@@ -408,10 +399,7 @@ async function dropBranchIfContained(repoRoot: string, branch: string): Promise<
 // bị xoá ngay để không tích rác; commit của lượt vẫn sống trên branch. Cây còn
 // việc chưa lưu ⇒ commit WIP trước (xem rescueDirtyCheckout); cứu không được ⇒
 // KHÔNG xoá gì cả, trả 'retained' để caller báo lên UI.
-export async function releaseWorkspace(
-  owner: WorkspaceOwner,
-  ws: IsolatedWorkspace,
-): Promise<ReleaseOutcome> {
+export async function releaseWorkspace(owner: WorkspaceOwner, ws: IsolatedWorkspace): Promise<ReleaseOutcome> {
   if (!ws.isolated) {
     if (ws.claimKey) sharedClaims.delete(ws.claimKey)
     return { status: 'clean' }
@@ -478,11 +466,9 @@ export async function releaseWorkspace(
 // làm mất dấu công việc đã commit trong worktree.
 async function listOwnerBranches(repoRoot: string, owner: WorkspaceOwner): Promise<string[]> {
   const prefix = branchPrefix(owner)
-  const res = await runGit(
-    repoRoot,
-    ['for-each-ref', '--format=%(refname:short)', `refs/heads/${prefix}`],
-    { throwOnNonZero: false },
-  )
+  const res = await runGit(repoRoot, ['for-each-ref', '--format=%(refname:short)', `refs/heads/${prefix}`], {
+    throwOnNonZero: false,
+  })
   if (res.code !== 0) return []
   return res.stdout
     .split('\n')
@@ -501,10 +487,7 @@ async function listOwnerBranches(repoRoot: string, owner: WorkspaceOwner): Promi
 // Conflict ⇒ `merge --abort`, GIỮ branch, báo lên caller. Engine dừng task có
 // trật tự để người dùng tự merge; AWOG không đoán hộ khi hai node song song sửa
 // cùng một chỗ.
-export async function integrateTaskBranches(
-  taskId: string,
-  projectPath: string,
-): Promise<IntegrationOutcome[]> {
+export async function integrateTaskBranches(taskId: string, projectPath: string): Promise<IntegrationOutcome[]> {
   const owner: WorkspaceOwner = { kind: 'task', id: taskId }
   const repoRoot = await resolveRepoRoot(projectPath)
   if (!repoRoot) return []
@@ -566,11 +549,7 @@ export async function integrateTaskBranches(
   return outcomes
 }
 
-async function mergeOne(
-  repoRoot: string,
-  taskId: string,
-  branch: string,
-): Promise<IntegrationOutcome> {
+async function mergeOne(repoRoot: string, taskId: string, branch: string): Promise<IntegrationOutcome> {
   const message = `Merge task node branch ${branch}`
   try {
     return await withWorkspaceLock(
@@ -594,7 +573,11 @@ async function mergeOne(
             branch,
             detail,
           })
-          return { branch, status: 'conflict' as const, ...(detail ? { detail } : {}) }
+          return {
+            branch,
+            status: 'conflict' as const,
+            ...(detail ? { detail } : {}),
+          }
         }
         // Merge xong mới xoá branch; `-d` từ chối khi chưa merge hết ⇒ an toàn.
         await runGit(repoRoot, ['branch', '-d', branch], { throwOnNonZero: false })
@@ -852,11 +835,8 @@ export async function ensureSessionWorkspace(session: {
     // sót từ lần membership trước (release GIỮ branch) ⇒ gắn lại thay vì `-b`
     // trùng tên và mất luôn commit đã cứu trên đó.
     const branchExists =
-      (await runGit(repoRoot, ['branch', '--list', branch], { throwOnNonZero: false }))
-        .stdout.trim().length > 0
-    const addArgs = branchExists
-      ? ['worktree', 'add', dir, branch]
-      : ['worktree', 'add', '-b', branch, dir, 'HEAD']
+      (await runGit(repoRoot, ['branch', '--list', branch], { throwOnNonZero: false })).stdout.trim().length > 0
+    const addArgs = branchExists ? ['worktree', 'add', dir, branch] : ['worktree', 'add', '-b', branch, dir, 'HEAD']
     await withWorkspaceLock(
       repoRoot,
       async () => {
@@ -978,8 +958,7 @@ export async function memberDiff(session: {
     const names = await runGit(wt.repoPath, ['diff', '--name-only', range], {
       throwOnNonZero: false,
     })
-    const files =
-      names.code === 0 ? names.stdout.split('\n').filter((l) => l.trim().length > 0).length : 0
+    const files = names.code === 0 ? names.stdout.split('\n').filter((l) => l.trim().length > 0).length : 0
     const full = await runGit(wt.repoPath, ['diff', range], { throwOnNonZero: false })
     let diff = full.code === 0 ? full.stdout : ''
     if (diff.length > MEMBER_DIFF_MAX_CHARS) {
@@ -995,9 +974,7 @@ export async function memberDiff(session: {
   }
 }
 
-export type IntegrateSessionResult =
-  | { merged: true; commit: string }
-  | { merged: false; reason: string }
+export type IntegrateSessionResult = { merged: true; commit: string } | { merged: false; reason: string }
 
 // Merge branch của MỘT member về baseRef — CHỈ chạy từ RPC `sessions.integrateMember`
 // (nút Merge của NGƯỜI DÙNG). Đây là cổng merge duy nhất của owner `session`:

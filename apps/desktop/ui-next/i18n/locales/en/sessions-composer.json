@@ -36,6 +36,8 @@
   "sessions.command.notice.compacted": "Conversation compacted — context freed",
   "sessions.command.notice.nothingToCompact": "Nothing more to compact — only recent messages remain, kept so you can continue",
   "sessions.command.notice.compactFailed": "Compaction failed — the conversation is unchanged",
+  "sessions.compaction.marker.manual": "Conversation compacted · {range} tokens",
+  "sessions.compaction.marker.auto": "Conversation auto-compacted · {range} tokens",
   "sessions.style.group.default": "Default",
   "sessions.style.group.fast": "Fast & concise",
   "sessions.style.group.fun": "For fun",

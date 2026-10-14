@@ -13,7 +13,7 @@
     <div class="sysdiv">
       <span class="sl" />
       <Icon name="refresh" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <SessionLinkedText :text="message.text" />
+      <SessionLinkedText :text="systemText" />
       <span class="sl" />
     </div>
   </div>
@@ -118,6 +118,7 @@
             :entries="g.entries"
             :preview="g.preview"
             :streaming="streaming"
+            :msg-eid="message.eid"
           />
           <!-- The prominent final answer (craft's ResponseCard) — bubbled per the
                assistantBubble pref. Carries §8 quote highlights + caret. -->
@@ -130,7 +131,9 @@
             :bubble="showBubble"
           />
           <!-- Latest TodoWrite checklist, rendered inline once the docked banner yields. -->
-          <SessionStepItem v-else-if="g.type === 'todo'" :block="g.step" />
+          <SessionStepItem v-else-if="g.type === 'todo'" :block="g.step" :msg-eid="message.eid" />
+          <!-- Trang agent vừa mở (browser_tool navigate/tab_new): thẻ xem trước. -->
+          <SessionBrowserCard v-else-if="g.type === 'browser'" :block="g.step" />
           <!-- Turn error (stopReason 'error') — surface the provider message + a one-click
                retry (re-run this turn) instead of a silent empty bubble. -->
           <div v-else-if="g.type === 'error'" class="merr">
@@ -218,6 +221,7 @@
       :title="fullscreenTitle"
       :grouped="grouped"
       :streaming="streaming"
+      :msg-eid="message.eid"
       :highlights-for-block="highlightsForBlock"
       @close="turnFullscreenOpen = false"
     />
@@ -297,6 +301,20 @@ const viaLabel = computed(() =>
   props.message.via ? t('sessions.cli.via', { cli: props.message.via }) : '',
 )
 
+// Divider text of a `system` message. A native-compaction marker localises its own
+// figures ("120k → 3k tokens", the after-figure is absent when the CLI did not report
+// it); every other system message shows its stored text.
+const systemText = computed(() => {
+  const m = props.message
+  if (m.role !== 'system') return ''
+  const c = m.compaction
+  if (!c) return m.text
+  const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k` : String(n))
+  const range =
+    c.postTokens !== undefined ? `${k(c.preTokens)} → ${k(c.postTokens)}` : k(c.preTokens)
+  return t(`sessions.compaction.marker.${c.trigger}`, { range })
+})
+
 // Byline author của lượt assistant — proto "claude · Sonnet 4.5" = harness · model.
 // Agent AWOG (session.agent, thành viên team) thắng provider display name; đọc qua
 // `scope.session` (KHÔNG `store.active`) để ô lưới lấy đúng phiên của nó.
@@ -336,6 +354,7 @@ export type Grouped =
   | { key: string; type: 'activities'; entries: ActivityEntry[]; preview: string }
   | { key: string; type: 'text'; text: string; blockIndex: number }
   | { key: string; type: 'todo'; step: StepBlock }
+  | { key: string; type: 'browser'; step: StepBlock }
   | { key: string; type: 'error'; text: string }
   | { key: string; type: 'gate'; gate: AssistantBlock }
 
@@ -418,6 +437,14 @@ const grouped = computed<Grouped[]>(() => {
         flush()
         out.push({ key: blockKey(b, bi), type: 'todo', step: b })
       }
+      continue
+    }
+    // Trang agent vừa mở bằng browser_tool → thẻ xem trước đứng riêng, hiện ngay không
+    // cần mở nhóm "N steps" (kiểu Claude Desktop). Step lỗi (tải trang thất bại) thì
+    // không có gì để xem trước nên quay về hàng step thường trong nhóm activities.
+    if (b.kind === 'step' && b.page && b.status !== 'error') {
+      flush()
+      out.push({ key: blockKey(b, bi), type: 'browser', step: b })
       continue
     }
     // Collapsible activity = tool step + thinking + intermediate commentary text.

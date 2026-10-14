@@ -35,14 +35,14 @@ Chỗ đặt theo [ADR 0070](../decisions/0070-share-claude-home-for-config.md):
 }
 ```
 
-| Trường | Bắt buộc | Luật |
-|---|---|---|
-| `name` | ✓ | 1–40 ký tự `[A-Za-z0-9._-]`, không trùng (không phân biệt hoa thường). Vừa là khoá tra cứu vừa là marker trong chuỗi lệnh. |
-| `command` | ✓ | **Một token** — tên chương trình hoặc đường dẫn tới nó. Không khoảng trắng, không ký tự shell, không bắt đầu bằng `-`. |
-| `args` | | Mảng chuỗi, ≤ 32 phần tử, mỗi cái ≤ 512 ký tự, **không ký tự shell**. |
-| `cwd` | | **Tương đối** so với gốc dự án, mặc định `.`. Tuyệt đối / `~` / leo ra ngoài dự án ⇒ từ chối. |
-| `port` | | Số nguyên 1–65535. Chỉ để hiển thị + nhắc model, AWOG không tự dò cổng. |
-| `description` | | Một dòng cho người đọc. |
+| Trường        | Bắt buộc | Luật                                                                                                                       |
+| ------------- | -------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `name`        | ✓        | 1–40 ký tự `[A-Za-z0-9._-]`, không trùng (không phân biệt hoa thường). Vừa là khoá tra cứu vừa là marker trong chuỗi lệnh. |
+| `command`     | ✓        | **Một token** — tên chương trình hoặc đường dẫn tới nó. Không khoảng trắng, không ký tự shell, không bắt đầu bằng `-`.     |
+| `args`        |          | Mảng chuỗi, ≤ 32 phần tử, mỗi cái ≤ 512 ký tự, **không ký tự shell**.                                                      |
+| `cwd`         |          | **Tương đối** so với gốc dự án, mặc định `.`. Tuyệt đối / `~` / leo ra ngoài dự án ⇒ từ chối.                              |
+| `port`        |          | Số nguyên 1–65535. Chỉ để hiển thị + nhắc model, AWOG không tự dò cổng.                                                    |
+| `description` |          | Một dòng cho người đọc.                                                                                                    |
 
 Không hỗ trợ `env`, **cố ý**: biến môi trường do repo cấp là một bề mặt tiêm thêm (`LD_PRELOAD`, `NODE_OPTIONS='--require …'`) mà tính năng này không cần.
 
@@ -52,7 +52,7 @@ Nạp **fail-soft** như [ADR 0080 F2](../decisions/0080-command-scoped-permissi
 
 **File này nằm trong repo, nên bất kỳ ai commit cũng được: nó là dữ liệu L1 KHÔNG TIN.**
 
-Repo này đã vá **hai** lỗ hổng cùng lớp trong ngày 2026-09-07: luật quyền tầng project đặt trong repo ([ADR 0080](../decisions/0080-command-scoped-permission-rules.md), mục Đính chính F1) và trust của hook ([ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md)). Cả hai đều là *"một file trong repo khiến sidecar chạy lệnh mà không hỏi"*. **Một tool tự spawn theo file này sẽ là lỗ thứ ba**: thứ người dùng duyệt phải là **chuỗi lệnh họ đọc thấy**, mà một `start` tự spawn thì chuỗi đó đến từ một file trong repo và không ai nhìn nó cả.
+Repo này đã vá **hai** lỗ hổng cùng lớp trong ngày 2026-09-07: luật quyền tầng project đặt trong repo ([ADR 0080](../decisions/0080-command-scoped-permission-rules.md), mục Đính chính F1) và trust của hook ([ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md)). Cả hai đều là _"một file trong repo khiến sidecar chạy lệnh mà không hỏi"_. **Một tool tự spawn theo file này sẽ là lỗ thứ ba**: thứ người dùng duyệt phải là **chuỗi lệnh họ đọc thấy**, mà một `start` tự spawn thì chuỗi đó đến từ một file trong repo và không ai nhìn nó cả.
 
 > Từ **2026-09-08** tool này đã có cổng quyền, nhưng **chỉ cho `stop`** (xem mục dưới). `start` vẫn không spawn, nên lập luận trên vẫn nguyên giá trị.
 
@@ -76,7 +76,7 @@ Chỉ chạy khi người dùng bấm nút trên UI, **sau khi đã đọc nguy�
 
 ### Hàng rào thứ hai: hình dạng token
 
-Kể cả khi ai đó bỏ qua cả hai cửa trên, một entry vẫn không nối được lệnh thứ hai: `command` là một token, `args` là mảng, và **không token nào được chứa** `; & | ` `` ` `` ` $ ( ) { } < > \ ' " ` xuống dòng hay ký tự điều khiển. Lúc ghép, token "hiền" giữ nguyên (để người dùng đọc được nguyên văn), token có khoảng trắng được bọc nháy đơn — an toàn vì nháy đơn đã bị cấm từ lúc nạp. `cwd` do sidecar dựng từ gốc dự án, **không bao giờ** nhận từ payload; RPC nhận `projectId` chứ không nhận đường dẫn.
+Kể cả khi ai đó bỏ qua cả hai cửa trên, một entry vẫn không nối được lệnh thứ hai: `command` là một token, `args` là mảng, và **không token nào được chứa** `; & | ` `` ` `` `$ ( ) { } < > \ ' "` xuống dòng hay ký tự điều khiển. Lúc ghép, token "hiền" giữ nguyên (để người dùng đọc được nguyên văn), token có khoảng trắng được bọc nháy đơn — an toàn vì nháy đơn đã bị cấm từ lúc nạp. `cwd` do sidecar dựng từ gốc dự án, **không bao giờ** nhận từ payload; RPC nhận `projectId` chứ không nhận đường dẫn.
 
 ### Cổng quyền: `stop` phải hỏi, `list`/`start`/`logs` thì không
 
@@ -86,10 +86,10 @@ Bổ sung 2026-09-08 (finding F3 của lượt audit) — `runtime/permission.ts
 
 Nhưng gate **cả tool** thì sai: `list`/`start`/`logs` không đổi gì ở ngoài tool, và bắt người dùng duyệt cả việc **đọc log** là cách nhanh nhất biến rào chắn thành thứ họ tắt đi. Nên cổng quyết theo **từng lời gọi**, đúng khuôn `isMutatingBrowserAction` của `browser_tool` — cũng là một tool nhiều hành động:
 
-| Hành động | `execute` | `ask` / `accept-edits` | `plan` |
-|---|---|---|---|
-| `list` · `start` · `logs` | chạy | chạy, không hỏi | chạy |
-| `stop` | chạy | **hỏi** | **chặn** |
+| Hành động                 | `execute` | `ask` / `accept-edits` | `plan`   |
+| ------------------------- | --------- | ---------------------- | -------- |
+| `list` · `start` · `logs` | chạy      | chạy, không hỏi        | chạy     |
+| `stop`                    | chạy      | **hỏi**                | **chặn** |
 
 Nhận diện tên đi qua `isDevServerToolName()` nên khớp **cả hai** cách viết: `dev_server` (nhánh Pi) và `mcp__awogdev__dev_server` (nhánh Claude SDK). Cả hai runtime dùng chung `makeBeforeToolCall`, nên hàng rào chỉ có một bản. Khoá bằng test: [`runtime/__tests__/dev-server-gate.test.ts`](../../apps/desktop/sidecar/src/runtime/__tests__/dev-server-gate.test.ts).
 
@@ -102,7 +102,7 @@ Luật quyền viết cho tool này là luật **trần** (`dev_server`), không
 Cần tech-lead chốt trước khi ai đó code:
 
 1. **Cho `start` spawn thẳng** (thêm `start` vào nhóm gated + một nhánh trong `suggestRuleText` để "always allow" ghi ra luật `dev_server(web)` chứ không phải tên tool trần). Rẻ về code, nhưng nó đảo lại đúng quyết định "khai ≠ chạy" ở trên — phải audit chung với đường SSH/browser trước.
-2. **Cổng trust riêng cho file cấu hình** (khuôn hook trust của [ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md)): người dùng duyệt *nội dung file* một lần theo băm, đổi file ⇒ hỏi lại. Mạnh hơn nhưng thêm một khái niệm và một UI.
+2. **Cổng trust riêng cho file cấu hình** (khuôn hook trust của [ADR 0032](../decisions/0032-hook-execution-engine-ipc-contract.md)): người dùng duyệt _nội dung file_ một lần theo băm, đổi file ⇒ hỏi lại. Mạnh hơn nhưng thêm một khái niệm và một UI.
 
 ## Ánh xạ tên → tiến trình: marker, không phải registry thứ hai
 
@@ -118,7 +118,7 @@ Trạng thái được suy từ bg-registry: `running` · `exited` (kèm exit co
 
 **Qua lượt chat.** Tiến trình chạy **detached** (bg-registry, ADR 0066), không dính abort signal của lượt, không dính trần 600s của `Bash` foreground. Đóng lượt, gửi tin nhắn mới, model đổi ý — server vẫn chạy.
 
-**Qua restart sidecar: GẮN LẠI ĐƯỢC.** Không cần cơ chế reattach riêng — nó restart-safe *by construction*:
+**Qua restart sidecar: GẮN LẠI ĐƯỢC.** Không cần cơ chế reattach riêng — nó restart-safe _by construction_:
 
 - Tiến trình detach nên nó không chết theo sidecar.
 - `meta.json` + file `log` + file `exit` nằm trên đĩa trong `~/.awog/sessions/<sid>/bg/<shellId>/`.
@@ -129,7 +129,7 @@ Trạng thái được suy từ bg-registry: `running` · `exited` (kèm exit co
 
 **Phạm vi phiên.** Background shell thuộc về **một phiên** (`~/.awog/sessions/<sid>/bg`), nên server bật ở phiên A **không** thấy được từ phiên B. Đó là ranh giới sẵn có của ADR 0066, không phải thứ tính năng này tự đặt thêm — nhưng nó là giới hạn đã biết (xem cuối trang).
 
-**Trần đồng thời.** bg-registry cho tối đa 4 background shell *đang chạy* mỗi phiên. Dev server ăn vào hạn mức đó.
+**Trần đồng thời.** bg-registry cho tối đa 4 background shell _đang chạy_ mỗi phiên. Dev server ăn vào hạn mức đó.
 
 ## Đọc log
 
@@ -149,12 +149,12 @@ Trả về kèm `matched` / `total` để người đọc biết "3/1240 dòng k
 
 ### RPC
 
-| Method | Params | Trả về |
-|---|---|---|
-| `devserver.list` | `projectId`, `sessionId` | `{ configPath, missing, problems[], servers[] }` |
-| `devserver.start` | `projectId`, `sessionId`, `name`, `confirmCommand?` | `{ outcome: 'started' \| 'already-running', server }` |
-| `devserver.stop` | `projectId`, `sessionId`, `name` | `{ server }` |
-| `devserver.logs` | `projectId`, `sessionId`, `name`, `lines?`, `contains?`, `level?` | `{ server, log: { text, matched, total, filtered, clipped }, truncated }` |
+| Method            | Params                                                            | Trả về                                                                    |
+| ----------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `devserver.list`  | `projectId`, `sessionId`                                          | `{ configPath, missing, problems[], servers[] }`                          |
+| `devserver.start` | `projectId`, `sessionId`, `name`, `confirmCommand?`               | `{ outcome: 'started' \| 'already-running', server }`                     |
+| `devserver.stop`  | `projectId`, `sessionId`, `name`                                  | `{ server }`                                                              |
+| `devserver.logs`  | `projectId`, `sessionId`, `name`, `lines?`, `contains?`, `level?` | `{ server, log: { text, matched, total, filtered, clipped }, truncated }` |
 
 `server` = `{ name, description?, port?, command, cwd, status, shellId?, startedAt?, exitCode }`.
 
@@ -166,9 +166,22 @@ Chỉ được nạp khi `filter.backgroundExec` có mặt — tức **phiên ch
 
 Nhánh **Claude SDK** (provider `anthropic`, [ADR 0058](../decisions/0058-claude-agent-sdk-vs-pi-runtime-revisit.md)) bắc cùng tool này qua một in-process MCP server tên `awogdev` ⇒ `mcp__awogdev__dev_server` (`runtime/claude-sdk/dev-server-sdk-server.ts`). Handler là **đúng** hàm `runDevServer`, không phải bản chép, và điều kiện cấp phát giữ nguyên `filter.backgroundExec`.
 
+## Trình duyệt của agent vào được dev server (ngoại lệ loopback)
+
+Trình duyệt nhúng của agent chặn mọi host loopback/private (invariant #7). Ngoại lệ **duy nhất**: cổng của dev server vừa **được khai** (`port` trong `.awog/dev-servers.json`) vừa **đang chạy** trong registry của phiên.
+
+- **Sidecar là bên biết, main là bên thi hành.** `devserver/registry.ts` (`syncBrowserLoopbackPorts`) tính tập `{port}` của các server `status === 'running'` có khai `port`, rồi đẩy sang Electron main qua host-request `browser.setDevServerPorts { scope, ports }` (thay nguyên tập; rỗng = thu hồi). Đẩy khi: `startDevServer`, `stopDevServer`, shell của phiên hết chạy (`onBackgroundSettled` trong bg-registry, cài ở boot bằng `installDevServerBrowserSync`), và **trước mỗi `navigate`/`tab_new`** của `browser_tool` (bắt cả server bật bằng `Bash` hay còn sống từ trước khi sidecar khởi động lại). Không đẩy lặp khi tập không đổi; đẩy tuần tự theo phiên.
+- **Phạm vi = phiên.** `scope` = `sessionId` (cũng là khoá của `bg-registry` và `browserScope` của tab) — dev server của phiên A không mở được cho tab của phiên B; pool global và task node (`task:…`) không có ngoại lệ. Bg shell vốn đã là per-session (ADR 0066) nên đây là ranh giới sẵn có, không thêm mới.
+- **Khớp chính xác** (`electron/src/browser-host-policy.ts`): host ∈ {`localhost`, `127.0.0.1`, `[::1]`} (coi là một máy) **và** cổng hiệu lực (cổng mặc định theo scheme) nằm trong tập của scope. Không wildcard, không `127.0.0.2`, không cổng khác; scheme chỉ http/https. Redirect/iframe/popup đi qua cùng hàm với scope của **tab**, nên redirect từ cổng được phép sang cổng loopback khác bị `will-redirect` chặn.
+- **Allowlist site của người dùng vẫn áp** (Settings → site được phép): ở chế độ allowlist thì `localhost` không nằm trong danh sách vẫn bị chặn.
+- **Fail-closed.** Đẩy lỗi (không có host) ⇒ không ném, main giữ tập cũ/rỗng. Sidecar chết/khởi động lại (`engine.crashed|restarted`) ⇒ main xoá toàn bộ tập. Cửa sổ lệch tối đa: server chết tự nhiên → thu hồi ngay qua listener settle (đồng bộ với `finalize`).
+- **Lỗi bị chặn nói cách mở khoá** (sidecar + main): khai server vào `.awog/dev-servers.json` kèm `port` rồi bật bằng tool `dev_server`.
+- Cũng sửa kèm: `URL.hostname` của IPv6 có ngoặc (`[::1]`) nên guard cũ so với `::1` trần **không bao giờ khớp**; nay chuẩn hoá, và chặn thêm `::`, `::ffff:*` (IPv4-mapped).
+
 ## Giới hạn đã biết / chưa làm
 
 - **Chưa có UI.** RPC đã sẵn sàng cho một khung "Dev servers" trong Workspace Panel; nút Start phải hiện `command` và gửi lại nó qua `confirmCommand`.
-- **Server không xuyên phiên** (ranh giới ADR 0066). Muốn xuyên phiên thì phải cho background shell một tầng lưu trữ theo *project* thay vì theo *session* — đó là một quyết định kiến trúc riêng.
+- **Server không xuyên phiên** (ranh giới ADR 0066). Muốn xuyên phiên thì phải cho background shell một tầng lưu trữ theo _project_ thay vì theo _session_ — đó là một quyết định kiến trúc riêng.
 - **`start` của model không tự spawn.** Model có thể bỏ qua lời nhắc và tự gõ một lệnh khác qua `Bash`; khi đó AWOG không tra được nó theo tên (thiếu marker). Đây là đánh đổi có chủ ý: thà mất khả năng tra ngược còn hơn mở một bề mặt spawn không qua cổng quyền.
+- **Ngoại lệ trình duyệt dựa vào `port` khai, không dò cổng.** Server chạy sai cổng so với file khai thì vẫn bị chặn (đúng ý). Subresource của trang (XHR/ảnh tới `localhost` khác) không đi qua guard điều hướng — như mọi trang khác.
 - **Không dò cổng thật.** `port` là thứ file khai, không phải thứ AWOG đo. Muốn biết server lên chưa thì `monitor` trên `shellId` với `until_output_contains`.

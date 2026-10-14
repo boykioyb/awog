@@ -10,30 +10,30 @@
 4. **IPC boundary:** UI **không** `import fs`, `child_process`, model SDK. Đi qua sidecar IPC.
 5. **No telemetry** ra ngoài trừ model API (allowlist host).
 6. **No port public.** Production: stdio IPC. Dev HTTP chỉ khi `AWOG_DEV_HTTP=1` + dev token, bind localhost.
-7. **No SSRF** từ model client / context provider. Allowlist provider host; chặn private IP + redirect không kiểm soát.
+7. **No SSRF** từ model client / context provider. Allowlist provider host; chặn private IP + redirect không kiểm soát. Ngoại lệ duy nhất: trình duyệt agent tới `localhost`/`127.0.0.1`/`[::1]` đúng cổng của dev server vừa khai trong `.awog/dev-servers.json` vừa đang chạy trong phiên đó ([dev-server.md](../../docs/features/dev-server.md)); mọi loopback/private khác vẫn chặn.
 8. **No eval / dynamic require** trên payload từ workspace/UI ở sidecar.
 
 ## Sink nhạy cảm (input L1 đi vào đây phải validate/escape)
 
-| Sink | Risk | Validate |
-|---|---|---|
-| `v-html` | XSS | Chỉ source kiểm soát; markdown từ user → renderer AST, không inject HTML |
-| `JSON.parse(workspaceFile)` | Insecure deser | Schema (zod) trước khi đưa vào store |
-| `path.join(root, userInput)` | Path traversal | `path.resolve` + `startsWith` |
-| `execFile('git', [...])` | Cmd injection | arg array (không shell string), allowlist subcommand, validate ký tự |
-| `fetch(urlFromUser)` | SSRF | Allowlist host, chặn private IP |
-| `store.update({...payload})` | Mass assignment | Explicit pick field cho phép |
-| `console.error(err)` | Verbose leak | Sanitize message cho UI; trace chỉ local log |
-| Loop gọi model | Cháy tiền | Budget per task: max tokens / calls / wallclock |
+| Sink                         | Risk            | Validate                                                                 |
+| ---------------------------- | --------------- | ------------------------------------------------------------------------ |
+| `v-html`                     | XSS             | Chỉ source kiểm soát; markdown từ user → renderer AST, không inject HTML |
+| `JSON.parse(workspaceFile)`  | Insecure deser  | Schema (zod) trước khi đưa vào store                                     |
+| `path.join(root, userInput)` | Path traversal  | `path.resolve` + `startsWith`                                            |
+| `execFile('git', [...])`     | Cmd injection   | arg array (không shell string), allowlist subcommand, validate ký tự     |
+| `fetch(urlFromUser)`         | SSRF            | Allowlist host, chặn private IP                                          |
+| `store.update({...payload})` | Mass assignment | Explicit pick field cho phép                                             |
+| `console.error(err)`         | Verbose leak    | Sanitize message cho UI; trace chỉ local log                             |
+| Loop gọi model               | Cháy tiền       | Budget per task: max tokens / calls / wallclock                          |
 
 ## Trust level (rút từ vbsec)
 
-| Level | Nguồn | Cần làm |
-|---|---|---|
-| **L1** Không tin | User input, file workspace, IPC payload, model response | Validate + escape |
-| **L2** Bán tin | Store sau load từ filesystem | Re-validate khi qua sink |
-| **L3** Tin | Hardcoded constant, schema cố định | OK |
-| **L4** Tin | Env, framework | OK |
+| Level            | Nguồn                                                   | Cần làm                  |
+| ---------------- | ------------------------------------------------------- | ------------------------ |
+| **L1** Không tin | User input, file workspace, IPC payload, model response | Validate + escape        |
+| **L2** Bán tin   | Store sau load từ filesystem                            | Re-validate khi qua sink |
+| **L3** Tin       | Hardcoded constant, schema cố định                      | OK                       |
+| **L4** Tin       | Env, framework                                          | OK                       |
 
 ## Khi commit thêm dependency
 

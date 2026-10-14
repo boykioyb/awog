@@ -37,9 +37,7 @@ const collapsed = useScrollCollapse(scroller)
 onMounted(() => void loadTasks())
 
 const canCreate = computed(() => capabilities.value.unattended)
-const formWorkflows = computed(() =>
-  form.value.projectId ? workflowsFor(form.value.projectId) : [],
-)
+const formWorkflows = computed(() => (form.value.projectId ? workflowsFor(form.value.projectId) : []))
 const formValid = computed(
   () => !!form.value.projectId && !!form.value.workflowId && form.value.description.trim().length > 0,
 )
@@ -144,8 +142,8 @@ async function submit(): Promise<void> {
       <h1 class="big">Tasks</h1>
 
       <p v-if="!canCreate" class="note">
-        Chỉ xem và điều khiển task đang có. Tạo task mới cần bật "chạy không cần duyệt"
-        ở Settings → Devices trên máy desktop — node của task chạy không hỏi duyệt.
+        Chỉ xem và điều khiển task đang có. Tạo task mới cần bật "chạy không cần duyệt" ở Settings → Devices trên máy
+        desktop — node của task chạy không hỏi duyệt.
       </p>
 
       <div v-if="taskListError" class="state danger">{{ taskListError }}</div>
@@ -214,8 +212,8 @@ async function submit(): Promise<void> {
     <AppSheet :open="creating" title="Chạy workflow" @close="creating = false">
       <p class="warn-box">
         <TriangleAlert class="icn-sm" />
-        Task chạy không có thẻ duyệt nào: mỗi node chạy Bash/Write thẳng. Trần chi phí
-        do máy desktop áp (mặc định $20 · 1500 tool call · 4 giờ cho mỗi task).
+        Task chạy không có thẻ duyệt nào: mỗi node chạy Bash/Write thẳng. Trần chi phí do máy desktop áp (mặc định $20 ·
+        1500 tool call · 4 giờ cho mỗi task).
       </p>
       <label class="field">
         <span>Project</span>
@@ -238,12 +236,15 @@ async function submit(): Promise<void> {
         <select
           :value="form.workflowId"
           :disabled="!form.projectId"
-          @change="form = { ...form, workflowId: ($event.target as HTMLSelectElement).value }"
+          @change="
+            form = {
+              ...form,
+              workflowId: ($event.target as HTMLSelectElement).value,
+            }
+          "
         >
           <option value="">Chọn workflow</option>
-          <option v-for="w in formWorkflows" :key="w.id" :value="w.id">
-            {{ w.name }} · {{ w.nodeCount }} node
-          </option>
+          <option v-for="w in formWorkflows" :key="w.id" :value="w.id">{{ w.name }} · {{ w.nodeCount }} node</option>
         </select>
       </label>
       <label class="field">
@@ -254,9 +255,7 @@ async function submit(): Promise<void> {
         <span>Mô tả (đây là đề bài cho agent)</span>
         <textarea v-model="form.description" rows="5" placeholder="Việc cần làm…" />
       </label>
-      <button class="btn primary wide" :disabled="!formValid || busy" @click="submit">
-        Chạy
-      </button>
+      <button class="btn primary wide" :disabled="!formValid || busy" @click="submit">Chạy</button>
     </AppSheet>
   </div>
 </template>

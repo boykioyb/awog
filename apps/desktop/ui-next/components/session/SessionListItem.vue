@@ -70,44 +70,25 @@
         {{ session.title }}
       </span>
       <span v-if="session.unread && !editing" class="undot" :title="t('sessions.item.unread')" />
-      <!-- ⋯ từng hàng — cùng bộ thao tác với menu chuột phải (gương proto):
-           ghim · chọn · đổi tên · xoá. Reveal khi hover / focus-within / mở. -->
-      <DropdownMenu v-if="!editing">
-        <DropdownMenuTrigger as-child>
-          <span
-            role="button"
-            tabindex="-1"
-            class="ddbtn"
-            :title="t('sessions.sidebar.more')"
-            :aria-label="t('sessions.sidebar.more')"
-            @click.stop
-          >
-            <Icon name="dots" />
-          </span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" side="bottom" class="w-52">
-          <DropdownMenuItem @select="store.togglePin(session.id)">
-            <Icon name="pin" />
-            {{ session.pinned ? t('sessions.ctx.unpin') : t('sessions.ctx.pin') }}
-          </DropdownMenuItem>
-          <DropdownMenuItem @select="onSelectToggle">
-            <Icon name="check" />
-            {{ t('sessions.ctx.select') }}
-          </DropdownMenuItem>
-          <DropdownMenuItem @select="startRename">
-            <Icon name="edit" />
-            {{ t('sessions.ctx.rename') }}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            class="text-destructive focus:bg-destructive/10 focus:text-destructive"
-            @select="askRemove"
-          >
-            <Icon name="trash" />
-            {{ t('sessions.ctx.delete') }}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <!-- ⋯ từng hàng — mở ĐÚNG menu chuột phải chung của danh sách (emit
+           `ctxmenu` lên parent như right-click). Trước đây là một DropdownMenu
+           reka riêng: modal mặc định của nó khoá `pointer-events` trên body và
+           có thể kẹt khoá nếu không dismiss được → toàn màn hình chết click.
+           Menu chung `.smenu` không modal, có backdrop + wheel để đóng, và vốn
+           là tập cha của các mục này (ghim · chọn · đổi tên · xoá + thêm nhiều
+           thao tác khác). `data-state` giữ nguyên để nút hiện khi menu mở. -->
+      <span
+        v-if="!editing && !noMenu"
+        role="button"
+        tabindex="-1"
+        class="ddbtn"
+        :data-state="menuOpen ? 'open' : 'closed'"
+        :title="t('sessions.sidebar.more')"
+        :aria-label="t('sessions.sidebar.more')"
+        @click.stop="onDots"
+      >
+        <Icon name="dots" />
+      </span>
     </div>
     <div class="sub" :style="subIndentStyle">
       <!-- Thứ tự proto: agent · model (agent = chip pill khi phiên thuộc một
@@ -138,6 +119,23 @@
              with the title. -->
         <span v-if="archived" class="archchip" :title="t('sessionsSearch.archive.badge')">
           {{ t('sessionsSearch.archive.badge') }}
+        </span>
+        <!-- Imported from Claude Desktop / CLI (docs/features/claude-session-import.md). -->
+        <span
+          v-if="session.importedFrom"
+          class="lindchip"
+          :title="
+            session.importedFrom.kind === 'cli'
+              ? t('sessions.claudeImport.badge.cli')
+              : t('sessions.claudeImport.badge.desktop')
+          "
+        >
+          <Icon name="download" style="width: var(--icon-xs); height: var(--icon-xs)" />
+          {{
+            session.importedFrom.kind === 'cli'
+              ? t('sessions.claudeImport.srcCli')
+              : t('sessions.claudeImport.srcDesktop')
+          }}
         </span>
         <!-- Popped out into its own OS window: this row is a pointer, the live view
              is over there (docs/features/session-popout-window.md). -->
@@ -225,6 +223,13 @@ const props = defineProps<{
   // Rename signal from the parent context menu: when `.id` matches this row, the
   // inline rename starts. `n` (nonce) lets the same row be re-triggered.
   renameReq?: { id: number; n: number }
+  // Menu chuột phải chung đang mở TRÊN đúng hàng này (parent truyền `ctx.session.id`).
+  // Giữ nút ⋯ hiện (data-state=open) thay vì biến mất khi hover rời hàng — cùng
+  // hiệu ứng với `data-state` mà reka trigger cũ từng đặt.
+  menuOpen?: boolean
+  // Bề mặt không có menu chuột phải (vd bong bóng chọn phiên trên màn infra)
+  // truyền cờ này để nút ⋯ ẩn hẳn thay vì mở một menu đến đâu cũng được.
+  noMenu?: boolean
   // ── Chế độ xem "Nhóm" (cây) — mặc định 0/false nên mọi chế độ khác không đổi gì ──
   // Tầng trong cây, chỉ dùng để thụt lề.
   depth?: number
@@ -285,16 +290,6 @@ const railStyle = computed(() => {
 const { t } = useI18n()
 const { projectName } = useProjects()
 const store = useSessionsStore()
-const { confirm } = useConfirm()
-
-// Delete is destructive + unrecoverable (drops the JSONL transcript) → confirm first.
-async function askRemove() {
-  const ok = await confirm({
-    title: t('sessions.delete.title'),
-    description: t('sessions.delete.one', { title: props.session.title }),
-  })
-  if (ok) store.remove(props.session.id)
-}
 
 // LIVE relative-time label derived from the raw `updatedAt` + a shared ticking clock,
 // so an untouched row's "3m → 2h → 1d" advances on its own instead of freezing at its
@@ -380,13 +375,6 @@ function onRowClick(e: MouseEvent) {
   }
 }
 
-// ⋯ menu "Select" — same semantics as the context-menu item: enter select mode
-// and toggle this row into the selection.
-function onSelectToggle() {
-  store.setSelectMode(true)
-  store.toggleSelect(props.session.id)
-}
-
 // Inline rename: local UI state; the renamed value is committed to the store.
 const editing = ref(false)
 const draft = ref('')
@@ -431,6 +419,12 @@ const tokensLabel = computed(() => {
 // Right-click → bubble the cursor position up so the parent shows one shared menu.
 function onCtx(e: MouseEvent) {
   emit('ctxmenu', { id: props.session.id, x: e.clientX, y: e.clientY })
+}
+// Click ⋯ → cũng mở menu chuột phải chung, neo tại cạnh nút (gần đúng vị trí
+// menu dropdown cũ). placeMenu tự kẹp nếu tràn mép màn hình.
+function onDots(e: MouseEvent) {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect()
+  emit('ctxmenu', { id: props.session.id, x: r.right, y: r.top })
 }
 // Parent context menu "Rename" → start this row's inline edit when targeted.
 watch(

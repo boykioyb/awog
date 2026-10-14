@@ -4,6 +4,7 @@ import { realpath } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import { browser, type Rect, type TabInfo } from './browser'
+import { registerCaptureIpc } from './browser-capture'
 import {
   clearImportedData,
   importProfile,
@@ -12,14 +13,11 @@ import {
   type BrowserEntry,
   type ImportReport,
 } from './browser-import'
+import { DEFAULT_PROFILE_ID, isValidProfileId, partitionForProfile } from './browser-profile'
 import { engine, type RpcErrorShape } from './engine'
+import { mintPreviewToken } from './html-preview'
 import { openPreviewWindow } from './preview-window'
-import {
-  closeSessionWindow,
-  openSessionIds,
-  openSessionWindow,
-  sessionWindowList,
-} from './session-window'
+import { closeSessionWindow, openSessionIds, openSessionWindow, sessionWindowList } from './session-window'
 import { isVscodeAvailable, openInVscode } from './vscode'
 import { resolveInsideWorkspace } from './workspace-scope'
 
@@ -77,6 +75,7 @@ type ImportPayload = {
   browserId?: string
   profileDir?: string
   parts?: { cookies?: boolean; localStorage?: boolean; indexedDb?: boolean }
+  profileId?: string
 }
 type BrowserOpenPayload = { url: string; tabId?: string; scope?: string }
 type SessionWindowPayload = { engineId: string; title?: string }
@@ -164,10 +163,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // clipboard. Same derive + validate as revealSessionFolder — the renderer never
   // builds the path itself (invariant #4); it must be absolute (~ doesn't expand in
   // terminals/file managers), which is the whole point of "Copy path".
-  ipcMain.handle(
-    'shell:sessionFolderPath',
-    async (_e, engineId: string): Promise<string> => sessionDirFromId(engineId),
-  )
+  ipcMain.handle('shell:sessionFolderPath', async (_e, engineId: string): Promise<string> => sessionDirFromId(engineId))
 
   ipcMain.handle('shell:openPath', async (_e, { root, path }: PathPayload) => {
     const target = resolveInsideWorkspace(root, path)
@@ -204,7 +200,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     if (real === home || !real.startsWith(`${home}/`)) {
       throw new Error('trashItem: refusing a path outside the home directory')
     }
-    const depth = real.slice(home.length + 1).split('/').filter(Boolean).length
+    const depth = real
+      .slice(home.length + 1)
+      .split('/')
+      .filter(Boolean).length
     if (depth < 2) {
       throw new Error('trashItem: refusing a top-level folder in the home directory')
     }
@@ -237,6 +236,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
     shell.showItemInFolder(real)
   })
+
+  // Mint the opaque token for a workspace root → wspreview://<token>/<rel> (HTML
+  // preview in the Workbench). Root must be an existing directory (html-preview.ts).
+  ipcMain.handle('preview:token', (_e, { root }: { root: string }) => ({
+    token: mintPreviewToken(root),
+  }))
 
   ipcMain.handle('shell:openFileExternal', async (_e, { root, path }: PathPayload) => {
     const target = resolveInsideWorkspace(root, path)
@@ -271,10 +276,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // "Bring it back here" — close a session's popout from the main window. Addresses a
   // window this app opened BY SESSION ID (never a window handle), so a renderer can
   // only ever close a session popout, not an arbitrary window.
-  ipcMain.handle(
-    'session:closeWindow',
-    async (_e, engineId: string): Promise<boolean> => closeSessionWindow(engineId),
-  )
+  ipcMain.handle('session:closeWindow', async (_e, engineId: string): Promise<boolean> => closeSessionWindow(engineId))
 
   // Sessions currently owned by a popout window. Polled once per renderer on mount
   // (a window that opens later still learns the current set); live changes ride the
@@ -296,22 +298,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     await openInVscode(resolveInsideWorkspace(root, path))
   })
 
-  ipcMain.handle(
-    'dialog:pickFolder',
-    async (_e, opts: PickFolderOpts = {}): Promise<string | null> => {
-      const win = getWindow()
-      const options: Electron.OpenDialogOptions = {
-        properties: ['openDirectory'],
-        ...(opts.title ? { title: opts.title } : {}),
-        ...(opts.defaultPath ? { defaultPath: opts.defaultPath } : {}),
-      }
-      const result = win
-        ? await dialog.showOpenDialog(win, options)
-        : await dialog.showOpenDialog(options)
-      if (result.canceled || result.filePaths.length === 0) return null
-      return result.filePaths[0]
-    },
-  )
+  ipcMain.handle('dialog:pickFolder', async (_e, opts: PickFolderOpts = {}): Promise<string | null> => {
+    const win = getWindow()
+    const options: Electron.OpenDialogOptions = {
+      properties: ['openDirectory'],
+      ...(opts.title ? { title: opts.title } : {}),
+      ...(opts.defaultPath ? { defaultPath: opts.defaultPath } : {}),
+    }
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (result.canceled || result.filePaths.length === 0) return null
+    return result.filePaths[0]
+  })
 
   // Pick one OR MORE folders (multi-select) — used to attach folders as read-only
   // session context. Returns [] on cancel. Separate from pickFolder so the existing
@@ -323,9 +320,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       ...(opts.title ? { title: opts.title } : {}),
       ...(opts.defaultPath ? { defaultPath: opts.defaultPath } : {}),
     }
-    const result = win
-      ? await dialog.showOpenDialog(win, options)
-      : await dialog.showOpenDialog(options)
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     return result.canceled ? [] : result.filePaths
   })
 
@@ -349,9 +344,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       ...(defaultPath ? { defaultPath } : {}),
       ...(opts.filters ? { filters: opts.filters } : {}),
     }
-    const result = win
-      ? await dialog.showOpenDialog(win, options)
-      : await dialog.showOpenDialog(options)
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     if (result.canceled || result.filePaths.length === 0) return null
     return result.filePaths[0]
   })
@@ -367,9 +360,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       ...(opts.defaultPath ? { defaultPath: opts.defaultPath } : {}),
       ...(opts.filters ? { filters: opts.filters } : {}),
     }
-    const result = win
-      ? await dialog.showOpenDialog(win, options)
-      : await dialog.showOpenDialog(options)
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     return result.canceled ? [] : result.filePaths
   })
 
@@ -382,9 +373,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       ...(opts.defaultPath ? { defaultPath: opts.defaultPath } : {}),
       ...(opts.filters ? { filters: opts.filters } : {}),
     }
-    const result = win
-      ? await dialog.showSaveDialog(win, options)
-      : await dialog.showSaveDialog(options)
+    const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return null
     return result.filePath
   })
@@ -421,9 +410,7 @@ function registerBrowserViewIpc(): void {
   }
   const optTab = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined)
   const optScope = (p: unknown): string | undefined =>
-    p && typeof p === 'object'
-      ? optTab((p as { scope?: unknown }).scope)
-      : undefined
+    p && typeof p === 'object' ? optTab((p as { scope?: unknown }).scope) : undefined
   const asString = (p: unknown, key: string): string | null => {
     const v = p && typeof p === 'object' ? (p as Record<string, unknown>)[key] : undefined
     return typeof v === 'string' && v ? v : null
@@ -440,11 +427,10 @@ function registerBrowserViewIpc(): void {
     }
   })
 
-  ipcMain.handle(
-    'browser:attach',
-    async (e, payload: BrowserViewPayload): Promise<TabInfo> =>
-      browser.attachTo(senderWindow(e), payload?.tabId, payload?.rect, optScope(payload)),
-  )
+  ipcMain.handle('browser:attach', async (e, payload: BrowserViewPayload): Promise<TabInfo> => {
+    await browser.profileOf(optScope(payload))
+    return browser.attachTo(senderWindow(e), payload?.tabId, payload?.rect, optScope(payload))
+  })
   ipcMain.handle('browser:bounds', async (e, payload: BrowserViewPayload): Promise<void> => {
     browser.setViewBounds(senderWindow(e), payload?.tabId, payload?.rect, optScope(payload))
   })
@@ -457,17 +443,33 @@ function registerBrowserViewIpc(): void {
     if (!rect) return
     browser.concealAt(senderWindow(e), rect)
   })
-  ipcMain.handle('browser:tabs', async (e, payload?: { scope?: string }) =>
-    browser.listTabs(senderWindow(e), optScope(payload)),
+  ipcMain.handle('browser:tabs', async (e, payload?: { scope?: string }) => {
+    await browser.profileOf(optScope(payload))
+    return browser.listTabs(senderWindow(e), optScope(payload))
+  })
+  // Menu ⋮: userscript đã chạy / khớp trang hiện tại của tab (ADR userscript).
+  ipcMain.handle('browser:userscriptsForTab', async (_e, payload?: BrowserTabPayload) =>
+    browser.userscriptsForTab(optTab(payload?.tabId), optScope(payload)),
   )
-  ipcMain.handle(
-    'browser:open',
-    async (_e, payload: BrowserOpenPayload): Promise<TabInfo> =>
-      browser.openFromUser(String(payload?.url ?? ''), payload?.tabId, optScope(payload)),
-  )
+  // Profile hiệu lực của một scope (hỏi sidecar nếu main chưa biết).
+  ipcMain.handle('browser:profileOf', async (_e, payload?: { scope?: string }) => {
+    const profileId = await browser.profileOf(optScope(payload))
+    return { profileId, proxied: browser.isProxied(profileId) }
+  })
+  // Người dùng bấm "Test" ở Settings: một request qua đúng route của profile.
+  ipcMain.handle('browser:testProxy', async (_e, payload?: { profileId?: string }) => {
+    const profileId = payload?.profileId
+    if (!isValidProfileId(profileId)) return { ok: false, error: 'invalid profile id' }
+    return browser.testProxy(profileId)
+  })
+  ipcMain.handle('browser:open', async (_e, payload: BrowserOpenPayload): Promise<TabInfo> => {
+    await browser.profileOf(optScope(payload))
+    return browser.openFromUser(String(payload?.url ?? ''), payload?.tabId, optScope(payload))
+  })
   // `wait: false` = mở tab rồi trả về ngay (đường người dùng bấm link); mặc định
   // vẫn chờ tải xong để đường của model không đổi hành vi.
   ipcMain.handle('browser:newTab', async (_e, payload: unknown) => {
+    await browser.profileOf(optScope(payload))
     const url = typeof payload === 'string' ? payload : (asString(payload, 'url') ?? undefined)
     const wait =
       typeof payload === 'object' && payload !== null && 'wait' in payload
@@ -475,10 +477,8 @@ function registerBrowserViewIpc(): void {
         : true
     return browser.newTab(url, wait, optScope(payload))
   })
-  ipcMain.handle(
-    'browser:selectTab',
-    async (_e, payload: BrowserTabPayload): Promise<TabInfo> =>
-      browser.selectTab(optTab(payload?.tabId) ?? '', optScope(payload)),
+  ipcMain.handle('browser:selectTab', async (_e, payload: BrowserTabPayload): Promise<TabInfo> =>
+    browser.selectTab(optTab(payload?.tabId) ?? '', optScope(payload)),
   )
   ipcMain.handle('browser:closeTab', async (_e, payload: BrowserTabPayload) =>
     browser.closeTab(optTab(payload?.tabId) ?? '', optScope(payload)),
@@ -494,27 +494,19 @@ function registerBrowserViewIpc(): void {
   })
   // Menu ⋯ của chrome: zoom/DevTools/emulation mobile — cùng lớp trust với
   // reload (user-initiated, tabId + scope được main kiểm cặp với nhau).
-  ipcMain.handle(
-    'browser:zoom',
-    async (_e, payload?: BrowserTabPayload & { action?: string }) => {
-      const a = payload?.action
-      browser.zoom(optTab(payload?.tabId), optScope(payload), a === 'out' || a === 'reset' ? a : 'in')
-    },
-  )
-  ipcMain.handle(
-    'browser:devtools',
-    async (_e, payload?: BrowserTabPayload & { open?: boolean }) => {
-      browser.devTools(
-        optTab(payload?.tabId),
-        optScope(payload),
-        typeof payload?.open === 'boolean' ? payload.open : undefined,
-      )
-    },
-  )
-  ipcMain.handle(
-    'browser:mobile',
-    async (_e, payload?: BrowserTabPayload & { on?: boolean }) =>
-      browser.setMobileEmulation(optTab(payload?.tabId), optScope(payload), payload?.on === true),
+  ipcMain.handle('browser:zoom', async (_e, payload?: BrowserTabPayload & { action?: string }) => {
+    const a = payload?.action
+    browser.zoom(optTab(payload?.tabId), optScope(payload), a === 'out' || a === 'reset' ? a : 'in')
+  })
+  ipcMain.handle('browser:devtools', async (_e, payload?: BrowserTabPayload & { open?: boolean }) => {
+    browser.devTools(
+      optTab(payload?.tabId),
+      optScope(payload),
+      typeof payload?.open === 'boolean' ? payload.open : undefined,
+    )
+  })
+  ipcMain.handle('browser:mobile', async (_e, payload?: BrowserTabPayload & { on?: boolean }) =>
+    browser.setMobileEmulation(optTab(payload?.tabId), optScope(payload), payload?.on === true),
   )
   // "Open it in its own window" — the panel hands the tab to the popout, which is
   // the same window the tray item toggles. `scope` khoá cửa sổ popout về đúng
@@ -538,19 +530,24 @@ function registerBrowserViewIpc(): void {
     const win = BrowserWindow.fromWebContents(e.sender)
     return win ? pickProfile(win) : null
   })
-  ipcMain.handle(
-    'browser:importProfile',
-    async (_e, payload: ImportPayload): Promise<ImportReport> =>
-      importProfile(String(payload?.browserId ?? ''), String(payload?.profileDir ?? ''), {
+  ipcMain.handle('browser:importProfile', async (_e, payload: ImportPayload): Promise<ImportReport> =>
+    importProfile(
+      String(payload?.browserId ?? ''),
+      String(payload?.profileDir ?? ''),
+      {
         cookies: payload?.parts?.cookies !== false,
         localStorage: payload?.parts?.localStorage !== false,
         indexedDb: payload?.parts?.indexedDb !== false,
-      }),
+      },
+      optTab(payload?.profileId) ?? DEFAULT_PROFILE_ID,
+    ),
   )
-  // The undo for an import: wipe everything the agent's browser holds.
-  ipcMain.handle('browser:clearData', async (): Promise<void> => {
-    browser.close()
-    await clearImportedData()
+  // The undo for an import: wipe everything the agent's browser holds in ONE profile.
+  ipcMain.handle('browser:clearData', async (_e, payload?: { profileId?: string }): Promise<void> => {
+    const profileId = optTab(payload?.profileId) ?? DEFAULT_PROFILE_ID
+    partitionForProfile(profileId)
+    await browser.wipeProfile(profileId)
+    await clearImportedData(profileId)
   })
   // Staged LevelDB stores only land at boot (see applyPendingImport), so the user
   // needs a restart to finish an import. The renderer confirms first — this kills
@@ -586,23 +583,21 @@ function registerBrowserViewIpc(): void {
   // through the same resolver every other write-into-workspace op uses.
   ipcMain.handle(
     'browser:saveScreenshot',
-    async (
-      _e,
-      payload: { root?: string; tabId?: string; scope?: string },
-    ): Promise<{ path: string }> => {
+    async (_e, payload: { root?: string; tabId?: string; scope?: string }): Promise<{ path: string }> => {
       const root = String(payload?.root ?? '')
       if (!root) throw new Error('saveScreenshot needs a workspace root')
       return browser.saveScreenshot(root, optTab(payload?.tabId), optScope(payload))
     },
   )
   // Freeze-frame cho lúc overlay DOM che viewport — xem browser.frameDataUrl.
-  ipcMain.handle(
-    'browser:frameDataUrl',
-    async (_e, payload?: BrowserTabPayload): Promise<{ dataUrl: string | null }> =>
-      browser.frameDataUrl(optTab(payload?.tabId), optScope(payload)),
+  ipcMain.handle('browser:frameDataUrl', async (_e, payload?: BrowserTabPayload): Promise<{ dataUrl: string | null }> =>
+    browser.frameDataUrl(optTab(payload?.tabId), optScope(payload)),
   )
   ipcMain.handle('browser:sites', async () => browser.sites())
   ipcMain.handle('browser:setSites', async (_e, sites: unknown) => {
     browser.setSites(sites)
   })
+
+  // Bộ bắt request của người dùng (Network inspector) — docs/features/network-capture.md.
+  registerCaptureIpc(browser.captureHost())
 }

@@ -11,6 +11,7 @@ import { clearSessionPermissions } from './permissions.js'
 import { releaseSessionMcp } from '../runtime/tools/mcp-tools.js'
 import { removeSdkSession } from '../runtime/claude-sdk/store.js'
 import { cleanupSessionBackground } from './bg-registry.js'
+import { closeLive } from '../runtime/claude-sdk/live-process.js'
 import { abortSession } from './runner.js'
 import { emit } from '../transport/stdio.js'
 
@@ -32,6 +33,8 @@ export async function deleteSessionCascade(id: string): Promise<void> {
   // appendMessage trong finally — no-op trên phiên đã xoá khỏi map nên không
   // thể hồi sinh record; abort ở đây chỉ để cắt token đang đốt sớm hơn.
   abortSession(id)
+  // The session's long-lived Claude CLI (ADR 0099) goes with it, background tasks and all.
+  closeLive(id, 'session deleted')
   await deleteSession(id)
   // Drop any session-scoped "always allow" entries so they don't linger in the
   // sidecar for the process lifetime after the session is gone.

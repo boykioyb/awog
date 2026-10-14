@@ -15,7 +15,13 @@ import type { AccountOption } from '~/composables/useAccounts'
 import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import type { UsageEntry } from '~/composables/useAccountUsage'
 import { PR_REVIEW_ACCOUNT_INHERIT, useSettingsStore } from '~/stores/settings'
-import type { InfraContext, ProviderName } from '~/types'
+import type {
+  ClaudeImportResult,
+  ClaudeSessionsList,
+  ImportedFrom,
+  InfraContext,
+  ProviderName,
+} from '~/types'
 import { compactInfraContext } from '~/utils/infra-context'
 import { useProjectsStore } from '~/stores/projects'
 import {
@@ -23,6 +29,7 @@ import {
   contextLimitForUsage,
   contextTokensFromUsage,
   estimateContextTokens,
+  measuredContextTokens,
 } from '~/utils/context-window'
 import { slugSessionId } from '~/utils/session-slug'
 import type {
@@ -30,6 +37,7 @@ import type {
   AssistantMessage,
   ContextChars,
   Finding,
+  NativeCompaction,
   Followup,
   PermBlock,
   PermRuleScope,
@@ -80,6 +88,9 @@ type EngineStepDetail =
   | { kind: 'list'; items: { label: string; path?: string; snippet?: string }[] }
   | { kind: 'terminal'; command: string; output?: string; exitCode?: number }
   | { kind: 'text'; content: string }
+  // sessions.get `lite` stub: an oversized detail stays off the wire as
+  // `{kind, deferred:true}` — the real body arrives via sessions.stepDetail.
+  | { kind: 'diff' | 'file' | 'list' | 'terminal' | 'text'; deferred: true }
 
 type EngineQuestion = {
   header: string
@@ -152,8 +163,11 @@ type EngineStep = {
   id: string
   kind: 'tool' | 'group' | 'thinking' | 'note' | 'plan' | 'question' | 'steer' | 'surface'
   label: string
-  tool?: string
   target?: string
+  // Wire-only marker (sessions.get lite): the target shipped as a 512B preview
+  // — the full string (e.g. a heredoc command) arrives via sessions.stepDetail.
+  targetDeferred?: boolean
+  tool?: string
   description?: string
   additions?: number
   deletions?: number
@@ -171,6 +185,8 @@ type EngineStep = {
   parentId?: string
   todos?: EngineTodo[]
   surface?: EngineSurface
+  // browser_tool navigate/tab_new: URL trang agent mở → SessionBrowserCard.
+  browserPage?: { url: string }
 }
 
 type SessionChunkPayload = { sessionId: string; messageId: string; delta: string }
@@ -220,6 +236,11 @@ type BackgroundDonePayload = {
   // itself — this renderer must not fire a second continuation.
   read?: boolean
   wake?: boolean
+  // Claude SDK path (ADR 0099): the live CLI process ALREADY started the continuation
+  // turn on its own. This is not a chip update (that came, with wake:false, when the task
+  // settled) — it is the signal to ATTACH to that turn via sendMessage `attachWake`
+  // instead of starting a second one. `shellId` may be synthetic: never upsert a chip.
+  native?: boolean
 }
 type BackgroundReadPayload = { sessionId: string; shellId: string }
 type PermissionRequestPayload = {
@@ -454,6 +475,9 @@ type EngineSessionSettings = {
   // Per-session SSH tool approval mode (ADR 0064 P2).
   sshApprovalMode?: SshApprovalMode
 }
+// Sidecar ném mã này khi gửi tiếp vào phiên nhập mà transcript vừa được ghi (<120s)
+// và không tiến trình CLI nào của AWOG sở hữu — có thể đang mở trong Claude Desktop/CLI.
+const CLAUDE_SESSION_BUSY_CODE = -32021
 type SessionSummaryDto = {
   id: string
   title: string
@@ -491,6 +515,8 @@ type SessionSummaryDto = {
   // Nguồn gốc materialize — mirrors sidecar SessionSummary.origin. 'board' =
   // phiên lone-agent dispatch từ board item — ẩn khỏi danh sách session.
   origin?: 'board'
+  // Phiên nhập từ Claude Desktop / CLI — mirrors sidecar SessionSummary.importedFrom.
+  importedFrom?: ImportedFrom
   // Cấu hình spawn đã nhớ của nhóm — mirrors sidecar SessionSummary.
   spawnConfig?: SpawnSessionConfig
   // Agent gắn vào member/lead + branch worktree riêng của member — mirrors
@@ -538,6 +564,9 @@ type EngineMessage = {
   // CLI mà tin này được viết trong đó ("Open in CLI" — sessions.syncCli fold tin
   // CLI-side về JSONL; mirrors sidecar SessionMessage.via). Không có = tin AWOG.
   via?: 'claude' | 'codex' | 'devin'
+  // Native Claude CLI compaction marker on a `system` message (sidecar
+  // SessionMessage.compaction, derived from the CLI JSONL on replay).
+  compaction?: NativeCompaction
   // Model id thô đã sinh ra lượt agent này (mirrors sidecar SessionMessage.modelUsed
   // — 'claude-opus-4-8'…). Nạp lên AssistantMessage.modelUsed dạng TÊN HIỂN THỊ để
   // byline của từng lượt giữ đúng model lúc nó chạy, kể cả khi phiên đã đổi model.
@@ -627,6 +656,9 @@ interface SendMessageResult {
   contextChars?: ContextChars
   stopReason: string | null
   errorMessage?: string
+  // Native Claude CLI compactions that ran in this turn (Anthropic): see
+  // nativeCompactionMarker.
+  nativeCompactions?: NativeCompaction[]
   // Authoritative ordered timeline (ADR 0032): reply-text runs interleaved with
   // steps in arrival order. When present it is the source of truth for the final
   // per-run text — finalize reconciles each text block against its matching run
@@ -749,6 +781,36 @@ export const useSessionsStore = defineStore('sessions', () => {
   watch(openProjectTabs, (v) => localStorage.setItem(STORAGE_OPEN_TABS, JSON.stringify(v)))
   watch(activeTab, (v) => localStorage.setItem(STORAGE_ACTIVE_TAB, v))
 
+  // MRU project list — gần nhất đứng đầu. ⌘` đảo qua project dùng gần nhất
+  // (toggleLastProject) và popover Đổi project sort theo đây. Cap 10: danh sách
+  // này là "gần đây", không phải roster đầy đủ.
+  const STORAGE_RECENT = 'awog.sessions.recentProjects'
+  const readRecent = (): string[] => {
+    try {
+      const arr: unknown = JSON.parse(localStorage.getItem(STORAGE_RECENT) ?? '[]')
+      return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : []
+    } catch {
+      return []
+    }
+  }
+  const recentProjects = ref<string[]>(readRecent())
+  watch(
+    activeTab,
+    (v) => {
+      recentProjects.value = [v, ...recentProjects.value.filter((p) => p !== v)].slice(0, 10)
+      localStorage.setItem(STORAGE_RECENT, JSON.stringify(recentProjects.value))
+    },
+    { immediate: true },
+  )
+
+  // ⌘` — nhảy tới project dùng gần nhất KHÁC project hiện tại (giống ⌘Tab giữa
+  // hai app gần nhất). Bỏ qua entry trỏ project đã bị gỡ.
+  function toggleLastProject(): void {
+    const known = new Set([...projectsStore.projects.map((p) => p.id), ''])
+    const target = recentProjects.value.find((p) => p !== activeTab.value && known.has(p))
+    if (target !== undefined) setActiveTab(target)
+  }
+
   let seq = 1
   const newClientId = () => Date.now() + seq++
 
@@ -756,21 +818,25 @@ export const useSessionsStore = defineStore('sessions', () => {
   const byEngineId = (eid: string) => sessions.value.find((s) => s.engineId === eid)
 
   // Context-window usage percentage (0..100) for a session. Mirrors
-  // useSessionContextUsage: occupancy = the ITEMISED prompt segments only (the
-  // per-segment char breakdown — contextTokensFromUsage) over the SELECTED model's
-  // window — NOT the API usage total, which double-counts the cached prefix and adds
-  // output, inflating the gauge past 100%. Shared by the auto-compact trigger +
-  // quota guard.
+  // useSessionContextUsage: occupancy = the MEASURED prompt size of the last
+  // request (`contextTokens`) over the SELECTED model's window — the same number
+  // the session list row shows. Falls back to the itemised char breakdown, then
+  // the text-only estimate.
   //
-  // Tool schemas and accumulated tool results are OUTSIDE this number by design
-  // (user's call, 2026-09-12), so on a tool-heavy turn the real request can be
-  // several times this and AUTO_COMPACT_PCT is crossed much later, or not at all.
+  // Flipped from itemised-only on 2026-10-11: on a tool-heavy turn the itemised
+  // sum reads a fraction of the real prompt (4% vs an actual 83%), so
+  // AUTO_COMPACT_PCT was crossed far too late — or never. Reading the measured
+  // request is what lets the guard fire before the window really fills.
   //
-  // No breakdown (browser-dev / a transcript persisted before per-turn `usage`) falls
-  // back to the SAME text-only estimate the panel shows, never to 0: reading 0% there
-  // is what left auto-compact blind on exactly the sessions whose gauge looked full.
+  // No breakdown (browser-dev / a transcript persisted before per-turn `usage`)
+  // falls back to the SAME text-only estimate the panel shows, never to 0: reading
+  // 0% there is what left auto-compact blind on exactly the sessions whose gauge
+  // looked full.
   function usagePct(s: Session): number {
-    const used = contextTokensFromUsage(s.usage) || estimateContextTokens(s.msgs)
+    const used =
+      measuredContextTokens(s.usage) ||
+      contextTokensFromUsage(s.usage) ||
+      estimateContextTokens(s.msgs)
     if (!used) return 0
     const max = contextLimitForUsage(modelIdFromDisplay(s.model), s.usage)
     if (!max) return 0
@@ -900,11 +966,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     return isSendBlocked(sessionId)
   }
 
-  // Auto-compaction trigger (Settings → Sessions → autoCompact). The sidecar has no
-  // server-side auto-compact loop — `/compact` is a client-driven RPC — so we drive
-  // it here: when the session is over the threshold, fire compactSession() (the real
-  // ADR 0047 RPC, same as the manual button). The sidecar persists a checkpoint and
-  // trims the model context on the NEXT turn; the transcript is left intact.
+  // Auto-compaction trigger for Pi/Codex providers (Settings → Sessions → autoCompact).
+  // Their runtimes have no compaction of their own — `/compact` is a client-driven RPC —
+  // so we drive it here: when the session is over the threshold, fire compactSession()
+  // (the ADR 0047 RPC, same as the manual button). The sidecar persists a checkpoint and
+  // trims the model context on the NEXT turn; the transcript is left intact. Anthropic
+  // never reaches the threshold check (the CLI compacts natively, ADR 0099).
   //
   // Called on BOTH edges of a turn: awaited BEFORE a turn starts (so an over-budget
   // session is cut before the request goes out, not after it already overflowed) and
@@ -929,6 +996,10 @@ export const useSessionsStore = defineStore('sessions', () => {
       return
     }
     if (!settingsStore.sessions.autoCompact) return
+    // Anthropic sessions are compacted by the Claude CLI itself, inside the turn, at the
+    // Settings → Sessions threshold (contextConfig.compactAtTokens) — a client-side
+    // trigger on top would only race it. This trigger serves Pi/Codex providers.
+    if (engineSettings(s).provider === 'anthropic') return
     const eid = s.engineId
     const pct = usagePct(s)
     const latched = autoCompactedAt.get(eid) ?? false
@@ -1000,7 +1071,10 @@ export const useSessionsStore = defineStore('sessions', () => {
   // for kinds with no visual block (none currently — but defensive).
   function engineStepToBlock(step: EngineStep): AssistantBlock | null {
     if (step.kind === 'thinking') {
-      const text = step.detail?.kind === 'text' ? step.detail.content : step.label
+      const text =
+        step.detail?.kind === 'text' && !('deferred' in step.detail)
+          ? step.detail.content
+          : step.label
       return { kind: 'thinking', text, eid: step.id }
     }
     if (step.kind === 'plan') {
@@ -1089,10 +1163,16 @@ export const useSessionsStore = defineStore('sessions', () => {
       target: step.target ?? '',
       eid: step.id,
     }
+    if (step.targetDeferred) block.targetDeferred = true
     if (result) block.result = result
     if (detail) block.detail = detail
-    if (detail && step.detail?.kind) block.detailKind = step.detail.kind
+    // `kind` survives the deferred stub too — it picks the body view the
+    // late-fetched detail will render in (diff view vs code vs plain).
+    if (step.detail?.kind) block.detailKind = step.detail.kind
+    if (step.detail && 'deferred' in step.detail) block.detailDeferred = true
     if (step.status) block.status = step.status
+    // Thẻ xem trước trang (browser_tool navigate/tab_new): chỉ step cấp trên cùng.
+    if (step.browserPage) block.page = step.browserPage
     if (step.children?.length) block.sub = engineSubAgent(step)
     return block
   }
@@ -1199,7 +1279,11 @@ export const useSessionsStore = defineStore('sessions', () => {
       const d = step.deletions ?? 0
       return `+${a} −${d}`
     }
-    if (step.detail?.kind === 'terminal' && step.detail.exitCode != null) {
+    if (
+      step.detail?.kind === 'terminal' &&
+      !('deferred' in step.detail) &&
+      step.detail.exitCode != null
+    ) {
       return step.detail.exitCode === 0 ? '✓' : `exit ${step.detail.exitCode}`
     }
     return undefined
@@ -1207,7 +1291,7 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Expandable body text for a step (diff / file content / list / terminal output).
   function engineStepDetail(step: EngineStep): string | undefined {
     const d = step.detail
-    if (!d) return undefined
+    if (!d || 'deferred' in d) return undefined
     if (d.kind === 'diff') return d.diff
     if (d.kind === 'file') return d.content
     if (d.kind === 'terminal') return d.output
@@ -1232,7 +1316,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     const det = engineStepDetail(c)
     if (res) sub.result = res
     if (det) sub.detail = det
-    if (det && c.detail?.kind) sub.detailKind = c.detail.kind
+    // `kind` must survive a deferred stub: it picks the SessionStepBody view
+    // the late-fetched detail will render in (diff view vs code view vs plain).
+    if (c.detail?.kind) sub.detailKind = c.detail.kind
+    if (c.detail && 'deferred' in c.detail) sub.detailDeferred = true
+    if (c.targetDeferred) sub.targetDeferred = true
     return sub
   }
   // Map a Task step's children to the ui-next SubAgent shape.
@@ -1334,6 +1422,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.aboutSshHostId) session.aboutSshHostId = dto.aboutSshHostId
     if (dto.aboutGhUrl) session.aboutGhUrl = dto.aboutGhUrl
     if (dto.infra) session.infra = dto.infra
+    if (dto.importedFrom) session.importedFrom = dto.importedFrom
     if (dto.parentSessionId) session.parentSessionId = dto.parentSessionId
     if (dto.teamRunId) session.teamRunId = dto.teamRunId
     if (dto.teamRole) session.teamRole = dto.teamRole
@@ -1391,8 +1480,13 @@ export const useSessionsStore = defineStore('sessions', () => {
     // (e.g. a re-load) so we don't blank an existing transcript.
     if (!s.msgs.length) s.loading = true
     try {
+      // `lite` keeps heavy step details off the wire: `parts` stays
+      // authoritative (so `steps` is dropped — same objects, half the payload)
+      // and oversized details arrive as `{kind, deferred}` stubs the step rows
+      // fetch on expand via sessions.stepDetail.
       const res = await sc.request<{ session: SessionGetDto | null }>('sessions.get', {
         sessionId: s.engineId,
+        lite: true,
       })
       const target = byId(id)
       if (!target) return
@@ -1486,6 +1580,70 @@ export const useSessionsStore = defineStore('sessions', () => {
     void ensureLoaded(id).finally(() => transcriptReloads.delete(id))
   }
 
+  // ── Deferred step details (sessions.get `lite`) ───────────────────────────
+  // Wire stubs carry `{kind, deferred:true}` in place of the detail body. The
+  // transcript is `markRaw`, so the resolved body CANNOT live on the block —
+  // it lands in this reactive cache keyed `${engineId}:${msgEid}:${stepEid}`.
+  // A sentinel `{ pending: true }` row blocks the "no output" render while the
+  // fetch is in flight and dedupes repeat requests for the same step.
+  type StepDetailEntry =
+    | { pending: true }
+    // `target` rides in the same fetch — a deferred (>512B) target is a terminal
+    // step's full command; the wire carried only its preview.
+    | { detail?: string; detailKind?: StepBlock['detailKind']; target?: string }
+  const stepDetailCache = reactive(new Map<string, StepDetailEntry>())
+  const stepDetailInflight = new Set<string>()
+
+  function stepDetailOf(
+    engineId: string,
+    msgEid: string,
+    stepEid: string,
+  ): StepDetailEntry | undefined {
+    return stepDetailCache.get(`${engineId}:${msgEid}:${stepEid}`)
+  }
+
+  // Fetch a deferred step's full detail (the row calls this on expand). Folds
+  // the engine detail object through engineStepDetail so the cache stores the
+  // same flattened string the block would have carried inline.
+  async function ensureStepDetail(
+    engineId: string,
+    msgEid: string,
+    stepEid: string,
+  ): Promise<void> {
+    if (!useIpc) return
+    const key = `${engineId}:${msgEid}:${stepEid}`
+    if (stepDetailCache.has(key) || stepDetailInflight.has(key)) return
+    stepDetailInflight.add(key)
+    stepDetailCache.set(key, { pending: true })
+    try {
+      const res = await sc.request<{
+        detail: EngineStep['detail'] | null
+        target: string | null
+      }>('sessions.stepDetail', {
+        sessionId: engineId,
+        messageId: msgEid,
+        stepId: stepEid,
+      })
+      if (res.detail || res.target != null) {
+        const entry: Exclude<StepDetailEntry, { pending: true }> = {}
+        if (res.detail) {
+          entry.detail = engineStepDetail({ detail: res.detail } as EngineStep)
+          entry.detailKind = res.detail.kind as StepBlock['detailKind']
+        }
+        if (res.target != null) entry.target = res.target
+        stepDetailCache.set(key, entry)
+      } else {
+        // No detail persisted (missing blob / step had none) — cache an empty
+        // resolution so the row renders "(no output)" and never re-asks.
+        stepDetailCache.set(key, {})
+      }
+    } catch {
+      stepDetailCache.set(key, {})
+    } finally {
+      stepDetailInflight.delete(key)
+    }
+  }
+
   // Engine attachment (persisted on a user turn) → ui-next SessionAttachment so a
   // JSONL reload restores the attachment chips + previews. Mirrors the forward map
   // in sendMessage (att → engineAtts): image/PDF `url` (base64) → dataUrl (drives
@@ -1522,7 +1680,14 @@ export const useSessionsStore = defineStore('sessions', () => {
       }
     }
     if (m.role === 'system') {
-      return { role: 'system', text: m.text, at: m.at ?? '', eid: m.id, ...via }
+      return {
+        role: 'system',
+        text: m.text,
+        at: m.at ?? '',
+        eid: m.id,
+        ...via,
+        ...(m.compaction ? { compaction: m.compaction } : {}),
+      }
     }
     return {
       role: 'assistant',
@@ -2836,6 +3001,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       item.quotes,
       item.autoDelivered,
       item.comm,
+      item.attachWake,
     )
   }
 
@@ -3089,7 +3255,12 @@ export const useSessionsStore = defineStore('sessions', () => {
   // land late). Guarding on an existing error block keeps it to a single alert.
   function pushErrorBlock(m: AssistantMessage, text: string): void {
     if (m.blocks.some((b) => b.kind === 'error')) return
-    m.blocks.push({ kind: 'error', text })
+    // The terminal `done` event carries the sidecar's English text — localise the
+    // imported-session busy guard here so both error paths read the same.
+    const body = text.startsWith('CLAUDE_SESSION_BUSY')
+      ? useI18n().t('sessions.claudeImport.busy')
+      : text
+    m.blocks.push({ kind: 'error', text: body })
   }
 
   // Surface a terminal turn outcome that carries a stopReason: a graceful provider
@@ -3167,6 +3338,7 @@ export const useSessionsStore = defineStore('sessions', () => {
           eid: step.id,
           tool: step.label || step.tool || 'Tool',
           target: step.target ?? '',
+          ...(step.targetDeferred ? { targetDeferred: true } : {}),
           ...(engineStepResult(step) ? { result: engineStepResult(step) } : {}),
           ...(engineStepDetail(step) ? { detail: engineStepDetail(step) } : {}),
           ...(engineStepDetail(step) && step.detail?.kind ? { detailKind: step.detail.kind } : {}),
@@ -3286,6 +3458,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     status: BgShellStatus
     exitCode: number | null
     outputTail: string
+    native?: boolean
   }
   const pendingWakes = ref<Record<string, PendingWake[]>>({})
   const pendingWakesFor = (engineId: string): PendingWake[] => pendingWakes.value[engineId] ?? []
@@ -3327,8 +3500,13 @@ export const useSessionsStore = defineStore('sessions', () => {
   // Fire the pending wakes for a session as one continuation turn — auto-continue
   // path. Only when the setting is on AND the session is idle (no live/queued turn);
   // otherwise leaves them pending for the card / a later flush on turn end.
+  //
+  // Wake NATIVE (Claude CLI sống lâu, ADR 0099) bỏ qua công tắc: CLI đã TỰ mở lượt
+  // model ngay khi task nền xong — token đã tiêu, câu trả lời đang được sinh. Bắt
+  // người dùng bấm "Continue" chỉ giấu một câu trả lời đã có, không tiết kiệm gì.
   function maybeAutoContinue(engineId: string): void {
-    if (!settingsStore.sessions.autoContinueOnBackground) return
+    const hasNative = pendingWakes.value[engineId]?.some((w) => w.native) === true
+    if (!settingsStore.sessions.autoContinueOnBackground && !hasNative) return
     if (autoWakeStarting.has(engineId)) return
     const s = byEngineId(engineId)
     if (!s) return
@@ -3342,7 +3520,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Backstop clear: if the turn never starts (e.g. quota-blocked, so runEngineTurn
     // is never reached), the latch must still release. runEngineTurn clears it early
     // (on placeholder push); this covers the no-start path.
-    void sendMessage(s.id, buildWakePrompt(wakes)).finally(() => autoWakeStarting.delete(engineId))
+    void sendMessage(
+      s.id,
+      buildWakePrompt(wakes),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      wakes.some((w) => w.native) || undefined,
+    ).finally(() => autoWakeStarting.delete(engineId))
   }
 
   // User clicked "Continue" on the wake card (notify-only path).
@@ -3352,7 +3539,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s || !wakes || !wakes.length) return
     delete pendingWakes.value[engineId]
     markWakesRead(engineId, wakes)
-    void sendMessage(s.id, buildWakePrompt(wakes))
+    void sendMessage(
+      s.id,
+      buildWakePrompt(wakes),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      wakes.some((w) => w.native) || undefined,
+    )
   }
 
   function dismissBackgroundWakes(engineId: string): void {
@@ -3986,15 +4182,19 @@ export const useSessionsStore = defineStore('sessions', () => {
         if (evt.type === 'session.background-done') {
           if (!isBgDonePayload(evt.payload)) return
           const p = evt.payload
-          const existing = bgShellsFor(p.sessionId).find((sh) => sh.shellId === p.shellId)
-          upsertBgShell(p.sessionId, {
-            shellId: p.shellId,
-            command: p.command,
-            startedAt: existing?.startedAt ?? '',
-            status: p.status,
-            exitCode: p.exitCode,
-            read: p.read === true,
-          })
+          // A native wake is not a task edge — its `shellId` can be synthetic and the
+          // real task's chip was settled when its notification arrived.
+          if (p.native !== true) {
+            const existing = bgShellsFor(p.sessionId).find((sh) => sh.shellId === p.shellId)
+            upsertBgShell(p.sessionId, {
+              shellId: p.shellId,
+              command: p.command,
+              startedAt: existing?.startedAt ?? '',
+              status: p.status,
+              exitCode: p.exitCode,
+              read: p.read === true,
+            })
+          }
           // A runtime that resumes its own turn (Claude SDK path) settles with
           // wake:false — the chip updates, but nothing else here fires.
           if (p.wake === false) return
@@ -4009,6 +4209,7 @@ export const useSessionsStore = defineStore('sessions', () => {
             status: p.status,
             exitCode: p.exitCode,
             outputTail: p.outputTail,
+            ...(p.native === true ? { native: true } : {}),
           })
           pendingWakes.value[p.sessionId] = wakes
           maybeAutoContinue(p.sessionId)
@@ -4286,6 +4487,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Lượt "chỉ trò chuyện" từ kênh ê-kíp — forward sang sidecar để kẹp model
     // rẻ + effort thấp (lượt trả lời nhanh). Chỉ set bởi đường inbox comm.
     comm?: boolean,
+    // Wake of a LIVE Claude CLI process (ADR 0099): the continuation is already running
+    // there, so the sidecar adopts it instead of sending `text` (kept as the user-visible
+    // echo and as the fallback prompt when there is nothing left to adopt).
+    attachWake?: boolean,
   ) {
     const s = byId(id)
     const trimmed = text.trim()
@@ -4304,6 +4509,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (quotes.length) requeued.quotes = [...quotes]
       if (autoDelivered) requeued.autoDelivered = true
       if (comm) requeued.comm = true
+      if (attachWake) requeued.attachWake = true
       s.queue = [requeued, ...(s.queue ?? [])]
       if (!quotesOverride) s.followups = []
       return
@@ -4351,6 +4557,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (quotes.length) requeued.quotes = [...quotes]
       if (autoDelivered) requeued.autoDelivered = true
       if (comm) requeued.comm = true
+      if (attachWake) requeued.attachWake = true
       s.queue = [requeued, ...(s.queue ?? [])]
       if (!quotesOverride) s.followups = []
       return
@@ -4399,7 +4606,16 @@ export const useSessionsStore = defineStore('sessions', () => {
     try {
       await maybeAutoCompact(s)
 
-      await runEngineTurn(s, modelText, atts, userMessageId, nativeCommand, autoDelivered, comm)
+      await runEngineTurn(
+        s,
+        modelText,
+        atts,
+        userMessageId,
+        nativeCommand,
+        autoDelivered,
+        comm,
+        attachWake,
+      )
     } finally {
       // Backstop: runEngineTurn nhả latch ngay khi push placeholder (đường
       // chính) — finally này chỉ còn việc gỡ latch khi nó ném TRƯỚC chỗ đó
@@ -4426,6 +4642,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     // Lượt "chỉ trò chuyện" kênh ê-kíp — forward thẳng sang sidecar để kẹp
     // model rẻ + effort thấp sau mọi overlay settings.
     comm?: boolean,
+    attachWake?: boolean,
   ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
@@ -4542,6 +4759,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         ...(nativeCommand ? { nativeCommand: true } : {}),
         // Lượt trả lời-nhanh của kênh ê-kíp → sidecar kẹp rẻ+low sau mọi overlay.
         ...(comm ? { comm: true } : {}),
+        ...(attachWake ? { attachWake: true } : {}),
         ...(engineAtts.length ? { attachments: engineAtts } : {}),
         history: [],
         settings: engineSettings(s),
@@ -4614,6 +4832,14 @@ export const useSessionsStore = defineStore('sessions', () => {
         // awaited here — the turn is done; the pre-send edge is the one that gates.
         void maybeAutoCompact(s)
       }
+      // Native Claude CLI compactions that happened INSIDE this turn (the CLI's own
+      // auto-compact, or the overflow recovery): a divider each, ahead of the reply
+      // bubble — the order the CLI JSONL replays them in. No gauge adjustment: the
+      // usage merged above was measured after the compaction.
+      if (result.nativeCompactions?.length) {
+        const at = s.msgs.findIndex((m) => m.role === 'assistant' && m.eid === messageId)
+        if (at >= 0) s.msgs.splice(at, 0, ...result.nativeCompactions.map(nativeCompactionMarker))
+      }
       // Reflect the actually-used model, but DON'T collapse a 1M variant: the
       // engine reports the API base id (`claude-opus-4-8`) for the AWOG-internal
       // `claude-opus-4-8-1m`, so overwriting unconditionally would snap the
@@ -4647,6 +4873,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (!canceled) {
         let message = 'Unknown error'
         if (err instanceof SidecarUnavailableError) message = 'Sidecar unavailable'
+        else if (err instanceof SidecarError && err.code === CLAUDE_SESSION_BUSY_CODE)
+          message = useI18n().t('sessions.claudeImport.busy')
         else if (err instanceof SidecarError)
           message = err.code ? `${err.message} (code ${err.code})` : err.message
         else if (err instanceof Error && err.message) message = err.message
@@ -4750,6 +4978,31 @@ export const useSessionsStore = defineStore('sessions', () => {
     }
   }
 
+  // A native Claude CLI compaction landed (manual `/compact`, the overflow recovery, or
+  // the CLI's own auto-compact inside a turn). The CLI rewrote ITS session in place —
+  // same sdkSessionId, nothing persisted by AWOG — so the UI only draws a divider marker
+  // with the figures. The same marker comes back from the CLI JSONL on reload (sidecar
+  // sessions/claude-transcript.ts), so the live one is just that, early.
+  function nativeCompactionMarker(c: NativeCompaction) {
+    return {
+      role: 'system' as const,
+      text: 'Conversation compacted',
+      at: new Date().toISOString(),
+      compaction: c,
+    }
+  }
+
+  // Manual `/compact` (after the turn): also drop the measured window occupancy by what
+  // the CLI says it freed — the next turn re-measures, but keeping the old figure would
+  // leave the gauge pinned high until then. (An in-turn compaction needs no such step:
+  // the turn's own usage is measured AFTER it.)
+  function applyManualNativeCompaction(s: Session, c: NativeCompaction) {
+    const freed = Math.max(0, c.preTokens - (c.postTokens ?? 0))
+    if (s.usage?.contextTokens) s.usage.contextTokens = Math.max(0, s.usage.contextTokens - freed)
+    if (s.usage?.baseTokens) s.usage.baseTokens = Math.max(0, s.usage.baseTokens - freed)
+    s.msgs.push(nativeCompactionMarker(c))
+  }
+
   // The `sessions.compact` round-trip itself. Flips `compacting` synchronously — before
   // its first await — so the composer's Send lock and the overlap guard above take
   // effect the moment compactSession is called, not a microtask later.
@@ -4762,23 +5015,33 @@ export const useSessionsStore = defineStore('sessions', () => {
     const es = engineSettings(s)
     const messageId = `compact-${Date.now().toString(36)}`
     try {
-      const res = await sc.request<{ ok?: boolean; reason?: string; historyChars?: number }>(
-        'sessions.compact',
-        {
-          sessionId: engineId,
-          messageId,
-          provider: es.provider,
-          modelId: es.modelId,
-          ...(es.accountId ? { accountId: es.accountId } : {}),
-          ...(s.project ? { projectId: s.project } : {}),
-          ...(keepRecentTokens !== undefined ? { keepRecentTokens } : {}),
-        },
-      )
+      const ctxConfig = settingsStore.contextConfig()
+      const res = await sc.request<{
+        ok?: boolean
+        reason?: string
+        historyChars?: number
+        // Anthropic: the Claude CLI compacted its own session (same sdkSessionId).
+        nativeCompaction?: NativeCompaction
+      }>('sessions.compact', {
+        sessionId: engineId,
+        messageId,
+        provider: es.provider,
+        modelId: es.modelId,
+        ...(es.accountId ? { accountId: es.accountId } : {}),
+        ...(s.project ? { projectId: s.project } : {}),
+        ...(keepRecentTokens !== undefined ? { keepRecentTokens } : {}),
+        // Same auto-compact policy as the chat turns, so the CLI spawn keeps one env.
+        ...(Object.keys(ctxConfig).length ? { contextConfig: ctxConfig } : {}),
+      })
       if (res?.ok === false) {
         // Nothing summarised (transcript too short / no session) is not an error.
         return res.reason === 'nothing-to-compact' || res.reason === 'no-session'
           ? 'nothing'
           : 'error'
+      }
+      if (res?.nativeCompaction) {
+        applyManualNativeCompaction(s, res.nativeCompaction)
+        return 'compacted'
       }
       // Drop the context gauge IMMEDIATELY (before the next turn): swap the stale
       // `history` bucket for the post-compaction estimate the engine returned so the
@@ -4808,6 +5071,9 @@ export const useSessionsStore = defineStore('sessions', () => {
       return 'compacted'
     } catch (err) {
       console.warn('[sessions] compact failed', err)
+      if (err instanceof SidecarError && err.code === CLAUDE_SESSION_BUSY_CODE) {
+        useToast().add({ title: useI18n().t('sessions.claudeImport.busy'), color: 'warning' })
+      }
       return 'error'
     } finally {
       s.compacting = false
@@ -5469,6 +5735,29 @@ export const useSessionsStore = defineStore('sessions', () => {
     seedTabsFromSessions()
   }
 
+  // ── Nhập phiên từ Claude Desktop / CLI (docs/features/claude-session-import.md) ──
+  // Thủ công, người dùng chọn từng phiên. Sidecar chỉ trả phiên nằm trong project AWOG.
+  async function listClaudeSessions(days: number): Promise<ClaudeSessionsList> {
+    return sc.request<ClaudeSessionsList>('claudeSessions.list', { days })
+  }
+
+  // Sau khi nhập, đọc lại sessions.list và thêm các hàng chưa biết (idempotent với
+  // event `session.created` nếu sidecar có phát) — tránh đẻ hàng thứ hai.
+  async function importClaudeSessions(ids: string[]): Promise<ClaudeImportResult> {
+    const res = await sc.request<ClaudeImportResult>('claudeSessions.import', { ids })
+    if (res.imported.length) {
+      const list = await sc.request<{ sessions: SessionSummaryDto[] }>('sessions.list')
+      const fresh = (Array.isArray(list.sessions) ? list.sessions : [])
+        .filter((dto) => !byEngineId(dto.id))
+        .map(summaryToSession)
+      if (fresh.length) {
+        sessions.value = [...fresh, ...sessions.value]
+        reconcileSessionAccounts()
+      }
+    }
+    return res
+  }
+
   return {
     // state
     sessions,
@@ -5517,6 +5806,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     closeAllTabs,
     reorderTabs,
     setActiveTab,
+    recentProjects,
+    toggleLastProject,
     // quota / usage (Settings → Usage quota)
     usagePct,
     quotaUsage,
@@ -5529,8 +5820,12 @@ export const useSessionsStore = defineStore('sessions', () => {
     onQuotaBlocked,
     // load (IPC)
     hydrate,
+    listClaudeSessions,
+    importClaudeSessions,
     ensureLoaded,
     reloadTranscript,
+    stepDetailOf,
+    ensureStepDetail,
     openByEngineId,
     // popout windows (docs/features/session-popout-window.md)
     windowedEngineIds,

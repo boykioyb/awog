@@ -41,22 +41,12 @@
 import { Type } from '@earendil-works/pi-ai'
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import type { InfraContext } from '../../infra/run.js'
-import {
-  deleteDashboard,
-  listDashboards,
-  readDashboard,
-  saveDashboard,
-} from '../../infra/dashboard/store.js'
+import { deleteDashboard, listDashboards, readDashboard, saveDashboard } from '../../infra/dashboard/store.js'
 import { getCostSummary } from '../../infra/cost/cost.js'
 import { PRICING_AS_OF, PRICING_REGION } from '../../infra/cost/pricing.js'
 import { WASTE_CHECKS, runWasteScan, type WasteCheck } from '../../infra/cost/waste.js'
 import { buildCleanupDraft } from '../../infra/cost/cleanup.js'
-import {
-  deletePlaybook,
-  listPlaybooks,
-  readPlaybook,
-  savePlaybook,
-} from '../../infra/playbook/store.js'
+import { deletePlaybook, listPlaybooks, readPlaybook, savePlaybook } from '../../infra/playbook/store.js'
 import { missingRollbackSteps } from '../../infra/playbook/schema.js'
 import { readLibrary, saveQuery } from '../../infra/logs/library.js'
 import { queryInfraAudit } from '../../infra/audit/store.js'
@@ -165,8 +155,7 @@ const DashboardSaveParams = Type.Object({
   description: Type.Optional(Type.String({ description: 'One line on what the board is for.' })),
   tier: Type.Optional(
     Type.String({
-      description:
-        '"global" (default, available everywhere) or "project" (only inside this session\'s project).',
+      description: '"global" (default, available everywhere) or "project" (only inside this session\'s project).',
     }),
   ),
 })
@@ -205,9 +194,7 @@ const CleanupPlanParams = Type.Object({
 
 const PlaybookReadParams = Type.Object({
   id: Type.String({ description: 'Plan id exactly as infra_playbook_list reported it.' }),
-  source: Type.Optional(
-    Type.String({ description: '"builtin", "global" or "project". Defaults to "global".' }),
-  ),
+  source: Type.Optional(Type.String({ description: '"builtin", "global" or "project". Defaults to "global".' })),
 })
 
 const LogsSaveQueryParams = Type.Object({
@@ -220,12 +207,8 @@ const LogsSaveQueryParams = Type.Object({
 })
 
 const AuditQueryParams = Type.Object({
-  sinceHours: Type.Optional(
-    Type.Number({ description: 'How far back to look, in hours. Defaults to 24.' }),
-  ),
-  contains: Type.Optional(
-    Type.String({ description: 'Keep only entries whose command contains this text.' }),
-  ),
+  sinceHours: Type.Optional(Type.Number({ description: 'How far back to look, in hours. Defaults to 24.' })),
+  contains: Type.Optional(Type.String({ description: 'Keep only entries whose command contains this text.' })),
   limit: Type.Optional(Type.Number({ description: 'Maximum entries to return. Defaults to 50.' })),
 })
 
@@ -233,29 +216,27 @@ const TrailLookupParams = Type.Object({
   sinceHours: Type.Optional(
     Type.Number({ description: `How far back, in hours. Defaults to 24, at most ${String(TRAIL_MAX_DAYS * 24)}.` }),
   ),
-  resourceName: Type.Optional(
-    Type.String({ description: 'Only events touching this resource id or name.' }),
-  ),
+  resourceName: Type.Optional(Type.String({ description: 'Only events touching this resource id or name.' })),
 })
 
 const DeleteParams = Type.Object({
   id: Type.String({ description: 'Id exactly as the list tool reported it.' }),
-  source: Type.Optional(
-    Type.String({ description: '"global" (default) or "project". Built-ins cannot be deleted.' }),
-  ),
+  source: Type.Optional(Type.String({ description: '"global" (default) or "project". Built-ins cannot be deleted.' })),
 })
 
 const PlaybookStepParam = Type.Object({
-  id: Type.String({ description: 'Step id: letters, digits, dot, dash, underscore.' }),
-  title: Type.String({ description: 'What this step does, in the user\'s language.' }),
+  id: Type.String({
+    description: 'Step id: letters, digits, dot, dash, underscore.',
+  }),
+  title: Type.String({
+    description: "What this step does, in the user's language.",
+  }),
   verb: Type.String({ description: '"check", "do", "verify" or "rollback".' }),
   tool: Type.String({ description: '"aws", "terraform" or "kubectl".' }),
   args: Type.Array(Type.String(), {
     description: 'Argument LIST, never a shell string. Use {{name}} for a declared variable.',
   }),
-  note: Type.Optional(
-    Type.String({ description: 'Why this step exists — the approver reads this.' }),
-  ),
+  note: Type.Optional(Type.String({ description: 'Why this step exists — the approver reads this.' })),
 })
 
 const PlaybookVariableParam = Type.Object({
@@ -284,18 +265,18 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
   function resolveTier(want: string | undefined): { source: 'global' | 'project'; error?: string } {
     if (want !== 'project') return { source: 'global' }
     if (!projectId) {
-      return { source: 'global', error: 'This session is not pinned to a project, so a project-tier item cannot be created. Retry without "tier", or ask the user to pin a project.' }
+      return {
+        source: 'global',
+        error:
+          'This session is not pinned to a project, so a project-tier item cannot be created. Retry without "tier", or ask the user to pin a project.',
+      }
     }
     return { source: 'project' }
   }
 
   /** Id file từ tên. Cùng luật với `slugifyDashboardId` phía UI (ASCII, kebab). */
   function slugify(name: string, fallback: string): string {
-    const ascii = name
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/đ/g, 'd')
-      .replace(/Đ/g, 'D')
+    const ascii = name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D')
     const slug = ascii
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
@@ -324,7 +305,7 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
     name: INFRA_DASHBOARD_SAVE_TOOL,
     label: 'Create infra dashboard',
     description:
-      "Write a CloudWatch dashboard into the app so the user can load it from the Health → Dashboards tab. UPSERT: the id comes from the name, and a board with that id is OVERWRITTEN, so call infra_dashboard_list first — both to avoid a near-duplicate and to avoid silently replacing a board the user built. Writes a local file; it creates nothing in AWS and fetches no metric. Series keys must be unique across the whole board.",
+      'Write a CloudWatch dashboard into the app so the user can load it from the Health → Dashboards tab. UPSERT: the id comes from the name, and a board with that id is OVERWRITTEN, so call infra_dashboard_list first — both to avoid a near-duplicate and to avoid silently replacing a board the user built. Writes a local file; it creates nothing in AWS and fetches no metric. Series keys must be unique across the whole board.',
     parameters: DashboardSaveParams,
     async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
       const tier = resolveTier(params.tier)
@@ -399,8 +380,7 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
   const wasteScan: AgentTool<typeof WasteScanParams> = {
     name: INFRA_WASTE_SCAN_TOOL,
     label: 'AWS waste scan',
-    description:
-      `Find resources costing money with nobody using them, in the pinned region only. The five default checks are plain describe-* calls and are free. Adding "ec2-idle" or "nat-idle" reads CloudWatch metrics and COSTS MONEY (billed per metric per data point) — only add them when the user asked about idle compute. Money figures are estimates from a static ${PRICING_REGION} list-price table taken ${PRICING_AS_OF}; a resource with no price in the table reports none rather than a guess. Feed the findings to infra_cleanup_plan once the user has agreed what to act on.`,
+    description: `Find resources costing money with nobody using them, in the pinned region only. The five default checks are plain describe-* calls and are free. Adding "ec2-idle" or "nat-idle" reads CloudWatch metrics and COSTS MONEY (billed per metric per data point) — only add them when the user asked about idle compute. Money figures are estimates from a static ${PRICING_REGION} list-price table taken ${PRICING_AS_OF}; a resource with no price in the table reports none rather than a guess. Feed the findings to infra_cleanup_plan once the user has agreed what to act on.`,
     parameters: WasteScanParams,
     async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
       if (!context.profile) return errorResult('No AWS profile is pinned for this session.')
@@ -444,9 +424,7 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
       if (params.findings.length === 0) return errorResult('No findings were given.')
 
       const findings = params.findings
-        .filter((f): f is typeof f & { check: WasteCheck } =>
-          (WASTE_CHECKS as readonly string[]).includes(f.check),
-        )
+        .filter((f): f is typeof f & { check: WasteCheck } => (WASTE_CHECKS as readonly string[]).includes(f.check))
         .map((f) => ({
           check: f.check,
           resourceId: f.resourceId,
@@ -513,13 +491,8 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
       'Read one plan step by step so you can explain what it does before the user runs it. Reads a local file. Running the plan is NOT something you can do — it goes through preflight, approval and a per-step permission gate, all driven by the user from the Changes → Plans tab.',
     parameters: PlaybookReadParams,
     async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
-      const source =
-        params.source === 'builtin' || params.source === 'project' ? params.source : 'global'
-      const parsed = await readPlaybook(
-        source,
-        source === 'project' ? projectId : undefined,
-        params.id,
-      )
+      const source = params.source === 'builtin' || params.source === 'project' ? params.source : 'global'
+      const parsed = await readPlaybook(source, source === 'project' ? projectId : undefined, params.id)
       if (!parsed) return errorResult(`No plan "${params.id}" in ${source}.`)
       if (!parsed.ok) {
         return errorResult(
@@ -537,8 +510,12 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
         '',
         ...pb.steps.map(
           (st, i) => `${String(i + 1)}. [${st.verb}] ${st.title}
-   ${st.tool} ${st.args.join(' ')}${st.note ? `
-   ${st.note}` : ''}`,
+   ${st.tool} ${st.args.join(' ')}${
+     st.note
+       ? `
+   ${st.note}`
+       : ''
+   }`,
         ),
       ]
       return textResult(lines)
@@ -554,7 +531,7 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
     name: INFRA_LOGS_SAVED_TOOL,
     label: 'Saved log queries',
     description:
-      "List the CloudWatch Logs Insights queries the user has saved, with the log groups and window each one uses. Reads a local file: free, and it runs nothing. Prefer reusing a saved query over inventing one — logs_query bills per GB scanned, and a saved query already has a measured scan size.",
+      'List the CloudWatch Logs Insights queries the user has saved, with the log groups and window each one uses. Reads a local file: free, and it runs nothing. Prefer reusing a saved query over inventing one — logs_query bills per GB scanned, and a saved query already has a measured scan size.',
     parameters: NoParams,
     async execute(): Promise<AgentToolResult<Record<string, never>>> {
       const lib = await readLibrary()
@@ -618,8 +595,7 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
   const trailLookup: AgentTool<typeof TrailLookupParams> = {
     name: INFRA_TRAIL_LOOKUP_TOOL,
     label: 'CloudTrail lookup',
-    description:
-      `Read what actually changed on the AWS account, from CloudTrail — including changes nobody made through AWOG (the console, a pipeline, another person). Each event is labelled as coming from AWOG or elsewhere, but that label is INFERRED from the operation name and timing, not from a shared id, so treat it as a strong hint. Makes one AWS call and CloudTrail keeps only ${String(TRAIL_MAX_DAYS)} days.`,
+    description: `Read what actually changed on the AWS account, from CloudTrail — including changes nobody made through AWOG (the console, a pipeline, another person). Each event is labelled as coming from AWOG or elsewhere, but that label is INFERRED from the operation name and timing, not from a shared id, so treat it as a strong hint. Makes one AWS call and CloudTrail keeps only ${String(TRAIL_MAX_DAYS)} days.`,
     parameters: TrailLookupParams,
     async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
       if (!context.profile) return errorResult('No AWS profile is pinned for this session.')
@@ -652,13 +628,8 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
       'Read one board chart by chart, with the series each chart draws. Reads a local file: free, and it fetches no metric. Call this before infra_dashboard_save when revising an existing board — save is an upsert and would otherwise replace charts you never saw.',
     parameters: DeleteParams,
     async execute(_id, params): Promise<AgentToolResult<Record<string, unknown>>> {
-      const source =
-        params.source === 'builtin' || params.source === 'project' ? params.source : 'global'
-      const parsed = await readDashboard(
-        source,
-        source === 'project' ? projectId : undefined,
-        params.id,
-      )
+      const source = params.source === 'builtin' || params.source === 'project' ? params.source : 'global'
+      const parsed = await readDashboard(source, source === 'project' ? projectId : undefined, params.id)
       if (!parsed) return errorResult(`No dashboard "${params.id}" in ${source}.`)
       if (!parsed.ok) {
         return errorResult(
@@ -689,11 +660,7 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
       const tier = resolveTier(params.source)
       if (tier.error) return errorResult(tier.error)
       try {
-        await deleteDashboard(
-          tier.source,
-          tier.source === 'project' ? projectId : undefined,
-          params.id,
-        )
+        await deleteDashboard(tier.source, tier.source === 'project' ? projectId : undefined, params.id)
         return textResult([`Deleted dashboard "${params.id}" from ${tier.source}.`])
       } catch (err) {
         return errorResult(`Could not delete: ${err instanceof Error ? err.message : String(err)}`)
@@ -773,11 +740,7 @@ export function createInfraAppTools(opts: CreateInfraAppToolsOptions): AgentTool
       const tier = resolveTier(params.source)
       if (tier.error) return errorResult(tier.error)
       try {
-        await deletePlaybook(
-          tier.source,
-          tier.source === 'project' ? projectId : undefined,
-          params.id,
-        )
+        await deletePlaybook(tier.source, tier.source === 'project' ? projectId : undefined, params.id)
         return textResult([`Deleted plan "${params.id}" from ${tier.source}.`])
       } catch (err) {
         return errorResult(`Could not delete: ${err instanceof Error ? err.message : String(err)}`)

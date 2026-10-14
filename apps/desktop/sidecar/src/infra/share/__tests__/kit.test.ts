@@ -12,14 +12,7 @@
 // sau thì placeholder `<endpoint nội bộ>` chèn vào markup đã render và tạo ra một
 // lỗ XSS do chính mình dựng.
 import { describe, expect, it } from 'vitest'
-import {
-  applyMask,
-  applyRedact,
-  renderDoc,
-  renderHtml,
-  renderMarkdown,
-  shareFilename,
-} from '../kit.js'
+import { applyMask, applyRedact, renderDoc, renderHtml, renderMarkdown, shareFilename } from '../kit.js'
 import type { ShareDoc } from '../kit.js'
 
 const FOOTER = {
@@ -37,15 +30,26 @@ function doc(over: Partial<ShareDoc> = {}): ShareDoc {
       {
         title: 'Summary',
         blocks: [
-          { kind: 'paragraph', text: 'Endpoint 10.0.0.5:5432 and role arn:aws:iam::229:role/Admin' },
+          {
+            kind: 'paragraph',
+            text: 'Endpoint 10.0.0.5:5432 and role arn:aws:iam::229:role/Admin',
+          },
           { kind: 'list', items: ['first', 'second'] },
           {
             kind: 'table',
             columns: ['Step', 'Task'],
             rows: [['1', 'Scale | the service']],
           },
-          { kind: 'code', language: 'bash', text: 'aws ecs update-service --desired-count 4' },
-          { kind: 'callout', tone: 'warn', text: 'Rollback takes about a minute.' },
+          {
+            kind: 'code',
+            language: 'bash',
+            text: 'aws ecs update-service --desired-count 4',
+          },
+          {
+            kind: 'callout',
+            tone: 'warn',
+            text: 'Rollback takes about a minute.',
+          },
         ],
       },
     ],
@@ -65,7 +69,19 @@ function doc(over: Partial<ShareDoc> = {}): ShareDoc {
  * ngoài**, nên phép kiểm soi đúng hai nhóm đó.
  */
 function assertSelfContained(html: string): void {
-  for (const tag of ['script', 'link', 'img', 'iframe', 'object', 'embed', 'source', 'video', 'audio', 'base', 'form']) {
+  for (const tag of [
+    'script',
+    'link',
+    'img',
+    'iframe',
+    'object',
+    'embed',
+    'source',
+    'video',
+    'audio',
+    'base',
+    'form',
+  ]) {
     expect(html, `thẻ <${tag}> không được có mặt`).not.toMatch(new RegExp(`<${tag}\\b`, 'i'))
   }
   expect(html).not.toMatch(/@import/i)
@@ -182,9 +198,7 @@ describe('sanitizeSvg (SVG đi vào từ bên gọi = dữ liệu L1)', () => {
   })
 
   it('giữ nguyên phần vẽ hợp lệ', () => {
-    const html = renderHtml(
-      doc({ diagram: { svg: '<svg><path d="M0 0 L5 5"></path></svg>', title: 'Flow' } }),
-    )
+    const html = renderHtml(doc({ diagram: { svg: '<svg><path d="M0 0 L5 5"></path></svg>', title: 'Flow' } }))
     expect(html).toContain('<path d="M0 0 L5 5"></path>')
     expect(html).toContain('<figcaption>Flow</figcaption>')
   })
@@ -266,9 +280,7 @@ describe('shareFilename — mỗi lần xuất một tệp MỚI', () => {
   })
 
   it('chủ đề rỗng vẫn ra một tên hợp lệ', () => {
-    expect(shareFilename('###', 'markdown', new Date('2026-09-15T08:50:42Z'))).toBe(
-      'export-20260915-085042.md',
-    )
+    expect(shareFilename('###', 'markdown', new Date('2026-09-15T08:50:42Z'))).toBe('export-20260915-085042.md')
   })
 })
 

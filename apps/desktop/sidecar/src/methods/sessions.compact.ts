@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { runStream, registerAborter, unregisterAborter } from '../sessions/runner.js'
 import { isCliAttached } from '../sessions/cli-registry.js'
+import { assertClaudeSessionIdle } from '../sessions/claude-busy-guard.js'
 import { loadSession, compactSession } from '../sessions/store.js'
 import { loadProject } from '../projects/store.js'
 import { log } from '../util/logger.js'
@@ -26,6 +27,15 @@ const Params = z.object({
   // Recent-context budget kept verbatim (ADR 0047). Manual /compact sends 0
   // (keep only the last turn); omitted → Pi default (20k). Clamped ≥ 0.
   keepRecentTokens: z.number().int().min(0).optional(),
+  // Auto-compact policy (Anthropic path): the same fields the chat turn carries, so
+  // the CLI spawn gets the SAME env as the turns around it (a differing env would
+  // make the persistent CLI process respawn).
+  contextConfig: z
+    .object({
+      autoCompact: z.boolean().optional(),
+      compactAtTokens: z.number().int().min(0).max(1_000_000).optional(),
+    })
+    .optional(),
 })
 
 register('sessions.compact', async (raw) => {
@@ -38,9 +48,12 @@ register('sessions.compact', async (raw) => {
     return { ok: false, reason: 'no-session' }
   }
 
-  // Compaction viết lại context + xoá resume-handle của phiên — cùng lớp mutator
-  // transcript nên chịu cổng "CLI đang gắn" như truncate/rewind (sendMessage đã
-  // từ chối; compact cũng phải từ chối vì SDK transcript của CLI sẽ lệch).
+  // Phiên nhập từ Claude Desktop/CLI: transcript dùng chung, từ chối khi có thể còn mở ở đó.
+  await assertClaudeSessionIdle(session)
+
+  // Compaction viết lại context của phiên — cùng lớp mutator transcript nên chịu
+  // cổng "CLI đang gắn" như truncate/rewind (sendMessage đã từ chối; compact cũng phải
+  // từ chối vì SDK transcript của CLI sẽ lệch).
   if (isCliAttached(params.sessionId)) {
     throw new RpcError(-32021, 'A CLI is attached to this session — close it before compacting')
   }
@@ -65,6 +78,10 @@ register('sessions.compact', async (raw) => {
     ...(params.accountId ? { accountId: params.accountId } : {}),
   }
 
+  const native = params.provider === 'anthropic'
+  // Anthropic: nothing to compact until the CLI has a session to rewrite.
+  if (native && !session.sdkSessionId) return { ok: false, reason: 'nothing-to-compact' }
+
   // One AbortController for the run; sessions.cancel resolves it by messageId so
   // the Stop button aborts mid-compaction (mirrors sessions.send-message).
   const abortController = new AbortController()
@@ -72,28 +89,62 @@ register('sessions.compact', async (raw) => {
 
   try {
     const result = await runStream(
-      {
-        sessionId: params.sessionId,
-        pendingText: '/compact',
-        history: session.messages,
-        settings,
-        slashCommand: 'compact',
-        abortController,
-        ...(params.keepRecentTokens !== undefined
-          ? { keepRecentTokens: params.keepRecentTokens }
-          : {}),
-        // Prior checkpoint: lets runCompact skip a no-op re-compact and keeps the
-        // cut monotonic.
-        ...(session.compaction ? { compaction: session.compaction } : {}),
-        ...(cwd ? { cwd } : {}),
-      },
+      native
+        ? {
+            sessionId: params.sessionId,
+            // The CLI's own command, verbatim — see RunNonStreamArgs.nativeCommand.
+            pendingText: '/compact',
+            nativeCommand: true,
+            history: session.messages,
+            settings,
+            // Resume the SAME CLI session: compaction rewrites it in place.
+            ...(session.sdkSessionId ? { sdkSessionId: session.sdkSessionId } : {}),
+            abortController,
+            ...(params.contextConfig ? { contextConfig: params.contextConfig } : {}),
+            ...(cwd ? { cwd } : {}),
+            ...(params.projectId ? { projectId: params.projectId } : {}),
+          }
+        : {
+            sessionId: params.sessionId,
+            pendingText: '/compact',
+            history: session.messages,
+            settings,
+            slashCommand: 'compact',
+            abortController,
+            ...(params.keepRecentTokens !== undefined ? { keepRecentTokens: params.keepRecentTokens } : {}),
+            // Prior checkpoint: lets runCompact skip a no-op re-compact and keeps the
+            // cut monotonic.
+            ...(session.compaction ? { compaction: session.compaction } : {}),
+            ...(cwd ? { cwd } : {}),
+          },
       { onChunk: () => {} },
     )
 
-    // Compaction always runs through Pi's runCompact (ADR 0047/0058, routed in
-    // runner.ts) — provider-agnostic — so a real turn always yields a checkpoint
-    // here. On the Claude SDK path the persisted checkpoint clears sdkSessionId
-    // (session.compacted fold) → the next turn re-seeds a fresh, smaller SDK session.
+    if (native) {
+      if (result.stopReason === 'error') {
+        log.warn('sessions.compact (native) failed', {
+          sessionId: params.sessionId,
+          err: result.errorMessage,
+        })
+        return { ok: false, reason: 'error' }
+      }
+      // No boundary = the CLI declined (too little conversation to cut). The
+      // session is untouched, so this is "nothing", not an error.
+      const nativeCompaction = result.nativeCompactions?.[0]
+      if (!nativeCompaction) return { ok: false, reason: 'nothing-to-compact' }
+      if (result.sdkSessionId && result.sdkSessionId !== session.sdkSessionId) {
+        // Measured: a native compact keeps the id. If a CLI version ever rotates it,
+        // the next sendMessage re-points the session (it persists any id it sees).
+        log.warn('native compact rotated the CLI session id', {
+          sessionId: params.sessionId,
+        })
+      }
+      return { ok: true, native: true, nativeCompaction }
+    }
+
+    // Pi path: runCompact always yields a checkpoint on a real run. Pi/Codex have no
+    // CLI session handle to preserve; the persisted checkpoint clears the resume
+    // handles (session.compacted fold) so the next turn re-seeds smaller.
     if (!result.compaction) {
       // Nothing was summarised (transcript too short / already compacted). The UI
       // clears its running state without adding a checkpoint.
@@ -105,9 +156,7 @@ register('sessions.compact', async (raw) => {
     return {
       ok: true,
       compaction: result.compaction,
-      ...(result.compactedHistoryChars !== undefined
-        ? { historyChars: result.compactedHistoryChars }
-        : {}),
+      ...(result.compactedHistoryChars !== undefined ? { historyChars: result.compactedHistoryChars } : {}),
     }
   } catch (err) {
     log.warn('sessions.compact failed', {

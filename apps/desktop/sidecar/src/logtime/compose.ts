@@ -21,8 +21,11 @@ export interface ComposeContextItem {
   // khảo, không phải con số bắt buộc dùng.
   elapsedLabel: string
   issue?: number | undefined
-  // PR số — model được dặn để "(PR #N)" trong note, KHÔNG dùng làm issue auto-link.
   pr?: number | undefined
+  // Tiêu đề THẬT của issue/PR trên GitHub — nơi duy nhất nói việc là tính năng gì
+  // (title phiên thường chỉ là URL). Fetch qua `gh api`; vắng ⇒ model chỉ có title
+  // gợi ý + digest.
+  refTitle?: string | undefined
   // Trích nội dung thực (digest ngắn) để model viết note CỤ THỂ thay vì diễn giải lại
   // tiêu đề. Vắng ⇒ chỉ có tiêu đề.
   detail?: string | undefined
@@ -75,9 +78,10 @@ export function buildComposeContext(input: ComposePromptInput): string {
     const issue = it.issue !== undefined ? ` #${it.issue}` : ''
     const pr = it.pr !== undefined ? ` (PR #${it.pr})` : ''
     // "[P1 YAHAGI 168]" — model echo lại tag P1, KHÔNG phải id thật.
-    lines.push(
-      `  ${kind}  ${it.title}${issue}${pr}  ${it.elapsedLabel}  [${it.projectTag} ${it.projectLabel}]`,
-    )
+    lines.push(`  ${kind}  ${it.title}${issue}${pr}  ${it.elapsedLabel}  [${it.projectTag} ${it.projectLabel}]`)
+    // Tiêu đề thật của issue/PR (nếu fetch được) — model đọc dòng này để viết "làm
+    // gì" thay vì "kiểm tra gì".
+    if (it.refTitle) lines.push(`      Việc: ${it.refTitle}`)
     // Nội dung thực (nếu đọc được) thụt dòng dưới việc — để model viết note bám vào đó.
     if (it.detail) {
       for (const line of it.detail.split('\n')) lines.push(`      ${line}`)
@@ -112,8 +116,15 @@ export function buildComposeSystemPrompt(): string {
     'review, update, triển khai/implement, dò, test, viết UT, deploy, refactor…). Giữ',
     'NGUYÊN thuật ngữ IT, đừng dịch sang tiếng Việt ("fix bug"/"review PR", chứ không',
     '"khắc phục lỗi"/"xem xét yêu cầu hợp nhất"). Nói yêu cầu/chức năng NGHIỆP VỤ nào',
-    'được xử lý, KHÔNG nêu chi tiết kỹ thuật (tên file, hàm/biến, câu lệnh, code, tên',
-    'bảng/cột) — còn tên màn hình, loại mail/báo cáo, số issue thì giữ. Mỗi dòng mở',
+    'được xử lý, KHÔNG nêu chi tiết kỹ thuật — tên file, hàm/biến, câu lệnh, code, tên',
+    'bảng/cột, VÀ cả khái niệm repo/hạ tầng như force-push, mergeable, Docker, CI/CD,',
+    'e2e/harness, config, migration trừ khi chính nó là việc của yêu cầu — còn tên màn',
+    'hình, loại mail/báo cáo, số issue thì giữ. KHÔNG kể lại các BƯỚC nội bộ của công',
+    'việc (kiểm tra, dò, xác nhận, đọc log): note nói VIỆC và KẾT QUẢ, không kể quá',
+    'trình tay — "Review PR #668 (phần import), confirm cách xử lý xung đột" chứ không',
+    '"Kiểm tra PR #668: phát hiện head đã force-push, dò harness e2e và xác định',
+    'trạng thái mergeable". Khi có thể thì nêu PHẦN nghiệp vụ được đụng tới (màn nào,',
+    'luồng nào, nội dung thay đổi là gì) chứ đừng trả trơ "Review PR #668". Mỗi dòng mở',
     'đầu một kiểu khác nhau; KHÔNG ép mọi note vào cùng một khuôn kiểu "Làm rõ và thống',
     'nhất …" (chỉ dùng mấy động từ đó khi việc thật sự là làm rõ hay chốt phương án).',
     'Khi việc có phần nội dung (thụt dòng bên dưới), đọc để hiểu rồi viết bám vào đó —',
@@ -177,9 +188,16 @@ export function buildLineSummarySystemPrompt(): string {
     'rõ hay chốt phương án.',
     '',
     'Nói yêu cầu/chức năng NGHIỆP VỤ nào được xử lý, KHÔNG đi vào chi tiết KỸ THUẬT',
-    'triển khai: không nêu tên file, tên hàm/biến, câu lệnh, đoạn code, tên bảng/cột.',
-    'Tên màn hình, loại mail/báo cáo, số issue/PR thì giữ. Cũng KHÔNG viết chung chung',
-    'kiểu "xử lý yêu cầu #192"/"lập kế hoạch triển khai".',
+    'triển khai: không nêu tên file, tên hàm/biến, câu lệnh, đoạn code, tên bảng/cột,',
+    'và cũng không nêu khái niệm repo/hạ tầng (force-push, mergeable, Docker, CI/CD,',
+    'e2e/harness, config, migration) trừ khi chính nó là việc của yêu cầu. Tên màn',
+    'hình, loại mail/báo cáo, số issue/PR thì giữ. KHÔNG kể lại các BƯỚC nội bộ',
+    '(kiểm tra, dò, xác nhận, đọc log): note nói VIỆC và KẾT QUẢ, không kể quá trình',
+    'tay — "Review PR #668 (phần import), confirm cách xử lý xung đột" chứ không',
+    '"Kiểm tra PR #668: phát hiện head đã force-push, dò harness e2e…". Khi có thể',
+    'thì nêu PHẦN nghiệp vụ được đụng tới (màn nào, luồng nào, đổi gì) chứ đừng trả',
+    'trơ "Review PR #668". Cũng KHÔNG viết chung chung kiểu "xử lý yêu cầu #192"/"lập',
+    'kế hoạch triển khai".',
     '',
     'Ví dụ note nghe tự nhiên (noi GIỌNG, không phải chép nội dung):',
     '- "Fix bug màn confirm hiển thị sai số tiền khi áp giảm giá"',
@@ -188,6 +206,9 @@ export function buildLineSummarySystemPrompt(): string {
     '- "Điều tra nguyên nhân job xuất báo cáo chạy chậm, note lại cho anh leader"',
     '',
     'Ví dụ XẤU (quá kỹ thuật): "Sửa hàm exportCsv thêm cột ken_cd, cập nhật migration".',
+    'Ví dụ XẤU (kể bước việc nội bộ): "Kiểm tra PR #668: phát hiện head đã force-push,',
+    'dò harness e2e và xác định trạng thái mergeable" — đúng hơn: "Review PR #668',
+    '(phần import), confirm cách xử lý xung đột".',
     'Ví dụ XẤU (quá chung): "Xử lý yêu cầu #594".',
     'Ví dụ XẤU (giọng báo cáo, một khuôn cho mọi việc):',
     '"Làm rõ và thống nhất phương án xử lý cho yêu cầu #594".',
@@ -222,20 +243,50 @@ export function buildLineSummaryUserPrompt(input: LineSummaryInput): string {
 // Trích nội dung một phiên thành đoạn ngắn cho model: câu HỎI đầu (user muốn gì) +
 // KẾT QUẢ cuối (agent làm xong gì). Đủ để viết note cụ thể mà không nhồi cả transcript
 // (tốn token + phần lớn là tool/log). Cắt mỗi phần theo `cap`, bỏ tin rỗng.
-export function buildSessionDigest(
-  messages: { role: string; text: string }[],
-  cap = 1400,
-): string {
+export function buildSessionDigest(messages: { role: string; text: string }[], cap = 1400): string {
   const clip = (s: string): string => {
     const t = s.trim().replace(/\s+/g, ' ')
     return t.length > cap ? `${t.slice(0, cap)}…` : t
   }
   const firstUser = messages.find((m) => m.role === 'user' && m.text.trim().length > 0)
+  // Message agent ĐẦU tiên thường là "đã fetch xong — đây là PR về X" — chính là nơi
+  // duy nhất context mang TÍNH NĂNG của việc (tiêu đề user thường chỉ là URL/lệnh,
+  // message cuối lại toàn quy trình kết thúc). Thiếu nó thì model chỉ có "review PR
+  // 668" + log kỹ thuật, không biết PR làm gì để viết.
+  const firstAgent = messages.find((m) => m.role === 'agent' && m.text.trim().length > 0)
   const lastAgent = [...messages].reverse().find((m) => m.role === 'agent' && m.text.trim().length > 0)
   const out: string[] = []
   if (firstUser) out.push(`Yêu cầu: ${clip(firstUser.text)}`)
+  if (firstAgent && firstAgent !== lastAgent) out.push(`Bối cảnh: ${clip(firstAgent.text)}`)
   if (lastAgent && lastAgent !== firstUser) out.push(`Kết quả: ${clip(lastAgent.text)}`)
   return out.join('\n')
+}
+
+// Câu/vế nhắc cơ chế repo-hạ tầng NỘI BỘ (force-push, sha, MERGEABLE/BEHIND, Docker,
+// e2e, CI, stack trace…) — dữ kiện của việc kiểm tra, KHÔNG phải việc. Model bị pull
+// mạnh bởi các từ này trong `detail` và sẽ chép lên note dù prompt đã cấm, nên lọc
+// ở đây: không có trong context thì không thể lọt vào note.
+const INTERNAL_RE =
+  /force-?push|mergeable|conflict(ed)?\b|\bBEHIND\b|\bAHEAD\b|\bsha\b|\bcommit\b|[0-9a-f]{7,}\s*→\s*[0-9a-f]{7,}|docker|e2e|harness|\bci\b|ci\/cd|pipeline|stack ?trace|migration|eslint|typecheck|tsc\b|jest|vitest|prisma|rebase|cherry-?pick/i
+
+// Lọc `detail` (digest phiên / mô tả task): bỏ từng VẾ câu chứa dữ kiện nội bộ, giữ
+// vế còn lại để model vẫn có bối cảnh nghiệp vụ. Tách trên ',', ';', '\n', ' — ' vì
+// kết quả phiên thường liệt kê phát hiện bằng dấu phẩy ("… force-push (abc→def),
+// BEHIND nhưng MERGEABLE, kiểm tra Docker và e2e"). Vế bị bỏ hết thì bỏ luôn dòng —
+// title gốc vẫn đủ cho model viết note.
+export function scrubInternalDetail(text: string): string {
+  const kept: string[] = []
+  for (const line of text.split('\n')) {
+    // Giữ prefix "Yêu cầu:"/"Kết quả:" của digest — nó là khung, không phải nội dung.
+    const prefix = /^([^:]{1,24}:\s*)/.exec(line)?.[1] ?? ''
+    const body = line.slice(prefix.length)
+    const parts = body
+      .split(/[,;]\s+|\s+—\s+/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0 && !INTERNAL_RE.test(p))
+    if (parts.length > 0) kept.push(prefix + parts.join(', '))
+  }
+  return kept.join('\n').trim()
 }
 
 // Model có thể trả kèm ngoặc kép / xuống dòng dù đã dặn. Lấy dòng đầu không rỗng, bỏ

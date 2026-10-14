@@ -46,6 +46,7 @@ import { log } from '../util/logger.js'
 import { loadSession, updateSessionMetadata } from './store.js'
 import { importCliTranscript } from './cli-import.js'
 import { activeSessionIds } from './runner.js'
+import { closeLive } from '../runtime/claude-sdk/live-process.js'
 import type { Session, SessionCliKind } from '../types/shared.js'
 
 export interface CliLink {
@@ -140,10 +141,7 @@ function claudeExeName(): string {
 export async function resolveCliCwd(session: Session): Promise<string> {
   if (session.workspaceFolder) {
     try {
-      if (
-        isAbsolute(session.workspaceFolder) &&
-        (await stat(session.workspaceFolder)).isDirectory()
-      ) {
+      if (isAbsolute(session.workspaceFolder) && (await stat(session.workspaceFolder)).isDirectory()) {
         return session.workspaceFolder
       }
     } catch {
@@ -192,10 +190,7 @@ const CLI_TOKEN_MIN_LIFETIME_MS = 5 * 60 * 1000
 async function claudeInvocation(session: Session): Promise<CliInvocation> {
   const file = resolveClaudeBinary() ?? pathCandidate(claudeExeName())
   if (!file) {
-    throw new RpcError(
-      -32021,
-      'claude CLI not found — reinstall the app or install `claude` on PATH',
-    )
+    throw new RpcError(-32021, 'claude CLI not found — reinstall the app or install `claude` on PATH')
   }
 
   let args: string[]
@@ -248,10 +243,7 @@ async function claudeInvocation(session: Session): Promise<CliInvocation> {
 // việc AWOG refresh token là việc của đường turn.
 async function codexInvocation(session: Session): Promise<CliInvocation> {
   if (!session.codexThreadId) {
-    throw new RpcError(
-      -32021,
-      'Codex CLI needs an existing thread; send one message in this session first',
-    )
+    throw new RpcError(-32021, 'Codex CLI needs an existing thread; send one message in this session first')
   }
   let file: string
   try {
@@ -282,10 +274,7 @@ async function codexInvocation(session: Session): Promise<CliInvocation> {
   } catch (err) {
     // Provisioning chạy `codex login` + ghi file — lỗi của nó không phải lỗi
     // nội bộ bất định (-32603), là "CLI không mở được" (-32021).
-    throw new RpcError(
-      -32021,
-      `codex home provisioning failed: ${err instanceof Error ? err.message : String(err)}`,
-    )
+    throw new RpcError(-32021, `codex home provisioning failed: ${err instanceof Error ? err.message : String(err)}`)
   }
   const env = sanitizedBaseEnv()
   env.CODEX_HOME = home
@@ -298,10 +287,7 @@ async function codexInvocation(session: Session): Promise<CliInvocation> {
 function devinInvocation(): CliInvocation {
   const file = resolveDevinBinary()
   if (!file) {
-    throw new RpcError(
-      -32021,
-      'devin CLI not found — install Devin CLI or set AWOG_DEVIN_BIN',
-    )
+    throw new RpcError(-32021, 'devin CLI not found — install Devin CLI or set AWOG_DEVIN_BIN')
   }
   return { file, args: [], env: sanitizedBaseEnv(), linked: false }
 }
@@ -353,6 +339,14 @@ export async function openCliLink(args: {
   // link mới hơn (mở lại ngay sau khi đóng).
   let link: CliLink | undefined
   const spawnedAt = Date.now()
+  // An interactive `claude --resume <id>` and the session's long-lived chat process
+  // (ADR 0099) would both write the SAME transcript — the CLI silently forks it when the
+  // id is attached elsewhere. Close the chat process, background tasks included; the next
+  // chat turn respawns via `resume`. A turn in flight is NOT interrupted here: the gate
+  // below refuses the attach and the turn keeps its process.
+  if (kind === 'claude' && !activeSessionIds().includes(sessionId)) {
+    closeLive(sessionId, 'interactive cli attached')
+  }
   const { terminalId } = await terminalManager.spawnProcess({
     file: invocation.file,
     args: invocation.args,
@@ -381,10 +375,7 @@ export async function openCliLink(args: {
       // PTY có thể đã tự thoát — onExit vẫn chạy, `link` chưa set nên nó
       // không đụng `links`; không có gì để dọn thêm.
     }
-    throw new RpcError(
-      -32021,
-      'This session has a turn in flight — wait for it or stop it before opening a CLI',
-    )
+    throw new RpcError(-32021, 'This session has a turn in flight — wait for it or stop it before opening a CLI')
   }
 
   link = {
@@ -394,9 +385,7 @@ export async function openCliLink(args: {
     cwd,
     spawnedAt,
     linked: invocation.linked,
-    ...(invocation.pendingSdkSessionId
-      ? { pendingSdkSessionId: invocation.pendingSdkSessionId }
-      : {}),
+    ...(invocation.pendingSdkSessionId ? { pendingSdkSessionId: invocation.pendingSdkSessionId } : {}),
   }
   links.set(sessionId, link)
   lastLinks.set(sessionId, link)
@@ -478,10 +467,7 @@ export function assertCliDetachedForDelete(sessionId: string): void {
   // biến mất (kill/exit đã reap) nghĩa là link chỉ còn là xác stale.
   const alive = terminalManager.groupKeyFor(link.terminalId) === `cli:${sessionId}`
   if (alive) {
-    throw new RpcError(
-      -32021,
-      'A CLI is still attached to this session — close it before deleting the session',
-    )
+    throw new RpcError(-32021, 'A CLI is still attached to this session — close it before deleting the session')
   }
   links.delete(sessionId)
   log.warn('cli link dropped as stale during session delete', {

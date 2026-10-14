@@ -80,8 +80,8 @@ import { useInfraExplorerCatalog } from '~/composables/useInfraExplorerCatalog'
 import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
 import { useLinkOpen } from '~/composables/useLinkOpen'
 import Input from '~/components/ui/input/Input.vue'
+import { highlightSegments } from '~/utils/fuzzy'
 import {
-  highlightSegments,
   rankCommands,
   useCommandPalette,
   type PaletteCommand,
@@ -111,7 +111,7 @@ const rowEls = useTemplateRef<HTMLElement[]>('rowEls')
 
 // ── Navigate commands (file-based routes) ────────────────────────────────────
 const NAV_ROUTES: { to: string; key: string }[] = [
-  { to: '/sessions', key: 'palette.cmd.goSessions' },
+  { to: '/workbench', key: 'palette.cmd.goSessions' },
   { to: '/agents', key: 'palette.cmd.goAgents' },
   { to: '/projects', key: 'palette.cmd.goProjects' },
   { to: '/git', key: 'palette.cmd.goGit' },
@@ -144,7 +144,7 @@ const commands = computed<PaletteCommand[]>(() => {
       // the header "New" button. Project scoping is intentionally only on ⌘T + the
       // page "+", not on this generic affordance. Do NOT pass activeTab here.
       store.create()
-      void navigateTo('/sessions')
+      void navigateTo('/workbench')
     },
   })
   for (const s of store.sessions.slice(0, RECENT_LIMIT)) {
@@ -159,7 +159,7 @@ const commands = computed<PaletteCommand[]>(() => {
       section: 'session',
       run: () => {
         store.setActive(s.id)
-        void navigateTo('/sessions')
+        void navigateTo('/workbench')
       },
     })
   }
@@ -179,7 +179,7 @@ const commands = computed<PaletteCommand[]>(() => {
         const first = store.sessions.find((s) => s.project === p.id)
         if (first) store.setActive(first.id)
         else store.create(p.id)
-        void navigateTo('/sessions')
+        void navigateTo('/workbench')
       },
     })
   }

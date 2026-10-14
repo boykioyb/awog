@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>AWOG · Dense Dark — layout variants (v2)</title>
+<!--
+  v2: cùng MỘT skin (dense-dark tokens), khác CẤU TRÚC.
+  A — Unified sidebar: rail + list gộp một nav, transcript centered, panel = rail+drawer, status bar nhét vào composer.
+  B — Command-first: bỏ session list (⌘K + chip strip), panel là overlay trượt lên nội dung.
+  C — IDE workbench: session = tab ngang, tools dời xuống bottom dock, bỏ cột phải.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter+Variable:opsz,wght@14..32,400;14..32,510;14..32,590;14..32,680&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { background:#000; }
+  body { font-family:'Inter Variable',-apple-system,BlinkMacSystemFont,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { padding:28px; }
+  h1.opt { font-size:15px; font-weight:590; color:#f7f8f8; margin:34px 0 4px; }
+  .opt-note { font-size:12px; color:#6e6e73; margin-bottom:14px; max-width:1280px; line-height:1.6; }
+  .opt-note b { color:#a1a1a6; font-weight:510; }
+  svg { display:block; }
+  kbd { font:500 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:#5f636b; background:#171a1f; border:1px solid #22252b; border-radius:4px; padding:2px 5px; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+  :root, .sk {
+    --bg:#090a0c; --l1:#0e1013; --l2:#131519; --l3:#191b20; --input:#171a1f;
+    --hover:#202329; --active:#262a31; --border:#22252b; --border2:#33363e; --hair:rgba(255,255,255,.055);
+    --t1:#f4f6f8; --t2:#d2d7de; --t3:#8b9099; --t4:#5f636b;
+    --ac:#10b981; --acText:#021410; --acDim:rgba(16,185,129,.14); --acBorder:rgba(16,185,129,.42);
+  }
+  .frame { width:1280px; height:780px; display:flex; overflow:hidden; background:var(--bg); color:var(--t1); font-size:13px; border:1px solid var(--border); }
+
+  /* ---------- shared atoms ---------- */
+  .ibtn { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--t4); flex:none; }
+  .ibtn:hover { background:var(--hover); color:var(--t1); }
+  .ibtn svg { width:15px; height:15px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px; border-radius:999px; font-size:11px; font-weight:510; border:1px solid var(--border2); color:var(--t3); white-space:nowrap; }
+  .chip.run { color:var(--ac); border-color:var(--acBorder); background:var(--acDim); }
+  .chip .spin { width:9px; height:9px; border:1.5px solid var(--ac); border-top-color:transparent; border-radius:50%; animation:sp .9s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+
+  /* ---------- shared transcript content ---------- */
+  .tcol { min-width:0; display:flex; flex-direction:column; }
+  .msgs { flex:1; overflow:hidden; padding:8px 0 0; }
+  .msg { padding:14px 0; border-bottom:1px solid var(--hair); }
+  .msg:last-child { border-bottom:0; }
+  .who { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .who .nm { font-weight:590; font-size:12.5px; }
+  .who .mdl { color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .who .tm { margin-left:auto; color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .av { width:20px; height:20px; border-radius:6px; background:var(--hover); display:flex; align-items:center; justify-content:center; color:var(--t3); flex:none; }
+  .av svg { width:12px; height:12px; }
+  .av.ai { background:var(--acDim); color:var(--ac); }
+  .msg p { font-size:13px; line-height:1.55; color:var(--t2); }
+  .msg p + p { margin-top:8px; }
+  code.ic { font-family:ui-monospace,Menlo,monospace; font-size:12px; background:rgba(255,255,255,.05); padding:1px 5px; border-radius:4px; }
+  .tool { margin-top:10px; border:1px solid var(--border); border-radius:10px; background:var(--l1); overflow:hidden; }
+  .tool .thead { display:flex; align-items:center; gap:8px; padding:7px 10px; color:var(--t3); font-size:12px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .tool .thead .ok { color:var(--ac); }
+  .tool .thead .dur { margin-left:auto; color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .tool .tbody { padding:8px 10px; font-size:12px; color:var(--t2); font-family:ui-monospace,Menlo,monospace; }
+  .codeblk { margin-top:10px; border:1px solid var(--border); border-radius:10px; background:#0b0c0e; overflow:hidden; }
+  .codeblk .chead { display:flex; padding:6px 10px; color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; box-shadow:inset 0 -1px 0 var(--hair); }
+  .codeblk pre { padding:10px 12px; font-family:ui-monospace,Menlo,monospace; font-size:12px; line-height:1.55; color:#c9d1d9; overflow:hidden; }
+  .codeblk .add { color:#7ee2b8; } .codeblk .kw { color:#ff9e64; }
+
+  /* ---------- shared composer ---------- */
+  .cwrap { flex:none; padding:10px 0 12px; }
+  .cbox { border:1px solid var(--border2); border-radius:11px; background:var(--input); }
+  .cbox .ta { padding:10px 12px 4px; color:var(--t4); font-size:13px; min-height:38px; }
+  .cbox .ta .hint { font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .cbar { display:flex; align-items:center; gap:6px; padding:6px 8px 8px; }
+  .pill { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:6px; font-size:11.5px; color:var(--t3); }
+  .pill:hover { background:var(--hover); color:var(--t1); }
+  .send { width:26px; height:26px; border-radius:8px; background:var(--ac); color:var(--acText); display:flex; align-items:center; justify-content:center; flex:none; }
+  .send svg { width:14px; height:14px; }
+  .ctx { color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; display:flex; align-items:center; gap:5px; }
+  .ctx .bar { width:42px; height:3px; border-radius:2px; background:var(--active); overflow:hidden; }
+  .ctx .bar i { display:block; height:100%; width:21%; background:var(--ac); }
+
+  /* ---------- shared panel content ---------- */
+  .psec { color:var(--t4); font-size:10.5px; font-weight:510; margin:14px 0 6px; }
+  .psec:first-child { margin-top:0; }
+  .plan { display:flex; align-items:center; gap:8px; height:26px; font-size:12.5px; color:var(--t2); }
+  .plan .ck { width:14px; height:14px; border-radius:4px; flex:none; display:flex; align-items:center; justify-content:center; }
+  .plan.done .ck { background:var(--acDim); color:var(--ac); }
+  .plan.done .tt { color:var(--t4); text-decoration:line-through; text-decoration-color:var(--t4); }
+  .plan.now .ck { border:1.5px solid var(--ac); }
+  .plan.todo .ck { border:1px solid var(--border2); }
+  .plan .tt { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ============ A — Unified sidebar ============ */
+  .fa .nav { width:232px; flex:none; background:var(--l1); border-right:1px solid var(--hair); display:flex; flex-direction:column; }
+  .fa .nav .ws { display:flex; align-items:center; gap:7px; height:40px; padding:0 12px; font-weight:590; font-size:12.5px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .fa .nav .ws .lg { width:20px; height:20px; border-radius:6px; background:var(--ac); color:var(--acText); font-size:10px; font-weight:680; display:flex; align-items:center; justify-content:center; }
+  .fa .nav .find { margin:8px 10px; height:28px; display:flex; align-items:center; gap:7px; padding:0 8px; background:var(--input); border:1px solid var(--border); border-radius:8px; color:var(--t4); font-size:12px; }
+  .fa .nav .find kbd { margin-left:auto; }
+  .fa .sec { padding:10px 14px 4px; color:var(--t4); font-size:10.5px; font-weight:510; display:flex; }
+  .fa .sec b { margin-left:auto; font-weight:510; }
+  .fa .proj { padding:2px 14px; color:var(--t3); font-size:12px; height:24px; display:flex; align-items:center; gap:6px; }
+  .fa .srow { height:26px; display:flex; align-items:center; gap:7px; margin:0 6px 0 12px; padding:0 7px; border-radius:6px; color:var(--t2); font-size:12.5px; }
+  .fa .srow .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fa .srow .meta { color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .fa .srow.on { background:var(--acDim); box-shadow:inset 0 0 0 1px var(--acBorder); color:var(--t1); position:relative; }
+  .fa .srow.on::before { content:''; position:absolute; left:0; top:5px; bottom:5px; width:2px; border-radius:2px; background:var(--ac); }
+  .fa .srow.h { margin:0 6px; padding-left:7px; color:var(--t3); }
+  .fa .srow.h svg { width:14px; height:14px; }
+  .fa .main { flex:1; display:flex; min-width:0; }
+  .fa .center { flex:1; display:flex; flex-direction:column; align-items:center; min-width:0; }
+  .fa .measure { width:720px; max-width:100%; padding:0 24px; display:flex; flex-direction:column; min-height:0; flex:1; }
+  .fa .hd { height:44px; flex:none; display:flex; align-items:center; gap:9px; box-shadow:inset 0 -1px 0 var(--hair); width:100%; }
+  .fa .hd .crumb { font-size:12px; color:var(--t4); }
+  .fa .hd .ttl { font-size:13px; font-weight:590; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fa .hd .grow { flex:1; }
+  .fa .prail { width:38px; flex:none; border-left:1px solid var(--hair); display:flex; flex-direction:column; align-items:center; padding-top:10px; gap:4px; background:var(--l1); }
+  .fa .prail a { width:28px; height:28px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--t4); }
+  .fa .prail a.on { background:var(--hover); color:var(--t1); }
+  .fa .prail a svg { width:15px; height:15px; }
+
+  /* ============ B — Command-first ============ */
+  .fb .rail { width:46px; flex:none; background:var(--l1); border-right:1px solid var(--hair); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:4px; }
+  .fb .rail .logo { width:26px; height:26px; border-radius:8px; background:var(--ac); color:var(--acText); display:flex; align-items:center; justify-content:center; font-weight:680; font-size:12px; margin-bottom:10px; }
+  .fb .rail a { width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--t4); }
+  .fb .rail a.on { background:var(--hover); color:var(--t1); }
+  .fb .rail a svg { width:16px; height:16px; }
+  .fb .rail .sp { flex:1; }
+  .fb .stage { flex:1; display:flex; flex-direction:column; align-items:center; min-width:0; position:relative; }
+  .fb .cmdwrap { width:760px; max-width:calc(100% - 48px); padding:14px 0 0; }
+  .fb .cmdbar { display:flex; align-items:center; gap:10px; height:40px; padding:0 14px; background:var(--input); border:1px solid var(--border2); border-radius:12px; font-size:13px; }
+  .fb .cmdbar .ttl { font-weight:590; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fb .cmdbar kbd { margin-left:auto; }
+  .fb .recents { display:flex; gap:6px; margin-top:10px; overflow:hidden; }
+  .fb .recents .rchip { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; background:var(--l2); border:1px solid var(--hair); color:var(--t3); font-size:11.5px; white-space:nowrap; }
+  .fb .recents .rchip.on { color:var(--t1); border-color:var(--border2); }
+  .fb .measure { width:760px; max-width:calc(100% - 48px); flex:1; display:flex; flex-direction:column; min-height:0; }
+  .fb .scrim { position:absolute; inset:0; background:rgba(0,0,0,.45); }
+  .fb .drawer { position:absolute; top:0; right:0; bottom:0; width:320px; background:var(--l1); border-left:1px solid var(--border); box-shadow:-16px 0 48px rgba(0,0,0,.5); display:flex; flex-direction:column; }
+  .fb .drawer .dhead { height:40px; display:flex; align-items:center; gap:4px; padding:0 10px; font-weight:590; font-size:12.5px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .fb .drawer .pbody { flex:1; padding:12px 14px; overflow:hidden; }
+
+  /* ============ C — IDE workbench ============ */
+  .fc .rail { width:46px; flex:none; background:var(--l1); border-right:1px solid var(--hair); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:4px; }
+  .fc .rail .logo { width:26px; height:26px; border-radius:8px; background:var(--ac); color:var(--acText); display:flex; align-items:center; justify-content:center; font-weight:680; font-size:12px; margin-bottom:10px; }
+  .fc .rail a { width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--t4); }
+  .fc .rail a.on { background:var(--hover); color:var(--t1); }
+  .fc .rail a svg { width:16px; height:16px; }
+  .fc .rail .sp { flex:1; }
+  .fc .stage { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .fc .hd { height:36px; flex:none; display:flex; align-items:center; gap:10px; padding:0 12px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .fc .hd .crumb { font-size:11.5px; color:var(--t4); }
+  .fc .hd .grow { flex:1; }
+  .fc .tabs { height:34px; flex:none; display:flex; align-items:flex-end; gap:2px; padding:0 8px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .fc .tabi { display:flex; align-items:center; gap:7px; height:28px; padding:0 10px; border-radius:7px 7px 0 0; font-size:12px; color:var(--t3); border:1px solid transparent; border-bottom:0; }
+  .fc .tabi.on { background:var(--l2); color:var(--t1); border-color:var(--border); }
+  .fc .tabi .x { color:var(--t4); font-size:11px; }
+  .fc .tabi.add { color:var(--t4); }
+  .fc .center { flex:1; display:flex; justify-content:center; min-height:0; }
+  .fc .measure { width:780px; max-width:100%; padding:0 24px; display:flex; flex-direction:column; min-height:0; }
+  .fc .dock { height:182px; flex:none; border-top:1px solid var(--border); background:var(--l1); display:flex; flex-direction:column; }
+  .fc .docktabs { height:30px; display:flex; align-items:center; gap:2px; padding:0 8px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .fc .dt { height:24px; padding:0 9px; display:flex; align-items:center; gap:5px; border-radius:6px; color:var(--t4); font-size:11.5px; font-weight:510; }
+  .fc .dt.on { background:var(--hover); color:var(--t1); }
+  .fc .dt svg { width:13px; height:13px; }
+  .fc .dt .bdg { background:var(--active); border-radius:8px; padding:0 5px; font-size:10px; font-family:ui-monospace,Menlo,monospace; }
+  .fc .dockbody { flex:1; display:flex; min-height:0; }
+  .fc .term { flex:1; padding:8px 14px; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; line-height:1.7; color:var(--t2); overflow:hidden; }
+  .fc .term .p { color:var(--ac); } .fc .term .d { color:var(--t4); }
+  .fc .dockside { width:250px; flex:none; border-left:1px solid var(--hair); padding:8px 12px; overflow:hidden; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="opt">A — Unified sidebar</h1>
+  <div class="opt-note"><b>Thay đổi:</b> rail + session list gộp thành MỘT nav (workspace → sections → sessions theo project, collapse về 40px) · header = breadcrumb + actions · transcript + composer căn giữa measure 720 · cột phải thành <b>icon-rail 38px thường trực + drawer</b> (đang mở Plan) · status bar XOÁ — context meter + git branch gộp vào composer/nav. <b>Trade-off:</b> vẫn 1 cột nav nhưng giảm 1 cột chrome; measure giới hạn dễ đọc prose.</div>
+  <div class="frame sk fa">
+    <nav class="nav">
+      <div class="ws"><span class="lg">A</span>AWOG <span style="flex:1"></span><span class="ibtn" style="width:22px;height:22px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m9 18 6-6-6-6"/></svg></span></div>
+      <div class="find"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Jump to… <kbd>⌘K</kbd></div>
+      <div class="srow h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="t">Tasks</span><span class="meta">4</span></div>
+      <div class="srow h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg><span class="t">Git</span><span class="meta">main ↗</span></div>
+      <div class="srow h"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg><span class="t">Monitor</span></div>
+      <div class="sec">Sessions<b>awog · 4</b></div>
+      <div class="srow"><span class="dot" style="background:#3caefe"></span><span class="t">Review PR auth flow</span><span class="meta">2m</span></div>
+      <div class="srow on"><span class="dot" style="background:var(--ac)"></span><span class="t">Refactor session transcript</span><span class="meta">41.2k</span></div>
+      <div class="srow"><span class="dot" style="background:#8b9099"></span><span class="t">Fix browser occlusion</span><span class="meta">1h</span></div>
+      <div class="srow"><span class="dot" style="background:#f0bf00"></span><span class="t">Điều tra codex thread</span><span class="meta">3h</span></div>
+      <div class="sec">Sessions<b>kyroweb · 2</b></div>
+      <div class="srow"><span class="dot" style="background:#8b9099"></span><span class="t">Viết ADR 0094</span><span class="meta">1d</span></div>
+      <div class="srow"><span class="dot" style="background:#27a644"></span><span class="t">Migrate logtime store</span><span class="meta">2d</span></div>
+      <div style="flex:1"></div>
+      <div class="srow h" style="margin-bottom:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8m10-10 2.8-2.8"/></svg><span class="t">Settings</span></div>
+    </nav>
+    <div class="main">
+      <div class="center">
+        <div class="measure">
+          <div class="hd">
+            <span class="crumb">Sessions /</span><span class="ttl">Refactor session transcript store</span>
+            <span class="chip run"><span class="spin"></span>Running</span>
+            <span class="grow"></span>
+            <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+            <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>
+            <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+          </div>
+          <div class="tcol"><div class="msgs" data-slot="msgs"></div><div class="cwrap" data-slot="composer"></div></div>
+        </div>
+      </div>
+      <div class="prail">
+        <a class="on" title="Plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
+        <a title="Files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></a>
+        <a title="Terminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 17 6-6-6-6M12 19h8"/></svg></a>
+        <a title="Browser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg></a>
+        <a title="Diff"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M3 12h18"/></svg></a>
+      </div>
+      <aside style="width:292px;flex:none;border-left:1px solid var(--hair);background:var(--l1);display:flex;flex-direction:column">
+        <div style="height:40px;display:flex;align-items:center;padding:0 12px;font-weight:590;font-size:12.5px;box-shadow:inset 0 -1px 0 var(--hair)">Plan<span style="flex:1"></span><span class="ibtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span></div>
+        <div style="flex:1;padding:12px 14px;overflow:hidden" data-slot="plan"></div>
+      </aside>
+    </div>
+  </div>
+
+  <h1 class="opt">B — Command-first</h1>
+  <div class="opt-note"><b>Thay đổi:</b> BỎ session list — chuyển session qua ⌘K hoặc chip strip "recent" dưới command bar · command bar 40px là chrome duy nhất của stage (title + search + ⌘K trong một) · workspace panel là <b>overlay drawer trượt đè lên transcript</b> kèm scrim, không chiếm cột → transcript full 760px khi panel đóng. <b>Trade-off:</b> content maximal, keyboard thuần; mất list luôn-hiện → user scan nhiều session sẽ phải ⌘K.</div>
+  <div class="frame sk fb">
+    <nav class="rail">
+      <div class="logo">A</div>
+      <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></a>
+      <div class="sp"></div>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8m10-10 2.8-2.8"/></svg></a>
+    </nav>
+    <div class="stage">
+      <div class="cmdwrap">
+        <div class="cmdbar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span class="ttl">Refactor session transcript store</span>
+          <span class="chip run"><span class="spin"></span>Running</span>
+          <kbd>⌘K</kbd>
+        </div>
+        <div class="recents">
+          <span class="rchip on"><span class="dot" style="background:var(--ac)"></span>Refactor transcript</span>
+          <span class="rchip"><span class="dot" style="background:#3caefe"></span>Review PR auth</span>
+          <span class="rchip"><span class="dot" style="background:#8b9099"></span>Browser occlusion</span>
+          <span class="rchip"><span class="dot" style="background:#f0bf00"></span>Codex thread</span>
+          <span class="rchip"><span class="dot" style="background:#27a644"></span>Logtime store</span>
+          <span class="rchip">+ 3 more</span>
+        </div>
+      </div>
+      <div class="measure"><div class="tcol"><div class="msgs" data-slot="msgs"></div><div class="cwrap" data-slot="composer"></div></div></div>
+      <div class="scrim"></div>
+      <aside class="drawer">
+        <div class="dhead"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Plan <span style="flex:1"></span><kbd>⌘B</kbd><span class="ibtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span></div>
+        <div class="pbody" data-slot="plan"></div>
+      </aside>
+    </div>
+  </div>
+
+  <h1 class="opt">C — IDE workbench</h1>
+  <div class="opt-note"><b>Thay đổi:</b> session = <b>tab ngang</b> (như editor tabs), list dọc biến mất · toàn bộ tools (Terminal/Files/Diff/Plan/Browser) dời xuống <b>bottom dock</b> tabbed như VSCode — ảnh mô tả: terminal + checklist cạnh nhau · BỎ cột phải hoàn toàn, transcript 780px full-height · header mỏng 36px chỉ còn breadcrumb + actions. <b>Trade-off:</b> quen với dev; browser tab trong dock thấp hơn panel phải — WebContentsView phải gắn lại bounds (đã có cơ chế attach/bounds nên chỉ đổi rect).</div>
+  <div class="frame sk fc">
+    <nav class="rail">
+      <div class="logo">A</div>
+      <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></a>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg></a>
+      <div class="sp"></div>
+      <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8m10-10 2.8-2.8"/></svg></a>
+    </nav>
+    <div class="stage">
+      <div class="hd">
+        <span class="crumb">awog / Sessions</span>
+        <span class="chip run"><span class="spin"></span>Running · Sonnet 4.5</span>
+        <span class="grow"></span>
+        <span class="ctx">main ↗</span>
+        <span class="ctx"><span class="bar"><i></i></span>41.2k/200k</span>
+        <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+        <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+      </div>
+      <div class="tabs">
+        <span class="tabi"><span class="dot" style="background:#3caefe"></span>Review PR auth <span class="x">✕</span></span>
+        <span class="tabi on"><span class="dot" style="background:var(--ac)"></span>Refactor transcript <span class="x">✕</span></span>
+        <span class="tabi"><span class="dot" style="background:#f0bf00"></span>Codex thread <span class="x">✕</span></span>
+        <span class="tabi add">＋</span>
+      </div>
+      <div class="center"><div class="measure"><div class="tcol"><div class="msgs" data-slot="msgs"></div><div class="cwrap" data-slot="composer"></div></div></div></div>
+      <div class="dock">
+        <div class="docktabs">
+          <span class="dt on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Terminal</span>
+          <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Files <span class="bdg">12</span></span>
+          <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M3 12h18"/></svg>Diff</span>
+          <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser</span>
+          <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Plan</span>
+          <span style="flex:1"></span>
+          <span class="ibtn" style="width:22px;height:22px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>
+        </div>
+        <div class="dockbody">
+          <div class="term">
+            <div><span class="p">awog</span> <span class="d">~/KyroTech/Projects/awog</span> <span style="color:var(--t4)">$</span> pnpm typecheck</div>
+            <div><span class="d">…</span> vue-tsc --noEmit</div>
+            <div><span class="d">apps/desktop/ui-next:</span> 0 errors <span class="d">(4.1s)</span></div>
+            <div><span class="p">awog</span> <span class="d">~/KyroTech/Projects/awog</span> <span style="color:var(--t4)">$</span> <span style="background:var(--active)">&nbsp;</span></div>
+          </div>
+          <div class="dockside" data-slot="plan"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<template id="msgs">
+  <div class="msg">
+    <div class="who"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="nm">kyro</span><span class="tm">14:02</span></div>
+    <p>Tách <code class="ic">useSessionTranscript</code> ra khỏi <code class="ic">sessions.ts</code> — file đang 5.2k dòng, render transcript chậm khi &gt; 200 message. Giữ nguyên IPC contract.</p>
+  </div>
+  <div class="msg">
+    <div class="who"><span class="av ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">sonnet-4.5</span><span class="tm">14:02</span></div>
+    <p>Rõ. Kế hoạch: (1) tách composable <code class="ic">useSessionTranscript</code> nhận <code class="ic">sessionId</code>, giữ derive <code class="ic">displayMsgs</code>; (2) chuyển step-render sang <code class="ic">v-memo</code> theo <code class="ic">eid</code>; (3) đo lại bằng trace <code class="ic">step.latency</code>.</p>
+    <div class="tool">
+      <div class="thead"><span class="ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="mono">Bash</span><span class="mono" style="color:var(--t3)">rg "export function" stores/sessions.ts | wc -l</span><span class="dur">0.4s</span></div>
+      <div class="tbody">→ 147</div>
+    </div>
+    <div class="codeblk">
+      <div class="chead">composables/useSessionTranscript.ts · diff</div>
+      <pre><span class="add">+ export function useSessionTranscript(id: Ref&lt;number&gt;) {</span>
+<span class="add">+   const store = useSessionsStore()</span>
+<span class="add">+   const msgs = computed(() =&gt; store.byId(id.value)?.msgs ?? [])</span>
+<span class="kw">    ...</span></pre>
+    </div>
+  </div>
+  <div class="msg">
+    <div class="who"><span class="av ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">sonnet-4.5</span><span class="tm">14:03</span></div>
+    <p>Store đã mỏng: <code class="ic">sessions.ts</code> còn 3.1k dòng, transcript path nằm hẳn trong composable. Đang chạy <code class="ic">pnpm typecheck</code> để bắt import lệch.</p>
+  </div>
+</template>
+
+<template id="composer">
+  <div class="cbox">
+    <div class="ta">Reply… <span class="hint">⏎ send · ⇧⏎ newline</span></div>
+    <div class="cbar">
+      <span class="pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></span>
+      <span class="pill">Sonnet 4.5 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+      <span class="pill">High <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+      <span style="flex:1"></span>
+      <span class="ctx"><span class="bar"><i></i></span>41.2k/200k</span>
+      <span class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></span>
+    </div>
+  </div>
+</template>
+
+<template id="plan">
+  <div class="psec">Checklist · 3/5</div>
+  <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">Đọc call-site của displayMsgs</span></div>
+  <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">Tách useSessionTranscript</span></div>
+  <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">v-memo theo eid</span></div>
+  <div class="plan now"><span class="ck"></span><span class="tt">pnpm typecheck + lint</span></div>
+  <div class="plan todo"><span class="ck"></span><span class="tt">Xoá dead code ở store</span></div>
+</template>
+
+<script>
+  const T = (id) => document.getElementById(id).content.cloneNode(true)
+  for (const host of document.querySelectorAll('[data-slot="msgs"]')) host.appendChild(T('msgs'))
+  for (const host of document.querySelectorAll('[data-slot="composer"]')) host.appendChild(T('composer'))
+  for (const host of document.querySelectorAll('[data-slot="plan"]')) host.appendChild(T('plan'))
+</script>
+</body>
+</html>

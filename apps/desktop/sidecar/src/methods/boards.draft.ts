@@ -9,7 +9,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { MAX_TEXT_LEN, oneLineLabel } from '../sessions/inbox.js'
 import type { ProviderName } from '../types/shared.js'
 
@@ -58,9 +58,7 @@ register('boards.draft', async (raw) => {
 
   const body = [
     `Request: ${params.brief.trim()}`,
-    params.current
-      ? `\nCURRENT item (revise it, keep unmentioned parts):\n${JSON.stringify(params.current)}`
-      : '',
+    params.current ? `\nCURRENT item (revise it, keep unmentioned parts):\n${JSON.stringify(params.current)}` : '',
     params.current ? 'Revise the item now.' : 'Draft the item now.',
   ]
     .filter(Boolean)
@@ -68,15 +66,13 @@ register('boards.draft', async (raw) => {
 
   const cheap = CHEAP_MODEL[params.settings.provider]
   const candidates =
-    cheap && cheap !== params.settings.modelId
-      ? [cheap, params.settings.modelId]
-      : [params.settings.modelId]
+    cheap && cheap !== params.settings.modelId ? [cheap, params.settings.modelId] : [params.settings.modelId]
   let lastErr = ''
   let out = ''
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential fallback
-      out = await completePi({
+      out = await complete({
         provider: params.settings.provider,
         ...(params.settings.accountId ? { accountId: params.settings.accountId } : {}),
         modelId,

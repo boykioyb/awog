@@ -6,9 +6,39 @@
 
 Khi một Session dài tới mức **sắp đầy context window**, tự động **tóm tắt các lượt cũ** để giải phóng token — tương tự Claude Code — mà **vẫn giữ nguyên lịch sử hội thoại hiển thị**. Đồng thời sửa `/compact` thủ công để nó **thực sự cắt context** (trước đây chỉ ghi 1 dòng thông báo, context không đổi).
 
+> **⚠ Anthropic đã tách khỏi toàn bộ phần dưới (ADR 0099).** Mọi thứ từ "Hành vi" trở xuống mô tả đường **Pi/Codex** (provider google, OpenAI-compatible gateway, Codex) — đường duy nhất còn dùng checkpoint `session.compacted`, `computeCutPoint`, `runCompact`, trigger 85% ở UI. Provider `anthropic` nén **hoàn toàn bằng CLI**, như dưới đây.
+
+## Anthropic — native compaction của Claude CLI (ADR 0099)
+
+Phiên Anthropic ở pointer-mode ([ADR 0097](../decisions/0097-claude-transcript-as-session-source.md)): transcript sống trong JSONL của CLI, mỗi lượt `resume` đúng một `sdkSessionId`. Nén = **để CLI tự làm trong phiên đó** — không có checkpoint của AWOG, không re-seed, `sdkSessionId` **giữ nguyên**.
+
+### Thủ công (`/compact`, nút ở status bar/composer)
+
+- `sessions.compact` (provider `anthropic`) gửi `/compact` nguyên văn như **native command** (`nativeCommand`) vào phiên SDK đang có (`sdkSessionId` của phiên) — cùng đường `/goal`, `/context`.
+- Không có `sdkSessionId` ⇒ `nothing-to-compact` (CLI chưa có gì để viết lại). CLI không phát `compact_boundary` ⇒ cũng `nothing-to-compact` (không phải lỗi). `keepRecentTokens` **bị bỏ qua** — `/compact` của CLI không có núm đó.
+- Kết quả trả `{ ok, native: true, nativeCompaction: { trigger, preTokens, postTokens, durationMs } }` (lấy từ `system/compact_boundary` qua `event-adapter` → `RunStreamResult.nativeCompactions`). UI trừ `preTokens − postTokens` khỏi `contextTokens`/`baseTokens` đã đo (lượt kế đo lại) và vẽ **divider** `system` có marker "Đã nén hội thoại · 17.2k → 1.3k token".
+- `runner.ts` **từ chối** `slashCommand:'compact'` + `anthropic` (`COMPACT_NATIVE_ONLY`) để không ai vô tình tóm tắt bằng Pi rồi bỏ rơi phiên CLI.
+
+### Tự động (CLI tự nén)
+
+- Không còn trigger 85% ở UI cho Anthropic (`maybeAutoCompact` bỏ qua provider này). CLI nén **giữa lượt**, khi context chạm ngưỡng.
+- **Một** setting: **Settings → Sessions → "Nén ngữ cảnh Claude ở (token)"** (`settings.context.compactAtTokens`, mặc định **300.000**, `0` = mặc định của CLI), điều khiển bởi toggle `sessions.autoCompact` có sẵn (tắt ⇒ `DISABLE_AUTO_COMPACT=1`). Đi kèm **mỗi lượt** trong `contextConfig` (`autoCompact`, `compactAtTokens`; sidecar không đọc settings.json), và theo **task** qua snapshot `Task.compactConfig` (`tasks.create` → `node-runner` → `InvokeArgs.compactConfig`).
+- Sidecar đặt env cho tiến trình CLI (`runtime/claude-sdk/shared.ts#autoCompactEnv`, qua `buildSdkEnv(…, autoCompact)`): `CLAUDE_CODE_AUTO_COMPACT_WINDOW = clamp(N + 13_000, 100_000, 1_000_000)`. Đường CLI PTY của người dùng (`cli-registry`) **không** truyền cấu hình ⇒ giữ mặc định CLI.
+- **Ngữ nghĩa đã ĐO** (CLI 0.3.296, haiku-4-5, không suy từ tên biến): `CLAUDE_CODE_AUTO_COMPACT_WINDOW` là **cửa sổ hiệu dụng** (sàn 100k, trần 1M, và `min` với cửa sổ thật của model); ngưỡng nén ≈ window − 13k dự trữ ⇒ đặt 100k: phiên 27k không nén, phiên ~170k tự nén (`compact_boundary.trigger:'auto'`, cùng `sdkSessionId`, model vẫn nhớ nội dung sau đó). Hệ quả: **không thể nén dưới ~87k** (giá trị thấp hơn bị nâng lên sàn), và với model 200k thì ngưỡng 300k bị `min` về ~187k. `DISABLE_AUTO_COMPACT=1` tắt tự nén nhưng `/compact` thủ công vẫn chạy. `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (đặt 5, phiên 17k) **không** kích hoạt gì và `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` không đo được hiệu ứng ⇒ không dùng.
+- Marker tự nén: `RunStreamResult.nativeCompactions` → `session.message.done`/kết quả `sendMessage.nativeCompactions` → UI chèn divider **trước bubble agent** của lượt (đúng thứ tự replay).
+
+### Marker sau khi tải lại (replay)
+
+AWOG **không persist** gì cho một lần nén native. `sessions/claude-transcript.ts#parseClaudeTranscript` (chế độ `compactMarkers`, chỉ bật ở `sdk-transcript.ts`) dựng lại marker từ JSONL của CLI: `system/compact_boundary` ⇒ message `role:'system'` mang `compaction` (`preTokens` có sẵn trong JSONL; `postTokens` thường không); bỏ entry `isCompactSummary` (tóm tắt dài nuôi model) và hai dòng echo của `/compact` thủ công. Nén thủ công flush lượt đang mở trước (marker nằm SAU lượt), nén tự động giữa lượt không flush (marker đứng TRƯỚC bubble agent).
+
+### Tự cứu khi tràn (Anthropic)
+
+Cùng lưới an toàn ở `sessions.sendMessage` (xem mục dưới) nhưng gửi `/compact` native vào phiên đang resume rồi retry **đúng một lần** trên CÙNG `sdkSessionId`; không `compactSession`, không re-seed. Lượt đầu tràn (chưa có `sdkSessionId`) thì không cứu.
+
 ## Hành vi
 
 ### Tự động (auto-compact)
+
 - Mặc định **BẬT**. Tắt ở **Settings → Sessions → "Tự động tóm tắt ngữ cảnh"**.
 - Chạy ở **cả 2 mép của một lượt** (SỬA 2026-08-19): **await trước khi gửi** (`sendMessage`, nên checkpoint kịp cắt context của CHÍNH lượt đó) + fire-and-forget **sau khi lượt settle** (để lần gửi sau thường đã sạch). Trước đây chỉ có mép sau ⇒ chỉ phản ứng được sau khi đã tràn.
 - Nếu `usagePct(session) ≥ 85%` → tự compact (latch per-session, **re-arm khi tụt < 70%** để lần đầy sau lại compact được). Latch **nhả khi RPC lỗi** (SỬA 2026-08-19): trước đây latch set vô điều kiện, nên một lần fail là dính vĩnh viễn — usage không tự tụt xuống < 70% ⇒ auto-compact tắt hẳn cho session đó tới khi restart app. Kết quả `nothing` (đã compact tới mốc đó / một lượt đơn quá lớn không cắt được) thì **giữ latch** để không đốt round-trip mỗi lần gửi.
@@ -25,17 +55,19 @@ Khi một Session dài tới mức **sắp đầy context window**, tự động
 - **Breakdown panel:** itemize theo CONTENT (System prompt / Instructions / System tools / MCP / Custom agents / Skills / Memory files / Messages) + **Định nghĩa tool** + **Kết quả tool (lượt này)** + **Còn trống**. Engine đo **HAI** mốc mỗi lượt — `baseTokens` (request ĐẦU) và `contextTokens` (request CUỐI) — nên phần breakdown char không itemize được tách làm đôi thay vì gộp một ô xám:
   - **Định nghĩa tool** = `baseTokens − tổng bucket itemize` → schema tool (built-in của runtime + mọi MCP server đang gắn) + system prompt riêng của preset, cộng ngữ cảnh mang sang từ lượt trước nếu lượt này `resume`.
   - **Kết quả tool (lượt này)** = `contextTokens − baseTokens` → đúng phần vòng lặp tool bồi vào trong lượt.
-  Tách vì **cách sửa ngược nhau**: schema nhỏ lại khi **bỏ gắn MCP server**, kết quả tích luỹ nhỏ lại khi **compact / làm ít việc hơn trong một lượt**. Gộp chung thì nhìn ô 143k không biết phải làm gì. Thiếu `baseTokens` (lượt do engine build cũ ghi) thì phần dư về bucket thứ ba **"Tool + kết quả tool"** — KHÔNG dồn vào "Định nghĩa tool": gán nhãn "định nghĩa tool" cho 192k của một lượt có **34 tool call** là nói sai. Row luôn cộng đúng bằng gauge ở mọi nhánh.
+    Tách vì **cách sửa ngược nhau**: schema nhỏ lại khi **bỏ gắn MCP server**, kết quả tích luỹ nhỏ lại khi **compact / làm ít việc hơn trong một lượt**. Gộp chung thì nhìn ô 143k không biết phải làm gì. Thiếu `baseTokens` (lượt do engine build cũ ghi) thì phần dư về bucket thứ ba **"Tool + kết quả tool"** — KHÔNG dồn vào "Định nghĩa tool": gán nhãn "định nghĩa tool" cho 192k của một lượt có **34 tool call** là nói sai. Row luôn cộng đúng bằng gauge ở mọi nhánh.
 - **Mẫu số cửa sổ tự sửa (2026-09-06):** `contextLimitForUsage` = `max(giới hạn khai báo, prompt LỚN NHẤT provider đã CHẤP NHẬN)`. Bảng `CONTEXT_WINDOW` là hằng số cache nên hỏng ngay khi provider nới cửa sổ — gặp thật: request **217.049 token** được chấp nhận trên `claude-opus-4-8` trong khi bảng vẫn ghi 200k, gauge hiện **"217k / 200k · 100%, còn trống 0"** (tự mâu thuẫn). Một response 200 cho request N token là **bằng chứng** cửa sổ ≥ N. Kèm theo, `contextLimitFor` giờ lấy giá trị catalog fetch được khi nó **lớn hơn** bảng cứng (bảng chỉ được nâng, không bị hạ, nên quy ước `-1m` không vỡ) — Settings → Models → Fetch sửa được một dòng đã cũ.
 - Ngưỡng 85% = "sắp đầy" — không chờ literal 100% vì một lượt đẩy lên 100% có thể tràn trước khi kịp tóm tắt.
 
 ### Thủ công (`/compact`)
+
 - Gõ `/compact` trong composer (hoặc qua `/` picker).
 - Hiện **running spinner + nút Stop như một lượt bình thường** trong lúc tóm tắt; bấm Stop hủy được.
 - **Aggressive**: gửi `keepRecentTokens: 0` → chỉ giữ **lượt cuối**, tóm tắt phần còn lại — nên nó **hoạt động kể cả trên cuộc trò chuyện ngắn** (khác auto giữ 20k). Cuộc chỉ có 1 lượt → không có gì để tóm tắt → hiện notice.
 - Xong → một **marker tóm tắt** xuất hiện; có **notice** dưới composer (compacted / nothing / unavailable / error).
 
 ### Sau khi compact
+
 - Tin nhắn cũ **vẫn hiển thị bình thường** (không ẩn, không làm mờ).
 - Một **marker** (`SessionCompactionMarker`) chèn ngay trước message đầu tiên còn được giữ: "Đã tóm tắt N tin nhắn trước đó…", bấm để xem/ẩn nội dung tóm tắt.
 - **Model** chỉ nhận: `summary (trong system prompt)` + các message **từ mốc cắt trở đi** + tin mới.
@@ -70,21 +102,21 @@ checkpoint, hoặc retry vẫn overflow → lỗi gốc đứng yên, không l�
 
 ## File chính
 
-| Lớp | File | Vai trò |
-|---|---|---|
-| Sidecar | `runtime/compaction.ts` | `computeCutPoint` (mốc cắt + prefix tóm tắt) |
-| Sidecar | `runtime/run-stream.ts` | `runCompact` trả checkpoint; truyền `compaction` vào `buildContext` |
-| Sidecar | `runtime/context-builder.ts` | `historyToAgentMessages` (export dùng chung) + cắt context theo checkpoint |
-| Sidecar | `sessions/store.ts` | event `session.compacted` + `fold` + `compactSession()` |
-| Sidecar | `methods/sessions.compact.ts` | RPC abortable (`messageId` + `registerAborter`), persist, trả `compaction` |
-| Sidecar | `methods/sessions.send-message.ts` | nhận + forward `compaction` |
-| Sidecar/UI | `types/shared.ts` · `types/index.ts` | `SessionCompaction` + `Session.compaction` |
-| UI | `utils/context-window.ts` | `contextTokensFromChars` (occupancy = SUM content, dùng chung widget % + trigger) + `estimateContextTokens` (fallback TEXT-ONLY) + `contextLimitFor` |
-| Engine | `runtime/claude-sdk/event-adapter.ts`, `runtime/event-adapter.ts` | đo `contextTokens` = prompt size của request CUỐI (bỏ qua subagent) |
-| Engine | `methods/sessions.send-message.ts` | persist `usage.contextTokens` + forward qua RPC |
-| UI | `composables/useSessionContextUsage.ts` | breakdown per-category + gauge + bucket "Tool + kết quả tool" |
-| UI | `stores/sessions.ts` | `usagePct` (content-based, fallback ước lượng) + `usageFromMessages` (hồi phục usage khi mở session) + `maybeAutoCompact` (latch 85%/re-arm 70%, chạy pre-send + post-turn, latch chỉ giữ khi thành công); `compactSession(id, keepRecentTokens)` RPC |
-| UI | `components/settings/SettingsSessions.vue` | toggle `autoCompact` (persist) |
+| Lớp        | File                                                              | Vai trò                                                                                                                                                                                                                                               |
+| ---------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sidecar    | `runtime/compaction.ts`                                           | `computeCutPoint` (mốc cắt + prefix tóm tắt)                                                                                                                                                                                                          |
+| Sidecar    | `runtime/run-stream.ts`                                           | `runCompact` trả checkpoint; truyền `compaction` vào `buildContext`                                                                                                                                                                                   |
+| Sidecar    | `runtime/context-builder.ts`                                      | `historyToAgentMessages` (export dùng chung) + cắt context theo checkpoint                                                                                                                                                                            |
+| Sidecar    | `sessions/store.ts`                                               | event `session.compacted` + `fold` + `compactSession()`                                                                                                                                                                                               |
+| Sidecar    | `methods/sessions.compact.ts`                                     | RPC abortable (`messageId` + `registerAborter`), persist, trả `compaction`                                                                                                                                                                            |
+| Sidecar    | `methods/sessions.send-message.ts`                                | nhận + forward `compaction`                                                                                                                                                                                                                           |
+| Sidecar/UI | `types/shared.ts` · `types/index.ts`                              | `SessionCompaction` + `Session.compaction`                                                                                                                                                                                                            |
+| UI         | `utils/context-window.ts`                                         | `contextTokensFromChars` (occupancy = SUM content, dùng chung widget % + trigger) + `estimateContextTokens` (fallback TEXT-ONLY) + `contextLimitFor`                                                                                                  |
+| Engine     | `runtime/claude-sdk/event-adapter.ts`, `runtime/event-adapter.ts` | đo `contextTokens` = prompt size của request CUỐI (bỏ qua subagent)                                                                                                                                                                                   |
+| Engine     | `methods/sessions.send-message.ts`                                | persist `usage.contextTokens` + forward qua RPC                                                                                                                                                                                                       |
+| UI         | `composables/useSessionContextUsage.ts`                           | breakdown per-category + gauge + bucket "Tool + kết quả tool"                                                                                                                                                                                         |
+| UI         | `stores/sessions.ts`                                              | `usagePct` (content-based, fallback ước lượng) + `usageFromMessages` (hồi phục usage khi mở session) + `maybeAutoCompact` (latch 85%/re-arm 70%, chạy pre-send + post-turn, latch chỉ giữ khi thành công); `compactSession(id, keepRecentTokens)` RPC |
+| UI         | `components/settings/SettingsSessions.vue`                        | toggle `autoCompact` (persist)                                                                                                                                                                                                                        |
 
 > Bảng trên đã trỏ sang `apps/desktop/ui-next/` (UI hiện hành). `SessionCompactionMarker.vue` chèn marker tóm tắt vẫn theo mô hình cũ.
 

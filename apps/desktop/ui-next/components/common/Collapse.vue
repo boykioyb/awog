@@ -5,13 +5,26 @@
        wrapper clips overflow during the transition. Disabled under reduced-motion. -->
   <div class="collapsible" :class="{ open }">
     <div class="collapsible-in">
-      <slot />
+      <!-- Lazy-mount: a transcript carries ~hundreds of collapsed step bodies
+           (code views, diffs). Mounting them all on open made session load feel
+           heavy even though the wire got smaller — mount the content on FIRST
+           open, keep it mounted after (the grid-row animation still needs a
+           live element to collapse into, so unmounting on close is off the
+           table). -->
+      <slot v-if="rendered" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-defineProps<{ open: boolean }>()
+const props = defineProps<{ open: boolean }>()
+const rendered = ref(props.open)
+watch(
+  () => props.open,
+  (open) => {
+    if (open) rendered.value = true
+  },
+)
 </script>
 
 <style scoped>

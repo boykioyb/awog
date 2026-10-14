@@ -20,7 +20,8 @@ import { listSessionSummaries } from '../../sessions/store.js'
 import { memberDiff } from '../../tasks/worktree.js'
 import { resolveRunRoot } from './channel-tools.js'
 
-export const MEMBER_TOOL_NAMES = ['member_diff'] as const
+// MEMBER_TOOL_NAMES lives in tool-names.ts (leaf) — see session-tools.ts note.
+export { MEMBER_TOOL_NAMES } from './tool-names.js'
 
 // ─── Văn bản tool (một nguồn — nhánh Pi dựng schema TypeBox, nhánh Claude SDK
 // dựng schema zod từ đây) ────────────────────────────────────────────────────
@@ -60,8 +61,7 @@ export function createMemberRunners(input: {
   // lẻ ⇒ trả null; string ⇒ dùng luôn.
   runId?: string | null | undefined
 }): MemberRunners | null {
-  const runId =
-    input.runId === undefined ? resolveRunRoot(input.sessionId) : input.runId
+  const runId = input.runId === undefined ? resolveRunRoot(input.sessionId) : input.runId
   if (!runId) return null
 
   async function diff(params: { session_id: string }): Promise<MemberToolRunResult> {
@@ -79,10 +79,7 @@ export function createMemberRunners(input: {
       return { text: 'That member works on the shared tree — nothing to diff.' }
     }
     const head = result.stat.length > 0 ? result.stat : 'no changes'
-    const body =
-      result.diff.length > 0
-        ? result.diff
-        : '(empty diff — the branch has no changes versus its base)'
+    const body = result.diff.length > 0 ? result.diff : '(empty diff — the branch has no changes versus its base)'
     return {
       text: `${result.files} file(s) changed — ${head}\n\n${body}`,
       files: result.files,

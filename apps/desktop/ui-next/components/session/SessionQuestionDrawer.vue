@@ -122,6 +122,14 @@ const onDismiss = (): void => {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Lùi đúng `--padX` hai bên: `.composer` đệm `var(--padX)` rồi mới tới `.cbox`, và
+     `.msgs` cũng đệm chừng ấy — ba khối xếp chồng trong một cột thì phải chung một
+     lề trái, đó là lý do `--padX` tồn tại. Không có dòng này thì ngăn kéo trải hết
+     cột, rộng hơn ô soạn 22px mỗi bên, và cả cụm đọc ra lệch.
+     Lề là padding ở ĐÂY chứ không phải margin trên `.qdrw-in`: `overflow:hidden`
+     cắt đến mép padding, nên chỗ trống phải nằm BÊN TRONG hộp cắt thì bóng đổ hai
+     bên mới có đất mà vẽ. */
+  padding: 0 var(--padX);
 }
 .qdrw-in {
   flex: 1 1 auto;
@@ -135,14 +143,13 @@ const onDismiss = (): void => {
      ngăn kéo lại là lối ra — đó là việc của nút gập. */
   min-height: 7em;
   max-height: 52vh;
-  /* Lùi đúng `--padX` hai bên: `.composer` đệm `var(--padX)` rồi mới tới `.cbox`, và
-     `.msgs` cũng đệm chừng ấy — ba khối xếp chồng trong một cột thì phải chung một
-     lề trái, đó là lý do `--padX` tồn tại. Không có dòng này thì ngăn kéo trải hết
-     cột, rộng hơn ô soạn 22px mỗi bên, và cả cụm đọc ra lệch.
-     Lề ở ĐÂY chứ không phải padding trên `.qdrw`: <Collapse> cắt overflow ngay ở
-     `.collapsible-in`, nên chỗ trống phải nằm BÊN TRONG hộp cắt thì bóng đổ hai bên
-     mới có đất mà vẽ. */
-  margin: 0 var(--padX) 8px;
+  /* Rộng bằng ô soạn: `.cbox` là `width:100%` cap `max-width:860px` căn giữa, còn
+     ngăn kéo từng giãn hết cột ⇒ ở cột chat rộng nó "tràn" qua trần của ô soạn.
+     `margin: 0 auto` vừa căn giữa vừa tắt stretch của flex-item. KHÔNG dùng
+     `width:auto` — shrink-wrap làm nó thành thẻ nổi lơ lửng trông như modal. */
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto 8px;
   /* Đây là lề TRONG duy nhất của cả thẻ: thân câu hỏi bỏ khung của nó (`.qdrw-body`
      bên dưới) nên không còn lớp đệm thứ hai nào nữa. 12px là đệm của một cái chip,
      không phải của một tấm thẻ bo xl — chữ dính mép. */

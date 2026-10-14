@@ -170,6 +170,19 @@
           />
         </span>
       </div>
+      <!-- Hồ sơ trình duyệt nhúng của project (ADR 0101): login + bookmark riêng. Phiên
+           có thể ghi đè trong menu ⋮ của trình duyệt; trống = theo mặc định của app. -->
+      <div class="kvrow">
+        <span class="kvk">{{ t('projects.overview.browserProfile') }}</span>
+        <span class="kvv">
+          <AppSelect
+            :model-value="browserProfileValue"
+            :options="browserProfileOptions"
+            width="200px"
+            @update:model-value="onBrowserProfile"
+          />
+        </span>
+      </div>
       <div class="kvrow" style="align-items: flex-start">
         <span class="kvk">.awog/</span>
         <span class="kvv awtiers">
@@ -231,6 +244,7 @@ import { useProjectModal } from '~/composables/useProjectModal'
 import { useProjectsStore } from '~/stores/projects'
 import { useSettingsStore } from '~/stores/settings'
 import { useGhAccounts } from '~/composables/useGhAccounts'
+import { useBrowserProfiles } from '~/composables/useBrowserProfiles'
 import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.vue'
 import type { Project } from '~/types'
 import Button from '~/components/ui/button/Button.vue'
@@ -277,7 +291,7 @@ const projectModal = useProjectModal()
 function openSession(id: number) {
   sessions.setActive(id)
   projectModal.close()
-  navigateTo('/sessions')
+  navigateTo('/workbench')
 }
 
 const TIERS = ['agents', 'skills', 'rules', 'workflows', 'commands', 'hooks'] as const
@@ -343,6 +357,46 @@ async function onGhAccount(v: string) {
   } catch (err) {
     console.warn('[project] save githubAccount failed', err)
     toast.add({ title: t('projects.toast.ghAccountFailed'), color: 'error' })
+  }
+}
+
+// ── Browser profile setting ─────────────────────────────────────────────────
+// Project.browserProfileId: absent = inherit the app default profile; an id pins it.
+const browserProfiles = useBrowserProfiles()
+const BP_INHERIT = '__inherit'
+
+const browserProfileValue = computed(() => props.project.browserProfileId ?? BP_INHERIT)
+
+const browserProfileOptions = computed<AppSelectOption[]>(() => {
+  const list = browserProfiles.profiles.value
+  const cur = props.project.browserProfileId
+  const rows = list.map((p) => ({ value: p.id, label: p.name }))
+  // Hồ sơ đã bị xoá nhưng project còn tham chiếu: vẫn hiện để picker không trống.
+  if (cur && !list.some((p) => p.id === cur)) rows.push({ value: cur, label: cur })
+  return [
+    {
+      value: BP_INHERIT,
+      label: t('projects.browserProfile.inherit', {
+        name: browserProfiles.defaultProfile.value?.name ?? '…',
+      }),
+    },
+    ...rows,
+  ]
+})
+
+async function onBrowserProfile(v: string) {
+  const next: Project = { ...props.project }
+  if (v === BP_INHERIT) delete next.browserProfileId
+  else next.browserProfileId = v
+  try {
+    await projectsStore.updateProject(next)
+    toast.add({
+      title: t('projects.toast.browserProfileSaved', { name: props.project.name }),
+      color: 'success',
+    })
+  } catch (err) {
+    console.warn('[project] save browserProfileId failed', err)
+    toast.add({ title: t('projects.toast.browserProfileFailed'), color: 'error' })
   }
 }
 </script>

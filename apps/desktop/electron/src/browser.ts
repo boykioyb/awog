@@ -1,10 +1,25 @@
 import { realpathSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
-import { BrowserWindow, WebContentsView, nativeImage } from 'electron'
+import { app, BrowserWindow, WebContentsView, nativeImage, session } from 'electron'
+import { captureDropTab, captureOnCdp, type CaptureHost } from './browser-capture'
+import { fitEmulation } from './browser-emulation'
+import { errorPageScript, renderErrorPage } from './browser-error-page'
+import { clearDevServerPorts, evaluateHost, setDevServerPorts } from './browser-host-policy'
+import { DEFAULT_PROFILE_ID, isValidProfileId, partitionForProfile } from './browser-profile'
+import {
+  buildSessionProxy,
+  parseProxyConfig,
+  parseProxyCredentials,
+  parseTrace,
+  proxyAuthMatches,
+  type ProxyConfig,
+  type ProxyCredentials,
+} from './browser-proxy'
 import { isHostAllowed, loadSites, saveSites } from './browser-sites'
 import { engine } from './engine'
 import { log } from './logger'
+import { userscripts, type UserscriptTabState } from './browser-userscripts'
 import { preloadPath } from './paths'
 import { applyNavigationGuards, loadAppRoute, WINDOW_BACKGROUND } from './window'
 import { resolveInsideWorkspace } from './workspace-scope'
@@ -75,14 +90,12 @@ const MAX_TABS = 8
 // Poll của renderer chạy 1,2 s/lần, nên đọc selection phải thất bại NHANH: 15s là
 // hạn cho một hành động người dùng chờ, không phải cho một phép đo nền.
 const SELECTION_TIMEOUT_MS = 2_000
-// One partition for every tab (cookies/storage shared between tabs like a real
-// browser, isolated from the app session — invariant #1). Exported because
-// browser-import.ts writes into this exact jar: two string literals would be one
-// typo away from importing a profile into a partition nobody reads.
-export const BROWSER_PARTITION = 'persist:awog-browser'
 // One frame is enough to mint a compositor surface for a view that has never been
 // shown; measured at 250ms with margin (see ensurePainted).
 const PAINT_FRAME_MS = 250
+// Thumbnail của thẻ trang trong transcript: rộng tối đa 640px, JPEG chất lượng 70.
+const THUMB_WIDTH = 640
+const THUMB_QUALITY = 70
 // Clamp for a rect the RENDERER sends (L1 — see attach/setBounds).
 const MAX_VIEW_EDGE = 10_000
 // Cap cho ba đường đọc trang của phần E. Script tiêm vào trang đã tự cắt (đỡ
@@ -93,45 +106,16 @@ const PICK_TEXT_MAX = 20_000
 const PICK_HTML_MAX = 20_000
 const PAGE_CONTEXT_MAX = 8_000
 
-const PRIVATE_IP_PATTERNS = [
-  /^127\./,
-  /^10\./,
-  /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
-  /^192\.168\./,
-  /^169\.254\./,
-  /^0\./,
-]
-const LOOPBACK_HOSTS = new Set(['localhost', '::1', '0:0:0:0:0:0:0:1'])
-
-// Returns a rejection reason for a literal host (no DNS), or null if allowed.
+// Luật host nằm ở browser-host-policy.ts (thuần, có test). Allowlist site của
+// người dùng (browser-sites.ts) áp SAU guard private/loopback trong đó.
 //
 // ĐÂY LÀ CHỖ DUY NHẤT luật host được thi hành: `navigate`, `openFromUser`,
 // `setWindowOpenHandler`, `will-navigate`, `will-redirect`, `will-frame-navigate`
-// đều gọi vào đúng hàm này. Danh sách allowlist của người dùng (ADR 0086 phần E)
-// vì thế chỉ cần thêm MỘT nhánh ở cuối, sau guard private/loopback — không thêm
-// đường rẽ nào, nên không có đường đi nào lọt qua được luật.
-function hostBlocked(rawUrl: string): string | null {
-  let url: URL
-  try {
-    url = new URL(rawUrl)
-  } catch {
-    return 'invalid URL'
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return `protocol ${url.protocol} not allowed (http/https only)`
-  }
-  const h = url.hostname.toLowerCase()
-  if (LOOPBACK_HOSTS.has(h)) return 'loopback host not allowed'
-  for (const p of PRIVATE_IP_PATTERNS) {
-    if (p.test(h)) return `private/loopback IP ${h} not allowed`
-  }
-  if (h.includes(':') && (/^f[cd][0-9a-f]{2}:/i.test(h) || /^fe80:/i.test(h))) {
-    return `IPv6 private ${h} not allowed`
-  }
-  // Lớp cuối cùng, và chỉ là lớp THÊM: mọi guard trên vẫn chạy trước ở cả hai
-  // chế độ, nên bật/tắt allowlist không bao giờ nới được invariant #7.
-  if (!isHostAllowed(h)) return `host ${h} is not in the allowed-sites list`
-  return null
+// đều gọi vào đúng hàm này, luôn kèm scope của TAB (không phải của caller) để
+// ngoại lệ dev server theo phiên (docs/features/dev-server.md) không rò sang phiên khác và
+// redirect/iframe của trang đi qua cùng luật với lần điều hướng đầu.
+function hostBlocked(rawUrl: string, scope: string | undefined): string | null {
+  return evaluateHost(rawUrl, scope, isHostAllowed)
 }
 
 // Tab đã có document để chạy script chưa?
@@ -669,6 +653,8 @@ interface BrowserTab {
   // browser thì session đó hiện" — while unscoped callers resolve the global
   // active tab exactly as before.
   scope?: string
+  // Profile (⇒ partition) của tab. Cố định suốt đời tab: đổi profile = tab mới.
+  profileId: string
   // Window currently displaying the tab (embedded panel or popout), or null when
   // the tab is parked in the invisible holder.
   host: BrowserWindow | null
@@ -682,6 +668,17 @@ interface BrowserTab {
   // mobile/tablet của browser_tool qua `viewport`). Phản chiếu trong TabInfo để
   // menu hiện dấu tick.
   mobile: boolean
+  // Thiết bị giả lập đang bật (null = không). Nguồn sự thật cho hình học:
+  // `applyEmulation` suy bounds + scale từ đây và `slot`.
+  emu: { width: number; height: number; dsf: number; mobile: boolean } | null
+  // Key của override CDP đã gửi gần nhất — bỏ qua lời gửi trùng khi resize.
+  emuKey: string
+  // Rect renderer cấp cho tab này (đã clamp); null khi tab đỗ ở holder.
+  slot: Rect | null
+  // Đồng hồ tải trang cho chrome: mốc `did-start-loading` (epoch ms) và thời gian tới
+  // `did-stop-loading` (spinner tắt — mọi frame xong). null = chưa có lượt tải nào xong.
+  loadStartedAt: number | null
+  loadMs: number | null
 }
 
 // Picker đang chờ người dùng bấm. Chỉ có MỘT tại một thời điểm (xem pickElement),
@@ -723,6 +720,14 @@ export interface TabInfo {
   zoom: number
   devtools: boolean
   mobile: boolean
+  // Profile (partition) mà tab đang chạy.
+  profileId: string
+  // Profile của tab đi qua proxy riêng (chỉ cờ — host/credential không rời main).
+  proxied: boolean
+  // Đồng hồ tải trang: mốc bắt đầu (epoch ms, null = chưa tải) + tổng ms của lượt tải
+  // gần nhất (null khi đang tải / chưa xong lượt nào). Renderer đếm sống từ mốc.
+  loadStartedAt: number | null
+  loadMs: number | null
 }
 
 // ADR 0086 phần E. Mirrored in ui-next/types/awog-bridge.d.ts (Awog* names) and in
@@ -775,6 +780,27 @@ function clampRect(rect: Rect): Rect {
   }
 }
 
+// Đệm `img` (chụp từ view có `bounds`) thành ảnh phủ trọn `slot` bằng pixel trong
+// suốt, view đặt đúng chỗ của nó trong slot. Dùng cho frame đông cứng khi view bị
+// thu nhỏ giữa rect vì giả lập thiết bị. null nếu hình học không khớp (view không
+// nằm trong slot / ảnh rỗng) — người gọi rơi về ảnh trần.
+function padToSlot(img: Electron.NativeImage, bounds: Rect, slot: Rect): Electron.NativeImage | null {
+  const { width: iw, height: ih } = img.getSize()
+  if (iw < 1 || ih < 1 || bounds.width < 1 || slot.width < 1 || slot.height < 1) return null
+  const f = iw / bounds.width
+  const sw = Math.round(slot.width * f)
+  const sh = Math.round(slot.height * f)
+  const ox = Math.round((bounds.x - slot.x) * f)
+  const oy = Math.round((bounds.y - slot.y) * f)
+  if (ox < 0 || oy < 0 || ox + iw > sw || oy + ih > sh) return null
+  const src = img.toBitmap()
+  const out = Buffer.alloc(sw * sh * 4) // 0 = trong suốt
+  for (let row = 0; row < ih; row++) {
+    src.copy(out, ((oy + row) * sw + ox) * 4, row * iw * 4, (row + 1) * iw * 4)
+  }
+  return nativeImage.createFromBitmap(out, { width: sw, height: sh })
+}
+
 // What the user typed in the URL bar. Bare hosts ("example.com") get https://,
 // which is also what makes the hostBlocked check meaningful — a string with no
 // scheme fails `new URL` and would be reported as "invalid URL" instead of being
@@ -793,27 +819,25 @@ export interface ViewportInput {
   mobile?: boolean
 }
 
-const VIEWPORT_PRESETS: Record<
-  string,
-  { width: number; height: number; scale: number; mobile: boolean; ua?: string }
-> = {
-  mobile: {
-    width: 390,
-    height: 844,
-    scale: 3,
-    mobile: true,
-    ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-  },
-  tablet: {
-    width: 820,
-    height: 1180,
-    scale: 2,
-    mobile: true,
-    ua: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-  },
-  desktop: { width: 1280, height: 800, scale: 1, mobile: false },
-  wide: { width: 1680, height: 1050, scale: 1, mobile: false },
-}
+const VIEWPORT_PRESETS: Record<string, { width: number; height: number; scale: number; mobile: boolean; ua?: string }> =
+  {
+    mobile: {
+      width: 390,
+      height: 844,
+      scale: 3,
+      mobile: true,
+      ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    },
+    tablet: {
+      width: 820,
+      height: 1180,
+      scale: 2,
+      mobile: true,
+      ua: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+    },
+    desktop: { width: 1280, height: 800, scale: 1, mobile: false },
+    wide: { width: 1680, height: 1050, scale: 1, mobile: false },
+  }
 
 class BrowserController {
   private tabs = new Map<string, BrowserTab>()
@@ -843,6 +867,24 @@ class BrowserController {
   private hookedHosts = new WeakSet<BrowserWindow>()
   // Element picker đang chờ (ADR 0086 phần E) — tối đa một.
   private pendingPick: PendingPick | null = null
+  // Profile hiệu lực theo scope (sidecar đẩy xuống / main hỏi lười) + profile của
+  // pool global (= profile mặc định). `securedProfiles`: partition đã cài handler.
+  private scopeProfile = new Map<string, string>()
+  private resolving = new Map<string, Promise<string>>()
+  private globalProfile = DEFAULT_PROFILE_ID
+  private securedProfiles = new Set<string>()
+  // Proxy theo profile (sidecar đẩy xuống qua `browser.setProfileProxy`). `null` = đi
+  // thẳng, thiếu key = chưa biết. Credential CHỈ ở RAM main, không ghi đĩa/log.
+  private proxies = new Map<string, ProxyConfig | null>()
+  private proxyCreds = new Map<string, ProxyCredentials>()
+  // Đã đồng bộ proxy từ sidecar ít nhất một lần. Trước đó profile "chưa biết" bị chặn
+  // (fail-closed) thay vì đi thẳng — không để một profile có proxy lọt ra mạng trực tiếp.
+  private proxiesSynced = false
+  private proxySyncing: Promise<void> | null = null
+  // Chống vòng lặp 407: proxy từ chối credential sai sẽ bắn `login` lại liên tục.
+  private proxyLoginAttempts = new Map<string, { count: number; since: number }>()
+  private loginHooked = false
+  private proxyApplying = new Map<string, Promise<void>>()
 
   // ── Where a parked tab lives ─────────────────────────────────────────────
 
@@ -874,6 +916,7 @@ class BrowserController {
     const holder = this.ensureHolder()
     if (tab.host && !tab.host.isDestroyed()) tab.host.contentView.removeChildView(tab.view)
     tab.host = null
+    tab.slot = null
     holder.contentView.addChildView(tab.view)
     // A view that was already on screen KEEPS its bounds: bounds unchanged
     // means no resize event, so the page does not re-layout on park — and a
@@ -928,6 +971,25 @@ class BrowserController {
     this.onChange = fn
   }
 
+  // Cổng cho bộ bắt request của NGƯỜI DÙNG (browser-capture.ts, ipc.ts nối vào). Mọi lần
+  // resolve tab đi qua `this.tab(tabId, scope)` — cùng cổng sở hữu với các thao tác khác.
+  captureHost(): CaptureHost {
+    return {
+      target: (tabId, scope) => {
+        const tab = this.tab(tabId, scope)
+        return {
+          id: tab.id,
+          wc: tab.view.webContents,
+          scope: tab.scope,
+          profileId: tab.profileId,
+          debuggerOk: tab.debuggerOk,
+        }
+      },
+      blocked: (url, scope) => hostBlocked(url, scope),
+      ready: (profileId) => this.proxyReady(profileId),
+    }
+  }
+
   private changed(): void {
     this.onChange?.()
   }
@@ -940,12 +1002,14 @@ class BrowserController {
     }
     this.tabSeq += 1
     const id = `tab_${this.tabSeq}`
+    const profileId = this.profileSync(scope)
+    this.ensurePartition(profileId)
     const view = new WebContentsView({
       webPreferences: {
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
-        partition: BROWSER_PARTITION,
+        partition: partitionForProfile(profileId),
         // A parked view is inside a hidden window, and Chromium freezes timers in
         // a hidden compositor: measured 0 setInterval ticks parked, 14 with this
         // off. The agent must be able to load a page that finishes rendering after
@@ -965,11 +1029,18 @@ class BrowserController {
       host: null,
       favicon: '',
       mobile: false,
+      emu: null,
+      loadStartedAt: null,
+      loadMs: null,
+      emuKey: '',
+      slot: null,
+      profileId,
       ...(scope !== undefined ? { scope } : {}),
     }
     const wc = view.webContents
     wc.on('destroyed', () => {
       this.tabs.delete(id)
+      captureDropTab(id)
       this.dropActive(tab)
       this.changed()
     })
@@ -986,8 +1057,23 @@ class BrowserController {
       notify()
     })
     wc.on('did-navigate-in-page', notify)
+    // Đồng hồ tải trang: bắt đầu ở điều hướng KHUNG CHÍNH sang document mới, dừng ở
+    // `did-stop-loading` ĐẦU TIÊN sau đó. KHÔNG dùng `did-start-loading`: nó bắn cả cho
+    // iframe tải muộn (quảng cáo, widget…) ⇒ một cặp start/stop vài ms sau khi trang đã
+    // xong ghi đè con số thật bằng ~0 — người dùng thấy đồng hồ nhảy về 0.0s.
+    wc.on('did-start-navigation', (details) => {
+      if (!details.isMainFrame || details.isSameDocument) return
+      tab.loadStartedAt = Date.now()
+      tab.loadMs = null
+      notify()
+    })
     wc.on('did-start-loading', notify)
-    wc.on('did-stop-loading', notify)
+    wc.on('did-stop-loading', () => {
+      if (tab.loadStartedAt !== null && tab.loadMs === null) {
+        tab.loadMs = Date.now() - tab.loadStartedAt
+      }
+      notify()
+    })
     wc.on('page-title-updated', notify)
     // Favicon là của chip tab trên chrome — renderer không tự hỏi được (icon nằm
     // trong webContents của trang), nên main phải bắn `changed` khi nó đổi.
@@ -997,6 +1083,26 @@ class BrowserController {
       if (next === tab.favicon) return
       tab.favicon = next
       notify()
+    })
+    // Tải hỏng ở khung chính ⇒ Electron để tab TRẮNG (không có trang lỗi của Chrome).
+    // Bơm trang lỗi vào document `chrome-error://` hiện tại: URL giữ nguyên là URL hỏng,
+    // lịch sử không thêm mục. -3 (ERR_ABORTED) là huỷ chủ động (guard điều hướng, người
+    // dùng bấm đi trang khác) — không phải lỗi để báo.
+    wc.on('did-fail-load', (_event, code, desc, url, isMainFrame) => {
+      if (!isMainFrame || code === -3) return
+      const html = renderErrorPage({
+        code,
+        desc,
+        url,
+        lang: app.getLocale().toLowerCase().startsWith('vi') ? 'vi' : 'en',
+        proxy: this.proxies.get(tab.profileId) ?? null,
+      })
+      wc.executeJavaScript(errorPageScript(html)).catch((err: unknown) => {
+        log.warn('browser error page inject failed', {
+          url,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      })
     })
     // Chặn điều hướng tới host nội bộ/loopback. BA sự kiện, không phải một:
     //
@@ -1011,7 +1117,7 @@ class BrowserController {
     // tải, nên nó không thể là lớp duy nhất — chính comment của ssrf.ts nói
     // "chạy lại ở mỗi hop".
     const guardNav = (event: { preventDefault: () => void }, url: string, where: string): void => {
-      const reason = hostBlocked(url)
+      const reason = hostBlocked(url, tab.scope)
       if (!reason) return
       log.warn('browser navigation blocked', { url, reason, where })
       event.preventDefault()
@@ -1025,7 +1131,7 @@ class BrowserController {
     // Open a real tab instead, through the same SSRF guard as everything else, and
     // still return `deny` so Chromium never creates a window of its own.
     wc.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url) && !hostBlocked(url)) {
+      if (/^https?:\/\//i.test(url) && !hostBlocked(url, tab.scope)) {
         // Popup của một tab scoped phải giữ NGUYÊN scope của nó — không thì link
         // `target=_blank` trong session A sẽ rơi vào pool global và hiện lên
         // mọi session khác.
@@ -1036,24 +1142,15 @@ class BrowserController {
         })
       } else if (url) {
         log.warn('browser popup blocked', {
-          reason: hostBlocked(url) ?? 'non-web scheme',
+          reason: hostBlocked(url, tab.scope) ?? 'non-web scheme',
         })
       }
       return { action: 'deny' }
     })
-    // Trang web ở đây là L1 tuyệt đối: không có handler thì
-    // Electron DUYỆT MẶC ĐỊNH mọi yêu cầu quyền, nên một trang xin clipboard
-    // (thường chứa mật khẩu/API key), vị trí, hay notification đều được cấp im
-    // lặng. Từ chối tất cả; cần quyền nào sau này thì allowlist đúng cái đó.
-    const ses = wc.session
-    ses.setPermissionRequestHandler((_wc, _perm, callback) => callback(false))
-    ses.setPermissionCheckHandler(() => false)
-    // Trang không được tự tải file về máy người dùng.
-    ses.on('will-download', (event) => {
-      log.warn('browser download blocked')
-      event.preventDefault()
-    })
+    // Quyền + tải file: handler của partition đã cài ở ensurePartition.
+    // Báo cáo của userscript đi qua console — không để lọt vào ring mà agent đọc.
     wc.on('console-message', (_event, level, message, line, sourceId) => {
+      if (userscripts.isReport(message)) return
       this.pushConsole(tab, level, message, line, sourceId)
     })
     // DevTools (Inspect trên chrome) + phím zoom: mở/đóng từ cửa sổ DevTools
@@ -1075,6 +1172,7 @@ class BrowserController {
       event.preventDefault()
       this.applyZoom(tab, k === '0' ? 'reset' : k === '-' ? 'out' : 'in')
     })
+    userscripts.attachTab(id, wc)
     this.attachDebugger(tab)
     this.tabs.set(id, tab)
     this.activate(tab)
@@ -1123,34 +1221,20 @@ class BrowserController {
   private tab(tabId?: string, scope?: string): BrowserTab {
     if (tabId) {
       const found = this.tabs.get(tabId)
-      if (
-        !found ||
-        found.view.webContents.isDestroyed() ||
-        (scope !== undefined && found.scope !== scope)
-      ) {
+      if (!found || found.view.webContents.isDestroyed() || (scope !== undefined && found.scope !== scope)) {
         throw new Error(`no such browser tab: ${tabId}`)
       }
       return found
     }
     const active =
-      scope === undefined
-        ? this.activeId
-          ? this.tabs.get(this.activeId)
-          : undefined
-        : this.scopedActiveTab(scope)
+      scope === undefined ? (this.activeId ? this.tabs.get(this.activeId) : undefined) : this.scopedActiveTab(scope)
     if (active && !active.view.webContents.isDestroyed()) return active
     return this.createTab(scope)
   }
 
   // ── Console capture ──────────────────────────────────────────────────────
 
-  private pushConsole(
-    tab: BrowserTab,
-    level: number,
-    message: string,
-    line: number,
-    sourceId: string,
-  ): void {
+  private pushConsole(tab: BrowserTab, level: number, message: string, line: number, sourceId: string): void {
     tab.consoleSeq += 1
     tab.console.push({
       seq: tab.consoleSeq,
@@ -1179,11 +1263,14 @@ class BrowserController {
       return
     }
     tab.debuggerOk = true
+    userscripts.onDebuggerAttached(tab.id)
     wc.debugger.on('detach', () => {
       tab.debuggerOk = false
     })
     wc.debugger.on('message', (_event, method: string, params: unknown) => {
-      this.onCdpEvent(tab, method, asObject(params))
+      const obj = asObject(params)
+      this.onCdpEvent(tab, method, obj)
+      captureOnCdp(tab.id, method, obj)
     })
     void wc.debugger
       .sendCommand('Network.enable', {
@@ -1269,29 +1356,19 @@ class BrowserController {
   private withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     return Promise.race([
       p,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
-      ),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)),
     ])
   }
 
-  private run(
-    tab: BrowserTab,
-    code: string,
-    label: string,
-    ms = ACTION_TIMEOUT_MS,
-  ): Promise<unknown> {
+  private run(tab: BrowserTab, code: string, label: string, ms = ACTION_TIMEOUT_MS): Promise<unknown> {
     return this.withTimeout(tab.view.webContents.executeJavaScript(code, true), ms, label)
   }
 
-  async navigate(
-    url: string,
-    tabId?: string,
-    scope?: string,
-  ): Promise<{ url: string; title: string; tabId: string }> {
-    const reason = hostBlocked(url)
+  async navigate(url: string, tabId?: string, scope?: string): Promise<{ url: string; title: string; tabId: string }> {
+    const reason = hostBlocked(url, scope)
     if (reason) throw new Error(`blocked URL — ${reason}`)
     const tab = this.tab(tabId, scope)
+    await this.proxyReady(tab.profileId)
     await this.withTimeout(tab.view.webContents.loadURL(url), NAV_TIMEOUT_MS, 'navigation')
     return {
       url: tab.view.webContents.getURL(),
@@ -1355,8 +1432,7 @@ class BrowserController {
     const prop = mode === 'dom' ? 'outerHTML' : 'innerText'
     const code = `(() => { const el = ${target}; return el ? String(el.${prop} || '') : null; })()`
     const raw = await this.run(tab, code, 'extract')
-    if (raw === null)
-      throw new Error(selector ? `no element matches ${selector}` : 'no document loaded')
+    if (raw === null) throw new Error(selector ? `no element matches ${selector}` : 'no document loaded')
     const text = String(raw)
     return {
       content: text.length > EXTRACT_MAX ? `${text.slice(0, EXTRACT_MAX)}\n…(truncated)` : text,
@@ -1416,7 +1492,11 @@ class BrowserController {
   // này không thêm hạ tầng nào. Nó không thay hai đường trên: khi có surface thì
   // `capturePage` rẻ hơn và đúng những gì đang hiện trên màn hình.
   private async captureOrThrow(tab: BrowserTab): Promise<Electron.NativeImage> {
-    let img = await this.tryCapture(tab)
+    // Đang giả lập thiết bị: `capturePage` chụp CÁI ĐANG HIỆN, tức view đã co vừa
+    // khung (vd 138×300 cho iPhone trong panel thấp) — model không đọc nổi. CDP
+    // render đúng metrics của thiết bị (1170×2532 @3x), nên đi đường đó trước.
+    let img = tab.emu ? await this.captureViaCdp(tab) : null
+    if (!img) img = await this.tryCapture(tab)
     if (!img) {
       await this.primeSurface(tab)
       img = await this.tryCapture(tab)
@@ -1503,9 +1583,7 @@ class BrowserController {
     const tab = this.tab(tabId, scope)
     const needle = filter ? filter.toLowerCase() : null
     const filtered = needle
-      ? tab.network.filter(
-          (e) => e.url.toLowerCase().includes(needle) || e.resourceType.toLowerCase() === needle,
-        )
+      ? tab.network.filter((e) => e.url.toLowerCase().includes(needle) || e.resourceType.toLowerCase() === needle)
       : tab.network
     return {
       entries: filtered.slice(-limit),
@@ -1582,12 +1660,8 @@ class BrowserController {
     if (tab.debuggerOk) {
       const dbg = tab.view.webContents.debugger
       try {
-        await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
-          width,
-          height,
-          deviceScaleFactor: scale,
-          mobile,
-        })
+        tab.emu = { width, height, dsf: scale, mobile }
+        await this.applyEmulation(tab)
         await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
           enabled: mobile,
         })
@@ -1610,6 +1684,314 @@ class BrowserController {
     return { width, height, scale, mobile, emulated, tabId: tab.id }
   }
 
+  // ── Profiles ─────────────────────────────────────────────────────────────
+
+  // Cài handler an toàn cho partition của một profile — ĐÚNG MỘT lần mỗi partition.
+  // Trang web ở đây là L1 tuyệt đối: không có handler thì Electron DUYỆT MẶC ĐỊNH
+  // mọi yêu cầu quyền, nên một trang xin clipboard (thường chứa mật khẩu/API key),
+  // vị trí, hay notification đều được cấp im lặng. Từ chối tất cả; cần quyền nào
+  // sau này thì allowlist đúng cái đó. Trang cũng không được tự tải file về máy.
+  private ensurePartition(profileId: string): void {
+    if (this.securedProfiles.has(profileId)) return
+    const ses = session.fromPartition(partitionForProfile(profileId))
+    ses.setPermissionRequestHandler((_wc, _perm, callback) => callback(false))
+    ses.setPermissionCheckHandler(() => false)
+    ses.on('will-download', (event) => {
+      log.warn('browser download blocked')
+      event.preventDefault()
+    })
+    this.securedProfiles.add(profileId)
+    this.hookProxyLogin()
+    void this.applyProxy(profileId)
+  }
+
+  // ── Proxy theo profile ───────────────────────────────────────────────────
+
+  // Áp trạng thái proxy đã biết của profile vào partition rồi cắt kết nối đang giữ để
+  // tab chuyển tuyến ngay. Chưa đồng bộ lần nào + chưa biết ⇒ chặn (cổng 1 trên
+  // loopback từ chối kết nối) cho tới khi sidecar báo.
+  private applyProxy(profileId: string): Promise<void> {
+    const run = this.applyProxyNow(profileId)
+    this.proxyApplying.set(profileId, run)
+    return run
+  }
+
+  // Chờ partition mang đúng tuyến TRƯỚC lượt tải đầu: `ensurePartition` áp proxy không
+  // chờ (nó chạy đồng bộ trong `createTab`), nên `loadURL` ngay sau đó có thể đi trước
+  // `setProxy` — với profile có proxy là lộ IP thật đúng ở trang đầu tiên. Chưa đồng bộ
+  // lần nào thì kéo trạng thái về trước, để trang đầu lúc khởi động không đâm vào cổng
+  // chặn tạm (fail-closed) trong khi sidecar đã sẵn sàng trả lời.
+  private async proxyReady(profileId: string): Promise<void> {
+    if (!this.proxiesSynced) await this.syncProxies()
+    await this.proxyApplying.get(profileId)
+  }
+
+  private async applyProxyNow(profileId: string): Promise<void> {
+    const ses = session.fromPartition(partitionForProfile(profileId))
+    const cfg = this.proxies.get(profileId)
+    try {
+      if (cfg) await ses.setProxy(buildSessionProxy(cfg))
+      else if (cfg === undefined && !this.proxiesSynced) {
+        await ses.setProxy({
+          mode: 'fixed_servers',
+          proxyRules: 'http://127.0.0.1:1',
+        })
+      } else await ses.setProxy({ mode: 'direct' })
+      await ses.closeAllConnections()
+    } catch (err) {
+      log.warn('browser proxy apply failed', {
+        profile: profileId,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  // Sidecar đẩy proxy (+ credential) của một profile. Không đổi gì ⇒ bỏ qua để các
+  // lần đồng bộ lặp lại không cắt kết nối vô cớ.
+  async setProfileProxy(
+    profileId: string,
+    proxy: ProxyConfig | null,
+    auth: ProxyCredentials | undefined,
+  ): Promise<void> {
+    partitionForProfile(profileId)
+    const prevCfg = this.proxies.get(profileId)
+    const prevAuth = this.proxyCreds.get(profileId)
+    const same =
+      prevCfg !== undefined &&
+      JSON.stringify(prevCfg) === JSON.stringify(proxy) &&
+      prevAuth?.username === auth?.username &&
+      prevAuth?.password === auth?.password
+    if (same) return
+    this.proxies.set(profileId, proxy)
+    if (proxy && auth) this.proxyCreds.set(profileId, auth)
+    else this.proxyCreds.delete(profileId)
+    this.proxyLoginAttempts.delete(profileId)
+    if (this.securedProfiles.has(profileId)) await this.applyProxy(profileId)
+    this.changed()
+  }
+
+  // Hỏi sidecar đẩy lại proxy của mọi profile (khởi động / engine restart / danh sách
+  // đổi). Một chuyến bay một lúc.
+  syncProxies(): Promise<void> {
+    if (this.proxySyncing) return this.proxySyncing
+    this.proxySyncing = (async () => {
+      try {
+        await engine.request('browserProfiles.syncProxies', null)
+        this.proxiesSynced = true
+        // Partition đã mở mà sidecar không nhắc tới ⇒ đi thẳng (hết trạng thái chặn).
+        for (const id of this.securedProfiles) {
+          if (!this.proxies.has(id)) {
+            this.proxies.set(id, null)
+            await this.applyProxy(id)
+          }
+        }
+      } catch (err) {
+        log.warn('browser proxy sync failed', {
+          err: err instanceof Error ? err.message : String(err),
+        })
+      } finally {
+        this.proxySyncing = null
+      }
+    })()
+    return this.proxySyncing
+  }
+
+  isProxied(profileId: string): boolean {
+    return this.proxies.get(profileId) != null
+  }
+
+  // Trả lời 407 của proxy bằng credential đã lưu — chỉ khi (a) là thử thách proxy,
+  // (b) webContents thuộc đúng partition của profile có proxy ấy, (c) host:port khớp
+  // cấu hình. Mọi ca khác bỏ qua ⇒ hành vi mặc định (huỷ), không lộ credential.
+  private hookProxyLogin(): void {
+    if (this.loginHooked) return
+    this.loginHooked = true
+    app.on('login', (event, wc, _details, authInfo, callback) => {
+      if (!authInfo.isProxy || !wc) return
+      for (const [id, cfg] of this.proxies) {
+        if (!cfg) continue
+        if (wc.session !== session.fromPartition(partitionForProfile(id))) continue
+        const creds = this.proxyCreds.get(id)
+        if (!creds || !proxyAuthMatches(authInfo, cfg)) return
+        const now = Date.now()
+        const prev = this.proxyLoginAttempts.get(id)
+        const att = prev && now - prev.since < 30_000 ? prev : { count: 0, since: now }
+        att.count++
+        this.proxyLoginAttempts.set(id, att)
+        if (att.count > 3) {
+          log.warn('browser proxy auth rejected repeatedly — giving up', {
+            profile: id,
+          })
+          return
+        }
+        event.preventDefault()
+        callback(creds.username, creds.password)
+        return
+      }
+    })
+  }
+
+  // Thử tuyến của một profile: người dùng bấm "Test" ⇒ MỘT request qua đúng partition
+  // đó (không gọi thêm đường trực tiếp để so sánh).
+  async testProxy(profileId: string): Promise<{ ok: boolean; ip?: string; loc?: string; error?: string }> {
+    this.ensurePartition(profileId)
+    if (!this.proxiesSynced) await this.syncProxies()
+    await this.proxyApplying.get(profileId)
+    const ses = session.fromPartition(partitionForProfile(profileId))
+    try {
+      const res = await ses.fetch('https://www.cloudflare.com/cdn-cgi/trace', {
+        signal: AbortSignal.timeout(8000),
+        cache: 'no-store',
+      })
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` }
+      const { ip, loc } = parseTrace(await res.text())
+      if (!ip) return { ok: false, error: 'Unexpected response (no ip)' }
+      return { ok: true, ip, ...(loc ? { loc } : {}) }
+    } catch (err) {
+      return {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+  }
+
+  // Profile của scope, đọc ĐỒNG BỘ từ cache (createTab không async được). Chưa
+  // biết ⇒ tạm dùng mặc định và hỏi sidecar ngầm; kết quả về sẽ đi qua
+  // setScopeProfile nên tab đã lỡ tạo ở partition tạm được chuyển sang đúng chỗ.
+  private profileSync(scope?: string): string {
+    if (scope === undefined) return this.globalProfile
+    const cached = this.scopeProfile.get(scope)
+    if (cached) return cached
+    void this.profileOf(scope)
+    return DEFAULT_PROFILE_ID
+  }
+
+  // Profile hiệu lực của scope; hỏi sidecar (`browserProfiles.resolveScope`) khi
+  // chưa có cache. Lỗi sidecar ⇒ mặc định, KHÔNG cache để lần sau hỏi lại.
+  async profileOf(scope?: string): Promise<string> {
+    if (scope === undefined) return this.globalProfile
+    const cached = this.scopeProfile.get(scope)
+    if (cached) return cached
+    let pending = this.resolving.get(scope)
+    if (!pending) {
+      pending = (async () => {
+        try {
+          const res = asObject(await engine.request('browserProfiles.resolveScope', { scope }))
+          const id = readString(res, 'profileId')
+          if (!isValidProfileId(id)) throw new Error(`sidecar returned invalid profile id: ${id}`)
+          // Sidecar có thể đã đẩy giá trị mới hơn trong lúc ta chờ: không đè.
+          if (!this.scopeProfile.has(scope)) await this.setScopeProfile(scope, id)
+          return this.scopeProfile.get(scope) ?? id
+        } catch (err) {
+          log.warn('browser profile resolve failed', {
+            scope,
+            err: err instanceof Error ? err.message : String(err),
+          })
+          return DEFAULT_PROFILE_ID
+        } finally {
+          this.resolving.delete(scope)
+        }
+      })()
+      this.resolving.set(scope, pending)
+    }
+    return pending
+  }
+
+  // Đổi profile hiệu lực của một scope. Có tab ở partition cũ ⇒ đóng + mở lại cùng
+  // URL ở partition mới (cùng thứ tự, cùng tab active, cùng rect nếu đang nhúng).
+  async setScopeProfile(scope: string, profileId: string): Promise<void> {
+    partitionForProfile(profileId)
+    this.scopeProfile.set(scope, profileId)
+    await this.reopenTabs(scope, profileId)
+  }
+
+  // Profile mặc định (cho pool global) do sidecar giữ; đọc lại khi nó có thể đã đổi.
+  async refreshGlobalProfile(): Promise<void> {
+    try {
+      const res = asObject(await engine.request('browserProfiles.list', null))
+      const id = readString(res, 'defaultProfileId')
+      if (!isValidProfileId(id) || id === this.globalProfile) return
+      this.globalProfile = id
+      await this.reopenTabs(undefined, id)
+    } catch (err) {
+      log.warn('browser default profile refresh failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  private async reopenTabs(scope: string | undefined, profileId: string): Promise<void> {
+    const stale = [...this.tabs.values()].filter(
+      (t) => t.scope === scope && t.profileId !== profileId && !t.view.webContents.isDestroyed(),
+    )
+    if (stale.length === 0) return
+    const activeId = scope === undefined ? this.activeId : (this.activeByScope.get(scope) ?? null)
+    const plan = stale.map((t) => ({
+      url: t.view.webContents.getURL(),
+      wasActive: t.id === activeId,
+      host: t.host && !t.host.isDestroyed() ? t.host : null,
+      slot: t.slot,
+    }))
+    this.cancelPick()
+    for (const t of stale) this.discardTab(t)
+    let reopenedActive: BrowserTab | null = null
+    let last: BrowserTab | null = null
+    for (const p of plan) {
+      const tab = this.createTab(scope)
+      last = tab
+      if (p.wasActive) reopenedActive = tab
+      if (p.url && p.url !== 'about:blank' && !hostBlocked(p.url, scope)) {
+        const target = p.url
+        void this.proxyReady(tab.profileId)
+          .then(() => tab.view.webContents.loadURL(target))
+          .catch((err: unknown) => {
+            log.warn('browser reopen load failed', {
+              url: p.url,
+              err: err instanceof Error ? err.message : String(err),
+            })
+          })
+      }
+      if (p.wasActive && p.host && p.slot) this.attachTo(p.host, tab.id, p.slot, scope)
+    }
+    const target = reopenedActive ?? last
+    if (target) this.activate(target)
+    this.changed()
+    log.info('browser tabs moved to profile', {
+      scope: scope ?? '(global)',
+      profileId,
+      tabs: plan.length,
+    })
+  }
+
+  // Gỡ tab khỏi sổ NGAY rồi đóng: `destroyed` bắn bất đồng bộ mà MAX_TABS đếm
+  // trên sổ này.
+  private discardTab(tab: BrowserTab): void {
+    this.tabs.delete(tab.id)
+    this.dropActive(tab)
+    if (tab.host && !tab.host.isDestroyed()) tab.host.contentView.removeChildView(tab.view)
+    tab.view.webContents.close()
+  }
+
+  // Profile bị xoá: đóng mọi tab còn ở partition đó (sidecar thường đã đẩy
+  // setScopeProfile trước nên tab đã chuyển đi), rồi xoá sạch dữ liệu của nó.
+  async wipeProfile(profileId: string): Promise<void> {
+    const ses = session.fromPartition(partitionForProfile(profileId))
+    for (const t of [...this.tabs.values()]) {
+      if (t.profileId === profileId) this.discardTab(t)
+    }
+    for (const [scope, id] of this.scopeProfile) {
+      if (id === profileId) this.scopeProfile.delete(scope)
+    }
+    if (this.globalProfile === profileId) {
+      // Xoá dữ liệu (không xoá profile) thì mặc định vẫn là nó: đọc lại từ sidecar.
+      this.globalProfile = DEFAULT_PROFILE_ID
+      void this.refreshGlobalProfile()
+    }
+    await ses.clearStorageData()
+    await ses.clearCache()
+    this.changed()
+  }
+
   // ── Tabs ─────────────────────────────────────────────────────────────────
 
   // `for` is the window the list is being built for, so `shown` means "in YOUR
@@ -1624,6 +2006,8 @@ class BrowserController {
       title: wc.getTitle(),
       favicon: tab.favicon,
       scope: tab.scope,
+      profileId: tab.profileId,
+      proxied: this.isProxied(tab.profileId),
       active: tab.id === this.activeId,
       loading: wc.isLoading(),
       canGoBack: wc.navigationHistory.canGoBack(),
@@ -1633,7 +2017,16 @@ class BrowserController {
       zoom: wc.getZoomFactor(),
       devtools: wc.isDevToolsOpened(),
       mobile: tab.mobile,
+      loadStartedAt: tab.loadStartedAt,
+      loadMs: tab.loadMs,
     }
+  }
+
+  // Menu ⋮ của chrome: userscript đã chạy / khớp trang hiện tại của tab. Cùng cổng
+  // `this.tab()` ⇒ một surface không hỏi được tab của scope khác.
+  userscriptsForTab(tabId?: string, scope?: string): UserscriptTabState {
+    const tab = this.tab(tabId, scope)
+    return userscripts.forTab(tab.id, tab.view.webContents.getURL())
   }
 
   // `scope` lọc danh sách VÀ đổi nghĩa của `active`/`activeTabId`: với scope
@@ -1641,7 +2034,10 @@ class BrowserController {
   // nhìn thấy tab của session khác, kể cả chỉ qua cờ `active` trên danh sách.
   // `activeByScope` snapshot để renderer phân rã cho nhiều scope cùng lúc (panel
   // KeepAlive của session đang ngủ vẫn biết nó trông thế nào).
-  listTabs(forWindow?: BrowserWindow, scope?: string): {
+  listTabs(
+    forWindow?: BrowserWindow,
+    scope?: string,
+  ): {
     tabs: TabInfo[]
     activeTabId: string | null
     activeByScope: Record<string, string>
@@ -1682,7 +2078,7 @@ class BrowserController {
     if (!waitForLoad) {
       // Guard host chạy TRƯỚC và đồng bộ, nên URL bị chặn vẫn ném ngay cho người
       // gọi — chỉ phần tải là không chờ.
-      const reason = hostBlocked(url)
+      const reason = hostBlocked(url, scope)
       if (reason) throw new Error(`cannot open ${url}: ${reason}`)
       void this.navigate(url, tab.id, scope).catch((err: unknown) => {
         log.warn('browser background navigation failed', {
@@ -1741,9 +2137,7 @@ class BrowserController {
     // thật để renderer tự sửa mình theo.
     const known = tabId ? this.tabs.get(tabId) : undefined
     const tab =
-      known &&
-      !known.view.webContents.isDestroyed() &&
-      (scope === undefined || known.scope === scope)
+      known && !known.view.webContents.isDestroyed() && (scope === undefined || known.scope === scope)
         ? known
         : this.tab(undefined, scope)
     // One webContents cannot be in two rects, so attaching hands the tab over:
@@ -1780,7 +2174,8 @@ class BrowserController {
       host.contentView.addChildView(tab.view)
       tab.host = host
     }
-    tab.view.setBounds(target)
+    tab.slot = target
+    this.layoutTab(tab)
     // View có thể đang bị giấu tại chỗ (concealAt / overlap ở trên) — bật lại
     // SAU setBounds để frame đầu đã ở đúng rect.
     tab.view.setVisible(true)
@@ -1794,20 +2189,12 @@ class BrowserController {
   // cheap enough to call from a ResizeObserver. `scope` khoá resolve về active
   // của scope đó — một payload cũ của panel ngủ không được dời rect của tab
   // session khác.
-  setViewBounds(
-    host: BrowserWindow,
-    tabId: string | undefined,
-    rect: Rect,
-    scope?: string,
-  ): void {
-    const tab = tabId
-      ? this.tabs.get(tabId)
-      : scope !== undefined
-        ? this.scopedActiveTab(scope)
-        : this.activeTab()
+  setViewBounds(host: BrowserWindow, tabId: string | undefined, rect: Rect, scope?: string): void {
+    const tab = tabId ? this.tabs.get(tabId) : scope !== undefined ? this.scopedActiveTab(scope) : this.activeTab()
     if (!tab || tab.view.webContents.isDestroyed() || tab.host !== host) return
     if (scope !== undefined && tab.scope !== scope) return
-    tab.view.setBounds(clampRect(rect))
+    tab.slot = clampRect(rect)
+    this.layoutTab(tab)
   }
 
   // Hide (NOT unpaint) every tab occupying `rect` of this window: the view
@@ -1872,6 +2259,56 @@ class BrowserController {
     tab.view.setBounds({ x: 0, y: 0, width, height })
   }
 
+  // Đặt bounds của view theo rect renderer cấp (`tab.slot`) và — nếu tab đang giả
+  // lập thiết bị — co thiết bị vừa rect rồi đẩy override CDP kèm `scale`. Phần
+  // đồng bộ (setBounds) chạy ngay trong lời gọi nên ResizeObserver của renderer
+  // không phải đợi CDP; override tới sau một nhịp, trùng key thì bỏ qua.
+  // Không giả lập: view = rect như cũ. Tab đang đỗ ở holder (không có slot): scale 1.
+  private async applyEmulation(tab: BrowserTab): Promise<void> {
+    const emu = tab.emu
+    const slot = tab.host && !tab.host.isDestroyed() ? tab.slot : null
+    if (!emu) {
+      if (slot) tab.view.setBounds(slot)
+      return
+    }
+    let scale = 1
+    if (slot) {
+      const fit = fitEmulation(slot, emu.width, emu.height)
+      tab.view.setBounds(fit.bounds)
+      scale = fit.scale
+    }
+    const key = `${emu.width}x${emu.height}@${emu.dsf}/${emu.mobile}/${scale}`
+    if (key === tab.emuKey || !tab.debuggerOk) return
+    tab.emuKey = key
+    try {
+      await tab.view.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', {
+        width: emu.width,
+        height: emu.height,
+        deviceScaleFactor: emu.dsf,
+        mobile: emu.mobile,
+        scale,
+        screenWidth: emu.width,
+        screenHeight: emu.height,
+        // KHÔNG để Chromium đổi visible size của renderer thành cỡ thiết bị: đó
+        // chính là thứ làm trang vẽ lố khỏi bounds view (browser-emulation.ts).
+        dontSetVisibleSize: true,
+      })
+    } catch (err) {
+      tab.emuKey = ''
+      throw err
+    }
+  }
+
+  // Gọi từ đường renderer-driven (attach/resize) — không ai await, nên lỗi chỉ log.
+  private layoutTab(tab: BrowserTab): void {
+    this.applyEmulation(tab).catch((err: unknown) => {
+      log.warn('browser emulation layout failed', {
+        tab: tab.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+    })
+  }
+
   // ── User-driven navigation (URL bar, back/forward/reload) ────────────────
   //
   // Same guard as the agent's `navigate`: a URL typed in the panel is still L1
@@ -1880,14 +2317,11 @@ class BrowserController {
 
   async openFromUser(url: string, tabId?: string, scope?: string): Promise<TabInfo> {
     const target = normalizeUserUrl(url)
-    const reason = hostBlocked(target)
+    const reason = hostBlocked(target, scope)
     if (reason) throw new Error(`cannot open ${target}: ${reason}`)
     const tab = this.tab(tabId, scope)
-    await this.withTimeout(
-      tab.view.webContents.loadURL(target),
-      NAV_TIMEOUT_MS,
-      'navigation',
-    ).catch((err: unknown) => {
+    await this.proxyReady(tab.profileId)
+    await this.withTimeout(tab.view.webContents.loadURL(target), NAV_TIMEOUT_MS, 'navigation').catch((err: unknown) => {
       // A failed load leaves the tab usable (error page); report it as data.
       log.warn('browser user navigation failed', {
         url: target,
@@ -1958,27 +2392,41 @@ class BrowserController {
     const tab = this.tab(tabId, scope)
     const wc = tab.view.webContents
     if (on === tab.mobile || !tab.debuggerOk) {
-      if (!tab.debuggerOk)
-        log.warn('mobile emulation skipped — debugger not attached', { tab: tab.id })
+      if (!tab.debuggerOk) log.warn('mobile emulation skipped — debugger not attached', { tab: tab.id })
       return { mobile: tab.mobile }
     }
     const dbg = wc.debugger
     try {
       if (on) {
         const p = VIEWPORT_PRESETS.mobile
-        await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
+        tab.emu = {
           width: p.width,
           height: p.height,
-          deviceScaleFactor: p.scale,
+          dsf: p.scale,
           mobile: true,
+        }
+        // Bounds (co vừa khung, căn giữa) + override + scale đi cùng một chỗ — xem
+        // browser-emulation.ts vì sao không được gửi override trần.
+        await this.applyEmulation(tab)
+        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
+          enabled: true,
         })
-        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true })
-        await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: p.ua ?? '' })
+        await dbg.sendCommand('Emulation.setUserAgentOverride', {
+          userAgent: p.ua ?? '',
+        })
       } else {
+        tab.emu = null
+        tab.emuKey = ''
         await dbg.sendCommand('Emulation.clearDeviceMetricsOverride')
-        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: false })
+        await dbg.sendCommand('Emulation.setTouchEmulationEnabled', {
+          enabled: false,
+        })
         // '' = bỏ override, trở về UA thật của session.
-        await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
+        await dbg.sendCommand('Emulation.setUserAgentOverride', {
+          userAgent: '',
+        })
+        // Trả view về full rect của renderer.
+        await this.applyEmulation(tab)
       }
       tab.mobile = on
     } catch (err) {
@@ -2069,10 +2517,7 @@ class BrowserController {
     })
     this.popoutWin = win
     this.popoutScope = scope ?? null
-    loadAppRoute(
-      win,
-      this.popoutScope ? `browser?scope=${encodeURIComponent(this.popoutScope)}` : 'browser',
-    )
+    loadAppRoute(win, this.popoutScope ? `browser?scope=${encodeURIComponent(this.popoutScope)}` : 'browser')
     return win
   }
 
@@ -2097,12 +2542,7 @@ class BrowserController {
     // `about:blank` trong cửa sổ popout). Không có trang thì không có selection —
     // trả rỗng là câu trả lời ĐÚNG, không phải một cách né lỗi.
     if (!hasCommittedPage(wc)) return { text: '', url: wc.getURL(), title: wc.getTitle() }
-    const raw = await this.run(
-      tab,
-      selectionScript(SELECTION_MAX),
-      'read selection',
-      SELECTION_TIMEOUT_MS,
-    )
+    const raw = await this.run(tab, selectionScript(SELECTION_MAX), 'read selection', SELECTION_TIMEOUT_MS)
     return {
       text: clip(typeof raw === 'string' ? raw : '', SELECTION_MAX),
       url: wc.getURL(),
@@ -2249,9 +2689,47 @@ class BrowserController {
     const tab = this.tab(tabId, scope)
     const img = await this.tryCapture(tab)
     if (!img) return { dataUrl: null }
-    const w = Math.round(tab.view.getBounds().width)
+    const bounds = tab.view.getBounds()
+    const w = Math.round(bounds.width)
     const sized = w > 0 && img.getSize().width > w ? img.resize({ width: w }) : img
-    return { dataUrl: `data:image/jpeg;base64,${sized.toJPEG(72).toString('base64')}` }
+    // Đang giả lập thiết bị: view chỉ chiếm phần giữa của rect (xem
+    // browser-emulation.ts) mà renderer phủ ảnh này lên TOÀN rect bằng
+    // object-fit: fill — ảnh trần sẽ bị kéo méo. Đệm lại đúng kích thước rect bằng
+    // pixel trong suốt (PNG) để phần letterbox vẫn là nền theme của renderer.
+    const slot = tab.slot
+    if (tab.emu && slot) {
+      const padded = padToSlot(sized, bounds, slot)
+      if (padded)
+        return {
+          dataUrl: `data:image/png;base64,${padded.toPNG().toString('base64')}`,
+        }
+    }
+    return {
+      dataUrl: `data:image/jpeg;base64,${sized.toJPEG(72).toString('base64')}`,
+    }
+  }
+
+  // JPEG ~640px rộng, chất lượng 70 (≈ 20–60KB). Dùng `captureOrThrow` để tab chưa
+  // từng lên màn hình vẫn được `ensurePainted` đánh thức, rồi nuốt lỗi → null.
+  async thumbnail(tabId?: string, scope?: string): Promise<{ base64: string; width: number; height: number } | null> {
+    const tab = this.tab(tabId, scope)
+    try {
+      const img = await this.captureOrThrow(tab)
+      const w = img.getSize().width
+      const sized = w > THUMB_WIDTH ? img.resize({ width: THUMB_WIDTH }) : img
+      const { width, height } = sized.getSize()
+      return {
+        base64: sized.toJPEG(THUMB_QUALITY).toString('base64'),
+        width,
+        height,
+      }
+    } catch (err) {
+      log.warn('browser thumbnail failed', {
+        tab: tab.id,
+        err: err instanceof Error ? err.message : String(err),
+      })
+      return null
+    }
   }
 
   sites(): SitePolicy {
@@ -2290,6 +2768,66 @@ export const browser = new BrowserController()
 // ↔ tab ownership ở `this.tab()` nên một agent không thể mượn tabId của session
 // khác để đọc hay điều hướng trang đó.
 export function registerBrowserHostHandlers(): void {
+  // Sidecar đẩy tập cổng dev server ĐANG CHẠY + đã khai của một phiên (xem
+  // browser-host-policy.ts). Thay thế nguyên tập; rỗng = thu hồi.
+  engine.registerHostHandler('browser.setDevServerPorts', async (p) => {
+    const ports = asObject(p).ports
+    if (!Array.isArray(ports)) throw new Error('missing required param: ports')
+    setDevServerPorts(requireString(p, 'scope'), ports as unknown[] as number[])
+    return { ok: true }
+  })
+  // Sidecar chết ⇒ mọi khẳng định "đang chạy" hết căn cứ: thu hồi hết, sidecar
+  // mới sẽ tự đẩy lại khi agent điều hướng.
+  engine.onEvent((event) => {
+    if (event.type === 'engine.crashed' || event.type === 'engine.restarted') {
+      clearDevServerPorts()
+    }
+  })
+  // Profile hiệu lực của một scope (session override ?? project ?? default) do
+  // SIDECAR quyết — nó đẩy xuống mỗi khi có thể đổi và trước mỗi lượt browser_tool.
+  // Đổi profile ⇒ tab của scope đóng + mở lại cùng URL ở partition mới.
+  engine.registerHostHandler('browser.setScopeProfile', async (p) => {
+    await browser.setScopeProfile(requireString(p, 'scope'), requireString(p, 'profile'))
+    return { ok: true }
+  })
+  // Xoá sạch dữ liệu của một partition (profile bị xoá ở sidecar).
+  engine.registerHostHandler('browser.wipeProfile', async (p) => {
+    await browser.wipeProfile(requireString(p, 'profile'))
+    return { ok: true }
+  })
+  // Tập userscript (luật đã biên dịch + source của script bật) do SIDECAR giữ.
+  engine.registerHostHandler('browser.setUserscripts', async (p) => {
+    userscripts.setScripts(p)
+    return { ok: true }
+  })
+  // App mở / sidecar khởi động lại ⇒ kéo tập (lần đẩy trước có thể đã hụt).
+  void userscripts.refresh()
+  engine.onEvent((event) => {
+    if (event.type === 'engine.restarted') void userscripts.refresh()
+  })
+  // Profile mặc định đổi (hoặc sidecar khởi động lại) ⇒ pool global có thể phải
+  // chuyển partition.
+  engine.onEvent((event) => {
+    if (event.type === 'browser.profiles-changed' || event.type === 'engine.restarted') {
+      void browser.refreshGlobalProfile()
+      void browser.syncProxies()
+    }
+  })
+  // Proxy (+ credential) của một profile do SIDECAR đẩy xuống: cấu hình ở file, credential
+  // ở keychain. Main validate lại payload; credential chỉ giữ trong RAM.
+  engine.registerHostHandler('browser.setProfileProxy', async (p) => {
+    const o = asObject(p)
+    const profile = requireString(p, 'profile')
+    if (!isValidProfileId(profile)) throw new Error(`invalid browser profile id: ${profile}`)
+    const proxy = o.proxy === null ? null : parseProxyConfig(o.proxy)
+    const auth = o.auth === undefined ? undefined : parseProxyCredentials(o.auth)
+    if (!proxy && auth) throw new Error('auth without proxy')
+    if (proxy?.type === 'socks5' && auth) throw new Error('socks5 proxy authentication is not supported')
+    await browser.setProfileProxy(profile, proxy, auth)
+    return { ok: true }
+  })
+  // Khởi động: engine có thể đã chạy trước khi handler này đăng ký.
+  void browser.syncProxies()
   engine.registerHostHandler('browser.navigate', async (p) =>
     browser.navigate(requireString(p, 'url'), optionalString(p, 'tabId'), optionalString(p, 'scope')),
   )
@@ -2317,22 +2855,20 @@ export function registerBrowserHostHandlers(): void {
   engine.registerHostHandler('browser.extract', async (p) => {
     const o = asObject(p)
     const mode = o.mode === 'dom' ? 'dom' : 'text'
-    return browser.extract(
-      mode,
-      optionalString(p, 'selector'),
-      optionalString(p, 'tabId'),
-      optionalString(p, 'scope'),
-    )
+    return browser.extract(mode, optionalString(p, 'selector'), optionalString(p, 'tabId'), optionalString(p, 'scope'))
   })
   engine.registerHostHandler('browser.screenshot', async (p) =>
     browser.screenshot(optionalString(p, 'tabId'), optionalString(p, 'scope')),
   )
+  // Ảnh xem trước cho thẻ trang trong transcript (docs/features/browser-preview-card.md).
+  // Best-effort: chụp lỗi ⇒ null, KHÔNG ném — thẻ vẫn hiện được không có ảnh và
+  // một lần chụp hỏng không được làm hỏng lượt `navigate`. Base64 chỉ đi về sidecar
+  // để ghi đĩa; không bao giờ vào kết quả tool gửi cho model.
+  engine.registerHostHandler('browser.thumbnail', async (p) =>
+    browser.thumbnail(optionalString(p, 'tabId'), optionalString(p, 'scope')),
+  )
   engine.registerHostHandler('browser.snapshot', async (p) =>
-    browser.snapshot(
-      optionalString(p, 'selector'),
-      optionalString(p, 'tabId'),
-      optionalString(p, 'scope'),
-    ),
+    browser.snapshot(optionalString(p, 'selector'), optionalString(p, 'tabId'), optionalString(p, 'scope')),
   )
   engine.registerHostHandler('browser.console', async (p) =>
     browser.readConsole(
@@ -2351,11 +2887,7 @@ export function registerBrowserHostHandlers(): void {
     ),
   )
   engine.registerHostHandler('browser.networkBody', async (p) =>
-    browser.networkBody(
-      requireString(p, 'requestId'),
-      optionalString(p, 'tabId'),
-      optionalString(p, 'scope'),
-    ),
+    browser.networkBody(requireString(p, 'requestId'), optionalString(p, 'tabId'), optionalString(p, 'scope')),
   )
   engine.registerHostHandler('browser.viewport', async (p) =>
     browser.viewport(
@@ -2369,9 +2901,7 @@ export function registerBrowserHostHandlers(): void {
       optionalString(p, 'scope'),
     ),
   )
-  engine.registerHostHandler('browser.tabs', async (p) =>
-    browser.listTabs(undefined, optionalString(p, 'scope')),
-  )
+  engine.registerHostHandler('browser.tabs', async (p) => browser.listTabs(undefined, optionalString(p, 'scope')))
   engine.registerHostHandler('browser.tabNew', async (p) =>
     browser.newTab(optionalString(p, 'url'), true, optionalString(p, 'scope')),
   )

@@ -347,6 +347,10 @@ export interface SessionMessage {
   role: 'user' | 'agent' | 'system'
   agentId?: string
   text: string
+  // Set on a `system` message that marks a native Claude CLI compaction point
+  // (derived from the CLI transcript on replay, or pushed live by the UI). The UI
+  // localises the divider text from these figures instead of showing `text`.
+  compaction?: NativeCompaction
   at: string
   modeAtSend?: AgentMode
   // Nguồn của message: vắng mặt = do AWOG stream (đường bình thường). 'claude' /
@@ -430,6 +434,19 @@ export interface SessionMessage {
   // finalize) the UI derives the order from `text` + `steps`. Built + persisted by
   // sessions.send-message; never carries `textOffset`.
   parts?: SessionMessagePart[]
+}
+
+// One native compaction of the Claude CLI (`system/compact_boundary`, Anthropic
+// runtime). The CLI rewrites its OWN session (same sdkSessionId) and writes the
+// boundary into its JSONL, which pointer-mode replay (ADR 0097) turns into a
+// `system` SessionMessage carrying this marker. AWOG persists nothing else.
+// Token figures are the CLI's own measure of the conversation (excl. system
+// prompt / tool schemas).
+export interface NativeCompaction {
+  trigger: 'manual' | 'auto'
+  preTokens: number
+  postTokens?: number
+  durationMs?: number
 }
 
 // Context-compaction checkpoint (ADR 0047). Mirrors Pi's CompactionResult shape.
@@ -561,6 +578,10 @@ export interface Session {
   // người. Đường ghi: `sessions.setLlmOverride` (RPC riêng vì gỡ phải XOÁ HẲN
   // key, y hệt setAgent/setSpawnConfig).
   llmOverride?: SessionLlmOverride
+  // Profile trình duyệt nhúng của phiên (docs/features/browser-profiles-bookmarks.md).
+  // Thắng `Project.browserProfileId`, rồi tới profile mặc định toàn app. Vắng = kế
+  // thừa. Đường ghi duy nhất: `sessions.setBrowserProfile` (null phải XOÁ HẲN key).
+  browserProfileId?: string
   // Cấu hình spawn đã duyệt + NHỚ cho run này (popover điều phối → "nhớ cho nhóm").
   // Chỉ có nghĩa trên phiên LEAD: `create_session` nhìn thấy nó sẽ BỎ QUA
   // popover và đẻ phiên member thẳng với cấu hình này — đúng nghĩa "duyệt một lần cho
@@ -613,6 +634,19 @@ export interface Session {
   // from its own store. Absent for Pi-only (non-Anthropic) sessions. JSONL still
   // records the messages for UI display — this is only the SDK's resume handle.
   sdkSessionId?: string
+  // ADR 0097 — transcript source for this session. Absent = the AWOG session.jsonl
+  // body (lines 2+) holds the messages (default; always true for Pi/Codex). 'sdk'
+  // = the Claude CLI transcript under `sdkSessionPath` is the ONLY source of
+  // truth: session.jsonl carries just the index line (header) and messages are
+  // derived by replaying the CLI file on load. Set when an Anthropic turn lands
+  // on a covered transcript; cleared whenever the session's history re-roots in
+  // AWOG (truncate/compact/provider switch) — the SDK file can never be edited,
+  // so diverging past it means re-freezing a full copy.
+  transcriptSource?: 'sdk'
+  // Absolute path of the CLI transcript for the current sdkSessionId
+  // (~/.claude/projects/<cwd-hash>/<sdkSessionId>.jsonl). Persisted so a cold
+  // load resolves the file without scanning every project dir.
+  sdkSessionPath?: string
   // Codex thread id (ADR 0087, OpenAI path only) + the dynamic tool-set signature
   // that thread was started with. Codex owns the conversation inside its thread,
   // so the next turn resumes it — unless the tool set changed, which a thread
@@ -633,6 +667,21 @@ export interface Session {
   // `cliImport.claude.file` là file ~/.claude/projects/<cwd-hash>/<sdkSessionId>.jsonl
   // đang được fold về; xem SessionCliImportCursor + sessions/cli-import.ts.
   cliImport?: Partial<Record<SessionCliKind, SessionCliImportCursor>>
+  // Phiên được NHẬP từ Claude Desktop / Claude CLI (terminal) — ADR 0102. Phiên ở chế độ
+  // pointer (transcriptSource='sdk'): file ~/.claude/projects/<slug>/<sdkSessionId>.jsonl là
+  // nguồn thật, nên Desktop/CLI làm tiếp ở bên kia thì AWOG thấy lượt mới (xem
+  // sessions/claude-import.ts). Có field này ⇒ `sessions.sendMessage`/`sessions.compact`
+  // bị chặn bởi cổng CLAUDE_SESSION_BUSY khi transcript vừa được ghi.
+  importedFrom?: SessionImportedFrom
+}
+
+// Nguồn của một phiên đã nhập. `cwd` = thư mục làm việc ghi trong transcript: lượt tiếp theo
+// phải chạy ở đúng cwd này, vì CLI tìm file resume theo slug của cwd (project có thể là thư
+// mục cha của cwd).
+export interface SessionImportedFrom {
+  kind: 'claude-desktop' | 'cli'
+  at: string
+  cwd?: string
 }
 
 // Lightweight list-row projection of a Session WITHOUT `messages` (ADR 0048).
@@ -676,6 +725,9 @@ export interface SessionSummary {
   aboutSshHostId?: string
   // GitHub issue/PR this session was opened from — mirrors Session.aboutGhUrl.
   aboutGhUrl?: string
+  // Mirrors Session.importedFrom — badge nguồn (Desktop/CLI) ở hàng danh sách mà không cần
+  // nạp transcript.
+  importedFrom?: SessionImportedFrom
   // Ngữ cảnh hạ tầng đã đóng băng (ADR 0088) — mirrors Session.infra. Có mặt trên
   // hàng danh sách để chip ngữ cảnh hiện ĐÚNG ngay khi mở phiên, thay vì hiện giá
   // trị kế thừa rồi nhảy sang giá trị ghim khi transcript nạp xong.
@@ -704,6 +756,9 @@ export interface SessionSummary {
   // renderer hiện/đổi override (vd. tab Advanced của board item) mà không cần
   // nạp transcript.
   llmOverride?: SessionLlmOverride
+  // Mirrors Session.browserProfileId — lên summary để resync scope→profile mà
+  // không nạp transcript.
+  browserProfileId?: string
   // Nhãn vai của member trong run — mirrors Session.teamRole (chip hiển thị).
   teamRole?: string
   // Cấu hình spawn đã nhớ của run — mirrors Session.spawnConfig. Lên summary
@@ -779,15 +834,7 @@ export interface SessionRawEventPage {
 // Mirrors apps/desktop/ui-next/types/index.ts SessionStep. Sidecar emits these via
 // session.step notifications when the SDK reports tool_use / tool_result.
 
-export type SessionStepTool =
-  | 'read'
-  | 'write'
-  | 'edit'
-  | 'save'
-  | 'search'
-  | 'find-files'
-  | 'terminal'
-  | 'task'
+export type SessionStepTool = 'read' | 'write' | 'edit' | 'save' | 'search' | 'find-files' | 'terminal' | 'task'
 
 export type SessionStepStatus = 'running' | 'done' | 'error'
 
@@ -934,6 +981,10 @@ export interface SessionStep {
   // The whole payload lives in one discriminated field instead of a fifth batch
   // of flat optionals on this interface.
   surface?: SessionSurface
+  // Browser page step (kind === 'tool', browser_tool navigate/tab_new có url): trang
+  // agent vừa mở. UI dựng thẻ xem trước từ đây; ảnh + title lấy lazy qua RPC
+  // `sessions.browserPreview` theo step id. Xem docs/features/browser-preview-card.md.
+  browserPage?: { url: string }
   // Steer step (kind === 'steer'): the user's mid-turn instruction injected via
   // getSteeringMessages. Holds the steered text so the UI renders it inline as a
   // user-note in the agent timeline at the point it landed. See
@@ -989,6 +1040,9 @@ export interface Project {
   // push/fetch/pull AND the GH Issues/PR tabs. '' = active gh account; absent =
   // inherit the app-level default (settings.githubAccount). A concrete login pins.
   githubAccount?: string
+  // Profile trình duyệt nhúng mặc định của project (tầng giữa của chuỗi phiên →
+  // project → profile mặc định toàn app). Vắng = kế thừa.
+  browserProfileId?: string
   // Ngữ cảnh hạ tầng mặc định của project (ADR 0088 §7) — tầng giữa của chuỗi kế
   // thừa phiên → project → toàn app. Phiên mới trong project này đóng băng giá trị
   // hiệu lực tại lúc tạo; field vắng mặt = kế thừa tiếp lên `settings.infra`,
@@ -1101,12 +1155,7 @@ export interface McpServerSnapshot extends McpServerConfig {
 
 export type SourceType = 'mcp' | 'api' | 'local'
 export type SourceTrust = 'allow' | 'prompt' | 'deny'
-export type SourceConnectionStatus =
-  | 'connected'
-  | 'needs_auth'
-  | 'failed'
-  | 'untested'
-  | 'local_disabled'
+export type SourceConnectionStatus = 'connected' | 'needs_auth' | 'failed' | 'untested' | 'local_disabled'
 
 export interface SourceHealthCheck {
   tool: string
@@ -1171,27 +1220,13 @@ export interface ApiSourceBlock {
         extraParams?: Record<string, string> | undefined
       }
     | undefined
-  googleService?:
-    | 'gmail'
-    | 'calendar'
-    | 'drive'
-    | 'docs'
-    | 'sheets'
-    | 'youtube'
-    | 'searchconsole'
-    | undefined
+  googleService?: 'gmail' | 'calendar' | 'drive' | 'docs' | 'sheets' | 'youtube' | 'searchconsole' | undefined
   googleScopes?: string[] | undefined
   googleOAuthClientId?: string | undefined
   googleOAuthClientSecret?: string | undefined
   slackService?: 'messaging' | 'channels' | 'users' | 'files' | 'full' | undefined
   slackUserScopes?: string[] | undefined
-  microsoftService?:
-    | 'outlook'
-    | 'microsoft-calendar'
-    | 'onedrive'
-    | 'teams'
-    | 'sharepoint'
-    | undefined
+  microsoftService?: 'outlook' | 'microsoft-calendar' | 'onedrive' | 'teams' | 'sharepoint' | undefined
   microsoftScopes?: string[] | undefined
 }
 
@@ -1358,21 +1393,9 @@ export interface Workflow {
 // (ADR 0024 D-2). Mirror of UI shape (apps/desktop/ui-next/types/index.ts).
 
 export type TaskStatus =
-  | 'queued'
-  | 'running'
-  | 'waiting_approval'
-  | 'waiting_connection'
-  | 'paused'
-  | 'completed'
-  | 'failed'
+  'queued' | 'running' | 'waiting_approval' | 'waiting_connection' | 'paused' | 'completed' | 'failed'
 
-export type PhaseStatus =
-  | 'pending'
-  | 'running'
-  | 'waiting_approval'
-  | 'waiting_connection'
-  | 'completed'
-  | 'failed'
+export type PhaseStatus = 'pending' | 'running' | 'waiting_approval' | 'waiting_connection' | 'completed' | 'failed'
 
 export type RunStatus = 'running' | 'waiting_approval' | 'completed' | 'superseded' | 'failed'
 
@@ -1480,6 +1503,10 @@ export interface Task {
   // true the per-phase auto-commit appends `Co-Authored-By: AWOG …`. Optional
   // for legacy tasks — undefined is treated as enabled.
   commitCoAuthor?: boolean
+  // Snapshot of the Claude CLI auto-compact policy (Settings → Sessions) at creation
+  // time — same fields chat turns carry in ContextConfig. Anthropic nodes only;
+  // undefined → defaults (on, ~300k tokens).
+  compactConfig?: Pick<ContextConfig, 'autoCompact' | 'compactAtTokens'>
   // Snapshot of the remaining auto-commit Git settings (UI) at creation time.
   // Settings live in the renderer (localStorage) so they travel in tasks.create
   // and are persisted here for restart/rerun. Optional for legacy tasks:
@@ -2027,6 +2054,14 @@ export interface ContextConfig {
   // Inject the <available_skills> catalogue. Default true. Off = skills invoked
   // explicitly via `@skill:<id>` still work; only the up-front listing is dropped.
   skillsCatalogEnabled?: boolean | undefined
+  // Claude CLI native auto-compaction (Anthropic runtime only; Pi/Codex compaction
+  // is driven by the UI). `autoCompact` false → DISABLE_AUTO_COMPACT on the CLI
+  // spawn. Default true.
+  autoCompact?: boolean | undefined
+  // Context size (tokens) at which the CLI compacts by itself. Default 300_000;
+  // 0 = leave the CLI's own default (its model window minus a reserve). See
+  // runtime/claude-sdk/shared.ts autoCompactEnv for how this maps onto the env.
+  compactAtTokens?: number | undefined
 }
 
 // ── Logtime (ADR 0091) ────────────────────────────────────────────────────────

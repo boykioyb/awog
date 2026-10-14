@@ -1,20 +1,19 @@
 // Pi-SDK one-shot helpers for the 7 generator/author methods (ADR 0029 C2).
 //
-// Two shapes:
-//   completePi — pure text generation (NO tools, NO permission). The 4
-//     *.generate methods + git.generateCommitMessage call this: a single
-//     non-streaming turn returning concatenated assistant text.
-//   authorPi — agentic one-shot WITH the AWOG Write/Read tool set (bypass
-//     permission) + streaming callbacks. The 3 *.author methods call this: they
-//     materialise a file on disk via Write AND stream text/step events to the UI,
-//     so a no-tools completeSimple cannot reach parity. authorPi drives
-//     runAgentLoop (like runtime/invoke.ts) and forwards deltas + tool steps.
+// Runtime chọn THEO PROVIDER, cùng quy tắc với chat: `anthropic` → Claude Agent SDK
+// (claude-sdk/complete.ts); google + endpoint tuỳ chỉnh kiểu OpenAI → Pi (các hàm
+// `pi*` private bên dưới). Bốn hàm public trung lập provider:
+//   complete / completeWithUsage — sinh văn bản thuần (không tool, không permission).
+//   streamComplete — như trên nhưng đẩy từng delta qua onDelta.
+//   author — agentic one-shot CÓ tool Write/Read/Edit (bypass permission) + callback
+//     stream text/tool; các method *.author ghi file lên đĩa qua nó.
 
 import { completeSimple, streamSimple } from '@earendil-works/pi-ai/compat'
 import type { AssistantMessage, Message } from '@earendil-works/pi-ai'
 import { runAgentLoop, type AgentEvent, type AgentMessage } from '@earendil-works/pi-agent-core'
-import { resolveCredential, providerOfAccount } from '../credentials/credential-resolver.js'
+import { resolveAccount, resolveCredential, providerOfAccount } from '../credentials/credential-resolver.js'
 import { normalizeModelId } from '../providers/anthropic/models-map.js'
+import { runClaudeAuthor, runClaudeComplete } from './claude-sdk/complete.js'
 import { recordCodexUsageFromHeaders } from '../providers/openai/usage.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
@@ -75,24 +74,33 @@ function toSettings(args: RunRef, provider: ProviderName): SessionSettings {
   }
 }
 
-// Resolve {model, getApiKey} + the account. Shared by both helpers.
-async function resolveForRun(args: RunRef): Promise<{
+// Resolve {model, getApiKey} + the account for the Pi path.
+async function resolveForRun(args: RunRef & { provider: ProviderName }): Promise<{
   account: Awaited<ReturnType<typeof resolveCredential>>['account']
   settings: SessionSettings
   model: ReturnType<typeof resolveModel>['model']
   getApiKey: ReturnType<typeof resolveModel>['getApiKey']
 }> {
-  // Provider = caller-specified, else inferred from the account's owning bucket
-  // (account ids are globally unique) — callers that send only accountId (the
-  // *.author/*.generate one-shots) stay correct on non-Anthropic accounts;
-  // without it they resolved credentials under a hardcoded 'anthropic'.
-  const provider = args.provider ?? (await providerOfAccount(args.accountId)) ?? 'anthropic'
-  const { account } = await resolveCredential(provider, args.accountId)
-  const settings = toSettings(args, provider)
+  const { account } = await resolveCredential(args.provider, args.accountId)
+  const settings = toSettings(args, args.provider)
   // resolveModel validates the id per provider (catalog lookup) and trusts
   // user-supplied ids for custom endpoints (account.baseURL).
   const { model, getApiKey } = resolveModel(settings, account)
   return { account, settings, model, getApiKey }
+}
+
+// Runtime của một lượt one-shot. Provider = caller chỉ định, else suy từ bucket sở
+// hữu account (account id là duy nhất toàn cục) — caller chỉ gửi accountId (các
+// one-shot *.author/*.generate) vẫn đúng trên account không phải Anthropic.
+// Anthropic chạy trên Claude SDK, TRỪ account có endpoint tuỳ chỉnh nói giao thức
+// OpenAI chat-completions (nằm trong bucket anthropic nhưng CLI không nói được).
+async function pickRuntime(args: RunRef): Promise<{ runtime: 'claude' } | { runtime: 'pi'; provider: ProviderName }> {
+  const provider = args.provider ?? (await providerOfAccount(args.accountId)) ?? 'anthropic'
+  if (provider === 'anthropic') {
+    const account = await resolveAccount(provider, args.accountId)
+    if (account.api !== 'openai-completions') return { runtime: 'claude' }
+  }
+  return { runtime: 'pi', provider }
 }
 
 // Kết quả one-shot kèm số đo thật của lượt gọi.
@@ -108,8 +116,17 @@ export interface CompleteResult {
 // lượt đó tốn bao nhiêu đều phải tự ƯỚC LƯỢNG bằng `chars / 4`. Kiểm định skill
 // (`skills/eval.ts`) chạy tới 20 lượt liên tiếp và áp trần chi tiêu lên chính con
 // số ước lượng đó — tức là một trần đo bằng thước đoán. Provider đã trả usage
-// thật trên assistant message; chỉ là chưa ai chuyển nó ra ngoài.
-export async function completePiWithUsage(args: CompleteArgs): Promise<CompleteResult> {
+// thật; chỉ là chưa ai chuyển nó ra ngoài.
+export async function completeWithUsage(args: CompleteArgs): Promise<CompleteResult> {
+  const picked = await pickRuntime(args)
+  if (picked.runtime === 'claude') {
+    const { text, modelUsed, usage } = await runClaudeComplete(args)
+    return { text, modelUsed, usage }
+  }
+  return piCompleteWithUsage({ ...args, provider: picked.provider })
+}
+
+async function piCompleteWithUsage(args: CompleteArgs & { provider: ProviderName }): Promise<CompleteResult> {
   const { account, settings, model, getApiKey } = await resolveForRun(args)
   const apiKey = await getApiKey(settings.provider)
   if (!apiKey) throw new RpcError(-32020, 'AUTH_EXPIRED: re-authenticate via Settings')
@@ -138,9 +155,9 @@ export async function completePiWithUsage(args: CompleteArgs): Promise<CompleteR
   }
 }
 
-// Bản chỉ-lấy-text. Giữ nguyên chữ ký cho 17 caller hiện có.
-export async function completePi(args: CompleteArgs): Promise<string> {
-  return (await completePiWithUsage(args)).text
+// Bản chỉ-lấy-text của completeWithUsage.
+export async function complete(args: CompleteArgs): Promise<string> {
+  return (await completeWithUsage(args)).text
 }
 
 // Streaming pure-text one-shot. Same shape as completePi but forwards each text
@@ -148,8 +165,16 @@ export async function completePi(args: CompleteArgs): Promise<string> {
 // the full text at the end. No tools — the model just generates. Used by the
 // summarize-prompt method so the Export dialog shows the prompt building live
 // instead of a blank spinner.
-export async function streamCompletePi(
-  args: CompleteArgs,
+export async function streamComplete(args: CompleteArgs, onDelta: (delta: string) => void): Promise<string> {
+  const picked = await pickRuntime(args)
+  if (picked.runtime === 'claude') {
+    return (await runClaudeComplete(args, onDelta)).text
+  }
+  return piStreamComplete({ ...args, provider: picked.provider }, onDelta)
+}
+
+async function piStreamComplete(
+  args: CompleteArgs & { provider: ProviderName },
   onDelta: (delta: string) => void,
 ): Promise<string> {
   const { account, settings, model, getApiKey } = await resolveForRun(args)
@@ -224,11 +249,16 @@ function toInputRecord(args: unknown): Record<string, unknown> {
   return typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
 }
 
-// Agentic one-shot WITH tools + streaming. Drives runAgentLoop with the AWOG
-// Write/Read/Edit/Bash/Grep/Glob set and bypass permission (the user explicitly
-// opened the author flow → implicit consent, mirroring the sdk branch's
-// bypassPermissions). Forwards text deltas + tool steps via cb.
-export async function authorPi(args: AuthorArgs, cb: AuthorCallbacks): Promise<AuthorResult> {
+// Agentic one-shot WITH tools + streaming (Write/Read/Edit, bypass permission: the
+// user explicitly opened the author flow → implicit consent). Forwards text deltas
+// + tool steps via cb.
+export async function author(args: AuthorArgs, cb: AuthorCallbacks): Promise<AuthorResult> {
+  const picked = await pickRuntime(args)
+  if (picked.runtime === 'claude') return runClaudeAuthor(args, cb)
+  return piAuthor({ ...args, provider: picked.provider }, cb)
+}
+
+async function piAuthor(args: AuthorArgs & { provider: ProviderName }, cb: AuthorCallbacks): Promise<AuthorResult> {
   const { account, settings, model, getApiKey } = await resolveForRun(args)
   const initialKey = await getApiKey(settings.provider)
 

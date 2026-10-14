@@ -56,13 +56,10 @@ import type { SpawnSessionConfig } from '../../types/shared.js'
 // đây thì ĐỌC danh bạ các phiên khác và GHI vào hộp thư của một phiên khác — một
 // biên tin cậy khác hẳn. Gộp chung thì một luật viết cho `mcp__awogsurfaces__*`
 // (hoặc một cú tắt "surfaces") vô tình phủ luôn kênh liên phiên.
-export const SESSION_MESSAGING_MCP_SERVER = 'awogsessions'
-export const SESSION_MESSAGING_TOOL_NAMES = [
-  'list_sessions',
-  'send_session_message',
-  'create_session',
-  'team_status',
-] as const
+// SESSION_MESSAGING_MCP_SERVER + SESSION_MESSAGING_TOOL_NAMES live in
+// tool-names.ts (leaf) — bridged derives its table from them and sessions/*
+// reaches bridged via step-mapper, so the names must not hang off this file.
+export { SESSION_MESSAGING_MCP_SERVER, SESSION_MESSAGING_TOOL_NAMES } from './tool-names.js'
 
 // Mọi chuỗi model ĐỌC về hai tool này, ở đúng một chỗ — nhánh Pi dựng schema
 // TypeBox từ đây, nhánh Claude SDK dựng schema zod từ đây
@@ -86,9 +83,9 @@ export const SESSION_MESSAGING_TEXT = {
   createDescription:
     'Create NEW session(s) as sub-sessions of this one and hand each its first assignment — use it to split work across specialists (a spec writer, an implementer, a reviewer) that each keep their own conversation and can be opened and steered by the user. ' +
     'Pass `children` to propose a whole team in ONE call instead of calling once per member. ' +
-    'Always pass `goal`: the user\'s objective this spawn serves — it pre-fills the request box in their review popover. ' +
-    'Spawns wait at the user\'s review popover first — UNLESS this session runs in execute mode or its run already remembered a config, in which case new sessions are created directly. In the popover the user may adjust the child list and each session\'s settings (account, model, effort, style, mode). ' +
-    'Approved children start their assignment automatically and inherit this session\'s provider, model and project unless the user overrode them in the popover. ' +
+    "Always pass `goal`: the user's objective this spawn serves — it pre-fills the request box in their review popover. " +
+    "Spawns wait at the user's review popover first — UNLESS this session runs in execute mode or its run already remembered a config, in which case new sessions are created directly. In the popover the user may adjust the child list and each session's settings (account, model, effort, style, mode). " +
+    "Approved children start their assignment automatically and inherit this session's provider, model and project unless the user overrode them in the popover. " +
     `At most ${MAX_SPAWNS_PER_TURN} new sub-sessions per turn and ${MAX_CHILDREN} in total. ` +
     'You may optionally bind an AWOG agent id to a child to give it a real role (its system prompt/model/tools). ' +
     'Prefer the Task tool for work you just need done inside this turn: this is for work that deserves its own ongoing conversation.',
@@ -106,8 +103,7 @@ export const SESSION_MESSAGING_TEXT = {
     'Optional tier of the bound agent: "global" (the user\'s agents dir) or "project" (a project\'s .awog/agents) — needed when the same agent id exists in both.',
   createAgentProjectId:
     'Optional: id of the project the bound agent belongs to — only meaningful together with agent_source "project".',
-  createGoal:
-    `The user's objective this spawn serves, in one or two sentences (max ${MAX_TEXT_LEN / 10} characters) — it pre-fills the request box in the review popover so they see why the team exists.`,
+  createGoal: `The user's objective this spawn serves, in one or two sentences (max ${MAX_TEXT_LEN / 10} characters) — it pre-fills the request box in the review popover so they see why the team exists.`,
   statusDescription:
     'Check where the sub-sessions of THIS session stand: which are running a turn right now, when each last did anything, and how deep the group goes. ' +
     'Call it before you decide what to hand out next, or when the user asks how the team is doing — never guess a sub-session is finished. ' +
@@ -135,9 +131,7 @@ const CreateChildSchema = Type.Object({
       description: SESSION_MESSAGING_TEXT.createAgentSource,
     }),
   ),
-  agent_project_id: Type.Optional(
-    Type.String({ description: SESSION_MESSAGING_TEXT.createAgentProjectId }),
-  ),
+  agent_project_id: Type.Optional(Type.String({ description: SESSION_MESSAGING_TEXT.createAgentProjectId })),
 })
 
 const CreateParams = Type.Object({
@@ -153,9 +147,7 @@ const CreateParams = Type.Object({
       description: SESSION_MESSAGING_TEXT.createAgentSource,
     }),
   ),
-  agent_project_id: Type.Optional(
-    Type.String({ description: SESSION_MESSAGING_TEXT.createAgentProjectId }),
-  ),
+  agent_project_id: Type.Optional(Type.String({ description: SESSION_MESSAGING_TEXT.createAgentProjectId })),
   children: Type.Optional(
     Type.Array(CreateChildSchema, {
       description: SESSION_MESSAGING_TEXT.createChildren,
@@ -243,10 +235,7 @@ function overlaySpawnConfig(
 
 // Gắn cấu hình đã trộn vào một spec con. exactOptionalPropertyTypes cấm gán
 // `config: undefined`, nên key bị GỠ hẳn khi không có gì để ghi.
-function withSpawnConfig(
-  spec: SpawnChildSpec,
-  shared: SpawnSessionConfig | undefined,
-): SpawnChildSpec {
+function withSpawnConfig(spec: SpawnChildSpec, shared: SpawnSessionConfig | undefined): SpawnChildSpec {
   const merged = overlaySpawnConfig(shared, spec.config)
   const { config: _dropped, ...rest } = spec
   return merged ? { ...rest, config: merged } : rest
@@ -282,12 +271,7 @@ export function createSessionMessagingRunners(input: {
         }
       }
       const lines = contacts.map((c) => {
-        const parts = [
-          c.id,
-          `"${c.title}"`,
-          c.busy ? 'running a turn' : 'idle',
-          `last active ${c.updatedAt}`,
-        ]
+        const parts = [c.id, `"${c.title}"`, c.busy ? 'running a turn' : 'idle', `last active ${c.updatedAt}`]
         // Vai đứng NGAY SAU tiêu đề: nó là thứ quyết định "nhắn cho ai", còn project
         // và số tin gần đây chỉ là bối cảnh.
         if (c.role) parts.splice(2, 0, `role "${c.role}"`)
@@ -465,10 +449,7 @@ export function createSessionMessagingRunners(input: {
 }
 
 // Vỏ AgentTool của nhánh Pi.
-export function createSessionMessagingTools(input: {
-  sessionId: string
-  signal?: AbortSignal
-}): AgentTool[] {
+export function createSessionMessagingTools(input: { sessionId: string; signal?: AbortSignal }): AgentTool[] {
   const run = createSessionMessagingRunners(input)
 
   const listSessions: AgentTool<typeof ListParams, ListSessionsDetails> = {
@@ -521,9 +502,7 @@ export function createSessionMessagingTools(input: {
               prompt: params.prompt ?? '',
               ...(params.agent_id ? { agentId: params.agent_id } : {}),
               ...(params.agent_source ? { agentSource: params.agent_source } : {}),
-              ...(params.agent_project_id
-                ? { agentProjectId: params.agent_project_id }
-                : {}),
+              ...(params.agent_project_id ? { agentProjectId: params.agent_project_id } : {}),
             },
           ]
       const r = await run.createSession(specs, params.goal)

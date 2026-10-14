@@ -19,7 +19,7 @@
 // Nói cách khác: mô hình được quyền làm cho dễ hiểu hơn, không được quyền làm
 // cho có vẻ an toàn hơn.
 
-import { completePi } from './complete.js'
+import { complete } from './complete.js'
 import { RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import type { ProviderName } from '../types/shared.js'
@@ -162,14 +162,13 @@ export async function explainCommand(args: ExplainCommandArgs): Promise<CommandE
   // tức tầng vận chuyển, và nó không tái hiện qua 7 lời gọi thật ngay sau đó. Với
   // một thẻ duyệt đang chờ người bấm, một lời gọi thừa rẻ hơn hẳn ba dòng trống.
   const cheap = CHEAP_MODEL[args.provider]
-  const candidates =
-    cheap && cheap !== args.modelId ? [cheap, args.modelId] : [args.modelId, args.modelId]
+  const candidates = cheap && cheap !== args.modelId ? [cheap, args.modelId] : [args.modelId, args.modelId]
 
   let lastErr: unknown
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- fallback tuần tự, cố ý
-      const out = await completePi({
+      const out = await complete({
         provider: args.provider,
         ...(args.accountId ? { accountId: args.accountId } : {}),
         modelId,

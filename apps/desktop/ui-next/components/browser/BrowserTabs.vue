@@ -145,13 +145,30 @@ const onFavError = (tab: AwogBrowserTab): void => {
   white-space: nowrap;
 }
 .bch-tab .x {
-  opacity: 0;
+  /* Hộp vuông 16px tròn đều — không thì hover bg co theo glyph × (chữ hẹp, box
+     cao) nhìn như cục xám bị méo. line-height = box để glyph canh giữa;
+     padding đáy 1px bù glyph × nằm hơi cao. */
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-xs);
   font-size: var(--fs-sm);
-  line-height: var(--lh-sm);
+  line-height: 16px;
+  padding-bottom: 1px;
+  opacity: 0;
+  color: var(--textDim);
 }
 .bch-tab:hover .x,
 .bch-tab:focus-visible .x {
   opacity: 0.7;
+}
+.bch-tab .x:hover {
+  opacity: 1;
+  background: var(--bgActive);
+  color: var(--text);
 }
 .bch-act {
   display: flex;

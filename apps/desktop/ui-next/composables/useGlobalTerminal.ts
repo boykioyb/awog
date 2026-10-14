@@ -67,9 +67,15 @@ const collapsed = ref(
 const snippetsOpen = ref(
   typeof localStorage !== 'undefined' && localStorage.getItem(SNIPPETS_KEY) === '1',
 )
+// Bề mặt có dock terminal riêng (Session Workbench, ADR 0098) set cờ này để
+// giấu dock toàn cục: hai dock đáy chồng nhau thì xterm nằm dưới và ⌘J bật cả
+// hai cùng lúc. Chỉ là cờ hiển thị — PTY sống tiếp, trạng thái mở per-project
+// không đổi; bỏ cờ là dock trở lại đúng trạng thái cũ.
+const suppressed = ref(false)
 
-// Open state of the ACTIVE project's dock (absent key → closed).
-const isOpen = computed(() => openByKey.value[activeKey.value] ?? false)
+// Open state of the ACTIVE project's dock (absent key → closed). `suppressed`
+// wins over the per-project flag so the host hides itself entirely.
+const isOpen = computed(() => !suppressed.value && (openByKey.value[activeKey.value] ?? false))
 
 function setOpen(key: string, value: boolean): void {
   // Always reassign so the shallow ref fires; persist the per-project map.
@@ -86,17 +92,26 @@ export function useGlobalTerminal() {
     activeKey.value = key || HOME_KEY
   }
   // Open the ACTIVE project's dock. Always expands the roll-up so clicking "Terminal"
-  // reveals the content (never a bare header bar).
+  // reveals the content (never a bare header bar). Suppressed → no-op: on a surface
+  // with its own dock (workbench) ⌘J must not open this one underneath.
   function open(): void {
+    if (suppressed.value) return
     setOpen(activeKey.value, true)
     setCollapsed(false)
   }
   function close(): void {
+    if (suppressed.value) return
     setOpen(activeKey.value, false)
   }
   function toggle(): void {
+    if (suppressed.value) return
     if (isOpen.value) close()
     else open()
+  }
+  // Giấu/hiện toàn bộ dock (Session Workbench có dock terminal riêng). PTY sống
+  // tiếp; bỏ cờ là dock trở lại đúng trạng thái cũ.
+  function setSuppressed(v: boolean): void {
+    suppressed.value = v
   }
   // Roll-up state (global): shrink the dock to its header (keeps the PTY alive).
   function setCollapsed(v: boolean): void {
@@ -128,6 +143,7 @@ export function useGlobalTerminal() {
   return {
     isOpen,
     setActiveKey,
+    setSuppressed,
     height,
     collapsed,
     snippetsOpen,

@@ -244,6 +244,7 @@
   "settings.notifications.cicd.name": "Triển khai",
   "settings.notifications.cicd.desc": "Lần chạy pipeline thất bại, và lần chạy đang chờ bạn duyệt. Kiểm tra mỗi 5 phút — mỗi lượt tốn vài lời gọi AWS/gh.",
   "settings.nav.wiki": "Wiki",
+  "settings.nav.browser": "Hồ sơ trình duyệt",
   "settings.nav.memory": "Bộ nhớ",
   "settings.wiki.heading": "Ngữ cảnh Wiki",
   "settings.wiki.enabled.name": "Cấp mục lục wiki cho agent",

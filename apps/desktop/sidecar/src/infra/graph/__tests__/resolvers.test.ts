@@ -29,29 +29,44 @@ const ctx = (over: Partial<InfraResolveContext> = {}): InfraResolveContext => ({
 })
 
 const ids = (r: { nodes: readonly { id: string }[] }): string[] => r.nodes.map((n) => n.id)
-const nodeById = (r: { nodes: readonly { id: string }[] }, id: string) =>
-  r.nodes.find((n) => n.id === id)
-const serialize = (r: { nodes: unknown; edges: unknown }): string =>
-  JSON.stringify([r.nodes, r.edges])
+const nodeById = (r: { nodes: readonly { id: string }[] }, id: string) => r.nodes.find((n) => n.id === id)
+const serialize = (r: { nodes: unknown; edges: unknown }): string => JSON.stringify([r.nodes, r.edges])
 
 // ─── Mẫu JSON (hình dạng thật của từng API) ──────────────────────────────────
 
 const zoneId = 'Z123ABC'
 const route53Records = {
   ResourceRecordSets: [
-    { Name: 'example.com.', Type: 'NS', ResourceRecords: [{ Value: 'ns-1.awsdns.com.' }] },
+    {
+      Name: 'example.com.',
+      Type: 'NS',
+      ResourceRecords: [{ Value: 'ns-1.awsdns.com.' }],
+    },
     {
       Name: 'www.example.com.',
       Type: 'A',
-      AliasTarget: { DNSName: 'd111.cloudfront.net.', HostedZoneId: 'Z2FDTNDATAQYW2' },
+      AliasTarget: {
+        DNSName: 'd111.cloudfront.net.',
+        HostedZoneId: 'Z2FDTNDATAQYW2',
+      },
     },
     {
       Name: 'api.example.com.',
       Type: 'A',
-      AliasTarget: { DNSName: 'my-alb-1234567.ap-southeast-1.elb.amazonaws.com.' },
+      AliasTarget: {
+        DNSName: 'my-alb-1234567.ap-southeast-1.elb.amazonaws.com.',
+      },
     },
-    { Name: 'mail.example.com.', Type: 'A', ResourceRecords: [{ Value: '1.2.3.4' }] },
-    { Name: 'ext.example.com.', Type: 'CNAME', ResourceRecords: [{ Value: 'other.example.org.' }] },
+    {
+      Name: 'mail.example.com.',
+      Type: 'A',
+      ResourceRecords: [{ Value: '1.2.3.4' }],
+    },
+    {
+      Name: 'ext.example.com.',
+      Type: 'CNAME',
+      ResourceRecords: [{ Value: 'other.example.org.' }],
+    },
   ],
 }
 const route53Zone = { HostedZone: { Name: 'example.com.', Config: { Comment: 'prod zone' } } }
@@ -117,12 +132,14 @@ const lambdaMappings = {
       EventSourceArn: 'arn:aws:sqs:ap-southeast-1:123456789012:jobs',
       State: 'Enabled',
     },
-    { UUID: 'uuid-2', EventSourceArn: 'arn:aws:dynamodb:ap-southeast-1:123456789012:table/t' },
+    {
+      UUID: 'uuid-2',
+      EventSourceArn: 'arn:aws:dynamodb:ap-southeast-1:123456789012:table/t',
+    },
   ],
 }
 
-const taskDefinitionArn =
-  'arn:aws:ecs:ap-southeast-1:123456789012:task-definition/prod-api:12'
+const taskDefinitionArn = 'arn:aws:ecs:ap-southeast-1:123456789012:task-definition/prod-api:12'
 const ecsServices = {
   services: [{ serviceName: 'prod-api', taskDefinition: taskDefinitionArn }],
 }
@@ -139,7 +156,12 @@ const ecsTaskDefinition = {
             value: 'https://sqs.ap-southeast-1.amazonaws.com/123456789012/orders',
           },
         ],
-        secrets: [{ name: 'DB_PASS', valueFrom: 'arn:aws:secretsmanager:ap-southeast-1:1:secret:x' }],
+        secrets: [
+          {
+            name: 'DB_PASS',
+            valueFrom: 'arn:aws:secretsmanager:ap-southeast-1:1:secret:x',
+          },
+        ],
       },
     ],
   },
@@ -174,11 +196,7 @@ describe('id của node', () => {
 
 describe('route53: hosted zone → bản ghi', () => {
   const resolve = (over: Partial<InfraResolveContext> = {}) =>
-    resolveGraphStep(
-      { service: 'route53', region: 'global', name: zoneId },
-      [route53Records, route53Zone],
-      ctx(over),
-    )
+    resolveGraphStep({ service: 'route53', region: 'global', name: zoneId }, [route53Records, route53Zone], ctx(over))
 
   it('alias CloudFront + ALB thành cạnh nét LIỀN; bỏ NS và bản ghi A thường', () => {
     const r = resolve()
@@ -220,10 +238,7 @@ describe('cloudfront: distribution → behavior → origin', () => {
 
   it('origin mặc định là `origin`, đường dẫn riêng là `behavior`', () => {
     expect(r.edges.map((e) => e.label)).toEqual(['origin', 'behavior'])
-    expect(r.edges.map((e) => e.to)).toEqual([
-      's3:ap-southeast-1:shop-web',
-      `apigateway:ap-southeast-1:${apiId}`,
-    ])
+    expect(r.edges.map((e) => e.to)).toEqual(['s3:ap-southeast-1:shop-web', `apigateway:ap-southeast-1:${apiId}`])
   })
 
   it('đường dẫn của behavior theo node con, và edge id phân biệt hai cạnh', () => {
@@ -254,9 +269,7 @@ describe('apigateway: api → route → integration', () => {
   it('route AWS_PROXY thành cạnh tới lambda, kèm tên route', () => {
     expect(ids(r)).toEqual(['lambda:ap-southeast-1:api-prod'])
     expect(r.nodes[0]?.detail['route']).toBe('POST /v1/orders')
-    expect(r.nodes[0]?.detail['arn']).toBe(
-      'arn:aws:lambda:ap-southeast-1:123456789012:function:api-prod',
-    )
+    expect(r.nodes[0]?.detail['arn']).toBe('arn:aws:lambda:ap-southeast-1:123456789012:function:api-prod')
     expect(r.edges[0]).toMatchObject({ label: 'target', inferred: false, source: 'describe' })
     expect(r.edges[0]?.id).toContain('POST /v1/orders')
   })
@@ -288,14 +301,9 @@ describe('lambda: env (suy luận) + event source mapping (đọc được)', ()
 
   it('cạnh suy từ env có inferred: true + source config (UI vẽ nét đứt)', () => {
     const env = r.edges.filter((e) => e.label === 'env')
-    expect(env.map((e) => e.to).sort()).toEqual([
-      'rds:ap-southeast-1:orders-db',
-      'sqs:ap-southeast-1:orders',
-    ])
+    expect(env.map((e) => e.to).sort()).toEqual(['rds:ap-southeast-1:orders-db', 'sqs:ap-southeast-1:orders'])
     expect(env.every((e) => e.inferred === true && e.source === 'config')).toBe(true)
-    expect(r.nodes.find((n) => n.id === 'rds:ap-southeast-1:orders-db')?.detail['env']).toBe(
-      'DB_HOST',
-    )
+    expect(r.nodes.find((n) => n.id === 'rds:ap-southeast-1:orders-db')?.detail['env']).toBe('DB_HOST')
   })
 
   it('event source mapping là liên kết AWS kể ra được ⇒ nét liền', () => {
@@ -320,10 +328,7 @@ describe('lambda: env (suy luận) + event source mapping (đọc được)', ()
   it('env trỏ tài nguyên ở region khác ⇒ node external', () => {
     const other = resolveGraphStep(
       { service: 'lambda', region: 'ap-southeast-1', name: 'api-prod' },
-      [
-        { Environment: { Variables: { Q: 'https://sqs.us-east-1.amazonaws.com/123456789012/orders' } } },
-        {},
-      ],
+      [{ Environment: { Variables: { Q: 'https://sqs.us-east-1.amazonaws.com/123456789012/orders' } } }, {}],
       ctx({ accountId: undefined }),
     )
     expect(other.nodes[0]?.id).toBe('sqs:us-east-1:orders')
@@ -379,19 +384,21 @@ describe('điểm vào của graph', () => {
       { HostedZones: [{ Id: '/hostedzone/Z9', Name: 'example.com.', ResourceRecordSetCount: 3 }] },
       'ap-southeast-1',
     )
-    expect(r.roots).toEqual([
-      { id: 'route53:global:Z9', service: 'route53', label: 'example.com', region: 'global' },
-    ])
+    expect(r.roots).toEqual([{ id: 'route53:global:Z9', service: 'route53', label: 'example.com', region: 'global' }])
     expect(r.truncated).toBe(false)
   })
 
   it('cloudfront/route53 là dịch vụ TOÀN CẦU, apigateway theo region đang ghim', () => {
-    expect(
-      rootsFromResult('cloudfront', cloudfrontList, 'ap-southeast-1').roots[0],
-    ).toMatchObject({ id: `cloudfront:global:${distributionDomain}`, label: 'shop.example.com' })
-    expect(rootsFromResult('apigateway', { items: [{ id: 'a1', name: 'shop-api' }] }, 'us-east-1').roots[0]).toEqual(
-      { id: 'apigateway:us-east-1:a1', service: 'apigateway', label: 'shop-api', region: 'us-east-1' },
-    )
+    expect(rootsFromResult('cloudfront', cloudfrontList, 'ap-southeast-1').roots[0]).toMatchObject({
+      id: `cloudfront:global:${distributionDomain}`,
+      label: 'shop.example.com',
+    })
+    expect(rootsFromResult('apigateway', { items: [{ id: 'a1', name: 'shop-api' }] }, 'us-east-1').roots[0]).toEqual({
+      id: 'apigateway:us-east-1:a1',
+      service: 'apigateway',
+      label: 'shop-api',
+      region: 'us-east-1',
+    })
   })
 
   it('còn trang nữa (NextToken/position) ⇒ nói ra là đã cắt', () => {
@@ -400,11 +407,7 @@ describe('điểm vào của graph', () => {
   })
 
   it('ba loại điểm vào, mỗi loại một lượt đọc', () => {
-    expect(GRAPH_ROOT_COMMANDS.map((c) => c.service)).toEqual([
-      'route53',
-      'cloudfront',
-      'apigateway',
-    ])
+    expect(GRAPH_ROOT_COMMANDS.map((c) => c.service)).toEqual(['route53', 'cloudfront', 'apigateway'])
     for (const c of GRAPH_ROOT_COMMANDS) expect(c.args.every((a) => a.length > 0)).toBe(true)
   })
 })

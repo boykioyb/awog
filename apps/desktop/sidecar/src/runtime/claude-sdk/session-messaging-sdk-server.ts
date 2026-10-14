@@ -23,24 +23,29 @@
 import { z } from 'zod'
 import { MAX_TEXT_LEN } from '../../sessions/inbox.js'
 import { MAX_ROLE_LEN, MAX_SPAWNS_PER_TURN, MAX_TITLE_LEN } from '../../sessions/spawn.js'
-import {
-  createSdkMcpServer,
-  tool,
-  type McpSdkServerConfigWithInstance,
-} from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk'
 import {
   SESSION_MESSAGING_MCP_SERVER,
   SESSION_MESSAGING_TEXT,
   createSessionMessagingRunners,
 } from '../tools/session-tools.js'
+import { TurnState } from './live-process.js'
 
 export function buildSessionMessagingSdkServer(
   sessionId: string,
-  // Abort của lượt — popover điều phối của create_session đang mở phải tan theo
-  // khi người dùng bấm Dừng (giống kênh `chatSession.signal` bên nhánh Pi).
-  signal?: AbortSignal,
+  // Trạng thái lượt của process: runner (bộ đếm theo lượt) và abort của lượt hiện tại —
+  // popover điều phối của create_session đang mở phải tan theo khi người dùng bấm Dừng
+  // (giống kênh `chatSession.signal` bên nhánh Pi).
+  turns: TurnState = new TurnState(),
 ): McpSdkServerConfigWithInstance {
-  const run = createSessionMessagingRunners({ sessionId, ...(signal ? { signal } : {}) })
+  const runner = () =>
+    turns.once('session-runners', () => {
+      const signal = turns.signal()
+      return createSessionMessagingRunners({
+        sessionId,
+        ...(signal ? { signal } : {}),
+      })
+    })
 
   return createSdkMcpServer({
     name: SESSION_MESSAGING_MCP_SERVER,
@@ -52,7 +57,7 @@ export function buildSessionMessagingSdkServer(
     // ("báo cho phiên kia biết…"), nên ý định có trước và tool-search nhặt được.
     tools: [
       tool('list_sessions', SESSION_MESSAGING_TEXT.listDescription, {}, async () => {
-        const r = await run.listSessions()
+        const r = await runner().listSessions()
         return { content: [{ type: 'text' as const, text: r.text }] }
       }),
       tool(
@@ -66,7 +71,7 @@ export function buildSessionMessagingSdkServer(
           message: z.string().max(MAX_TEXT_LEN).describe(SESSION_MESSAGING_TEXT.message),
         },
         async (args) => {
-          const r = await run.sendSessionMessage(args.session_id, args.message)
+          const r = await runner().sendSessionMessage(args.session_id, args.message)
           // `isError` qua cầu tường minh: một lần gửi bị từ chối (đích lạ, đã lưu
           // trữ, chạm trần, phát hiện vòng lặp) là một bước LỖI, không phải một cú
           // gửi coi như thành công. Lõi báo hỏng bằng cờ trong kết quả, không throw.
@@ -77,7 +82,7 @@ export function buildSessionMessagingSdkServer(
         },
       ),
       tool('team_status', SESSION_MESSAGING_TEXT.statusDescription, {}, async () => {
-        const r = await run.teamStatus()
+        const r = await runner().teamStatus()
         return { content: [{ type: 'text' as const, text: r.text }] }
       }),
       tool(
@@ -123,7 +128,7 @@ export function buildSessionMessagingSdkServer(
                   prompt: args.prompt ?? '',
                 },
               ]
-          const r = await run.createSession(specs, args.goal)
+          const r = await runner().createSession(specs, args.goal)
           return {
             content: [{ type: 'text' as const, text: r.text }],
             ...(r.isError ? { isError: true } : {}),

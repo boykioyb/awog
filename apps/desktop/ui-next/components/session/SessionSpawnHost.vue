@@ -480,7 +480,7 @@ function toggleOvr(c: DraftChild) {
   c.ovr = c.ovr ? null : blankCfg()
 }
 
-// "Tạo bằng AI" → sessions.spawnDraft mode 'team': sidecar gọi completePi với
+// "Tạo bằng AI" → sessions.spawnDraft mode 'team': sidecar gọi complete với
 // provider/model/account của PHIÊN CHA (model rẻ trước, fallback model phiên).
 // Kết quả ĐỔ VÀO list như draft — người dùng sửa tiếp trước khi duyệt; không
 // tự tạo phiên.

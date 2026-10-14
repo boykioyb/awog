@@ -125,6 +125,10 @@
             <Icon name="foldv" style="width: var(--icon-sm); height: var(--icon-sm)" />
             {{ t('sessions.foldAll.tooltip') }}
           </div>
+          <div class="mi" @click="runListAction(claudeImport.open)">
+            <Icon name="download" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            {{ t('sessions.claudeImport.button') }}
+          </div>
         </div>
       </span>
     </div>
@@ -249,6 +253,7 @@
               :selecting="store.selecting"
               hide-project
               :rename-req="renameReq"
+              :menu-open="ctx.target.value?.id === s.id"
               @click="$emit('select', s.id)"
               @ctxmenu="(p) => openCtx(p, s)"
             />
@@ -300,6 +305,7 @@
               :in-group="r.inGroup"
               :group-top="r.groupTop"
               :group-bottom="r.groupBottom"
+              :menu-open="ctx.target.value?.id === r.session.id"
               @click="$emit('select', r.session.id)"
               @ctxmenu="(p) => openCtx(p, r.session)"
               @toggle-children="toggleTree(r.session.engineId)"
@@ -355,6 +361,7 @@
                 :selecting="store.selecting"
                 hide-project
                 :rename-req="renameReq"
+                :menu-open="ctx.target.value?.id === s.id"
                 @click="$emit('select', s.id)"
                 @ctxmenu="(p) => openCtx(p, s)"
               />
@@ -446,104 +453,16 @@
       @close="runPickerFor = null"
     />
 
-    <!-- Right-click context menu (one shared menu, positioned at the cursor). -->
-    <template v-if="ctx">
-      <div
-        class="ctxbackdrop"
-        @click="ctx = null"
-        @contextmenu.prevent="ctx = null"
-        @wheel="ctx = null"
+    <!-- Right-click context menu — items from the shared `useSessionActions`. -->
+    <Teleport to="body">
+      <AppContextMenu
+        :open="ctx.pos.value !== null"
+        :position="ctx.pos.value ?? { x: 0, y: 0 }"
+        :items="ctxItems"
+        @close="ctx.close()"
+        @select="onCtxSelect"
       />
-      <div ref="ctxMenuEl" class="smenu ctxmenu" :style="ctxStyle">
-        <div class="mi" @click="ctxOpen">
-          <Icon name="sessions" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.open') }}
-        </div>
-        <div class="mi" @click="ctxRename">
-          <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.rename') }}
-        </div>
-        <div class="mi" @click="ctxAutoTitle">
-          <Icon name="sparkles" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.autoTitle') }}
-        </div>
-        <div class="mi" @click="ctxPin">
-          <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ ctx.session.pinned ? t('sessions.ctx.unpin') : t('sessions.ctx.pin') }}
-        </div>
-        <!-- Archive: hides the session from the list without deleting it. -->
-        <div class="mi" @click="ctxArchive">
-          <Icon
-            :name="store.isArchived(ctx.session.id) ? 'eye' : 'eye-off'"
-            style="width: var(--icon-sm); height: var(--icon-sm)"
-          />
-          {{
-            store.isArchived(ctx.session.id)
-              ? t('sessionsSearch.archive.unarchive')
-              : t('sessionsSearch.archive.archive')
-          }}
-        </div>
-        <div class="mi" @click="ctxSelect">
-          <Icon name="check" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.select') }}
-        </div>
-        <div class="mi" @click="ctxDuplicate">
-          <Icon name="fork" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.duplicate') }}
-        </div>
-        <div class="mi" @click="ctxExport">
-          <Icon name="save" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.export') }}
-        </div>
-        <!-- Nhóm phiên: xếp phiên này xuống dưới một phiên cha (hoặc đổi vai của nó).
-             Hiện ở MỌI chế độ xem, không chỉ chế độ "Nhóm" — xếp nhóm là thao tác trên
-             dữ liệu, không phải trên cách đang nhìn. -->
-        <div class="mi" @click="ctxGroup">
-          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{
-            ctx.session.teamRunId ? t('sessions.ctx.changeGroup') : t('sessions.ctx.moveToGroup')
-          }}
-        </div>
-        <!-- Lưới các phiên con. Chỉ hiện trên phiên CÓ con: mở lưới từ một phiên lẻ
-             là mở ra một khung rỗng. Menu `⋯` của header vẫn giữ mục lưới cho MỌI
-             phiên — ở đó còn ô tìm phiên để kéo một phiên bất kỳ lên lưới. -->
-        <div v-if="ctxHasChildren" class="mi" @click="ctxGrid">
-          <Icon name="layers" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.gridChildren') }}
-        </div>
-        <div v-if="ctx.session.teamRunId" class="mi" @click="ctxUngroup">
-          <Icon name="x" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.team.detach') }}
-        </div>
-        <!-- Move the session to its own OS window / bring it back (popout hand-off). -->
-        <div v-if="ctxCanWindow" class="mi" @click="ctxWindow">
-          <Icon name="external" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{
-            store.isWindowed(ctx.session.engineId)
-              ? t('sessions.ctx.bringBackWindow')
-              : t('sessions.ctx.openWindow')
-          }}
-        </div>
-        <div class="ctxsep" />
-        <div class="mi" @click="ctxCopyPath">
-          <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.copyPath') }}
-        </div>
-        <div v-if="canOpenFinder" class="mi" @click="ctxOpenFinder">
-          <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.openFinder') }}
-        </div>
-        <div class="mi" @click="ctxCopyId">
-          <Icon name="commands" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.copyId') }}
-        </div>
-        <div class="ctxsep" />
-        <div class="mi danger" @click="ctxDelete">
-          <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-          {{ t('sessions.ctx.delete') }}
-        </div>
-      </div>
-    </template>
+    </Teleport>
   </div>
 </template>
 
@@ -562,7 +481,7 @@ import {
   useSessionSearch,
   type SessionSearchHit,
 } from '~/composables/useSessionSearch'
-import { placeMenu } from '~/utils/context-menu'
+import AppContextMenu from '~/components/common/AppContextMenu.vue'
 
 const props = defineProps<{ sessions: Session[]; activeId: number | null; listWidth: number }>()
 const emit = defineEmits<{ select: [id: number] }>()
@@ -570,9 +489,8 @@ const emit = defineEmits<{ select: [id: number] }>()
 const { t } = useI18n()
 const { GROUPBY, SORTBY, providerOf } = useSessionsData()
 const store = useSessionsStore()
-const sc = useSidecar()
 const { confirm } = useConfirm()
-const exportModal = useSessionExportModal()
+const claudeImport = useClaudeImportModal()
 
 // Confirm before deleting selected sessions (bulk bar trash). Destructive +
 // unrecoverable, so gate even though the rows are explicitly selected.
@@ -957,157 +875,31 @@ function applyRunPick(parentClientId: number | null, role: string | null) {
 }
 
 // ── Right-click context menu ───────────────────────────────────────────────────
-// One shared menu positioned at the cursor. `renameReq` signals a row to start its
-// inline rename (the edit state is local to SessionListItem).
-const ctx = ref<{ x: number; y: number; session: Session } | null>(null)
+// Items + handlers come from `useSessionActions` (shared with the Workbench sessions
+// explorer); this column only supplies the UI-local hooks. `renameReq` signals a row
+// to start its inline rename (the edit state is local to SessionListItem).
+const ctx = useContextMenu<Session>()
 const renameReq = ref<{ id: number; n: number }>({ id: -1, n: 0 })
-const ctxMenuEl = useTemplateRef<HTMLElement>('ctxMenuEl')
-const ctxStyle = ref<Record<string, string>>({})
+const actions = useSessionActions({
+  open: (s) => emit('select', s.id),
+  rename: (s) => {
+    renameReq.value = { id: s.id, n: renameReq.value.n + 1 }
+  },
+  group: (s) => {
+    runPickerFor.value = s
+  },
+})
+const ctxItems = computed(() =>
+  ctx.target.value ? actions.items(ctx.target.value, { select: true }) : [],
+)
 
 function openCtx(p: { id: number; x: number; y: number }, s: Session) {
-  // Seed at the click point, then refine once the menu has measurable dimensions.
-  ctx.value = { x: p.x, y: p.y, session: s }
-  ctxStyle.value = { left: `${p.x}px`, top: `${p.y}px` }
-  nextTick(() => {
-    ctxStyle.value = placeMenu(ctxMenuEl.value, p.x, p.y)
-  })
+  ctx.open(new MouseEvent('contextmenu', { clientX: p.x, clientY: p.y }), s)
 }
-function ctxGroup() {
-  runPickerFor.value = ctx.value?.session ?? null
-  ctx.value = null
-}
-// Phiên được bấm có phiên con nào không. Quét TOÀN BỘ store chứ không phải
-// `props.sessions` (đã lọc theo tab project + ô tìm kiếm): một phiên con bị lọc khỏi
-// danh sách vẫn là con, và lưới vẫn phải mở được nó ra.
-const ctxHasChildren = computed(() => {
-  const eid = ctx.value?.session.engineId
-  return !!eid && store.sessions.some((x) => x.teamRunId === eid)
-})
-// Mở phiên cha RỒI đặt yêu cầu lưới: `gridMode` là ref cục bộ của SessionDetail, cột
-// này không với tới được (xem `requestGridView` trong store).
-function ctxGrid() {
-  const s = ctx.value?.session
-  ctx.value = null
-  if (!s) return
-  store.requestGridView(s.id)
-  emit('select', s.id)
-}
-function ctxUngroup() {
-  const s = ctx.value?.session
-  ctx.value = null
-  if (s) void store.setRunMembership(s.id, null)
-}
-function ctxOpen() {
-  if (ctx.value) emit('select', ctx.value.session.id)
-  ctx.value = null
-}
-function ctxRename() {
-  if (ctx.value) renameReq.value = { id: ctx.value.session.id, n: renameReq.value.n + 1 }
-  ctx.value = null
-}
-// Summarize the transcript into a concise title via the model (best-effort; keeps
-// the current title on failure or an empty session).
-function ctxAutoTitle() {
-  if (ctx.value) void store.regenerateTitle(ctx.value.session.id)
-  ctx.value = null
-}
-function ctxPin() {
-  if (ctx.value) store.togglePin(ctx.value.session.id)
-  ctx.value = null
-}
-// Archive / un-archive the right-clicked session. Non-destructive: the transcript
-// stays on disk and searchable, the row just leaves the list.
-function ctxArchive() {
-  const s = ctx.value?.session
-  ctx.value = null
-  if (s) void store.setArchived(s.id, !store.isArchived(s.id))
-}
-function ctxSelect() {
-  if (ctx.value) {
-    store.setSelectMode(true)
-    store.toggleSelect(ctx.value.session.id)
-  }
-  ctx.value = null
-}
-function ctxDuplicate() {
-  if (ctx.value) {
-    const s = ctx.value.session
-    store.fork(s.id, s.msgs.length - 1, 'copy')
-  }
-  ctx.value = null
-}
-// The right-clicked session's on-disk engineId ("ses-…" slug). A session only has
-// one once it's been persisted (first message sent); until then Copy path / Open in
-// Finder have no real folder to point at, so both items gate on this (spec AC5).
-// NB: this is the SESSION folder (~/.awog/sessions/<engineId>), not the project path
-// the items used to (wrongly) copy — the session dir is independent of any project.
-const ctxSessionId = computed<string | null>(() => ctx.value?.session.engineId ?? null)
-// Open in Finder needs the Electron shell (browser-dev has no OS file manager), so the
-// item is hidden there. When shown but the session isn't persisted yet (no engineId),
-// the handler toasts "not saved" — symmetric with Copy path, no silently-missing item.
-const canOpenFinder = computed(() => sc.available)
-async function ctxCopyPath() {
-  const engineId = ctxSessionId.value
-  ctx.value = null
-  if (!engineId) {
-    useToast().add({ title: t('sessions.ctx.notSaved'), color: 'info' })
-    return
-  }
-  // Main derives the absolute path from the engineId (invariant #4). Browser-dev
-  // has no bridge → sessionFolderPath throws; degrade to a no-op toast.
-  try {
-    const path = sc.available ? await sc.sessionFolderPath(engineId) : null
-    if (path) await navigator.clipboard.writeText(path)
-  } catch {
-    // best-effort: bridge unavailable or clipboard blocked → no-op
-  }
-}
-function ctxOpenFinder() {
-  const engineId = ctxSessionId.value
-  ctx.value = null
-  if (!engineId) {
-    useToast().add({ title: t('sessions.ctx.notSaved'), color: 'info' })
-    return
-  }
-  if (sc.available) void sc.revealSessionFolder(engineId).catch(() => undefined)
-}
-function ctxCopyId() {
-  if (ctx.value) {
-    const s = ctx.value.session
-    void navigator.clipboard.writeText(s.engineId ?? String(s.id))
-  }
-  ctx.value = null
-}
-function ctxExport() {
-  if (ctx.value) exportModal.open(ctx.value.session.id)
-  ctx.value = null
-}
-
-// Popout hand-off (docs/features/session-popout-window.md): move the row's session to
-// its own OS window, or — when it already has one — close that window to bring it back
-// here. Offered only for a session the sidecar knows about (it is addressed by engine
-// id) and never mid-turn, matching the header button's gate.
-const ctxCanWindow = computed(() => {
-  const s = ctx.value?.session
-  if (!s?.engineId || !sc.available) return false
-  return store.isWindowed(s.engineId) || (s.status !== 'streaming' && s.status !== 'awaiting')
-})
-function ctxWindow() {
-  const s = ctx.value?.session
-  ctx.value = null
-  if (!s) return
-  if (store.isWindowed(s.engineId)) void store.closeWindowFor(s.id)
-  else void store.openInWindow(s.id)
-}
-async function ctxDelete() {
-  const s = ctx.value?.session
-  ctx.value = null // close the menu before the dialog opens
-  if (!s) return
-  const ok = await confirm({
-    title: t('sessions.delete.title'),
-    description: t('sessions.delete.one', { title: s.title }),
-  })
-  if (ok) store.remove(s.id)
+async function onCtxSelect(id: string) {
+  const s = ctx.target.value
+  ctx.close() // close the menu before any dialog opens
+  if (s) await actions.run(id, s)
 }
 
 function toggleGroup(key: string) {
@@ -1181,30 +973,6 @@ function toggleFoldAll() {
   gap: 9px;
   cursor: pointer;
   min-width: 0;
-}
-/* Context menu: a `.smenu`-styled popover pinned at the cursor (fixed), above all. */
-.ctxbackdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-}
-.ctxmenu {
-  position: fixed;
-  z-index: 61;
-  min-width: 178px;
-}
-/* Thin divider between context-menu groups. */
-.ctxsep {
-  height: 1px;
-  margin: 4px 6px;
-  background: var(--border);
-}
-/* Destructive item (Delete): danger tint + hover. */
-.ctxmenu .mi.danger {
-  color: var(--destructive);
-}
-.ctxmenu .mi.danger:hover {
-  background: color-mix(in srgb, var(--destructive) 14%, transparent);
 }
 /* Proto zinc parity — `.list` is SHARED (Library / Projects / Infra / Workflows
    all reuse it), so the reskin stays scoped to this column:

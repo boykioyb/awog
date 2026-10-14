@@ -47,7 +47,6 @@
 // (PTY onExit). Hai chiều chỉ gọi nhau BÊN TRONG hàm — không chạm nhau lúc
 // module-eval nên ESM cycle này an toàn.
 
-import { randomBytes } from 'node:crypto'
 import { readdir, readFile, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join, sep } from 'node:path'
@@ -57,6 +56,27 @@ import { awogHome, claudeHome } from '../util/path.js'
 import { codexHomeFor } from '../runtime/codex/home.js'
 import { cliLastLinkFor, resolveCliCwd } from './cli-registry.js'
 import { appendMessage, loadSession, updateSessionMetadata } from './store.js'
+// Shared fold helpers (TurnAcc/flushTurn/parseClaudeTranscript/…) live in
+// claude-transcript.ts — see the comment above the Codex parser section.
+import {
+  appendTurnText,
+  asArray,
+  asNumber,
+  asObject,
+  asString,
+  bump,
+  cliUserMessage,
+  entryMs,
+  flushTurn,
+  mintCliMessageId,
+  newTurn,
+  parseClaudeTranscript,
+  pushTurnStep,
+  subtractKnownMessages,
+  type CliParseResult,
+  type JsonObject,
+  type TurnAcc,
+} from './claude-transcript.js'
 import {
   stepFromQuestion,
   stepFromThinking,
@@ -65,13 +85,7 @@ import {
   stepFromToolUse,
   type ToolUseInfo,
 } from './step-mapper.js'
-import type {
-  Session,
-  SessionCliKind,
-  SessionMessage,
-  SessionMessagePart,
-  SessionStep,
-} from '../types/shared.js'
+import type { Session, SessionCliKind, SessionMessage, SessionMessagePart, SessionStep } from '../types/shared.js'
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -203,16 +217,10 @@ async function runCliImport(
 // devin mà user `/resume` trong TUI có toàn bộ step trước spawn — sàn sẽ nuốt
 // hết lịch sử đang muốn kéo về. Resume theo offset (start>0) cũng không áp:
 // phần byte sau con trỏ đã được con trỏ phân định đúng.
-function spawnFloor(
-  session: Session,
-  kind: SessionCliKind,
-  start: number,
-  shared: boolean,
-): number | undefined {
+function spawnFloor(session: Session, kind: SessionCliKind, start: number, shared: boolean): number | undefined {
   if (start !== 0 || !shared) return undefined
   const link = cliLastLinkFor(session.id)
-  const spawnedAt =
-    link && link.kind === kind ? link.spawnedAt : session.cliImport?.[kind]?.spawnedAt
+  const spawnedAt = link && link.kind === kind ? link.spawnedAt : session.cliImport?.[kind]?.spawnedAt
   // Không còn bằng chứng spawn nào (registry restart + cursor sạch) → không áp
   // sàn; multiset dedupe vẫn là lớp chính trên shared history.
   if (spawnedAt === undefined) return undefined
@@ -318,14 +326,9 @@ async function insideRoot(file: string, root: string): Promise<string | undefine
 function isSessionRuntimeFile(session: Session, kind: SessionCliKind, file: string): boolean {
   switch (kind) {
     case 'claude':
-      return (
-        typeof session.sdkSessionId === 'string' &&
-        basename(file) === `${session.sdkSessionId}.jsonl`
-      )
+      return typeof session.sdkSessionId === 'string' && basename(file) === `${session.sdkSessionId}.jsonl`
     case 'codex':
-      return (
-        typeof session.codexThreadId === 'string' && basename(file).includes(session.codexThreadId)
-      )
+      return typeof session.codexThreadId === 'string' && basename(file).includes(session.codexThreadId)
     case 'devin':
       return false
   }
@@ -391,7 +394,7 @@ async function adoptClaudePending(session: Session): Promise<string | undefined>
   return pending
 }
 
-async function findClaudeTranscriptFile(sdkSessionId: string): Promise<string | undefined> {
+export async function findClaudeTranscriptFile(sdkSessionId: string): Promise<string | undefined> {
   if (!isSafeCliId(sdkSessionId)) {
     log.warn('cli import: refusing malformed claude sdkSessionId', { sdkSessionId })
     return undefined
@@ -499,10 +502,7 @@ async function collectJsonlFiles(root: string, depth = 0): Promise<CodexFileInfo
   return out
 }
 
-async function findCodexRollout(
-  threadId: string,
-  sessionsRoot: string,
-): Promise<string | undefined> {
+async function findCodexRollout(threadId: string, sessionsRoot: string): Promise<string | undefined> {
   const files = (await collectJsonlFiles(sessionsRoot)).sort((a, b) => b.mtimeMs - a.mtimeMs)
   // Mọi file trả về phải realpath nằm trong sessionsRoot — một file/symlink
   // trong cây sessions trỏ ra ngoài không được thành bề mặt đọc tự do.
@@ -664,10 +664,7 @@ function devinSpawnEvidence(session: Session): number | undefined {
 // trừ multiset phía shared-history giảm phần lớn).
 // offset rơi GIỮA dòng (header sửa tay, đệm lạ) ⇒ nhảy tới newline kế trước
 // khi cắt.
-export function sliceJsonlTail(
-  buf: Buffer,
-  offset: number,
-): { text: string; nextOffset: number } {
+export function sliceJsonlTail(buf: Buffer, offset: number): { text: string; nextOffset: number } {
   if (offset < 0 || !Number.isFinite(offset)) offset = 0
   if (offset > buf.length) offset = 0
   if (offset > 0 && buf[offset - 1] !== 0x0a) {
@@ -681,360 +678,11 @@ export function sliceJsonlTail(
   return { text: buf.toString('utf8', offset, end + 1), nextOffset: end + 1 }
 }
 
-// ─── Shared parsing helpers ──────────────────────────────────────────────────
-
-type JsonObject = Record<string, unknown>
-
-function asObject(v: unknown): JsonObject | undefined {
-  return typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as JsonObject) : undefined
-}
-function asString(v: unknown): string | undefined {
-  return typeof v === 'string' ? v : undefined
-}
-function asNumber(v: unknown): number | undefined {
-  return typeof v === 'number' && Number.isFinite(v) ? v : undefined
-}
-function asArray(v: unknown): unknown[] {
-  return Array.isArray(v) ? v : []
-}
-
-function mintCliMessageId(): string {
-  // Charset [a-z0-9_-] thỏa MESSAGE_ID_RE — message id đi vào sink đường dẫn
-  // attachments (sessions/ids.ts), không được mang ký tự lạ.
-  return `msg_cli_${randomBytes(6).toString('hex')}`
-}
-
-// Entry timestamp: ISO string (cả 'Z' lẫn '+00:00') → ms; không parse được →
-// undefined thay vì NaN rò vào filter.
-function entryMs(v: unknown): number | undefined {
-  const s = asString(v)
-  if (!s) return undefined
-  const ms = Date.parse(s)
-  return Number.isFinite(ms) ? ms : undefined
-}
-
-export interface CliParseResult {
-  messages: SessionMessage[]
-  // Entry bị bỏ qua, đếm theo lý do — importer log MỘT lần; một dòng hỏng/lạ
-  // không bao giờ được làm cả lần sync đổ.
-  skipped: Map<string, number>
-}
-
-function bump(skipped: Map<string, number>, key: string): void {
-  skipped.set(key, (skipped.get(key) ?? 0) + 1)
-}
-
-// Tích luỹ MỘT lượt agent: các entry assistant/response-item liên tiếp gộp
-// thành MỘT SessionMessage — cùng khuôn với một turn AWOG (text + steps +
-// usage + modelUsed). `parts` giữ thứ tự text↔step để UI render đan xen đúng
-// thứ tự thay vì dồn text lên đầu; `pendingCalls` nhớ tool_use chưa thấy
-// output để *_output/tool_result gập vào ĐÚNG step thay vì thành message rời.
-interface TurnAcc {
-  parts: SessionMessagePart[]
-  texts: string[]
-  steps: SessionStep[]
-  pendingCalls: Map<string, { name: string; input: Record<string, unknown>; step: SessionStep }>
-  inputTokens: number
-  outputTokens: number
-  cacheReadTokens: number
-  cacheWriteTokens: number
-  model?: string
-  at?: string
-}
-
-function newTurn(): TurnAcc {
-  return {
-    parts: [],
-    texts: [],
-    steps: [],
-    pendingCalls: new Map(),
-    inputTokens: 0,
-    outputTokens: 0,
-    cacheReadTokens: 0,
-    cacheWriteTokens: 0,
-  }
-}
-
-function appendTurnText(t: TurnAcc, text: string): void {
-  t.texts.push(text)
-  const last = t.parts[t.parts.length - 1]
-  if (last && last.kind === 'text') {
-    last.text = `${last.text}\n${text}`
-  } else {
-    t.parts.push({ kind: 'text', text })
-  }
-}
-
-function pushTurnStep(t: TurnAcc, step: SessionStep): void {
-  t.steps.push(step)
-  t.parts.push(step)
-}
-
-function flushTurn(t: TurnAcc, via: SessionCliKind, out: SessionMessage[]): void {
-  // Transcript là lịch sử: mọi step còn treo 'running' (tool_use chưa có
-  // tool_result trong phần file đã đọc) kết là 'done' — không có "đang chạy"
-  // khi xem lại, và step treo sẽ quay spinner mãi trong UI.
-  for (const s of t.steps) {
-    if (s.status === 'running') s.status = 'done'
-  }
-  const text = t.texts.join('\n').trim()
-  if (!text && t.steps.length === 0) return // turn trống (entry assistant rỗng)
-  const msg: SessionMessage = {
-    id: mintCliMessageId(),
-    role: 'agent',
-    text,
-    at: t.at ?? new Date().toISOString(),
-    via,
-  }
-  if (t.steps.length > 0) msg.steps = t.steps
-  if (t.parts.length > 0) msg.parts = t.parts
-  if (t.inputTokens + t.outputTokens + t.cacheReadTokens + t.cacheWriteTokens > 0) {
-    msg.usage = {
-      inputTokens: t.inputTokens,
-      outputTokens: t.outputTokens,
-      ...(t.cacheReadTokens > 0 ? { cacheReadTokens: t.cacheReadTokens } : {}),
-      ...(t.cacheWriteTokens > 0 ? { cacheWriteTokens: t.cacheWriteTokens } : {}),
-    }
-  }
-  if (t.model) msg.modelUsed = t.model
-  out.push(msg)
-}
-
-function cliUserMessage(text: string, at: string | undefined, via: SessionCliKind): SessionMessage {
-  return { id: mintCliMessageId(), role: 'user', text, at: at ?? new Date().toISOString(), via }
-}
-
-// Trừ multiset các message transcript AWOG ĐÃ có (key = role + text bỏ hết
-// whitespace — khoảng trắng/newline khác nhau giữa hai nguồn không được đánh
-// lừa dedupe). Chỉ áp dụng trên file "shared history": file đó chứa nguyên
-// các lượt AWOG đã chạy nên text trùng CHẮC CHẮN là bản sao.
-//
-// Ngoại lệ USER: runtime prepend scaffold (history prefix `<conversation_so_far>`
-// / `<summary_of_earlier_conversation>`, `<current_state>`, style/checklist/plan
-// prompt…) TRƯỚC chữ thô user gõ — file transcript giữ bản scaffold còn AWOG
-// chỉ persist text thô. Vì scaffold luôn nằm TRƯỚC, text thô là SUFFIX của bản
-// transcript → khớp đuôi (sau khi exact miss) cho role 'user' khi text stored
-// đã chuẩn hoá ≥ 3 ký tự. Assistant giữ exact-only: scaffold không đụng text
-// của nó, và suffix trên assistant sẽ nuốt cả các câu trả lời CLI thật tình cờ
-// trùng đuôi (không có bound nào để phân biệt).
-const SUFFIX_DEDUPE_MIN_LEN = 3
-
-function subtractKnownMessages(
-  imported: SessionMessage[],
-  existing: SessionMessage[],
-): SessionMessage[] {
-  const norm = (s: string): string => s.replace(/\s+/g, '')
-  const keyOf = (m: SessionMessage): string => `${m.role}:${norm(m.text)}`
-  const pool = new Map<string, number>()
-  // Text user đã persist — pool suffix (mỗi entry vẫn bị cùng multiset đếm qua
-  // `pool`, nên bản trùng stored không khớp quá số lần nó xuất hiện).
-  const userTexts: { norm: string; key: string }[] = []
-  for (const m of existing) {
-    const key = keyOf(m)
-    pool.set(key, (pool.get(key) ?? 0) + 1)
-    if (m.role === 'user') userTexts.push({ norm: norm(m.text), key })
-  }
-  const out: SessionMessage[] = []
-  for (const m of imported) {
-    const key = keyOf(m)
-    const left = pool.get(key) ?? 0
-    if (left > 0) {
-      pool.set(key, left - 1)
-      continue // bản sao của một lượt AWOG đã có — không append lần hai
-    }
-    if (m.role === 'user') {
-      const n = norm(m.text)
-      const hit = userTexts.find(
-        (u) => u.norm.length >= SUFFIX_DEDUPE_MIN_LEN && n.endsWith(u.norm) && (pool.get(u.key) ?? 0) > 0,
-      )
-      if (hit) {
-        pool.set(hit.key, (pool.get(hit.key) ?? 0) - 1)
-        continue // bản scaffold của một user-turn AWOG đã lưu — bỏ
-      }
-    }
-    out.push(m)
-  }
-  return out
-}
-
-// ─── Claude JSONL parser ─────────────────────────────────────────────────────
-
-// Khuôn entry Claude Code: {type:'user'|'assistant'|'summary'|..., uuid,
-// parentUuid, timestamp, isMeta?, isSidechain?, message:{role,content,model?,
-// usage?}}. Lọc meta/sidechain/tool_result; gộp các entry assistant liên tiếp
-// thành một turn (text + tool_use steps + usage cộng dồn + model cuối).
-export function parseClaudeTranscript(text: string, sinceMs?: number): CliParseResult {
-  const out: SessionMessage[] = []
-  const skipped = new Map<string, number>()
-  let turn: TurnAcc | undefined
-  const openTurn = (): TurnAcc => (turn ??= newTurn())
-  const flush = (): void => {
-    if (turn) {
-      flushTurn(turn, 'claude', out)
-      turn = undefined
-    }
-  }
-
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim()
-    if (!line) continue
-    let entry: unknown
-    try {
-      entry = JSON.parse(line)
-    } catch {
-      bump(skipped, 'unparseable')
-      continue
-    }
-    const e = asObject(entry)
-    if (!e) {
-      bump(skipped, 'non-object')
-      continue
-    }
-    if (e.isMeta === true) {
-      bump(skipped, 'meta')
-      continue
-    }
-    if (e.isSidechain === true) {
-      bump(skipped, 'sidechain')
-      continue
-    }
-    // Sàn spawn-time (chỉ khi mở file từ offset 0 trên shared history): entry
-    // trước lúc CLI mở là lượt AWOG cũ — có timestamp thì lọc, không có thì giữ
-    // (không định tuổi được thì không gán là "cũ").
-    if (sinceMs !== undefined) {
-      const ms = entryMs(e.timestamp)
-      if (ms !== undefined && ms < sinceMs) {
-        bump(skipped, 'pre-spawn')
-        continue
-      }
-    }
-    const ts = asString(e.timestamp)
-
-    if (e.type === 'user') {
-      const message = asObject(e.message)
-      const content = message?.content
-      if (typeof content === 'string') {
-        flush()
-        if (content.trim()) out.push(cliUserMessage(content, ts, 'claude'))
-        else bump(skipped, 'user:empty')
-        continue
-      }
-      const blocks = asArray(content)
-      const isToolResults =
-        blocks.length > 0 && blocks.every((b) => asObject(b)?.type === 'tool_result')
-      if (isToolResults) {
-        // tool_result nằm TRONG user-entry nhưng là output của tool_use lượt
-        // trước → gập vào step đang treo, KHÔNG sinh user message.
-        for (const b of blocks) foldClaudeToolResult(b, turn, skipped)
-        continue
-      }
-      if (blocks.length === 0) {
-        bump(skipped, 'user:empty')
-        continue
-      }
-      flush()
-      const text = blocks
-        .map((b) => asObject(b))
-        .filter((b): b is JsonObject => b !== undefined && b.type === 'text')
-        .map((b) => asString(b.text) ?? '')
-        .join('\n')
-        .trim()
-      if (text) out.push(cliUserMessage(text, ts, 'claude'))
-      else bump(skipped, 'user:no-text') // user entry chỉ có image/document
-      continue
-    }
-
-    if (e.type === 'assistant') {
-      const message = asObject(e.message)
-      if (!message) {
-        bump(skipped, 'assistant:no-message')
-        continue
-      }
-      const t = openTurn()
-      if (ts) t.at = ts // timestamp CUỐI của turn thắng — gần lúc hoàn thành nhất
-      const model = asString(message.model)
-      if (model) t.model = model
-      const usage = asObject(message.usage)
-      if (usage) {
-        t.inputTokens += asNumber(usage.input_tokens) ?? 0
-        t.outputTokens += asNumber(usage.output_tokens) ?? 0
-        t.cacheReadTokens += asNumber(usage.cache_read_input_tokens) ?? 0
-        t.cacheWriteTokens += asNumber(usage.cache_creation_input_tokens) ?? 0
-      }
-      for (const b of asArray(message.content)) {
-        const block = asObject(b)
-        if (!block) continue
-        const type = block.type
-        if (type === 'text') {
-          const s = asString(block.text)
-          if (s) appendTurnText(t, s)
-        } else if (type === 'thinking') {
-          const s = asString(block.thinking)
-          if (s) {
-            const id = asString(e.uuid) ?? `think-${t.steps.length}`
-            pushTurnStep(t, stepFromThinking(`think-${id}`, s, true))
-          }
-        } else if (type === 'tool_use') {
-          addToolUseStep(t, block, asString(e.uuid), skipped)
-        } else {
-          bump(skipped, `block:${String(type)}`)
-        }
-      }
-      continue
-    }
-
-    bump(skipped, `type:${String(e.type)}`)
-  }
-  flush()
-  return { messages: out, skipped }
-}
-
-function addToolUseStep(
-  t: TurnAcc,
-  block: JsonObject,
-  entryUuid: string | undefined,
-  skipped: Map<string, number>,
-): void {
-  const name = asString(block.name)
-  if (!name) {
-    bump(skipped, 'tool_use:no-name')
-    return
-  }
-  const id = asString(block.id) ?? `${entryUuid ?? 'cli'}-tu${t.steps.length}`
-  const input = asObject(block.input) ?? {}
-  const step = stepFromToolUse({ id, name, input })
-  t.pendingCalls.set(id, { name, input, step })
-  pushTurnStep(t, step)
-}
-
-// tool_result của Claude gập vào step đang treo cùng tool_use_id (nhìn thấy
-// ở phần file trước); mồ côi (turn trước đã flush hoặc file cắt giữa chừng)
-// thì bỏ — một result không có call thì không render được thành step có nghĩa.
-function foldClaudeToolResult(
-  rawBlock: unknown,
-  turn: TurnAcc | undefined,
-  skipped: Map<string, number>,
-): void {
-  const block = asObject(rawBlock)
-  if (!block) return
-  const toolUseId = asString(block.tool_use_id)
-  const pending = toolUseId ? turn?.pendingCalls.get(toolUseId) : undefined
-  if (!pending || !toolUseId) {
-    bump(skipped, 'tool_result:orphan')
-    return
-  }
-  const done = stepFromToolResult({
-    toolUseId,
-    toolName: pending.name,
-    toolInput: pending.input,
-    content: block.content,
-    isError: block.is_error === true,
-  })
-  // Object.assign giữ object identity — step đã nằm trong steps[] và parts[]
-  // nên cập nhật tại chỗ giữ đúng vị trí timeline.
-  Object.assign(pending.step, done)
-  turn?.pendingCalls.delete(toolUseId)
-}
+// ─── Shared parsing helpers — moved to sessions/claude-transcript.ts ────────
+// (ADR 0097: sdk-transcript.ts replays the same transcript on the cold-persist
+// path and must stay a leaf module; everything the Codex/Devin parsers below
+// use — TurnAcc/newTurn/flushTurn/cliUserMessage, as*/entryMs/mint helpers,
+// subtractKnownMessages, parseClaudeTranscript — lives there now.)
 
 // ─── Codex rollout parser ────────────────────────────────────────────────────
 
@@ -1298,12 +946,7 @@ function codexCallInput(item: JsonObject): Record<string, unknown> {
   return asObject(raw) ?? {}
 }
 
-function codexCallStep(
-  t: TurnAcc,
-  item: JsonObject,
-  ts: string | undefined,
-  skipped: Map<string, number>,
-): void {
+function codexCallStep(t: TurnAcc, item: JsonObject, ts: string | undefined, skipped: Map<string, number>): void {
   if (ts) t.at = ts
   const itemType = asString(item.type) ?? ''
   const callId = asString(item.call_id) ?? asString(item.id) ?? `codex-call-${t.steps.length}`
@@ -1346,8 +989,7 @@ function codexCallStep(
   } else if (useName === 'apply_patch') {
     // apply_patch payload là PATCH TEXT (không phải JSON) — rút target file để
     // step label hiện "Edit <file>" thay vì một cụm diff.
-    const patch =
-      asString(item.input) ?? asString(item.arguments) ?? asString(input.patch) ?? ''
+    const patch = asString(item.input) ?? asString(item.arguments) ?? asString(input.patch) ?? ''
     const m = patch.match(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/m)
     useName = 'Edit'
     input = m ? { file_path: m[1].trim() } : {}
@@ -1364,7 +1006,10 @@ function codexCallStep(
   if (mapped === 'Bash' && Array.isArray(input.command)) {
     input = {
       ...input,
-      command: input.command.map((c) => asString(c) ?? '').join(' ').trim(),
+      command: input.command
+        .map((c) => asString(c) ?? '')
+        .join(' ')
+        .trim(),
     }
   }
   const use: ToolUseInfo = { id: callId, name: mapped, input }
@@ -1410,11 +1055,7 @@ function codexFileChangeStep(t: TurnAcc, item: JsonObject): void {
   pushTurnStep(t, step)
 }
 
-function foldCodexOutput(
-  turn: TurnAcc | undefined,
-  item: JsonObject,
-  skipped: Map<string, number>,
-): void {
+function foldCodexOutput(turn: TurnAcc | undefined, item: JsonObject, skipped: Map<string, number>): void {
   const callId = asString(item.call_id) ?? asString(item.id)
   const pending = callId ? turn?.pendingCalls.get(callId) : undefined
   if (!pending || !callId) {
@@ -1445,19 +1086,14 @@ function foldCodexOutput(
 // token_count event: `info.last_token_usage` là usage của REQUEST cuối (per-
 // request, cộng dồn như event-adapter đang làm — total_token_usage là tích
 // luỹ cả thread nên không dùng).
-function recordCodexTokenCount(
-  payload: JsonObject,
-  turn: TurnAcc | undefined,
-  openTurn: () => TurnAcc,
-): void {
+function recordCodexTokenCount(payload: JsonObject, turn: TurnAcc | undefined, openTurn: () => TurnAcc): void {
   const info = asObject(payload.info)
   const last = asObject(info?.last_token_usage) ?? asObject(info?.lastTokenUsage)
   if (!last) return
   const t = turn ?? openTurn()
   t.inputTokens += asNumber(last.input_tokens) ?? 0
   t.outputTokens += asNumber(last.output_tokens) ?? 0
-  t.cacheReadTokens +=
-    asNumber(last.cached_input_tokens) ?? asNumber(last.cache_read_input_tokens) ?? 0
+  t.cacheReadTokens += asNumber(last.cached_input_tokens) ?? asNumber(last.cache_read_input_tokens) ?? 0
   t.cacheWriteTokens += asNumber(last.cache_write_input_tokens) ?? 0
 }
 
@@ -1549,11 +1185,7 @@ function clipText(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}\n…(truncated)` : text
 }
 
-function devinAgentMessage(
-  step: JsonObject,
-  stepId: string,
-  ts: string | undefined,
-): SessionMessage | undefined {
+function devinAgentMessage(step: JsonObject, stepId: string, ts: string | undefined): SessionMessage | undefined {
   const text = (asString(step.message) ?? '').trim()
   const parts: SessionMessagePart[] = []
   const steps: SessionStep[] = []

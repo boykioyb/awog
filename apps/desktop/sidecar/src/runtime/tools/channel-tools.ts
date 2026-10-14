@@ -23,13 +23,14 @@ import { sessionManager } from '../../sessions/session-manager.js'
 import { runRootId } from '../../sessions/run-root.js'
 import type { TeamChannelEntry } from '../../types/shared.js'
 
-export const CHANNEL_TOOL_NAMES = ['team_say', 'team_note', 'channel_read'] as const
+// CHANNEL_TOOL_NAMES lives in tool-names.ts (leaf) — see session-tools.ts note.
+export { CHANNEL_TOOL_NAMES } from './tool-names.js'
 
 // ─── Văn bản tool (một nguồn, mức chính sách — nhánh Pi dựng schema TypeBox,
 // nhánh Claude SDK dựng schema zod từ đây) ───────────────────────────────────
 export const CHANNEL_TOOLS_TEXT = {
   sayDescription:
-    'Post a message to your team\'s shared channel — every member and the lead sees it in their <team> context on their next turn. ' +
+    "Post a message to your team's shared channel — every member and the lead sees it in their <team> context on their next turn. " +
     'Use this for status updates, questions to the team, and handoffs. ' +
     'To wake a specific member NOW, put their session id in `mentions`; a post with no mentions only wakes the lead (rate-limited). ' +
     'For a private note to one member use send_session_message instead.',
@@ -38,13 +39,13 @@ export const CHANNEL_TOOLS_TEXT = {
     'Session ids of teammates to wake immediately via their inbox (see the roster in your <team> block). Omit for a normal broadcast.',
   sayKind: "'chat' for conversation (default); 'status' for a structured progress/handoff report.",
   sayItemId:
-    'Board item id this message is about — tagged messages surface on that item\'s Discuss view. Pass it whenever the message concerns a specific item (status, handoff, question about it); omit for general team talk.',
+    "Board item id this message is about — tagged messages surface on that item's Discuss view. Pass it whenever the message concerns a specific item (status, handoff, question about it); omit for general team talk.",
   noteDescription:
     'Record an evaluation or decision for the team — the lead\'s running log of what moved, what is stuck, and what was decided (kind "eval"). ' +
     'Eval entries are recorded on the shared channel and never wake anyone.',
   noteText: 'The evaluation or decision to record (max 4000 chars).',
   noteItemId:
-    'Board item id this evaluation is about — tagged notes surface on that item\'s Discuss view. Omit for team-wide observations.',
+    "Board item id this evaluation is about — tagged notes surface on that item's Discuss view. Omit for team-wide observations.",
   readDescription:
     'Read the most recent entries on the team channel — use it when your <team> block was truncated or you need more history than it carried.',
   readLimit: 'Max characters of channel history to return (default ~4000).',
@@ -52,9 +53,7 @@ export const CHANNEL_TOOLS_TEXT = {
 
 const SayParams = Type.Object({
   text: Type.String({ description: CHANNEL_TOOLS_TEXT.sayText }),
-  mentions: Type.Optional(
-    Type.Array(Type.String(), { description: CHANNEL_TOOLS_TEXT.sayMentions }),
-  ),
+  mentions: Type.Optional(Type.Array(Type.String(), { description: CHANNEL_TOOLS_TEXT.sayMentions })),
   kind: Type.Optional(
     Type.Union([Type.Literal('chat'), Type.Literal('status')], {
       description: CHANNEL_TOOLS_TEXT.sayKind,
@@ -122,17 +121,14 @@ export function createChannelRunners(input: {
   runId?: string | null | undefined
   selfTitle?: string
 }): ChannelRunners | null {
-  const runId =
-    input.runId === undefined ? resolveRunRoot(input.sessionId) : input.runId
+  const runId = input.runId === undefined ? resolveRunRoot(input.sessionId) : input.runId
   if (!runId) return null
 
   // Tiêu đề phiên → fromTitle của entry; đọc lại mỗi lần gọi vì title có thể
   // đổi giữa hai lượt (rename). Fallback tham số của caller, cuối cùng là id.
   function selfTitle(): string {
     return (
-      input.selfTitle ||
-      sessionManager.getSessions().find((s) => s.id === input.sessionId)?.title ||
-      input.sessionId
+      input.selfTitle || sessionManager.getSessions().find((s) => s.id === input.sessionId)?.title || input.sessionId
     )
   }
 
@@ -153,8 +149,7 @@ export function createChannelRunners(input: {
         ...(params.mentions?.length ? { mentions: params.mentions } : {}),
         ...(params.item_id ? { itemId: params.item_id } : {}),
       })
-      const woke =
-        (entry.mentions?.length ?? 0) > 0 ? ` — woke ${(entry.mentions ?? []).join(', ')}` : ''
+      const woke = (entry.mentions?.length ?? 0) > 0 ? ` — woke ${(entry.mentions ?? []).join(', ')}` : ''
       return {
         text: `posted to team channel (everyone sees it on their next turn)${woke}`,
         entryId: entry.id,
@@ -167,10 +162,7 @@ export function createChannelRunners(input: {
     }
   }
 
-  async function note(params: {
-    text: string
-    item_id?: string | undefined
-  }): Promise<ChannelToolRunResult> {
+  async function note(params: { text: string; item_id?: string | undefined }): Promise<ChannelToolRunResult> {
     const text = params.text.trim()
     if (!text) return { text: 'Nothing to record — the note is empty.', isError: true }
     try {

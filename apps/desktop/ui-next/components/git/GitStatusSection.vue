@@ -50,6 +50,15 @@
             </svg>
             <Icon name="folder" style="width: var(--icon-xs); height: var(--icon-xs)" />
             <span class="gtrunc">{{ row.label }}</span>
+            <span v-if="!staged" class="growact">
+              <span
+                class="gstage gdiscard"
+                :title="t('git.ctxFolder.discard')"
+                @click.stop="discardFolder(row.path)"
+              >
+                <Icon name="revert" style="width: var(--icon-xs); height: var(--icon-xs)" />
+              </span>
+            </span>
           </div>
           <div
             v-else
@@ -165,7 +174,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'select', file: string, staged: boolean, mods: SelMods): void
   (e: 'discard', file: string): void
-  (e: 'discard-all', files: string[]): void
+  (e: 'discard-all', files: string[], folder?: string): void
   (e: 'toggle-stage', file: string, staged: boolean): void
   (e: 'stage-all'): void
   (e: 'unstage-all'): void
@@ -216,6 +225,18 @@ function discardAll() {
   emit(
     'discard-all',
     props.files.map((x) => x.f),
+  )
+}
+
+function discardFolder(path: string) {
+  // Same single-confirm contract as discardAll — parent owns the dialog; the
+  // row's revert icon collapses to "files under this dir" so the confirm text
+  // names the folder rather than repeating each path.
+  const prefix = `${path}/`
+  emit(
+    'discard-all',
+    props.files.map((x) => x.f).filter((f) => f.startsWith(prefix)),
+    path,
   )
 }
 </script>

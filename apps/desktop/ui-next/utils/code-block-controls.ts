@@ -23,15 +23,15 @@ const RESIZE_MIN_H = 96
 // ngôn ngữ — fence trống tuy được tô màu như shell nhưng cố ý KHÔNG mang thuộc
 // tính này (xem highlightCode). Nhờ vậy nút Run không mọc trên mọi khối ``` trần,
 // vốn phần lớn là output hoặc nội dung file chứ không phải lệnh.
-const RUNNABLE_LANGS = new Set([
-  'bash',
-  'sh',
-  'shell',
-  'shellscript',
-  'zsh',
-  'console',
-  'shellsession',
-])
+export const RUNNABLE_LANGS: Record<string, true> = {
+  bash: true,
+  sh: true,
+  shell: true,
+  shellscript: true,
+  zsh: true,
+  console: true,
+  shellsession: true,
+}
 
 export type CodeBlockLabels = {
   copy: string
@@ -145,7 +145,7 @@ export function attachCodeBlockControls(el: HTMLElement, opts: CodeBlockControls
     // Run — chỉ cho block shell có nhãn ngôn ngữ rõ ràng, và chỉ khi bề mặt này
     // cấp được chỗ chạy. Đặt SAU copy nên nó là nút ngoài cùng phải: hành động
     // nặng đô nhất nằm xa nhất khỏi hai nút vô hại.
-    if (onRun && lang && RUNNABLE_LANGS.has(lang)) {
+    if (onRun && lang && RUNNABLE_LANGS[lang]) {
       const runBtn = document.createElement('button')
       runBtn.type = 'button'
       runBtn.className = 'coderun'

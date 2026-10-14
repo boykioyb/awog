@@ -4,6 +4,7 @@ import { useSessionsStore } from '~/stores/sessions'
 import { useTasksStore } from '~/stores/tasks'
 import { useSettingsStore } from '~/stores/settings'
 import { useSessionTaskLink } from '~/composables/useSessionTaskLink'
+import { useToast } from '~/composables/useToast'
 import type { Session } from '~/composables/useSessionsData'
 
 // ── Native notifications (§9 globals) ────────────────────────────────────────
@@ -23,6 +24,7 @@ export function useNativeNotify() {
   const store = useSessionsStore()
   const tasks = useTasksStore()
   const settings = useSettingsStore()
+  const toast = useToast()
   const { openSession, openTask } = useSessionTaskLink()
   const { sessions } = storeToRefs(store)
   const { t } = useI18n()
@@ -95,7 +97,7 @@ export function useNativeNotify() {
       return
     }
     store.setActive(s.id)
-    void navigateTo('/sessions')
+    void navigateTo('/workbench')
   }
 
   async function notifyTurn(s: Session) {
@@ -151,7 +153,20 @@ export function useNativeNotify() {
         if (prev == null) continue
         if (ACTIVE.has(prev) && SETTLED.has(s.status)) {
           const full = sessions.value.find((x) => x.id === s.id)
-          if (full) void notifyTurn(full)
+          if (!full) continue
+          // In-app toast cho mọi mode — OS notification chỉ khi 'native'/'both'
+          // (gate ở `notificationsOn`); user đang nhìn app vẫn cần biết turn xong.
+          const isErr = s.status === 'error'
+          toast.add({
+            title: isErr ? t('palette.notify.turnError.title') : t('palette.notify.turnDone.title'),
+            description: isErr
+              ? t('palette.notify.turnError.body', { title: s.title })
+              : t('palette.notify.turnDone.body', { title: s.title }),
+            color: isErr ? 'error' : 'success',
+            type: 'background',
+            onClick: () => goToSession(full),
+          })
+          void notifyTurn(full)
         } else if (prev !== 'awaiting' && s.status === 'awaiting') {
           const full = sessions.value.find((x) => x.id === s.id)
           if (full)

@@ -10,7 +10,7 @@ import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
 import { runGit } from '../git/runner.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 
 const ModelSchema = z.string().min(1).max(200)
 
@@ -42,12 +42,7 @@ register('git.generateCommitMessage', async (raw) => {
   if (!nameList.stdout.trim()) {
     throw new RpcError(-32602, 'Nothing staged to generate a message for')
   }
-  const diff = await runGit(params.workspaceRoot, [
-    'diff',
-    '--cached',
-    '--no-color',
-    '--find-renames',
-  ])
+  const diff = await runGit(params.workspaceRoot, ['diff', '--cached', '--no-color', '--find-renames'])
 
   let diffText = diff.stdout
   let truncated = false
@@ -76,8 +71,8 @@ register('git.generateCommitMessage', async (raw) => {
     truncated,
   })
 
-  // Pure-text generation through the Pi runtime (no tools).
-  const collected = await completePi({
+  // Pure-text generation through the one-shot runtime (no tools).
+  const collected = await complete({
     accountId: params.accountId,
     modelId,
     systemPrompt: params.rule,

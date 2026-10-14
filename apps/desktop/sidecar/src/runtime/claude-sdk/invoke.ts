@@ -8,10 +8,7 @@
 // the Pi invoke adapter uses).
 
 import { query, type Options, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
-import {
-  FROZEN_TOKEN_MIN_LIFETIME_MS,
-  resolveCredential,
-} from '../../credentials/credential-resolver.js'
+import { FROZEN_TOKEN_MIN_LIFETIME_MS, resolveCredential } from '../../credentials/credential-resolver.js'
 import {
   CONFIG_ISOLATION_OPTIONS,
   budgetOptions,
@@ -37,6 +34,7 @@ import { makeTaskToolGate } from '../permission.js'
 import { withBridgedAliases } from '../tools/bridged.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
+  autoCompactFromContext,
   buildSdkEnv,
   effortFromSettings,
   makeForegroundOnlyHook,
@@ -279,11 +277,7 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
   const mcpServers = await toSdkMcpServers(args.mcpServers)
   // Per-source allowedApiEndpoints (ADR 0060 P4) gate non-GET api calls inside the
   // SDK tool handler — the SAME check the Pi path enforces (isApiCallAllowed).
-  const apiServers = buildApiSdkServers(
-    args.apiSources,
-    args.abortController?.signal,
-    args.sourceApiEndpoints,
-  )
+  const apiServers = buildApiSdkServers(args.apiSources, args.abortController?.signal, args.sourceApiEndpoints)
   const allServers = { ...(mcpServers ?? {}), ...apiServers }
   const claudeBinary = resolveClaudeBinary()
   const sdkModel = toSdkModel(args.settings.modelId)
@@ -367,7 +361,7 @@ export async function invokeSdkClaude(args: InvokeArgs, cb: InvokeCallbacks): Pr
     // ĐI KÈM cách hiển thị nó ra UI — không phải một dòng env.
     // Cùng luật với đường chat: ngữ cảnh hạ tầng của node (khi có) đi vào env của
     // CLI, để `aws …` trong `Bash` của node chạm đúng tài khoản đã ghim.
-    env: buildSdkEnv(cred, args.settings.infra),
+    env: buildSdkEnv(cred, args.settings.infra, undefined, autoCompactFromContext(args.compactConfig)),
     // Packaged builds: bundled native binary (ADR 0058 P3); dev auto-discovers.
     ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
   }

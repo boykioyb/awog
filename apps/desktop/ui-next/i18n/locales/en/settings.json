@@ -244,6 +244,7 @@
   "settings.notifications.cicd.name": "Deploys",
   "settings.notifications.cicd.desc": "Failed pipeline runs, and runs waiting for your approval. Checked every 5 minutes — each pass costs a few AWS/gh calls.",
   "settings.nav.wiki": "Wiki",
+  "settings.nav.browser": "Browser profiles",
   "settings.nav.memory": "Memory",
   "settings.wiki.heading": "Wiki context",
   "settings.wiki.enabled.name": "Give agents the wiki index",

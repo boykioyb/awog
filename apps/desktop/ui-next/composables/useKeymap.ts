@@ -23,7 +23,8 @@ export type KeymapActionId =
   | 'openSettings'
   | 'nextSession'
   | 'prevSession'
-  | 'goSessions'
+  | 'lastProject'
+  | 'sessionTab1'
   | 'goTasks'
   | 'goProjects'
 
@@ -131,8 +132,16 @@ export const KEYMAP_ACTIONS: readonly KeymapAction[] = [
     default: { mod: true, alt: true, code: 'ArrowUp' },
   },
   {
-    id: 'goSessions',
-    labelKey: 'settingsKeymap.act.goSessions',
+    id: 'lastProject',
+    labelKey: 'settingsKeymap.act.lastProject',
+    group: 'navigate',
+    // ⌘` — đảo qua project dùng gần nhất (Backquote: ` hoặc ~ tuỳ layout,
+    // event.code không phân biệt Shift).
+    default: { mod: true, code: 'Backquote' },
+  },
+  {
+    id: 'sessionTab1',
+    labelKey: 'settingsKeymap.act.sessionTab1',
     group: 'navigate',
     default: { mod: true, code: 'Digit1' },
   },

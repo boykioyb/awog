@@ -516,13 +516,13 @@ const initPane = async (pane: Pane): Promise<void> => {
   pane.term = instance
   enableTerminalWebgl(instance)
 
-  // Bấm path trong output → PreviewModal. Chỉ pane LOCAL: output của SSH remote
-  // nói về filesystem của máy kia, file index của workspace không resolve được.
+  // Bấm path trong output → PreviewModal. Chỉ pane chạy trên backend terminal.*
+  // (PTY local — gồm cả transport ghim cwd riêng của workbench, chung idField):
+  // output của SSH remote nói về filesystem máy kia, file index không resolve.
   // Provider sống cùng instance — `term.dispose()` dọn luôn.
-  if (canLinkFiles && transportOf(pane) === localTransport) {
+  if (canLinkFiles && transportOf(pane).idField === localTransport.idField) {
     registerTerminalFileLinks(instance, (path) => filePreview.open(path))
   }
-
   // Input → PTY. Registered ONCE per xterm instance (its `term.dispose()` drops it
   // on close). It reads `pane.terminalId` lazily, so it keeps working after a
   // reconnect (new PTY id). It must NOT live in createPty — that runs again on every
@@ -969,11 +969,17 @@ function runText(text: string): boolean {
     .catch(() => undefined)
   return true
 }
-defineExpose({ runText })
+// `addTab` lộ ra cho host muốn mở tab lập trình (workbench "Mở Terminal ở đây"
+// truyền một transport ghim cwd riêng). Vẫn là API nội bộ — tab mới chạy trên
+// transport được đưa, hoặc mặc định nếu thiếu.
+defineExpose({ runText, addTab })
 
 // Đăng ký vào registry để nút Run trên code block của transcript tìm được shell
 // này mà không phải luồn ref qua SessionWorkspacePanel → SessionDetail → transcript.
 // Khoá là `ptyKey` (`ses:<id>` cho terminal của phiên), nên mỗi phiên một chỗ chạy.
+// Khi host NÀY đang hiển thị nó còn claim khoá "visible" — nút Run ghi vào cái
+// người dùng đang nhìn chứ không phải terminal phiên khuất mắt (claim tự nhả khi
+// panel ẩn/tab đổi, nên khoá không bao giờ trỏ vào host cũ).
 watch(
   () => props.ptyKey,
   (key, prev) => {
@@ -982,8 +988,19 @@ watch(
   },
   { immediate: true },
 )
+watch(
+  [() => props.ptyKey, () => props.visible],
+  ([key, vis]) => {
+    if (key && vis) claimVisibleTerminalRunner(key)
+    else if (key) releaseVisibleTerminalRunner(key)
+  },
+  { immediate: true },
+)
 onBeforeUnmount(() => {
-  if (props.ptyKey) unregisterTerminalRunner(props.ptyKey)
+  if (props.ptyKey) {
+    unregisterTerminalRunner(props.ptyKey)
+    releaseVisibleTerminalRunner(props.ptyKey)
+  }
 })
 
 // ── Wiring ────────────────────────────────────────────────────────────────────

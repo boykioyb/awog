@@ -1,7 +1,7 @@
 // Path validate per ADR 0017 (3-step flow) + security invariant #2.
 // All filesystem-bound inputs that come from UI/workspace go through this.
-import { realpathSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
+import { realpathSync } from 'node:fs'
 import { RpcError } from '../transport/rpc.js'
 import { GIT_RPC_CODE, GitErrorCode } from './error-map.js'
 

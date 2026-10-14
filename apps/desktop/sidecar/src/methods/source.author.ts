@@ -23,7 +23,7 @@ import { awogHome } from '../util/path.js'
 import { buildSourcePreset, PRESET_META } from '../sources/presets.js'
 import { SOURCE_SLUG_RE } from '../sources/schema.js'
 import { testAndPersistSource } from '../sources/test.js'
-import { authorPi } from '../runtime/complete.js'
+import { author } from '../runtime/complete.js'
 
 // First-run `npx -y <pkg>` also downloads the package before it can speak MCP,
 // so the verify handshake gets a generous budget (never below the config's own).
@@ -58,10 +58,7 @@ const Params = z.object({
   editConfig: z.string().max(20_000).optional(),
 })
 
-function renderTranscript(
-  history: { role: 'user' | 'agent'; text: string }[],
-  userText: string,
-): string {
+function renderTranscript(history: { role: 'user' | 'agent'; text: string }[], userText: string): string {
   const turns: string[] = []
   for (const m of history) {
     const text = m.text.trim()
@@ -229,7 +226,7 @@ register('source.author', async (raw) => {
   // verify below. Captured from tool results so a failed Write never triggers it.
   let writtenSlug: string | null = null
 
-  const res = await authorPi(
+  const res = await author(
     {
       accountId: params.accountId,
       modelId,

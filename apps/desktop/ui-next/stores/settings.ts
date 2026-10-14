@@ -272,6 +272,12 @@ export interface ContextSettings {
   // of every turn.
   agentsCatalogEnabled: boolean
   skillsCatalogEnabled: boolean
+  // Claude CLI auto-compact threshold in tokens (Anthropic sessions + tasks): the CLI
+  // compacts the conversation by itself at about this context size. 0 = the CLI's own
+  // default (its model window minus a reserve). Travels in contextConfig; whether it
+  // runs at all is `sessions.autoCompact`. The CLI clamps the effective window to
+  // 100k–1M, so values below ~87k behave like ~87k.
+  compactAtTokens: number
 }
 
 export interface TranslateSettings {
@@ -462,6 +468,10 @@ const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   },
 }
 
+// Mirrors the sidecar default (runtime/claude-sdk/shared.ts DEFAULT_COMPACT_AT_TOKENS):
+// an absent contextConfig field means this value on the engine side.
+const DEFAULT_COMPACT_AT_TOKENS = 300_000
+
 const DEFAULT_CONTEXT: ContextSettings = {
   wikiEnabled: true,
   wikiBudgetChars: 4000,
@@ -471,6 +481,7 @@ const DEFAULT_CONTEXT: ContextSettings = {
   memoryBudgetChars: 4000,
   agentsCatalogEnabled: true,
   skillsCatalogEnabled: true,
+  compactAtTokens: DEFAULT_COMPACT_AT_TOKENS,
 }
 
 const DEFAULT_TRANSLATE: TranslateSettings = {
@@ -1219,6 +1230,12 @@ export const useSettingsStore = defineStore('settings', () => {
     }
     if (!context.agentsCatalogEnabled) out.agentsCatalogEnabled = false
     if (!context.skillsCatalogEnabled) out.skillsCatalogEnabled = false
+    // Anthropic: the CLI compacts natively, gated by the same Settings → Sessions
+    // toggle the Pi/Codex UI trigger uses.
+    if (!sessions.autoCompact) out.autoCompact = false
+    if (context.compactAtTokens !== DEFAULT_CONTEXT.compactAtTokens) {
+      out.compactAtTokens = context.compactAtTokens
+    }
     return out
   }
   const setWorkspacePath = (path: string) => {

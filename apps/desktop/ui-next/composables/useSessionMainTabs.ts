@@ -17,6 +17,7 @@
 // trên đúng tab người dùng đang nhìn.
 
 import { reactive } from 'vue'
+import { useWorkbenchDocs } from '~/composables/useWorkbenchDocs'
 
 // scope → main tab đang active. Vắng mặt = 'discuss' (mặc định mở session là
 // mở trao đổi — chưa ai bấm link nào).
@@ -42,6 +43,11 @@ export function useSessionMainTabs() {
     if (!api) throw new Error('embedded browser unavailable')
     const created = await api.newTab(url, { wait: false, scope })
     setMainTab(scope, created.tabId)
+    // Session Workbench: tab web sống thành doc trên stage (DocWeb pin theo tab
+    // này), không phải pane mtabs trong SessionDetail (đã tắt khi embedded).
+    if (window.location.pathname.startsWith('/workbench')) {
+      void useWorkbenchDocs().openWebTab(created.tabId, { title: created.title || url })
+    }
     return created.tabId
   }
 

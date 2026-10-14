@@ -6,32 +6,40 @@
     <div class="siolbl">{{ t('sessions.step.path') }}</div>
     <pre class="siopre break-all text-muted-foreground">{{ pathText }}</pre>
   </div>
+  <!-- Detail stub kept off the wire (sessions.get lite) — fetched lazily on
+       expand via sessions.stepDetail; show a loading line instead of letting
+       the branches below render "(no output)" / "(empty)". -->
+  <div v-if="pending" class="sio">
+    <pre class="siopre text-muted-foreground">{{ t('sessions.step.loading') }}</pre>
+  </div>
   <!-- Real unified diff (Edit/MultiEdit) → parsed diff view. -->
-  <SessionCodeView
-    v-if="diffLines.length"
-    mode="diff"
-    :fname="target"
-    :lines="diffLines"
-    embedded
-  />
-  <!-- File content (Read/Write) → code view. Its own filename header is suppressed
+  <template v-if="!pending">
+    <SessionCodeView
+      v-if="diffLines.length"
+      mode="diff"
+      :fname="target"
+      :lines="diffLines"
+      embedded
+    />
+    <!-- File content (Read/Write) → code view. Its own filename header is suppressed
        when embedded; the Path row above is what names the file. -->
-  <SessionCodeView v-else-if="codeText !== null" :fname="target" :code="codeText" embedded />
-  <!-- Terminal output / plain text / list → Input + Output split. The header
+    <SessionCodeView v-else-if="codeText !== null" :fname="target" :code="codeText" embedded />
+    <!-- Terminal output / plain text / list → Input + Output split. The header
        truncates the input (command / query / url); here it shows in full,
        clearly separated from the result. `.sout` is the hook SessionStepItem
        tints destructive on a failed step. -->
-  <template v-else>
-    <div v-if="inputText" class="sio">
-      <div class="siolbl">{{ t('sessions.step.input') }}</div>
-      <pre class="siopre break-all text-foreground/85">{{ inputText }}</pre>
-    </div>
-    <div class="sio">
-      <div v-if="inputText" class="siolbl siosep">{{ t('sessions.step.output') }}</div>
-      <pre class="siopre sout text-muted-foreground">{{
-        detail || t('sessions.step.noOutput')
-      }}</pre>
-    </div>
+    <template v-else>
+      <div v-if="inputText" class="sio">
+        <div class="siolbl">{{ t('sessions.step.input') }}</div>
+        <pre class="siopre break-all text-foreground/85">{{ inputText }}</pre>
+      </div>
+      <div class="sio">
+        <div v-if="inputText" class="siolbl siosep">{{ t('sessions.step.output') }}</div>
+        <pre class="siopre sout text-muted-foreground">{{
+          detail || t('sessions.step.noOutput')
+        }}</pre>
+      </div>
+    </template>
   </template>
 </template>
 
@@ -48,6 +56,10 @@ const props = defineProps<{
   target: string
   detail?: string
   detailKind?: StepDetailKind
+  // Detail body kept off the wire (sessions.get lite) — true while the
+  // sessions.stepDetail fetch is in flight; renders a loading line instead of
+  // letting the detail branches render "(no output)".
+  pending?: boolean
 }>()
 const { t } = useI18n()
 

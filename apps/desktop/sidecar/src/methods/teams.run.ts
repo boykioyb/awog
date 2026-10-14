@@ -1,11 +1,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { loadTeam, MAX_TEAM_MEMBERS } from '../teams/store.js'
-import {
-  createSession,
-  flushSession,
-  setSessionAgent,
-} from '../sessions/store.js'
+import { createSession, flushSession, setSessionAgent } from '../sessions/store.js'
 import { mintSessionId } from '../sessions/spawn.js'
 import { postSessionMessage } from '../sessions/inbox.js'
 import { log } from '../util/logger.js'
@@ -93,9 +89,7 @@ register('teams.run', async (raw) => {
     // resolve đúng file spec, kể cả khi id trùng giữa hai tier.
     teamId: team.id,
     teamSource: team.source ?? 'global',
-    ...(team.source === 'project' && team.projectId
-      ? { teamProjectId: team.projectId }
-      : {}),
+    ...(team.source === 'project' && team.projectId ? { teamProjectId: team.projectId } : {}),
   }
   await createSession(root)
 
@@ -117,9 +111,7 @@ register('teams.run', async (raw) => {
     messageCount: 0,
     teamId: team.id,
     teamSource: team.source ?? 'global',
-    ...(team.source === 'project' && team.projectId
-      ? { teamProjectId: team.projectId }
-      : {}),
+    ...(team.source === 'project' && team.projectId ? { teamProjectId: team.projectId } : {}),
     ...(leadRef ? { agent: leadRef } : {}),
   }
   emit('session.created', { session: summary })
@@ -132,20 +124,16 @@ register('teams.run', async (raw) => {
   //     sẵn — run bắt đầu không đốt lượt nào cho member chưa có việc.
   const roster =
     team.members.length > 0
-      ? team.members
-          .map((m) => `- "${m.title}"${m.agent?.id ? ` · agent ${m.agent.id}` : ''}`)
-          .join('\n')
+      ? team.members.map((m) => `- "${m.title}"${m.agent?.id ? ` · agent ${m.agent.id}` : ''}`).join('\n')
       : '(no members in the spec — the lead may still spawn ad-hoc sessions with create_session when the work calls for it)'
   await postSessionMessage({
     from: null,
     to: rootId,
     text:
       `Team "${team.name}" — you are its lead.` +
-      (team.instructions?.trim()
-        ? `\n\nOperating instructions:\n${team.instructions.trim()}`
-        : '') +
+      (team.instructions?.trim() ? `\n\nOperating instructions:\n${team.instructions.trim()}` : '') +
       `\n\nMember roster (spawned lazily — a member's session only exists once work is assigned to them):\n${roster}\n\n` +
-      'To dispatch: assign a board item to a member by title via assignee_member on team_item_create/team_item_update — that member\'s session spawns on the assignment and is woken with the item. Never materialize members ahead of need. ' +
+      "To dispatch: assign a board item to a member by title via assignee_member on team_item_create/team_item_update — that member's session spawns on the assignment and is woken with the item. Never materialize members ahead of need. " +
       'A member title is a ROLE: member_instance:<N≥2> seats a parallel instance of it ("Dev 2" — a second Dev for an independent workstream) when one member would otherwise serialize the work.',
   }).catch((err) =>
     log.warn('teams.run: could not deliver lead briefing', {

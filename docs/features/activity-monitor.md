@@ -13,6 +13,8 @@
 
 Sự cố đã đo được trên máy thật khi khảo sát tính năng này: một **tiến trình sidecar mồ côi** (PID 30331) chạy **17 giờ 25 phút ở 99,7% CPU**, cha đã thoát nên nó bị launchd nhận nuôi, kéo theo hai tiến trình `claude` CLI kẹt lại. Không có bề mặt nào trong AWOG nói ra chuyện đó; người dùng chỉ thấy quạt kêu.
 
+**Nguyên nhân gốc (tìm ra 2026-10-13, hai sidecar mồ côi ~100% CPU — một của bản cài `/Applications/AWOG.app`, một của dev):** pause bằng inspector cho thấy vòng **EPIPE ⇄ log**: host chết ⇒ đầu kia stdio đóng ⇒ `log.*` ghi stderr ra EPIPE ⇒ `uncaughtException` ⇒ handler "recoverable EPIPE" lại `log.warn` ⇒ ghi stderr ⇒ EPIPE… Stream stdio của Node không tự `destroy` nên mỗi lần ghi ra một lỗi mới, và vòng nằm gọn trong hàng đợi `nextTick` ⇒ timer 2,5s của `gracefulShutdown` (vốn đã được gọi khi stdin đóng) không bao giờ tới lượt ⇒ tiến trình không bao giờ thoát. Sửa: `logger.ts` + `transport/stdio.ts` gắn listener `error` cho stderr/stdout (thôi ghi; stdout hỏng = host chết ⇒ đi đường tắt máy như stdin đóng) + `gracefulShutdown` có hạn chót cứng 10s (`unref`). Đo bằng harness giết cha `-9`: bản cũ mồ côi, CPU time tăng 1s mỗi giây; bản mới thoát < 1s. Test hồi quy: `util/__tests__/logger-broken-stderr.test.ts`.
+
 ## Màn hình
 
 ```
@@ -35,7 +37,7 @@ Sự cố đã đo được trên máy thật khi khảo sát tính năng này: 
 ```
 
 - **Nhịp đo 2 giây**, chỉ chạy khi trang đang hiện. Nút **Tạm dừng** giữ nguyên số liệu ở lần đo cuối.
-- **Nhịp đầu tiên không có số CPU** (hiện "—" + "Đang đo nhịp đầu tiên…"): CPU tức thời là *hiệu* giữa hai lần đo, một lần đọc đơn lẻ không nói được tiến trình đang bận hay đang ngủ.
+- **Nhịp đầu tiên không có số CPU** (hiện "—" + "Đang đo nhịp đầu tiên…"): CPU tức thời là _hiệu_ giữa hai lần đo, một lần đọc đơn lẻ không nói được tiến trình đang bận hay đang ngủ.
 - **Đơn vị CPU: 100% = một lõi**, giống `top` và Activity Monitor của macOS. Máy 10 lõi thì tổng có thể lên 1000%; thẻ đầu ghi rõ số lõi.
 - Bấm một dòng phiên → mở phiên đó.
 
@@ -43,11 +45,11 @@ Sự cố đã đo được trên máy thật khi khảo sát tính năng này: 
 
 Chọn ở thanh đầu trang. Mỗi phạm vi là một tập tiến trình khác nhau, nên đổi phạm vi là **vứt mốc CPU cũ** và đo lại từ đầu (bảng của máy khác hiện trong lúc chờ là bảng nói dối).
 
-| Phạm vi | Đo gì | Có gì / không có gì |
-|---|---|---|
-| **AWOG** (mặc định) | cây tiến trình của app | đủ: quy về phiên · mồ côi · GPU máy này |
-| **Toàn máy** | mọi tiến trình của máy này | vẫn quy về phiên cho phần của AWOG; tiến trình app khác chỉ có nhãn từ dòng lệnh, **không** bị gán phiên |
-| **SSH · `<host>`** | máy ở đầu kia một kết nối đang mở | **không** có: cây AWOG, phiên, mồ côi, GPU — máy đó không chạy AWOG nên mọi khái niệm ấy đều vô nghĩa |
+| Phạm vi             | Đo gì                             | Có gì / không có gì                                                                                      |
+| ------------------- | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **AWOG** (mặc định) | cây tiến trình của app            | đủ: quy về phiên · mồ côi · GPU máy này                                                                  |
+| **Toàn máy**        | mọi tiến trình của máy này        | vẫn quy về phiên cho phần của AWOG; tiến trình app khác chỉ có nhãn từ dòng lệnh, **không** bị gán phiên |
+| **SSH · `<host>`**  | máy ở đầu kia một kết nối đang mở | **không** có: cây AWOG, phiên, mồ côi, GPU — máy đó không chạy AWOG nên mọi khái niệm ấy đều vô nghĩa    |
 
 Nhãn các thẻ tổng đi theo phạm vi (`CPU · Toàn máy`, `RAM · prod-web-01`). Con số của cả máy mà nhãn ghi "của AWOG" là đúng loại nói dối mà trang này tồn tại để tránh.
 
@@ -63,13 +65,13 @@ Mọi ngưỡng **suy từ dung lượng thật của máy đang đo** (số lõ
 
 Lý do không dùng vài con số cố định: cùng "2 GB" là bình thường trên máy 64 GB và là báo động trên máy 8 GB; cùng "300% CPU" là một cú build lành mạnh trên máy 10 lõi và là máy đang quỳ trên máy 2 lõi. **Một thang không biết máy to bằng nào thì màu đỏ của nó không mang thông tin gì.**
 
-| Đo cái gì | Chia cho | 🟢 | 🟡 | 🔴 |
-|---|---|---|---|---|
-| CPU một tiến trình | một lõi | < 50% | 50–90% | ≥ 90% |
-| CPU tổng | số lõi × 100 | < 30% | 30–70% | ≥ 70% |
-| RAM một tiến trình | RAM vật lý | < 2% | 2–8% | ≥ 8% |
-| RAM tổng | RAM vật lý | < 25% | 25–50% | ≥ 50% |
-| GPU | — | < 50% | 50–85% | ≥ 85% |
+| Đo cái gì          | Chia cho     | 🟢    | 🟡     | 🔴    |
+| ------------------ | ------------ | ----- | ------ | ----- |
+| CPU một tiến trình | một lõi      | < 50% | 50–90% | ≥ 90% |
+| CPU tổng           | số lõi × 100 | < 30% | 30–70% | ≥ 70% |
+| RAM một tiến trình | RAM vật lý   | < 2%  | 2–8%   | ≥ 8%  |
+| RAM tổng           | RAM vật lý   | < 25% | 25–50% | ≥ 50% |
+| GPU                | —            | < 50% | 50–85% | ≥ 85% |
 
 Mốc đỏ của CPU một tiến trình (90% = ghim trọn một lõi) **trùng ngưỡng mặc định của cảnh báo** "CPU cao kéo dài", để màu trên bảng và nội dung thông báo không nói hai chuyện khác nhau.
 
@@ -89,11 +91,11 @@ Màu dùng token `--green` / `--amber` / `--danger`. ⚠ **Không dùng `--accen
 
 Ba tầng, tin cậy giảm dần ([ADR 0090](../decisions/0090-activity-monitor-process-attribution.md) §3):
 
-| Tầng | Cơ chế | Nhãn `attribution` |
-|---|---|---|
-| 1 | Nơi spawn tự khai vào `monitor/owned.ts` | `registry` |
-| 2 | `--resume=<uuid>` trên argv của CLI claude → `Session.sdkSessionId` | `sdk-session-id` |
-| 3 | Thừa kế từ tổ tiên gần nhất đã xác định | `inherited` |
+| Tầng | Cơ chế                                                              | Nhãn `attribution` |
+| ---- | ------------------------------------------------------------------- | ------------------ |
+| 1    | Nơi spawn tự khai vào `monitor/owned.ts`                            | `registry`         |
+| 2    | `--resume=<uuid>` trên argv của CLI claude → `Session.sdkSessionId` | `sdk-session-id`   |
+| 3    | Thừa kế từ tổ tiên gần nhất đã xác định                             | `inherited`        |
 
 Không tầng nào khớp ⇒ nằm ở nhóm hạ tầng chung. **Không bao giờ gán bừa vào một phiên.**
 
@@ -101,10 +103,10 @@ Không tầng nào khớp ⇒ nằm ở nhóm hạ tầng chung. **Không bao gi
 
 Mỗi phiên mang một nhãn, và hai nhãn sau hiện **"—"** kèm một câu giải thích thay vì một con số sai:
 
-| Nhãn | Nghĩa | Khi nào |
-|---|---|---|
-| `own-process` | số liệu là của đúng phiên này | nhánh Claude SDK (provider `anthropic`) |
-| `in-engine` | chạy trong tiến trình engine dùng chung | nhánh Pi |
+| Nhãn            | Nghĩa                                             | Khi nào                                                                           |
+| --------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `own-process`   | số liệu là của đúng phiên này                     | nhánh Claude SDK (provider `anthropic`)                                           |
+| `in-engine`     | chạy trong tiến trình engine dùng chung           | nhánh Pi                                                                          |
 | `shared-daemon` | dùng chung daemon với các phiên khác cùng account | nhánh Codex ([ADR 0087](../decisions/0087-codex-app-server-as-openai-runtime.md)) |
 
 Phiên `in-engine`/`shared-daemon` **vẫn được liệt kê** — bỏ đi thì người dùng tưởng phiên đã dừng. Riêng shell mà phiên spawn (`Bash` tool, shell nền, terminal) thì mọi nhánh đều quy về được, vì nơi spawn có khai sổ.
@@ -125,23 +127,23 @@ Linux: `nvidia-smi` cho mức toàn máy nếu có; không có đường per-pro
 
 ## Khối "Máy": từng lõi CPU · load average · RAM thật · swap
 
-Khối riêng, **không trộn** với hàng thẻ (hàng thẻ nói về *tập đang xem*, khối này nói về *cái máy*).
+Khối riêng, **không trộn** với hàng thẻ (hàng thẻ nói về _tập đang xem_, khối này nói về _cái máy_).
 
 **Từng lõi** — `os.cpus()` của Node gọi `host_processor_info` trên macOS và đọc `/proc/stat` trên Linux, trả về thời gian tích luỹ của từng lõi ⇒ lại là phép hiệu quen thuộc. Không native module, không root. (Đã thử và loại: `kern.cp_times` không tồn tại trên macOS, `top` không in per-core, `powermetrics` đòi root.) Kèm **load average** từ `os.loadavg()`.
 
 **RAM thật + swap** — đây là một **sửa sai về tính đúng đắn**, không phải trang trí: cộng RSS của mọi tiến trình KHÔNG phải "RAM đang dùng" (bộ nhớ dùng chung bị cộng nhiều lần; phần wired/nén của nhân không thuộc tiến trình nào). Tổng RSS ra 9.9 GB trong khi máy 16 GB đang thiếu bộ nhớ thật sự.
 
-> ⚠ **Đính chính lần hai.** Bản sửa đầu dùng `used = total − (free + speculative)` vì nó khớp `top` từng MiB. Khớp `top` nhưng **vô dụng**: công thức đó tính cả trang `inactive` — vốn phần lớn là file cache macOS thu hồi tức thì — nên ra **99% trên mọi máy Mac chạy được vài tiếng**. Một vạch lúc nào cũng đỏ không mang thông tin gì, đúng cái bẫy mà mục "Thang màu" bên trên tự cảnh báo. Người dùng phát hiện: *"phần số đỏ này hơi ảo không"*.
+> ⚠ **Đính chính lần hai.** Bản sửa đầu dùng `used = total − (free + speculative)` vì nó khớp `top` từng MiB. Khớp `top` nhưng **vô dụng**: công thức đó tính cả trang `inactive` — vốn phần lớn là file cache macOS thu hồi tức thì — nên ra **99% trên mọi máy Mac chạy được vài tiếng**. Một vạch lúc nào cũng đỏ không mang thông tin gì, đúng cái bẫy mà mục "Thang màu" bên trên tự cảnh báo. Người dùng phát hiện: _"phần số đỏ này hơi ảo không"_.
 
 Cách tính hiện tại, và vì sao:
 
-| | |
-|---|---|
-| **RAM đang dùng** | `App (anonymous − purgeable) + Wired + phần nén` — đúng định nghĩa "Memory Used" của Activity Monitor, tức con số người dùng đối chiếu được bằng công cụ của chính hệ điều hành. Đo thật: **13.2 / 16.0 GB = 83%** (thay vì 99%). |
-| **File cache** | Hiện thành **đoạn nhạt riêng** trên vạch (2.7 GB). Nó CÓ chiếm chỗ nhưng nhường lại ngay khi cần, nên không được trông ngang hàng với phần bị chiếm thật. |
-| **Màu RAM** | Theo `kern.memorystatus_vm_pressure_level` (1 bình thường · 2 cảnh báo · 4 nguy cấp) — **phán quyết của chính nhân**, thứ nó dùng để quyết định nén và swap. Phần trăm là chỉ báo tồi trên macOS vì hệ điều hành cố tình giữ RAM đầy. Chỉ rơi về ngưỡng phần trăm (75/92) khi nền tảng không cung cấp áp lực. |
-| **Swap** | **Chỉ số tuyệt đối** (11.3 GB). `vm.swapusage` có trường `total` nhưng đó là kích thước swapfile HIỆN TẠI mà macOS tự nới khi cần — **không phải trần**. Hiện "11.4/12.0 GB = 95%" là bịa ra một cái trần rồi báo động vì sắp chạm nó. Màu so với **RAM vật lý**: vàng ở 20%, đỏ ở 50% (swap bằng nửa RAM = máy đã thiếu bộ nhớ trầm trọng). |
-| Linux | `MemTotal − MemAvailable` vốn đã trừ cache thu hồi được nên không dính bẫy trên; cache lấy từ `Cached + Buffers`. Chưa có nguồn áp lực (PSI có thể thêm sau). |
+|                   |                                                                                                                                                                                                                                                                                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **RAM đang dùng** | `App (anonymous − purgeable) + Wired + phần nén` — đúng định nghĩa "Memory Used" của Activity Monitor, tức con số người dùng đối chiếu được bằng công cụ của chính hệ điều hành. Đo thật: **13.2 / 16.0 GB = 83%** (thay vì 99%).                                                                                                            |
+| **File cache**    | Hiện thành **đoạn nhạt riêng** trên vạch (2.7 GB). Nó CÓ chiếm chỗ nhưng nhường lại ngay khi cần, nên không được trông ngang hàng với phần bị chiếm thật.                                                                                                                                                                                    |
+| **Màu RAM**       | Theo `kern.memorystatus_vm_pressure_level` (1 bình thường · 2 cảnh báo · 4 nguy cấp) — **phán quyết của chính nhân**, thứ nó dùng để quyết định nén và swap. Phần trăm là chỉ báo tồi trên macOS vì hệ điều hành cố tình giữ RAM đầy. Chỉ rơi về ngưỡng phần trăm (75/92) khi nền tảng không cung cấp áp lực.                                |
+| **Swap**          | **Chỉ số tuyệt đối** (11.3 GB). `vm.swapusage` có trường `total` nhưng đó là kích thước swapfile HIỆN TẠI mà macOS tự nới khi cần — **không phải trần**. Hiện "11.4/12.0 GB = 95%" là bịa ra một cái trần rồi báo động vì sắp chạm nó. Màu so với **RAM vật lý**: vàng ở 20%, đỏ ở 50% (swap bằng nửa RAM = máy đã thiếu bộ nhớ trầm trọng). |
+| Linux             | `MemTotal − MemAvailable` vốn đã trừ cache thu hồi được nên không dính bẫy trên; cache lấy từ `Cached + Buffers`. Chưa có nguồn áp lực (PSI có thể thêm sau).                                                                                                                                                                                |
 
 **Không có**: nhiệt độ và điện năng (thứ `macmon` hiển thị) — chúng nằm sau IOReport, cần native code. Cố ý không đoán.
 
@@ -155,10 +157,10 @@ Nhận diện so khớp trên **file chạy** (argv[0], hoặc argv[1] khi argv[
 
 ## Dừng tiến trình
 
-| | |
-|---|---|
-| ❌ Cấm | Hạ tầng của **chính instance đang chạy**: Electron main, sidecar, renderer, GPU, utility — giết là tự bắn vào chân, đã có nút Thoát app |
-| ❌ Cấm | `pid ≤ 1` (`launchd`/`init`) |
+|             |                                                                                                                                                                                                     |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ❌ Cấm      | Hạ tầng của **chính instance đang chạy**: Electron main, sidecar, renderer, GPU, utility — giết là tự bắn vào chân, đã có nút Thoát app                                                             |
+| ❌ Cấm      | `pid ≤ 1` (`launchd`/`init`)                                                                                                                                                                        |
 | ✅ Cho phép | Mọi thứ còn lại, **kể cả tiến trình không thuộc AWOG**. Đây là máy của người dùng; phần quyền để hệ điều hành phán — tiến trình của user khác trả `EPERM` và lỗi đó đi thẳng lên UI thay vì bị nuốt |
 
 > Bản đầu chỉ cho giết tiến trình của AWOG. Người dùng đảo sau khi dùng thử, cùng lúc với việc bổ sung phạm vi toàn máy: một công cụ giám sát mà vẫn phải mở Activity Monitor của macOS để giết thì không giải quyết việc gì.
@@ -181,11 +183,11 @@ Trang chỉ phát hiện khi người dùng MỞ nó ra — mà không ai mở t
 - **MẶC ĐỊNH BẬT**, khác `cicdEvents` (mặc định tắt vì mỗi lượt là một chùm lệnh `aws`/`gh`).
 - Đi qua **cùng một kênh gửi** với hộp thư GitHub và cảnh báo CI/CD: `Settings → Thông báo → Kênh gửi` (toast / hệ điều hành / cả hai). Bấm vào cảnh báo → mở `/monitor`.
 
-| Luật | Điều kiện | Mặc định |
-|---|---|---|
-| Tiến trình sót lại | có tiến trình AWOG mồ côi | **bật** |
-| CPU cao kéo dài | một tiến trình ≥ ngưỡng % **liên tục** ≥ N phút | **bật** (90%, 5 phút) |
-| RAM vượt ngưỡng | tổng RSS của AWOG ≥ N GB | **tắt** (4 GB) |
+| Luật               | Điều kiện                                       | Mặc định              |
+| ------------------ | ----------------------------------------------- | --------------------- |
+| Tiến trình sót lại | có tiến trình AWOG mồ côi                       | **bật**               |
+| CPU cao kéo dài    | một tiến trình ≥ ngưỡng % **liên tục** ≥ N phút | **bật** (90%, 5 phút) |
+| RAM vượt ngưỡng    | tổng RSS của AWOG ≥ N GB                        | **tắt** (4 GB)        |
 
 RAM mặc định tắt vì ngưỡng "đúng" phụ thuộc hoàn toàn vào máy — đó phải là con số người dùng chọn, không phải con số ta đoán hộ.
 
@@ -223,7 +225,7 @@ Chỉ ổ chứa **thư mục nhà** (`df <home>`) cộng ổ gắn ngoài. Khô
 
 Danh mục cố định trong `monitor/disk.ts`, đường dẫn **tương đối với thư mục nhà** — không bao giờ ghép từ input nào. Mỗi mục có nhãn `safe` (hệ thống tự sinh lại) hoặc `review` (xoá được nhưng mất state / phải build lại lâu), kèm một câu nói rõ **mất gì khi xoá** — người dùng không đoán được điều đó từ đường dẫn.
 
-Mỗi dòng có **icon theo loại** (chọn theo *thứ sẽ mất*, không theo thư mục nằm ở đâu: cache `refresh` · build `layers` · kho gói `download` · log `listul` · thùng rác `trash`), tô accent hoặc amber khớp với nhãn `safe`/`review` — hai mươi dòng chữ thuần thì phải đọc từng dòng mới biết cái nào là gì.
+Mỗi dòng có **icon theo loại** (chọn theo _thứ sẽ mất_, không theo thư mục nằm ở đâu: cache `refresh` · build `layers` · kho gói `download` · log `listul` · thùng rác `trash`), tô accent hoặc amber khớp với nhãn `safe`/`review` — hai mươi dòng chữ thuần thì phải đọc từng dòng mới biết cái nào là gì.
 
 Hai nút mỗi dòng: **Quét sâu** (mở drawer ở đúng mục đó) và **Chuyển vào Thùng rác**. ⚠ Quét sâu phải là một NÚT: trước đó lối vào duy nhất là bấm vào chữ tên mục, không có gì báo hiệu nó bấm được, nên với người chưa biết thì coi như tính năng không tồn tại.
 
@@ -231,7 +233,7 @@ Thư mục build/dependency trong project (`node_modules`, `.nuxt`, `.output`, `
 
 **Đo tự động ngay khi mở tab.** Danh sách sắp theo dung lượng giảm dần, nên số đo chảy về tới đâu thì mục to nhất nổi lên tới đó, kèm dòng tổng "có thể dọn an toàn".
 
-⚠ Bản đầu chờ người dùng bấm nút "Đo" vì `du` tốn hàng chục giây. Nhưng như vậy thì lần mở đầu tiên cột Dung lượng **toàn `—`**, mà một danh sách tên là *gợi ý dọn* thì cái duy nhất biến nó thành gợi ý chính là con số đó: không có nó, người dùng không có cách nào biết nên xoá mục nào. Nay `load()` tự gọi `measureAll()` — và **chỉ khi chưa có số nào** (`measured === 0`), nên quay lại tab không đo lại; muốn số mới thì bấm "Đo lại".
+⚠ Bản đầu chờ người dùng bấm nút "Đo" vì `du` tốn hàng chục giây. Nhưng như vậy thì lần mở đầu tiên cột Dung lượng **toàn `—`**, mà một danh sách tên là _gợi ý dọn_ thì cái duy nhất biến nó thành gợi ý chính là con số đó: không có nó, người dùng không có cách nào biết nên xoá mục nào. Nay `load()` tự gọi `measureAll()` — và **chỉ khi chưa có số nào** (`measured === 0`), nên quay lại tab không đo lại; muốn số mới thì bấm "Đo lại".
 
 ⚠ **`du` chậm và không làm nhanh được**: đo trên máy thật, `du -sk ~/Library/Caches` (19.7 GB) mất **19,5 giây**. Vì thế API tách đôi — `disk.targets` trả danh sách ngay (chỉ `stat`), rồi UI hỏi `disk.size` **từng mục một**, tối đa 3 mục song song, hiện dần. Một RPC "quét hết rồi trả tổng" là cầm chắc một trang treo vài phút. Đo là **một cú bấm có chủ ý**, không tự chạy khi mở tab.
 
@@ -257,21 +259,21 @@ Tên ứng dụng lấy từ **bundle `.app` ngoài cùng** trên đường dẫ
 
 ### Duyệt toàn đĩa
 
-> Người dùng hỏi: *"mới có Gợi ý dọn thôi à? thế còn toàn bộ đĩa đâu?"* — đúng: danh mục rác là một danh sách **soạn sẵn**, nên mọi thứ ngoài nó vô hình, kể cả khi nó chiếm 300 GB.
+> Người dùng hỏi: _"mới có Gợi ý dọn thôi à? thế còn toàn bộ đĩa đâu?"_ — đúng: danh mục rác là một danh sách **soạn sẵn**, nên mọi thứ ngoài nó vô hình, kể cả khi nó chiếm 300 GB.
 
 Ba lối vào ở đầu tab, cộng nút **Duyệt** trên mỗi thẻ ổ:
 
-| Lối vào | Trỏ tới |
-|---|---|
+| Lối vào     | Trỏ tới                                        |
+| ----------- | ---------------------------------------------- |
 | Thư mục nhà | `home` (sidecar trả về, không đoán ở renderer) |
-| Ứng dụng | `/Applications` |
-| Toàn ổ | **mount của ổ chứa thư mục nhà** |
+| Ứng dụng    | `/Applications`                                |
+| Toàn ổ      | **mount của ổ chứa thư mục nhà**               |
 
 ⚠ "Toàn ổ" **không phải `/`**. Trên APFS, `/` là volume hệ thống niêm phong còn dữ liệu người dùng nằm ở volume Data, mà `du -x` dừng ở biên filesystem — đo được: quét `/` ra `Applications 32.4 GB · private 8.6 GB · Library 8.5 GB` và **không có `/Users`**, tức một bức tranh sai về chỗ trống đã đi đâu. Quét `/System/Volumes/Data` mới ra `Users 300 GB`.
 
 ### Chuẩn hoá đường dẫn (firmlink APFS)
 
-> Người dùng báo ba lỗi tưởng rời rạc: *"nút quay lại không dùng được, breadcrumb cũng không nhấn được, folder đang không có button xoá"*. Cả ba là **MỘT** lỗi.
+> Người dùng báo ba lỗi tưởng rời rạc: _"nút quay lại không dùng được, breadcrumb cũng không nhấn được, folder đang không có button xoá"_. Cả ba là **MỘT** lỗi.
 
 Trên APFS, cùng một thư mục có **hai đường dẫn hợp lệ**: `/Users/kyro` và `/System/Volumes/Data/Users/kyro` (firmlink). Ổ dữ liệu mount ở `/System/Volumes/Data`, nên duyệt từ thẻ ổ hoặc từ "Toàn ổ" sinh ra dạng thứ hai — và mọi phép so khớp theo tiền tố đều trượt:
 
@@ -287,14 +289,14 @@ Breadcrumb cũng được dựng **từ segment cho mọi đường dẫn** (`~`
 
 Hai phạm vi **cố ý khác nhau**:
 
-| | Phạm vi | Cưỡng chế ở |
-|---|---|---|
-| Đọc (đo, liệt kê) | mọi đường dẫn tuyệt đối, trừ filesystem ảo (`/dev`, `/proc`, `/sys`, snapshot Time Machine) | `assertScannable` trong sidecar |
-| Xoá (vào Thùng rác) | chỉ trong thư mục nhà, sâu ≥ 2 cấp | `shell:trashItem` ở Electron main |
+|                     | Phạm vi                                                                                     | Cưỡng chế ở                       |
+| ------------------- | ------------------------------------------------------------------------------------------- | --------------------------------- |
+| Đọc (đo, liệt kê)   | mọi đường dẫn tuyệt đối, trừ filesystem ảo (`/dev`, `/proc`, `/sys`, snapshot Time Machine) | `assertScannable` trong sidecar   |
+| Xoá (vào Thùng rác) | chỉ trong thư mục nhà, sâu ≥ 2 cấp                                                          | `shell:trashItem` ở Electron main |
 
-Khi **cả thư mục đang xem** nằm ngoài phạm vi xoá (`/Library`, `/Applications`…), drawer bỏ hẳn cột nút và hiện **một dòng giải thích**: *"Thư mục này nằm ngoài thư mục nhà nên AWOG chỉ xem, không xoá. macOS cũng đòi quyền quản trị cho hầu hết thứ ở đây."*
+Khi **cả thư mục đang xem** nằm ngoài phạm vi xoá (`/Library`, `/Applications`…), drawer bỏ hẳn cột nút và hiện **một dòng giải thích**: _"Thư mục này nằm ngoài thư mục nhà nên AWOG chỉ xem, không xoá. macOS cũng đòi quyền quản trị cho hầu hết thứ ở đây."_
 
-> ⚠ Bản đầu hiện `—` ở mỗi dòng. Hai mươi dòng dấu gạch câm không nói được lý do, nên người dùng kết luận nút xoá bị hỏng (*"tôi thấy đang - hết không có button xóa?"*). Nói MỘT lần ở đầu danh sách thì rõ; cột nút cũng không còn chiếm chỗ vô ích.
+> ⚠ Bản đầu hiện `—` ở mỗi dòng. Hai mươi dòng dấu gạch câm không nói được lý do, nên người dùng kết luận nút xoá bị hỏng (_"tôi thấy đang - hết không có button xóa?"_). Nói MỘT lần ở đầu danh sách thì rõ; cột nút cũng không còn chiếm chỗ vô ích.
 
 > ⚠ Bản đầu chặn ĐỌC ngoài thư mục nhà. Nới ra vì nó chặn luôn câu hỏi chính của trang. Đây là thao tác chỉ-đọc và chỉ cộng kích thước; hệ điều hành vẫn từ chối thư mục không có quyền. Ranh giới XOÁ thì **không** nới — **nhìn được cả đĩa ≠ xoá được cả đĩa**. UI ẩn nút Thùng rác (hiện `—` kèm tooltip) cho mục ngoài phạm vi, để khỏi mời bấm một thứ chắc chắn bị từ chối.
 
@@ -332,40 +334,40 @@ Chi tiết đáng giữ:
 
 - **Thư mục và file phân biệt rõ**: icon thư mục tô accent + mũi tên khi rê chuột (bấm được), icon file xám (không bấm được). `TreeEntry.isDir` đến từ sidecar chứ không đoán theo tên. ⚠ Đây không chỉ là thẩm mỹ: bản đầu mọi dòng đều là `<button>`, nên bấm vào một file là gọi `readdir` trên file → lỗi. File nay render thành `<div>`, không phải nút — mời bấm một thứ chỉ để báo lỗi là tệ hơn không mời.
 - **Breadcrumb `~ / Library / Caches`** ở tiêu đề, mỗi cấp bấm để nhảy thẳng về. Drawer chỉ hiện MỘT cấp mỗi lúc, nên đây là chỗ duy nhất cho thấy đang ở đâu trong cây — một dòng đường dẫn chết thì không làm được việc đó.
-- Hàng dùng **grid 3 cột** (tên · dung lượng 62px · nút), không phải flex. Với flex, bề rộng cột số còn phụ thuộc độ dài tên ở CÙNG hàng — đo được: tên dài đẩy số lệch phải 14px và cột số răng cưa, trong khi việc chính của panel là *so sánh* dung lượng. Tên dài (pnpm store đặt tên kiểu `https+++codeload.github.com+…`) cắt bằng `…`; ⚠ chỉ `overflow: hidden` là chưa đủ — flex/grid item mặc định `min-width: auto` nên **từ chối co nhỏ hơn nội dung**, và trước khi thêm `min-width: 0` thì tên tràn đè lên cả dung lượng lẫn nút xoá.
+- Hàng dùng **grid 3 cột** (tên · dung lượng 62px · nút), không phải flex. Với flex, bề rộng cột số còn phụ thuộc độ dài tên ở CÙNG hàng — đo được: tên dài đẩy số lệch phải 14px và cột số răng cưa, trong khi việc chính của panel là _so sánh_ dung lượng. Tên dài (pnpm store đặt tên kiểu `https+++codeload.github.com+…`) cắt bằng `…`; ⚠ chỉ `overflow: hidden` là chưa đủ — flex/grid item mặc định `min-width: auto` nên **từ chối co nhỏ hơn nội dung**, và trước khi thêm `min-width: 0` thì tên tràn đè lên cả dung lượng lẫn nút xoá.
 - **Mọi nhãn bị cắt đều có `title`** (tên tiến trình, tên nhóm ứng dụng, tiêu đề phiên, tên mục trong drawer — tooltip của drawer là đường dẫn ĐẦY ĐỦ, vì nó chứa luôn tên và còn trả lời "nằm ở đâu"). Cắt chữ mà không có tooltip là bịt đường xem tên đầy đủ, không còn cách nào khác.
 - Mỗi dòng có **vạch tỉ lệ so với mục lớn nhất cùng cấp** — mắt so sánh hình nhanh hơn so sánh số, mà đây đúng là việc "tìm cái nào nặng".
 - Nút **lên một cấp tự tắt ở thư mục nhà**: sidecar từ chối mọi đường dẫn ngoài đó, nên một nút dẫn tới lỗi là nút nói dối.
 - **Xoá cả thư mục đang mở** bằng nút thùng rác ở đầu drawer (chỉ hiện khi nó nằm trong phạm vi xoá). Không có đường này thì muốn xoá thư mục vừa xem xong, người dùng phải lùi lên cấp trên rồi dò lại nó trong danh sách cha — đúng lúc họ đã biết chắc nó là thứ cần xoá. Xoá xong thì tự lùi lên cấp cha, vì chỗ đang đứng không còn nữa.
-  - ⚠ Hộp xác nhận cố ý **không kèm dung lượng**: con số duy nhất có trong tay là tổng các mục *đang liệt kê*, mà danh sách bị cắt ở 400 mục — đưa một số thiếu vào hộp xác nhận xoá là đưa bằng chứng sai cho một quyết định không dễ hoàn tác.
+  - ⚠ Hộp xác nhận cố ý **không kèm dung lượng**: con số duy nhất có trong tay là tổng các mục _đang liệt kê_, mà danh sách bị cắt ở 400 mục — đưa một số thiếu vào hộp xác nhận xoá là đưa bằng chứng sai cho một quyết định không dễ hoàn tác.
 - **Esc** và bấm nền đều đóng.
-- ⚠ Drawer và nền mờ phải khai **`-webkit-app-region: no-drag`**. Thanh trên của app CHÍNH LÀ thanh tiêu đề cửa sổ (`.top { -webkit-app-region: drag }`), và vùng kéo được tính ở tầng cửa sổ — một lớp phủ nằm ĐÈ lên nó mà không tự trừ mình ra thì **click bị nuốt**: nút quay lại và breadcrumb bấm không ăn (lỗi đã đo, xuất hiện ngay khi drawer đổi sang `top: 0`). Chính comment trong `app-shell.css` đã cảnh báo: *"a control that sits inside a drag region swallows its own clicks"*.
+- ⚠ Drawer và nền mờ phải khai **`-webkit-app-region: no-drag`**. Thanh trên của app CHÍNH LÀ thanh tiêu đề cửa sổ (`.top { -webkit-app-region: drag }`), và vùng kéo được tính ở tầng cửa sổ — một lớp phủ nằm ĐÈ lên nó mà không tự trừ mình ra thì **click bị nuốt**: nút quay lại và breadcrumb bấm không ăn (lỗi đã đo, xuất hiện ngay khi drawer đổi sang `top: 0`). Chính comment trong `app-shell.css` đã cảnh báo: _"a control that sits inside a drag region swallows its own clicks"_.
 - UI phải dùng đường dẫn **sidecar TRẢ VỀ** (`disk.tree` → `{ scanId, path }`), không phải cái nó vừa gửi: sidecar chuẩn hoá firmlink nên entry ở dạng `/Users/...` trong khi UI còn giữ `/System/Volumes/Data/Users/...` — breadcrumb và `canTrash` khi đó nói về một đường dẫn khác với danh sách đang hiện.
-- Drawer chạy **suốt chiều cao**, chỉ chừa thanh trạng thái (đúng quy ước sẵn có: *"leave the status bar interactive while a drawer is open"*). ⚠ Bản đầu viết `top: var(--topbar-h, 48px)` — nhưng **`--topbar-h` không tồn tại** trong repo (chỉ có `--statusbar-h`), nên nó thực chất ghim cứng 48px, một con số không liên quan tới chiều cao thanh trên thật, và để hở một dải ở đỉnh.
+- Drawer chạy **suốt chiều cao**, chỉ chừa thanh trạng thái (đúng quy ước sẵn có: _"leave the status bar interactive while a drawer is open"_). ⚠ Bản đầu viết `top: var(--topbar-h, 48px)` — nhưng **`--topbar-h` không tồn tại** trong repo (chỉ có `--statusbar-h`), nên nó thực chất ghim cứng 48px, một con số không liên quan tới chiều cao thanh trên thật, và để hở một dải ở đỉnh.
 - Đường dẫn rút gọn về `~/…`. ⚠ Bản đầu dùng `direction: rtl` để cắt đầu chuỗi — mẹo đó đảo luôn dấu `/` mở đầu xuống cuối, ra `Users/kyro/Library/Caches/` (lỗi đã đo).
 
 ### Hiện trong Finder · Sao chép đường dẫn · menu chuột phải
 
 Hai nút trên **mọi hàng** của cả bảng gợi ý lẫn cây quét sâu, cộng một bộ nữa trong header của drawer cho chính thư mục đang mở, cộng **menu chuột phải** trên mọi hàng.
 
-⚠ Ba lỗi hình học của cùng một nguyên nhân — *cột hành động được ghim theo số nút CŨ*:
+⚠ Ba lỗi hình học của cùng một nguyên nhân — _cột hành động được ghim theo số nút CŨ_:
 
-| Triệu chứng | Nguyên nhân | Sửa |
-|---|---|---|
-| Bốn nút vuông thành bốn viên thuốc hẹp | cột `.act` ghim 88px (đúng cho hai nút); `width: 32px` chỉ là **basis**, `flex-shrink` mặc định 1 nên con flex bị bóp | cột 160px + `flex: 0 0 auto` ⇒ lần sau thêm nút sẽ **tràn (nhìn thấy ngay)** thay vì âm thầm bóp |
-| Cột Dung lượng trong drawer xô lệch giữa các hàng (đo: 578 vs 544) | cột hành động để `auto`, mà số nút đổi theo hàng (ngoài thư mục nhà không có nút xoá) | **ô giữ chỗ vô hình** ở khe xoá, chỉ render khi danh sách CÓ ít nhất một hàng xoá được |
-| Hàng không xoá được lệch 4px so với hàng xoá được | ô giữ chỗ ghim `26px`, trong khi `.iconbtn` là **32px ở theme awog nhưng 30px ở theme cute** | ô giữ chỗ mang luôn class `iconbtn` (khử viền/bóng) ⇒ tự lấy đúng khổ của từng theme, không ghim số |
-| Dải trắng chết ở mép phải drawer khi mở thư mục ngoài nhà | bản sửa trước ghim cột hành động `104px` = trường hợp 3 nút, nên thư mục **không hàng nào xoá được** vẫn chừa khe xoá trống trên mọi hàng | cột trở lại `auto` + ô giữ chỗ vô hình `v-else-if="anyTrashable"` ⇒ danh sách không xoá được thì không ai render nó |
+| Triệu chứng                                                        | Nguyên nhân                                                                                                                               | Sửa                                                                                                                 |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Bốn nút vuông thành bốn viên thuốc hẹp                             | cột `.act` ghim 88px (đúng cho hai nút); `width: 32px` chỉ là **basis**, `flex-shrink` mặc định 1 nên con flex bị bóp                     | cột 160px + `flex: 0 0 auto` ⇒ lần sau thêm nút sẽ **tràn (nhìn thấy ngay)** thay vì âm thầm bóp                    |
+| Cột Dung lượng trong drawer xô lệch giữa các hàng (đo: 578 vs 544) | cột hành động để `auto`, mà số nút đổi theo hàng (ngoài thư mục nhà không có nút xoá)                                                     | **ô giữ chỗ vô hình** ở khe xoá, chỉ render khi danh sách CÓ ít nhất một hàng xoá được                              |
+| Hàng không xoá được lệch 4px so với hàng xoá được                  | ô giữ chỗ ghim `26px`, trong khi `.iconbtn` là **32px ở theme awog nhưng 30px ở theme cute**                                              | ô giữ chỗ mang luôn class `iconbtn` (khử viền/bóng) ⇒ tự lấy đúng khổ của từng theme, không ghim số                 |
+| Dải trắng chết ở mép phải drawer khi mở thư mục ngoài nhà          | bản sửa trước ghim cột hành động `104px` = trường hợp 3 nút, nên thư mục **không hàng nào xoá được** vẫn chừa khe xoá trống trên mọi hàng | cột trở lại `auto` + ô giữ chỗ vô hình `v-else-if="anyTrashable"` ⇒ danh sách không xoá được thì không ai render nó |
 
 `anyTrashable` là giá trị của **cả danh sách**, không phải từng hàng — đó là lý do ô giữ chỗ không làm hàng xô lệch trở lại. Và nó **không ghim con số nào**: mang class `iconbtn` nên chiếm đúng khổ nút của theme đang chạy. Đo cả hai ca: thư mục ngoài nhà 2 khe · danh sách trộn (xoá được lẫn không) 3 khe, `firstX`/`sizeRight` bằng nhau ở mọi hàng, `gapRight` = 12 ở cả hai ca.
 
 **Menu là `useFileContextMenu` dùng chung với tab Files của Sessions**, không phải bản thứ hai. Composable nhận thêm cờ `absolute`:
 
-| | workspace (Sessions Files, Code Workspace) | `absolute: true` (tab Đĩa) |
-|---|---|---|
-| Đường dẫn | tương đối với một root | tuyệt đối, **không có root nào** |
-| Hàng cần root | VS Code · mở bằng app mặc định · copy đường dẫn tương đối · tạo/đổi tên/xoá qua `fs.*` | **vắng** |
-| Xoá | `fs.deletePath` | `onTrash` của bề mặt → **Thùng rác**, hoàn tác được |
+|               | workspace (Sessions Files, Code Workspace)                                             | `absolute: true` (tab Đĩa)                          |
+| ------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Đường dẫn     | tương đối với một root                                                                 | tuyệt đối, **không có root nào**                    |
+| Hàng cần root | VS Code · mở bằng app mặc định · copy đường dẫn tương đối · tạo/đổi tên/xoá qua `fs.*` | **vắng**                                            |
+| Xoá           | `fs.deletePath`                                                                        | `onTrash` của bề mặt → **Thùng rác**, hoàn tác được |
 
 Cố ý **không** có "Mở bằng ứng dụng mặc định" ở chế độ `absolute`: nó CHẠY trình xử lý của file, mạnh hơn hẳn việc chỉ mở Finder ở chỗ file nằm, và tab Đĩa liệt kê cả những file người dùng chưa từng biết mình có.
 
@@ -379,28 +381,28 @@ Có những chỗ **Thùng rác với không tới**: layer của Docker nằm t
 
 Danh mục **cố định trong `monitor/cleanup.ts`**; UI chỉ gửi **một `id`**, không bao giờ gửi chuỗi lệnh. Đó là ranh giới quan trọng: `cleanup.run` với bất kỳ thứ gì ngoài danh mục đều trả `Unknown cleanup action` (đã thử `rm -rf /`, `docker-prune; rm -rf ~`).
 
-| Id | Lệnh |
-|---|---|
+| Id                   | Lệnh                              |
+| -------------------- | --------------------------------- |
 | `simctl-unavailable` | `xcrun simctl delete unavailable` |
-| `brew-cleanup` | `brew cleanup --prune=all` |
-| `docker-prune` | `docker system prune -f` |
-| `pnpm-store-prune` | `pnpm store prune` |
-| `npm-cache-clean` | `npm cache clean --force` |
-| `go-clean-cache` | `go clean -cache` |
+| `brew-cleanup`       | `brew cleanup --prune=all`        |
+| `docker-prune`       | `docker system prune -f`          |
+| `pnpm-store-prune`   | `pnpm store prune`                |
+| `npm-cache-clean`    | `npm cache clean --force`         |
+| `go-clean-cache`     | `go clean -cache`                 |
 
 Cố ý **`docker system prune -f` chứ không `-a --volumes`**: `--volumes` xoá dữ liệu database của người dùng, `-a` xoá cả image còn dùng tới. Dọn rác không được đi kèm mất dữ liệu.
 
 `cleanup.actions` **dò từng công cụ** bằng một lệnh chỉ-đọc rồi chỉ trả về những cái chạy được, nên máy không có Docker thì không thấy dòng Docker. ⚠ `simctl` vắng mặt khi `xcode-select -p` trỏ vào `/Library/Developer/CommandLineTools` thay vì một bản Xcode đầy đủ — lúc đó `xcrun simctl` thật sự không dùng được (exit 72), không phải lỗi dò.
 
-**Lệnh hiện nguyên văn ngay trên hàng**, không giấu sau cái nhãn, và hộp xác nhận nhắc lại đúng chuỗi đó cộng một câu: *xoá hẳn, KHÔNG qua Thùng rác nên không hoàn tác được* — khác hẳn phần Thùng rác ở dưới. Trong lúc chạy, **mọi nút đều khoá** (các lệnh này đụng cùng một đĩa), rồi output của công cụ lên toast: đó là thứ duy nhất trả lời "giải phóng được bao nhiêu", nên không nuốt nó.
+**Lệnh hiện nguyên văn ngay trên hàng**, không giấu sau cái nhãn, và hộp xác nhận nhắc lại đúng chuỗi đó cộng một câu: _xoá hẳn, KHÔNG qua Thùng rác nên không hoàn tác được_ — khác hẳn phần Thùng rác ở dưới. Trong lúc chạy, **mọi nút đều khoá** (các lệnh này đụng cùng một đĩa), rồi output của công cụ lên toast: đó là thứ duy nhất trả lời "giải phóng được bao nhiêu", nên không nuốt nó.
 
 ### Xoá — vào Thùng rác, không phải `rm -rf`
 
-| | |
-|---|---|
-| Cơ chế | `shell.trashItem` của Electron — **hoàn tác được từ Finder** |
+|                       |                                                                                       |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| Cơ chế                | `shell.trashItem` của Electron — **hoàn tác được từ Finder**                          |
 | Vì sao không `rm -rf` | Một lời gọi sai đường dẫn không có đường lùi, và đường dẫn ở đây đến từ renderer (L1) |
-| Xác nhận | Hộp xác nhận nêu đường dẫn + dung lượng + nói rõ là vào Thùng rác |
+| Xác nhận              | Hộp xác nhận nêu đường dẫn + dung lượng + nói rõ là vào Thùng rác                     |
 
 **Ba hàng rào cưỡng chế ở Electron main**, không tin UI đã lọc:
 
@@ -412,18 +414,18 @@ Bên đọc có cổng riêng: `disk.size`/`disk.tree` chỉ nhận đường d�
 
 ## Hợp đồng IPC
 
-| Method | Params | Trả về |
-|---|---|---|
-| `monitor.sample` | — | `MonitorSnapshot` |
-| `monitor.reset` | — | `{ ok: true }` — quên mốc đo cũ (UI gọi khi vào trang) |
-| `monitor.kill` | `{ pid, force?, connId? }` | `{ pid, signal }` |
-| `disk.volumes` | — | `{ volumes }` — rẻ |
-| `disk.targets` | `{ projectRoots? }` | `{ targets, home }` — chỉ `stat`, trả ngay |
-| `disk.size` | `{ path }` | `{ path, sizeKb }` — **chậm**, gọi từng mục |
-| `disk.tree` | `{ path }` | `{ scanId, path }` — `path` đã chuẩn hoá; kết quả về qua event |
-| `disk.tree-cancel` | `{ scanId }` | `{ ok }` |
-| `cleanup.actions` | — | `{ actions }` — chỉ những công cụ dò thấy trên máy |
-| `cleanup.run` | `{ id }` | `{ ok, output }` — `id` ngoài danh mục ⇒ lỗi |
+| Method             | Params                     | Trả về                                                         |
+| ------------------ | -------------------------- | -------------------------------------------------------------- |
+| `monitor.sample`   | —                          | `MonitorSnapshot`                                              |
+| `monitor.reset`    | —                          | `{ ok: true }` — quên mốc đo cũ (UI gọi khi vào trang)         |
+| `monitor.kill`     | `{ pid, force?, connId? }` | `{ pid, signal }`                                              |
+| `disk.volumes`     | —                          | `{ volumes }` — rẻ                                             |
+| `disk.targets`     | `{ projectRoots? }`        | `{ targets, home }` — chỉ `stat`, trả ngay                     |
+| `disk.size`        | `{ path }`                 | `{ path, sizeKb }` — **chậm**, gọi từng mục                    |
+| `disk.tree`        | `{ path }`                 | `{ scanId, path }` — `path` đã chuẩn hoá; kết quả về qua event |
+| `disk.tree-cancel` | `{ scanId }`               | `{ ok }`                                                       |
+| `cleanup.actions`  | —                          | `{ actions }` — chỉ những công cụ dò thấy trên máy             |
+| `cleanup.run`      | `{ id }`                   | `{ ok, output }` — `id` ngoài danh mục ⇒ lỗi                   |
 
 Kênh Electron (không qua sidecar): `shell:trashItem` `{ path }` · `shell:revealDiskPath` `{ path }`.
 
@@ -435,12 +437,12 @@ Event của lượt quét: `disk.tree-list` `{ scanId, total }` → `disk.tree-e
 type MonitorSnapshot = {
   at: number
   coreCount: number
-  warmingUp: boolean                     // nhịp đầu — mọi cpuPercent là null
+  warmingUp: boolean // nhịp đầu — mọi cpuPercent là null
   gpu: { utilizationPercent: number | null; memoryUsedMb: number | null; source: 'ioreg' | 'nvidia-smi' | null }
   totals: { cpuPercent: number | null; rssKb: number; processCount: number }
-  processes: MonitorProcess[]            // cây của instance hiện tại
+  processes: MonitorProcess[] // cây của instance hiện tại
   sessions: MonitorSession[]
-  orphans: MonitorProcess[]              // mang dấu AWOG nhưng ngoài cây
+  orphans: MonitorProcess[] // mang dấu AWOG nhưng ngoài cây
 }
 ```
 
@@ -453,31 +455,31 @@ type MonitorSnapshot = {
 
 ## File
 
-| Path | Vai trò |
-|---|---|
-| `sidecar/src/monitor/process-table.ts` | Gọi `ps`, parse `[[dd-]hh:]mm:ss` |
-| `sidecar/src/monitor/sampler.ts` | CPU tích luỹ → CPU tức thời; chặn pid tái sử dụng |
-| `sidecar/src/monitor/classify.ts` | Đọc argv → loại tiến trình + `sdkSessionId` + model |
-| `sidecar/src/monitor/identity.ts` | "Tiến trình này có phải của AWOG không" (dò mồ côi + cổng giết) |
-| `sidecar/src/monitor/owned.ts` | Sổ đăng ký pid → chủ sở hữu, do nơi spawn khai |
-| `sidecar/src/monitor/snapshot.ts` | Dựng cây, quy trách nhiệm 3 tầng, cuộn theo phiên |
-| `sidecar/src/monitor/gpu.ts` | `ioreg` / `nvidia-smi` |
-| `sidecar/src/monitor/kill.ts` | Cổng kiểm + `process.kill` (+ định tuyến sang SSH) |
-| `sidecar/src/monitor/remote.ts` | Đọc `ps` và dừng tiến trình trên máy ở đầu kia SSH |
-| `sidecar/src/monitor/system.ts` | Từng lõi CPU · load average · RAM thật · swap |
-| `sidecar/src/monitor/disk.ts` | Ổ đĩa · danh mục rác · quét sâu (CHỈ ĐỌC) |
-| `sidecar/src/monitor/cleanup.ts` | Danh mục lệnh dọn cố định + dò công cụ + chạy theo id |
-| `electron/src/ipc.ts` → `shell:trashItem` | Chuyển vào Thùng rác + ba hàng rào đường dẫn |
-| `electron/src/ipc.ts` → `shell:revealDiskPath` | Hiện trong Finder, phạm vi = phần ĐỌC (chặn filesystem ảo) |
-| `ui-next/composables/useFileContextMenu.ts` | Menu chuột phải dùng chung; cờ `absolute` cho tab Đĩa |
-| `ui-next/composables/useDiskManager.ts` | Điều phối đo song song có giới hạn + gọi xoá |
-| `ui-next/components/monitor/MonitorDisk.vue` | Màn Đĩa |
-| `ui-next/components/monitor/MonitorSystem.vue` | Khối "Máy" |
-| `ui-next/composables/useMonitorManager.ts` | Poll, dẫn xuất bảng, gói lệnh dừng |
-| `ui-next/pages/monitor.vue` | Trang (thin template) |
-| `ui-next/components/monitor/` | `MonitorSummary` · `MonitorSessions` · `MonitorProcesses` |
-| `ui-next/composables/useResourceAlerts.ts` | Vòng canh gác 60s + luật ngưỡng + chống spam |
-| `ui-next/composables/useAppNotify.ts` | Kênh gửi dùng chung (toast / hệ điều hành) cho cả 3 nguồn |
+| Path                                           | Vai trò                                                         |
+| ---------------------------------------------- | --------------------------------------------------------------- |
+| `sidecar/src/monitor/process-table.ts`         | Gọi `ps`, parse `[[dd-]hh:]mm:ss`                               |
+| `sidecar/src/monitor/sampler.ts`               | CPU tích luỹ → CPU tức thời; chặn pid tái sử dụng               |
+| `sidecar/src/monitor/classify.ts`              | Đọc argv → loại tiến trình + `sdkSessionId` + model             |
+| `sidecar/src/monitor/identity.ts`              | "Tiến trình này có phải của AWOG không" (dò mồ côi + cổng giết) |
+| `sidecar/src/monitor/owned.ts`                 | Sổ đăng ký pid → chủ sở hữu, do nơi spawn khai                  |
+| `sidecar/src/monitor/snapshot.ts`              | Dựng cây, quy trách nhiệm 3 tầng, cuộn theo phiên               |
+| `sidecar/src/monitor/gpu.ts`                   | `ioreg` / `nvidia-smi`                                          |
+| `sidecar/src/monitor/kill.ts`                  | Cổng kiểm + `process.kill` (+ định tuyến sang SSH)              |
+| `sidecar/src/monitor/remote.ts`                | Đọc `ps` và dừng tiến trình trên máy ở đầu kia SSH              |
+| `sidecar/src/monitor/system.ts`                | Từng lõi CPU · load average · RAM thật · swap                   |
+| `sidecar/src/monitor/disk.ts`                  | Ổ đĩa · danh mục rác · quét sâu (CHỈ ĐỌC)                       |
+| `sidecar/src/monitor/cleanup.ts`               | Danh mục lệnh dọn cố định + dò công cụ + chạy theo id           |
+| `electron/src/ipc.ts` → `shell:trashItem`      | Chuyển vào Thùng rác + ba hàng rào đường dẫn                    |
+| `electron/src/ipc.ts` → `shell:revealDiskPath` | Hiện trong Finder, phạm vi = phần ĐỌC (chặn filesystem ảo)      |
+| `ui-next/composables/useFileContextMenu.ts`    | Menu chuột phải dùng chung; cờ `absolute` cho tab Đĩa           |
+| `ui-next/composables/useDiskManager.ts`        | Điều phối đo song song có giới hạn + gọi xoá                    |
+| `ui-next/components/monitor/MonitorDisk.vue`   | Màn Đĩa                                                         |
+| `ui-next/components/monitor/MonitorSystem.vue` | Khối "Máy"                                                      |
+| `ui-next/composables/useMonitorManager.ts`     | Poll, dẫn xuất bảng, gói lệnh dừng                              |
+| `ui-next/pages/monitor.vue`                    | Trang (thin template)                                           |
+| `ui-next/components/monitor/`                  | `MonitorSummary` · `MonitorSessions` · `MonitorProcesses`       |
+| `ui-next/composables/useResourceAlerts.ts`     | Vòng canh gác 60s + luật ngưỡng + chống spam                    |
+| `ui-next/composables/useAppNotify.ts`          | Kênh gửi dùng chung (toast / hệ điều hành) cho cả 3 nguồn       |
 
 Năm nơi spawn khai vào sổ: `terminal/manager.ts` (PTY), `sessions/bg-registry.ts` (shell nền), `runtime/tools/bash-tool.ts` (shell của lượt), `runtime/codex/app-server.ts` (daemon).
 

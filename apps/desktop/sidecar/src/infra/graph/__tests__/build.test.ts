@@ -78,10 +78,7 @@ type GateOptions = {
  * Cổng giả: tra JSON mẫu theo đúng argv. Hai phép dò lưu lượng nhận diện bằng
  * `args[0]` vì argv của X-Ray mang mốc thời gian đổi mỗi lượt.
  */
-function installGate(
-  responses: Record<string, unknown>,
-  opts: GateOptions = {},
-): void {
+function installGate(responses: Record<string, unknown>, opts: GateOptions = {}): void {
   runGated.mockImplementation(async (p: InfraGateInput): Promise<InfraGatedResult> => {
     const key = p.args.join(' ')
     if (p.args[0] === 'xray') {
@@ -125,14 +122,29 @@ const K = {
 
 const zoneRecords = {
   ResourceRecordSets: [
-    { Name: 'example.com.', Type: 'NS', ResourceRecords: [{ Value: 'ns-1.awsdns.com.' }] },
+    {
+      Name: 'example.com.',
+      Type: 'NS',
+      ResourceRecords: [{ Value: 'ns-1.awsdns.com.' }],
+    },
     {
       Name: 'www.example.com.',
       Type: 'A',
-      AliasTarget: { DNSName: `${DIST_DOMAIN}.`, HostedZoneId: 'Z2FDTNDATAQYW2' },
+      AliasTarget: {
+        DNSName: `${DIST_DOMAIN}.`,
+        HostedZoneId: 'Z2FDTNDATAQYW2',
+      },
     },
-    { Name: 'api.example.com.', Type: 'A', AliasTarget: { DNSName: `${ELB}.` } },
-    { Name: 'ext.example.com.', Type: 'CNAME', ResourceRecords: [{ Value: 'other.example.org.' }] },
+    {
+      Name: 'api.example.com.',
+      Type: 'A',
+      AliasTarget: { DNSName: `${ELB}.` },
+    },
+    {
+      Name: 'ext.example.com.',
+      Type: 'CNAME',
+      ResourceRecords: [{ Value: 'other.example.org.' }],
+    },
   ],
 }
 const zoneInfo = { HostedZone: { Name: 'example.com.', Config: { Comment: 'prod' } } }
@@ -185,9 +197,7 @@ const lambdaConfig = {
   },
 }
 const lambdaMappings = {
-  EventSourceMappings: [
-    { UUID: 'uuid-1', EventSourceArn: 'arn:aws:sqs:ap-southeast-1:123456789012:jobs' },
-  ],
+  EventSourceMappings: [{ UUID: 'uuid-1', EventSourceArn: 'arn:aws:sqs:ap-southeast-1:123456789012:jobs' }],
 }
 
 /** Chuỗi distribution lồng nhau — cố ý dài để chạm trần độ sâu ở đúng mức 4. */
@@ -334,9 +344,7 @@ describe('resolveInfraGraph — cả chuỗi resolver', () => {
     const inferred = out.graph.edges.filter((e) => e.inferred)
     expect(inferred.map((e) => e.label)).toEqual(['env', 'env'])
     expect(inferred.every((e) => e.source === 'config')).toBe(true)
-    expect(
-      out.graph.edges.filter((e) => !e.inferred).every((e) => e.source === 'describe'),
-    ).toBe(true)
+    expect(out.graph.edges.filter((e) => !e.inferred).every((e) => e.source === 'describe')).toBe(true)
   })
 
   it('GIÁ TRỊ env không lọt vào graph (invariant 1, test âm)', async () => {
@@ -365,10 +373,7 @@ describe('resolveInfraGraph — cả chuỗi resolver', () => {
   })
 
   it('hai route cùng trỏ một lambda ⇒ một node, hai cạnh', async () => {
-    installGate(
-      { ...chainResponses, [K.apiResources]: apiTwoRoutes },
-      { xray: true },
-    )
+    installGate({ ...chainResponses, [K.apiResources]: apiTwoRoutes }, { xray: true })
     const out = await resolveInfraGraph({ context: CTX, rootId: API_NODE, depth: 2 })
     if (!out.ok) throw new Error('unreachable')
     expect(ids(out.graph.nodes).filter((id) => id === LAMBDA_NODE)).toHaveLength(1)
@@ -408,9 +413,7 @@ describe('trần độ sâu', () => {
     // d1(0) → d2(1) → d3(2) → d4(3) → d5(4 = trần): nhánh d5 phải bị cắt.
     expect(out.graph.truncated).toBe(true)
     expect(out.graph.notes).toContain(GRAPH_NOTES.depthTruncated)
-    expect(out.graph.nodes.find((n) => n.id === 'cloudfront:global:d5.cloudfront.net')?.expandable).toBe(
-      false,
-    )
+    expect(out.graph.nodes.find((n) => n.id === 'cloudfront:global:d5.cloudfront.net')?.expandable).toBe(false)
     // Không mở tiếp sang d6 — nhánh đã cắt thì không chạy thêm lệnh.
     expect(ids(out.graph.nodes)).not.toContain('cloudfront:global:d6.cloudfront.net')
   })
@@ -502,11 +505,7 @@ describe('listInfraGraphRoots', () => {
     })
     const out = await listInfraGraphRoots({ context: CTX })
     if (!out.ok) throw new Error('unreachable')
-    expect(ids(out.roots)).toEqual([
-      ROOT_ZONE,
-      CF_NODE,
-      API_NODE,
-    ])
+    expect(ids(out.roots)).toEqual([ROOT_ZONE, CF_NODE, API_NODE])
     expect(out.notes).not.toContain(GRAPH_BUILD_NOTES.noRootFound)
     expect(runGated).toHaveBeenCalledTimes(3)
   })

@@ -1,4 +1,14 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+// Type-only (bị xoá lúc biên dịch ⇒ preload sandbox không phải `require` thêm gì).
+import type {
+  CaptureEntry,
+  CaptureEvent,
+  CaptureState,
+  CaptureSummary,
+  ExportHarResult,
+  ReplayRequest,
+  ReplayResult,
+} from './browser-capture-types'
 
 // Shapes mirrored from main's browser.ts (Rect / TabInfo). Declared, not imported:
 // a sandboxed preload cannot pull in main-process modules — same reason the
@@ -22,6 +32,13 @@ type BrowserTabInfo = {
   zoom: number
   devtools: boolean
   mobile: boolean
+  // Profile (partition) mà tab đang chạy.
+  profileId: string
+  // Tab chạy qua proxy riêng của profile (chỉ cờ).
+  proxied: boolean
+  // Đồng hồ tải trang (epoch ms bắt đầu, tổng ms lượt gần nhất).
+  loadStartedAt: number | null
+  loadMs: number | null
 }
 // `activeTabId` is the active tab OF THE SCOPE the list was requested with
 // (global active when unscoped); `activeByScope` is the full per-scope map so a
@@ -89,9 +106,7 @@ type UpdateEvent =
   | { type: 'downloaded'; version: string }
   | { type: 'error'; message: string }
 type LogTailEvent =
-  | { type: 'init'; content: string; path: string }
-  | { type: 'data'; chunk: string }
-  | { type: 'error'; message: string }
+  { type: 'init'; content: string; path: string } | { type: 'data'; chunk: string } | { type: 'error'; message: string }
 // Live tray status (system-tray-status). The main window pushes a lightweight
 // indicator model; the styled popover window forwards item clicks as commands.
 type TrayCommand =
@@ -169,6 +184,49 @@ type PairingInfo = {
   port: number
 }
 
+// MỘT listener IPC cho mỗi kênh có nhiều người nghe, chia lại trong preload. Mỗi store
+// / composable của renderer subscribe `engine:event` suốt đời app (agents, skills, wiki,
+// tasks, sessions, git…) ⇒ gắn thẳng `ipcRenderer.on` cho từng cái là vượt ngưỡng 10
+// của EventEmitter và Electron in `MaxListenersExceededWarning` dù không có leak nào.
+// Nâng `setMaxListeners` thì mất luôn khả năng phát hiện leak thật, nên giữ một ngưỡng
+// riêng (cao hơn hẳn số người nghe hợp lệ) và cảnh báo một lần khi vượt.
+const FANOUT_WARN_AT = 100
+
+function fanOut<T>(channel: string): (handler: (payload: T) => void) => () => void {
+  // Mỗi lần subscribe một entry riêng: cùng một handler đăng ký hai lần thì hai lần
+  // unsubscribe — đúng ngữ nghĩa của `ipcRenderer.on` cũ.
+  const entries = new Set<{ handler: (payload: T) => void }>()
+  let warned = false
+  ipcRenderer.on(channel, (_e: unknown, payload: T) => {
+    for (const entry of [...entries]) {
+      try {
+        entry.handler(payload)
+      } catch (err) {
+        // Một handler lỗi không được chặn các handler sau; ném lại ở microtask để lỗi
+        // vẫn hiện (kèm stack) trong console như uncaught.
+        queueMicrotask(() => {
+          throw err
+        })
+      }
+    }
+  })
+  return (handler) => {
+    const entry = { handler }
+    entries.add(entry)
+    if (!warned && entries.size > FANOUT_WARN_AT) {
+      warned = true
+      console.warn(`[preload] ${entries.size} listeners on '${channel}' — possible leak`)
+    }
+    return () => {
+      entries.delete(entry)
+    }
+  }
+}
+
+const subscribeEngineEvent = fanOut<EngineEvent>('engine:event')
+const subscribeBrowserChanged = fanOut<BrowserTabList>('browser:changed')
+const subscribeCapture = fanOut<CaptureEvent>('browser:capture:event')
+
 const awog = {
   // Returns the JSON-RPC result, or rejects with the RpcErrorShape so the
   // renderer can rebuild a typed SidecarError (code/message/data preserved).
@@ -183,13 +241,12 @@ const awog = {
 
   // Subscribe to engine events; returns an unsubscribe function.
   onEvent(handler: (event: EngineEvent) => void): () => void {
-    const listener = (_e: unknown, event: EngineEvent): void => handler(event)
-    ipcRenderer.on('engine:event', listener)
+    const unsubscribe = subscribeEngineEvent(handler)
     // Báo cho main biết renderer này đã sẵn sàng nhận sự kiện, để nó giao lại
     // những gì đã park lúc không cửa sổ nào mở (wake.ts, ADR 0084). Fire-and-forget:
     // main tự lọc cửa sổ chính và tự chống phát lại nhiều lần.
     ipcRenderer.send('engine:subscribed')
-    return () => ipcRenderer.removeListener('engine:event', listener)
+    return unsubscribe
   },
 
   // Host platform (`process.platform`, polyfilled in the sandboxed preload). The
@@ -212,25 +269,22 @@ const awog = {
   trashItem: (path: string): Promise<void> => ipcRenderer.invoke('shell:trashItem', { path }),
   // Hiện một đường dẫn bất kỳ của tab Đĩa trong Finder (phạm vi ĐỌC cả đĩa —
   // main chặn filesystem ảo; xoá vẫn chỉ trong nhà, xem `trashItem`).
-  revealDiskPath: (path: string): Promise<void> =>
-    ipcRenderer.invoke('shell:revealDiskPath', { path }),
-  revealPath: (root: string, path: string): Promise<void> =>
-    ipcRenderer.invoke('shell:revealPath', { root, path }),
+  revealDiskPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:revealDiskPath', { path }),
+  revealPath: (root: string, path: string): Promise<void> => ipcRenderer.invoke('shell:revealPath', { root, path }),
   // Reveal a source's folder (~/.awog/sources/<slug>) — main derives + validates
   // the path from the slug (the renderer never passes a path).
-  revealSourceFolder: (slug: string): Promise<void> =>
-    ipcRenderer.invoke('shell:revealSourceFolder', slug),
+  revealSourceFolder: (slug: string): Promise<void> => ipcRenderer.invoke('shell:revealSourceFolder', slug),
   // Reveal a session's folder (~/.awog/sessions/<engineId>) — main derives +
   // validates the path from the engineId (the renderer never passes a path).
-  revealSessionFolder: (engineId: string): Promise<void> =>
-    ipcRenderer.invoke('shell:revealSessionFolder', engineId),
+  revealSessionFolder: (engineId: string): Promise<void> => ipcRenderer.invoke('shell:revealSessionFolder', engineId),
   // Absolute path of a session's folder (for "Copy path") — same derive + validate.
-  sessionFolderPath: (engineId: string): Promise<string> =>
-    ipcRenderer.invoke('shell:sessionFolderPath', engineId),
-  openPath: (root: string, path: string): Promise<void> =>
-    ipcRenderer.invoke('shell:openPath', { root, path }),
+  sessionFolderPath: (engineId: string): Promise<string> => ipcRenderer.invoke('shell:sessionFolderPath', engineId),
+  openPath: (root: string, path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', { root, path }),
   openFileExternal: (root: string, path: string): Promise<void> =>
     ipcRenderer.invoke('shell:openFileExternal', { root, path }),
+  // Opaque token for a workspace root, used to build wspreview://<token>/<rel> URLs
+  // (Workbench HTML preview). Main validates the root.
+  previewToken: (root: string): Promise<{ token: string }> => ipcRenderer.invoke('preview:token', { root }),
   // Open a workspace file in its own OS window (preview popout). Main validates the
   // root/path pair against the workspace before creating the window.
   openPreviewWindow: (root: string, path: string, name: string): Promise<void> =>
@@ -241,8 +295,7 @@ const awog = {
     ipcRenderer.invoke('session:openWindow', { engineId, title }),
   // Close a session's popout ("bring it back here"). Addresses the window by SESSION
   // id, so a renderer can only close a session popout — never an arbitrary window.
-  closeSessionWindow: (engineId: string): Promise<boolean> =>
-    ipcRenderer.invoke('session:closeWindow', engineId),
+  closeSessionWindow: (engineId: string): Promise<boolean> => ipcRenderer.invoke('session:closeWindow', engineId),
   // Sessions currently owned by a popout window (read once on mount).
   listSessionWindows: (): Promise<string[]> => ipcRenderer.invoke('session:listWindows'),
   // Live changes to that set; returns an unsubscribe function.
@@ -269,10 +322,8 @@ const awog = {
     // it). The page keeps running — this is geometry, not a close. `rect` là
     // khung của CHÍNH bề mặt gọi: main giấu đúng view trong rect đó thay vì
     // nhổ khỏi window, nên bật lại không tốn reparent/reflow.
-    detach: (rect?: BrowserRect): Promise<void> =>
-      ipcRenderer.invoke('browser:detach', { rect }),
-    tabs: (scope?: string): Promise<BrowserTabList> =>
-      ipcRenderer.invoke('browser:tabs', { scope }),
+    detach: (rect?: BrowserRect): Promise<void> => ipcRenderer.invoke('browser:detach', { rect }),
+    tabs: (scope?: string): Promise<BrowserTabList> => ipcRenderer.invoke('browser:tabs', { scope }),
     open: (url: string, tabId?: string, scope?: string): Promise<BrowserTabInfo> =>
       ipcRenderer.invoke('browser:open', { url, tabId, scope }),
     // `wait: false` = trả về ngay khi tab đã tạo (đường người dùng bấm link); mặc
@@ -290,12 +341,9 @@ const awog = {
       ipcRenderer.invoke('browser:selectTab', { tabId, scope }),
     closeTab: (tabId: string, scope?: string): Promise<{ closed: string; remaining: number }> =>
       ipcRenderer.invoke('browser:closeTab', { tabId, scope }),
-    back: (tabId?: string, scope?: string): Promise<void> =>
-      ipcRenderer.invoke('browser:back', { tabId, scope }),
-    forward: (tabId?: string, scope?: string): Promise<void> =>
-      ipcRenderer.invoke('browser:forward', { tabId, scope }),
-    reload: (tabId?: string, scope?: string): Promise<void> =>
-      ipcRenderer.invoke('browser:reload', { tabId, scope }),
+    back: (tabId?: string, scope?: string): Promise<void> => ipcRenderer.invoke('browser:back', { tabId, scope }),
+    forward: (tabId?: string, scope?: string): Promise<void> => ipcRenderer.invoke('browser:forward', { tabId, scope }),
+    reload: (tabId?: string, scope?: string): Promise<void> => ipcRenderer.invoke('browser:reload', { tabId, scope }),
     // Chrome ⋯ menu: zoom theo bậc Chromium, DevTools rời, emulation mobile
     // (CDP). `open` vắng = toggle DevTools.
     zoom: (tabId: string | undefined, scope: string | undefined, action: 'in' | 'out' | 'reset') =>
@@ -306,30 +354,43 @@ const awog = {
       tabId: string | undefined,
       scope: string | undefined,
       on: boolean,
-    ): Promise<{ mobile: boolean }> =>
-      ipcRenderer.invoke('browser:mobile', { tabId, scope, on }),
-    popout: (scope?: string): Promise<void> =>
-      ipcRenderer.invoke('browser:popout', { scope }),
+    ): Promise<{ mobile: boolean }> => ipcRenderer.invoke('browser:mobile', { tabId, scope, on }),
+    popout: (scope?: string): Promise<void> => ipcRenderer.invoke('browser:popout', { scope }),
+    // Userscript đã chạy / khớp trang hiện tại của tab (cho menu ⋮).
+    userscriptsForTab: (
+      tabId?: string,
+      scope?: string,
+    ): Promise<{
+      ran: { id: string; name: string; error?: string }[]
+      matching: { id: string; name: string; enabled: boolean }[]
+    }> => ipcRenderer.invoke('browser:userscriptsForTab', { tabId, scope }),
     // Profile import: read the user's real Chrome/Edge/Brave/Arc profile into the
     // agent's jar. Ids only — main resolves them to paths itself.
     listBrowsers: (): Promise<BrowserImportSource[]> => ipcRenderer.invoke('browser:listBrowsers'),
     // The TCC workaround: let the user point at a Chromium profile dir through the
     // native picker (the dialog grants access). Returns a synthetic source whose
     // profile dir is an opaque token, or null when cancelled.
-    pickProfile: (): Promise<BrowserImportSource | null> =>
-      ipcRenderer.invoke('browser:pickProfile'),
+    pickProfile: (): Promise<BrowserImportSource | null> => ipcRenderer.invoke('browser:pickProfile'),
     importProfile: (
       browserId: string,
       profileDir: string,
       parts: { cookies: boolean; localStorage: boolean; indexedDb: boolean },
+      profileId?: string,
     ): Promise<BrowserImportReport> =>
       ipcRenderer.invoke('browser:importProfile', {
         browserId,
         profileDir,
         parts,
+        profileId,
       }),
-    // Wipe everything the agent's browser holds — the undo for an import.
-    clearData: (): Promise<void> => ipcRenderer.invoke('browser:clearData'),
+    // Wipe everything one profile's browser holds — the undo for an import.
+    clearData: (profileId?: string): Promise<void> => ipcRenderer.invoke('browser:clearData', { profileId }),
+    // Profile hiệu lực của scope (main hỏi sidecar nếu chưa biết).
+    profileOf: (scope?: string): Promise<{ profileId: string; proxied: boolean }> =>
+      ipcRenderer.invoke('browser:profileOf', { scope }),
+    // Thử tuyến của profile (proxy riêng nếu có): IP + quốc gia thấy từ ngoài.
+    testProxy: (profileId: string): Promise<{ ok: boolean; ip?: string; loc?: string; error?: string }> =>
+      ipcRenderer.invoke('browser:testProxy', { profileId }),
     // Staged LevelDB stores only land at boot, so finishing an import needs a
     // restart. Confirm in the renderer first: this kills running turns.
     relaunch: (): Promise<void> => ipcRenderer.invoke('browser:relaunch'),
@@ -353,32 +414,53 @@ const awog = {
     setSites: (sites: BrowserSites): Promise<void> => ipcRenderer.invoke('browser:setSites', sites),
     // Tab list changes — including the ones the AGENT causes. Returns unsubscribe.
     onChanged(handler: (list: BrowserTabList) => void): () => void {
-      const listener = (_e: unknown, list: BrowserTabList): void => handler(list)
-      ipcRenderer.on('browser:changed', listener)
-      return () => ipcRenderer.removeListener('browser:changed', listener)
+      return subscribeBrowserChanged(handler)
+    },
+    // Bộ bắt request của người dùng (Network inspector). Dữ liệu thô (cookie/token) — main giữ,
+    // chỉ renderer này đọc; agent/sidecar không có đường nào tới.
+    capture: {
+      start: (tabId: string, scope?: string): Promise<CaptureState> =>
+        ipcRenderer.invoke('browser:capture:start', { tabId, scope }),
+      stop: (tabId: string, scope?: string): Promise<CaptureState> =>
+        ipcRenderer.invoke('browser:capture:stop', { tabId, scope }),
+      clear: (tabId: string, scope?: string): Promise<CaptureState> =>
+        ipcRenderer.invoke('browser:capture:clear', { tabId, scope }),
+      state: (tabId: string, scope?: string): Promise<CaptureState> =>
+        ipcRenderer.invoke('browser:capture:state', { tabId, scope }),
+      list: (
+        tabId: string,
+        scope?: string,
+        sinceSeq?: number,
+      ): Promise<{ state: CaptureState; entries: CaptureSummary[] }> =>
+        ipcRenderer.invoke('browser:capture:list', { tabId, scope, sinceSeq }),
+      get: (tabId: string, id: string, scope?: string): Promise<CaptureEntry | null> =>
+        ipcRenderer.invoke('browser:capture:get', { tabId, scope, id }),
+      exportHar: (tabId: string, scope?: string, ids?: string[]): Promise<ExportHarResult> =>
+        ipcRenderer.invoke('browser:capture:exportHar', { tabId, scope, ids }),
+      replay: (tabId: string, request: ReplayRequest, scope?: string): Promise<ReplayResult> =>
+        ipcRenderer.invoke('browser:capture:replay', { tabId, scope, request }),
+      openWindow: (tabId: string, scope?: string): Promise<void> =>
+        ipcRenderer.invoke('browser:capture:openWindow', { tabId, scope }),
+      onEvent(handler: (ev: CaptureEvent) => void): () => void {
+        return subscribeCapture(handler)
+      },
     },
   },
   // Close the calling window — used by a preview popout's own ✕ / Esc. Main resolves
   // the target from the sender, so this can never close another window.
   closeSelf: (): Promise<void> => ipcRenderer.invoke('window:closeSelf'),
   vscodeAvailable: (): Promise<boolean> => ipcRenderer.invoke('shell:vscodeAvailable'),
-  openInVscode: (root: string, path: string): Promise<void> =>
-    ipcRenderer.invoke('shell:openInVscode', { root, path }),
-  pickFolder: (opts?: DialogOpts): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:pickFolder', opts ?? {}),
-  pickFolders: (opts?: DialogOpts): Promise<string[]> =>
-    ipcRenderer.invoke('dialog:pickFolders', opts ?? {}),
+  openInVscode: (root: string, path: string): Promise<void> => ipcRenderer.invoke('shell:openInVscode', { root, path }),
+  pickFolder: (opts?: DialogOpts): Promise<string | null> => ipcRenderer.invoke('dialog:pickFolder', opts ?? {}),
+  pickFolders: (opts?: DialogOpts): Promise<string[]> => ipcRenderer.invoke('dialog:pickFolders', opts ?? {}),
   // Resolve the absolute on-disk path of a dropped File/folder. Electron ≥32
   // removed the non-standard `File.path`; webUtils.getPathForFile is the
   // supported replacement (runs in the sandboxed preload). Returns '' if the
   // File did not originate from a real filesystem entry.
   getPathForFile: (file: File): string => webUtils.getPathForFile(file),
-  pickFile: (opts?: SavePathOpts): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:pickFile', opts ?? {}),
-  pickFiles: (opts?: SavePathOpts): Promise<string[]> =>
-    ipcRenderer.invoke('dialog:pickFiles', opts ?? {}),
-  savePath: (opts?: SavePathOpts): Promise<string | null> =>
-    ipcRenderer.invoke('dialog:savePath', opts ?? {}),
+  pickFile: (opts?: SavePathOpts): Promise<string | null> => ipcRenderer.invoke('dialog:pickFile', opts ?? {}),
+  pickFiles: (opts?: SavePathOpts): Promise<string[]> => ipcRenderer.invoke('dialog:pickFiles', opts ?? {}),
+  savePath: (opts?: SavePathOpts): Promise<string | null> => ipcRenderer.invoke('dialog:savePath', opts ?? {}),
 
   // Auto-update (ADR 0028). Renderer drives the schedule; main is reactive.
   getAppInfo: (): Promise<AppInfo> => ipcRenderer.invoke('app:info'),
@@ -430,8 +512,7 @@ const awog = {
 
   // Thông báo OS phát từ main — đọc/ghi công tắc ở Settings → Thông báo.
   getNotifyPrefs: (): Promise<NotifyPrefs> => ipcRenderer.invoke('notify:getPrefs'),
-  setNotifyPrefs: (prefs: NotifyPrefs): Promise<NotifyPrefs> =>
-    ipcRenderer.invoke('notify:setPrefs', prefs),
+  setNotifyPrefs: (prefs: NotifyPrefs): Promise<NotifyPrefs> => ipcRenderer.invoke('notify:setPrefs', prefs),
 
   // Desktop pet (desktop-pet). MAIN WINDOW side: push the prefs main acts on
   // (create/resize/move) + the status model, take back the pet's clicks and the
@@ -472,8 +553,7 @@ const awog = {
   // in main. Device tokens never cross this bridge (only public metadata).
   gateway: {
     status: (): Promise<GatewayStatus> => ipcRenderer.invoke('gateway:status'),
-    setEnabled: (on: boolean): Promise<GatewayStatus> =>
-      ipcRenderer.invoke('gateway:setEnabled', on),
+    setEnabled: (on: boolean): Promise<GatewayStatus> => ipcRenderer.invoke('gateway:setEnabled', on),
     listDevices: (): Promise<RemoteDevice[]> => ipcRenderer.invoke('gateway:listDevices'),
     createPairing: (): Promise<PairingInfo> => ipcRenderer.invoke('gateway:createPairing'),
     revokeDevice: (id: string): Promise<boolean> => ipcRenderer.invoke('gateway:revokeDevice', id),

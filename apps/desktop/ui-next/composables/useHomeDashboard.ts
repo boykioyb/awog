@@ -21,7 +21,7 @@ export type AttentionItem = {
   title: string
   sub: string
   action: 'reply' | 'review' | 'approve'
-  to: '/sessions' | '/tasks'
+  to: '/workbench' | '/tasks'
   // Sort key (ms epoch) — newest first.
   at: number
 }
@@ -78,7 +78,7 @@ export function useHomeDashboard() {
         title: s.title,
         sub,
         action,
-        to: '/sessions',
+        to: '/workbench',
         at: parseWhen(s.when),
       })
     }

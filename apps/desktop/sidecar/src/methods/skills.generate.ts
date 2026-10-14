@@ -9,7 +9,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { extractJson } from '../util/json-extract.js'
 
 const ModelSchema = z.string().min(1).max(200)
@@ -84,7 +84,6 @@ function buildSystemPrompt(currentSkill: unknown): string {
   return `${BASE_SYSTEM_PROMPT}${EDIT_INSTRUCTIONS}\n\nCurrent skill:\n${JSON.stringify(currentSkill, null, 2)}`
 }
 
-
 register('skills.generate', async (raw) => {
   const params = Params.parse(raw)
 
@@ -97,8 +96,8 @@ register('skills.generate', async (raw) => {
     mode: params.currentSkill ? 'edit' : 'create',
   })
 
-  // Pure-text generation through the Pi runtime (no tools).
-  const collected = await completePi({
+  // Pure-text generation through the one-shot runtime (no tools).
+  const collected = await complete({
     accountId: params.accountId,
     modelId,
     systemPrompt: buildSystemPrompt(params.currentSkill),

@@ -108,16 +108,14 @@ export function contextTokensFromChars(cc: ContextChars | undefined): number {
 
 // Context-window occupancy in tokens = the ITEMISED prompt segments only (the char
 // breakdown ÷4). Tool schemas and the tool results a turn accumulates are excluded
-// by design — user's call, 2026-09-12.
+// — it reports only the content AWOG can name and point at.
 //
-// What this buys and what it costs, both measured on real sessions: the gauge now
-// only ever reports content AWOG can name and point at, so every row in the popover
-// is something the user can act on. But it is NOT the size of the request: the same
-// turn that itemises ~28k here sent ~138k. So the gauge UNDER-reports the real
-// prompt, and everything derived from it inherits that — `free space` reads more
-// headroom than the window has, and auto-compact (threshold 85% in stores/sessions)
-// effectively stops firing on tool-heavy sessions, which is how the window fills up
-// without warning. Use measuredContextTokens when you need the true prompt size.
+// It is NOT the request size: the same turn that itemises ~28k here can send ~138k
+// once schemas + accumulated results are in. Until 2026-10-11 it owned the gauge
+// and auto-compact (user's call, 2026-09-12) — which read a session actually at 83%
+// as 4% and left auto-compact permanently blind on tool-heavy sessions. The gauge
+// now reads measuredContextTokens first; this remains the FALLBACK for sessions
+// whose `contextTokens` was never reported, and the source of the itemised rows.
 //
 // Returns 0 when no breakdown is available (caller falls back to its own estimate).
 export function contextTokensFromUsage(
@@ -128,8 +126,8 @@ export function contextTokensFromUsage(
 
 // The prompt size the provider actually billed for the last request of the turn
 // (input + cacheRead + cacheWrite — never `output`). Tool schemas + accumulated tool
-// results included, which is exactly the part the occupancy gauge no longer counts.
-// Used to derive the unmetered tool rows in the breakdown; 0 when unreported.
+// results included — this is what the occupancy gauge and auto-compact read first
+// (since 2026-10-11), and the same number the session list row shows.
 export function measuredContextTokens(usage: { contextTokens?: number } | undefined): number {
   return usage?.contextTokens && usage.contextTokens > 0 ? usage.contextTokens : 0
 }

@@ -20,7 +20,7 @@ import { z } from 'zod'
 import { stat } from 'node:fs/promises'
 import { isAbsolute, join, resolve } from 'node:path'
 import { register, RpcError } from '../transport/rpc.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { renderScan, scanRepo } from '../context/repo-scan.js'
 import { log } from '../util/logger.js'
 
@@ -115,19 +115,11 @@ register('projects.initDocs', async (raw) => {
     ? 'Repo NÀY đã có CLAUDE.md. Bản bạn viết là bản nháp để người dùng tự đối chiếu và trộn tay — cứ viết đầy đủ như thể viết mới.'
     : ''
 
-  const collected = await completePi({
+  const collected = await complete({
     accountId: params.accountId,
     modelId,
     systemPrompt: SYSTEM_PROMPT,
-    prompt: [
-      '<repo-scan>',
-      renderScan(scan),
-      '</repo-scan>',
-      '',
-      notes,
-      '',
-      'Viết nội dung CLAUDE.md ngay bây giờ.',
-    ]
+    prompt: ['<repo-scan>', renderScan(scan), '</repo-scan>', '', notes, '', 'Viết nội dung CLAUDE.md ngay bây giờ.']
       .filter((line) => line !== '')
       .join('\n'),
   })

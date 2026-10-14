@@ -28,6 +28,29 @@ type SessionMessagePart = { kind: 'text'; text: string } | SessionStep
 3. **UI store**: build `slot.parts` **live** bằng reducer arrival-order (Option B) — `appendDelta` nối/mở text part, typewriter chạy trên text part trailing, `upsertStep` đóng text run + push/merge/nest step, `slot.steps` derive từ parts (`syncSteps`). `finalize` success adopt `result.parts` (swap vô hình); `hydrate` re-nest (`normalizeParts`).
 4. **Render** (`SessionMessageItem.timelineBlocks`): có `parts` → dựng block từ `parts`; không có (message legacy) → derive từ `text + steps + textOffset`. Cả hai: **hoist `kind:'thinking'` lên đầu**, coalesce step liên tiếp thành 1 cluster.
 
+## Wire size — `sessions.get` `lite` (sửa 2026-10-09)
+
+Session viết-đọc-viết lại file lớn tích luỹ `detail` hàng chục MB (mỗi detail
+tới `FILE_DETAIL_MAX` ≈ 200KB); `sessions.get` chở nguyên → treo transcript. Hai
+đòn bẩy, cùng ngưỡng 8KB:
+
+- **Disk** (`sessions/jsonl.ts`): `serializeSessionJsonl` externalize detail
+  ≥8KB sang `{sessionDir}/details/<sha256>.json`, persist stub
+  `{kind, detailRef}`; đọc rehydrate đúng chỗ (dedupe nội dung theo sha — step
+  nằm trong `parts` VÀ `steps` share một blob; các message viết lại cùng file
+  cũng share).
+- **Wire** (`methods/sessions.get.ts`): `lite:true` (desktop `ensureLoaded`)
+  bỏ `steps` khi `parts` đã có (cùng object, phí gấp đôi) và stub detail ≥8KB
+  thành `{kind, deferred:true}` — UI fetch khi user mở step qua
+  `sessions.stepDetail` (`{sessionId, messageId, stepId}` → full detail).
+  Store cache kết quả trong `stepDetailCache` (Map reactive — transcript
+  `markRaw` nên không mutate block được); `detailKind` được giữ trên stub để
+  body biết render theo diff/file/plain. Mặc định `lite` TẮT: remote PWA + CLI
+  - `save-export` cần full message.
+
+Đo trên phiên thật 20.8MB: ghi lại → 11.4MB + 142 blob; `sessions.get` full
+16.08MB → lite 4.63MB (−71%).
+
 ## Acceptance
 
 - **AC1** Lượt nhiều vòng (text→tools→text) hiển thị text liền mạch, không cắt giữa chữ quanh task card.

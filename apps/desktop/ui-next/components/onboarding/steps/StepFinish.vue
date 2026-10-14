@@ -67,7 +67,7 @@ const onTour = () => {
 const onSession = () => {
   complete()
   sessions.create()
-  void navigateTo('/sessions')
+  void navigateTo('/workbench')
 }
 const onClose = () => {
   complete()

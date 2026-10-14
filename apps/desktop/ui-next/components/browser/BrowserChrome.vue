@@ -23,6 +23,8 @@
           type="button"
           class="bch-act"
           :title="t('browser.menu.title')"
+          @pointerenter="prefetchBrowserFrame"
+          @pointerdown="prefetchBrowserFrame"
           @click.stop="navBarEl?.openOverflow($event)"
         >
           <Icon
@@ -54,6 +56,7 @@
       :expanded="expanded"
       :can-expand="canExpand"
       :dock="dock"
+      :scope="scope"
       @back="emit('back')"
       @forward="emit('forward')"
       @reload="emit('reload')"
@@ -61,9 +64,8 @@
       @popout="emit('popout')"
       @set-dock="emit('set-dock', $event)"
       @toggle-expand="emit('toggle-expand')"
+      @open-url="onOpenUrl"
     />
-
-    <BrowserPinStrip :current-url="currentUrl" @open="emit('new-tab', $event)" />
 
     <BrowserTranslateStrip />
   </div>
@@ -73,7 +75,7 @@
 // Chrome của trình duyệt nhúng (ADR 0086) — GHÉP MẢNG, không còn chi tiết:
 //   BrowserTabs     — hàng tab + nút "+" (emit intent lên)
 //   BrowserNavBar   — nav + ô URL + ⋯ + cả ba menu (overflow/dock/actions)
-//   BrowserPinStrip / BrowserTranslateStrip — dải phụ dưới chrome
+//   BrowserTranslateStrip — dải phụ dưới chrome (thanh bookmark nằm trong NavBar)
 // DÙNG CHUNG cho hai bề mặt qua `surface`: view Browser của workspace panel và
 // cửa sổ popout (pages/browser.vue).
 //
@@ -83,6 +85,7 @@
 // cần đổi gì.
 import type { AwogBrowserTab } from '~/types/awog-bridge'
 import type { WorkspaceDockSide } from '~/stores/settings'
+import { prefetchBrowserFrame } from '~/composables/useEmbeddedBrowser'
 
 // 'panel' = view của workspace panel (có dock/expand/popout), 'window' = cửa sổ
 // popout (những nút đó vô nghĩa: OS lo, và nó đã ở cửa sổ riêng rồi),
@@ -107,6 +110,9 @@ const props = withDefaults(
     // vào rồi không có gì xảy ra.
     canExpand?: boolean
     dock?: WorkspaceDockSide
+    // Scope sở hữu bề mặt (engineId phiên; vắng = pool global) — để thanh bookmark và
+    // hồ sơ đúng ngay cả khi CHƯA có tab nào.
+    scope?: string
   }>(),
   {
     root: null,
@@ -116,6 +122,7 @@ const props = withDefaults(
     expanded: false,
     canExpand: true,
     dock: 'right',
+    scope: undefined,
   },
 )
 
@@ -146,9 +153,16 @@ const isPanel = computed(() => props.surface === 'panel')
 const activeTab = computed<AwogBrowserTab | null>(
   () => props.tabs.find((tab) => tab.tabId === props.activeTabId) ?? null,
 )
-// URL đang TẢI THẬT — dải pin đánh dấu "đang mở" trên trang thật, không phải
-// draft trong ô nhập.
-const currentUrl = computed(() => activeTab.value?.url ?? '')
+// Bookmark bấm từ thanh / ☆ / menu: 'new' = tab mới (agent sở hữu tab nên không bao giờ
+// "quay lại tab cũ"); 'current' = điều hướng tab đang xem qua đúng đường gõ URL.
+const onOpenUrl = (target: string, mode: 'current' | 'new'): void => {
+  if (mode === 'new') {
+    emit('new-tab', target)
+    return
+  }
+  url.value = target
+  emit('submit-url')
+}
 
 // Nút ⋮ ở hàng 1 nhưng menu ⋮ sống trong NavBar (giữ cùng chỗ với menu dock +
 // menu ⋯): chrome gọi `openOverflow` qua ref, forward nguyên MouseEvent để menu

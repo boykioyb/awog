@@ -124,9 +124,7 @@ describe('findForbiddenFlag', () => {
     // `cloudwatch list-metrics --namespace AWS/ECS`, tức là chặn toàn bộ lượt dò
     // tài nguyên của màn Giám sát, kèm câu "không ghi đè được ngữ cảnh" vô nghĩa.
     // Với kubectl nó vẫn bị chặn, nhưng ở `EXTRA_FORBIDDEN.kubectl` (run.ts).
-    expect(
-      findForbiddenFlag(['cloudwatch', 'list-metrics', '--namespace', 'AWS/ECS']),
-    ).toBeNull()
+    expect(findForbiddenFlag(['cloudwatch', 'list-metrics', '--namespace', 'AWS/ECS'])).toBeNull()
   })
 
   it('leaves a clean command alone', () => {
@@ -178,9 +176,7 @@ describe('sso — liệt kê là read, phát credential thì không', () => {
   // Đây là lệnh mà OUTPUT CHÍNH LÀ credential. Nó phải ở nguyên trong danh sách
   // chặn cứng, không được "đi ké" vì hai anh em của nó vừa vào allowlist read.
   it('aws sso get-role-credentials vẫn bị chặn cứng, không bao giờ là read', () => {
-    expect(findCredentialOp('aws', ['sso', 'get-role-credentials'])).toBe(
-      'sso get-role-credentials',
-    )
+    expect(findCredentialOp('aws', ['sso', 'get-role-credentials'])).toBe('sso get-role-credentials')
     expect(classify('aws', ['sso', 'get-role-credentials'])).not.toBe('read')
   })
 
@@ -189,9 +185,7 @@ describe('sso — liệt kê là read, phát credential thì không', () => {
   // thẳng và cả luồng A5 chết, mà nó không phải cờ ngữ cảnh.
   it('--access-token không bị nhầm thành cờ ngữ cảnh', () => {
     expect(findForbiddenFlag(['sso', 'list-accounts', '--access-token', 'x'])).toBe(null)
-    expect(findForbiddenFlag(['sso', 'list-account-roles', '--account-id', '229015218011'])).toBe(
-      null,
-    )
+    expect(findForbiddenFlag(['sso', 'list-account-roles', '--account-id', '229015218011'])).toBe(null)
   })
 })
 
@@ -323,9 +317,7 @@ describe('Mốc 3 — op mới của Explorer', () => {
   })
 
   it('s3api get-object ra đường dẫn bất kỳ → write (KHÔNG phải read)', () => {
-    expect(
-      classify('aws', ['s3api', 'get-object', '--bucket', 'b', '--key', 'k', '/tmp/out.bin']),
-    ).toBe('write')
+    expect(classify('aws', ['s3api', 'get-object', '--bucket', 'b', '--key', 'k', '/tmp/out.bin'])).toBe('write')
   })
 
   it('s3api get-object ra ~/.ssh → write', () => {
@@ -344,9 +336,7 @@ describe('Mốc 3 — op mới của Explorer', () => {
 
   it('`..` trong đường dẫn không lách qua được hàng rào cache', () => {
     const escaped = join(CACHE_OUT, '..', '..', '..', 'etc', 'passwd')
-    expect(classify('aws', ['s3api', 'get-object', '--bucket', 'b', '--key', 'k', escaped])).toBe(
-      'write',
-    )
+    expect(classify('aws', ['s3api', 'get-object', '--bucket', 'b', '--key', 'k', escaped])).toBe('write')
   })
 
   it('op ghi mới vẫn là write, không lọt qua cùng đường', () => {
@@ -372,23 +362,11 @@ describe('graph — lệnh dựng sơ đồ là read', () => {
     ['cloudfront list-distributions', ['cloudfront', 'list-distributions', '--max-items', '200']],
     ['apigateway get-rest-apis', ['apigateway', 'get-rest-apis', '--limit', '200']],
     ['apigateway get-rest-api', ['apigateway', 'get-rest-api', '--rest-api-id', 'abc123']],
-    [
-      'apigateway get-resources',
-      ['apigateway', 'get-resources', '--rest-api-id', 'abc123', '--embed', 'methods'],
-    ],
-    [
-      'lambda get-function-configuration',
-      ['lambda', 'get-function-configuration', '--function-name', 'api'],
-    ],
-    [
-      'lambda list-event-source-mappings',
-      ['lambda', 'list-event-source-mappings', '--function-name', 'api'],
-    ],
+    ['apigateway get-resources', ['apigateway', 'get-resources', '--rest-api-id', 'abc123', '--embed', 'methods']],
+    ['lambda get-function-configuration', ['lambda', 'get-function-configuration', '--function-name', 'api']],
+    ['lambda list-event-source-mappings', ['lambda', 'list-event-source-mappings', '--function-name', 'api']],
     ['ecs describe-services', ['ecs', 'describe-services', '--cluster', 'c', '--services', 's']],
-    [
-      'ecs describe-task-definition',
-      ['ecs', 'describe-task-definition', '--task-definition', 'td:1'],
-    ],
+    ['ecs describe-task-definition', ['ecs', 'describe-task-definition', '--task-definition', 'td:1']],
   ])('%s → read', (_label, args) => {
     expect(classify('aws', args)).toBe('read')
   })
@@ -397,9 +375,9 @@ describe('graph — lệnh dựng sơ đồ là read', () => {
   // `outfile`) — đúng ca `s3api get-object` của audit #1. Chúng KHÔNG được đi ké
   // vào allowlist chỉ vì `get-rest-api` vừa vào.
   it('get-export / get-sdk vẫn là write — chúng ghi file', () => {
-    expect(
-      classify('aws', ['apigateway', 'get-export', '--rest-api-id', 'a', '--stage-name', 's', 'out.json']),
-    ).toBe('write')
+    expect(classify('aws', ['apigateway', 'get-export', '--rest-api-id', 'a', '--stage-name', 's', 'out.json'])).toBe(
+      'write',
+    )
     expect(classify('aws', ['apigateway', 'get-sdk', '--rest-api-id', 'a', 'sdk.zip'])).toBe('write')
   })
 })

@@ -11,6 +11,7 @@
           <span class="flex-1 text-base text-foreground">
             {{ t('sessions.workspace.browser.import.title') }}
           </span>
+          <span v-if="profileName" class="chip">{{ profileName }}</span>
           <Button
             variant="ghost"
             class="h-auto p-0 flex size-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -248,12 +249,17 @@ import type { AwogBrowserImportReport, AwogBrowserImportSource } from '~/types/a
 import { formatBytes } from '~/utils/format-bytes'
 import { useConfirm } from '~/composables/useConfirm'
 import Button from '~/components/ui/button/Button.vue'
+import { useBrowserProfiles } from '~/composables/useBrowserProfiles'
 
-const props = defineProps<{ open: boolean }>()
+const props = withDefaults(defineProps<{ open: boolean; profileId?: string }>(), {
+  profileId: 'default',
+})
 const emit = defineEmits<{ (e: 'close'): void }>()
 
 const { t } = useI18n()
 const { confirm } = useConfirm()
+const profilesApi = useBrowserProfiles()
+const profileName = computed(() => profilesApi.resolve(props.profileId)?.name ?? '')
 
 const PARTS = ['cookies', 'localStorage', 'indexedDb'] as const
 
@@ -358,7 +364,12 @@ const runImport = async (): Promise<void> => {
   error.value = ''
   report.value = null
   try {
-    report.value = await api.importProfile(browserId.value, profileDir.value, { ...parts.value })
+    report.value = await api.importProfile(
+      browserId.value,
+      profileDir.value,
+      { ...parts.value },
+      props.profileId,
+    )
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
   } finally {
@@ -384,7 +395,7 @@ const clearAll = async (): Promise<void> => {
   })
   if (!ok) return
   try {
-    await bridge.value?.clearData()
+    await bridge.value?.clearData(props.profileId)
     report.value = null
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)

@@ -126,7 +126,7 @@
         :root="termRoot"
         :ready="termReady"
         :pty-key="`ses:${session.id}`"
-        :visible="active === 'Terminal'"
+        :visible="live === true && active === 'Terminal'"
       />
 
       <!-- Browser — the agent's embedded Chromium (ADR 0086). Kept mounted once
@@ -191,6 +191,10 @@ const props = withDefaults(
     // Views routed to this panel's dock side, in order, plus the active one.
     tabs: string[]
     active: string | null
+    // Phiên này đang là view hiển thị của SessionDetail (false khi KeepAlive giữ
+    // instance khuất mắt). Terminal dùng nó để claim khoá runner "đang hiện" — một
+    // panel bị cache không được phép hút lệnh Run về shell không ai thấy.
+    live?: boolean
     // Fixed dock side of this panel + its size along the docked axis (width when
     // right, height when bottom). The parent owns the value so it can persist.
     dock: WorkspaceDockSide

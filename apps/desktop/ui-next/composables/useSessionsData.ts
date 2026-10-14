@@ -7,7 +7,7 @@
 // (a sample project, a sample account, a sample diff), so they are gone.
 
 import type { ProviderName } from '~/stores/settings'
-import type { InfraCommandClass, InfraContext, TodoStatus } from '~/types'
+import type { ImportedFrom, InfraCommandClass, InfraContext, TodoStatus } from '~/types'
 import type { CliKind } from '~/composables/useTerminalApi'
 import {
   providerModelsShown,
@@ -70,6 +70,13 @@ export type SubStep = {
   result?: string
   detail?: string
   detailKind?: StepDetailKind
+  // The step's detail body was kept OFF the wire (`sessions.get` lite) because it
+  // exceeded the defer threshold — the store lazily fetches it on expand via
+  // `sessions.stepDetail`. `detail` stays undefined until the fetch lands.
+  detailDeferred?: boolean
+  // `target` shipped as a 512B preview (a terminal step's full heredoc command
+  // can be tens of KB) — the full string arrives via the same stepDetail fetch.
+  targetDeferred?: boolean
 }
 export type SubAgent = { agent: string; steps: SubStep[] }
 
@@ -85,6 +92,12 @@ export type StepBlock = {
   result?: string
   detail?: string
   detailKind?: StepDetailKind
+  // Same contract as SubStep.detailDeferred — the detail body arrives late via
+  // sessions.stepDetail; render a loading hint instead of "(no output)".
+  detailDeferred?: boolean
+  // Same contract as SubStep.targetDeferred — header shows a preview; the full
+  // target resolves through the shared stepDetail fetch.
+  targetDeferred?: boolean
   sub?: SubAgent
   eid?: string
   status?: 'running' | 'done' | 'error'
@@ -92,6 +105,9 @@ export type StepBlock = {
   // Such blocks are NOT rendered inline (SessionMessageItem skips them); the docked
   // SessionTodoPanel scans for the latest one. `undefined` = not a todo step.
   todos?: Todo[]
+  // browser_tool navigate/tab_new có url: trang agent vừa mở. Block có field này được
+  // SessionMessageItem tách khỏi nhóm activities và vẽ thành SessionBrowserCard.
+  page?: { url: string }
 }
 export type PlanBlock = {
   kind: 'plan'
@@ -527,6 +543,15 @@ export type SystemMessage = {
   eid?: string
   // See UserMessage.via.
   via?: CliKind
+  // Native Claude CLI compaction marker (sidecar SessionMessage.compaction): the
+  // divider renders localised text from these figures instead of `text`.
+  compaction?: NativeCompaction
+}
+export type NativeCompaction = {
+  trigger: 'manual' | 'auto'
+  preTokens: number
+  postTokens?: number
+  durationMs?: number
 }
 export type SessionMessage = UserMessage | AssistantMessage | SystemMessage
 
@@ -651,6 +676,9 @@ export type QueuedMessage = {
   // trả lời nhanh: sendMessage đánh dấu comm để sidecar kẹp model rẻ + effort
   // thấp cho đúng lượt đó.
   comm?: boolean
+  // Wake of a live Claude CLI process (ADR 0099): sendMessage must adopt the turn that
+  // process already started rather than send `text`. Kept through a re-queue.
+  attachWake?: boolean
 }
 
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.
@@ -842,6 +870,9 @@ export type Session = {
   // lone-agent do dispatch từ một board item tạo; danh sách session ẩn các
   // phiên "của board" (chúng sống trong board/Teams UI).
   origin?: 'board'
+  // Phiên được nhập từ Claude Desktop / CLI (mirrors sidecar header.importedFrom) —
+  // hiện badge nguồn; gửi tiếp bị chặn nếu nó có thể đang mở ở nơi gốc.
+  importedFrom?: ImportedFrom
   // Cấu hình spawn đã nhớ của nhóm — chỉ có nghĩa trên phiên GỐC (mirrors sidecar
   // Session.spawnConfig). Ghi/xoá qua `sessions.setSpawnConfig`, KHÔNG qua
   // sessions.upsert ("ngừng điều phối" phải xoá hẳn key).
@@ -1001,7 +1032,7 @@ export const STATUS_COLOR: Record<SessionStatus, string> = {
   idle: 'var(--textFaint)',
   streaming: 'var(--accent)',
   awaiting: 'var(--amber)',
-  done: 'var(--textFaint)',
+  done: 'var(--success)',
   error: 'var(--danger)',
 }
 

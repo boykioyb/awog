@@ -14,7 +14,7 @@ export function useSessionTaskLink() {
   // exists (deleted) so the caller can surface a "session not found" hint.
   async function openSession(engineId: string): Promise<boolean> {
     const ok = await sessions.openByEngineId(engineId)
-    if (ok) await navigateTo('/sessions')
+    if (ok) await navigateTo('/workbench')
     return ok
   }
 
@@ -31,7 +31,7 @@ export function useSessionTaskLink() {
   // so the user can ask the agent about the task's results.
   async function discussInSession(taskId: string, projectId: string, title: string): Promise<void> {
     sessions.createForTask(taskId, projectId, title)
-    await navigateTo('/sessions')
+    await navigateTo('/workbench')
   }
 
   // Create a fresh session bound to an SSH host (aboutSshHostId) and navigate to it
@@ -44,7 +44,7 @@ export function useSessionTaskLink() {
     title: string,
   ): Promise<void> {
     sessions.createForSshHost(hostId, projectId, title)
-    await navigateTo('/sessions')
+    await navigateTo('/workbench')
   }
 
   // Open the SSH page (used by the SessionDetail "working with host" banner). The

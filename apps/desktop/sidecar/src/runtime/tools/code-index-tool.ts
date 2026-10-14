@@ -50,22 +50,15 @@ export const CODE_INDEX_TEXT = {
     'LIMITS, state them if they matter: the index is built by a lightweight parser (regex + brace counting), NOT the TypeScript compiler. It sees top-level functions/classes/interfaces/types/enums/consts and class methods, but NOT symbols created by destructuring (`const { a } = x`), object-literal methods, or anything generated at runtime. It matches names EXACTLY and cannot tell two same-named symbols apart. So "refs found nothing" means "the index has no record", not "nothing calls it" — confirm with Grep before deleting anything.',
   action:
     'define = where a symbol is declared; refs = every place that calls/uses it; blast = which files break if you change a given file; status = index coverage and freshness.',
-  symbol:
-    'Exact, case-sensitive symbol name for define/refs (e.g. "createAwogToolDefinitions"). Not a pattern.',
+  symbol: 'Exact, case-sensitive symbol name for define/refs (e.g. "createAwogToolDefinitions"). Not a pattern.',
   path: 'For blast: the file to change (repo-relative, absolute, or a unique path suffix like "sessions/runner.ts"). For define/refs: optional substring filter on the file path.',
   depth: `For blast: how many import hops to follow (default ${DEFAULT_BLAST_DEPTH}, max ${MAX_BLAST_DEPTH}).`,
 } as const
 
 const Params = Type.Object({
-  action: Type.Union(
-    [
-      Type.Literal('define'),
-      Type.Literal('refs'),
-      Type.Literal('blast'),
-      Type.Literal('status'),
-    ],
-    { description: CODE_INDEX_TEXT.action },
-  ),
+  action: Type.Union([Type.Literal('define'), Type.Literal('refs'), Type.Literal('blast'), Type.Literal('status')], {
+    description: CODE_INDEX_TEXT.action,
+  }),
   symbol: Type.Optional(Type.String({ description: CODE_INDEX_TEXT.symbol })),
   path: Type.Optional(Type.String({ description: CODE_INDEX_TEXT.path })),
   depth: Type.Optional(Type.Number({ description: CODE_INDEX_TEXT.depth })),
@@ -105,21 +98,14 @@ function group(label: string, paths: string[]): string[] {
   if (paths.length === 0) return []
   const shown = paths.slice(0, MAX_LISTED_PER_GROUP)
   const more = paths.length - shown.length
-  return [
-    `${label} (${paths.length}):`,
-    ...shown.map((p) => `  ${p}`),
-    ...(more > 0 ? [`  …and ${more} more`] : []),
-  ]
+  return [`${label} (${paths.length}):`, ...shown.map((p) => `  ${p}`), ...(more > 0 ? [`  …and ${more} more`] : [])]
 }
 
 // Phần thân dùng chung cho cả hai runtime — nhánh Pi gọi qua AgentTool, nhánh
 // Claude SDK gọi qua in-process MCP server. Một bản duy nhất, nên mọi cap
 // (MAX_TOTAL_CHARS, MAX_LISTED_PER_GROUP) và mọi lời cảnh báo về giới hạn của
 // parser không thể trôi khỏi nhau giữa hai nhánh.
-export async function runCodeIndex(
-  cwd: string,
-  params: CodeIndexRunParams,
-): Promise<CodeIndexRunResult> {
+export async function runCodeIndex(cwd: string, params: CodeIndexRunParams): Promise<CodeIndexRunResult> {
   const action = params.action
   let built
   try {
@@ -139,8 +125,7 @@ export async function runCodeIndex(
   if (index.source === 'walk') {
     caveats.push('This root is not a git repository, so .gitignore was not applied.')
   }
-  const withCaveats = (text: string): string =>
-    caveats.length > 0 ? `${text}\n\nNote: ${caveats.join(' ')}` : text
+  const withCaveats = (text: string): string => (caveats.length > 0 ? `${text}\n\nNote: ${caveats.join(' ')}` : text)
 
   if (action === 'status') {
     const stats = await indexStats(index)
@@ -178,10 +163,7 @@ export async function runCodeIndex(
       `Changing ${target} can affect ${total} file(s) (import depth ${radius.depth}):`,
       ...group('imported directly by', radius.direct),
       ...group(`reachable through further imports (depth 2..${radius.depth})`, radius.transitive),
-      ...group(
-        'reference a symbol it exports without importing it (auto-import / same-name)',
-        radius.symbolUsers,
-      ),
+      ...group('reference a symbol it exports without importing it (auto-import / same-name)', radius.symbolUsers),
     ]
     if (radius.truncated) lines.push('…blast radius hit its file cap; the real reach is larger.')
     const clamped = clampForLlm(lines, {

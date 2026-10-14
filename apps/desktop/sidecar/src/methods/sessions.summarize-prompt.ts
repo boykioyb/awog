@@ -15,7 +15,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { loadSession } from '../sessions/store.js'
-import { streamCompletePi } from '../runtime/complete.js'
+import { streamComplete } from '../runtime/complete.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import type { ProviderName } from '../types/shared.js'
@@ -100,7 +100,7 @@ register('sessions.summarizePrompt', async (raw) => {
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential fallback
-      const out = await streamCompletePi(
+      const out = await streamComplete(
         {
           provider: params.provider,
           ...(params.accountId ? { accountId: params.accountId } : {}),
@@ -131,8 +131,5 @@ register('sessions.summarizePrompt', async (raw) => {
     }
   }
   if (lastErr instanceof RpcError) throw lastErr
-  throw new RpcError(
-    -32021,
-    `summarizePrompt failed: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
-  )
+  throw new RpcError(-32021, `summarizePrompt failed: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`)
 })

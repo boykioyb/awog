@@ -21,5 +21,5 @@ import { useForwardAttrs } from '~/composables/useForwardAttrs'
 
 defineOptions({ inheritAttrs: false })
 
-const rest = useForwardAttrs('class')
+const [rest] = useForwardAttrs('class')
 </script>

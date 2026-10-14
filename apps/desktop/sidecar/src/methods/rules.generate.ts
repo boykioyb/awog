@@ -5,7 +5,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { extractJson } from '../util/json-extract.js'
 
 const ModelSchema = z.string().min(1).max(200)
@@ -54,13 +54,15 @@ function buildSystemPrompt(currentRule: unknown): string {
   return `${BASE_SYSTEM_PROMPT}${EDIT_INSTRUCTIONS}\n\nCurrent rule:\n${JSON.stringify(currentRule, null, 2)}`
 }
 
-
 register('rules.generate', async (raw) => {
   const params = Params.parse(raw)
   const modelId = params.modelId ?? 'claude-haiku-4-5'
-  log.info('rules.generate', { model: modelId, mode: params.currentRule ? 'edit' : 'create' })
+  log.info('rules.generate', {
+    model: modelId,
+    mode: params.currentRule ? 'edit' : 'create',
+  })
 
-  const collected = await completePi({
+  const collected = await complete({
     accountId: params.accountId,
     modelId,
     systemPrompt: buildSystemPrompt(params.currentRule),

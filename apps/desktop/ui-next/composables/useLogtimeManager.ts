@@ -717,6 +717,7 @@ function createManager() {
         store.composeLine({
           title: s.title,
           projectLabel: labelOf(s.projectKey),
+          projectKey: s.projectKey,
           kind: s.kind,
           refId: s.refId,
           ...(s.issue !== undefined ? { issue: s.issue } : {}),
@@ -778,7 +779,7 @@ function createManager() {
       toast({ color: 'warning', title: t('logtime.suggest.sessionGone') })
       return
     }
-    await navigateTo('/sessions')
+    await navigateTo('/workbench')
   }
 
   // ─── Soạn bằng AI ────────────────────────────────────────────────────────────
@@ -915,6 +916,7 @@ function createManager() {
       title: s,
       seed: s,
       projectLabel: labelOf(opts.projectKey),
+      projectKey: opts.projectKey,
       kind: opts.kind ?? 'session',
       ...(opts.sourceRefId ? { refId: opts.sourceRefId } : {}),
       ...(opts.issue !== undefined ? { issue: opts.issue } : {}),

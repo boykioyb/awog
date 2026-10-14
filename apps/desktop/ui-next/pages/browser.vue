@@ -13,6 +13,7 @@
         :active-tab-id="activeTabId"
         :selection-text="selectionText"
         surface="window"
+        :scope="popoutScope"
         @select-tab="selectTab"
         @close-tab="closeTab"
         @new-tab="newTab"
@@ -33,7 +34,7 @@
         <!-- Ở popout thì "chỗ khác" gần như luôn là cửa sổ CHÍNH (dock bất kỳ) —
              cửa sổ này là renderer riêng nên `!isOwner` không xảy ra được. -->
         <BrowserElsewhere v-if="elsewhere" where="window" @takeover="takeOver" />
-        <BrowserEmptyState v-else-if="empty" @open="onEmptyOpen" />
+        <BrowserEmptyState v-else-if="empty" :scope="popoutScope" @open="onEmptyOpen" />
       </div>
 
       <Teleport to="body">

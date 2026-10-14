@@ -91,9 +91,7 @@ describe('readStaticSecrets — ba khoá của đúng profile được yêu cầ
   })
 
   it('khoá trùng trong cùng section: cái SAU thắng', async () => {
-    await seedCredentials(
-      ['[dev]', 'aws_access_key_id = FIRST', 'aws_access_key_id = SECOND', ''].join('\n'),
-    )
+    await seedCredentials(['[dev]', 'aws_access_key_id = FIRST', 'aws_access_key_id = SECOND', ''].join('\n'))
     expect((await readStaticSecrets('dev')).accessKeyId).toBe('SECOND')
   })
 
@@ -148,9 +146,7 @@ describe('readStaticSecrets — trạng thái rỗng và đầu vào không hợ
   })
 
   it('section có nhưng khoá rỗng (hoặc bị block thụt che) ⇒ không trả giá trị', async () => {
-    await seedCredentials(
-      ['[dev]', 'aws_access_key_id =', '  aws_secret_access_key = NESTED', ''].join('\n'),
-    )
+    await seedCredentials(['[dev]', 'aws_access_key_id =', '  aws_secret_access_key = NESTED', ''].join('\n'))
     const got = await readStaticSecrets('dev')
     expect(got.accessKeyId).toBe('')
     expect(got.secretAccessKey).toBe('')

@@ -38,19 +38,9 @@ const SESSION_ID_RE = /^[a-z0-9-]+$/
 // có phiên của một run đang sống (đối xứng assignee_member của board tools —
 // materialize qua sessions.materializeMember). Chặt đúng hình để rác không
 // lọt vào field mà cả agent tool lẫn UI đều đọc.
-const ASSIGNEE_REF_RE =
-  /^(agent|team):(global|project)\|[a-z0-9-]*\|[a-z0-9-]+$|^member:[a-z0-9-]+\|.{1,160}$/
+const ASSIGNEE_REF_RE = /^(agent|team):(global|project)\|[a-z0-9-]*\|[a-z0-9-]+$|^member:[a-z0-9-]+\|.{1,160}$/
 
-const STATUS_ENUM = z.enum([
-  'backlog',
-  'todo',
-  'in_progress',
-  'in_review',
-  'changes',
-  'blocked',
-  'done',
-  'cancelled',
-])
+const STATUS_ENUM = z.enum(['backlog', 'todo', 'in_progress', 'in_review', 'changes', 'blocked', 'done', 'cancelled'])
 
 // Status "sống" — đổi chủ khi item đứng ở đây thì người nhận mới phải được báo
 // ngay (đối xứng luật wake của team_item_*). backlog = bãi đỗ, done/cancelled
@@ -91,7 +81,7 @@ async function wakeAssignee(item: BoardItem, prev: BoardItem | undefined): Promi
       text:
         `[board] "${item.title}" (${item.id}) was assigned to you — status ${item.status}. ` +
         'Acknowledge FIRST with team_item_comment in the thread — before any other work — then call team_item_get for the full brief and move it to in_progress when you start. ' +
-        'Keep the thread posted as you make progress — it is the team\'s shared view of your work.',
+        "Keep the thread posted as you make progress — it is the team's shared view of your work.",
     })
   } catch (err) {
     log.warn('boards.upsert: assignee wake failed', {
@@ -113,8 +103,7 @@ async function recordTransitions(item: BoardItem, prev: BoardItem | undefined): 
     if (item.assigneeSessionId) {
       try {
         const title =
-          (await listSessionSummaries()).find((s) => s.id === item.assigneeSessionId)?.title ??
-          item.assigneeSessionId
+          (await listSessionSummaries()).find((s) => s.id === item.assigneeSessionId)?.title ?? item.assigneeSessionId
         parts.push(`assigned to "${title}"`)
       } catch {
         parts.push('assigned')
@@ -130,9 +119,7 @@ async function recordTransitions(item: BoardItem, prev: BoardItem | undefined): 
     if (item.parentId) {
       let parent = item.parentId
       try {
-        parent =
-          (await listBoardItems(item.projectId)).find((i) => i.id === item.parentId)?.title ??
-          item.parentId
+        parent = (await listBoardItems(item.projectId)).find((i) => i.id === item.parentId)?.title ?? item.parentId
       } catch {
         // Tên cha tắc tra — rơi về id, vạch vẫn ghi được.
       }
@@ -165,7 +152,11 @@ const Params = z.object({
     // Có `id` = update item đó; vắng = tạo mới.
     id: z.string().max(64).regex(MESSAGE_ID_RE).optional(),
     // Store làm phẳng + cắt một dòng ở trần của nó; biên chỉ chặn payload vô lý.
-    title: z.string().min(1).max(MAX_ITEM_TITLE_LEN * 4).optional(),
+    title: z
+      .string()
+      .min(1)
+      .max(MAX_ITEM_TITLE_LEN * 4)
+      .optional(),
     desc: z.string().max(MAX_ITEM_DESC_LEN).optional(),
     // null = gỡ assignee. Vắng = giữ nguyên (khác biệt này là lý do không thể
     // gộp chung `undefined`/`null` trong một schema tuỳ ý).
@@ -177,7 +168,10 @@ const Params = z.object({
     // Biên zod giữ payload sạch hình; store (cleanAssigneeConfig) chặt giá trị.
     assigneeConfig: z
       .record(
-        z.string().max(180).regex(/^(self|lead|member:[^|]{1,120})$/),
+        z
+          .string()
+          .max(180)
+          .regex(/^(self|lead|member:[^|]{1,120})$/),
         z.object({
           provider: z.enum(['anthropic', 'openai', 'google']).optional(),
           modelId: z.string().min(1).max(200).optional(),

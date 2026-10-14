@@ -941,7 +941,7 @@ const statusColor = (s: Session): string => STATUS_COLOR[s.status] ?? 'var(--mut
 
 function openSession(s: Session): void {
   void sessionsStore.openByEngineId(s.engineId ?? '')
-  void navigateTo(`/sessions?id=${encodeURIComponent(s.engineId ?? '')}`)
+  void navigateTo(`/workbench?id=${encodeURIComponent(s.engineId ?? '')}`)
 }
 
 // ── Chat with agent — materialize spec thành phiên chat thật (agents.run) ──
@@ -968,7 +968,7 @@ async function chatWithAgent(projectId: string | null): Promise<void> {
     )
     if (!res?.sessionId) return
     void sessionsStore.openByEngineId(res.sessionId)
-    void navigateTo(`/sessions?id=${encodeURIComponent(res.sessionId)}`)
+    void navigateTo(`/workbench?id=${encodeURIComponent(res.sessionId)}`)
   } catch (err) {
     toast.add({
       title: t('agents.detail.chatFailed'),

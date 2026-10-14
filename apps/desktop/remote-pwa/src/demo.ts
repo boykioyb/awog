@@ -30,13 +30,18 @@ const iso = (minAgo: number): string => new Date(Date.now() - minAgo * 60_000).t
 const demoTerms: { id: string; sessionId: string }[] = []
 let sshConnSeq = 0
 let fwdSeq = 0
-const sshConnsDemo: { connId: string; hostId: string }[] = [
-  { connId: 'conn-1', hostId: 'prod-web' },
-]
+const sshConnsDemo: { connId: string; hostId: string }[] = [{ connId: 'conn-1', hostId: 'prod-web' }]
 const fwdsDemo: {
   forwardId: string
   connId: string
-  forward: { id: string; type: 'local' | 'remote' | 'dynamic'; label?: string; bindPort: number; destHost: string; destPort: number }
+  forward: {
+    id: string
+    type: 'local' | 'remote' | 'dynamic'
+    label?: string
+    bindPort: number
+    destHost: string
+    destPort: number
+  }
   status: 'active' | 'error'
 }[] = [
   {
@@ -224,9 +229,17 @@ const transcripts = new Map<string, FullSession>([
               label: 'Bash',
               target: 'pnpm typecheck',
               status: 'done',
-              detail: { kind: 'terminal', command: 'pnpm typecheck', output: 'src/demo.ts — no errors\n\nExit code: 0', exitCode: 0 },
+              detail: {
+                kind: 'terminal',
+                command: 'pnpm typecheck',
+                output: 'src/demo.ts — no errors\n\nExit code: 0',
+                exitCode: 0,
+              },
             },
-            { kind: 'text', text: 'NavBar + TabBar xong, typecheck sạch. Đang viết edge-swipe gesture.' },
+            {
+              kind: 'text',
+              text: 'NavBar + TabBar xong, typecheck sạch. Đang viết edge-swipe gesture.',
+            },
           ],
         },
         {
@@ -253,13 +266,20 @@ const transcripts = new Map<string, FullSession>([
         responseStyle: 'Default',
       },
       messages: [
-        { id: 'u1', role: 'user', text: 'Viết spec tính năng backlink cho wiki' },
+        {
+          id: 'u1',
+          role: 'user',
+          text: 'Viết spec tính năng backlink cho wiki',
+        },
         {
           id: 'm1',
           role: 'agent',
           text: '',
           parts: [
-            { kind: 'text', text: 'Đã khảo sát wiki store 2-tier. Đề xuất plan:' },
+            {
+              kind: 'text',
+              text: 'Đã khảo sát wiki store 2-tier. Đề xuất plan:',
+            },
             {
               id: 'p1',
               kind: 'plan',
@@ -314,13 +334,20 @@ const transcripts = new Map<string, FullSession>([
         responseStyle: 'feynman',
       },
       messages: [
-        { id: 'u1', role: 'user', text: 'Viết draft về local-first AI cho blog' },
+        {
+          id: 'u1',
+          role: 'user',
+          text: 'Viết draft về local-first AI cho blog',
+        },
         {
           id: 'm1',
           role: 'agent',
           text: '',
           parts: [
-            { kind: 'text', text: 'Draft xong ở `drafts/local-first-ai.md`. Một câu hỏi trước khi chốt:' },
+            {
+              kind: 'text',
+              text: 'Draft xong ở `drafts/local-first-ai.md`. Một câu hỏi trước khi chốt:',
+            },
             {
               id: 'q1',
               kind: 'question',
@@ -415,7 +442,13 @@ const taskDetails = new Map<string, RemoteTaskDetail>([
       currentNodeId: 'n3',
       phases: [
         { nodeId: 'n1', status: 'completed', skillName: 'Lên plan', runCount: 1, lastOutput: 'plan.md → 4 phases' },
-        { nodeId: 'n2', status: 'completed', skillName: 'Implement gateway calls', runCount: 2, lastOutput: 'typecheck sạch' },
+        {
+          nodeId: 'n2',
+          status: 'completed',
+          skillName: 'Implement gateway calls',
+          runCount: 2,
+          lastOutput: 'typecheck sạch',
+        },
         { nodeId: 'n3', status: 'running', skillName: 'Verify UI', runCount: 1, lastOutput: 'đang chạy playwright…' },
         { nodeId: 'n4', status: 'queued', skillName: 'Mở PR', runCount: 0 },
       ],
@@ -442,7 +475,13 @@ const taskDetails = new Map<string, RemoteTaskDetail>([
       currentNodeId: 'b2',
       phases: [
         { nodeId: 'b1', status: 'completed', skillName: 'Backup', runCount: 1, lastOutput: 'snapshot ok' },
-        { nodeId: 'b2', status: 'failed', skillName: 'Migrate 1-4', runCount: 1, lastOutput: 'lock timeout ở migration 3' },
+        {
+          nodeId: 'b2',
+          status: 'failed',
+          skillName: 'Migrate 1-4',
+          runCount: 1,
+          lastOutput: 'lock timeout ở migration 3',
+        },
         { nodeId: 'b3', status: 'queued', skillName: 'Migrate 5-9', runCount: 0 },
       ],
     },
@@ -594,11 +633,9 @@ const handlers: Record<string, (p: Params) => unknown | Promise<unknown>> = {
     // Duyệt gate → "engine" chạy nốt một đoạn rồi xong lượt (drainPending của
     // store sẽ tự bắn tin nhắn đang xếp hàng — đúng luồng thật).
     if (p.decision === 'allow') {
-      void streamReply('s1', 'm-run', 'Đã được duyệt — chạy `pnpm build`: ✓ built in 1.67s. Xong.').then(
-        () => {
-          s1Running = false
-        },
-      )
+      void streamReply('s1', 'm-run', 'Đã được duyệt — chạy `pnpm build`: ✓ built in 1.67s. Xong.').then(() => {
+        s1Running = false
+      })
     } else {
       emit('session.message.done', {
         sessionId: 's1',
@@ -692,10 +729,38 @@ const handlers: Record<string, (p: Params) => unknown | Promise<unknown>> = {
     ahead: 2,
     behind: 0,
     files: [
-      { path: 'src/App.vue', changeType: 'modified', stageState: 'unstaged', isBinary: false, additions: 132, deletions: 40 },
-      { path: 'src/components/NavBar.vue', changeType: 'added', stageState: 'unstaged', isBinary: false, additions: 96, deletions: 0 },
-      { path: 'src/components/TabBar.vue', changeType: 'added', stageState: 'unstaged', isBinary: false, additions: 74, deletions: 0 },
-      { path: 'src/style.css', changeType: 'modified', stageState: 'unstaged', isBinary: false, additions: 61, deletions: 12 },
+      {
+        path: 'src/App.vue',
+        changeType: 'modified',
+        stageState: 'unstaged',
+        isBinary: false,
+        additions: 132,
+        deletions: 40,
+      },
+      {
+        path: 'src/components/NavBar.vue',
+        changeType: 'added',
+        stageState: 'unstaged',
+        isBinary: false,
+        additions: 96,
+        deletions: 0,
+      },
+      {
+        path: 'src/components/TabBar.vue',
+        changeType: 'added',
+        stageState: 'unstaged',
+        isBinary: false,
+        additions: 74,
+        deletions: 0,
+      },
+      {
+        path: 'src/style.css',
+        changeType: 'modified',
+        stageState: 'unstaged',
+        isBinary: false,
+        additions: 61,
+        deletions: 12,
+      },
     ],
     isMerging: false,
     isRebasing: false,
@@ -712,12 +777,33 @@ const handlers: Record<string, (p: Params) => unknown | Promise<unknown>> = {
           {
             header: '@@ -34,6 +34,9 @@',
             lines: [
-              { kind: 'context', oldLineNum: 34, newLineNum: 34, content: "import { route } from './store'" },
-              { kind: 'add', newLineNum: 35, content: "import TabBar from './components/TabBar.vue'" },
-              { kind: 'add', newLineNum: 36, content: "import { navPop } from './store'" },
+              {
+                kind: 'context',
+                oldLineNum: 34,
+                newLineNum: 34,
+                content: "import { route } from './store'",
+              },
+              {
+                kind: 'add',
+                newLineNum: 35,
+                content: "import TabBar from './components/TabBar.vue'",
+              },
+              {
+                kind: 'add',
+                newLineNum: 36,
+                content: "import { navPop } from './store'",
+              },
               { kind: 'context', oldLineNum: 35, newLineNum: 37, content: '' },
-              { kind: 'del', oldLineNum: 36, content: 'const inSession = computed(() => route.value === \'session\')' },
-              { kind: 'add', newLineNum: 38, content: '// Edge swipe-back: drag từ mép trái ≤26px' },
+              {
+                kind: 'del',
+                oldLineNum: 36,
+                content: "const inSession = computed(() => route.value === 'session')",
+              },
+              {
+                kind: 'add',
+                newLineNum: 38,
+                content: '// Edge swipe-back: drag từ mép trái ≤26px',
+              },
             ],
           },
         ],
@@ -782,7 +868,12 @@ const handlers: Record<string, (p: Params) => unknown | Promise<unknown>> = {
         { name: 'mobile-remote-ui.md', path: 'docs/features/mobile-remote-ui.md', kind: 'file', size: 5400 },
       ],
       'docs/decisions': [
-        { name: '0067-mobile-remote-control.md', path: 'docs/decisions/0067-mobile-remote-control.md', kind: 'file', size: 8900 },
+        {
+          name: '0067-mobile-remote-control.md',
+          path: 'docs/decisions/0067-mobile-remote-control.md',
+          kind: 'file',
+          size: 8900,
+        },
       ],
     }
     return { entries: tree[String(p.path ?? '')] ?? [] }
@@ -806,7 +897,8 @@ const handlers: Record<string, (p: Params) => unknown | Promise<unknown>> = {
       },
       'CLAUDE.md': {
         language: 'markdown',
-        content: '# AWOG\n\nArtifact Workflow Orchestrate Guild — AI Team OS local-first, đóng gói desktop qua Electron.\n\n## Quy ước\n\n- Tài liệu tiếng Việt, code tiếng Anh.\n- Một file = một chủ đề.',
+        content:
+          '# AWOG\n\nArtifact Workflow Orchestrate Guild — AI Team OS local-first, đóng gói desktop qua Electron.\n\n## Quy ước\n\n- Tài liệu tiếng Việt, code tiếng Anh.\n- Một file = một chủ đề.',
       },
       'src/main.ts': {
         language: 'typescript',
@@ -905,16 +997,23 @@ const handlers: Record<string, (p: Params) => unknown | Promise<unknown>> = {
           : 'disconnected',
       connectionError: h.id === 'db-1' ? 'Connection timed out' : undefined,
     })),
-    identities: [{ id: 'id-main', name: 'Khoá chính', keyType: 'ed25519', keyPath: '~/.ssh/id_ed25519', inlineStored: false, hasPassphrase: true }],
+    identities: [
+      {
+        id: 'id-main',
+        name: 'Khoá chính',
+        keyType: 'ed25519',
+        keyPath: '~/.ssh/id_ed25519',
+        inlineStored: false,
+        hasPassphrase: true,
+      },
+    ],
   }),
 
   'ssh.connections': () => ({ connections: [...sshConnsDemo] }),
 
   'ssh.test': async (p) => {
     await sleep(600)
-    return String(p.hostId) === 'db-1'
-      ? { status: 'error', error: 'Connection timed out' }
-      : { status: 'connected' }
+    return String(p.hostId) === 'db-1' ? { status: 'error', error: 'Connection timed out' } : { status: 'connected' }
   },
 
   'ssh.connect': async (p) => {
@@ -933,9 +1032,20 @@ const handlers: Record<string, (p: Params) => unknown | Promise<unknown>> = {
   'ssh.exec': async (p) => {
     await sleep(500)
     const c = String(p.command ?? '')
-    if (c.includes('uptime')) return { stdout: ' 14:02  up 36 days,  2:41, 1 user, load average: 0.42, 0.38, 0.31\n', stderr: '', code: 0 }
-    if (c.includes('df')) return { stdout: 'Filesystem  Size  Used Avail Use% Mounted on\n/dev/sda1   50G   31G   17G  65% /\n', stderr: '', code: 0 }
-    if (c.includes('docker')) return { stdout: 'CONTAINER ID  IMAGE        STATUS\n8f3a21bc9d01  awog:latest  Up 36 days\n', stderr: '', code: 0 }
+    if (c.includes('uptime'))
+      return { stdout: ' 14:02  up 36 days,  2:41, 1 user, load average: 0.42, 0.38, 0.31\n', stderr: '', code: 0 }
+    if (c.includes('df'))
+      return {
+        stdout: 'Filesystem  Size  Used Avail Use% Mounted on\n/dev/sda1   50G   31G   17G  65% /\n',
+        stderr: '',
+        code: 0,
+      }
+    if (c.includes('docker'))
+      return {
+        stdout: 'CONTAINER ID  IMAGE        STATUS\n8f3a21bc9d01  awog:latest  Up 36 days\n',
+        stderr: '',
+        code: 0,
+      }
     return { stdout: `$ ${c}\n(demo) lệnh đã chạy trên host.\n`, stderr: '', code: 0 }
   },
 

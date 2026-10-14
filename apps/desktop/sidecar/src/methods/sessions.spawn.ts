@@ -31,20 +31,11 @@ import {
   type SpawnChildSpec,
 } from '../sessions/spawn.js'
 import { MAX_TEXT_LEN, oneLineLabel } from '../sessions/inbox.js'
-import {
-  findSpecMember,
-  loadMemberLlmOverride,
-  loadRunTeam,
-  materializeMember,
-} from '../sessions/team-members.js'
-import {
-  listSessionSummaries,
-  loadSession,
-  setSessionSpawnConfig,
-} from '../sessions/store.js'
+import { findSpecMember, loadMemberLlmOverride, loadRunTeam, materializeMember } from '../sessions/team-members.js'
+import { listSessionSummaries, loadSession, setSessionSpawnConfig } from '../sessions/store.js'
 import { listBoardItems } from '../boards/store.js'
 import { emit } from '../transport/stdio.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
 import type { ProviderName, SpawnSessionConfig } from '../types/shared.js'
 
@@ -84,9 +75,7 @@ const ChildSpecSchema = z.object({
 // object rỗng hoàn toàn trả undefined: caller phải phân biệt "không gửi config"
 // với "config rỗng". Riêng đường remember, `rememberSpawnConfig` cố ý đổi rỗng →
 // `{}` (marker "đã duyệt điều phối, kế thừa hết") — xem comment tại đó.
-function toSpawnConfig(
-  parsed: z.infer<typeof SpawnConfigSchema> | undefined,
-): SpawnSessionConfig | undefined {
+function toSpawnConfig(parsed: z.infer<typeof SpawnConfigSchema> | undefined): SpawnSessionConfig | undefined {
   if (!parsed) return undefined
   const c: SpawnSessionConfig = {}
   if (parsed.provider !== undefined) c.provider = parsed.provider
@@ -105,9 +94,7 @@ function toSpawnConfig(
 // Chuẩn hoá children do zod parse: `config?: T | undefined` của zod không gán
 // được vào `config?: T` (exactOptionalPropertyTypes) — key phải VẮNG hẳn. Tuple
 // agent đi cùng luật: chỉ gắn key thật sự có mặt trên payload.
-function toChildSpecs(
-  parsed: z.infer<typeof ChildSpecSchema>[],
-): SpawnChildSpec[] {
+function toChildSpecs(parsed: z.infer<typeof ChildSpecSchema>[]): SpawnChildSpec[] {
   return parsed.map((c) => {
     const { config, agentId, agentSource, agentProjectId, ...rest } = c
     const spec: SpawnChildSpec = { ...rest }
@@ -127,10 +114,7 @@ function toChildSpecs(
 // session-manager coi `{}` là ghi, chỉ `null` mới là xoá.
 // Emit SAU khi config đã nằm trên đĩa — renderer khác (kể cả popout) nhận đủ
 // trạng thái một lần, không phải chờ reload mới thấy nhóm đã "nhớ".
-async function rememberSpawnConfig(
-  rootId: string,
-  config?: SpawnSessionConfig,
-): Promise<void> {
+async function rememberSpawnConfig(rootId: string, config?: SpawnSessionConfig): Promise<void> {
   const saved = config ?? {}
   await setSessionSpawnConfig(rootId, saved)
   emit('session.spawn-config', { sessionId: rootId, spawnConfig: saved })
@@ -279,10 +263,7 @@ register('sessions.materializeMember', async (raw) => {
   const member = findSpecMember(team, params.member)
   if (!member) {
     const roster = team.members.map((m) => `"${m.title}"`).join(', ')
-    throw new RpcError(
-      -32602,
-      `No member "${params.member}" in team "${team.name}". Members: ${roster || '(none)'}.`,
-    )
+    throw new RpcError(-32602, `No member "${params.member}" in team "${team.name}". Members: ${roster || '(none)'}.`)
   }
   const prompt = params.itemTitle
     ? `You are "${member.title}" — a member of the "${team.name}" session team. ` +
@@ -296,9 +277,7 @@ register('sessions.materializeMember', async (raw) => {
   let routeItem
   if (params.itemId && root.projectId) {
     try {
-      routeItem = (await listBoardItems(root.projectId)).find(
-        (i) => i.id === params.itemId,
-      )
+      routeItem = (await listBoardItems(root.projectId)).find((i) => i.id === params.itemId)
     } catch {
       /* board đọc hỏng ⇒ member vẫn spawn theo override tay */
     }
@@ -317,11 +296,7 @@ register('sessions.materializeMember', async (raw) => {
       ? { llmOverride: params.llmOverride }
       : root.projectId
         ? {
-            llmOverride: await loadMemberLlmOverride(
-              root.projectId,
-              params.itemId,
-              member.title,
-            ),
+            llmOverride: await loadMemberLlmOverride(root.projectId, params.itemId, member.title),
           }
         : {}),
   })
@@ -395,7 +370,9 @@ function parseTeamDraft(raw: string): SpawnChildSpec[] {
     const it = item as Record<string, unknown>
     const title = oneLineLabel(String(it?.title ?? ''), MAX_TITLE_LEN)
     const role = oneLineLabel(String(it?.role ?? ''), MAX_ROLE_LEN)
-    const prompt = String(it?.prompt ?? '').trim().slice(0, MAX_TEXT_LEN)
+    const prompt = String(it?.prompt ?? '')
+      .trim()
+      .slice(0, MAX_TEXT_LEN)
     if (title && prompt) out.push({ title, role, prompt })
   }
   return out
@@ -410,12 +387,11 @@ async function draftWithFallback(input: {
   prompt: string
 }): Promise<string> {
   const cheap = CHEAP_MODEL[input.provider]
-  const candidates =
-    cheap && cheap !== input.sessionModel ? [cheap, input.sessionModel] : [input.sessionModel]
+  const candidates = cheap && cheap !== input.sessionModel ? [cheap, input.sessionModel] : [input.sessionModel]
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential fallback
-      const out = await completePi({
+      const out = await complete({
         provider: input.provider,
         ...(input.accountId ? { accountId: input.accountId } : {}),
         modelId,

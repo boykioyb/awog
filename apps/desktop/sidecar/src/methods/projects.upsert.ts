@@ -6,6 +6,9 @@ import { register, RpcError } from '../transport/rpc.js'
 import { saveProject, loadProject } from '../projects/store.js'
 import { forgetProjectPath } from '../sessions/permission-rules.js'
 import type { Project } from '../types/shared.js'
+import { log } from '../util/logger.js'
+import { profileExists } from '../browser-profiles/profiles.js'
+import { resyncProjectScopes } from '../browser-profiles/scope.js'
 
 // id is composed by the UI and used as the filename. We constrain shape here
 // because filename safety in store.ts also depends on sanitizeChild rejecting
@@ -65,6 +68,11 @@ const ProjectSchema = z.object({
   githubAccount: z.string().max(60).optional(),
   // Ngữ cảnh hạ tầng mặc định của project. Vắng mặt = kế thừa `settings.infra`.
   infra: InfraContextSchema.optional(),
+  // Profile trình duyệt nhúng mặc định của project. Vắng = kế thừa profile mặc định.
+  browserProfileId: z
+    .string()
+    .regex(/^(default|[a-z0-9-]{1,32})$/)
+    .optional(),
 })
 
 const Params = z.object({
@@ -166,6 +174,13 @@ register('projects.upsert', async (raw) => {
   }
   // Omitted → dropped (inherit the app default). '' preserved (active account).
   if (incoming.githubAccount !== undefined) project.githubAccount = incoming.githubAccount
+  // Cùng luật: bỏ field ⇒ project quay về kế thừa profile mặc định.
+  if (incoming.browserProfileId !== undefined) {
+    if (!(await profileExists(incoming.browserProfileId))) {
+      throw new RpcError(-32602, `Browser profile not found: ${incoming.browserProfileId}`)
+    }
+    project.browserProfileId = incoming.browserProfileId
+  }
   // Cùng luật: bỏ field ⇒ project quay về kế thừa `settings.infra`. Gán từng khoá
   // một (không spread cả object đã parse) để giữ đúng nếp chống mass-assignment của
   // hàm này, và để `exactOptionalPropertyTypes` không nuốt phải `undefined`.
@@ -185,5 +200,14 @@ register('projects.upsert', async (raw) => {
   // ở đây là biến DUY NHẤT của cache đó, nên xoá ngay: cache ôi làm luật tầng
   // project neo vào thư mục cũ, tức luật đúng chạy trên gốc sai.
   forgetProjectPath(project.id)
+  // Profile trình duyệt hiệu lực của các phiên thuộc project có thể vừa đổi ⇒ báo
+  // main (best-effort, không chặn kết quả lưu).
+  if (existing?.browserProfileId !== project.browserProfileId) {
+    void resyncProjectScopes(project.id).catch((err: unknown) =>
+      log.warn('projects.upsert: browser profile resync failed', {
+        err: String(err),
+      }),
+    )
+  }
   return { project }
 })

@@ -50,7 +50,7 @@ const EXCERPT_FILES: Record<string, string> = {
   Gemfile: 'Gemfile',
   'mix.exs': 'mix.exs',
   Makefile: 'Makefile',
-  'justfile': 'justfile',
+  justfile: 'justfile',
   'docker-compose.yml': 'docker-compose.yml',
   'CONTRIBUTING.md': 'CONTRIBUTING.md',
   '.editorconfig': '.editorconfig',

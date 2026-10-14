@@ -1,12 +1,7 @@
 import { startStdioLoop, send, resolveHostResponse, setEventSink } from './transport/stdio.js'
 import { dispatch, RpcError } from './transport/rpc.js'
 import { log } from './util/logger.js'
-import {
-  startSocketServer,
-  stopSocketServer,
-  setSocketRequestHandler,
-  emitToSockets,
-} from './transport/socket.js'
+import { startSocketServer, stopSocketServer, setSocketRequestHandler, emitToSockets } from './transport/socket.js'
 
 // Side-effect imports register methods into the RPC registry.
 import './methods/ping.js'
@@ -26,6 +21,8 @@ import './methods/settings.get.js'
 import './methods/settings.set.js'
 import './methods/sessions.send-message.js'
 import './methods/sessions.compact.js'
+import './methods/claude-sessions.list.js'
+import './methods/claude-sessions.import.js'
 import './methods/sessions.cli-commands.js'
 import './methods/sessions.open-cli.js'
 import './methods/sessions.sync-cli.js'
@@ -50,6 +47,8 @@ import './methods/permissions.add-deny-rule.js'
 import './methods/sessions.answer-question.js'
 import './methods/sessions.list.js'
 import './methods/sessions.get.js'
+import './methods/sessions.step-detail.js'
+import './methods/sessions.browser-preview.js'
 import './methods/sessions.cost-breakdown.js'
 import './methods/sessions.upsert.js'
 import './methods/sessions.truncate.js'
@@ -101,6 +100,24 @@ import './methods/activity.pricing.js'
 import './methods/activity.pricing.fetch.js'
 import './methods/projects.list.js'
 import './methods/projects.upsert.js'
+import './methods/browser-profiles.list.js'
+import './methods/browser-profiles.create.js'
+import './methods/browser-profiles.update.js'
+import './methods/browser-profiles.set-proxy.js'
+import './methods/browser-profiles.sync-proxies.js'
+import './methods/browser-profiles.delete.js'
+import './methods/browser-profiles.set-default.js'
+import './methods/browser-profiles.resolve-scope.js'
+import './methods/free-proxies.list.js'
+import './methods/free-proxies.probe.js'
+import './methods/userscripts.js'
+import './methods/sessions.set-browser-profile.js'
+import './methods/bookmarks.list.js'
+import './methods/bookmarks.add.js'
+import './methods/bookmarks.add-folder.js'
+import './methods/bookmarks.update.js'
+import './methods/bookmarks.remove.js'
+import './methods/bookmarks.import-pins.js'
 import './methods/projects.delete.js'
 import './methods/projects.clone.js'
 import './methods/projects.inspect.js'
@@ -461,6 +478,7 @@ import { sessionManager } from './sessions/session-manager.js'
 import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
 import { reloadBackgroundShells } from './sessions/bg-registry.js'
+import { installDevServerBrowserSync } from './devserver/registry.js'
 import { ensureUserPath } from './util/spawn-path.js'
 
 // Last-resort crash guards. A broken pipe from a spawned child (e.g. the Claude
@@ -508,11 +526,12 @@ let shuttingDown = false
 async function gracefulShutdown(code: number): Promise<void> {
   if (shuttingDown) return
   shuttingDown = true
+  // Hạn chót cứng: bất kỳ bước nào dưới đây treo (đóng socket chờ client, một promise
+  // không bao giờ settle…) thì vẫn THOÁT — sidecar không có host là tiến trình mồ côi
+  // giữ fd + watcher mãi mãi. `unref` để timer không tự giữ process sống.
+  setTimeout(() => process.exit(code), 10_000).unref()
   try {
-    await Promise.race([
-      sessionManager.flushAll(),
-      new Promise<void>((resolve) => setTimeout(resolve, 2500)),
-    ])
+    await Promise.race([sessionManager.flushAll(), new Promise<void>((resolve) => setTimeout(resolve, 2500))])
   } catch (err) {
     log.error('shutdown: session flush failed', {
       err: err instanceof Error ? err.message : String(err),
@@ -526,6 +545,22 @@ async function gracefulShutdown(code: number): Promise<void> {
     shutdownCodexDaemons()
   } catch {
     /* the module was never loaded (no OpenAI turn this run) — nothing to stop */
+  }
+  // One Claude CLI per chat session (ADR 0099) lives as a child of this process. Close
+  // them explicitly: their background tasks are children of THEM, and relying on stdin EOF
+  // alone leaves those for the OS to reap.
+  try {
+    const { closeAllLive } = await import('./runtime/claude-sdk/live-process.js')
+    closeAllLive('sidecar shutdown')
+  } catch {
+    /* never loaded (no Anthropic turn this run) — nothing to stop */
+  }
+  // Spare của one-shot (ADR 0099) là một tiến trình CLI đang đậu — đóng cùng lượt.
+  try {
+    const { closeAllOneShotSpares } = await import('./runtime/claude-sdk/one-shot-spare.js')
+    closeAllOneShotSpares('sidecar shutdown')
+  } catch {
+    /* never loaded (no Anthropic one-shot this run) — nothing to stop */
   }
   // Socket transport goes down WITH the engine (ADR 0093 — no standalone
   // daemon): close the listener + remove the endpoint file so a CLI doesn't
@@ -580,10 +615,7 @@ async function handleLine(line: string): Promise<void> {
     // Như trên: chỉ `method` (một tên, không phải dữ liệu) và danh sách TÊN
     // trường — không bao giờ `params`.
     log.warn('bad envelope on stdin', {
-      method:
-        typeof (msg as { method?: unknown }).method === 'string'
-          ? (msg as { method: string }).method
-          : undefined,
+      method: typeof (msg as { method?: unknown }).method === 'string' ? (msg as { method: string }).method : undefined,
       keys: typeof msg === 'object' && msg !== null ? Object.keys(msg) : [],
     })
     return
@@ -627,9 +659,11 @@ async function handleRequest(
 // Force stdout to blocking mode so streaming chunks reach the host immediately
 // instead of being batched in Node's 64KB pipe buffer. Without this, many small
 // `emit()` writes coalesce and the UI sees the whole response in one burst.
-const stdoutHandle = (process.stdout as unknown as {
-  _handle?: { setBlocking?: (b: boolean) => void }
-})._handle
+const stdoutHandle = (
+  process.stdout as unknown as {
+    _handle?: { setBlocking?: (b: boolean) => void }
+  }
+)._handle
 if (stdoutHandle?.setBlocking) stdoutHandle.setBlocking(true)
 
 // Augment PATH before anything spawns a child process (MCP `npx`, git, pty).
@@ -641,7 +675,6 @@ log.info('sidecar starting', { pid: process.pid, node: process.version })
 // Pass gracefulShutdown as the stdin-close handler so a host exit flushes pending
 // session writes before the process exits (mirrors the SIGTERM path).
 startStdioLoop(handleLine, () => gracefulShutdown(0))
-
 
 // Second door for external clients (ADR 0093): unix socket + endpoint file +
 // per-boot token. Same dispatch as stdio via handleRequest; the method surface
@@ -707,6 +740,7 @@ void resumeOnBoot()
 // Synchronous fs scan — cheap; must run AFTER the session store warms so the
 // dirs it reads are the current ones. Best-effort; never blocks boot.
 try {
+  installDevServerBrowserSync()
   reloadBackgroundShells()
 } catch (err) {
   log.warn('boot: background-shell reload failed', {

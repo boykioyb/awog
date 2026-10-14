@@ -1,5 +1,9 @@
 <template>
   <aside class="side" :class="{ collapsed: navCollapsed && !compact }" data-tour="nav-rail">
+    <!-- Vùng kéo cửa sổ cho dải trống phía trên (chỗ traffic lights trên macOS).
+         `.top` đã là drag region nhưng `.side` thì không — dải đệm 40px này ở
+         trong `.side` nên kéo bất lực nếu không có element drag riêng. -->
+    <div class="sdrag" aria-hidden="true" />
     <div class="brand">
       <span class="logo">
         <AwogMascot v-if="isCute" :size="16" />
@@ -21,7 +25,7 @@
           class="ni"
           :class="{ on: isActive(item.to) }"
           :title="navCollapsed && !compact ? t(item.label) : undefined"
-          :data-tour="item.to === '/sessions' ? 'nav-sessions' : undefined"
+          :data-tour="item.to === '/workbench' ? 'nav-sessions' : undefined"
         >
           <Icon :name="item.icon" />
           {{ t(item.label) }}
@@ -53,6 +57,7 @@
       >
         <Icon name="settings" style="width: var(--icon-md); height: var(--icon-md)" />
       </Button>
+      <TopBarNotifications anchor="left-bottom" />
       <Button
         variant="ghost"
         size="iconSm"
@@ -94,6 +99,7 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { isBoardSession } from '~/composables/useSessionsData'
+import TopBarNotifications from '~/components/shell/TopBarNotifications.vue'
 
 type NavBadge = { kind: 'run' | 'wait'; n: number }
 type NavItem = { to: string; icon: string; label: string; badge?: NavBadge; dot?: boolean }
@@ -122,7 +128,7 @@ const groups = computed<NavGroup[]>(() => [
     title: 'nav.group.work',
     items: [
       {
-        to: '/sessions',
+        to: '/workbench',
         icon: 'sessions',
         label: 'nav.sessions',
         ...(sessionsAttention.value > 0
@@ -235,9 +241,28 @@ const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.s
   background: var(--primary);
   border: 1px solid var(--card);
 }
-/* Collapsed rail is too narrow for a row — stack the footer buttons. */
+/* Collapsed rail xếp DỌC — gap + padding phải nhỏ đủ để 6 nút (act / settings /
+   bell / whatsnew / theme / collapse) vừa chiều cao màn hình ngắn mà không rơi
+   nút cuối (chev — nút bung rail) ra khỏi tầm nhìn. */
 .side.collapsed .sfoot {
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+/* Drag strip ngồi chồng lên dải đệm đầu rail (chỗ traffic lights macOS). `.side`
+   cần `position: relative` để strip neo vào cạnh trên của nó. */
+.side {
+  position: relative;
+}
+.sdrag {
+  -webkit-app-region: drag;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  /* KHÔNG pointer-events:none — strip phải bắt click để drag; vùng đệm bên dưới
+     không có gì để bấm xuyên qua. */
 }
 </style>

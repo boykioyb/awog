@@ -6,27 +6,17 @@
 //
 // Run: `npx vitest run src/infra/__tests__/monitor-targets.test.ts`
 import { describe, expect, it, vi } from 'vitest'
-import {
-  albLabel,
-  deniedAction,
-  dimensionsMatch,
-  logGroupLabel,
-  shortAwsError,
-} from '../monitor-targets.js'
+import { albLabel, deniedAction, dimensionsMatch, logGroupLabel, shortAwsError } from '../monitor-targets.js'
 
 const dim = (name: string, value = 'x') => ({ name, value })
 
 describe('dimensionsMatch', () => {
   it('nhận đúng tập ECS service (cluster + service)', () => {
-    expect(
-      dimensionsMatch([dim('ClusterName'), dim('ServiceName')], ['ClusterName', 'ServiceName']),
-    ).toBe(true)
+    expect(dimensionsMatch([dim('ClusterName'), dim('ServiceName')], ['ClusterName', 'ServiceName'])).toBe(true)
   })
 
   it('thứ tự khác vẫn khớp — AWS không bảo đảm thứ tự dimension', () => {
-    expect(
-      dimensionsMatch([dim('ServiceName'), dim('ClusterName')], ['ClusterName', 'ServiceName']),
-    ).toBe(true)
+    expect(dimensionsMatch([dim('ServiceName'), dim('ClusterName')], ['ClusterName', 'ServiceName'])).toBe(true)
   })
 
   it('LOẠI metric mức cluster: chỉ có ClusterName thì KHÔNG phải một service', () => {
@@ -36,9 +26,7 @@ describe('dimensionsMatch', () => {
 
   it('LOẠI bản tổng hợp theo TargetGroup — nếu không mỗi ALB hiện hàng chục lần', () => {
     expect(dimensionsMatch([dim('LoadBalancer'), dim('TargetGroup')], ['LoadBalancer'])).toBe(false)
-    expect(dimensionsMatch([dim('LoadBalancer'), dim('AvailabilityZone')], ['LoadBalancer'])).toBe(
-      false,
-    )
+    expect(dimensionsMatch([dim('LoadBalancer'), dim('AvailabilityZone')], ['LoadBalancer'])).toBe(false)
   })
 
   it('LOẠI bản EC2 theo AutoScalingGroup / ImageId — không cái nào là một máy cụ thể', () => {
@@ -61,7 +49,10 @@ describe('albLabel', () => {
   })
 
   it('NLB giữ tiền tố riêng — ba loại dùng ba namespace khác nhau', () => {
-    expect(albLabel('net/my-nlb/abc123')).toEqual({ label: 'my-nlb', hint: 'net' })
+    expect(albLabel('net/my-nlb/abc123')).toEqual({
+      label: 'my-nlb',
+      hint: 'net',
+    })
   })
 
   it('hình dạng lạ ⇒ hiện nguyên văn, không đoán', () => {
@@ -79,11 +70,17 @@ describe('logGroupLabel', () => {
   })
 
   it('không có dấu / ⇒ giữ nguyên', () => {
-    expect(logGroupLabel('my-log-group')).toEqual({ label: 'my-log-group', hint: '' })
+    expect(logGroupLabel('my-log-group')).toEqual({
+      label: 'my-log-group',
+      hint: '',
+    })
   })
 
   it('kết thúc bằng / ⇒ giữ nguyên, không cắt ra chuỗi rỗng', () => {
-    expect(logGroupLabel('/aws/ecs/')).toEqual({ label: '/aws/ecs/', hint: '' })
+    expect(logGroupLabel('/aws/ecs/')).toEqual({
+      label: '/aws/ecs/',
+      hint: '',
+    })
   })
 })
 
@@ -98,9 +95,7 @@ describe('deniedAction', () => {
   })
 
   it('biến thể không có khoảng trắng sau dấu hai chấm', () => {
-    expect(deniedAction('is not authorized to perform:sqs:listqueues on resource')).toBe(
-      'sqs:listqueues',
-    )
+    expect(deniedAction('is not authorized to perform:sqs:listqueues on resource')).toBe('sqs:listqueues')
   })
 
   it('biến thể UnauthorizedOperation của EC2', () => {
@@ -112,9 +107,7 @@ describe('deniedAction', () => {
   })
 
   it('KHÔNG phải lỗi quyền ⇒ rỗng, vì token hết hạn cần lời khuyên khác hẳn', () => {
-    expect(deniedAction('ExpiredToken: The security token included in the request is expired')).toBe(
-      '',
-    )
+    expect(deniedAction('ExpiredToken: The security token included in the request is expired')).toBe('')
     expect(deniedAction('')).toBe('')
   })
 })
@@ -123,9 +116,7 @@ describe('shortAwsError', () => {
   it('bỏ phần khuôn, giữ MÃ và câu cuối', () => {
     const raw =
       'aws: [ERROR]: An error occurred (ExpiredToken) when calling the DescribeLoadBalancers operation: The security token included in the request is expired'
-    expect(shortAwsError(raw)).toBe(
-      'ExpiredToken: The security token included in the request is expired',
-    )
+    expect(shortAwsError(raw)).toBe('ExpiredToken: The security token included in the request is expired')
   })
 
   it('không khớp khuôn ⇒ giữ dòng đầu, KHÔNG nuốt lỗi', () => {
@@ -181,7 +172,10 @@ describe('listMonitorTargets — đường lùi qua describe-alarms', () => {
                   { Name: 'ServiceName', Value: 'pwpf-dev-apne1-api' },
                 ],
               },
-              { Namespace: 'AWS/SQS', Dimensions: [{ Name: 'QueueName', Value: 'noti-dlq' }] },
+              {
+                Namespace: 'AWS/SQS',
+                Dimensions: [{ Name: 'QueueName', Value: 'noti-dlq' }],
+              },
               {
                 Namespace: 'AWS/ECS',
                 Dimensions: [{ Name: 'ClusterName', Value: 'pwpf-dev-apne1-cluster' }],
@@ -200,9 +194,7 @@ describe('listMonitorTargets — đường lùi qua describe-alarms', () => {
     const ecs = out.groups.find((g) => g.kind === 'ecs-service')
     const sqs = out.groups.find((g) => g.kind === 'sqs')
 
-    expect(ecs?.items.map((i) => i.id)).toEqual([
-      'ecs-service:pwpf-dev-apne1-cluster/pwpf-dev-apne1-api',
-    ])
+    expect(ecs?.items.map((i) => i.id)).toEqual(['ecs-service:pwpf-dev-apne1-cluster/pwpf-dev-apne1-api'])
     expect(ecs?.items[0]?.label).toBe('pwpf-dev-apne1-api')
     expect(ecs?.items[0]?.hint).toBe('pwpf-dev-apne1-cluster')
     expect(sqs?.items.map((i) => i.label)).toEqual(['noti-dlq'])
@@ -211,9 +203,7 @@ describe('listMonitorTargets — đường lùi qua describe-alarms', () => {
     expect(ecs?.error).toContain('cloudwatch:ListMetrics')
     expect(ecs?.truncated).toBe(true)
 
-    const alarmCalls = runInfra.mock.calls.filter(
-      (c) => (c[0] as { args: string[] }).args[1] === 'describe-alarms',
-    )
+    const alarmCalls = runInfra.mock.calls.filter((c) => (c[0] as { args: string[] }).args[1] === 'describe-alarms')
     expect(alarmCalls).toHaveLength(1)
     vi.doUnmock('../run.js')
   })
@@ -230,9 +220,7 @@ describe('listMonitorTargets — đường lùi qua describe-alarms', () => {
     const { listMonitorTargets } = await import('../monitor-targets.js')
 
     await listMonitorTargets({ surface: 'explorer' })
-    const alarmCalls = runInfra.mock.calls.filter(
-      (c) => (c[0] as { args: string[] }).args[1] === 'describe-alarms',
-    )
+    const alarmCalls = runInfra.mock.calls.filter((c) => (c[0] as { args: string[] }).args[1] === 'describe-alarms')
     expect(alarmCalls).toHaveLength(0)
     vi.doUnmock('../run.js')
   })

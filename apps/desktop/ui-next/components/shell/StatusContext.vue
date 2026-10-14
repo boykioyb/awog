@@ -142,10 +142,7 @@ const open = ref(false)
 const memoryFilesOpen = ref(false)
 const agentsOpen = ref(false)
 
-// Usage column — blank for the unmetered rows (the derived tool-definition /
-// tool-result buckets), which carry a token size but no share of the window.
 function pctLabel(row: CatRow): string {
-  if (!row.metered) return ''
   return row.pct < 0.05 ? '0%' : `${row.pct.toFixed(1)}%`
 }
 

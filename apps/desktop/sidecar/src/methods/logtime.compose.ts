@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { listSessionSummaries, loadSession } from '../sessions/store.js'
+import { listSessionSummariesFresh, loadSession } from '../sessions/store.js'
 import { listTasks, loadTask } from '../tasks/store.js'
 import { loadSettings, loadMonth, monthOf } from '../logtime/store.js'
 import { loadSourceById } from '../sources/store.js'
@@ -13,12 +13,14 @@ import {
   buildSessionDigest,
   formatElapsed,
   parseComposeLines,
+  scrubInternalDetail,
   type ComposeContextItem,
   type ComposeLoggedItem,
   type ComposeProject,
   type ComposePromptInput,
 } from '../logtime/compose.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
+import { fetchGhRefTitle } from '../github/ref-title.js'
 
 // "Soạn bằng AI" — model soạn dòng công nháp cho một ngày từ việc AWOG đo được.
 //
@@ -33,11 +35,7 @@ const Params = z.object({
 
 register('logtime.compose', async (raw) => {
   const { date, accountId, modelId } = Params.parse(raw)
-  const [sessions, tasks, settings] = await Promise.all([
-    listSessionSummaries(),
-    listTasks(),
-    loadSettings(),
-  ])
+  const [sessions, tasks, settings] = await Promise.all([listSessionSummariesFresh(), listTasks(), loadSettings()])
 
   const links = settings.links.filter((l) => !!l.pmsProjectId)
   const trackedKeys = new Set(links.map((l) => l.projectKey))
@@ -88,14 +86,31 @@ register('logtime.compose', async (raw) => {
       try {
         if (s.kind === 'session') {
           const sess = await loadSession(s.refId)
-          return sess ? buildSessionDigest(sess.messages, DIGEST_CAP) || undefined : undefined
+          const digest = sess ? buildSessionDigest(sess.messages, DIGEST_CAP) : ''
+          return digest ? scrubInternalDetail(digest) || undefined : undefined
         }
         const task = await loadTask(s.refId)
         const desc = task?.description?.trim()
-        return desc ? desc.slice(0, DIGEST_CAP) : undefined
+        return desc ? scrubInternalDetail(desc.slice(0, DIGEST_CAP)) || undefined : undefined
       } catch {
         return undefined
       }
+    }),
+  )
+
+  // Tiêu đề thật của issue/PR trên GitHub — nguồn DUY NHẤT nói "việc là tính năng
+  // gì" (title phiên thường chỉ là URL). Chỉ fetch cho item đã link repo; hỏng thì
+  // bỏ qua, compose vẫn chạy với title gợi ý + digest như cũ.
+  const refTitles = await Promise.all(
+    suggestions.map(async (s) => {
+      const repo = links.find((l) => l.projectKey === s.projectKey)?.githubRepo
+      if (!repo) return undefined
+      // PR có thì lấy tiêu đề PR trước — PR chính là tính năng; issue chỉ là yêu cầu.
+      // Hỏng (private, gh chưa login) thì rơi về issue, rồi về không-có-title.
+      const title =
+        (s.pr !== undefined ? await fetchGhRefTitle(repo, 'pull', s.pr) : null) ??
+        (s.issue !== undefined ? await fetchGhRefTitle(repo, 'issue', s.issue) : null)
+      return title ?? undefined
     }),
   )
 
@@ -107,6 +122,7 @@ register('logtime.compose', async (raw) => {
     elapsedLabel: s.kind === 'session' ? formatElapsed(sessionSpan.get(s.refId) ?? 0) : '—',
     ...(s.issue !== undefined ? { issue: s.issue } : {}),
     ...(s.pr !== undefined ? { pr: s.pr } : {}),
+    ...(refTitles[i] ? { refTitle: refTitles[i] } : {}),
     ...(details[i] ? { detail: details[i] } : {}),
   }))
 
@@ -126,9 +142,7 @@ register('logtime.compose', async (raw) => {
   // dự án đang có việc. Không có tên thì bỏ qua, không dừng cả lượt vì cosmetic.
   const sourceIds = [
     ...new Set(
-      keysInPlay
-        .map((key) => links.find((l) => l.projectKey === key)?.sourceId)
-        .filter((id): id is string => !!id),
+      keysInPlay.map((key) => links.find((l) => l.projectKey === key)?.sourceId).filter((id): id is string => !!id),
     ),
   ]
   const sourceNames: string[] = []
@@ -151,7 +165,7 @@ register('logtime.compose', async (raw) => {
   const model = modelId ?? 'claude-haiku-4-5'
   log.info('logtime.compose', { model, date, items: items.length, logged: logged.length })
 
-  const text = await completePi({
+  const text = await complete({
     ...(accountId ? { accountId } : {}),
     modelId: model,
     systemPrompt: buildComposeSystemPrompt(),

@@ -17,18 +17,20 @@
 //   - adapts the SDKMessage stream back to the same StreamCallbacks/steps the UI
 //     already renders (claude-sdk/event-adapter.ts).
 
+import { createHash, randomUUID } from 'node:crypto'
 import {
   query,
   type Options,
   type HookInput,
   type HookJSONOutput,
-  type SDKMessage,
   type SDKUserMessage,
+  type Settings,
 } from '@anthropic-ai/claude-agent-sdk'
 
 import {
   FROZEN_TOKEN_MIN_LIFETIME_MS,
   resolveCredential,
+  type Credential,
 } from '../../credentials/credential-resolver.js'
 import { RpcError } from '../../transport/rpc.js'
 import { log } from '../../util/logger.js'
@@ -49,11 +51,7 @@ import { buildCurrentStateBlock, collectWorkspaceSnapshot } from '../../context/
 import { isToolAllowed } from '../tools/index.js'
 import { updateSessionMetadata } from '../../sessions/store.js'
 import { ARTIFACT_ENV } from './artifact.js'
-import {
-  ASK_USER_QUESTION_TOOL,
-  QUESTION_ENV,
-  makeAskUserQuestionGate,
-} from './ask-user-question.js'
+import { ASK_USER_QUESTION_TOOL, QUESTION_ENV, makeAskUserQuestionGate } from './ask-user-question.js'
 import { createClaudeEventAdapter } from './event-adapter.js'
 import { makeElicitationHandler } from './elicitation.js'
 import {
@@ -76,6 +74,8 @@ import { isReservedAwogServerName, withBridgedAliases } from '../tools/bridged.j
 import { buildTerminalToolsSdkServer } from './terminal-sdk-server.js'
 import { TERMINAL_MCP_SERVER } from '../tools/read-terminal-tool.js'
 import { BROWSER_MCP_SERVER, buildBrowserToolSdkServer } from './browser-sdk-server.js'
+import { isBrowserToolName } from '../tools/browser-tool.js'
+import { noteBrowserToolUse } from '../../sessions/browser-previews.js'
 import { buildDevServerSdkServer } from './dev-server-sdk-server.js'
 import { DEV_SERVER_MCP_SERVER } from '../tools/dev-server-tool.js'
 import { buildCodeIndexSdkServer } from './code-index-sdk-server.js'
@@ -87,19 +87,24 @@ import { TEAM_MCP_SERVER } from '../tools/board-tools.js'
 import { SURFACE_MCP_SERVER } from '../tools/surface-tools.js'
 import { hasMemory, hasMemoryBodies } from '../../memory/inject.js'
 import { listHosts } from '../../ssh/store.js'
-import {
-  noteExternalOutputFile,
-  registerExternalBackground,
-  settleExternalBackground,
-  settleAllExternalBackground,
-  setExternalKiller,
-  clearExternalKiller,
-} from '../../sessions/bg-registry.js'
-import { readTaskOutputTail } from './task-output.js'
 import { renderHistoryPrefix } from '../history-prefix.js'
 import { resolveClaudeBinary } from './binary.js'
 import {
-  backgroundTurnPrompt,
+  IDLE_SETTLE_MS,
+  LiveClaude,
+  TurnState,
+  acquireLive,
+  createPromptChannel,
+  isPassiveAfterResult,
+  makeRoomForSpawn,
+  sessionStateOf,
+  type LiveTurn,
+  type SoftConfig,
+} from './live-process.js'
+import { readTaskOutputTail } from './task-output.js'
+import {
+  BACKGROUND_TURN_PROMPT,
+  autoCompactFromContext,
   buildSdkEnv,
   effortFromSettings,
   mapClaudeErrorToRpc,
@@ -108,88 +113,6 @@ import {
   toSdkMcpServers,
   toSdkModel,
 } from './shared.js'
-
-// How long a turn may stay parked waiting for background work to settle before we
-// give up and end the session (the per-turn wallclock budget overrides it when the
-// caller set one). Generous: a background build or a deep subagent legitimately
-// runs for many minutes; the cap only exists so a wedged task can't hold the
-// session lock forever.
-//
-// 30, not 15: at 15 the cap was the SECOND most common way a watcher died (five of
-// the eleven parks in the logs before the idle-close regression ended on it), and
-// what it was watching — a cloud build, a deploy — routinely runs past a quarter of
-// an hour. The number is no longer only ours to live with either: it rides the turn
-// prompt (backgroundTurnPrompt), so the model sizes its poll loop to fit instead of
-// writing `40 x sleep 30` and being cut at 15 minutes.
-const DEFAULT_BACKGROUND_WAIT_MS = 30 * 60_000
-
-// Grace window after the LAST background task settles: if the CLI doesn't wake the
-// model within it (ambient tasks are skipped, a failed one may produce no
-// continuation), end the turn rather than sit until the cap. Any message cancels it
-// except the passive ones (isPassiveAfterResult).
-export const BACKGROUND_GRACE_MS = 45_000
-
-// How long we wait, after `result`, for the CLI's authoritative `session_state_changed:
-// idle` before closing stdin ourselves. `result` is NOT turn-over: the CLI can deliver
-// it and then wake the model again (a task notification — including the one it raises
-// for background work ORPHANED by the previous turn's CLI process, which was never in
-// this process's live set). Closing on `result` cut those continuations off; see the
-// closeInput comment for what that costs. Short, because on a genuinely finished turn
-// this is dead time before the reply is released.
-export const IDLE_SETTLE_MS = 4_000
-
-// Messages the CLI emits AFTER `result` that say nothing about the model waking up.
-// They must not cancel the post-result settle/grace timers. Everything else —
-// including types this list has never heard of — still counts as activity, because
-// missing a wake-up cuts a continuation off, while missing a passive type only
-// leaves the turn waiting (and the cancel log in the stream loop names the culprit).
-//
-// Lỗi thật đã dẫn tới danh sách này: `promptSuggestions` làm CLI phát
-// `prompt_suggestion` SAU `result`, nó huỷ `idleTimer`, CLI không gửi `idle` ⇒ lượt
-// treo tới khi người dùng bấm Stop. Chỉ xét `type`: mọi `system/*` vẫn là hoạt động
-// (`task_notification` là tiền đề đánh thức thật, tới trước `stream_event` cả TTFT).
-const PASSIVE_AFTER_RESULT = new Set<SDKMessage['type']>(['prompt_suggestion', 'rate_limit_event'])
-
-export function isPassiveAfterResult(msg: SDKMessage): boolean {
-  return PASSIVE_AFTER_RESULT.has(msg.type)
-}
-
-// After the wait cap fires we ask the CLI to stop its own background tasks and wait
-// for their notifications, so the turn ends through the normal `idle` path instead of
-// having stdin yanked mid-flight. This is the backstop if that never lands.
-const STOP_TASKS_DEADLINE_MS = 15_000
-
-// Backstop for a close deferred behind an in-flight tool call (see closeInput):
-// long enough that a genuinely slow command finishes and short enough that a call
-// which will never answer can't hold the session lock indefinitely.
-const DEFER_CLOSE_MAX_MS = 5 * 60_000
-
-// The CLI's task_type vocabulary, VERBATIM (`system/background_tasks_changed` +
-// `task_started`): `local_bash` = Bash(run_in_background), `local_agent` = a Task
-// subagent, `local_workflow` = a Workflow run.
-//
-// These names are a FALLBACK only. `background_tasks_changed` carries an `ambient`
-// flag per task ("True for tasks that are not activity … hosts should exclude them
-// from activity indicators") — that flag is the CLI's own answer to "is the user
-// waiting on this?", so it decides whenever present and this list is consulted only
-// for a task we learned from a `task_started` edge (no flag there) or from an older
-// CLI that omits it. Guessing the vocabulary is how this broke before: a name that
-// doesn't match leaves waitingCount() at 0, we close stdin while work is live, and
-// since stdin is also the control stream carrying PreToolUse hook callbacks every
-// later tool call comes back as `toolDenialKind: 'cancelled'`.
-const WAITABLE_TASK_TYPES = new Set(['local_bash', 'local_agent', 'local_workflow'])
-// Known types we deliberately don't wait for: ambient/housekeeping work the CLI
-// runs on its own, and work whose lifetime is not the turn's. Listed so an actually
-// unknown type stands out in the log instead of hiding in this crowd.
-const AMBIENT_TASK_TYPES = new Set([
-  'monitor_ws',
-  'monitor_mcp',
-  'mcp_task',
-  'dream',
-  'auto_mode_scan',
-  'remote_agent',
-  'in_process_teammate',
-])
 
 // Plan-mode nudge (mirrors the Pi path). The gate blocks all writes/exec in plan
 // mode, so tell the model to investigate read-only then present its plan via the
@@ -212,7 +135,8 @@ When you have understood the task and formed a concrete approach, call the \`Exi
 // path so gating behaviour and the UI prompt are identical across runtimes. The
 // hook fires for EVERY tool call, so 'ask'/'accept-edits' reliably prompt.
 function makePreToolUseHook(
-  gate: BeforeToolCall,
+  turns: TurnState,
+  scope: string | undefined,
 ): (input: HookInput, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<HookJSONOutput> {
   return async (input, _toolUseID, { signal }) => {
     if (input.hook_event_name !== 'PreToolUse') return { continue: true }
@@ -238,6 +162,16 @@ function makePreToolUseHook(
       toolCall: { name: input.tool_name, id: input.tool_use_id },
       args: toolInput,
     } as unknown as Parameters<BeforeToolCall>[0]
+    const gate = turns.ctx?.gate
+    if (!gate) {
+      return {
+        hookSpecificOutput: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'deny',
+          permissionDecisionReason: 'No active turn to authorise this call.',
+        },
+      }
+    }
     const res = await gate(ctx, signal)
     if (res?.block) {
       return {
@@ -248,6 +182,12 @@ function makePreToolUseHook(
         },
       }
     }
+    // Thẻ xem trước trang (docs/features/browser-preview-card.md): handler MCP của
+    // browser_tool không nhận tool_use id, nên ghi phiếu ở đây — sau khi cổng đã cho
+    // qua, trước khi handler chạy — để nó nhận ra step nào mà lưu ảnh.
+    if (scope && isBrowserToolName(input.tool_name)) {
+      noteBrowserToolUse(scope, input.tool_use_id, toolInput)
+    }
     return {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
@@ -257,7 +197,6 @@ function makePreToolUseHook(
     }
   }
 }
-
 
 // ── Attachments → Claude prompt content ─────────────────────────────────────
 // The SDK's plain-string `prompt` form CANNOT carry images (the root cause of
@@ -383,9 +322,7 @@ function toClaudeFileTextBlock(att: SessionAttachment): ClaudeTextBlock | null {
 // Trước bản vá #12, một PDF vượt trần kích thước rơi khỏi `toClaudeDocBlock` VÀ bị
 // `toClaudeFileTextBlock` bỏ qua (vì nó bỏ qua mọi PDF), nên biến mất hoàn toàn:
 // model không được cho biết là có file đó.
-export function attachmentPromptBlocks(
-  attachments: SessionAttachment[] | undefined,
-): ClaudePromptBlock[] {
+export function attachmentPromptBlocks(attachments: SessionAttachment[] | undefined): ClaudePromptBlock[] {
   const list = attachments ?? []
   const images = list.map(toClaudeImageBlock).filter((b): b is ClaudeImageBlock => b !== null)
   const docs = list.map(toClaudeDocBlock).filter((b): b is ClaudeDocBlock => b !== null)
@@ -393,30 +330,16 @@ export function attachmentPromptBlocks(
   return [...files, ...docs, ...images]
 }
 
-// An input stream we hold open on purpose. `close()` lets the generator finish,
-// which is what makes the SDK close the CLI's stdin.
-interface OpenPrompt {
-  stream: AsyncIterable<SDKUserMessage>
-  close: () => void
-}
-
-// Build the SDK prompt as a STREAMING input that stays open after the first
-// `result`, carrying the turn text + any file/document/image blocks. Attachments
-// ride with the CURRENT turn; prior-turn ones persist via the SDK's own resume
-// store, so there's no re-feed to do here.
+// The user message of ONE turn: the turn text + any file/document/image blocks.
+// Attachments ride with the CURRENT turn; prior-turn ones persist via the CLI's own
+// session store, so there's no re-feed to do here.
 //
-// Why never the plain-string form: the SDK sets `isSingleUserTurn` from
-// `typeof prompt === 'string'` and, for a single-turn query, closes the CLI's
-// stdin the moment the FIRST `result` arrives (sdk.mjs: "First result received for
-// single-turn query, closing stdin"). That kills the CLI process — and with it any
-// background subagent/shell still running — before its completion notification can
-// be delivered. With a generator, stdin closes only when the generator finishes,
-// so the caller decides when the session may end (see the background bookkeeping
-// in runStreamClaude).
-function openClaudePrompt(
-  text: string,
-  attachments: SessionAttachment[] | undefined,
-): OpenPrompt {
+// Always the structured (streaming-input) form, never the plain-string prompt: the string
+// form cannot carry images, and it makes the SDK treat the query as single-turn and close
+// the CLI's stdin at the first `result` (sdk.mjs: "First result received for single-turn
+// query, closing stdin") — which would kill the process and every background task in it.
+// live-process.ts keeps the input open and pushes one of these per turn.
+function buildUserMessage(text: string, attachments: SessionAttachment[] | undefined): SDKUserMessage {
   const blocks = attachmentPromptBlocks(attachments)
   let content: string | ClaudePromptBlock[] = text
   if (blocks.length > 0) {
@@ -425,21 +348,134 @@ function openClaudePrompt(
     all.push(...blocks)
     content = all
   }
-  let release = (): void => {}
-  const closed = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  const stream = (async function* (): AsyncGenerator<SDKUserMessage> {
-    yield { type: 'user', message: { role: 'user', content }, parent_tool_use_id: null }
-    await closed
-  })()
-  return { stream, close: () => release() }
+  return {
+    type: 'user',
+    message: { role: 'user', content },
+    parent_tool_use_id: null,
+  }
 }
 
-export async function runStreamClaude(
-  args: RunNonStreamArgs,
-  cb: StreamCallbacks,
-): Promise<RunStreamResult> {
+// ── Process reuse ───────────────────────────────────────────────────────────
+
+// Identity of the credential frozen into a process's env. Hashed so no token sits in a
+// registry or a log line (invariant #1).
+function tokenKeyOf(cred: Credential): string {
+  const secret = cred.kind === 'oauth' ? cred.accessToken : `${cred.apiKey}\n${cred.baseURL ?? ''}`
+  return createHash('sha256').update(secret).digest('hex')
+}
+
+// What `options` says about the CLI process, split in two (ADR 0099):
+//
+//   fingerprint — the HARD part: everything the CLI reads ONCE at startup and nothing can
+//     change afterwards (tools allow/deny, cwd, env, settingSources, agent/skills,
+//     permission-relevant flags, attribution…). Two turns with the same fingerprint can
+//     share a process; any difference means the live one cannot honour the new turn and
+//     is replaced via `resume`, history intact.
+//   soft — the part the live `Query` can be told to change (LiveClaude.reconfigure):
+//     model, effort, ultracode, thinking on/off and the MCP server set. These do NOT
+//     respawn the process, because a respawn kills the background work it owns.
+//
+// Deliberately NOT in either:
+//   - `resume` / `sessionId` — compared separately (acquireLive), against what the live
+//     process actually holds;
+//   - the credential — compared separately and leniently (acquireLive);
+//   - `systemPrompt.append`: the SDK records the system prompt once (`snapshot: true`) and
+//     ignores a changed append on `resume`, so a respawn could not apply it either —
+//     including it would only kill background work for nothing;
+//   - `fallbackModel`: derived from the model, but `--fallback-model` outranks the settings
+//     layer so it cannot be changed live; respawning for it would kill background work to
+//     fix a backup that only matters under overload. A live process keeps the fallback of
+//     the model it was spawned with (LiveClaude.reconfigure logs when that differs);
+//   - the per-turn closures (hooks, canUseTool, onElicitation, abortController): they read
+//     `TurnState`, so they never differ between turns. Only their PRESENCE is spawn-relevant.
+//
+// A thinking config that is not plain disabled/adaptive cannot be switched live, so it stays
+// in the fingerprint verbatim.
+//
+// `maxBudgetUsd` IS in the fingerprint, so a session with a hard cost cap respawns every
+// turn: the CLI counts that cap from `query()` start while AWOG passes what is LEFT of the
+// session budget, which shrinks each turn. Honest degradation (those sessions keep the old
+// per-turn process) beats a cap that silently counts spend twice.
+//
+// `sdkInputs` — per in-process server NAME, the (non-secret-bearing or hashed-only) inputs
+// its closure was built from: an edited api source, the wiki/memory write flags, the SSH
+// co-pilot connection. They feed the server's digest, so the live process can tell that a
+// same-named server must be rebuilt (LiveClaude.reconfigure replaces it).
+export function describeOptions(
+  options: Options,
+  sdkInputs: Record<string, unknown> = {},
+): { fingerprint: string; soft: SoftConfig } {
+  const {
+    resume: _resume,
+    sessionId: _sessionId,
+    abortController: _abortController,
+    hooks: _hooks,
+    systemPrompt: _systemPrompt,
+    canUseTool,
+    onElicitation,
+    mcpServers,
+    env,
+    model,
+    effort,
+    thinking,
+    fallbackModel,
+    settings,
+    ...rest
+  } = options
+  const flagSettings: Settings | undefined = typeof settings === 'object' ? settings : undefined
+  const { ultracode, ...otherSettings } = flagSettings ?? {}
+  const thinkingMode = thinking?.type === 'disabled' ? 'off' : thinking?.type === 'adaptive' ? 'on' : undefined
+  const servers = Object.entries(mcpServers ?? {}).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  // Only what AWOG ADDED on top of the sidecar's own environment, minus the credential.
+  const envDelta = Object.entries(env ?? {})
+    .filter(([k, v]) => v !== process.env[k] && k !== 'CLAUDE_CODE_OAUTH_TOKEN' && k !== 'ANTHROPIC_API_KEY')
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+  const fingerprint = createHash('sha256')
+    .update(
+      JSON.stringify({
+        rest,
+        settings: flagSettings ? otherSettings : settings,
+        rawThinking: thinkingMode ? null : (thinking ?? null),
+        envDelta,
+        hasCanUseTool: canUseTool !== undefined,
+        hasElicitation: onElicitation !== undefined,
+      }),
+    )
+    .digest('hex')
+  return {
+    fingerprint,
+    soft: {
+      model,
+      effort,
+      ultracode: ultracode === true,
+      thinking: thinkingMode ?? 'off',
+      fallbackModel,
+      // An in-process server is an object graph, so it is identified by its name plus a hash
+      // of the inputs its closure captured (`sdkInputs`; per-turn state is read through
+      // TurnState, not captured). An external one by a hash of its resolved config.
+      mcp: Object.fromEntries(
+        servers.map(([name, cfg]) => [
+          name,
+          cfg.type === 'sdk' ? `sdk:${digestOf(sdkInputs[name] ?? null)}` : digestOf(cfg),
+        ]),
+      ),
+    },
+  }
+}
+
+const digestOf = (value: unknown): string =>
+  createHash('sha256')
+    .update(JSON.stringify(value, (_k, v: unknown) => (v instanceof RegExp ? `${v}` : v)))
+    .digest('hex')
+    .slice(0, 16)
+
+// A graceful `error` result whose message says the credential was rejected.
+const AUTH_FAILURE_RE = /authenticat|unauthori[sz]ed|\b401\b|invalid (x-)?api[ _-]?key|oauth token/i
+
+const messageSubtype = (msg: object): string | undefined =>
+  'subtype' in msg && typeof msg.subtype === 'string' ? msg.subtype : undefined
+
+export async function runStreamClaude(args: RunNonStreamArgs, cb: StreamCallbacks): Promise<RunStreamResult> {
   // Demand real runway on the token: buildSdkEnv freezes it into the subprocess
   // env for the whole turn, so a token that expires mid-turn is unrecoverable.
   const { account, cred } = await resolveCredential(
@@ -447,6 +483,10 @@ export async function runStreamClaude(
     args.settings.accountId,
     FROZEN_TOKEN_MIN_LIFETIME_MS,
   )
+  // Per-turn state the long-lived hooks and in-process MCP servers read (live-process.ts).
+  // Built for the process this turn MAY spawn; when a live one is reused it is discarded
+  // and the live process's own TurnState takes over.
+  const turns = new TurnState()
 
   // systemPrompt: layer the agent's own prompt (AGENT.md) + bulk-loaded context
   // (memory/agents/skills, already folded into systemPromptAppend upstream) +
@@ -592,9 +632,7 @@ export async function runStreamClaude(
   // model's view of the tree current, and matches the Pi path. Prepended before
   // the style/checklist/plan directives below so it ends up adjacent to the
   // user's actual text. Best-effort: a non-repo yields the date alone.
-  const workspaceSnapshot = nativeCommand
-    ? undefined
-    : await collectWorkspaceSnapshot(args.cwd)
+  const workspaceSnapshot = nativeCommand ? undefined : await collectWorkspaceSnapshot(args.cwd)
   if (workspaceSnapshot) {
     promptText = `${buildCurrentStateBlock(workspaceSnapshot)}\n\n${promptText}`
   }
@@ -610,29 +648,19 @@ export async function runStreamClaude(
   if (!nativeCommand && checklistAllowed) {
     promptText = `${TASK_CHECKLIST_PROMPT}\n\n${promptText}`
   }
-  // Background work IS supported here (we hold the CLI session open until it
-  // settles — see the bookkeeping below), but only within this turn and only up to
-  // `waitCapMs`. Say both, so the model neither avoids background work nor sizes a
-  // watcher past the budget that will cut it off.
-  const waitCapMs = args.budget?.maxWallclockMs ?? DEFAULT_BACKGROUND_WAIT_MS
-  const backgroundPrompt = backgroundTurnPrompt(waitCapMs)
-  if (!nativeCommand) promptText = `${backgroundPrompt}\n\n${promptText}`
+  // Background work survives the turn here (live-process.ts): say so, so the model starts
+  // slow work in the background and ends its reply instead of polling or holding it open.
+  if (!nativeCommand) promptText = `${BACKGROUND_TURN_PROMPT}\n\n${promptText}`
   // Plan-mode directive on the turn prompt for the same frozen-append reason: plan
   // can be toggled mid-session, so a system-prompt append would be ignored on
   // `resume`. Prepended last → sits at the front of the turn so the model reliably
   // presents its plan via ExitPlanMode instead of writing it as plain text.
   if (!nativeCommand && inPlanMode) promptText = `${PLAN_MODE_PROMPT}\n\n${promptText}`
 
-  // Attachments (images / text files) need the streaming-input block form — the
-  // string prompt can't carry them. Returns the plain string when nothing usable
-  // is attached, so the common text-only turn is unchanged.
-  // Attachments are dropped for a native command: the block form would push the
-  // `/name` text out of the message's leading position, and no local command reads
-  // an image anyway.
-  const prompt = openClaudePrompt(
-    promptText,
-    nativeCommand ? undefined : args.pendingAttachments,
-  )
+  // Attachments (images / text files) need the block form of the user message. Dropped
+  // for a native command: the block form would push the `/name` text out of the message's
+  // leading position, and no local command reads an image anyway.
+  const userMessage = buildUserMessage(promptText, nativeCommand ? undefined : args.pendingAttachments)
 
   // External MCP servers of the user (SDK-native mechanism, not a custom tool) +
   // AWOG `api` sources as in-process SDK MCP servers (api-sdk-server.ts) + the
@@ -650,11 +678,7 @@ export async function runStreamClaude(
   const mcpServers = await toSdkMcpServers(args.mcpServers)
   // Per-source allowedApiEndpoints (ADR 0060 P4) gate non-GET api calls inside the
   // SDK tool handler — the SAME check the Pi path enforces (isApiCallAllowed).
-  const apiServers = buildApiSdkServers(
-    args.apiSources,
-    args.abortController?.signal,
-    args.sourceApiEndpoints,
-  )
+  const apiServers = buildApiSdkServers(args.apiSources, () => turns.signal(), args.sourceApiEndpoints)
   // SSH tools are offered whenever the user has an agent-enabled host (unified model).
   const sshHostsExist = (await listHosts()).some((h) => h.agentEnabled !== false)
   // Wiki tools (ADR 0073 D-7): same handlers as the Pi path, bridged as an
@@ -663,8 +687,7 @@ export async function runStreamClaude(
   // wikiAutoWrite bật ⇒ cụm wiki tool luôn hiện kể cả khi wiki rỗng — nếu không,
   // agent không thể tạo trang đầu tiên (gà–trứng). Cùng gate với Pi path.
   const wikiAutoWrite = ctxCfg?.wikiAutoWrite === true
-  const wikiAvailable =
-    ctxCfg?.wikiEnabled !== false && (wikiAutoWrite || (await hasWikiContext(args.projectId)))
+  const wikiAvailable = ctxCfg?.wikiEnabled !== false && (wikiAutoWrite || (await hasWikiContext(args.projectId)))
   // Memory tools (ADR 0073 D-11): writes are opt-in, read appears only when a fact
   // has detail past its one-liner. Same gating as the Pi path.
   const memoryOn = ctxCfg?.memoryEnabled !== false && (await hasMemory(args.projectId))
@@ -718,15 +741,12 @@ export async function runStreamClaude(
     // transcript — the same reason the Pi side gates them on ToolFilter.chatSession.
     // Same shared handlers, so a chapter or a file card behaves identically on
     // either runtime; step-mapper maps the bridged names back to the bare ones.
-    [SURFACE_MCP_SERVER]: buildSurfaceToolsSdkServer(args.sessionId, args.cwd ?? process.cwd()),
+    [SURFACE_MCP_SERVER]: buildSurfaceToolsSdkServer(args.sessionId, args.cwd ?? process.cwd(), turns),
     // Embedded browser (ADR 0043) → mcp__awogbrowser__browser_tool. Same handler as
     // the Pi AgentTool, so browsing does not disappear on an Anthropic account.
     // `args.sessionId` là scope sở hữu tab — tab của lượt này chỉ panel của
     // phiên đó mới thấy (browser per-session).
-    [BROWSER_MCP_SERVER]: buildBrowserToolSdkServer(
-      args.cwd ?? process.cwd(),
-      args.sessionId,
-    ),
+    [BROWSER_MCP_SERVER]: buildBrowserToolSdkServer(args.cwd ?? process.cwd(), args.sessionId),
     // Terminal của NGƯỜI DÙNG (ADR 0019) → mcp__awogterm__read_terminal. Cùng
     // handler với AgentTool của Pi, nên khử bí mật + hàng rào nonce là một bản
     // duy nhất. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat — đúng điều
@@ -741,10 +761,7 @@ export async function runStreamClaude(
     // _send_session_message. Vô điều kiện ở đây vì file này CHÍNH LÀ đường chat —
     // đúng điều kiện `filter.chatSession` mà nhánh Pi dùng; một task/subagent
     // không có người ngồi đọc hộp thư để bấm giao.
-    [SESSION_MESSAGING_MCP_SERVER]: buildSessionMessagingSdkServer(
-      args.sessionId,
-      args.abortController?.signal,
-    ),
+    [SESSION_MESSAGING_MCP_SERVER]: buildSessionMessagingSdkServer(args.sessionId, turns),
     // Tool ê-kíp (Session Teams) → mcp__awogteam__team_item_* / team_say /
     // team_note / channel_read / member_diff. Chỉ có mặt khi phiên NẰM TRONG
     // NHÓM — `buildTeamSdkServer` trả null cho phiên lẻ, đúng điều kiện
@@ -762,10 +779,7 @@ export async function runStreamClaude(
     ...(inPlanMode
       ? {}
       : {
-          [DEV_SERVER_MCP_SERVER]: buildDevServerSdkServer(
-            args.cwd ?? process.cwd(),
-            args.sessionId,
-          ),
+          [DEV_SERVER_MCP_SERVER]: buildDevServerSdkServer(args.cwd ?? process.cwd(), args.sessionId),
         }),
   }
   const claudeBinary = resolveClaudeBinary()
@@ -780,31 +794,42 @@ export async function runStreamClaude(
   // `onAbort` unwind park bằng answers rỗng, thẻ lật sang "No answer given". Người
   // dùng thấy đúng một nhịp nháy rồi câu hỏi tự trả lời "không chọn gì".
   //
-  // Đây là cùng một lớp lỗi commit 4041c7d đã sửa cho background work; chỗ này bị bỏ
-  // sót vì park của câu hỏi không đi qua `liveBackground`.
-  //
-  // Cố ý KHÔNG gộp vào `waitingCount()`: nó điều khiển `armWaitCap()`, mà cap 30 phút
-  // + `stopTask` là ngữ nghĩa của background task. Một câu hỏi thì KHÔNG có hạn —
-  // người dùng trả lời lúc nào cũng được, và không có "task" nào để stop.
-  let humanParks = 0
-  const humanParked = (): boolean => humanParks > 0
-  // Gắn bộ đếm quanh handler mà CẢ HAI đường hỏi người đều dùng (gate của
-  // AskUserQuestion và handler elicitation), nên không đường nào đếm sót.
+  // Process nay sống qua lượt nên handler hỏi người (gate AskUserQuestion + elicitation
+  // — dựng MỘT lần lúc spawn) không được capture `args.askUserQuestion` của lượt đầu: nó
+  // đọc handler của lượt HIỆN TẠI từ `turns.ctx`, và bộ đếm bọc quanh đúng handler mà cả
+  // hai đường hỏi người dùng nên không đường nào đếm sót.
   const askUserQuestion: AskUserQuestionFn | undefined = args.askUserQuestion
     ? async (...a) => {
-        humanParks += 1
+        const ask = turns.ctx?.askUserQuestion
+        if (!ask) throw new Error('No active turn to put this question to.')
+        turns.humanParks += 1
         try {
-          return await args.askUserQuestion!(...a)
+          return await ask(...a)
         } finally {
-          humanParks -= 1
-          // Trả lời xong mà CLI vì lý do nào đó không phát thêm message nào thì lượt
-          // sẽ treo — nên arm lại nhịp settle. Mọi message KHÔNG thụ động tới sau đều
-          // huỷ nó (khối clearTimeout trong vòng lặp, xem isPassiveAfterResult), nên
-          // đây chỉ là lưới an toàn.
-          if (sawResult && waitingCount() === 0 && !humanParked()) armIdleSettle()
+          turns.humanParks -= 1
+          // Trả lời xong mà CLI vì lý do nào đó không phát thêm message nào thì lượt sẽ
+          // treo — nên cho lượt arm lại nhịp settle. Mọi message KHÔNG thụ động tới sau
+          // đều huỷ nó, nên đây chỉ là lưới an toàn.
+          turns.ctx?.onQuestionAnswered?.()
         }
       }
     : undefined
+  // The cards those gates render go through the TURN's callbacks (or are held between
+  // turns), not through the first turn's `cb` captured at spawn.
+  const cardCb: StreamCallbacks = {
+    onChunk: () => {},
+    onStep: (step) => turns.card(step),
+  }
+  // Process-lifetime abort: closes the CLI (live-process.ts close()). NOT the turn's — a
+  // turn's Stop interrupts the generation and leaves the process and its background
+  // tasks running.
+  const lifeAbort = new AbortController()
+  // A fresh session gets its id from us instead of from the CLI's first message. Three
+  // reasons: the live process knows the id it serves from the first byte (acquireLive
+  // compares it to the persisted resume handle), the monitor can attribute the process to
+  // its session from argv (`--session-id <uuid>`, monitor/classify.ts) exactly as it does
+  // a resumed one, and nothing about the first turn depends on parsing an init message.
+  const freshCliSessionId = randomUUID()
 
   const options: Options = {
     // `snapshot: true` (SDK 0.3.260+): record this conversation's system prompt once
@@ -855,7 +880,9 @@ export async function runStreamClaude(
     // own (unreliable) permission path doesn't shadow it (ADR 0058 P4).
     permissionMode: 'bypassPermissions',
     allowDangerouslySkipPermissions: true,
-    hooks: { PreToolUse: [{ hooks: [makePreToolUseHook(gate)] }] },
+    hooks: {
+      PreToolUse: [{ hooks: [makePreToolUseHook(turns, args.sessionId)] }],
+    },
     // Interactive questions (AskUserQuestion). Supplying this callback is what makes
     // the CLI advertise that tool at all when it runs non-interactively — the SDK
     // turns it into `--permission-prompt-tool stdio`, which the tool's `isEnabled()`
@@ -865,11 +892,11 @@ export async function runStreamClaude(
     // leaves `askUserQuestion` undefined, and the tool stays off there.
     ...(askUserQuestion
       ? {
-          canUseTool: makeAskUserQuestionGate(askUserQuestion, cb),
+          canUseTool: makeAskUserQuestionGate(askUserQuestion, cardCb),
           // MCP elicitation (form / URL auth) → cùng thẻ câu hỏi, cùng park. Không
           // khai callback này thì SDK TỪ CHỐI TỰ ĐỘNG mọi request — một Source cần
           // cấp quyền qua trình duyệt sẽ hỏng câm (elicitation.ts).
-          onElicitation: makeElicitationHandler(askUserQuestion, cb),
+          onElicitation: makeElicitationHandler(askUserQuestion, cardCb),
         }
       : {}),
     // AWOG DOES render a per-task stop control (SessionBackgroundChips → the bg
@@ -901,9 +928,9 @@ export async function runStreamClaude(
     ...(args.disabledTools ? { disallowedTools: withBridgedAliases(args.disabledTools) } : {}),
     ...(sdkModel ? { model: sdkModel } : {}),
     ...(args.cwd ? { cwd: args.cwd } : {}),
-    ...(args.sdkSessionId ? { resume: args.sdkSessionId } : {}),
+    ...(args.sdkSessionId ? { resume: args.sdkSessionId } : { sessionId: freshCliSessionId }),
     ...(Object.keys(allServers).length > 0 ? { mcpServers: allServers } : {}),
-    ...(args.abortController ? { abortController: args.abortController } : {}),
+    abortController: lifeAbort,
     // Mở tool `Artifact` của CLI (parity #35). Cổng thật là biến môi trường chứ
     // KHÔNG phải `settings.enableArtifact` — artifact.ts ghi bảng đo và lý do.
     // Chẩn đoán (stderr → log, `--debug` theo env) + model dự phòng khi Anthropic quá
@@ -939,13 +966,90 @@ export async function runStreamClaude(
       // Ngữ cảnh hạ tầng đã ghim → `AWS_PROFILE`/`AWS_DEFAULT_REGION` cho CLI (và
       // mọi `Bash` nó spawn). Xem `buildSdkEnv`: trên đường này `Bash` là tool của
       // CLI nên env của tiến trình con là chỗ duy nhất đặt được nó.
-      ...buildSdkEnv(cred, args.settings.infra),
+      ...buildSdkEnv(cred, args.settings.infra, undefined, autoCompactFromContext(args.contextConfig)),
       ...ARTIFACT_ENV,
       ...(args.askUserQuestion ? QUESTION_ENV : {}),
     },
     // Packaged builds: point at the bundled native binary (ADR 0058 P3); dev leaves
     // it undefined so the SDK auto-discovers from the pnpm store.
     ...(claudeBinary ? { pathToClaudeCodeExecutable: claudeBinary } : {}),
+  }
+
+  // ── Which process runs this turn ────────────────────────────────────────────
+  // A turn already cancelled while it was still being prepared must not spawn (or wake) a
+  // process just to throw it away.
+  const signal = args.abortController?.signal
+  if (signal?.aborted) throw new RpcError(-32023, 'CANCELED')
+
+  // What each in-process server's closure captured, so an edit to it (an api Source's URL
+  // or endpoint rules, the wiki/memory write flags, the SSH co-pilot connection) is seen
+  // as a change of THAT server rather than ignored because its name is unchanged.
+  const { fingerprint, soft } = describeOptions(options, {
+    ...Object.fromEntries(
+      (args.apiSources ?? []).map((s) => [s.id, { source: s, endpoints: args.sourceApiEndpoints?.[s.id] ?? null }]),
+    ),
+    awogwiki: { projectId: args.projectId, autoWrite: wikiAutoWrite },
+    awogmemory: {
+      projectId: args.projectId,
+      autoWrite: memoryAutoWrite,
+      bodies: memoryBodies,
+    },
+    awogssh: { connId: args.sshTerminalConnId ?? null },
+  })
+  const tokenKey = tokenKeyOf(cred)
+  let live = acquireLive(args.sessionId, {
+    fingerprint,
+    tokenKey,
+    resume: args.sdkSessionId,
+    anyConfig: nativeCommand,
+  })
+  // Same hard config, possibly a different model / effort / thinking / MCP set: change
+  // those ON the process so the background work it owns survives (a native command skips
+  // this — it serves whatever config the caller assembled, see acquireLive). A failed
+  // apply closes the process and falls through to the respawn below.
+  let reconfigured: string[] = []
+  if (live && !nativeCommand) {
+    const applied = await live.reconfigure(soft, options.mcpServers, turns)
+    reconfigured = applied.changed
+    if (!applied.ok) live = undefined
+    // The reconfigure awaited: a Stop pressed meanwhile must not start the turn.
+    if (signal?.aborted) throw new RpcError(-32023, 'CANCELED')
+  }
+  const reused = live !== undefined
+  if (!live) {
+    // A new process: first make room under the cap (evicts the LRU quiet one).
+    makeRoomForSpawn(args.sessionId)
+    // The adapter belongs to the PROCESS, not the turn: it carries the background-task
+    // rows and the checklist tracker from the turn that launched work to the turn that
+    // reports it. It starts on this turn's callbacks and is re-pointed per turn below.
+    const adapter = createClaudeEventAdapter(cb, {
+      // Persist the main agent's checklist as the session's current one — the SDK-path
+      // equivalent of the Pi tool layer's todoSink (ADR 0069). Without it the banner/Plan
+      // tab can only fall back to the transcript snapshot and a user edit has no
+      // authoritative list to write to. The list is replayed from the CLI's task tools
+      // (task-checklist.ts), which replaced TodoWrite on this surface.
+      onTodos: (todos: TodoItem[]) => {
+        void updateSessionMetadata(args.sessionId, { todos })
+      },
+      // Let a finished background shell show its captured output in the transcript
+      // instead of a bare "completed" (task-output.ts validates the path).
+      readTaskOutput: readTaskOutputTail,
+      // Seed for the task-tool checklist tracker — see ClaudeAdapterHooks.sessionTodos.
+      ...(args.sessionTodos ? { sessionTodos: args.sessionTodos } : {}),
+    })
+    const input = createPromptChannel()
+    live = new LiveClaude({
+      sessionId: args.sessionId,
+      fingerprint,
+      soft,
+      tokenKey,
+      state: turns,
+      adapter,
+      input,
+      lifeAbort,
+      query: query({ prompt: input.stream, options }),
+      cliSessionId: args.sdkSessionId ?? freshCliSessionId,
+    })
   }
 
   log.info('chat stream request (claude-sdk)', {
@@ -955,31 +1059,14 @@ export async function runStreamClaude(
     account: account.id,
     accountLabel: account.label,
     resume: !!args.sdkSessionId,
+    processReused: reused,
+    reconfigured,
+    attachWake: args.attachWake === true,
     nativeBinary: !!claudeBinary,
     historyTurns: args.history.length,
   })
 
-  // Persist the main agent's checklist as the session's current one — the SDK-path
-  // equivalent of the Pi tool layer's todoSink (ADR 0069). Without it the banner/Plan
-  // tab can only fall back to the transcript snapshot and a user edit has no
-  // authoritative list to write to. The list is replayed from the CLI's task tools
-  // (task-checklist.ts), which replaced TodoWrite on this surface.
-  const todoSessionId = args.sessionId
-  const adapter = createClaudeEventAdapter(cb, {
-    ...(todoSessionId
-      ? {
-          onTodos: (todos: TodoItem[]) => {
-            void updateSessionMetadata(todoSessionId, { todos })
-          },
-        }
-      : {}),
-    // Let a finished background shell show its captured output in the transcript
-    // instead of a bare "completed" (task-output.ts validates the path).
-    readTaskOutput: readTaskOutputTail,
-    // Seed for the task-tool checklist tracker — see ClaudeAdapterHooks.sessionTodos.
-    ...(args.sessionTodos ? { sessionTodos: args.sessionTodos } : {}),
-  })
-  // ── Background work: keep the CLI session alive until it settles ────────────
+  // ── The turn: a span of the live process's message stream ───────────────────
   //
   // The CLI holds the turn open for background subagents/shells and wakes the
   // model when one finishes (`system/task_notification`). That only works while
@@ -990,472 +1077,139 @@ export async function runStreamClaude(
   // model again afterwards. So `result` only arms a short settle timer (any further
   // non-passive message cancels it) — it never closes stdin directly.
   //
-  // `background_tasks_changed` is a LEVEL signal (replace the set wholesale); the
-  // task_started/task_notification bookends are the fallback for a CLI that
-  // doesn't emit the level. The set starts empty because this query owns a fresh
-  // CLI process.
-  // id → task. We only PARK the turn for work the user is actually waiting on (a
-  // background shell, a subagent, a workflow). Ambient/housekeeping tasks the CLI
-  // runs on its own (monitor/dream/scan) must never hold a turn open — that would
-  // add the wait to EVERY turn — and neither must work that outlives the turn by
-  // design (a remote agent, a teammate). The CLI's own `ambient` flag answers that
-  // when we have it; the type list is the fallback (see WAITABLE_TASK_TYPES).
-  const liveBackground = new Map<string, { type: string; ambient?: boolean }>()
-  const isWaitable = (t: { type: string; ambient?: boolean }): boolean =>
-    t.ambient !== undefined ? !t.ambient : WAITABLE_TASK_TYPES.has(t.type)
-  const waitingCount = (): number => {
-    let n = 0
-    for (const t of liveBackground.values()) if (isWaitable(t)) n += 1
-    return n
-  }
-  // Unknown types are reported once per turn: they mean the CLI's task vocabulary
-  // moved and the fallback list needs updating. Only worth saying when the CLI gave
-  // us no `ambient` flag — with the flag the name doesn't decide anything.
-  const unknownTypesSeen = new Set<string>()
-  const noteTaskType = (type: string, ambient?: boolean): void => {
-    if (ambient !== undefined) return
-    if (WAITABLE_TASK_TYPES.has(type) || AMBIENT_TASK_TYPES.has(type)) return
-    if (unknownTypesSeen.has(type)) return
-    unknownTypesSeen.add(type)
-    log.warn('claude-sdk: unknown background task_type — turn will NOT wait for it', {
-      sessionId: args.sessionId,
-      taskType: type,
-    })
-  }
-  let closed = false
-  // This turn has produced at least one `result` — the point from which an `idle`
-  // state report means "this turn is over" rather than "the CLI is not busy yet".
+  // Which means the turn can end the moment the reply is complete. The things that keep
+  // it open are all about THIS reply: no `idle` yet (the settle timer below), a question
+  // parked on the human (no deadline at all), or the user pressing Stop.
   let sawResult = false
-  // Parked = the turn's result already arrived and we are only still here for
-  // background work.
-  let parked = false
-  // One log line per turn when the CLI reports itself idle under live background
-  // work (see the session_state_changed case).
-  let loggedIdleWhileParked = false
-  let waitTimer: NodeJS.Timeout | undefined
-  let graceTimer: NodeJS.Timeout | undefined
   let idleTimer: NodeJS.Timeout | undefined
-  const clearTimers = (): void => {
-    if (waitTimer) clearTimeout(waitTimer)
-    if (graceTimer) clearTimeout(graceTimer)
-    if (idleTimer) clearTimeout(idleTimer)
-    if (deferTimer) clearTimeout(deferTimer)
-    waitTimer = graceTimer = idleTimer = deferTimer = undefined
-  }
-  // Tool calls the CLI has announced but not yet answered. Closing stdin under one
-  // of these is what produces a PHANTOM DENIAL: stdin is the control stream, so the
-  // CLI aborts the in-flight call with reason 'background' and hands the model its
-  // canned "The user doesn't want to take this action right now…" text — which the
-  // model reasonably reads as the user refusing, and derails onto. So a deferrable
-  // close waits for the call to answer; only an abort or the stream ending cuts in.
-  const inFlightTools = new Set<string>()
-  let pendingClose: string | undefined
-  let deferTimer: NodeJS.Timeout | undefined
-  const closeInput = (reason: string, opts?: { force?: boolean }): void => {
-    if (closed) return
-    if (!opts?.force && inFlightTools.size > 0) {
-      if (pendingClose) return
-      pendingClose = reason
-      log.info('claude-sdk deferring close until tool calls answer', {
-        sessionId: args.sessionId,
-        reason,
-        inFlight: inFlightTools.size,
-      })
-      // Backstop: a call that never answers must not hold the session lock for the
-      // rest of time. Generous, because forcing past it cancels a call that IS
-      // still running — the thing the defer exists to avoid.
-      deferTimer = setTimeout(() => {
-        log.warn('claude-sdk close deferred too long — forcing', {
-          sessionId: args.sessionId,
-          reason,
-          inFlight: inFlightTools.size,
-        })
-        closeInput(`${reason} (defer cap)`, { force: true })
-      }, DEFER_CLOSE_MAX_MS)
-      return
-    }
-    closed = true
-    clearTimers()
-    log.info('claude-sdk closing input', { sessionId: args.sessionId, reason })
-    prompt.close()
-  }
-  // A deferred close fires as soon as the last announced tool call is answered.
-  const flushPendingClose = (): void => {
-    if (!pendingClose || inFlightTools.size > 0) return
-    const reason = pendingClose
-    pendingClose = undefined
-    closeInput(`${reason} (tools settled)`)
-  }
-  // `result` is not turn-over. Wait a beat for `session_state_changed: idle`; if the
-  // CLI wakes the model instead, the next non-passive message cancels this and the
-  // continuation streams into the same turn. Passive messages (isPassiveAfterResult)
-  // leave it alone, so the deadline stays measured from when it was armed.
+  let loggedParkedOnQuestion = false
+  let turn: LiveTurn | undefined
+  // `result` is not turn-over. Wait a beat for `idle`; if the CLI keeps going instead, the
+  // next non-passive message cancels this and the continuation streams into the same turn.
+  // Passive messages (isPassiveAfterResult) leave it alone, so the deadline stays measured
+  // from when it was armed. With `promptSuggestions` on, the CLI has been observed to say
+  // `result` + `prompt_suggestion` and never `idle`, hence the timer
+  // (docs/features/claude-sdk-idle-settle-prompt-suggestion.md).
   const armIdleSettle = (): void => {
-    if (idleTimer || closed) return
-    // Gỡ handle khi bắn: close có thể bị defer (tool đang bay), và một handle đã bắn
-    // còn treo ở đây làm message kế tiếp bị log nhầm "settle cancelled".
+    if (idleTimer) return
+    // The handle is dropped when it fires, so a later message is not logged as having
+    // "cancelled" a settle that already happened.
     idleTimer = setTimeout(() => {
       idleTimer = undefined
-      closeInput('result, no idle signal')
+      log.info('claude-sdk turn settled without an idle signal', {
+        sessionId: args.sessionId,
+      })
+      turn?.end()
     }, IDLE_SETTLE_MS)
   }
-  // Hard cap so a wedged background task can't hold the turn (and the session lock)
-  // forever. Honours the per-turn wallclock budget when the caller set one. We don't
-  // yank stdin: ask the CLI to stop its own tasks (it is the only thing that can) and
-  // let the resulting notifications take us to `idle` the normal way; the deadline is
-  // the backstop if that never lands.
-  const armWaitCap = (): void => {
-    if (waitTimer || closed) return
-    waitTimer = setTimeout(() => {
-      const stopping = [...liveBackground.entries()].filter(([, t]) => isWaitable(t))
-      log.info('claude-sdk background wait cap reached — stopping tasks', {
-        sessionId: args.sessionId,
-        tasks: stopping.length,
-      })
-      for (const [taskId] of stopping) {
-        void q.stopTask(taskId).catch((err: unknown) => {
-          log.warn('claude-sdk stopTask failed (wait cap)', {
-            taskId,
-            err: err instanceof Error ? err.message : String(err),
-          })
-        })
-      }
-      waitTimer = setTimeout(
-        () => closeInput('background wait cap reached'),
-        STOP_TASKS_DEADLINE_MS,
-      )
-    }, waitCapMs)
-  }
-  // Every parked task settled but the CLI didn't wake the model (it skips ambient
-  // tasks, and a failed task may produce no continuation). Give it a short grace
-  // window — any non-passive message cancels it — then end the turn instead of
-  // sitting until the cap.
-  const armGrace = (): void => {
-    if (graceTimer || closed || !parked || waitingCount() > 0 || humanParked()) return
-    graceTimer = setTimeout(() => {
-      graceTimer = undefined
-      closeInput('background settled, no continuation')
-    }, BACKGROUND_GRACE_MS)
-  }
-  // A user cancel is the one close that cannot wait for a tool call to answer —
-  // cancelling IS the point, and the partial reply is persisted as canceled.
-  const onAbort = (): void => closeInput('aborted', { force: true })
-  args.abortController?.signal.addEventListener('abort', onAbort, { once: true })
 
-  // Mirror the CLI's background work into AWOG's bg registry so the session shows
-  // the SAME chips as the Pi path (docs/features/session-background-tasks.md).
-  // Registration follows the LEVEL signal, not task_started: only a task the CLI
-  // itself calls background belongs on a chip — a foreground subagent is already
-  // in the transcript. Settling follows the notification edge (it carries status).
-  const mirrorSessionId = args.sessionId
-  const trackBackground = (msg: SDKMessage): void => {
-    if (msg.type !== 'system') return
-    const m = msg as {
-      subtype?: string
-      tasks?: {
-        task_id: string
-        task_type?: string
-        description?: string
-        ambient?: boolean
-      }[]
-      task_id?: string
-      tool_use_id?: string
-      task_type?: string
-      subagent_type?: string
-      description?: string
-      status?: string
-      summary?: string
-      state?: string
-    }
-    switch (m.subtype) {
-      case 'background_tasks_changed':
-        liveBackground.clear()
-        for (const t of m.tasks ?? []) {
-          const type = t.task_type ?? 'unknown'
-          const entry = { type, ...(t.ambient !== undefined ? { ambient: t.ambient } : {}) }
-          liveBackground.set(t.task_id, entry)
-          noteTaskType(type, t.ambient)
-          // This level signal is the ONLY place background and foreground work differ
-          // (a foreground subagent emits the same task_* bookends) — the adapter needs
-          // it to label the row honestly.
-          adapter.markBackgroundTask(t.task_id)
-          if (mirrorSessionId && isWaitable(entry)) {
-            registerExternalBackground({
-              sessionId: mirrorSessionId,
-              shellId: t.task_id,
-              command: t.description || type,
-            })
-          }
-        }
-        break
-      case 'task_started': {
-        // A Task-tool subagent may arrive without task_type; subagent_type says it.
-        // No `ambient` flag rides this edge, so the type list decides here.
-        if (m.task_id) {
-          const type = m.task_type ?? (m.subagent_type ? 'local_agent' : 'unknown')
-          liveBackground.set(m.task_id, { type })
-          noteTaskType(type)
-          // A shell has no progress events — remember which tool_use announced it so
-          // we can pick its output path out of the matching tool_result.
-          if (type === 'local_bash' && m.tool_use_id) {
-            shellTaskByToolUse.set(m.tool_use_id, m.task_id)
-          }
-        }
-        break
-      }
-      case 'task_notification':
-        if (m.task_id) {
-          liveBackground.delete(m.task_id)
-          if (mirrorSessionId) {
-            // 'completed' | 'failed' | 'stopped' — map onto the shell vocabulary
-            // the chips already speak (exit 0 / exit 1 / interrupted).
-            settleExternalBackground({
-              sessionId: mirrorSessionId,
-              shellId: m.task_id,
-              status: m.status === 'stopped' ? 'exited-unknown' : 'exited',
-              exitCode: m.status === 'completed' ? 0 : m.status === 'failed' ? 1 : null,
-              ...(m.summary !== undefined ? { summary: m.summary } : {}),
-            })
-          }
-        }
-        break
-      case 'session_state_changed':
-        // Turn-over signal — but only for a turn with nothing parked. The SDK
-        // documents `idle` as firing once the held-back result has flushed and the
-        // bg-agent loop has exited; MEASURED, it also fires 1-47ms after `result`
-        // while a `local_bash` of ours is still running. Acting on it there closed
-        // stdin, killed the CLI process, and took the live task down with it: every
-        // one of the ten parks in the logs after that close landed on this line, and
-        // the user met each of them as a chip reading "interrupted". So `idle` means
-        // "not generating", and it is turn-over only when we are not waiting on
-        // anything. Parked, the turn ends the normal way instead: the last task's
-        // notification drops waitingCount to 0 and armGrace closes, or the wait cap
-        // stops the tasks.
-        //
-        // Also gated on this turn having produced its `result`: a resumed CLI can
-        // report itself idle before it has even picked up our prompt, and acting on
-        // that would close stdin at the start of the turn.
-        if (m.state === 'idle' && sawResult) {
-          const waiting = waitingCount()
-          // `idle` = "không đang sinh chữ". Trong lúc chờ người trả lời thì CLI luôn
-          // idle — đóng stdin ở đây là tự giết câu hỏi của chính mình.
-          if (waiting === 0 && humanParked()) {
-            if (!loggedIdleWhileParked) {
-              loggedIdleWhileParked = true
-              log.info('claude-sdk idle while asking the user — holding the turn open', {
-                sessionId: args.sessionId,
-              })
-            }
-          } else if (waiting === 0) closeInput('session idle')
-          else if (!loggedIdleWhileParked) {
-            // Once per turn: this is the signal that used to end the turn here, and
-            // the only way to tell a healthy park from a stale task set in the logs.
-            loggedIdleWhileParked = true
-            log.info('claude-sdk idle while parked — holding the turn open', {
-              sessionId: args.sessionId,
-              tasks: waiting,
-            })
-          }
-        }
-        break
-      default:
-        break
-    }
-  }
-
-  // ── Live output for a background SHELL ──────────────────────────────────────
-  //
-  // The CLI emits `task_progress` for a subagent but NOTHING for a shell, so a long
-  // `pytest` would sit in the transcript as a bare "running" row for minutes and only
-  // reveal its output once it exits. The output file is named in the backgrounded
-  // Bash tool_result ("Output is being written to: …"), so we poll its tail while the
-  // task is live and push it into that row. Cheap by construction: one stat+read per
-  // live shell every few seconds, and the adapter drops an unchanged tail instead of
-  // re-emitting the step.
-  const OUTPUT_POLL_MS = 5_000
-  // Stop polling a path that keeps failing to read (deleted file, rejected path)
-  // instead of warning about it forever.
-  const OUTPUT_POLL_MAX_MISSES = 3
-  const shellTaskByToolUse = new Map<string, string>()
-  const bgOutputFiles = new Map<string, { file: string; misses: number }>()
-  let outputPoll: NodeJS.Timeout | undefined
-  const stopOutputPoll = (): void => {
-    if (!outputPoll) return
-    clearInterval(outputPoll)
-    outputPoll = undefined
-  }
-  const startOutputPoll = (): void => {
-    if (outputPoll || closed) return
-    outputPoll = setInterval(() => {
-      // Input closed → the turn is wrapping up; the row settles from the
-      // notification (or the turn-end sweep), not from another poll.
-      if (closed) {
-        stopOutputPoll()
-        return
-      }
-      for (const [taskId, entry] of bgOutputFiles) {
-        if (!liveBackground.has(taskId)) {
-          bgOutputFiles.delete(taskId)
-          continue
-        }
-        const tail = readTaskOutputTail(entry.file, taskId)
-        if (tail === undefined) {
-          entry.misses += 1
-          if (entry.misses >= OUTPUT_POLL_MAX_MISSES) bgOutputFiles.delete(taskId)
-          continue
-        }
-        entry.misses = 0
-        adapter.updateBackgroundOutput(taskId, tail)
-      }
-      if (bgOutputFiles.size === 0) stopOutputPoll()
-    }, OUTPUT_POLL_MS)
-    // A poll must never be the reason this process stays alive.
-    outputPoll.unref()
-  }
-  // Learn a backgrounded shell's output path from the tool_result that announced it.
-  const trackShellOutputPath = (msg: SDKMessage): void => {
-    if (msg.type !== 'user' || shellTaskByToolUse.size === 0) return
-    const content = (msg as { message?: { content?: unknown } }).message?.content
-    if (!Array.isArray(content)) return
-    for (const raw of content) {
-      const block = raw as { type?: string; tool_use_id?: string; content?: unknown }
-      if (block.type !== 'tool_result' || typeof block.tool_use_id !== 'string') continue
-      const taskId = shellTaskByToolUse.get(block.tool_use_id)
-      if (!taskId) continue
-      shellTaskByToolUse.delete(block.tool_use_id)
-      const text =
-        typeof block.content === 'string' ? block.content : JSON.stringify(block.content ?? '')
-      const file = /(\/[^\s"']+\.output)/.exec(text)?.[1]
-      if (!file) continue
-      bgOutputFiles.set(taskId, { file, misses: 0 })
-      // Cùng đường dẫn, hai người đọc: vòng poll ở trên đẩy tail vào transcript,
-      // còn registry giữ lại để modal "View output" của NGƯỜI DÙNG đọc được sau —
-      // trước đây nó luôn thấy hộp rỗng vì AWOG không sở hữu file log nào.
-      if (mirrorSessionId) {
-        noteExternalOutputFile({ sessionId: mirrorSessionId, shellId: taskId, file })
-      }
-      startOutputPoll()
-    }
-  }
-
-  // Announced-but-unanswered tool calls, so a close can wait for them (see
-  // closeInput). `tool_use` blocks ride the assistant message; the matching
-  // `tool_result` comes back on a user message. A subagent's calls count too —
-  // its stdin is the same control stream.
-  const trackToolFlight = (msg: SDKMessage): void => {
-    const content = (msg as { message?: { content?: unknown } }).message?.content
-    if (!Array.isArray(content)) return
-    for (const raw of content) {
-      const block = raw as { type?: string; id?: string; tool_use_id?: string }
-      if (msg.type === 'assistant' && block.type === 'tool_use' && block.id) {
-        inFlightTools.add(block.id)
-      } else if (msg.type === 'user' && block.type === 'tool_result' && block.tool_use_id) {
-        inFlightTools.delete(block.tool_use_id)
-      }
-    }
-  }
-
-  const q = query({ prompt: prompt.stream, options })
-  // Stop affordance parity with the Pi path: a chip's stop button goes through
-  // sessions.backgroundKill → the registry → here, since only the CLI can stop
-  // a task it owns.
-  if (mirrorSessionId) {
-    setExternalKiller(mirrorSessionId, (taskId) => {
-      void q.stopTask(taskId).catch((err: unknown) => {
-        log.warn('claude-sdk stopTask failed', {
-          taskId,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      })
-    })
-  }
+  // Everything the long-lived hooks and servers read per turn — set BEFORE the message is
+  // pushed, so even the first tool call of the turn finds this turn's gate.
+  const liveRef = live
+  liveRef.state.begin({
+    gate,
+    cb,
+    ...(args.askUserQuestion ? { askUserQuestion: args.askUserQuestion } : {}),
+    ...(signal ? { signal } : {}),
+    onQuestionAnswered: () => {
+      if (sawResult && liveRef.state.humanParks === 0) armIdleSettle()
+    },
+  })
+  liveRef.adapter.beginTurn(cb, args.sessionTodos)
+  turn = liveRef.begin({
+    message: userMessage,
+    attach: args.attachWake === true,
+  })
+  const thisTurn = turn
+  // A cancel interrupts the CLI — the process and its background tasks stay up
+  // (perTaskStopAffordance) — and the turn unwinds through the CLI's own
+  // `result` + `idle`. The deadline inside cancel() kills a CLI that never answers.
+  const onAbort = (): void => liveRef.cancel(thisTurn)
+  signal?.addEventListener('abort', onAbort, { once: true })
 
   try {
-    for await (const msg of q) {
-      // Any non-passive message is activity: the CLI is alive and working, so a
-      // pending "settled but nothing followed" grace window no longer applies — and
-      // neither does a post-`result` settle timer, since the CLI just proved the
-      // turn wasn't over (it woke the model, or is about to say `idle` itself).
-      // Passive messages (prompt_suggestion…) prove nothing of the sort and must not
-      // touch either timer — doing so is what left turns hanging with no `idle`.
+    for await (const msg of thisTurn.messages) {
+      // Any non-passive message is activity: the CLI is alive and working, so a post-
+      // `result` settle timer no longer applies — it just proved the turn wasn't over
+      // (it woke the model, or is about to say `idle` itself). Passive messages
+      // (prompt_suggestion…) prove nothing of the sort and must not touch the timer —
+      // doing so is what left turns hanging with no `idle`.
       const passive = isPassiveAfterResult(msg)
       const settleCancelled = !passive && idleTimer !== undefined
       if (!passive) {
-        if (graceTimer) {
-          clearTimeout(graceTimer)
-          graceTimer = undefined
-        }
-        if (idleTimer) {
-          clearTimeout(idleTimer)
-          idleTimer = undefined
-        }
+        clearTimeout(idleTimer)
+        idleTimer = undefined
       }
       // The adapter still sees EVERY message — passive ones too (the suggestion chip).
-      adapter.handle(msg)
-      trackBackground(msg)
-      trackToolFlight(msg)
-      trackShellOutputPath(msg)
-      // Rare by construction (the turn really went on after `result`), and it names
-      // the message that held the turn open — the data a future hang needs. `!closed`
-      // drops the `idle` case, which closes within this same iteration.
-      if (settleCancelled && !closed) {
+      liveRef.adapter.handle(msg)
+      // Rare by construction (the turn really went on after `result`), and it names the
+      // message that held the turn open — the data a future hang needs.
+      if (settleCancelled && !(sawResult && sessionStateOf(msg) === 'idle')) {
         log.info('claude-sdk settle cancelled — turn continues', {
           sessionId: args.sessionId,
           type: msg.type,
-          subtype: (msg as { subtype?: string }).subtype,
+          subtype: messageSubtype(msg),
         })
       }
       if (msg.type === 'result') {
         sawResult = true
-        const waiting = waitingCount()
-        // NOT a close: `result` says a reply was produced, not that the turn is
-        // over. Wait for `session_state_changed: idle` (or the settle timer).
-        if (waiting === 0 && humanParked()) {
-          // Chờ người: không đặt hạn nào cả. Cũng không `parked = true` / `armWaitCap()`
-          // — cap là cho background task, còn câu hỏi thì không có gì để stop.
+        // NOT the end: `result` says a reply was produced. Wait for `idle` (or the timer).
+        if (liveRef.state.humanParks > 0) {
+          // Chờ người: không đặt hạn nào cả — người dùng trả lời lúc nào cũng được.
           log.info('claude-sdk turn parked on a question — no idle deadline', {
             sessionId: args.sessionId,
           })
-        } else if (waiting === 0) armIdleSettle()
-        else {
-          parked = true
-          log.info('claude-sdk turn parked on background work', {
+        } else armIdleSettle()
+      } else if (sawResult && sessionStateOf(msg) === 'idle') {
+        // Also gated on this turn having produced its `result`: a resumed CLI can report
+        // itself idle before it has even picked up our prompt.
+        if (liveRef.state.humanParks === 0) {
+          thisTurn.end()
+          break
+        }
+        // `idle` = "not generating". Waiting on the human the CLI is always idle —
+        // ending the turn here would kill the question we are showing.
+        if (!loggedParkedOnQuestion) {
+          loggedParkedOnQuestion = true
+          log.info('claude-sdk idle while asking the user — holding the turn open', {
             sessionId: args.sessionId,
-            tasks: waiting,
-            capMs: waitCapMs,
           })
-          armWaitCap()
         }
       }
-      armGrace()
-      flushPendingClose()
     }
   } catch (err) {
+    // The process died or errored mid-turn: it cannot be reused, and a half-dead CLI must
+    // not be handed to the next turn.
+    liveRef.close('turn failed')
     throw mapClaudeErrorToRpc(err)
   } finally {
-    // Never leave the generator parked (it would keep the CLI process alive) or a
-    // timer pending, whichever way this turn ended. The stream is over here, so
-    // nothing can answer an in-flight call any more — force past the defer.
-    closeInput('turn ended', { force: true })
-    stopOutputPoll()
-    args.abortController?.signal.removeEventListener('abort', onAbort)
-    // The CLI process dies with the turn, so any task still mirrored as running
-    // is gone with it — settle the chips (and their transcript rows) instead of
-    // wedging them on 'running'.
-    for (const taskId of liveBackground.keys()) adapter.settleBackgroundRow(taskId)
-    if (mirrorSessionId) {
-      clearExternalKiller(mirrorSessionId)
-      settleAllExternalBackground(mirrorSessionId)
-    }
+    clearTimeout(idleTimer)
+    idleTimer = undefined
+    signal?.removeEventListener('abort', onAbort)
+    // Hand the stream back to the pump. The process (and any background task in it)
+    // stays; only this turn's span of it ends.
+    thisTurn.end()
   }
 
   // A mid-stream abort surfaces as CANCELED so send-message routes it through the
   // cancel path (persist the partial reply flagged canceled) — same as the Pi path.
-  if (args.abortController?.signal.aborted) {
+  if (signal?.aborted) {
     throw new RpcError(-32023, 'CANCELED')
   }
+  // The process went away without delivering this turn's reply (closed under it — a
+  // delete/archive/CLI-attach — or exited cleanly with nothing to say). An empty "done"
+  // would be recorded as a successful turn that said nothing.
+  if (!sawResult && liveRef.closed) {
+    throw new RpcError(-32021, 'chat failed: the Claude CLI process ended before the reply finished')
+  }
 
-  const acc = adapter.result()
+  const acc = liveRef.adapter.result()
+  const cliSessionId = acc.sdkSessionId ?? liveRef.cliSessionId
+  // A graceful `error` result that is an auth failure leaves a process holding a token the
+  // provider rejected — every later turn on it would fail the same way. Replace it.
+  if (acc.stopReason === 'error' && AUTH_FAILURE_RE.test(acc.errorMessage ?? '')) {
+    liveRef.close('authentication error')
+  }
   const doneMeta = {
     runtime: 'claude-sdk',
     sessionId: args.sessionId,
@@ -1490,17 +1244,11 @@ export async function runStreamClaude(
     (inPlanMode ? PLAN_MODE_PROMPT.length : 0) +
     (args.sessionChecklist?.length ?? 0) +
     (checklistAllowed ? TASK_CHECKLIST_PROMPT.length : 0) +
-    backgroundPrompt.length
+    BACKGROUND_TURN_PROMPT.length
   const instructionsLen =
     Math.max(
       0,
-      (append?.length ?? 0) -
-        systemPromptLen -
-        memoryFilesLen -
-        customAgentsLen -
-        skillsLen -
-        wikiLen -
-        memoryLen,
+      (append?.length ?? 0) - systemPromptLen - memoryFilesLen - customAgentsLen - skillsLen - wikiLen - memoryLen,
     ) + ridersLen
   // Transcript the SDK context holds: kept turns from the compaction cut onward (or
   // the whole transcript when uncompacted) + the summary — measured TEXT-ONLY via
@@ -1509,8 +1257,7 @@ export async function runStreamClaude(
   // tool I/O (full file contents, terminal output) that is NEVER replayed to the
   // model, which would inflate the gauge far past what is sent and never shrink on
   // /compact. Mirrors the Pi path's historyToAgentMessages estimate.
-  const historyLen =
-    renderHistoryPrefix(args.history, args.compaction).length + args.pendingText.length
+  const historyLen = renderHistoryPrefix(args.history, args.compaction).length + args.pendingText.length
   const contextChars: ContextChars = {
     systemPrompt: systemPromptLen,
     instructions: instructionsLen,
@@ -1541,7 +1288,8 @@ export async function runStreamClaude(
     stopReason: acc.stopReason,
     contextChars,
     // Persisted by the caller so the next turn resumes this SDK session.
-    ...(acc.sdkSessionId ? { sdkSessionId: acc.sdkSessionId } : {}),
+    ...(cliSessionId ? { sdkSessionId: cliSessionId } : {}),
     ...(acc.errorMessage !== undefined ? { errorMessage: acc.errorMessage } : {}),
+    ...(acc.compactions.length ? { nativeCompactions: acc.compactions } : {}),
   }
 }

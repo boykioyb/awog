@@ -40,6 +40,8 @@
   "sessions.workspace.terminal.dragPane": "Drag to move or split",
   "sessions.workspace.tasks.empty": "No tasks spawned from this session",
   "sessions.workspace.tasks.placeholder": "Tasks you run from this session appear here",
+  "sessions.workspace.tasks.bgTitle": "Background",
+  "sessions.workspace.tasks.taskTitle": "Tasks",
   "sessions.workspace.group.placeholder": "Sub-sessions of this one appear here, with what each is doing",
   "sessions.workspace.group.running": "{n} running",
   "sessions.workspace.group.waiting": "{n} waiting on you",

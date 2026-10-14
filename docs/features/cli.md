@@ -21,23 +21,24 @@ Socket transport ở `sidecar/src/transport/socket.ts`; allowlist method ở `tr
 
 ## Lệnh
 
-| Lệnh | Việc |
-|---|---|
-| `awog chat` | REPL tương tác trên session mới (`-s <id>` tiếp tục session cũ) |
-| `awog chat -p "…"` | One-shot: stream reply ra stdout, thoát. `--json` cho NDJSON event |
-| `awog session ls` | Bảng session gần nhất (id, thời gian, model, title) |
-| `awog session cli <id>` | In lệnh resume native (`claude --resume …` / `codex resume …`) — đường `--print` của ADR 0093, không cần socket |
-| `awog session set <id>` | Đặt `llmOverride` trên session: `--model` `--provider` `--account` `--level` `--mode` |
-| `awog account ls` | Liệt kê account mọi provider (`*` = active) |
-| `awog account use <id>` | Đổi active account **toàn cục** (ghi `credentials.json`, ảnh hưởng app) |
-| `awog models ls` | Catalog model theo provider (`--provider anthropic` mặc định) |
-| `awog task run <workflow> --project <id> --watch` | Tạo + chạy task, stream `task.run.output`, hỏi/`--approve` phase approval |
-| `awog login` | OAuth paste-code (anthropic) hoặc `--api-key <key>` mọi provider |
-| `awog project ls` / `use <ref>` / `add <path>` | Liệt kê / đặt project mặc định / đăng ký mới. Default persist ở `~/.awog/cli.json`; `chat`/`task` resolve theo `--project` → `AWOG_PROJECT` → cli.json → cwd |
-| `awog source ls` | Liệt kê source (mcp/api/local) + trạng thái kết nối — alias `mcp` |
-| `awog source add <slug>` | Tạo source: `--command/--args/--env` cho stdio, `--url/--headers/--bearer` cho http; bare `KEY` trong env/headers → hỏi giá trị rồi cất keychain (`secret:KEY` ref) |
-| `awog source rm|on|off|test|tools <slug>` | Xoá / bật-tắt / test handshake / liệt kê tool |
-| `awog source secret <slug> <KEY> [value]` | Ghi secret vào keychain sau khi tạo |
+| Lệnh                                              | Việc                                                                                                                                                                  |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `awog` (bare)                                     | Dashboard full-screen (TTY): sessions gần nhất (↑↓/j/k chọn, Enter resume), projects, sources, accounts. Phím: `c` chat mới, `s/p/m/a` list tương ứng, `q` thoát      |
+| `awog chat`                                       | REPL tương tác trên session mới; `-s <id>` resume session cũ **kèm replay transcript** (user `❯`, reply markdown, step cards — tail 30 message như `claude --resume`) |
+| `awog chat -p "…"`                                | One-shot: stream reply ra stdout, thoát. `--json` cho NDJSON event                                                                                                    |
+| `awog session ls`                                 | Bảng session gần nhất (id, thời gian, model, title)                                                                                                                   |
+| `awog session cli <id>`                           | In lệnh resume native (`claude --resume …` / `codex resume …`) — đường `--print` của ADR 0093, không cần socket                                                       |
+| `awog session set <id>`                           | Đặt `llmOverride` trên session: `--model` `--provider` `--account` `--level` `--mode`                                                                                 |
+| `awog account ls`                                 | Liệt kê account mọi provider (`*` = active)                                                                                                                           |
+| `awog account use <id>`                           | Đổi active account **toàn cục** (ghi `credentials.json`, ảnh hưởng app)                                                                                               |
+| `awog models ls`                                  | Catalog model theo provider (`--provider anthropic` mặc định)                                                                                                         |
+| `awog task run <workflow> --project <id> --watch` | Tạo + chạy task, stream `task.run.output`, hỏi/`--approve` phase approval                                                                                             |
+| `awog login`                                      | OAuth paste-code (anthropic) hoặc `--api-key <key>` mọi provider                                                                                                      |
+| `awog project ls` / `use <ref>` / `add <path>`    | Liệt kê / đặt project mặc định / đăng ký mới. Default persist ở `~/.awog/cli.json`; `chat`/`task` resolve theo `--project` → `AWOG_PROJECT` → cli.json → cwd          |
+| `awog source ls`                                  | Liệt kê source (mcp/api/local) + trạng thái kết nối — alias `mcp`                                                                                                     |
+| `awog source add <slug>`                          | Tạo source: `--command/--args/--env` cho stdio, `--url/--headers/--bearer` cho http; bare `KEY` trong env/headers → hỏi giá trị rồi cất keychain (`secret:KEY` ref)   |
+| `awog source rm                                   | on                                                                                                                                                                    | off | test | tools <slug>` | Xoá / bật-tắt / test handshake / liệt kê tool |
+| `awog source secret <slug> <KEY> [value]`         | Ghi secret vào keychain sau khi tạo                                                                                                                                   |
 
 **Slash trong REPL `awog chat`** — đổi qua `sessions.setLlmOverride` (persist trên header, áp dụng turn SAU, broadcast `session.llm-override` để app attach hội tụ):
 

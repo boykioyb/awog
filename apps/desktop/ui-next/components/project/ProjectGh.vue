@@ -230,7 +230,7 @@ async function onNewSession(item: GhThreadSummary): Promise<void> {
   )
   if (url) sessions.setAboutGh(id, url)
   sessions.setDraft(id, seed)
-  await navigateTo('/sessions')
+  await navigateTo('/workbench')
 }
 
 // "Start review" (PR drawer): open a session in THIS project bound to the PR and
@@ -268,7 +268,7 @@ async function onStartReview(): Promise<void> {
   if (llm) sessions.applyLlmConfig(id, llm)
   // Navigate first so the turn streams in front of the user instead of behind a
   // drawer they still have to leave.
-  await navigateTo('/sessions')
+  await navigateTo('/workbench')
   void sessions.sendMessage(id, prompt)
 }
 

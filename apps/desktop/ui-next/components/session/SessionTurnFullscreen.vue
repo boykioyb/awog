@@ -55,6 +55,7 @@
                 v-if="g.type === 'activities'"
                 :entries="g.entries"
                 :preview="g.preview"
+                :msg-eid="msgEid"
               />
               <SessionTextBlock
                 v-else-if="g.type === 'text'"
@@ -65,6 +66,7 @@
                 :bubble="false"
               />
               <SessionStepItem v-else-if="g.type === 'todo'" :block="g.step" />
+              <SessionBrowserCard v-else-if="g.type === 'browser'" :block="g.step" />
               <div v-else-if="g.type === 'error'" class="merr">
                 <Icon name="alert" class="merr-ic" />
                 <div class="merr-msg">{{ g.text }}</div>
@@ -118,6 +120,7 @@ const props = defineProps<{
   title: string
   grouped: Grouped[]
   streaming: boolean
+  msgEid?: string
   highlightsForBlock: (blockIndex: number) => BlockHighlight[]
 }>()
 const emit = defineEmits<{ close: [] }>()

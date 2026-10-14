@@ -3,7 +3,19 @@ import { log } from '../util/logger.js'
 
 export type LineHandler = (line: string) => void | Promise<void>
 
+// stdout hỏng = host (Electron main) đã chết: thôi ghi và đi đường tắt máy như khi
+// stdin đóng. Có listener thì EPIPE của stdout không thành `uncaughtException` — xem
+// logger.ts về vòng EPIPE → log → EPIPE từng làm sidecar mồ côi đứng 100% CPU.
+let stdoutBroken = false
+let onHostGone: (() => void) | null = null
+process.stdout.on('error', () => {
+  if (stdoutBroken) return
+  stdoutBroken = true
+  onHostGone?.()
+})
+
 export function send(obj: object): void {
+  if (stdoutBroken) return
   process.stdout.write(`${JSON.stringify(obj)}\n`)
 }
 
@@ -87,12 +99,18 @@ export function startStdioLoop(
     })
   })
 
-  // Host exit → stdin close → graceful shutdown (ADR 0008).
-  rl.on('close', () => {
-    log.info('stdin closed, shutting down')
+  // Host exit → stdin close (hoặc stdout EPIPE, tuỳ cái nào tới trước) → graceful
+  // shutdown (ADR 0008). Chỉ một lần.
+  let gone = false
+  const hostGone = (reason: string): void => {
+    if (gone) return
+    gone = true
+    log.info(`${reason}, shutting down`)
     if (onClose) void onClose()
     else process.exit(0)
-  })
+  }
+  rl.on('close', () => hostGone('stdin closed'))
+  onHostGone = () => hostGone('stdout broken')
 
   return rl
 }

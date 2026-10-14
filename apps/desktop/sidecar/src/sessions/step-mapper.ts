@@ -20,16 +20,9 @@ import type {
 import { countDone, parseTodos } from '../runtime/todos.js'
 import { buildUnifiedDiff } from '../runtime/tools/text-diff.js'
 import { unwrapMcpToolCall, MCP_DESCRIBE_TOOL } from '../runtime/tools/mcp-tools.js'
-import {
-  SURFACE_TOOL_NAMES,
-  takeResolvedSurface,
-} from '../runtime/tools/surface-tools.js'
+import { SURFACE_TOOL_NAMES, takeResolvedSurface } from '../runtime/tools/surface-tools.js'
 import { unbridgeAwogToolName } from '../runtime/tools/bridged.js'
-import type {
-  FindingSeverity,
-  SessionFinding,
-  SurfacePayload,
-} from '../runtime/tools/surface-tools.js'
+import type { FindingSeverity, SessionFinding, SurfacePayload } from '../runtime/tools/surface-tools.js'
 
 // Cap for inline previews and one-line labels — kept small so step payloads stay
 // light over stdio and the collapsed row never bloats.
@@ -146,10 +139,7 @@ function pickTarget(toolName: string, input: Record<string, unknown>): string | 
 // vs old_string line counts. Write counts the whole content as additions. This
 // is a lightweight approximation; full diff stats can come later from a real
 // patcher in the sidecar.
-function pickDiffStats(
-  toolName: string,
-  input: Record<string, unknown>,
-): { additions?: number; deletions?: number } {
+function pickDiffStats(toolName: string, input: Record<string, unknown>): { additions?: number; deletions?: number } {
   if (toolName === 'Write') {
     const content = input.content
     if (typeof content === 'string') {
@@ -180,6 +170,18 @@ function pickDiffStats(
     return { additions: adds, deletions: dels }
   }
   return {}
+}
+
+// browser_tool navigate / tab_new có url → step mang `browserPage` để UI dựng thẻ xem
+// trước ngay từ lúc step còn `running` (docs/features/browser-preview-card.md). Suy ra
+// từ INPUT chứ không từ kết quả: hai đường dựng step (live + replay JSONL pointer-mode
+// ADR 0097) đều đi qua đây nên thẻ sống sót qua reload mà không lưu thêm gì. Chỉ nhận
+// http(s) — thẻ là chỗ render URL do model đưa ra.
+function pickBrowserPage(toolName: string, input: Record<string, unknown>): { url: string } | undefined {
+  if (toolName !== 'browser_tool') return undefined
+  if (input.action !== 'navigate' && input.action !== 'tab_new') return undefined
+  const url = input.url
+  return typeof url === 'string' && /^https?:\/\//i.test(url) ? { url } : undefined
 }
 
 function humanLabel(toolName: string, input: Record<string, unknown>): string {
@@ -413,10 +415,7 @@ function asFindings(value: unknown, trustLinkable: boolean): SessionFinding[] {
     // the payload without a cast.
     const severity = FINDING_SEVERITIES.find((s) => s === asString(rec.severity))
     if (!file || !summary || !failure || !severity) continue
-    const line =
-      typeof rec.line === 'number' && Number.isInteger(rec.line) && rec.line >= 1
-        ? rec.line
-        : undefined
+    const line = typeof rec.line === 'number' && Number.isInteger(rec.line) && rec.line >= 1 ? rec.line : undefined
     const verdict = asString(rec.verdict)
     out.push({
       file,
@@ -473,10 +472,7 @@ function surfaceFromInput(toolName: string, input: Record<string, unknown>): Sur
 // empty file list is fine while the call is RUNNING (the card is a placeholder
 // that fills in), but a finished call showing a card with no files is worse than
 // no card at all — so it falls through to a plain tool row instead.
-function resultSurfaceFromInput(
-  toolName: string,
-  input: Record<string, unknown>,
-): SurfacePayload | null {
+function resultSurfaceFromInput(toolName: string, input: Record<string, unknown>): SurfacePayload | null {
   const surface = surfaceFromInput(toolName, input)
   if (surface && surface.kind === 'files' && surface.files.length === 0) return null
   return surface
@@ -541,11 +537,7 @@ function asStepSurface(surface: SurfacePayload): SessionSurface {
   return surface as SessionSurface
 }
 
-export function stepFromSurface(
-  id: string,
-  surface: SurfacePayload,
-  status: SessionStepStatus,
-): SessionStep {
+export function stepFromSurface(id: string, surface: SurfacePayload, status: SessionStepStatus): SessionStep {
   return {
     id,
     kind: 'surface',
@@ -583,6 +575,8 @@ export function stepFromToolUse(rawInfo: ToolUseInfo): SessionStep {
     status: 'running',
   }
   if (target !== undefined) step.target = target
+  const page = pickBrowserPage(info.name, info.input)
+  if (page) step.browserPage = page
   if (stats.additions !== undefined) step.additions = stats.additions
   if (stats.deletions !== undefined) step.deletions = stats.deletions
   // Task: stash the prompt as detail so the expand-drawer can show what the
@@ -706,14 +700,9 @@ export function stepFromToolResult(rawInfo: ToolResultInfo): SessionStep {
     // Fall back to an isolated old→new diff if absent. The UI infers the
     // language for the file view from the path extension.
     const path = typeof info.toolInput.file_path === 'string' ? info.toolInput.file_path : ''
-    const d =
-      typeof info.details === 'object' && info.details !== null
-        ? (info.details as Record<string, unknown>)
-        : {}
+    const d = typeof info.details === 'object' && info.details !== null ? (info.details as Record<string, unknown>) : {}
     const diffText =
-      typeof d.diff === 'string' && d.diff.length > 0
-        ? d.diff
-        : fallbackEditDiff(info.toolName, info.toolInput)
+      typeof d.diff === 'string' && d.diff.length > 0 ? d.diff : fallbackEditDiff(info.toolName, info.toolInput)
     const after = typeof d.newContent === 'string' ? d.newContent : undefined
     if (diffText.length > 0) {
       detail = { kind: 'diff', path, diff: clip(diffText, FILE_DETAIL_MAX) }
@@ -761,6 +750,8 @@ export function stepFromToolResult(rawInfo: ToolResultInfo): SessionStep {
     status,
   }
   if (target !== undefined) step.target = target
+  const page = pickBrowserPage(info.toolName, info.toolInput)
+  if (page) step.browserPage = page
   if (stats.additions !== undefined) step.additions = stats.additions
   if (stats.deletions !== undefined) step.deletions = stats.deletions
   if (detail !== undefined) step.detail = detail
@@ -777,8 +768,7 @@ export function stepFromToolResult(rawInfo: ToolResultInfo): SessionStep {
 // Parity with the task path (tasks/trace-mapper.ts → traceThinkingNode).
 export function stepFromThinking(id: string, text: string, done = false): SessionStep {
   const oneLine = text.replace(/\s+/g, ' ').trim()
-  const label =
-    oneLine.length > RESULT_PREVIEW_MAX ? `${oneLine.slice(0, RESULT_PREVIEW_MAX)}…` : oneLine
+  const label = oneLine.length > RESULT_PREVIEW_MAX ? `${oneLine.slice(0, RESULT_PREVIEW_MAX)}…` : oneLine
   const step: SessionStep = {
     id,
     kind: 'thinking',
@@ -796,11 +786,7 @@ export function stepFromThinking(id: string, text: string, done = false): Sessio
 // list lines (-, *, 1.) become planItems; non-list text before the first list
 // item becomes the rationale. A plan with no list falls back to one item = the
 // whole text so the card is never empty.
-export function stepFromPlan(
-  id: string,
-  plan: string,
-  status: PlanStatus = 'pending',
-): SessionStep {
+export function stepFromPlan(id: string, plan: string, status: PlanStatus = 'pending'): SessionStep {
   const items: string[] = []
   const rationaleLines: string[] = []
   let seenList = false

@@ -27,6 +27,7 @@
 import { resolve } from 'node:path'
 import {
   listBackground,
+  onBackgroundSettled,
   killBackground,
   readBackground,
   startBackground,
@@ -40,6 +41,8 @@ import {
   resolveEntryCwd,
   type DevServerEntry,
 } from './config.js'
+import { hostRequest } from '../transport/stdio.js'
+import { log } from '../util/logger.js'
 import { filterLog, type LogFilterOptions, type LogFilterResult } from './log-filter.js'
 
 export type DevServerStatus = 'stopped' | 'running' | 'exited' | 'unknown'
@@ -93,11 +96,7 @@ function statusOf(shell: BgShellState | undefined): DevServerStatus {
   return shell.status === 'exited' ? 'exited' : 'unknown'
 }
 
-function toView(
-  projectRoot: string,
-  entry: DevServerEntry,
-  shell: BgShellState | undefined,
-): DevServerView {
+function toView(projectRoot: string, entry: DevServerEntry, shell: BgShellState | undefined): DevServerView {
   return {
     name: entry.name,
     ...(entry.description ? { description: entry.description } : {}),
@@ -111,10 +110,7 @@ function toView(
 }
 
 // Toàn bộ server đã khai + trạng thái hiện tại của chúng.
-export async function listDevServers(
-  projectRoot: string,
-  sessionId: string,
-): Promise<DevServerListing> {
+export async function listDevServers(projectRoot: string, sessionId: string): Promise<DevServerListing> {
   const config = await loadDevServerConfig(projectRoot)
   const shells = listBackground(sessionId)
   return {
@@ -189,6 +185,7 @@ export async function startDevServer(input: {
     cwd: resolve(projectRoot),
     command: view.command,
   })
+  await syncBrowserLoopbackPorts(projectRoot, sessionId)
   return {
     outcome: 'started',
     server: {
@@ -214,6 +211,7 @@ export async function stopDevServer(input: {
     throw new DevServerError('not-running', `Dev server "${view.name}" is not running.`)
   }
   killBackground(sessionId, view.shellId)
+  await syncBrowserLoopbackPorts(projectRoot, sessionId)
   return { ...view, status: 'unknown' }
 }
 
@@ -255,4 +253,69 @@ export async function readDevServerLog(input: {
 function statusOfSnapshot(status: BgShellState['status']): DevServerStatus {
   if (status === 'running') return 'running'
   return status === 'exited' ? 'exited' : 'unknown'
+}
+
+// ─── Ngoại lệ loopback cho trình duyệt của agent ─────────────────────────────
+//
+// Trình duyệt của agent chặn mọi host loopback/private (invariant #7). Ngoại lệ
+// DUY NHẤT: cổng của dev server vừa ĐƯỢC KHAI trong `.awog/dev-servers.json` vừa
+// ĐANG CHẠY trong phiên này. Sidecar là bên biết hai điều đó, nên nó đẩy tập cổng
+// sang Electron main (`browser.setDevServerPorts`, theo scope = sessionId); main
+// là bên thi hành (electron/src/browser-host-policy.ts). Đẩy khi: start, stop,
+// shell của phiên hết chạy (onBackgroundSettled), và trước mỗi lần agent điều
+// hướng (runBrowserAction — bắt cả server bật bằng `Bash`, hay đã chạy từ trước
+// khi sidecar khởi động lại). Lỗi đẩy ⇒ KHÔNG ném: không đẩy được nghĩa là main
+// giữ tập cũ/rỗng, tức vẫn chặn (fail-closed); thu hồi lỡ thì main còn tự xoá
+// khi sidecar chết.
+
+// Tập cổng đã đẩy lần cuối, theo phiên ('' = rỗng = trạng thái khởi tạo của main).
+const pushedPorts = new Map<string, string>()
+// Gốc dự án của các phiên đang có ngoại lệ — để listener "shell hết chạy" biết
+// phải đọc file khai ở đâu mà không nhận đường dẫn từ ngoài.
+const projectOfSession = new Map<string, string>()
+// Tuần tự hoá theo phiên: hai lần đẩy chồng nhau có thể đến main sai thứ tự.
+const syncChain = new Map<string, Promise<unknown>>()
+
+async function pushLoopbackPorts(projectRoot: string, sessionId: string): Promise<number[]> {
+  const listing = await listDevServers(projectRoot, sessionId)
+  const ports = [
+    ...new Set(listing.servers.flatMap((s) => (s.status === 'running' && s.port !== undefined ? [s.port] : []))),
+  ].sort((a, b) => a - b)
+  const key = ports.join(',')
+  if ((pushedPorts.get(sessionId) ?? '') === key) return ports
+  try {
+    await hostRequest('browser.setDevServerPorts', { scope: sessionId, ports })
+    if (key === '') {
+      pushedPorts.delete(sessionId)
+      projectOfSession.delete(sessionId)
+    } else {
+      pushedPorts.set(sessionId, key)
+      projectOfSession.set(sessionId, projectRoot)
+    }
+  } catch (err) {
+    log.warn('devserver: pushing browser loopback ports failed', {
+      sessionId,
+      err: err instanceof Error ? err.message : JSON.stringify(err),
+    })
+  }
+  return ports
+}
+
+export function syncBrowserLoopbackPorts(projectRoot: string, sessionId: string): Promise<number[]> {
+  const prev = syncChain.get(sessionId) ?? Promise.resolve()
+  const next = prev.then(() => pushLoopbackPorts(projectRoot, sessionId))
+  const tail = next.catch(() => undefined)
+  syncChain.set(sessionId, tail)
+  void tail.then(() => {
+    if (syncChain.get(sessionId) === tail) syncChain.delete(sessionId)
+  })
+  return next
+}
+
+// Gọi một lần lúc sidecar boot: shell của phiên hết chạy ⇒ thu hồi ngay.
+export function installDevServerBrowserSync(): void {
+  onBackgroundSettled((sessionId) => {
+    const projectRoot = projectOfSession.get(sessionId)
+    if (projectRoot) void syncBrowserLoopbackPorts(projectRoot, sessionId)
+  })
 }

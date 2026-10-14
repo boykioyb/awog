@@ -30,6 +30,10 @@ const ALLOWED_PREFIXES: readonly string[] = [
   // writes land in ~/.awog/sources/ and secrets go to the OS keychain via
   // source.setSecret — same privilege tier the auth.* surface already grants.
   'source.',
+  // Workspace file I/O for the workbench in browser-dev (Explorer, image/markdown
+  // docs). Every write still passes assertInsideWorkspace — the socket exposes
+  // the same surface `terminal.*` already grants via a shell.
+  'fs.',
 ]
 
 const ALLOWED_METHODS: ReadonlySet<string> = new Set([

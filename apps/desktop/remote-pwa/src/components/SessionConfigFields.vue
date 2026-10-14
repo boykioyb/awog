@@ -29,9 +29,7 @@ const emit = defineEmits<{ (e: 'update:modelValue', value: SessionConfig): void 
 
 const providerNames = computed(() => providers.value.map((p) => p.provider))
 const accounts = computed(() => accountsFor(props.modelValue.provider))
-const models = computed(() =>
-  modelsForAccount(props.modelValue.provider, props.modelValue.accountId),
-)
+const models = computed(() => modelsForAccount(props.modelValue.provider, props.modelValue.accountId))
 const modeHint = computed(() => AGENT_MODES.find((m) => m.id === props.modelValue.mode)?.hint ?? '')
 // `accept-edits`/`execute` run tools without asking — the phone is unattended by
 // definition, so the choice gets a standing warning rather than a silent option.
@@ -72,8 +70,8 @@ function target(e: Event): string {
 
 <template>
   <p v-if="!providers.length" class="stale">
-    Không tải được danh mục provider/account từ desktop{{ catalogError ? ` (${catalogError})` : '' }}.
-    Desktop cần build lại bản mới (Electron main) rồi mở lại app.
+    Không tải được danh mục provider/account từ desktop{{ catalogError ? ` (${catalogError})` : '' }}. Desktop cần build
+    lại bản mới (Electron main) rồi mở lại app.
   </p>
 
   <div class="row">
@@ -87,12 +85,7 @@ function target(e: Event): string {
     <label class="field grow">
       <span>Mode</span>
       <select :value="modelValue.mode" @change="patch({ mode: target($event) as AgentMode })">
-        <option
-          v-for="m in AGENT_MODES"
-          :key="m.id"
-          :value="m.id"
-          :disabled="!isModeAvailable(m.id)"
-        >
+        <option v-for="m in AGENT_MODES" :key="m.id" :value="m.id" :disabled="!isModeAvailable(m.id)">
           {{ m.label }}{{ isModeAvailable(m.id) ? '' : ' · đã tắt' }}
         </option>
       </select>
@@ -101,8 +94,8 @@ function target(e: Event): string {
 
   <p v-if="modeBlocked" class="mode-hint warn">
     <TriangleAlert class="icn-xs" />
-    Mode này bị chặn cho thiết bị từ xa. Bật "chạy không cần duyệt" ở Settings →
-    Devices trên máy desktop, hoặc dùng Ask và duyệt từng lệnh ngay tại đây.
+    Mode này bị chặn cho thiết bị từ xa. Bật "chạy không cần duyệt" ở Settings → Devices trên máy desktop, hoặc dùng Ask
+    và duyệt từng lệnh ngay tại đây.
   </p>
   <p v-else class="mode-hint" :class="{ warn: modeUngated }">
     <TriangleAlert v-if="modeUngated" class="icn-xs" />{{ modeHint }}
@@ -122,10 +115,7 @@ function target(e: Event): string {
     <span>Model</span>
     <select :value="modelValue.modelId" @change="patch({ modelId: target($event) })">
       <option v-if="inheritable" value="">Mặc định</option>
-      <option
-        v-if="modelValue.modelId && !models.some((m) => m.id === modelValue.modelId)"
-        :value="modelValue.modelId"
-      >
+      <option v-if="modelValue.modelId && !models.some((m) => m.id === modelValue.modelId)" :value="modelValue.modelId">
         {{ modelValue.modelId }}
       </option>
       <option v-for="m in models" :key="m.id" :value="m.id">{{ m.name }}</option>
@@ -156,7 +146,11 @@ function target(e: Event): string {
     <input
       type="checkbox"
       :checked="modelValue.responseStyleNoMarkdown"
-      @change="patch({ responseStyleNoMarkdown: (($event.target as HTMLInputElement).checked) })"
+      @change="
+        patch({
+          responseStyleNoMarkdown: ($event.target as HTMLInputElement).checked,
+        })
+      "
     />
     <span>Trả lời không dùng markdown</span>
   </label>

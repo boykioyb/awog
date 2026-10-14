@@ -11,7 +11,7 @@ const COMPACT_BREAKPOINT = 1100
 // ProjectList, workflows, and every LibraryView-based page). On these, compact
 // mode exposes the "list" drawer toggle; elsewhere it is hidden.
 const LIST_ROUTES = [
-  '/sessions',
+  '/workbench',
   '/projects',
   '/workflows',
   '/agents',

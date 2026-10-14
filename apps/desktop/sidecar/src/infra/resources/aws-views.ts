@@ -112,16 +112,7 @@ const s3Objects: InfraViewSpec = {
   support: 'full',
   list: {
     required: BUCKET,
-    args: [
-      's3api',
-      'list-objects-v2',
-      '--bucket',
-      '{bucket}',
-      '--delimiter',
-      '/',
-      '--prefix',
-      '{prefix}',
-    ],
+    args: ['s3api', 'list-objects-v2', '--bucket', '{bucket}', '--delimiter', '/', '--prefix', '{prefix}'],
     pick: (json) => {
       const o = asObj(json)
       const rows: InfraRow[] = []
@@ -201,7 +192,11 @@ const s3Objects: InfraViewSpec = {
       confirm: 'simple',
       iam: 's3:PutObject',
       fields: [
-        { key: 'prefix', label: 'infra.explorer.form.prefix', placeholder: 'logs/2026/' },
+        {
+          key: 'prefix',
+          label: 'infra.explorer.form.prefix',
+          placeholder: 'logs/2026/',
+        },
       ],
       args: ['s3api', 'put-object', '--bucket', '{bucket}', '--key', '{folderKey}'],
       // S3 không có "thư mục": một key rỗng kết thúc bằng `/` là thư mục. Luật này
@@ -216,8 +211,16 @@ const s3Objects: InfraViewSpec = {
       confirm: 'simple',
       iam: 's3:PutObject',
       fields: [
-        { key: 'source', label: 'infra.explorer.form.localFile', required: true },
-        { key: 'objectKey', label: 'infra.explorer.form.objectKey', required: true },
+        {
+          key: 'source',
+          label: 'infra.explorer.form.localFile',
+          required: true,
+        },
+        {
+          key: 'objectKey',
+          label: 'infra.explorer.form.objectKey',
+          required: true,
+        },
       ],
       args: ['s3api', 'put-object', '--bucket', '{bucket}', '--key', '{objectKey}', '--body', '{source}'],
     },
@@ -342,12 +345,7 @@ const ec2Instances: InfraViewSpec = {
     `${encodeURIComponent(ctx.region || 'us-east-1')}#InstanceDetails:instanceId=` +
     `${encodeURIComponent(row['id'] ?? '')}`,
   probe: {
-    actions: [
-      'ec2:StartInstances',
-      'ec2:StopInstances',
-      'ec2:RebootInstances',
-      'ec2:TerminateInstances',
-    ],
+    actions: ['ec2:StartInstances', 'ec2:StopInstances', 'ec2:RebootInstances', 'ec2:TerminateInstances'],
   },
 }
 
@@ -445,9 +443,7 @@ const cloudfrontDistributions: InfraViewSpec = {
   ],
   // CloudFront là dịch vụ TOÀN CẦU: deep link không kèm region (task 3.4).
   consoleUrl: (row) =>
-    `https://console.aws.amazon.com/cloudfront/v4/home#/distributions/${encodeURIComponent(
-      row['id'] ?? '',
-    )}`,
+    `https://console.aws.amazon.com/cloudfront/v4/home#/distributions/${encodeURIComponent(row['id'] ?? '')}`,
   probe: { actions: ['cloudfront:CreateInvalidation'] },
 }
 
@@ -784,8 +780,7 @@ const listViews: readonly InfraViewSpec[] = [
     label: 'infra.explorer.view.dynamodb.tables',
     about: 'infra.explorer.about.dynamodb',
     args: ['dynamodb', 'list-tables'],
-    pick: (json) =>
-      asArray(asObj(json)['TableNames']).map((n) => ({ id: str(n), name: str(n) })),
+    pick: (json) => asArray(asObj(json)['TableNames']).map((n) => ({ id: str(n), name: str(n) })),
     columns: [{ key: 'name', label: 'infra.explorer.col.name', wide: true }],
   }),
   listView({
@@ -941,9 +936,7 @@ const listViews: readonly InfraViewSpec[] = [
     ],
     // Route53 là dịch vụ TOÀN CẦU: deep link không kèm region (task 3.4).
     consoleUrl: (row) =>
-      `https://console.aws.amazon.com/route53/v2/hostedzones#ListRecordSets/${encodeURIComponent(
-        row['id'] ?? '',
-      )}`,
+      `https://console.aws.amazon.com/route53/v2/hostedzones#ListRecordSets/${encodeURIComponent(row['id'] ?? '')}`,
   }),
   listView({
     id: 'ecs.clusters',

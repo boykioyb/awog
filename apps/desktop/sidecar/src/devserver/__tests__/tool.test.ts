@@ -19,8 +19,12 @@ vi.mock('../../sessions/bg-registry.js', () => ({
   listBackground: (sessionId: string) => listBackground(sessionId),
   startBackground: (input: unknown) => startBackground(input),
   killBackground: (sessionId: string, shellId: string) => killBackground(sessionId, shellId),
-  readBackground: (sessionId: string, shellId: string, opts?: unknown) =>
-    readBackground(sessionId, shellId, opts),
+  readBackground: (sessionId: string, shellId: string, opts?: unknown) => readBackground(sessionId, shellId, opts),
+}))
+
+// registry đẩy tập cổng sang Electron main qua hostRequest; ở đây chỉ chặn nó.
+vi.mock('../../transport/stdio.js', () => ({
+  hostRequest: vi.fn().mockResolvedValue({ ok: true }),
 }))
 
 const { createDevServerTool } = await import('../../runtime/tools/dev-server-tool.js')

@@ -167,8 +167,7 @@ const FOOTER_LABELS: Record<ShareLang, FooterLabels> = {
     generated: 'AWOG sinh lúc',
     status: 'trạng thái',
     snapshot:
-      'Đây là bản chụp. Sửa nguồn sau đó không làm đổi tệp này; ' +
-      'xuất lại sẽ sinh tệp mới chứ không ghi đè.',
+      'Đây là bản chụp. Sửa nguồn sau đó không làm đổi tệp này; ' + 'xuất lại sẽ sinh tệp mới chứ không ghi đè.',
   },
 }
 
@@ -244,9 +243,7 @@ function htmlBlock(block: ShareBlock): string {
     }
     case 'table': {
       const head = block.columns.map((c) => `<th>${escapeHtml(c)}</th>`).join('')
-      const rows = block.rows
-        .map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`)
-        .join('')
+      const rows = block.rows.map((row) => `<tr>${row.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('')
       return `<table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table>`
     }
     case 'code':
@@ -451,6 +448,10 @@ function slugify(text: string): string {
  * hành mở sẵn tên này; trùng tên là đường ngắn nhất tới một lần ghi đè).
  */
 export function shareFilename(subject: string, format: ShareFormat, now: Date): string {
-  const stamp = now.toISOString().slice(0, 19).replace(/[-:T]/g, '').replace(/^(\d{8})/, '$1-')
+  const stamp = now
+    .toISOString()
+    .slice(0, 19)
+    .replace(/[-:T]/g, '')
+    .replace(/^(\d{8})/, '$1-')
   return `${slugify(subject)}-${stamp}.${format === 'html' ? 'html' : 'md'}`
 }

@@ -4,10 +4,22 @@
 
 import { randomBytes } from 'node:crypto'
 import type { Engine } from '../transport.js'
-import { askChoice, askPermission, askText, createRepl, createReplyRenderer, detailBody, isTTY, note, renderStepCard, sgr } from '../tty.js'
+import {
+  askChoice,
+  askPermission,
+  askText,
+  createRepl,
+  createReplyRenderer,
+  cut,
+  detailBody,
+  isTTY,
+  note,
+  replyToLines,
+  sgr,
+  spinner,
+} from '../tty.js'
 import { listProjects, resolveDefaultProject, type Project } from './project.js'
 type Provider = 'anthropic' | 'openai' | 'google'
-
 
 const THINKING_LEVELS = ['low', 'medium', 'high', 'extra-high', 'max'] as const
 const MODES = ['ask', 'accept-edits', 'plan', 'execute'] as const
@@ -111,9 +123,7 @@ async function ensureSession(
   if (o.sessionId) return o.sessionId
   const now = new Date().toISOString()
   const id = newId('ses-')
-  const title = o.print
-    ? o.print.slice(0, 60)
-    : `CLI ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`
+  const title = o.print ? o.print.slice(0, 60) : `CLI ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`
   await engine.rpc('sessions.upsert', {
     mode: 'create',
     session: {
@@ -137,6 +147,107 @@ async function ensureSession(
   return id
 }
 
+// Claude-style step lines: `⏺ label  (meta)` then `  ⎿ body` capped at 10
+// lines — the same compact idiom claude's TUI uses for tool calls.
+// `printedSteps` dedupes accumulated thinking/note steps by id.
+function stepLines(step: Record<string, unknown>, printedSteps: Set<string>): string[] {
+  const label = typeof step.label === 'string' ? step.label : ''
+  const st = typeof step.status === 'string' ? step.status : 'done'
+  const nested = typeof step.parentId === 'string'
+  const stepId = typeof step.id === 'string' ? step.id : ''
+  const indent = nested ? '  └ ' : ''
+
+  if (step.kind === 'thinking' || step.kind === 'note') {
+    if (printedSteps.has(stepId)) return []
+    printedSteps.add(stepId)
+    const thinking =
+      step.detail && typeof step.detail === 'object' ? ((step.detail as { content?: string }).content ?? label) : label
+    const head = `${indent}${sgr.accent('✻')} ${sgr.dim(step.kind === 'thinking' ? 'Thinking' : label)}`
+    const body = thinking
+      .split('\n')
+      .slice(0, 10)
+      .map((l) => `  ${sgr.dim('⎿')}  ${sgr.dim(l)}`)
+    return [head, ...body]
+  }
+
+  // Running steps print nothing — the spinner already says "working"; the
+  // `⏺` card lands when done. Exception: background tasks stay running while
+  // the turn completes, and that fact must be visible.
+  if (st === 'running' && !/background/i.test(label)) {
+    return []
+  }
+  const { body, meta } = detailBody(step.detail)
+  const additions = typeof step.additions === 'number' ? step.additions : 0
+  const deletions = typeof step.deletions === 'number' ? step.deletions : 0
+  const stat = additions || deletions ? `+${additions} −${deletions}` : meta
+  const head = `${indent}${sgr.accent('⏺')} ${st === 'done' ? label : sgr.err(label)}${
+    stat ? `  ${sgr.dim(stat)}` : ''
+  }`
+  const lines = [head]
+  for (const [i, b] of (body ?? []).entries()) {
+    if (i >= 10) {
+      lines.push(`  ${sgr.dim('⎿')}  ${sgr.dim(`… ${body!.length - 10} more lines`)}`)
+      break
+    }
+    lines.push(`  ${sgr.dim('⎿')}  ${b}`)
+  }
+  return lines
+}
+
+function printStep(step: Record<string, unknown>, printedSteps: Set<string>): void {
+  for (const l of stepLines(step, printedSteps)) process.stdout.write(`${l}\n`)
+}
+
+interface HistoryMessage {
+  role: 'user' | 'agent' | 'system'
+  text?: string
+  at?: string
+  canceled?: boolean
+  error?: { message?: string }
+  steps?: Array<Record<string, unknown>>
+}
+
+// Builds the styled transcript lines for one session — shared between
+// `chat -s` replay (prints) and the dashboard transcript viewer (scrolls).
+export async function historyLines(engine: Engine, sessionId: string): Promise<string[]> {
+  const res = await engine
+    .rpc<{ session: { messages?: HistoryMessage[] } | null }>('sessions.get', { sessionId })
+    .catch(() => ({ session: null }) as { session: { messages?: HistoryMessage[] } | null })
+  const messages = res.session?.messages ?? []
+
+  const out: string[] = []
+  const printedSteps = new Set<string>()
+  for (const m of messages) {
+    if (m.role === 'user') {
+      const via = (m as { via?: string }).via
+      out.push(`${sgr.accent('❯')} ${sgr.bold(m.text ?? '')}${via ? sgr.dim(`  (via ${via})`) : ''}`, '')
+    } else if (m.role === 'agent') {
+      if (m.text) out.push(...replyToLines(m.text), '')
+      for (const s of m.steps ?? []) {
+        out.push(...stepLines({ ...s, status: s.status === 'running' ? 'done' : s.status }, printedSteps))
+      }
+      if (m.canceled) out.push(sgr.dim('  ⣿ canceled'))
+      if (m.error?.message) out.push(`  ${sgr.err('✗')} ${sgr.err(m.error.message)}`)
+      out.push('')
+    } else {
+      out.push(sgr.dim(`  · ${m.text ?? ''}`))
+    }
+  }
+  return out
+}
+
+// `chat -s` replay: tail of the transcript straight into scrollback.
+async function renderHistory(engine: Engine, sessionId: string): Promise<void> {
+  const lines = await historyLines(engine, sessionId)
+  if (lines.length === 0) return
+  const KEEP = 200 // approx lines of tail — cheap heuristic, avoids megabyte dumps
+  const tail = lines.slice(-KEEP)
+  if (lines.length > tail.length) {
+    note(sgr.dim(`  … earlier transcript truncated (dashboard 't' shows the full scroll)`))
+  }
+  process.stdout.write(`${tail.join('\n')}\n`)
+}
+
 async function runTurn(
   engine: Engine,
   o: ChatOptions,
@@ -149,12 +260,23 @@ async function runTurn(
   const { promise: done, resolve: resolveDone } = Promise.withResolvers<SendMessageResult>()
   const reply = createReplyRenderer()
   const printedSteps = new Set<string>()
+  // Claude-style working indicator: a steady spinner, PAUSED whenever the turn
+  // needs the screen (prompt, step card, reply chunk) — resumed right after.
+  const useSpinner = isTTY() && !o.json
+  let spin: { stop: (final?: string) => void } | null = useSpinner ? spinner('Thinking…') : null
+  let replyStarted = false
+  const pauseSpin = () => {
+    spin?.stop()
+    spin = null
+  }
+  const resumeSpin = (label = 'Working…') => {
+    // Once reply text starts streaming the spinner stays dead — its \r frames
+    // would interleave into the text.
+    if (useSpinner && !spin && !replyStarted) spin = spinner(label)
+  }
   // Stream + interactive gates scoped to this turn.
   const off = engine.onEvent(async (evt) => {
-    const p =
-      evt.payload && typeof evt.payload === 'object'
-        ? (evt.payload as Record<string, unknown>)
-        : {}
+    const p = evt.payload && typeof evt.payload === 'object' ? (evt.payload as Record<string, unknown>) : {}
     if (p.sessionId !== sessionId && p.messageId !== messageId) return
 
     if (evt.type === 'session.chunk') {
@@ -162,10 +284,13 @@ async function runTurn(
       if (o.json) {
         process.stdout.write(`${JSON.stringify({ t: 'chunk', delta })}\n`)
       } else {
+        pauseSpin()
+        replyStarted = true // text streaming owns the line — \r would garble it
         reply.push(delta)
       }
     } else if (evt.type === 'session.step') {
       const step = p.step && typeof p.step === 'object' ? (p.step as Record<string, unknown>) : {}
+      if (step.kind === 'question' && step.status === 'running') pauseSpin()
       if (step.kind === 'question' && step.status === 'running' && Array.isArray(step.questions)) {
         const answers: Array<{ header: string; selected: string[] }> = []
         for (const q of step.questions as SessionQuestion[]) {
@@ -177,66 +302,24 @@ async function runTurn(
             answers.push({ header: q.header, selected: picked })
           }
         }
-        await engine.rpc('sessions.answerQuestion', {
-          requestId: step.id,
-          answers,
-        }).catch(() => {})
+        await engine
+          .rpc('sessions.answerQuestion', {
+            requestId: step.id,
+            answers,
+          })
+          .catch(() => {})
       } else if (o.json) {
         process.stdout.write(`${JSON.stringify({ t: 'step', step })}\n`)
       } else {
-        const label = typeof step.label === 'string' ? step.label : ''
-        const st = typeof step.status === 'string' ? step.status : ''
-        const nested = typeof step.parentId === 'string'
-        const stepId = typeof step.id === 'string' ? step.id : ''
-
-        // thinking/note steps re-emit their ACCUMULATED text on every chunk —
-        // render once at 'done', tracked by step.id, not per event.
-        if (step.kind === 'thinking' || step.kind === 'note') {
-          if (st !== 'done' && st !== 'error') return
-          if (printedSteps.has(stepId)) return
-          printedSteps.add(stepId)
-          const thinking =
-            step.detail && typeof step.detail === 'object'
-              ? ((step.detail as { content?: string }).content ?? label)
-              : label
-          note(
-            renderStepCard({
-              icon: sgr.dim('💭'),
-              title: step.kind === 'thinking' ? 'Thinking' : label,
-              ...(thinking
-                ? { body: thinking.split('\n').slice(0, 14).map((l) => sgr.dim(l)) }
-                : {}),
-            }),
-          )
-          return
-        }
-
-        const title = `${nested ? '└ ' : ''}${label}`
-        if (st === 'running') {
-          // Thin one-liner while the tool is busy — the done card replaces it
-          // visually (no box chrome for a transient state).
-          note(`  ${sgr.dim('⠿')} ${sgr.dim(title)}`)
-          return
-        }
-        const icon = st === 'done' ? sgr.ok('✓') : sgr.err('✗')
-        const { body, meta } = detailBody(step.detail)
-        const additions = typeof step.additions === 'number' ? step.additions : 0
-        const deletions = typeof step.deletions === 'number' ? step.deletions : 0
-        const stat = additions || deletions ? `+${additions} −${deletions}` : meta
-        note(
-          renderStepCard({
-            icon,
-            title,
-            ...(stat ? { meta: stat } : {}),
-            ...(body ? { body } : {}),
-          }),
-        )
+        pauseSpin() // step cards are real output — the spinner clears first
+        printStep(step, printedSteps)
+        resumeSpin()
       }
     } else if (evt.type === 'session.permission-request') {
+      pauseSpin()
       const req = p as unknown as PermissionRequest
       const tool = req.displayName ?? req.toolName ?? 'tool'
-      const detail =
-        req.promptSentence ?? JSON.stringify(req.input ?? {}).slice(0, 200)
+      const detail = req.promptSentence ?? JSON.stringify(req.input ?? {}).slice(0, 200)
       const decision = await askPermission(tool, detail)
       await engine
         .rpc('sessions.permission', {
@@ -245,6 +328,7 @@ async function runTurn(
           ...(decision === 'always' ? { alwaysAllow: true, scope: 'session' } : {}),
         })
         .catch(() => {})
+      resumeSpin()
     } else if (evt.type === 'session.message.done') {
       resolveDone(p as unknown as SendMessageResult)
     }
@@ -265,6 +349,7 @@ async function runTurn(
     done,
     rpcResult.catch((err) => ({ stopReason: 'error', text: '', error: String(err) })),
   ])
+  spin?.stop()
   off()
   reply.flush()
   return result as SendMessageResult
@@ -276,14 +361,28 @@ export async function cmdChat(engine: Engine, o: ChatOptions): Promise<void> {
   const sessionId = await ensureSession(engine, o, settings, project)
   // --cwd wins; else the resolved project's path is the session workspace.
   const workspacePath = o.cwd ?? project?.path
+  const w = Math.max(20, Math.min(process.stderr.columns ?? 80, 90) - 4)
+  const ansi = /\x1b\[[0-9;]*m/g
+  const vis = (s: string) => s.replace(ansi, '').length
+  const boxLine = (c: string) => `  ${sgr.dim('│')} ${c}${' '.repeat(Math.max(0, w - 2 - vis(c)))} ${sgr.dim('│')}`
   note(
-    `${sgr.accent('·')} ${sgr.dim(engine.attached ? 'attached to running engine' : 'spawned engine')}`,
+    [
+      `  ${sgr.dim(`╭${'─'.repeat(w)}╮`)}`,
+      boxLine(
+        `${sgr.accent('awog')} ${sgr.bold('chat')}  ${sgr.dim(`${settings.provider}/${settings.modelId} (${settings.mode})`)}`,
+      ),
+      boxLine(
+        `${sgr.dim(`session ${sessionId}`)}   ${sgr.dim(engine.attached ? 'attached to running engine' : 'spawned engine')}`,
+      ),
+      boxLine(`${sgr.dim(`cwd ${cut(workspacePath ?? process.cwd(), Math.max(8, w - 14))}`)}`),
+      boxLine(`${sgr.dim('/model /account /level /mode /status · ctrl-c ×2 or /quit to exit')}`),
+      `  ${sgr.dim(`╰${'─'.repeat(w)}╯`)}`,
+    ].join('\n'),
   )
-  note(
-    `${sgr.accent('·')} session ${sgr.bold(sessionId)} — ${sgr.dim(
-      `${settings.provider}/${settings.modelId} (${settings.mode})`,
-    )}`,
-  )
+  // Resuming an existing session → replay the transcript like `claude --resume`.
+  if (o.sessionId && o.print === undefined && !o.json) {
+    await renderHistory(engine, sessionId)
+  }
 
   if (o.print !== undefined) {
     const r = await runTurn(engine, o, sessionId, settings, o.print, workspacePath)
@@ -303,8 +402,6 @@ export async function cmdChat(engine: Engine, o: ChatOptions): Promise<void> {
     note('interactive chat needs a TTY — use `awog chat -p "prompt"`')
     return
   }
-  note(sgr.dim('type a message; ctrl-c twice or /quit to exit'))
-  note(sgr.dim('slash: /model /account /level /mode /status'))
   createRepl(
     (line) => {
       if (line.startsWith('/')) {
@@ -321,6 +418,7 @@ export async function cmdChat(engine: Engine, o: ChatOptions): Promise<void> {
       })
     },
     () => process.exit(0),
+    { boxed: true },
   )
   // Keep process alive: the REPL holds stdin open.
 }
@@ -338,9 +436,7 @@ async function handleSlash(
   const arg = args.join(' ').trim()
 
   const setOverride = async (
-    patch: Partial<
-      Pick<SessionSettings, 'provider' | 'modelId' | 'accountId' | 'level' | 'mode'>
-    >,
+    patch: Partial<Pick<SessionSettings, 'provider' | 'modelId' | 'accountId' | 'level' | 'mode'>>,
     label: string,
   ) => {
     const override: Record<string, string> = {}

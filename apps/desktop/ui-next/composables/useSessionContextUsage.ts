@@ -13,18 +13,20 @@ import {
 // global status bar (footer) can render the context chip + breakdown for the
 // ACTIVE session without prop-drilling. Mirrors Claude-Code `/context`: a
 // per-CATEGORY breakdown of the prompt (system / instructions / tools / mcp /
-// agents / skills / memory / msgs). Occupancy = the ITEMISED char breakdown only,
-// falling back to a visible-text estimate before the first real turn. Pure derivation
-// off the session's reported usage — no IPC.
+// agents / skills / memory / msgs). Occupancy = the engine's MEASURED prompt
+// size of the last request (`contextTokens` — the same number the session list
+// row shows), falling back to the itemised char breakdown, then to a visible-text
+// estimate before the first real turn. Pure derivation off the session's reported
+// usage — no IPC.
 //
-// Tool definitions and tool results are UNMETERED (`metered: false`): they are listed
-// with their token size, but contribute no Usage %, no bar segment, and nothing to
-// the gauge total — user's call, 2026-09-12. Their size still comes from the engine's
-// two MEASURED prompt sizes (`baseTokens` = first request, `contextTokens` = last),
-// so the rows stay real numbers; they are simply excluded from what the window is
-// said to hold. Consequence, stated plainly: the gauge and `free space` describe the
-// nameable content, NOT the request — the same turn that itemises ~28k can send
-// ~138k — and auto-compact, which reads the same occupancy, fires that much later.
+// Gauge measures the REAL prompt (decision changed 2026-10-11 — the earlier
+// itemised-only gauge read 4% on a session whose request was actually 83% of the
+// window, which left auto-compact permanently blind on tool-heavy sessions). So
+// every row is now metered, including the two unmetered halves the char breakdown
+// cannot name — `toolDefs` (schemas + context carried over) and `results` (what
+// this turn's tool loop added) — sized from the engine's two MEASURED prompt
+// sizes (`baseTokens` = first request, `contextTokens` = last). The itemised sum
+// is still what we can point at; it just no longer owns the headline number.
 
 const CTX_DIVISOR = 4
 
@@ -48,84 +50,38 @@ type Breakdown = Record<BreakdownKey, number>
 // bucket) gets the prominent violet; the rarely-co-shown static-context buckets
 // (system prompt / memory files) share the accent family.
 const CAT_META = [
-  {
-    key: 'sys',
-    labelKey: 'sessions.detail.cat.systemPrompt',
-    color: 'var(--accent)',
-    metered: true,
-  },
-  {
-    key: 'instr',
-    labelKey: 'sessions.detail.cat.instructions',
-    color: 'var(--amber)',
-    metered: true,
-  },
-  {
-    key: 'tools',
-    labelKey: 'sessions.detail.cat.systemTools',
-    color: 'var(--blue)',
-    metered: true,
-  },
-  { key: 'mcp', labelKey: 'sessions.detail.cat.mcpTools', color: 'var(--add)', metered: true },
-  {
-    key: 'agents',
-    labelKey: 'sessions.detail.cat.customAgents',
-    color: 'var(--mod)',
-    metered: true,
-  },
-  { key: 'skills', labelKey: 'sessions.detail.cat.skills', color: 'var(--green)', metered: true },
-  {
-    key: 'memory',
-    labelKey: 'sessions.detail.cat.memoryFiles',
-    color: 'var(--accent)',
-    metered: true,
-  },
-  { key: 'msgs', labelKey: 'sessions.detail.cat.messages', color: 'var(--violet)', metered: true },
+  { key: 'sys', labelKey: 'sessions.detail.cat.systemPrompt', color: 'var(--accent)' },
+  { key: 'instr', labelKey: 'sessions.detail.cat.instructions', color: 'var(--amber)' },
+  { key: 'tools', labelKey: 'sessions.detail.cat.systemTools', color: 'var(--blue)' },
+  { key: 'mcp', labelKey: 'sessions.detail.cat.mcpTools', color: 'var(--add)' },
+  { key: 'agents', labelKey: 'sessions.detail.cat.customAgents', color: 'var(--mod)' },
+  { key: 'skills', labelKey: 'sessions.detail.cat.skills', color: 'var(--green)' },
+  { key: 'memory', labelKey: 'sessions.detail.cat.memoryFiles', color: 'var(--accent)' },
+  { key: 'msgs', labelKey: 'sessions.detail.cat.messages', color: 'var(--violet)' },
   // The two halves of what the char breakdown cannot itemise, split by the engine's
   // two measurements (first request vs last request of the turn). They are kept
   // APART because their fixes are opposite: schemas shrink by detaching MCP servers,
   // accumulated results shrink by compacting / doing less in one turn.
-  // Unmetered: token size only, no Usage % and no bar segment (see the file header).
-  {
-    key: 'toolDefs',
-    labelKey: 'sessions.detail.cat.toolDefs',
-    color: 'var(--textDim)',
-    metered: false,
-  },
-  {
-    key: 'results',
-    labelKey: 'sessions.detail.cat.toolResults',
-    color: 'var(--textFaint)',
-    metered: false,
-  },
+  { key: 'toolDefs', labelKey: 'sessions.detail.cat.toolDefs', color: 'var(--textDim)' },
+  { key: 'results', labelKey: 'sessions.detail.cat.toolResults', color: 'var(--textFaint)' },
   // Same remainder, but from a turn that reported no `baseTokens` (an engine build
   // before the two-point measurement, or a run that never got a first-request
   // usage). We cannot tell schemas from results there, so we must not claim to:
   // labelling an unsplit 192k as "Tool definitions" is a lie on a turn that made 34
   // tool calls.
-  {
-    key: 'toolsUnsplit',
-    labelKey: 'sessions.detail.cat.toolsUnsplit',
-    color: 'var(--textDim)',
-    metered: false,
-  },
+  { key: 'toolsUnsplit', labelKey: 'sessions.detail.cat.toolsUnsplit', color: 'var(--textDim)' },
 ] as const satisfies readonly {
   key: BreakdownKey
   labelKey: string
   color: string
-  metered: boolean
 }[]
 
-// `metered: false` → the row shows its token count but no share of the window: no
-// Usage %, no bar segment. `pct` stays the honest share so a future surface can use
-// it; only the rendering is withheld.
 export type CatRow = {
   key: string
   label: string
   tokens: number
   color: string
   pct: number
-  metered: boolean
 }
 export type CtxItemRow = { label: string; tokens: number }
 
@@ -146,13 +102,15 @@ export function useSessionContextUsage(session: () => Session) {
   // version counted every step's `detail` at chars/3 + 60/block — tool output the
   // model never receives — which read a ~35k-token prompt as 222k / 111% full.
   const estTok = computed(() => estimateContextTokens(session().msgs))
-  // Occupancy = the sum of the ITEMISED segments, so the gauge and the metered rows
-  // always agree; before the first real turn / browser-dev we fall back to the rough
-  // visible-text estimate. Tool schemas + tool results are deliberately outside it.
-  const totalTok = computed(() => contextTokensFromUsage(usage.value) || estTok.value)
-  // The real prompt size of the turn's last request — used ONLY to size the unmetered
-  // tool rows below, never to move the gauge.
+  // Occupancy = the MEASURED prompt size of the turn's last request (the same
+  // number the session list row shows), so the gauge reports the real fill —
+  // the earlier itemised-only number read 4% on a session actually at 83%.
+  // Falls back to the itemised char sum, then the rough visible-text estimate
+  // before the first real turn / in browser-dev.
   const measuredTok = computed(() => measuredContextTokens(usage.value))
+  const totalTok = computed(
+    () => measuredTok.value || contextTokensFromUsage(usage.value) || estTok.value,
+  )
   // Context window follows the session's SELECTED model id (retains `-1m`); the
   // provider's base id collapses 1M → 200k, so we derive from the display the user
   // picked, not from usage. Prefer an engine-reported max if one is ever set.
@@ -166,9 +124,9 @@ export function useSessionContextUsage(session: () => Session) {
   )
 
   // Context-window breakdown by CONTENT category. The engine reports char sizes of
-  // each prompt segment in usage.contextChars (÷4 ≈ tokens); the unmetered tool
-  // buckets carry whatever the MEASURED prompt holds beyond them. Metered rows sum to
-  // totalTok; metered + unmetered sum to the real request size.
+  // each prompt segment in usage.contextChars (÷4 ≈ tokens); the two unmetered
+  // buckets carry whatever the MEASURED prompt holds beyond them. All rows now
+  // sum to the real request size.
   const breakdown = computed<Breakdown>(() => {
     const cc = usage.value?.contextChars
     const tok = (chars: number | undefined) => Math.round((chars ?? 0) / CTX_DIVISOR)
@@ -229,9 +187,8 @@ export function useSessionContextUsage(session: () => Session) {
 
   // One row per category + Free space; tokens, % of the window, and a colour for
   // the square + bar segment. Empty categories (0 tokens) are dropped, except Free.
-  // Free space is `maxTok - totalTok`, i.e. against the ITEMISED occupancy: it reports
-  // the headroom left for nameable content, and reads higher than the window really
-  // has by the size of the two unmetered tool rows shown just above it.
+  // Free space is `maxTok - totalTok` — against the MEASURED occupancy now, so it
+  // is the headroom the next request really has left.
   const catRows = computed<CatRow[]>(() => {
     const b = breakdown.value
     const limit = maxTok.value || 1
@@ -241,7 +198,6 @@ export function useSessionContextUsage(session: () => Session) {
       tokens: Math.round(b[m.key]),
       color: m.color,
       pct: (b[m.key] / limit) * 100,
-      metered: m.metered,
     })).filter((r) => r.tokens > 0)
     const free = Math.max(0, maxTok.value - totalTok.value)
     rows.push({
@@ -250,13 +206,11 @@ export function useSessionContextUsage(session: () => Session) {
       tokens: free,
       color: 'var(--bgActive)',
       pct: (free / limit) * 100,
-      metered: true,
     })
     return rows
   })
-  // Filled bar segments: the metered categories only (Free space is the empty
-  // track, and the unmetered tool buckets are deliberately not drawn).
-  const barSegments = computed(() => catRows.value.filter((r) => r.key !== 'free' && r.metered))
+  // Filled bar segments: every category except Free space, which is the empty track.
+  const barSegments = computed(() => catRows.value.filter((r) => r.key !== 'free'))
 
   // Expandable detail sections (MEMORY FILES / CUSTOM AGENTS), each a flat list of
   // label + token count from the engine breakdown.

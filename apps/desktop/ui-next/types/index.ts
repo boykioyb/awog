@@ -120,6 +120,10 @@ export interface Project {
   // push/fetch/pull AND the GH Issues/PR tabs. '' = active gh account; undefined
   // = inherit the app-level default (settings.githubAccount); a login pins it.
   githubAccount?: string
+  // Hồ sơ trình duyệt nhúng của project (ADR 0101): partition riêng cho login +
+  // bookmark. undefined = kế thừa hồ sơ mặc định của app; một id = ghim hồ sơ đó.
+  // Phiên có thể ghi đè (Session.browserProfileId, ở sidecar).
+  browserProfileId?: string
   // Ngữ cảnh hạ tầng mặc định của project (ADR 0088 §7) — tầng giữa giữa phiên và
   // `settings.infra`. Phiên mới trong project này ĐÓNG BĂNG giá trị hiệu lực lúc
   // tạo, nên sửa ở đây không đổi tài khoản của phiên đang chạy dở.
@@ -138,4 +142,129 @@ export type GitRepoEntry = {
 
 export interface ProjectsListResponse {
   projects: Project[]
+}
+
+// ── Hồ sơ trình duyệt + bookmark (ADR 0101, docs/features/browser-profiles-bookmarks.md) ──
+// Mirror của sidecar `browser/profiles.ts` + `browser/bookmarks.ts`. Sidecar sở hữu dữ liệu.
+export type BrowserProfile = {
+  // 'default' hoặc `p-<8 hex>` do sidecar cấp.
+  id: string
+  name: string
+  color: string
+  createdAt: string
+  // VPN theo hồ sơ (ADR 0103): proxy CHỈ cho tab của hồ sơ này. Không bí mật — user/pass nằm
+  // trong keychain của sidecar, renderer chỉ biết `hasAuth`.
+  proxy?: BrowserProxy
+}
+export type BrowserProxyType = 'http' | 'https' | 'socks5'
+export type BrowserProxy = {
+  type: BrowserProxyType
+  host: string
+  port: number
+  bypass?: string
+  hasAuth: boolean
+}
+export type BrowserProfilesList = {
+  defaultProfileId: string
+  profiles: BrowserProfile[]
+}
+// ── Proxy miễn phí (docs/features/browser-profiles-bookmarks.md) — mirrors sidecar `browser-profiles/free-proxies.ts` ──
+export type FreeProxyType = 'http' | 'socks5'
+export type FreeProxyAnonymity = 'elite' | 'anonymous'
+export type FreeProxy = {
+  // `type://host:port` — khoá DUY NHẤT sidecar chấp nhận khi đo (không nhận host tuỳ ý từ UI).
+  id: string
+  type: FreeProxyType
+  host: string
+  port: number
+  country: string // ISO2 viết hoa
+  countryName?: string
+  city?: string
+  anonymity: FreeProxyAnonymity
+  sourceLatencyMs?: number
+  uptime?: number
+  isp?: string
+  sources: string[]
+}
+export type FreeProxyList = {
+  fetchedAt: number
+  sources: { name: string; ok: boolean; count: number; error?: string }[]
+  countries: { code: string; name: string; count: number }[]
+  items: FreeProxy[]
+}
+export type FreeProxyProbed = {
+  probeId: string
+  id: string
+  ok: boolean
+  latencyMs?: number
+  /** Đích không vào được qua proxy dù tunnel chạy (vd. mạng kiểm duyệt chặn Google). */
+  blocked?: string[]
+  error?: string
+}
+// ── Userscript của trình duyệt nhúng (docs/features/browser-userscripts.md) — mirrors sidecar userscripts.* ──
+export type UserscriptRunAt = 'document-start' | 'document-end' | 'document-idle'
+export type UserscriptMeta = {
+  name: string
+  namespace?: string
+  version?: string
+  description?: string
+  match: string[]
+  include: string[]
+  exclude: string[]
+  runAt: UserscriptRunAt
+  noframes: boolean
+  grant: string[]
+  require: string[]
+}
+export type UserscriptItem = {
+  id: string
+  enabled: boolean
+  meta: UserscriptMeta
+  // Cảnh báo parse/hỗ trợ (grant lạ, @require, pattern sai…) — script vẫn lưu và chạy được.
+  warnings: string[]
+  updatedAt: string
+}
+export type BookmarkUrl = {
+  id: string
+  kind: 'url'
+  title: string
+  url: string
+  createdAt: string
+}
+export type BookmarkFolder = {
+  id: string
+  kind: 'folder'
+  title: string
+  createdAt: string
+  // Chỉ MỘT cấp thư mục: con của folder luôn là url.
+  children: BookmarkUrl[]
+}
+export type BookmarkNode = BookmarkUrl | BookmarkFolder
+
+// ── Nhập phiên từ Claude Desktop / CLI (ADR 0102) — mirrors sidecar claudeSessions.* ──
+export type ClaudeImportSource = 'claude-desktop' | 'cli'
+// Header field của phiên đã nhập (Session.importedFrom) — cũng là chốt chặn "có thể
+// đang mở ở nơi khác" khi gửi tiếp (sidecar ném CLAUDE_SESSION_BUSY, -32021).
+export type ImportedFrom = { kind: ClaudeImportSource; at: string }
+export type ClaudeSessionItem = {
+  id: string
+  entrypoint: ClaudeImportSource
+  title: string
+  cwd: string
+  gitBranch?: string
+  projectId: string
+  projectName: string
+  firstAt: string
+  lastAt: string
+  userTurns: number
+  // AWOG session id nếu phiên này đã được nhập.
+  importedSessionId?: string
+}
+export type ClaudeSessionsList = {
+  items: ClaudeSessionItem[]
+  skipped: { noProject: number; unreadable: number }
+}
+export type ClaudeImportResult = {
+  imported: { id: string; sessionId: string }[]
+  skipped: { id: string; reason: string }[]
 }

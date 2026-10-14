@@ -1,5 +1,5 @@
 <template>
-  <div class="flex h-full min-h-0 flex-col gap-3.5 overflow-y-auto">
+  <div class="wco flex h-full min-h-0 flex-col gap-3.5 overflow-y-auto" :class="{ dock: compact }">
     <!-- RPC failed (e.g. the engine predates this method — restart the app) → say so,
          don't misreport it as "no priced turns". -->
     <div v-if="error" class="empty" style="padding: 30px">
@@ -74,11 +74,11 @@
       </div>
 
       <!-- Headline: cost over the selected range + token/turn subline. -->
-      <div class="flex flex-col gap-0.5">
+      <div class="wco-hl flex flex-col gap-0.5">
         <div class="text-xs leading-[18px] text-dim">
           {{ t('sessions.workspace.cost.rangeCost') }}
         </div>
-        <div class="text-[34px] font-semibold leading-[38px] tabular-nums text-foreground">
+        <div class="wco-num text-[34px] font-semibold leading-[38px] tabular-nums text-foreground">
           {{ fmtUsd(rangeTotal.costUsd) }}
         </div>
         <div class="tabular-nums text-dim">
@@ -92,7 +92,7 @@
       </div>
 
       <!-- Span + lifetime: makes multi-day sessions legible at a glance. -->
-      <div class="flex flex-col gap-1.5 border-y border-border py-2.5">
+      <div class="wco-span flex flex-col gap-1.5 border-y border-border py-2.5">
         <div v-if="firstDay" class="flex items-center gap-2 text-dim">
           <Clock class="size-3 shrink-0" />
           <span>{{ spanLabel }}</span>
@@ -105,7 +105,7 @@
 
       <!-- Per-day breakdown: one bar per active day in range, normalized to the
            peak day so a heavy day is obvious. -->
-      <div>
+      <div class="wco-day">
         <div class="mb-1 text-xs leading-[18px] text-dim">
           {{ t('sessions.workspace.cost.byDay') }}
         </div>
@@ -119,7 +119,7 @@
         <div
           v-for="d in daysDesc"
           :key="d.date"
-          class="flex items-center gap-2.5 py-1"
+          class="wco-dr flex items-center gap-2.5 py-1"
           :title="dayTitle(d)"
         >
           <span class="shrink-0 text-xs leading-[18px] tabular-nums text-dim">{{ d.date }}</span>
@@ -139,7 +139,7 @@
 
       <div
         v-if="hasUnpriced"
-        class="flex items-center gap-1.5 rounded-sm border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs leading-[18px] text-warning"
+        class="wco-warn flex items-center gap-1.5 rounded-sm border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs leading-[18px] text-warning"
       >
         <AlertTriangle class="size-3 shrink-0" />
         {{ t('sessions.workspace.cost.unpriced') }}
@@ -159,7 +159,10 @@ import { formatTokenCount } from '~/utils/context-window'
 import Input from '~/components/ui/input/Input.vue'
 import Button from '~/components/ui/button/Button.vue'
 
-const props = defineProps<{ session: Session }>()
+const props = withDefaults(defineProps<{ session: Session; compact?: boolean }>(), {
+  compact: false,
+})
+const compact = props.compact
 
 const { t } = useI18n()
 
@@ -203,3 +206,30 @@ const spanLabel = computed(() => {
 const dayTitle = (d: CostDay): string =>
   `${d.date} · ${fmtUsd(d.costUsd)} · ${formatTokenCount(d.totalTokens)} tokens · ${d.turns} turns`
 </script>
+
+<style scoped>
+/* Dock variant — ngang + gọn, không kéo dọc. Tailwind vẫn dùng được; đây là
+   override khi `compact`. */
+.wco.dock {
+  gap: 8px;
+  padding: 4px 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+}
+.wco.dock .wco-hl {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
+}
+.wco.dock .wco-num {
+  font-size: var(--fs-xl);
+  line-height: var(--lh-xl);
+}
+.wco.dock .wco-span {
+  padding: 5px 0;
+  gap: 4px;
+}
+.wco.dock .wco-dr {
+  padding: 2px 0;
+}
+</style>

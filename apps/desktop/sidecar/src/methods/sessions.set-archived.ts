@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { setSessionArchived } from '../sessions/store.js'
+import { closeLive } from '../runtime/claude-sdk/live-process.js'
 
 // Archive / un-archive một phiên — "ẩn khỏi danh sách nhưng KHÔNG xoá"
 // (docs/features/session-lifecycle-ops.md). Đây là bậc trung gian còn thiếu giữa
@@ -23,6 +24,10 @@ const Params = z.object({
 register('sessions.setArchived', async (raw) => {
   const params = Params.parse(raw)
   const found = await setSessionArchived(params.id, params.archived)
+  // An archived session is out of sight: don't keep a CLI (a few hundred MB, plus its
+  // background tasks) running for it. Un-archiving needs nothing — the next turn respawns
+  // the process via `resume` (ADR 0099).
+  if (params.archived) closeLive(params.id, 'session archived')
   if (!found) throw new RpcError(-32004, 'Session not found')
   return { ok: true }
 })

@@ -27,11 +27,7 @@
 // hiểm hơn không có comment.)
 
 import { z } from 'zod'
-import {
-  createSdkMcpServer,
-  tool,
-  type McpSdkServerConfigWithInstance,
-} from '@anthropic-ai/claude-agent-sdk'
+import { createSdkMcpServer, tool, type McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk'
 import {
   BROWSER_TOOL_DESCRIPTION,
   BROWSER_TOOL_NAME,
@@ -39,6 +35,7 @@ import {
   type BrowserActionInput,
   BROWSER_MCP_SERVER,
 } from '../tools/browser-tool.js'
+import { claimBrowserToolUse } from '../../sessions/browser-previews.js'
 export { BROWSER_MCP_SERVER }
 
 // `isError` là thứ khiến một ref chết / một tab không tồn tại render thành bước LỖI
@@ -60,10 +57,7 @@ function bridge(result: Awaited<ReturnType<typeof runBrowserAction>>): {
 
 // `scope` = chủ tab của lượt này (session engineId / `task:…`) — wrapper gắn,
 // model không đặt được. Cùng một thân `runBrowserAction` với nhánh Pi.
-export function buildBrowserToolSdkServer(
-  cwd: string,
-  scope?: string,
-): McpSdkServerConfigWithInstance {
+export function buildBrowserToolSdkServer(cwd: string, scope?: string): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: BROWSER_MCP_SERVER,
     version: '1.0.0',
@@ -118,30 +112,23 @@ export function buildBrowserToolSdkServer(
             .describe(
               'For network: substring of the URL, or an exact resource type (xhr, fetch, document, script, image).',
             ),
-          limit: z
-            .number()
-            .optional()
-            .describe('For console/network: how many recent entries (default 50).'),
-          requestId: z
-            .string()
-            .optional()
-            .describe('For network_body: the id printed by the network action.'),
+          limit: z.number().optional().describe('For console/network: how many recent entries (default 50).'),
+          requestId: z.string().optional().describe('For network_body: the id printed by the network action.'),
           preset: z
             .enum(['mobile', 'tablet', 'desktop', 'wide'])
             .optional()
             .describe('For viewport: a device preset. Or give width/height instead.'),
           width: z.number().optional().describe('For viewport: CSS pixels wide.'),
           height: z.number().optional().describe('For viewport: CSS pixels tall.'),
-          mobile: z
-            .boolean()
-            .optional()
-            .describe('For viewport: emulate touch + a mobile user agent.'),
-          tabId: z
-            .string()
-            .optional()
-            .describe('Which tab to act on. Defaults to the active tab.'),
+          mobile: z.boolean().optional().describe('For viewport: emulate touch + a mobile user agent.'),
+          tabId: z.string().optional().describe('Which tab to act on. Defaults to the active tab.'),
         },
-        async (args) => bridge(await runBrowserAction(cwd, args as BrowserActionInput, scope)),
+        async (args) => {
+          // tool_use id (cho thẻ xem trước) do PreToolUse hook ghi trước; lấy phiếu khớp
+          // lời gọi này. Không có phiếu (task node, hook không chạy) ⇒ không có thẻ ảnh.
+          const toolUseId = scope ? claimBrowserToolUse(scope, args) : undefined
+          return bridge(await runBrowserAction(cwd, args as BrowserActionInput, scope, toolUseId))
+        },
       ),
     ],
   })

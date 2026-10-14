@@ -22,19 +22,8 @@ import { readdir, copyFile, unlink, access, rename, mkdir } from 'node:fs/promis
 import { createInterface } from 'node:readline'
 import { join } from 'node:path'
 import { log } from '../util/logger.js'
-import type {
-  Session,
-  SessionCompaction,
-  SessionMessage,
-  SessionStep,
-} from '../types/shared.js'
-import {
-  attachmentsDir,
-  readSessionJsonl,
-  sessionFilePath,
-  sessionsDir,
-  writeSessionJsonl,
-} from './jsonl.js'
+import type { Session, SessionCompaction, SessionMessage, SessionStep } from '../types/shared.js'
+import { attachmentsDir, readSessionJsonl, sessionFilePath, sessionsDir, writeSessionJsonl } from './jsonl.js'
 
 // ─── Legacy event log (verbatim reducer from the pre-cutover event-sourced store) ─
 
@@ -97,9 +86,7 @@ function applyEvent(state: FoldState, e: LegacySessionEvent): void {
     // this to a plain push.
     const idx = current.messages.findIndex((m) => m.id === e.message.id)
     const messages =
-      idx >= 0
-        ? current.messages.map((m, i) => (i === idx ? e.message : m))
-        : [...current.messages, e.message]
+      idx >= 0 ? current.messages.map((m, i) => (i === idx ? e.message : m)) : [...current.messages, e.message]
     state.snapshot = { ...current, messages, updatedAt: e.at }
   } else if (e.type === 'message.progress') {
     if (!state.snapshot) return
@@ -107,8 +94,7 @@ function applyEvent(state: FoldState, e: LegacySessionEvent): void {
     const idx = current.messages.findIndex((m) => m.id === e.id)
     // Lazily materialise the assistant message on the first delta so a crash
     // before any `message.appended` still surfaces the partial reply.
-    const base: SessionMessage =
-      idx >= 0 ? current.messages[idx] : { id: e.id, role: 'agent', text: '', at: e.at }
+    const base: SessionMessage = idx >= 0 ? current.messages[idx] : { id: e.id, role: 'agent', text: '', at: e.at }
     let steps = base.steps
     if (e.steps && e.steps.length) {
       // Merge step deltas by id (a running → done re-emit replaces in place).
@@ -126,17 +112,14 @@ function applyEvent(state: FoldState, e: LegacySessionEvent): void {
       at: e.at,
       ...(steps && steps.length ? { steps } : {}),
     }
-    const messages =
-      idx >= 0
-        ? current.messages.map((m, i) => (i === idx ? next : m))
-        : [...current.messages, next]
+    const messages = idx >= 0 ? current.messages.map((m, i) => (i === idx ? next : m)) : [...current.messages, next]
     state.snapshot = { ...current, messages, updatedAt: e.at }
   } else if (e.type === 'session.truncated') {
     if (!state.snapshot) return
     // Drop sdkSessionId: a real truncation rewrites history, so the Claude SDK
     // resume handle is stale (ADR 0058). state.snapshot is only reassigned when we
     // actually truncate; an unknown keepThroughId leaves it (and sdkSessionId) intact.
-    const { sdkSessionId: _staleSdk, ...current } = state.snapshot
+    const { sdkSessionId: _staleSdk, transcriptSource: _ts, sdkSessionPath: _sp, ...current } = state.snapshot
     if (e.keepThroughId === null) {
       state.snapshot = { ...current, messages: [], updatedAt: e.at }
     } else {
@@ -152,7 +135,7 @@ function applyEvent(state: FoldState, e: LegacySessionEvent): void {
   } else if (e.type === 'session.compacted') {
     if (!state.snapshot) return
     // Drop sdkSessionId: a compaction supersedes the Claude SDK session (ADR 0058).
-    const { sdkSessionId: _supersededSdk, ...current } = state.snapshot
+    const { sdkSessionId: _supersededSdk, transcriptSource: _ts2, sdkSessionPath: _sp2, ...current } = state.snapshot
     // Only accept a checkpoint whose cut point still exists in the transcript.
     const known = current.messages.some((m) => m.id === e.compaction.firstKeptMessageId)
     if (known) state.snapshot = { ...current, compaction: e.compaction, updatedAt: e.at }

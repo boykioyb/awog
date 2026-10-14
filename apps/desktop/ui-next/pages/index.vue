@@ -153,7 +153,7 @@
             <Icon name="sessions" />
             <span class="tt">{{ t('home.recent.title') }}</span>
             <span class="ct">
-              <a @click="navigateTo('/sessions')">{{ t('home.all') }}</a>
+              <a @click="navigateTo('/workbench')">{{ t('home.all') }}</a>
             </span>
           </div>
           <div v-if="!recentSessions.length" class="hmHint" :style="hintStyle">
@@ -244,7 +244,7 @@ const recentSessions = computed(() =>
 // Mirrors the sessions page's own `store.setActive` select.
 function openSession(id: number) {
   sessions.setActive(id)
-  navigateTo('/sessions')
+  navigateTo('/workbench')
 }
 
 const deltaLabel = computed(() => {

@@ -1,25 +1,25 @@
 <template>
   <!-- Empty-state của viewport: tab trắng (about:blank / chưa commit) hoặc chưa
        có tab nào. View native KHÔNG bao giờ gắn vào đây (useEmbeddedBrowser gate
-       `hasPage`), nên DOM này thật sự nhìn thấy được — hướng dẫn ngắn + pins
+       `hasPage`), nên DOM này thật sự nhìn thấy được — hướng dẫn ngắn + bookmark
        thành card lớn bấm-mở ngay. -->
   <div class="bempty">
     <Icon name="globe" class="bempty-icn" style="width: var(--icon-xl); height: var(--icon-xl)" />
     <div class="bempty-title">{{ t('browser.empty.title') }}</div>
     <div class="bempty-hint">{{ t('browser.empty.hint') }}</div>
 
-    <div v-if="pins.length" class="bempty-pins">
+    <div v-if="cards.length" class="bempty-pins">
       <button
-        v-for="pin in pins"
-        :key="pin.url"
+        v-for="c in cards"
+        :key="c.id"
         type="button"
         class="bempty-pin"
-        :title="pin.url"
-        @click="emit('open', pin.url)"
+        :title="c.url"
+        @click="emit('open', c.url)"
       >
-        <Icon name="pin" style="width: var(--icon-sm); height: var(--icon-sm)" />
-        <span class="bempty-pinname">{{ labelOf(pin) }}</span>
-        <span class="bempty-pinhost">{{ hostOf(pin.url) }}</span>
+        <Icon name="bookmark" style="width: var(--icon-sm); height: var(--icon-sm)" />
+        <span class="bempty-pinname">{{ labelOf(c) }}</span>
+        <span class="bempty-pinhost">{{ hostOf(c.url) }}</span>
       </button>
     </div>
   </div>
@@ -27,20 +27,35 @@
 
 <script setup lang="ts">
 // Empty-state "trang trắng" của trình duyệt nhúng — dùng chung cho panel
-// (WorkspaceBrowser) và cửa sổ popout (pages/browser.vue). Tái dùng
-// `useBrowserPins` (state cấp module, localStorage) nên card ở đây và chip trong
-// BrowserPinStrip nhìn cùng một danh sách.
-import { useBrowserPins } from '~/composables/useBrowserPins'
+// (WorkspaceBrowser), main-tab (SessionDetail) và cửa sổ popout (pages/browser.vue).
+// Card lấy từ bookmark của HỒ SƠ hiệu lực (ADR 0101) — cùng cây với thanh bookmark
+// trong BrowserNavBar. Thư mục được trải phẳng: card là lối tắt nhanh, không phải
+// trình quản lý bookmark.
+import { useBookmarks } from '~/composables/useBookmarks'
+import { useScopeProfile } from '~/composables/useBrowserProfiles'
+
+const props = defineProps<{
+  // Scope sở hữu bề mặt (engineId phiên; vắng = pool global) → chọn đúng hồ sơ.
+  scope?: string
+}>()
 
 const emit = defineEmits<{
-  // Bấm card pin → mở URL đó. Bề mặt quyết định navigate tab trắng hiện tại hay
+  // Bấm card → mở URL đó. Bề mặt quyết định navigate tab trắng hiện tại hay
   // tạo tab mới (WorkspaceBrowser gán vào urlDraft rồi submitUrl).
   open: [url: string]
 }>()
 
 const { t } = useI18n()
-const { pins, labelOf } = useBrowserPins()
+const { profileId } = useScopeProfile(
+  () => props.scope,
+  () => undefined,
+)
+const bm = useBookmarks(() => profileId.value)
+const labelOf = bm.labelOf
 
+// Đủ để hữu ích, đủ ít để lưới không tràn khung trống.
+const MAX_CARDS = 12
+const cards = computed(() => bm.flat.value.map((e) => e.node).slice(0, MAX_CARDS))
 // Host nhỏ dưới tên card — đọc nhanh hơn nhìn nguyên URL. Lỗi parse → chuỗi rỗng.
 const hostOf = (url: string): string => {
   try {

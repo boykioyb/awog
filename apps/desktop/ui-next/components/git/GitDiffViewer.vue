@@ -18,6 +18,16 @@
         −{{ deletions }}
       </span>
       <span style="flex: 1" />
+      <!-- Nút refresh tuỳ chọn — DocDiff emit 'refresh' khi bấm; những caller
+           khác (GitManager/GitHistory) không truyền listener thì ẩn. -->
+      <button
+        v-if="hasRefresh"
+        class="gtoggle grefresh"
+        :title="t('git.diff.refresh')"
+        @click="emit('refresh')"
+      >
+        <RefreshCw :size="12" />
+      </button>
       <button
         v-if="!isImage"
         class="gtoggle"
@@ -73,6 +83,8 @@
 // Diff content is rendered as plain text colored only by line type (add/del/context);
 // it is intentionally NOT syntax-tokenized — per-token colors fought the add/del
 // background and looked noisy ("loạn màu"), especially on prose / non-JS files.
+import { computed, useAttrs } from 'vue'
+import { RefreshCw } from 'lucide-vue-next'
 import Button from '~/components/ui/button/Button.vue'
 import type { DiffLine, DiffMode, DiffRow } from './git-types'
 import { baseNameOf } from './git-types'
@@ -99,8 +111,12 @@ const emit = defineEmits<{
   (e: 'unstage-file', file: string): void
   (e: 'stage-hunk', hunk: number): void
   (e: 'unstage-hunk', hunk: number): void
+  (e: 'refresh'): void
 }>()
-
+const attrs = useAttrs()
+// `v-on:refresh` listener xuất hiện trong attrs dưới `onRefresh` — chỉ hiện nút
+// refresh khi caller thực sự truyền (DocDiff), caller khác (Git pane) thì ẩn.
+const hasRefresh = computed(() => typeof attrs.onRefresh === 'function')
 // Map the line's generic hunk button to stage (unstaged side) or unstage (staged
 // side). Branch so each emit hits its own typed overload.
 function onHunkAction(hunk: number) {
@@ -196,6 +212,16 @@ const splitRight = computed<DiffRow[]>(() => {
   border-radius: 0;
   margin: 0;
   background: transparent;
+}
+/* Nút refresh — override màu từ `.gtoggle` muted lên `--text` để đọc rõ là
+   button (mặc định t3 hơi nhạt). */
+.grefresh {
+  color: var(--text);
+  border-color: var(--input);
+}
+.grefresh:hover {
+  color: var(--t1);
+  background: var(--hover);
 }
 
 /* Image preview — center the bitmap in the scroll area, with breathing room and a

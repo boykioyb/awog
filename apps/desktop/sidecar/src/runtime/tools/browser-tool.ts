@@ -37,7 +37,75 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core'
 import { assertInsideWorkspace } from '../../git/path-sanitize.js'
 import { redactString } from '../../sessions/redact.js'
 import { hostRequest } from '../../transport/stdio.js'
+import { syncBrowserLoopbackPorts } from '../../devserver/registry.js'
+import { pushScopeProfile } from '../../browser-profiles/scope.js'
 import { assertSafeUrl } from './ssrf.js'
+import { saveBrowserPreview } from '../../sessions/browser-previews.js'
+import { log } from '../../util/logger.js'
+
+// Lưu ảnh + metadata của trang vừa mở cho thẻ trong transcript. BEST-EFFORT tuyệt đối:
+// mọi lỗi (host không chụp được, ổ đĩa) bị nuốt vì thẻ chỉ là phần trình bày — không
+// được phép làm hỏng một lượt `navigate` đã thành công. Ảnh không bao giờ nằm trong
+// kết quả tool (model không trả token cho nó). Chỉ phiên chat (scope = session id);
+// node của task có scope `task:…` và không có transcript để gắn thẻ.
+const PREVIEW_CAPTURE_TIMEOUT_MS = 5_000
+async function storePreview(
+  scope: string | undefined,
+  stepId: string | undefined,
+  page: { url: string; title: string; tabId: string },
+): Promise<void> {
+  if (!scope || !stepId || scope.startsWith('task:') || !page.url) return
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const shot = await Promise.race([
+      hostRequest('browser.thumbnail', {
+        tabId: page.tabId,
+        scope,
+      }) as Promise<{
+        base64: string
+      } | null>,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), PREVIEW_CAPTURE_TIMEOUT_MS)
+      }),
+    ])
+    await saveBrowserPreview(scope, stepId, page, shot?.base64 ?? null)
+  } catch (err) {
+    log.warn('browser preview not stored', { scope, stepId, err: String(err) })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Host loopback mà trình duyệt agent được phép tới: CHỈ cổng dev server đã khai +
+// đang chạy trong phiên (devserver/registry.ts). Main (browser-host-policy.ts) là
+// bên thi hành thật; đây chỉ là cổng sớm để lỗi nói được cách mở khoá.
+const LOOPBACK_URL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]'])
+
+async function assertNavigableUrl(rawUrl: string, cwd: string, scope?: string): Promise<void> {
+  let url: URL | null = null
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    // để assertSafeUrl báo "invalid URL"
+  }
+  const isLoopback =
+    url !== null &&
+    (url.protocol === 'http:' || url.protocol === 'https:') &&
+    LOOPBACK_URL_HOSTS.has(url.hostname.toLowerCase())
+  if (url === null || !isLoopback) {
+    await assertSafeUrl(rawUrl)
+    return
+  }
+  // Task node (`task:…`) không có dev server theo phiên ⇒ không có ngoại lệ.
+  const ports = scope && !scope.startsWith('task:') ? await syncBrowserLoopbackPorts(cwd, scope) : []
+  const port = url.port ? Number(url.port) : url.protocol === 'https:' ? 443 : 80
+  if (ports.includes(port)) return
+  throw new Error(
+    `blocked URL — loopback ${url.hostname}:${port} is not a running dev server. ` +
+      `Declare it in .awog/dev-servers.json (with its "port") and start it with the dev_server tool; ` +
+      `only declared, running ports are reachable.`,
+  )
+}
 
 export const BROWSER_TOOL_NAME = 'browser_tool'
 
@@ -89,9 +157,7 @@ const BrowserParams = Type.Object(
       ],
       { description: 'The browser action to perform.' },
     ),
-    url: Type.Optional(
-      Type.String({ description: 'For navigate / tab_new: absolute http/https URL.' }),
-    ),
+    url: Type.Optional(Type.String({ description: 'For navigate / tab_new: absolute http/https URL.' })),
     ref: Type.Optional(
       Type.String({
         description:
@@ -128,31 +194,17 @@ const BrowserParams = Type.Object(
           'For network: substring of the URL, or an exact resource type (xhr, fetch, document, script, image).',
       }),
     ),
-    limit: Type.Optional(
-      Type.Number({ description: 'For console/network: how many recent entries (default 50).' }),
-    ),
-    requestId: Type.Optional(
-      Type.String({ description: 'For network_body: the id printed by the network action.' }),
-    ),
+    limit: Type.Optional(Type.Number({ description: 'For console/network: how many recent entries (default 50).' })),
+    requestId: Type.Optional(Type.String({ description: 'For network_body: the id printed by the network action.' })),
     preset: Type.Optional(
-      Type.Union(
-        [
-          Type.Literal('mobile'),
-          Type.Literal('tablet'),
-          Type.Literal('desktop'),
-          Type.Literal('wide'),
-        ],
-        { description: 'For viewport: a device preset. Or give width/height instead.' },
-      ),
+      Type.Union([Type.Literal('mobile'), Type.Literal('tablet'), Type.Literal('desktop'), Type.Literal('wide')], {
+        description: 'For viewport: a device preset. Or give width/height instead.',
+      }),
     ),
     width: Type.Optional(Type.Number({ description: 'For viewport: CSS pixels wide.' })),
     height: Type.Optional(Type.Number({ description: 'For viewport: CSS pixels tall.' })),
-    mobile: Type.Optional(
-      Type.Boolean({ description: 'For viewport: emulate touch + a mobile user agent.' }),
-    ),
-    tabId: Type.Optional(
-      Type.String({ description: 'Which tab to act on. Defaults to the active tab.' }),
-    ),
+    mobile: Type.Optional(Type.Boolean({ description: 'For viewport: emulate touch + a mobile user agent.' })),
+    tabId: Type.Optional(Type.String({ description: 'Which tab to act on. Defaults to the active tab.' })),
   },
   { additionalProperties: true },
 )
@@ -320,27 +372,38 @@ export async function runBrowserAction(
   cwd: string,
   params: BrowserActionInput,
   scope?: string,
+  // Id của step (= tool_use id) để lưu thẻ xem trước dưới thư mục session. Vắng ⇒
+  // không lưu gì (task node, hoặc nhánh SDK không đối chiếu được lời gọi).
+  previewStepId?: string,
 ): Promise<AgentToolResult<BrowserDetails>> {
   const action = params.action
   const tabId = typeof params.tabId === 'string' ? params.tabId : undefined
   // `tabArg` đi cùng MỌI hostRequest: tabId là thứ model chọn, scope là thứ
   // wrapper gắn — main cần cả hai để verify ownership.
   const tabArg = { ...(tabId ? { tabId } : {}), ...(scope ? { scope } : {}) }
+  // Profile trình duyệt của scope (phiên → project → mặc định) phải tới main TRƯỚC
+  // mọi lời gọi — cùng nhịp với đồng bộ cổng loopback dev server ở `navigate`.
+  if (scope) await pushScopeProfile(scope)
   switch (action) {
     case 'navigate': {
       const url = requireString(params.url, action, 'url')
-      await assertSafeUrl(url) // SSRF: protocol + literal host + DNS resolve
-      const res = (await hostRequest('browser.navigate', { url, ...tabArg })) as {
+      await assertNavigableUrl(url, cwd, scope) // SSRF: protocol + literal host + DNS resolve
+      const res = (await hostRequest('browser.navigate', {
+        url,
+        ...tabArg,
+      })) as {
         url: string
         title: string
         tabId: string
       }
       const header = `Loaded ${res.tabId}. Run snapshot to see the page. Its final URL and title:`
-      return textResult(fenced('page', header, `url: ${res.url}\ntitle: ${res.title}`), {
+      const loaded = textResult(fenced('page', header, `url: ${res.url}\ntitle: ${res.title}`), {
         action,
         url: res.url,
         tabId: res.tabId,
       })
+      await storePreview(scope, previewStepId, res)
+      return loaded
     }
     case 'snapshot': {
       const selector = typeof params.selector === 'string' ? params.selector : undefined
@@ -380,10 +443,11 @@ export async function runBrowserAction(
       })) as { found: boolean; tabId: string }
       const target = ref ?? selector ?? ''
       if (!res.found) {
-        return textResult(
-          `No element matched ${target}. Re-run snapshot — refs go stale when the page changes.`,
-          { action, tabId: res.tabId, isError: true },
-        )
+        return textResult(`No element matched ${target}. Re-run snapshot — refs go stale when the page changes.`, {
+          action,
+          tabId: res.tabId,
+          isError: true,
+        })
       }
       return textResult(`Clicked ${target}. Re-snapshot to see the result.`, {
         action,
@@ -404,10 +468,11 @@ export async function runBrowserAction(
       const target = ref ?? selector ?? ''
       return res.found
         ? textResult(`Filled ${target}`, { action, tabId: res.tabId })
-        : textResult(
-            `No element matched ${target}. Re-run snapshot — refs go stale when the page changes.`,
-            { action, tabId: res.tabId, isError: true },
-          )
+        : textResult(`No element matched ${target}. Re-run snapshot — refs go stale when the page changes.`, {
+            action,
+            tabId: res.tabId,
+            isError: true,
+          })
     }
     case 'extract': {
       const mode = params.mode === 'dom' ? 'dom' : 'text'
@@ -429,10 +494,10 @@ export async function runBrowserAction(
         tabId: string
       }
       if (!cwd) {
-        return textResult(
-          `Screenshot captured (${res.width}x${res.height}); no workspace to save it.`,
-          { action, tabId: res.tabId },
-        )
+        return textResult(`Screenshot captured (${res.width}x${res.height}); no workspace to save it.`, {
+          action,
+          tabId: res.tabId,
+        })
       }
       const relPath = `.awog/screenshots/screenshot-${Date.now()}.png`
       const abs = assertInsideWorkspace(cwd, relPath)
@@ -499,9 +564,7 @@ export async function runBrowserAction(
       const meta = entry
         ? `${entry.method} ${redactString(entry.url)} → ${entry.status ?? '?'} ${entry.mimeType}\n` +
           formatHeaders('Response headers', entry.responseHeaders) +
-          (entry.hiddenHeaders > 0
-            ? `(${entry.hiddenHeaders} credential/oversized headers withheld)\n`
-            : '')
+          (entry.hiddenHeaders > 0 ? `(${entry.hiddenHeaders} credential/oversized headers withheld)\n` : '')
         : ''
       const header =
         `Response of ${requestId} on ${res.tabId}. Credential headers were never captured and ` +
@@ -561,7 +624,7 @@ export async function runBrowserAction(
     }
     case 'tab_new': {
       const url = typeof params.url === 'string' ? params.url : undefined
-      if (url) await assertSafeUrl(url) // same SSRF gate as navigate
+      if (url) await assertNavigableUrl(url, cwd, scope) // same SSRF gate as navigate
       const res = (await hostRequest('browser.tabNew', {
         ...(url ? { url } : {}),
         ...tabArg,
@@ -570,15 +633,17 @@ export async function runBrowserAction(
         url: string
         title: string
       }
-      if (!res.url) return textResult(`Opened blank tab ${res.tabId}`, { action, tabId: res.tabId })
-      return textResult(
-        fenced(
-          'page',
-          `Opened ${res.tabId}. Its final URL and title:`,
-          `url: ${res.url}\ntitle: ${res.title}`,
-        ),
+      if (!res.url)
+        return textResult(`Opened blank tab ${res.tabId}`, {
+          action,
+          tabId: res.tabId,
+        })
+      const opened = textResult(
+        fenced('page', `Opened ${res.tabId}. Its final URL and title:`, `url: ${res.url}\ntitle: ${res.title}`),
         { action, tabId: res.tabId, url: res.url },
       )
+      await storePreview(scope, previewStepId, res)
+      return opened
     }
     case 'tab_select': {
       const target = requireString(params.tabId, action, 'tabId')
@@ -608,15 +673,12 @@ export async function runBrowserAction(
 // Pi AgentTool. `cwd` = workspace root của lượt hiện tại — nơi duy nhất screenshot
 // được phép ghi xuống (invariant #2). `scope` = chủ tab của lượt này (session
 // engineId / `task:…`); bỏ trống nghĩa là pool global — giữ nguyên hành vi cũ.
-export function createBrowserTool(
-  cwd: string,
-  scope?: string,
-): AgentTool<typeof BrowserParams, BrowserDetails> {
+export function createBrowserTool(cwd: string, scope?: string): AgentTool<typeof BrowserParams, BrowserDetails> {
   return {
     name: BROWSER_TOOL_NAME,
     label: 'Browser',
     description: BROWSER_TOOL_DESCRIPTION,
     parameters: BrowserParams,
-    execute: (_id, params) => runBrowserAction(cwd, params, scope),
+    execute: (toolCallId, params) => runBrowserAction(cwd, params, scope, toolCallId),
   }
 }

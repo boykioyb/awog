@@ -33,7 +33,20 @@ export function mask(value: unknown): unknown {
 
 type LogLevel = 'info' | 'warn' | 'error'
 
+// stderr hỏng (host chết ⇒ đầu kia của pipe/socket stdio đóng) thì THÔI ghi, không
+// được để lỗi đó thành `uncaughtException`. Không có listener này thì vòng sau đã xảy
+// ra thật (2026-10-13, sidecar mồ côi đứng 100% CPU suốt 2,5 giờ): ghi stderr → EPIPE
+// → `uncaughtException` → handler EPIPE `log.warn` → ghi stderr → EPIPE… Stream stdio
+// của Node không tự `destroy` khi lỗi nên mỗi lần ghi lại ra một EPIPE mới, và vòng
+// chạy hoàn toàn trong hàng đợi `nextTick` ⇒ timer/I-O không bao giờ tới lượt, kể cả
+// lượt `gracefulShutdown` đang chờ ⇒ tiến trình không bao giờ thoát.
+let stderrBroken = false
+process.stderr.on('error', () => {
+  stderrBroken = true
+})
+
 function emit(lvl: LogLevel, msg: string, meta?: Record<string, unknown>): void {
+  if (stderrBroken) return
   const masked = meta ? (mask(meta) as Record<string, unknown>) : {}
   const record = { lvl, msg, ts: Date.now(), ...masked }
   process.stderr.write(`${JSON.stringify(record)}\n`)

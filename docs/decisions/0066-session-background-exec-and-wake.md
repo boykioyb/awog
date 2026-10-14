@@ -1,6 +1,6 @@
 # ADR 0066 — Session background exec + reactive wake
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Accepted; nhánh Claude SDK amended by [0099](./0099-anthropic-claude-native-runtime.md) (tiến trình CLI sống lâu, wake native luôn tự hiện — bỏ cơ chế giữ lượt mở 30 phút)
 - **Ngày:** 2026-07-24
 - **Người quyết định:** hoatq (product owner) + Claude Code
 - **Liên quan:** [ADR 0029](0029-migrate-llm-runtime-to-pi-sdk.md) (Pi runtime), [ADR 0055](0055-session-task-link.md) (RunWorkflow — spawn-and-return-immediately + link-back pattern để mirror), [ADR 0019](0019-pty-terminal-in-sidecar.md) (PTY — vì sao KHÔNG dùng), [ADR 0057](0057-session-budget-guard.md) (budget guard), [security.md](../../.claude/rules/security.md)
@@ -9,11 +9,12 @@
 
 Tool `Bash` của session ([runtime/tools/bash-tool.ts](../../apps/desktop/sidecar/src/runtime/tools/bash-tool.ts)) là **one-shot đồng bộ**: `spawn('sh', ['-c', cmd])`, chờ `close`, capture output cap 64KB, **timeout tối đa 600s** rồi `SIGKILL`. Không có `run_in_background`, không có tool poll output, không có cơ chế **đánh thức session** khi tiến trình nền kết thúc.
 
-Hệ quả quan sát thực tế: khi được yêu cầu chạy việc dài (vd `docker build`), model (Claude — training từ Claude Code, nơi `Bash run_in_background:true` **thật sự** re-invoke agent lúc lệnh exit) **giả định** nó có background exec. Nó nói *"Build chạy nền (ID …); tôi sẽ được báo khi xong"* rồi **kết thúc turn chờ một notification không bao giờ tới**. Turn đóng → session "gián đoạn". Lượt sau model phải tự dò lại trạng thái (`docker images …`) vì không biết build đã xong chưa. Đây là **confabulation do thiếu primitive**, không phải bug lẻ.
+Hệ quả quan sát thực tế: khi được yêu cầu chạy việc dài (vd `docker build`), model (Claude — training từ Claude Code, nơi `Bash run_in_background:true` **thật sự** re-invoke agent lúc lệnh exit) **giả định** nó có background exec. Nó nói _"Build chạy nền (ID …); tôi sẽ được báo khi xong"_ rồi **kết thúc turn chờ một notification không bao giờ tới**. Turn đóng → session "gián đoạn". Lượt sau model phải tự dò lại trạng thái (`docker images …`) vì không biết build đã xong chưa. Đây là **confabulation do thiếu primitive**, không phải bug lẻ.
 
 Thứ gần nhất đang có: `RunWorkflow` (ADR 0055) spawn một **Task** (workflow DAG) nền từ session và trả ngay — nhưng đó là pipeline nhiều phase trên Task engine, KHÔNG phải "chạy một lệnh shell nền rồi tiếp tục **chính session này** khi nó xong". `steering.ts` cũng không cứu được: steer chỉ tác động **giữa turn** (in-memory, keyed theo `messageId`, `enqueueSteer` trả `null` khi không còn turn sống) — turn đã đóng thì không có gì để steer.
 
 Bài toán tách làm 2 primitive độc lập:
+
 - **(A) Background exec** — chạy lệnh dài detached, không dính cap 600s, không block turn; poll output theo yêu cầu.
 - **(B) Reactive wake** — khi tiến trình nền exit, **đánh thức session** để model tiếp tục kế hoạch.
 
@@ -40,8 +41,8 @@ Bài toán tách làm 2 primitive độc lập:
 1. **Factor turn-core** khỏi `methods/sessions.send-message.ts` thành entry gọi được nội bộ: `startSystemTurn(sessionId, injectedPrompt, { origin:'background' })` tái dùng nguyên pipeline (context-builder, run-stream, permission gate, persist, emit). Message được **tag `origin:'system'`** để UI render phân biệt (không phải user gõ).
 2. **Khi bg process exit** (từ A), wake layer đọc **chính sách** (mục dưới) + trạng thái turn (`isTurnActive`):
    - **Session idle:**
-     - *notify-only* (default) → emit `session.background-done` (`shellId`, `command`, `exitCode`, tail output). UI hiện **card notification + nút "Tiếp tục"**; bấm → `startSystemTurn(...)`.
-     - *auto-continue* → gọi thẳng `startSystemTurn(...)` với prompt injected kiểu `Background shell <id> exited (code N). Output:\n<tail>\nContinue your plan.`
+     - _notify-only_ (default) → emit `session.background-done` (`shellId`, `command`, `exitCode`, tail output). UI hiện **card notification + nút "Tiếp tục"**; bấm → `startSystemTurn(...)`.
+     - _auto-continue_ → gọi thẳng `startSystemTurn(...)` với prompt injected kiểu `Background shell <id> exited (code N). Output:\n<tail>\nContinue your plan.`
    - **Session đang có turn chạy** → **buffer** completion vào hàng đợi per-session (KHÔNG steer mid-turn — tránh nhiễu + steering là Pi-only). Trong `finally` của turn hiện tại, nếu còn completion pending → áp lại chính sách idle (auto → wake turn kế; notify → surface card). Tôn trọng **single-turn invariant** (mỗi session 1 turn tại 1 thời điểm).
 3. **Chính sách = toggle Settings toàn cục** `autoContinueOnBackground: boolean` (default `false` → **notify-only**). Đặt ở `Settings → Sessions`. Lý do chọn toggle (không hardcode 1 hành vi): auto-continue giống Claude Code nhất nhưng **tốn token khi user không để ý** + có thể bất ngờ; notify-only an toàn nhưng thêm 1 cú bấm. User chốt 2026-07-24: làm cả hai, default notify-only.
 
@@ -67,6 +68,7 @@ Bài toán tách làm 2 primitive độc lập:
 - **(−)** Surface exec mới (detached, chạy dài) → **infosec pass bắt buộc** trước release (dù chung posture execute-mode với Bash hiện tại).
 
 ### Việc cần làm tiếp
+
 - Feature spec chi tiết: [docs/features/session-background-tasks.md](../features/session-background-tasks.md).
 - ~~Chốt cap~~ ✅ chốt (P1): bg shell = **4**/session; TTL cleanup dir = **24h**. Cap wake-turn/session → chốt ở P2.
 - Infosec pass: detached exec + auto-continue loop + đọc log file (path sanitize).

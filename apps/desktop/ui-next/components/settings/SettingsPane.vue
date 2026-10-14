@@ -7,6 +7,8 @@
     <SettingsPricing v-else-if="active === 'pricing'" />
     <SettingsWorkspace v-else-if="active === 'workspace'" />
     <SettingsWiki v-else-if="active === 'wiki'" />
+    <SettingsBrowser v-else-if="active === 'browser'" />
+    <SettingsUserscripts v-else-if="active === 'userscripts'" />
     <SettingsMemory v-else-if="active === 'memory'" />
     <SettingsStyles v-else-if="active === 'styles'" />
     <SettingsGit v-else-if="active === 'git'" />

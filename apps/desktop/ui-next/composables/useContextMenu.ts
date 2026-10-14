@@ -6,6 +6,9 @@ export type MenuItem = {
   id?: string
   label?: string
   icon?: string
+  // Chấm màu dữ liệu (vd màu hồ sơ trình duyệt) vẽ trước nhãn — màu của NGƯỜI DÙNG,
+  // không phải token theme.
+  dot?: string
   danger?: boolean
   disabled?: boolean
   // Marks the row as the current selection — accent color + trailing checkmark.
@@ -13,7 +16,12 @@ export type MenuItem = {
   hint?: string
   separator?: boolean
   children?: MenuItem[]
+  // Nút nhỏ ngay trên hàng (vd − 100% + của thu phóng) thay cho một lớp submenu. Bấm
+  // phát `select` với id của nút và GIỮ menu mở để bấm tiếp; hàng tự nó không chọn được.
+  buttons?: MenuButton[]
 }
+
+export type MenuButton = { id: string; title: string; icon?: string; text?: string }
 
 export type MenuPos = { x: number; y: number }
 

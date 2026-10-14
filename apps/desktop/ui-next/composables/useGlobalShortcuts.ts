@@ -1,3 +1,4 @@
+import { isBoardSession } from '~/composables/useSessionsData'
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useSessionsStore } from '~/stores/sessions'
 import { useCommandPalette } from '~/composables/useCommandPalette'
@@ -26,7 +27,7 @@ import { useWorkspacePanel } from '~/composables/useWorkspacePanel'
 //   toggleBrowserPip → open/đóng card Picture-in-Picture của trình duyệt
 //   openSettings   → open the Settings modal
 //   next/prevSession → step through the session list and jump to Sessions
-//   goSessions / goTasks / goProjects → route jumps
+//   sessionTab1 → activate tab phiên đầu tiên của project tab đang mở + jump
 //
 // Esc handling stays in the layout (it also closes the palette / responsive
 // drawers). Matching is done by useKeymap against event.code, so it is layout-
@@ -54,7 +55,7 @@ export function useGlobalShortcuts(): void {
     const target = list[next]
     if (!target) return
     sessions.setActive(target.id)
-    void navigateTo('/sessions')
+    void navigateTo('/workbench')
   }
 
   const dispatch: Record<KeymapActionId, () => void> = {
@@ -70,7 +71,7 @@ export function useGlobalShortcuts(): void {
       // with the active session's project, so this also covers "I'm inside a
       // project's session"; empty tab ('' = All) falls back to a global session.
       sessions.create(sessions.activeTab || undefined)
-      void navigateTo('/sessions')
+      void navigateTo('/workbench')
     },
     toggleFiles: () => workspace.toggleView('Files'),
     toggleDiff: () => workspace.toggleView('Diff'),
@@ -81,7 +82,19 @@ export function useGlobalShortcuts(): void {
     openSettings: () => settingsModal.openSettings(),
     nextSession: () => cycleSession(1),
     prevSession: () => cycleSession(-1),
-    goSessions: () => void navigateTo('/sessions'),
+    lastProject: () => {
+      sessions.toggleLastProject()
+      void navigateTo('/workbench')
+    },
+    sessionTab1: () => {
+      // ⌘1 = "tab trao đổi đầu tiên" — tab phiên thứ nhất của project tab đang
+      // mở (bỏ archived + board, cùng lọc SessionStrip). Không có thì chỉ jump.
+      const target = sessions.tabSessions.find(
+        (s) => !sessions.isArchived(s.id) && !isBoardSession(s),
+      )
+      if (target) sessions.setActive(target.id)
+      void navigateTo('/workbench')
+    },
     goTasks: () => void navigateTo('/tasks'),
     goProjects: () => void navigateTo('/projects'),
   }

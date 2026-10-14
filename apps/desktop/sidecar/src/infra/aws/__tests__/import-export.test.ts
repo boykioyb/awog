@@ -6,13 +6,7 @@ import { mkdtemp, mkdir, readFile, readdir, stat, symlink, writeFile } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  applyImport,
-  exportCommands,
-  exportProfiles,
-  parseCsv,
-  previewImport,
-} from '../import-export.js'
+import { applyImport, exportCommands, exportProfiles, parseCsv, previewImport } from '../import-export.js'
 
 // Khoá giả — chuỗi này là thứ mọi ca "không được rò" đi tìm trên đĩa.
 const FAKE_SECRET = 'wJalrXUtnFEMI-K7MDENG-bPxRfiCYEXAMPLEKEY'
@@ -61,9 +55,7 @@ async function seedAws(): Promise<void> {
   )
   await writeFile(
     credentialsPath,
-    ['[default]', 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE', `aws_secret_access_key = ${FAKE_SECRET}`, ''].join(
-      '\n',
-    ),
+    ['[default]', 'aws_access_key_id = AKIAIOSFODNN7EXAMPLE', `aws_secret_access_key = ${FAKE_SECRET}`, ''].join('\n'),
     { mode: 0o600 },
   )
 }
@@ -110,7 +102,10 @@ describe('nhập từ CSV của IAM console', () => {
   })
 
   it('thiếu cột khoá thì nói ra thay vì trả danh sách rỗng im lặng', async () => {
-    const preview = await previewImport({ source: 'csv', text: 'User name,Password\nx,y\n' })
+    const preview = await previewImport({
+      source: 'csv',
+      text: 'User name,Password\nx,y\n',
+    })
     expect(preview.entries).toEqual([])
     expect(preview.warnings.join(' ')).toMatch(/Access key ID/)
   })
@@ -282,9 +277,7 @@ describe('áp dụng — ba kiểu xử lý trùng tên', () => {
     const result = await applyImport({
       source: 'paste',
       text: PASTE,
-      selections: [
-        { from: 'default', to: '229015218011_Offshore-Developer', overwrite: false },
-      ],
+      selections: [{ from: 'default', to: '229015218011_Offshore-Developer', overwrite: false }],
     })
     expect(result.created).toEqual(['229015218011_Offshore-Developer'])
   })
@@ -321,12 +314,10 @@ describe('xuất', () => {
 
   it('kèm khoá thì ĐÒI gõ lại đúng một tên trong danh sách', async () => {
     await seedAws()
-    await expect(
-      exportProfiles({ names: ['default'], includeSecrets: true }),
-    ).rejects.toThrow(/CONFIRM_REQUIRED/)
-    await expect(
-      exportProfiles({ names: ['default'], includeSecrets: true, confirmName: 'prod' }),
-    ).rejects.toThrow(/CONFIRM_REQUIRED/)
+    await expect(exportProfiles({ names: ['default'], includeSecrets: true })).rejects.toThrow(/CONFIRM_REQUIRED/)
+    await expect(exportProfiles({ names: ['default'], includeSecrets: true, confirmName: 'prod' })).rejects.toThrow(
+      /CONFIRM_REQUIRED/,
+    )
   })
 
   it('kèm khoá + xác nhận đúng: có khoá, và file ra đĩa là 0600', async () => {
@@ -346,9 +337,9 @@ describe('xuất', () => {
 
   it('từ chối ghi đè vào chính `~/.aws`', async () => {
     await seedAws()
-    await expect(
-      exportProfiles({ names: ['default'], includeSecrets: false, targetPath: configPath }),
-    ).rejects.toThrow(/FORBIDDEN_TARGET/)
+    await expect(exportProfiles({ names: ['default'], includeSecrets: false, targetPath: configPath })).rejects.toThrow(
+      /FORBIDDEN_TARGET/,
+    )
   })
 
   it('từ chối ghi vào `~/.awog` — đó là nhà của bản sao lưu', async () => {
@@ -391,9 +382,9 @@ describe('lệnh `aws configure set` tương đương', () => {
 describe('xuất kèm khoá KHÔNG BAO GIỜ trả nội dung về người gọi', () => {
   it('thiếu `targetPath` ⇒ TARGET_REQUIRED, không có `text`', async () => {
     await seedAws()
-    await expect(
-      exportProfiles({ names: ['default'], includeSecrets: true, confirmName: 'default' }),
-    ).rejects.toThrow(/^TARGET_REQUIRED/)
+    await expect(exportProfiles({ names: ['default'], includeSecrets: true, confirmName: 'default' })).rejects.toThrow(
+      /^TARGET_REQUIRED/,
+    )
   })
 
   it('`targetPath` toàn khoảng trắng cũng bị chặn', async () => {
@@ -427,9 +418,9 @@ describe('đích xuất được giải symlink trước khi so danh sách cấm
     await seedAws()
     const link = join(dir, 'innocent.ini')
     await symlink(credentialsPath, link)
-    await expect(
-      exportProfiles({ names: ['default'], includeSecrets: false, targetPath: link }),
-    ).rejects.toThrow(/^FORBIDDEN_TARGET/)
+    await expect(exportProfiles({ names: ['default'], includeSecrets: false, targetPath: link })).rejects.toThrow(
+      /^FORBIDDEN_TARGET/,
+    )
     // File credential phải còn NGUYÊN.
     expect(await readFile(credentialsPath, 'utf8')).toContain(FAKE_SECRET)
   })
@@ -461,10 +452,7 @@ describe('đích xuất được giải symlink trước khi so danh sách cấm
 
 describe('nhập KHÔNG ghi đè profile credential_process', () => {
   it('bỏ qua + nói ra lý do thay vì ném', async () => {
-    await writeFile(
-      configPath,
-      ['[profile vault]', 'credential_process = /usr/local/bin/vault-aws', ''].join('\n'),
-    )
+    await writeFile(configPath, ['[profile vault]', 'credential_process = /usr/local/bin/vault-aws', ''].join('\n'))
     const text = [
       '[vault]',
       'aws_access_key_id = AKIAIOSFODNN7EXAMPLE',
@@ -491,11 +479,9 @@ describe('cả ba parser dừng tên section ở `]` ĐẦU TIÊN', () => {
 
   it('đường đọc, đường ghi và đường xuất-kèm-khoá cho cùng một tên', async () => {
     await writeFile(configPath, [HEADER_CONFIG, 'region = ap-northeast-1', ''].join('\n'))
-    await writeFile(
-      credentialsPath,
-      [HEADER_CREDS, `aws_secret_access_key = ${FAKE_SECRET}`, ''].join('\n'),
-      { mode: 0o600 },
-    )
+    await writeFile(credentialsPath, [HEADER_CREDS, `aws_secret_access_key = ${FAKE_SECRET}`, ''].join('\n'), {
+      mode: 0o600,
+    })
 
     // Đường ĐỌC (parseAwsIni qua previewImport → conflict) thấy `dev`.
     const preview = await previewImport({

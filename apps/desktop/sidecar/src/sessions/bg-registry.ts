@@ -24,15 +24,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process'
 import { registerOwnedProcess, unregisterOwnedProcess } from '../monitor/owned.js'
-import {
-  mkdirSync,
-  writeFileSync,
-  readFileSync,
-  readdirSync,
-  existsSync,
-  statSync,
-  rmSync,
-} from 'node:fs'
+import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, statSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { sessionsDir, sessionDir } from './jsonl.js'
@@ -331,6 +323,15 @@ function pollShell(state: LiveShell): void {
   }
 }
 
+// Ai đó cần biết "một shell của phiên này vừa hết chạy" mà không chờ lượt chat kế
+// (dev server → thu hồi ngoại lệ loopback của trình duyệt agent, xem
+// devserver/browser-ports.ts). Gọi trong `finalize`, đồng bộ, lỗi của listener
+// không được làm hỏng việc chốt shell.
+const settleListeners = new Set<(sessionId: string) => void>()
+export function onBackgroundSettled(listener: (sessionId: string) => void): void {
+  settleListeners.add(listener)
+}
+
 // Settle a shell to a terminal status, tear down watchers, emit the done event.
 // Idempotent (child 'exit' + poll can race).
 function finalize(state: LiveShell, forced?: BgShellStatus): void {
@@ -372,7 +373,20 @@ function finalize(state: LiveShell, forced?: BgShellStatus): void {
     // The renderer owns the wake on this path (it drives every session turn).
     wake: true,
   })
-  log.info('bg-registry: done', { shellId: state.meta.shellId, status, exitCode })
+  log.info('bg-registry: done', {
+    shellId: state.meta.shellId,
+    status,
+    exitCode,
+  })
+  for (const listener of settleListeners) {
+    try {
+      listener(state.meta.sessionId)
+    } catch (err) {
+      log.warn('bg-registry: settle listener failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
 }
 
 // ─── Read / list / kill ───────────────────────────────────────────────────
@@ -444,9 +458,7 @@ export function readBackground(
   // thư mục thật phải nằm trong temp/`~/.awog`) trước mọi I/O — invariant #2.
   // Đường này KHÔNG dùng cho task subagent: chúng không có file, và `state
   // .externalOutputFile` vắng mặt đúng ở đó.
-  const tail = state?.externalOutputFile
-    ? externalTail(state.externalOutputFile, shellId)
-    : readOutputTail(dir)
+  const tail = state?.externalOutputFile ? externalTail(state.externalOutputFile, shellId) : readOutputTail(dir)
   return {
     shellId,
     status,
@@ -528,11 +540,7 @@ export function clearExternalKiller(sessionId: string): void {
 // Mirror a runtime-owned task as a running background entry. Ignored when the id
 // is already known (the level signal that feeds this can repeat, and a settled
 // task must never flip back to running).
-export function registerExternalBackground(input: {
-  sessionId: string
-  shellId: string
-  command: string
-}): void {
+export function registerExternalBackground(input: { sessionId: string; shellId: string; command: string }): void {
   const { sessionId, shellId, command } = input
   let byId = registry.get(sessionId)
   if (!byId) {
@@ -556,11 +564,7 @@ export function registerExternalBackground(input: {
 // Remember where the CLI writes a runtime-owned SHELL's output. Called by
 // run-stream when it parses the path out of the tool_result that announced the
 // background shell — the same path it polls for the transcript tail.
-export function noteExternalOutputFile(input: {
-  sessionId: string
-  shellId: string
-  file: string
-}): void {
+export function noteExternalOutputFile(input: { sessionId: string; shellId: string; file: string }): void {
   const state = registry.get(input.sessionId)?.get(input.shellId)
   if (!state || !state.external) return
   state.externalOutputFile = input.file
@@ -604,8 +608,36 @@ export function settleExternalBackground(input: {
   }
 }
 
-// Settle every still-running external task of a session — the owning runtime turn
-// ended, so nothing of its can still be alive.
+// The CLI woke the model on its own after the turn ended (a background task's
+// notification restarted it) — the Claude SDK path's version of the reactive wake
+// (ADR 0066 P2). Same event, same channel, so Electron main's park/replay/OS-notification
+// machinery (ADR 0084) applies unchanged. `native: true` tells the renderer the
+// continuation is ALREADY running in the live CLI process: it must ATTACH to it
+// (sessions.sendMessage attachWake) rather than start a second turn, and it must not
+// upsert a chip for `shellId` (that task's chip was settled when its notification came).
+export function notifyExternalWake(input: {
+  sessionId: string
+  shellId: string
+  command: string
+  status: BgShellStatus
+  exitCode: number | null
+  outputTail: string
+}): void {
+  emit('session.background-done', {
+    sessionId: input.sessionId,
+    shellId: input.shellId,
+    command: input.command,
+    status: input.status,
+    exitCode: input.exitCode,
+    outputTail: input.outputTail,
+    read: true,
+    wake: true,
+    native: true,
+  })
+}
+
+// Settle every still-running external task of a session — its live CLI process is gone
+// (closed, crashed, respawned with a different config), so nothing of its can be alive.
 export function settleAllExternalBackground(sessionId: string): void {
   const m = registry.get(sessionId)
   if (!m) return

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { listSessionSummaries } from '../sessions/store.js'
+import { listSessionSummariesFresh } from '../sessions/store.js'
 import { listTasks } from '../tasks/store.js'
 import { buildLogtimeSuggestions } from '../logtime/suggestions.js'
 import { loadSettings } from '../logtime/store.js'
@@ -21,15 +21,9 @@ const Params = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
 
 register('logtime.suggestions', async (raw) => {
   const { date } = Params.parse(raw)
-  const [sessions, tasks, settings] = await Promise.all([
-    listSessionSummaries(),
-    listTasks(),
-    loadSettings(),
-  ])
+  const [sessions, tasks, settings] = await Promise.all([listSessionSummariesFresh(), listTasks(), loadSettings()])
   // Chỉ link đã có `pmsProjectId` mới tính là "đã nối" — link dựng dở (chọn dự án PMS
   // nhưng chưa lưu) chưa đẩy được, đúng bằng `canPush` phía store dùng.
-  const trackedProjectKeys = new Set(
-    settings.links.filter((l) => !!l.pmsProjectId).map((l) => l.projectKey),
-  )
+  const trackedProjectKeys = new Set(settings.links.filter((l) => !!l.pmsProjectId).map((l) => l.projectKey))
   return buildLogtimeSuggestions({ date, sessions, tasks, trackedProjectKeys })
 })

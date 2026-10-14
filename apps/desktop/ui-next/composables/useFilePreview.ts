@@ -8,9 +8,10 @@ import {
   type MaybeRefOrGetter,
   type Ref,
 } from 'vue'
-import { usePreview, previewKindFromPath, type PreviewRef } from './usePreview'
+import { usePreview, previewKindFromPath } from './usePreview'
 import { useWorkspaceData } from './useWorkspaceData'
 import { useFsApi } from './useFsApi'
+import { useWorkbenchDocs } from './useWorkbenchDocs'
 import { useSessionTouchedPaths } from './useSessionTouchedPaths'
 import type { Session } from './useSessionsData'
 
@@ -25,8 +26,14 @@ import type { Session } from './useSessionsData'
 // root per text run — one resolver per transcript, many cheap consumers.
 
 type FilePreviewApi = {
-  // Open the given path (relative-to-root or absolute) in the shared PreviewModal.
+  // Open the given path (relative-to-root or absolute) in a workbench doc tab —
+  // in-project file → file doc; outside-workspace abs → 'abs:' doc; only an
+  // unresolvable path (browser-dev) still falls back to the PreviewModal.
   open: (path: string) => void
+  // Same resolution as open(), but a CHANGED file lands on its working-tree
+  // diff doc (`diff:<pid>/<rel>`) so an Edit step reads as "what changed".
+  // Outside a git project → file doc (no diff exists for it).
+  openDiff: (path: string) => void
   // Display form: strip the workspace-root prefix so an absolute path renders as a
   // clean relative path in the chip (the full path is still used for the click).
   shorten: (path: string) => string
@@ -114,6 +121,7 @@ export function provideFilePreview(
 ): void {
   const { root, resolve: resolveRoot } = useWorkspaceData(projectName)
   const { open: openPreview } = usePreview()
+  const wbDocs = useWorkbenchDocs()
   const fs = useFsApi()
   // Files the session wrote/edited — the model's working context. Used to anchor a
   // bare/relative link (`[plan.md](plan.md)`) to the file it's really about instead of
@@ -209,13 +217,6 @@ export function provideFilePreview(
   // output (the usual case for a batch of frames under `output/`) is INVISIBLE to it and the
   // gallery came out empty. listDir reads the real filesystem, and a mention the model merely
   // proposed but never wrote is dropped because it isn't there.
-  const GALLERY_IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|avif|svg)$/i
-  // Path-ish run of characters ending in an image extension. Kept closed (no spaces) — the
-  // same shape filePathOf accepts, which then does the real validation.
-  const IMAGE_MENTION_RE = /[\w./~@#+-]*\.(?:png|jpe?g|gif|webp|bmp|avif|svg)\b/gi
-  // Bound the work: a long session can mention a lot, and each new directory costs a listDir.
-  const GALLERY_MAX = 80
-  const GALLERY_DIRS_MAX = 8
 
   // Directory listings, keyed `root::dir`, shared across gallery builds in this session.
   const dirCache = new Map<string, Set<string>>()
@@ -332,92 +333,14 @@ export function provideFilePreview(
     return out
   }
 
-  // Candidates in transcript order: files the session wrote first (its own output, which is
-  // what a user steps through), then mentions as they appear.
-  function sessionImageCandidates(): string[] {
-    const out = new Set<string>()
-    for (const p of touchedPaths.value) if (GALLERY_IMAGE_EXT.test(p)) out.add(p)
-    const scan = (text: string): void => {
-      for (const raw of text.match(IMAGE_MENTION_RE) ?? []) {
-        const p = filePathOf(raw)
-        if (p) out.add(p)
-      }
-    }
-    for (const m of toValue(session).msgs) {
-      // A user turn carries its prose directly; an assistant turn keeps it in text blocks
-      // (steps are skipped — their targets are already covered by touchedPaths).
-      if (m.role === 'assistant') {
-        for (const b of m.blocks) if (b.kind === 'text') scan(b.text)
-      } else {
-        scan(m.text)
-      }
-      if (out.size >= GALLERY_MAX) break
-    }
-    return [...out].slice(0, GALLERY_MAX)
-  }
-
-  // Verified sibling set as PreviewRefs, always including the image being opened. [] when
-  // there is nothing to step through.
-  async function sessionImageSiblings(r: string, openedPath: string): Promise<PreviewRef[]> {
-    // Transcript order, so ‹ › walks the images the way the session lists them. The opened one
-    // is normally already among the mentions (that's what was clicked); it's only prepended
-    // when it isn't, so it can never be missing from its own gallery.
-    const mentioned = sessionImageCandidates()
-      .map((c) => relativeToRoot(r, c))
-      .filter((c) => GALLERY_IMAGE_EXT.test(c))
-    const candidates = mentioned.includes(openedPath) ? mentioned : [openedPath, ...mentioned]
-    // Path tuyệt đối ngoài root (ảnh trong session-worktree…) probe qua thư mục
-    // cha của chính nó — cùng trick absScope của open/verifyPaths — và PreviewRef
-    // emit theo scope-root đó thay vì ghép vào workspace root của phiên.
-    const scopeOf = (c: string): { root: string; rel: string } => {
-      if (!c.startsWith('/')) return { root: r, rel: c }
-      return absScope(c) ?? { root: r, rel: c.replace(/^\/+/, '') }
-    }
-    // Cap the directories we're willing to probe, keeping the opened image's own dir first.
-    const dirKeys: string[] = []
-    const dirKey = (c: string): string => {
-      const s = scopeOf(c)
-      return `${s.root}::${dirOf(s.rel)}`
-    }
-    for (const c of [openedPath, ...candidates]) {
-      const k = dirKey(c)
-      if (!dirKeys.includes(k) && dirKeys.length < GALLERY_DIRS_MAX) dirKeys.push(k)
-    }
-    const listings = new Map<string, Set<string>>()
-    await Promise.all(
-      dirKeys.map(async (k) => {
-        const sepIdx = k.indexOf('::')
-        listings.set(k, await dirFileNames(k.slice(0, sepIdx), k.slice(sepIdx + 2)))
-      }),
-    )
-
-    const paths: string[] = []
-    for (const c of candidates) {
-      if (paths.includes(c)) continue
-      if (c !== openedPath && !listings.get(dirKey(c))?.has(baseName(c))) continue
-      paths.push(c)
-    }
-    if (paths.length < 2) return []
-    return paths.map((path) => {
-      const s = scopeOf(path)
-      return {
-        name: baseName(path),
-        kind: 'image' as const,
-        workspaceRoot: s.root,
-        path: s.rel,
-      }
-    })
-  }
-
-  const open: FilePreviewApi['open'] = async (rawPath) => {
+  // Resolve a written path to its fs-scope: absolute workspace root + path
+  // relative to it. Shared by open/openDiff so both route through the same
+  // file-index + on-disk checks. null when nothing can be resolved (browser-dev
+  // without a root AND a bare relative path).
+  async function resolveScope(rawPath: string): Promise<{ scopeRoot: string; rel: string } | null> {
     const detected = filePathOf(rawPath) ?? rawPath.trim()
-    if (!detected) return
+    if (!detected) return null
     const r = await ensureRoot()
-    // With a root, resolve against the real file tree (handles bare names / wrong
-    // base); fall back to the written path — made root-relative when it's an absolute
-    // path inside the workspace, which is the shape a PreviewRef must carry —
-    // so the modal can still surface a clear "could not load" for a genuinely
-    // missing file. Without a root (browser-dev) degrade to a placeholder.
     let path = detected
     if (r) {
       const rel = relativeToRoot(r, detected)
@@ -436,8 +359,8 @@ export function provideFilePreview(
     let scopeRoot = r
     // An absolute path that stayed absolute is outside the workspace root —
     // anchor the preview root to its parent dir so fs.*'s inside-root gate holds
-    // and every modal affordance (content, copy path, reveal, open-externally)
-    // works for it just like a workspace file.
+    // and every affordance (content, copy path, reveal, open-externally) works
+    // for it just like a workspace file.
     if (path.startsWith('/')) {
       const scope = absScope(path)
       if (scope) {
@@ -445,17 +368,50 @@ export function provideFilePreview(
         path = scope.rel
       }
     }
-    const name = baseName(path)
-    const item: PreviewRef = { name, kind: previewKindFromPath(name) }
-    if (scopeRoot) {
-      item.workspaceRoot = scopeRoot
-      item.path = path
+    if (!scopeRoot) return null
+    return { scopeRoot, rel: path }
+  }
+
+  // Project registered for a resolved scope, when the scope is exactly that
+  // project's workspace root. null for a parent-dir scope (outside-workspace
+  // file) — those have no git identity to attach to.
+  const projectOf = (scopeRoot: string, sessionRoot: string | null) =>
+    wbDocs.allProjects.value.find((p) => p.path === scopeRoot) ??
+    (sessionRoot === scopeRoot ? wbDocs.project.value : null)
+
+  const open: FilePreviewApi['open'] = async (rawPath) => {
+    const scope = await resolveScope(rawPath)
+    if (!scope) {
+      // Browser-dev / unresolvable: keep the old placeholder modal.
+      const name = baseName(rawPath.trim())
+      openPreview({ name, kind: previewKindFromPath(name) }, [])
+      return
     }
-    // An image opens with the session's other images as its gallery (see above) —
-    // only meaningful while the preview still sits inside the session workspace.
-    const siblings =
-      scopeRoot === r && r && item.kind === 'image' ? await sessionImageSiblings(r, path) : []
-    openPreview(item, siblings)
+    const proj = projectOf(scope.scopeRoot, root.value)
+    if (proj) {
+      wbDocs.openFile(proj.id, scope.rel)
+      return
+    }
+    // File nằm ngoài mọi project nhưng vẫn trên đĩa → doc tab 'abs:' (đọc/sửa
+    // qua root=dir cha) thay vì modal — cùng một bề mặt làm việc cho mọi file.
+    wbDocs.openFileAbs(scope.scopeRoot, scope.rel)
+  }
+
+  const openDiff: FilePreviewApi['openDiff'] = async (rawPath) => {
+    const scope = await resolveScope(rawPath)
+    if (!scope) {
+      const name = baseName(rawPath.trim())
+      openPreview({ name, kind: previewKindFromPath(name) }, [])
+      return
+    }
+    const proj = projectOf(scope.scopeRoot, root.value)
+    if (proj) {
+      wbDocs.openDiff(proj.id, scope.rel)
+      return
+    }
+    // Không có git identity → không có "diff" để xem; file tab vẫn là thứ gần
+    // nhất (người dùng đọc được nội dung mới, modal đã không còn là nơi đứng).
+    wbDocs.openFileAbs(scope.scopeRoot, scope.rel)
   }
   const shorten: FilePreviewApi['shorten'] = (path) => {
     const r = root.value
@@ -608,12 +564,22 @@ export function provideFilePreview(
       return null
     }
   }
-  provide(KEY, { open, shorten, resolve, verifyPaths, imageSrc, root: ensureRoot, imagesVersion })
+  provide(KEY, {
+    open,
+    openDiff,
+    shorten,
+    resolve,
+    verifyPaths,
+    imageSrc,
+    root: ensureRoot,
+    imagesVersion,
+  })
 }
 
 // No host (markdown rendered outside a session transcript) → links are inert.
 const NOOP: FilePreviewApi = {
   open: () => undefined,
+  openDiff: () => undefined,
   shorten: (p) => p,
   resolve: () => Promise.resolve(null),
   // No host = nothing to check against: keep every path rather than drop them all.

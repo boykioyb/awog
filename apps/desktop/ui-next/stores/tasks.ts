@@ -504,6 +504,12 @@ export const useTasksStore = defineStore('tasks', () => {
     const gitSettings = settingsStore.git
     const thinkingLevel = settingsStore.defaults.thinkingLevel
     const commitCoAuthor = gitSettings.commitCoAuthor
+    // Claude CLI auto-compact policy (Settings → Sessions) — same two fields chat turns
+    // send as contextConfig; nodes run unattended so it must travel with the task.
+    const compactConfig = {
+      autoCompact: settingsStore.sessions.autoCompact,
+      compactAtTokens: settingsStore.context.compactAtTokens,
+    }
     const autoCommitPerPhase = gitSettings.autoCommitPerPhase
     const autoCommitScope = gitSettings.autoCommitScope
     const autoCommitMessageTemplate = gitSettings.autoCommitMessageTemplate
@@ -536,6 +542,7 @@ export const useTasksStore = defineStore('tasks', () => {
       description: data.description,
       workflowId: data.workflowId,
       commitCoAuthor,
+      compactConfig,
       autoCommitPerPhase,
       autoCommitScope,
       autoCommitMessageTemplate,

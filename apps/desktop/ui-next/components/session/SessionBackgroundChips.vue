@@ -8,51 +8,53 @@
        a finished chip retires once the model has read its result, and anything
        left over collapses behind one summary chip. -->
   <div v-if="visible.length" class="bgsh">
-    <button
-      v-if="visible.length > 1"
-      type="button"
-      class="bgsh-chip bgsh-sum"
-      :class="[`is-${summaryKind}`, { open: expanded }]"
-      :title="expanded ? t('sessions.bg.summary.collapse') : t('sessions.bg.summary.expand')"
-      @click="expanded = !expanded"
-    >
-      <span v-if="runningCount" class="bgsh-dot" />
-      <Icon
-        v-else
-        :name="failedCount ? 'alert' : 'check'"
-        style="width: var(--icon-xs); height: var(--icon-xs)"
-      />
-      <span>{{ summaryText }}</span>
-      <Icon name="chev" class="bgsh-chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
-    </button>
-    <div
-      v-for="sh in shown"
-      :key="sh.shellId"
-      class="bgsh-chip"
-      :class="`is-${statusKind(sh)}`"
-      :title="sh.command"
-    >
-      <span v-if="sh.status === 'running'" class="bgsh-dot" />
-      <Icon v-else :name="iconFor(sh)" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      <span class="bgsh-cmd">{{ shortCmd(sh.command) }}</span>
-      <span class="bgsh-hint">{{ hintFor(sh) }}</span>
+    <div class="bgsh-in">
       <button
+        v-if="visible.length > 1"
         type="button"
-        class="bgsh-act"
-        :title="t('sessionsBg.view')"
-        @click="openOutput(sh.shellId)"
+        class="bgsh-chip bgsh-sum"
+        :class="[`is-${summaryKind}`, { open: expanded }]"
+        :title="expanded ? t('sessions.bg.summary.collapse') : t('sessions.bg.summary.expand')"
+        @click="expanded = !expanded"
       >
-        <Icon name="terminal" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <span v-if="runningCount" class="bgsh-dot" />
+        <Icon
+          v-else
+          :name="failedCount ? 'alert' : 'check'"
+          style="width: var(--icon-xs); height: var(--icon-xs)"
+        />
+        <span>{{ summaryText }}</span>
+        <Icon name="chev" class="bgsh-chev" style="width: var(--icon-xs); height: var(--icon-xs)" />
       </button>
-      <button
-        v-if="sh.status === 'running'"
-        type="button"
-        class="bgsh-act bgsh-stop"
-        :title="t('sessions.bg.stop')"
-        @click="onStop(sh.shellId)"
+      <div
+        v-for="sh in shown"
+        :key="sh.shellId"
+        class="bgsh-chip"
+        :class="`is-${statusKind(sh)}`"
+        :title="sh.command"
       >
-        <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
-      </button>
+        <span v-if="sh.status === 'running'" class="bgsh-dot" />
+        <Icon v-else :name="iconFor(sh)" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        <span class="bgsh-cmd">{{ shortCmd(sh.command) }}</span>
+        <span class="bgsh-hint">{{ hintFor(sh) }}</span>
+        <button
+          type="button"
+          class="bgsh-act"
+          :title="t('sessionsBg.view')"
+          @click="openOutput(sh.shellId)"
+        >
+          <Icon name="terminal" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        </button>
+        <button
+          v-if="sh.status === 'running'"
+          type="button"
+          class="bgsh-act bgsh-stop"
+          :title="t('sessions.bg.stop')"
+          @click="onStop(sh.shellId)"
+        >
+          <Icon name="x" style="width: var(--icon-xs); height: var(--icon-xs)" />
+        </button>
+      </div>
     </div>
   </div>
 
@@ -152,10 +154,17 @@ function onStop(shellId: string): void {
    rounded-md, semantic tint on the status edge/glyph only (running → primary,
    ok → success, fail → destructive). */
 .bgsh {
+  /* Cùng cấu trúc composer: padding --padX ở ngoài + inner max-width 860px
+     margin auto — chip strip căn thẳng mép với card .cbox thay vì trôi về
+     lề chat. */
+  padding: 6px var(--padX) 0;
+}
+.bgsh-in {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 6px 12px 0;
+  max-width: 860px;
+  margin: 0 auto;
 }
 .bgsh-chip {
   display: inline-flex;

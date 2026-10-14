@@ -34,7 +34,12 @@ interface CcMatcherGroup {
 function ccMatcherToGlob(matcher: string | undefined): string | null {
   const s = (matcher ?? '').trim()
   if (s === '' || s === '*' || s === '.*') return null
-  if (s.includes('|')) return `{${s.split('|').map((x) => x.trim()).filter(Boolean).join(',')}}`
+  if (s.includes('|'))
+    return `{${s
+      .split('|')
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .join(',')}}`
   return s
 }
 
@@ -43,10 +48,7 @@ function isMissing(err: unknown): boolean {
 }
 
 // A hook ready to be saved into `.awog` — source/projectId/trust assigned later.
-export type ClaudeHookDraft = Omit<
-  Hook,
-  'source' | 'projectId' | 'trusted' | 'readOnly' | 'recentRuns'
->
+export type ClaudeHookDraft = Omit<Hook, 'source' | 'projectId' | 'trusted' | 'readOnly' | 'recentRuns'>
 
 // Parse one settings.json into AWOG hook drafts. Missing file → []. A parse
 // error is logged and yields [] (never throws — import is best-effort).

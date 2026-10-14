@@ -23,7 +23,7 @@
 
 import { z } from 'zod'
 import { cost, getEffectivePricing } from '../pricing/catalog.js'
-import { completePiWithUsage } from '../runtime/complete.js'
+import { completeWithUsage } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
 import type { Skill, SkillSource } from '../types/shared.js'
 
@@ -155,10 +155,7 @@ export function buildCasePrompt(catalogue: string, userPrompt: string): string {
 
 // Model trả về id không có trong danh mục ⇒ coi như "không chọn skill nào": nó
 // bịa, và bịa thì không được tính là kích hoạt đúng.
-export function parseChoice(
-  raw: string,
-  knownIds: readonly string[],
-): { chosen: string | null; reason: string } {
+export function parseChoice(raw: string, knownIds: readonly string[]): { chosen: string | null; reason: string } {
   const trimmed = raw.trim()
   const fenced = /```(?:json)?\s*([\s\S]*?)\s*```/i.exec(trimmed)
   const payload = fenced?.[1]?.trim() ?? trimmed
@@ -178,11 +175,7 @@ export function parseChoice(
   return { chosen: knownIds.includes(skill) ? skill : null, reason }
 }
 
-export function scoreCase(
-  expect: SkillEvalExpectation,
-  chosen: string | null,
-  skillId: string,
-): boolean {
+export function scoreCase(expect: SkillEvalExpectation, chosen: string | null, skillId: string): boolean {
   return expect === 'activate' ? chosen === skillId : chosen !== skillId
 }
 
@@ -209,16 +202,10 @@ export function estimateCallCostUsd(modelId: string, promptChars: number): numbe
 
 // Chi phí THẬT của một lượt, từ usage provider trả về. `null` khi model không có
 // giá trong catalog — lúc đó caller giữ lại ước lượng và hạ `pricingKnown`.
-function actualCallCostUsd(
-  modelId: string,
-  usage: { inputTokens: number; outputTokens: number },
-): number | null {
+function actualCallCostUsd(modelId: string, usage: { inputTokens: number; outputTokens: number }): number | null {
   const price = getEffectivePricing(modelId, {})
   if (!price) return null
-  return cost(
-    { ...usage, cacheReadTokens: 0, cacheWriteTokens: 0 },
-    price,
-  )
+  return cost({ ...usage, cacheReadTokens: 0, cacheWriteTokens: 0 }, price)
 }
 
 // Chạy ------------------------------------------------------------------------
@@ -277,11 +264,7 @@ export async function runSkillEval(args: RunEvalArgs): Promise<SkillEvalRun> {
     if (budget.maxCalls > 0 && calls >= budget.maxCalls) stoppedBy = 'calls'
     else if (budget.maxWallclockMs > 0 && Date.now() - startedAt > budget.maxWallclockMs) {
       stoppedBy = 'wallclock'
-    } else if (
-      budget.maxCostUsd > 0 &&
-      estimate !== null &&
-      estimatedCostUsd + estimate > budget.maxCostUsd
-    ) {
+    } else if (budget.maxCostUsd > 0 && estimate !== null && estimatedCostUsd + estimate > budget.maxCostUsd) {
       stoppedBy = 'cost'
     }
     if (stoppedBy) {
@@ -296,7 +279,7 @@ export async function runSkillEval(args: RunEvalArgs): Promise<SkillEvalRun> {
     estimatedCostUsd += estimate ?? 0
     try {
       // eslint-disable-next-line no-await-in-loop
-      const res = await completePiWithUsage({
+      const res = await completeWithUsage({
         accountId: args.accountId,
         modelId: args.modelId,
         systemPrompt: EVAL_SYSTEM_PROMPT,

@@ -27,6 +27,7 @@ import { existsSync } from 'node:fs'
 import { emit } from './transport/stdio.js'
 import { log } from './util/logger.js'
 import { awogHome, claudeHome, projectClaudeDir } from './util/path.js'
+import { watchTree, type TreeWatcher } from './fs/watch-tree.js'
 import { listProjects } from './projects/store.js'
 // The wiki index is cached per turn (wiki/inject.ts). Unlike the flat config
 // kinds, a wiki is EXPECTED to change outside the app — the user edits a page in
@@ -56,40 +57,6 @@ type WatchKind =
   | 'ssh-identities'
   | 'vpn-profiles'
   | 'infra'
-
-interface Watcher {
-  close: () => Promise<void> | void
-}
-
-interface ChokidarModule {
-  watch: (
-    paths: string | string[],
-    options: Record<string, unknown>,
-  ) => Watcher & {
-    on: (event: string, handler: (path: string) => void) => void
-  }
-}
-
-let chokidarModule: ChokidarModule | null = null
-let chokidarLoadAttempted = false
-
-async function getChokidar(): Promise<ChokidarModule | null> {
-  if (chokidarLoadAttempted) return chokidarModule
-  chokidarLoadAttempted = true
-  try {
-    // Dynamic import + cast — chokidar is a real dep but the typings have a
-    // wide surface we don't need. Keeps watcher boot resilient if dep is
-    // missing.
-    const mod = await import('chokidar')
-    chokidarModule = mod as unknown as ChokidarModule
-    return chokidarModule
-  } catch (err) {
-    log.warn('watcher: chokidar dynamic import failed — fs auto-refresh disabled', {
-      err: err instanceof Error ? err.message : String(err),
-    })
-    return null
-  }
-}
 
 interface DirSpec {
   kind: WatchKind
@@ -168,11 +135,13 @@ function projectDirs(projectPath: string): DirSpec[] {
 
 interface WatcherEntry {
   spec: DirSpec
-  watcher: Watcher
+  watcher: TreeWatcher
 }
 
 class AwogWatcher {
   private entries: WatcherEntry[] = []
+
+  private missing: DirSpec[] = []
 
   private debouncedEmit = new Map<WatchKind, NodeJS.Timeout>()
 
@@ -180,18 +149,17 @@ class AwogWatcher {
 
   private rescanTimer?: NodeJS.Timeout
 
-  private chokidar: ChokidarModule | null = null
+  /** Throttle error logs per dir. */
+  private lastErrLogAt = new Map<string, number>()
 
   async start(): Promise<void> {
-    this.chokidar = await getChokidar()
-    if (!this.chokidar) return
     for (const spec of userDirs()) {
-      this.addWatcher(spec)
+      await this.addWatcher(spec, false)
     }
     await this.reconcileProjectWatchers()
     this.rescanTimer = setInterval(() => {
-      void this.reconcileProjectWatchers().catch((err: unknown) => {
-        log.warn('watcher: project rescan failed', {
+      void this.rescan().catch((err: unknown) => {
+        log.warn('watcher: rescan failed', {
           err: err instanceof Error ? err.message : String(err),
         })
       })
@@ -199,44 +167,66 @@ class AwogWatcher {
   }
 
   async shutdown(): Promise<void> {
-    if (this.rescanTimer) clearInterval(this.rescanTimer)
-    await Promise.all(this.entries.map((e) => Promise.resolve(e.watcher.close())))
+    clearInterval(this.rescanTimer)
+    await Promise.all(this.entries.map((e) => e.watcher.close()))
     this.entries = []
+    this.missing = []
   }
 
-  private addWatcher(spec: DirSpec): void {
-    if (!this.chokidar) return
-    // chokidar happily watches dirs that don't exist yet (uses fs.watchFile
-    // fallback), but skip ones we can short-circuit to keep the log clean.
-    // A project may have no `.claude/skills` (or no `.awog/rules`) yet — we
-    // want to know if one appears later, so still register.
+  private async rescan(): Promise<void> {
+    // Thư mục đang watch đã biến mất ⇒ đóng, đưa về `missing`.
+    for (const entry of this.entries.filter((e) => !existsSync(e.spec.dir))) {
+      this.entries = this.entries.filter((e) => e !== entry)
+      this.missing.push(entry.spec)
+      // eslint-disable-next-line no-await-in-loop
+      await entry.watcher.close()
+    }
+    await this.reconcileProjectWatchers()
+    // Thư mục vắng nay đã có ⇒ watch + báo UI nạp lại.
+    const appeared = this.missing.filter((s) => existsSync(s.dir))
+    this.missing = this.missing.filter((s) => !appeared.includes(s))
+    for (const spec of appeared) {
+      // eslint-disable-next-line no-await-in-loop
+      await this.addWatcher(spec, true)
+    }
+  }
+
+  private async addWatcher(spec: DirSpec, announce: boolean): Promise<void> {
+    if (!existsSync(spec.dir)) {
+      this.missing.push(spec)
+      return
+    }
+    const onPath = (path: string) => {
+      // Filter: only fire for files we'd actually parse. Anything else
+      // (.DS_Store, lock files, sibling images) is irrelevant.
+      if (!relevantFile(spec.kind, path)) return
+      // Native recursive không phân biệt thêm/sửa; UI chỉ nạp lại nên `type` là gợi
+      // ý: file còn ⇒ 'change', mất ⇒ 'unlink'.
+      this.notify(spec, {
+        dir: spec.dir,
+        path,
+        type: existsSync(path) ? 'change' : 'unlink',
+      })
+    }
+    const onError = (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err)
+      const now = Date.now()
+      const last = this.lastErrLogAt.get(spec.dir) ?? 0
+      if (now - last < 5_000) return
+      this.lastErrLogAt.set(spec.dir, now)
+      log.warn('watcher: watch error', { dir: spec.dir, err: msg })
+    }
     try {
-      const watcher = this.chokidar.watch(spec.dir, {
-        ignoreInitial: true,
-        // Flat kinds: <id>/AGENT.md or <id>/SKILL.md or <id>.md. A wiki is a real
-        // tree, so it declares its own depth (ADR 0073 caps slugs at 5 levels).
+      // Flat kinds: <id>/AGENT.md or <id>/SKILL.md or <id>.md. A wiki is a real
+      // tree, so it declares its own depth (ADR 0073 caps slugs at 5 levels).
+      const watcher = await watchTree(spec.dir, {
         depth: spec.depth ?? 3,
-        awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
-        followSymlinks: false,
+        onPath,
+        onError,
       })
-      const onChange = (path: string, type: 'add' | 'change' | 'unlink') => {
-        // Filter: only fire for files we'd actually parse. Anything else
-        // (.DS_Store, lock files, sibling images) is irrelevant.
-        if (!relevantFile(spec.kind, path)) return
-        if (spec.kind === 'wiki') invalidateWikiCache()
-        if (spec.kind === 'memory') invalidateMemoryCache()
-        this.scheduleEmit(spec.kind, { dir: spec.dir, path, type })
-      }
-      watcher.on('add', (p: string) => onChange(p, 'add'))
-      watcher.on('change', (p: string) => onChange(p, 'change'))
-      watcher.on('unlink', (p: string) => onChange(p, 'unlink'))
-      watcher.on('error', (err: unknown) => {
-        log.warn('watcher: chokidar error', {
-          dir: spec.dir,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      })
+      if (!watcher) return
       this.entries.push({ spec, watcher })
+      if (announce) this.notify(spec, { dir: spec.dir, path: spec.dir, type: 'add' })
     } catch (err) {
       log.warn('watcher: failed to watch dir', {
         dir: spec.dir,
@@ -245,20 +235,18 @@ class AwogWatcher {
     }
   }
 
-  private scheduleEmit(
-    kind: WatchKind,
-    payload: { dir: string; path: string; type: 'add' | 'change' | 'unlink' },
-  ): void {
+  private notify(spec: DirSpec, payload: { dir: string; path: string; type: 'add' | 'change' | 'unlink' }): void {
+    if (spec.kind === 'wiki') invalidateWikiCache()
+    if (spec.kind === 'memory') invalidateMemoryCache()
     // Coalesce multiple file events into a single UI re-hydrate. We don't
     // need per-file granularity in the event — the UI re-runs the full
     // hydrate RPC which is cheap.
-    const prev = this.debouncedEmit.get(kind)
-    if (prev) clearTimeout(prev)
+    clearTimeout(this.debouncedEmit.get(spec.kind))
     this.debouncedEmit.set(
-      kind,
+      spec.kind,
       setTimeout(() => {
-        emit(`${kind}.fs-changed`, payload)
-        this.debouncedEmit.delete(kind)
+        emit(`${spec.kind}.fs-changed`, payload)
+        this.debouncedEmit.delete(spec.kind)
       }, DEBOUNCE_MS),
     )
   }
@@ -273,32 +261,21 @@ class AwogWatcher {
       return
     }
     const currentPaths = new Set(projects.map((p) => p.path).filter((p) => existsSync(p)))
+    const isStaleProjectDir = (spec: DirSpec) => isProjectSubdir(spec.dir) && !pathRegistered(spec.dir, currentPaths)
 
-    // Remove watchers for projects that no longer exist.
-    const toClose = this.entries.filter(
-      (e) =>
-        (e.spec.kind === 'agents' ||
-          e.spec.kind === 'skills' ||
-          e.spec.kind === 'hooks' ||
-          e.spec.kind === 'rules' ||
-          e.spec.kind === 'commands' ||
-          e.spec.kind === 'wiki' ||
-          e.spec.kind === 'memory') &&
-        isProjectSubdir(e.spec.dir) &&
-        !pathRegistered(e.spec.dir, currentPaths),
-    )
-    for (const entry of toClose) {
-      // eslint-disable-next-line no-await-in-loop
-      await Promise.resolve(entry.watcher.close())
-      this.entries = this.entries.filter((e) => e !== entry)
-    }
+    // Remove watchers (and pending retries) for projects that no longer exist.
+    this.missing = this.missing.filter((s) => !isStaleProjectDir(s))
+    const toClose = this.entries.filter((e) => isStaleProjectDir(e.spec))
+    this.entries = this.entries.filter((e) => !toClose.includes(e))
+    await Promise.all(toClose.map((e) => e.watcher.close()))
 
     // Add watchers for new projects.
     for (const projectPath of currentPaths) {
       if (this.trackedProjectPaths.has(projectPath)) continue
       this.trackedProjectPaths.add(projectPath)
       for (const spec of projectDirs(projectPath)) {
-        this.addWatcher(spec)
+        // eslint-disable-next-line no-await-in-loop
+        await this.addWatcher(spec, false)
       }
     }
     // Drop tracked paths whose project is gone.
@@ -318,11 +295,7 @@ function relevantFile(kind: WatchKind, path: string): boolean {
   // sources: a per-source folder file we parse — config.json / guide.md /
   // permissions.json (atomic .tmp.<pid> writes are filtered by the suffix check).
   if (kind === 'sources') {
-    return (
-      lower.endsWith('/config.json') ||
-      lower.endsWith('/guide.md') ||
-      lower.endsWith('/permissions.json')
-    )
+    return lower.endsWith('/config.json') || lower.endsWith('/guide.md') || lower.endsWith('/permissions.json')
   }
   // hooks: a hook config .json; never the run-log dir (.runs/*.jsonl) which
   // churns on every hook run, and never the atomic .json.tmp.<pid> writes.

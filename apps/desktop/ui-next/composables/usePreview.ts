@@ -116,6 +116,28 @@ export function mediaFileUrl(workspaceRoot: string, path: string, version = 0): 
   return `media://awog/?${qs}${version ? `&v=${version}` : ''}`
 }
 
+// Whether a workspace path is an HTML page the Workbench can render as a preview.
+export function isHtmlPath(path: string): boolean {
+  return /\.html?$/i.test(path)
+}
+
+// URL for the Workbench HTML preview iframe (scheme wspreview://, electron/src/html-preview.ts):
+//   wspreview://<token>/<workspace-relative path>
+// The path-style URL is what lets the page's relative css/js/img resolve. The token is
+// minted by main for the workspace root (main validates the root). Returns null when
+// there is no desktop bridge (browser-dev). `version` is a cache-buster for reload.
+export async function htmlPreviewUrl(
+  workspaceRoot: string,
+  path: string,
+  version = 0,
+): Promise<string | null> {
+  const api = window.awog
+  if (!api?.previewToken) return null
+  const { token } = await api.previewToken(workspaceRoot)
+  const encoded = path.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/')
+  return `wspreview://${token}/${encoded}${version ? `?v=${version}` : ''}`
+}
+
 // Attachment variant: image/pdf are decided by the carried data (img flag / mime),
 // the rest by the filename. No inline content (`text == null`) → an opaque file card.
 export function previewKindFromAttachment(a: {

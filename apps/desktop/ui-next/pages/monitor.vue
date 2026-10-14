@@ -301,7 +301,7 @@ const subtitle = computed(() => {
 })
 
 function openSession(sessionId: string): void {
-  void navigateTo(`/sessions?id=${encodeURIComponent(sessionId)}`)
+  void navigateTo(`/workbench?id=${encodeURIComponent(sessionId)}`)
 }
 </script>
 

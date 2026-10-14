@@ -9,30 +9,20 @@ import { classify, findForbiddenFlag, hasFullFormatFlag } from '../../infra/clas
 const kctx = { cluster: 'readonly-context', namespace: 'apps-b2c' }
 
 describe('buildKubeCommand — tên độc hại bị chặn trước khi thành argv', () => {
-  it.each<string>([
-    '--kubeconfig=/etc/passwd',
-    '--namespace=prod',
-    '-o',
-    'app; rm -rf /',
-    'app\n--context other',
-    '',
-  ])('pod %j ⇒ ném, không dựng lệnh', (pod) => {
-    expect(() => buildKubeCommand({ op: 'logs', context: kctx, pod })).toThrow()
-  })
+  it.each<string>(['--kubeconfig=/etc/passwd', '--namespace=prod', '-o', 'app; rm -rf /', 'app\n--context other', ''])(
+    'pod %j ⇒ ném, không dựng lệnh',
+    (pod) => {
+      expect(() => buildKubeCommand({ op: 'logs', context: kctx, pod })).toThrow()
+    },
+  )
 
   it('namespace độc hại cũng bị chặn (nó vào context, không vào args)', () => {
-    expect(() =>
-      buildKubeCommand({ op: 'pods', context: { cluster: 'c', namespace: '--context other' } }),
-    ).toThrow()
+    expect(() => buildKubeCommand({ op: 'pods', context: { cluster: 'c', namespace: '--context other' } })).toThrow()
   })
 
   it('region/profile độc hại bị chặn', () => {
-    expect(() =>
-      buildKubeCommand({ op: 'eks-clusters', context: { region: '--endpoint-url http://evil' } }),
-    ).toThrow()
-    expect(() =>
-      buildKubeCommand({ op: 'eks-clusters', context: { profile: '-x' } }),
-    ).toThrow()
+    expect(() => buildKubeCommand({ op: 'eks-clusters', context: { region: '--endpoint-url http://evil' } })).toThrow()
+    expect(() => buildKubeCommand({ op: 'eks-clusters', context: { profile: '-x' } })).toThrow()
   })
 })
 
@@ -58,9 +48,9 @@ describe('buildKubeCommand — ngữ cảnh đi bằng context, KHÔNG thành c�
   })
 
   it('add-cluster thiếu region ⇒ ném (không để CLI tự đoán region)', () => {
-    expect(() =>
-      buildKubeCommand({ op: 'add-cluster', context: { profile: 'dev' }, cluster: 'prod-eks' }),
-    ).toThrow(/region/i)
+    expect(() => buildKubeCommand({ op: 'add-cluster', context: { profile: 'dev' }, cluster: 'prod-eks' })).toThrow(
+      /region/i,
+    )
   })
 
   it('logs có tail mặc định và container khi được chọn', () => {
@@ -92,20 +82,16 @@ describe('buildKubeCommand — ngữ cảnh đi bằng context, KHÔNG thành c�
   )
 
   it('delete-pod và restart dựng đúng động từ', () => {
-    expect(buildKubeCommand({ op: 'delete-pod', context: kctx, pod: 'app-0' }).args).toEqual([
-      'delete',
-      'pod',
-      'app-0',
+    expect(buildKubeCommand({ op: 'delete-pod', context: kctx, pod: 'app-0' }).args).toEqual(['delete', 'pod', 'app-0'])
+    expect(buildKubeCommand({ op: 'restart', context: kctx, deployment: 'api' }).args).toEqual([
+      'rollout',
+      'restart',
+      'deployment/api',
     ])
-    expect(
-      buildKubeCommand({ op: 'restart', context: kctx, deployment: 'api' }).args,
-    ).toEqual(['rollout', 'restart', 'deployment/api'])
   })
 
   it('container độc hại bị chặn', () => {
-    expect(() =>
-      buildKubeCommand({ op: 'logs', context: kctx, pod: 'app-0', container: '--all-containers' }),
-    ).toThrow()
+    expect(() => buildKubeCommand({ op: 'logs', context: kctx, pod: 'app-0', container: '--all-containers' })).toThrow()
   })
 })
 
@@ -151,14 +137,7 @@ describe('buildKubeCommand — thao tác số liệu của Báo cáo', () => {
     ['replicasets', ['get', 'rs', '--no-headers']],
     [
       'events',
-      [
-        'get',
-        'events',
-        '--field-selector',
-        'type=Warning',
-        '--sort-by=.metadata.creationTimestamp',
-        '--no-headers',
-      ],
+      ['get', 'events', '--field-selector', 'type=Warning', '--sort-by=.metadata.creationTimestamp', '--no-headers'],
     ],
   ])('%s ⇒ argv đúng, hạng read, không cờ ngữ cảnh', (op, args) => {
     const built = buildKubeCommand({
@@ -203,8 +182,6 @@ describe('buildKubeCommand — thao tác số liệu của Báo cáo', () => {
   })
 
   it('namespace độc hại vẫn bị chặn ở các thao tác mới', () => {
-    expect(() =>
-      buildKubeCommand({ op: 'top-pods', context: { cluster: 'c', namespace: '-o' } }),
-    ).toThrow()
+    expect(() => buildKubeCommand({ op: 'top-pods', context: { cluster: 'c', namespace: '-o' } })).toThrow()
   })
 })

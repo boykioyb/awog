@@ -281,7 +281,13 @@ describe('listAmplifyRuns / amplifyRunDetail', () => {
     ran({ branches: [{ branchName: 'dev' }, { branchName: 'main' }] })
     ran({
       jobSummaries: [
-        { jobId: '9', jobType: 'RELEASE', status: 'SUCCEED', startTime: '2026-09-14T00:00:00Z', endTime: '2026-09-14T00:02:00Z' },
+        {
+          jobId: '9',
+          jobType: 'RELEASE',
+          status: 'SUCCEED',
+          startTime: '2026-09-14T00:00:00Z',
+          endTime: '2026-09-14T00:02:00Z',
+        },
       ],
     })
 
@@ -334,16 +340,32 @@ describe('awsRunAction — argv của lệnh GHI', () => {
       class: 'write',
       accountKind: 'normal',
       decision: 'approved',
-      result: { ok: true, exitCode: 0, stdout: '', stderr: '', durationMs: 1, truncated: false, class: 'write' },
+      result: {
+        ok: true,
+        exitCode: 0,
+        stdout: '',
+        stderr: '',
+        durationMs: 1,
+        truncated: false,
+        class: 'write',
+      },
     })
   })
 
   it('CodeBuild: huỷ dùng `stop-build --id`, chạy lại dùng `retry-build --id`', async () => {
-    await awsRunAction({ ...base, kind: 'cancel', ref: { buildId: 'arn:aws:codebuild:r:1:build/p:1' } })
+    await awsRunAction({
+      ...base,
+      kind: 'cancel',
+      ref: { buildId: 'arn:aws:codebuild:r:1:build/p:1' },
+    })
     expect(wrote()).toEqual(['codebuild', 'stop-build', '--id', 'arn:aws:codebuild:r:1:build/p:1'])
 
     runGated.mockClear()
-    await awsRunAction({ ...base, kind: 'rerun', ref: { buildId: 'arn:aws:codebuild:r:1:build/p:1' } })
+    await awsRunAction({
+      ...base,
+      kind: 'rerun',
+      ref: { buildId: 'arn:aws:codebuild:r:1:build/p:1' },
+    })
     expect(wrote()).toEqual(['codebuild', 'retry-build', '--id', 'arn:aws:codebuild:r:1:build/p:1'])
   })
 
@@ -364,7 +386,9 @@ describe('awsRunAction — argv của lệnh GHI', () => {
 
     runGated.mockClear()
     // 1) đọc state để tìm stage hỏng, 2) retry đúng stage đó.
-    ran({ stageStates: [{ stageName: 'Build', actionStates: [{ actionName: 'x', latestExecution: { status: 'Failed' } }] }] })
+    ran({
+      stageStates: [{ stageName: 'Build', actionStates: [{ actionName: 'x', latestExecution: { status: 'Failed' } }] }],
+    })
     await awsRunAction({
       ...base,
       kind: 'rerun',
@@ -385,7 +409,11 @@ describe('awsRunAction — argv của lệnh GHI', () => {
   })
 
   it('không có stage nào hỏng ⇒ từ chối, không chạy lệnh mơ hồ', async () => {
-    ran({ stageStates: [{ stageName: 'Build', actionStates: [{ actionName: 'x', latestExecution: { status: 'Succeeded' } }] }] })
+    ran({
+      stageStates: [
+        { stageName: 'Build', actionStates: [{ actionName: 'x', latestExecution: { status: 'Succeeded' } }] },
+      ],
+    })
     const res = await awsRunAction({
       ...base,
       kind: 'rerun',
@@ -442,7 +470,14 @@ describe('awsRunAction — argv của lệnh GHI', () => {
   })
 
   it('token đã biến mất (người khác duyệt rồi) ⇒ từ chối', async () => {
-    ran({ stageStates: [{ stageName: 'Deploy production', actionStates: [{ actionName: 'Approve', latestExecution: { status: 'Succeeded' } }] }] })
+    ran({
+      stageStates: [
+        {
+          stageName: 'Deploy production',
+          actionStates: [{ actionName: 'Approve', latestExecution: { status: 'Succeeded' } }],
+        },
+      ],
+    })
     const res = await awsRunAction({
       ...base,
       kind: 'approve',
@@ -457,9 +492,10 @@ describe('awsRunAction — argv của lệnh GHI', () => {
       ok: false,
       error: 'cicd.action.badRef',
     })
-    expect(
-      await awsRunAction({ ...base, kind: 'cancel', ref: { buildId: '-x' } }),
-    ).toEqual({ ok: false, error: 'cicd.action.badRef' })
+    expect(await awsRunAction({ ...base, kind: 'cancel', ref: { buildId: '-x' } })).toEqual({
+      ok: false,
+      error: 'cicd.action.badRef',
+    })
     expect(runGated).not.toHaveBeenCalled()
   })
 

@@ -40,9 +40,7 @@ describe('s3.objects', () => {
   it('thư mục (CommonPrefixes) đứng trước tệp', () => {
     const rows = pick('s3.objects', {
       CommonPrefixes: [{ Prefix: 'logs/2026/' }],
-      Contents: [
-        { Key: 'logs/2026/a.txt', Size: 2048, LastModified: '2026-09-01T10:00:00.000Z' },
-      ],
+      Contents: [{ Key: 'logs/2026/a.txt', Size: 2048, LastModified: '2026-09-01T10:00:00.000Z' }],
     })
     expect(rows.map((r) => r['kind'])).toEqual(['folder', 'file'])
     expect(rows[0]?.['name']).toBe('2026')
@@ -99,9 +97,7 @@ describe('ec2.instances', () => {
 describe('route53.zones', () => {
   it('bỏ tiền tố /hostedzone/ và dấu chấm cuối tên miền', () => {
     const rows = pick('route53.zones', {
-      HostedZones: [
-        { Id: '/hostedzone/Z123', Name: 'example.com.', ResourceRecordSetCount: 12 },
-      ],
+      HostedZones: [{ Id: '/hostedzone/Z123', Name: 'example.com.', ResourceRecordSetCount: 12 }],
     })
     expect(rows[0]).toMatchObject({ id: 'Z123', zoneId: 'Z123', name: 'example.com' })
   })
@@ -164,9 +160,7 @@ describe('Mốc 4 — bốn màn Delivery/API/DNS (task 4.1)', () => {
         Items: [{ Id: 'I1', Status: 'Completed', CreateTime: '2026-09-01T10:00:00.000Z' }],
       },
     })
-    expect(rows).toEqual([
-      { id: 'I1', name: 'I1', status: 'Completed', issued: '01/09 10:00' },
-    ])
+    expect(rows).toEqual([{ id: 'I1', name: 'I1', status: 'Completed', issued: '01/09 10:00' }])
   })
 
   it('apigateway.restApis: createdDate là epoch giây, không phải ISO', () => {
@@ -213,7 +207,10 @@ describe('Mốc 4 — bốn màn Delivery/API/DNS (task 4.1)', () => {
           KeyAlgorithm: 'RSA_2048',
           InUseBy: ['arn:aws:cloudfront::1:distribution/E1'],
         },
-        { CertificateArn: 'arn:aws:acm:us-east-1:1:certificate/def', DomainName: 'x.example.com' },
+        {
+          CertificateArn: 'arn:aws:acm:us-east-1:1:certificate/def',
+          DomainName: 'x.example.com',
+        },
       ],
     })
     expect(rows[0]).toMatchObject({ name: 'example.com', inUse: 'yes', status: 'ISSUED' })
@@ -250,9 +247,7 @@ describe('Mốc 4 — bốn màn Delivery/API/DNS (task 4.1)', () => {
 describe('secretsmanager.secrets', () => {
   it('CHỈ trả tên + mô tả, không bao giờ trả giá trị', () => {
     const rows = pick('secretsmanager.secrets', {
-      SecretList: [
-        { Name: 'db/password', Description: 'prod db', SecretString: 'hunter2' },
-      ],
+      SecretList: [{ Name: 'db/password', Description: 'prod db', SecretString: 'hunter2' }],
     })
     expect(rows[0]?.['name']).toBe('db/password')
     expect(JSON.stringify(rows)).not.toContain('hunter2')

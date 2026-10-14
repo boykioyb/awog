@@ -501,9 +501,7 @@ function toEngineSettings(s: ResolvedSettings, mode: string): SessionSettingsLik
     mode,
     ...(s.accountId ? { accountId: s.accountId } : {}),
     ...(s.responseStyle ? { responseStyle: s.responseStyle } : {}),
-    ...(s.responseStyleNoMarkdown !== undefined
-      ? { responseStyleNoMarkdown: s.responseStyleNoMarkdown }
-      : {}),
+    ...(s.responseStyleNoMarkdown !== undefined ? { responseStyleNoMarkdown: s.responseStyleNoMarkdown } : {}),
   }
 }
 
@@ -511,9 +509,7 @@ function toEngineSettings(s: ResolvedSettings, mode: string): SessionSettingsLik
 // `phone` so a remotely-created session is identifiable on sight.
 function newSessionId(): string {
   const d = new Date()
-  const yymmdd = [d.getFullYear() % 100, d.getMonth() + 1, d.getDate()]
-    .map((n) => String(n).padStart(2, '0'))
-    .join('')
+  const yymmdd = [d.getFullYear() % 100, d.getMonth() + 1, d.getDate()].map((n) => String(n).padStart(2, '0')).join('')
   // 48 random bits: an id collision would OVERWRITE an existing session file, so
   // buy far more headroom than the handful of sessions a day this creates.
   return `${yymmdd}-phone-${randomBytes(6).toString('hex')}`
@@ -536,9 +532,7 @@ async function buildUpsert(
     if (!session) throw new RemoteRejected('session not found')
     // `projectId` absent = leave it as it is; explicit null = detach.
     const projectId =
-      p.projectId === undefined
-        ? session.projectId
-        : (await validProjectId(request, p.projectId)).projectId
+      p.projectId === undefined ? session.projectId : (await validProjectId(request, p.projectId)).projectId
     const merged = await resolveChoice(
       request,
       {
@@ -561,10 +555,7 @@ async function buildUpsert(
       // Clamped here too: `sessions.upsert` PERSISTS the mode, so an unclamped
       // phone write would leave the session in `execute` and make the DESKTOP
       // user's next turn ungated as well — privilege escalation by persistence.
-      ...toEngineSettings(
-        merged,
-        clampPersistedMode(phoneSettings.mode, session.settings.mode, policy.unattended),
-      ),
+      ...toEngineSettings(merged, clampPersistedMode(phoneSettings.mode, session.settings.mode, policy.unattended)),
     }
     if (!merged.accountId) delete nextSettings.accountId
     if (!merged.responseStyle) delete nextSettings.responseStyle
@@ -601,10 +592,7 @@ async function buildUpsert(
       invitedAgentIds: [],
       pendingAgentIds: [],
       messages: [],
-      settings: toEngineSettings(
-        chosen,
-        clampPersistedMode(phoneSettings.mode, 'ask', policy.unattended),
-      ),
+      settings: toEngineSettings(chosen, clampPersistedMode(phoneSettings.mode, 'ask', policy.unattended)),
     },
   }
 }
@@ -650,10 +638,7 @@ type WorkflowRow = { id: string; name?: string }
 // is pinned to `manual` (the github/jira variants carry a repo/url/connectionId
 // the phone has no business asserting). Git auto-commit fields are omitted on
 // purpose so the task uses the engine's defaults rather than a phone's opinion.
-async function buildTaskCreate(
-  request: EngineRequest,
-  raw: unknown,
-): Promise<Record<string, unknown>> {
+async function buildTaskCreate(request: EngineRequest, raw: unknown): Promise<Record<string, unknown>> {
   const p = asObject(raw)
   const projectId = reqString(p.projectId, 'projectId')
   const project = (await projectRows(request)).find((x) => x.id === projectId)
@@ -773,9 +758,7 @@ export async function sanitizeRemoteParams(
           // Response style is persisted on the session (ADR 0046) — carry it so a
           // remote turn is styled exactly like a desktop one.
           ...(s.responseStyle ? { responseStyle: s.responseStyle } : {}),
-          ...(s.responseStyleNoMarkdown !== undefined
-            ? { responseStyleNoMarkdown: s.responseStyleNoMarkdown }
-            : {}),
+          ...(s.responseStyleNoMarkdown !== undefined ? { responseStyleNoMarkdown: s.responseStyleNoMarkdown } : {}),
         },
         // F1: a phone can never flip the autoApprove flag itself. With `mode`
         // clamped above, this once again means what it says: no remote turn runs a

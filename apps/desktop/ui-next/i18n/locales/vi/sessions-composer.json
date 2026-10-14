@@ -36,6 +36,8 @@
   "sessions.command.notice.compacted": "Đã nén hội thoại — giải phóng ngữ cảnh",
   "sessions.command.notice.nothingToCompact": "Không còn gì để nén thêm — chỉ còn các tin nhắn gần đây, được giữ nguyên để bạn tiếp tục",
   "sessions.command.notice.compactFailed": "Nén thất bại — hội thoại không đổi",
+  "sessions.compaction.marker.manual": "Đã nén hội thoại · {range} token",
+  "sessions.compaction.marker.auto": "Đã tự nén hội thoại · {range} token",
   "sessions.style.group.default": "Mặc định",
   "sessions.style.group.fast": "Nhanh & gọn",
   "sessions.style.group.fun": "Cho vui",

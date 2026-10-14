@@ -7,6 +7,7 @@
   <ProjectQuickViewModal />
   <SessionExportModal />
   <SessionForkTreeModal />
+  <ClaudeImportModal />
   <NewTaskModalHost />
   <!-- Popover điều phối phiên con — cổng duyệt duy nhất của tool create_session
        + đường thủ công từ menu ⋯ (docs/features/session-runs.md). -->

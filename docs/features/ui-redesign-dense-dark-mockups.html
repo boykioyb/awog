@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>AWOG · Dense Dark mockups — Session detail</title>
+<!--
+  3 directions for the Session-detail frame (shell + list + transcript + composer + panel).
+  Option A — Linear-faithful (tokens from linear.app app spec, emerald accent kept).
+  Option B — Raycast command-bar (near-black charcoal, command-palette chrome).
+  Option C — Hybrid (Linear ladder + Raycast command bar + mono metadata).
+  Content is cloned from one template; only the token sheet + density differ.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter+Variable:opsz,wght@14..32,400;14..32,510;14..32,590;14..32,680&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { background:#000; }
+  body { font-family:'Inter Variable',-apple-system,BlinkMacSystemFont,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { padding:28px 28px 64px; }
+  h1.opt { font-size:15px; font-weight:590; color:#f7f8f8; letter-spacing:.01em; margin:34px 0 4px; }
+  .opt-note { font-size:12px; color:#6e6e73; margin-bottom:14px; max-width:1280px; }
+  .opt-note b { color:#a1a1a6; font-weight:510; }
+  svg { display:block; }
+  kbd { font:500 10px/1 ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+  /* ================= OPTION A — Linear-faithful ================= */
+  .va {
+    --v-bg:#08090a; --v-l1:#0f1011; --v-l2:#141516; --v-l3:#191a1b;
+    --v-input:#1c1c1f; --v-hover:#232326; --v-active:#28282c;
+    --v-border:#23252a; --v-border2:#3e3e44; --v-hair:rgba(255,255,255,.05);
+    --v-text:#f7f8f8; --v-text2:#d0d6e0; --v-muted:#8a8f98; --v-faint:#62666d;
+    --v-accent:#10b981; --v-accentText:#021410; --v-accentDim:rgba(16,185,129,.14); --v-accentBorder:rgba(16,185,129,.42);
+    --v-w-t:590; --v-w-m:510;
+    --v-row-h:28px; --v-msg-pad:16px 0; --v-list-w:230px; --v-panel-w:322px;
+    --v-r-row:6px; --v-r-ctl:8px; --v-r-card:12px;
+    --v-mono-meta:0;
+  }
+  /* ================= OPTION B — Raycast command-bar ================= */
+  .vb {
+    --v-bg:#07080a; --v-l1:#0c0d0f; --v-l2:#111214; --v-l3:#17181b;
+    --v-input:#141518; --v-hover:#1e2023; --v-active:#24262a;
+    --v-border:#1f2124; --v-border2:#2c2e32; --v-hair:rgba(255,255,255,.05);
+    --v-text:#f2f3f4; --v-text2:#c9cdd3; --v-muted:#83868c; --v-faint:#5b5e64;
+    --v-accent:#10b981; --v-accentText:#021410; --v-accentDim:rgba(16,185,129,.14); --v-accentBorder:rgba(16,185,129,.42);
+    --v-w-t:600; --v-w-m:500;
+    --v-row-h:26px; --v-msg-pad:13px 0; --v-list-w:212px; --v-panel-w:304px;
+    --v-r-row:6px; --v-r-ctl:8px; --v-r-card:10px;
+    --v-mono-meta:0;
+  }
+  .vb .font-sys, .vb { font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif; }
+  /* ================= OPTION C — Hybrid ================= */
+  .vc {
+    --v-bg:#090a0c; --v-l1:#0e1013; --v-l2:#131519; --v-l3:#191b20;
+    --v-input:#171a1f; --v-hover:#202329; --v-active:#262a31;
+    --v-border:#22252b; --v-border2:#33363e; --v-hair:rgba(255,255,255,.055);
+    --v-text:#f4f6f8; --v-text2:#d2d7de; --v-muted:#8b9099; --v-faint:#5f636b;
+    --v-accent:#10b981; --v-accentText:#021410; --v-accentDim:rgba(16,185,129,.14); --v-accentBorder:rgba(16,185,129,.42);
+    --v-w-t:590; --v-w-m:510;
+    --v-row-h:26px; --v-msg-pad:14px 0; --v-list-w:222px; --v-panel-w:316px;
+    --v-r-row:6px; --v-r-ctl:8px; --v-r-card:11px;
+    --v-mono-meta:1;
+  }
+
+  .frame { width:1280px; height:780px; display:flex; overflow:hidden; background:var(--v-bg); color:var(--v-text); font-size:13px; border:1px solid var(--v-border); }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+  /* ---------- left icon rail ---------- */
+  .rail { width:46px; flex:none; background:var(--v-l1); border-right:1px solid var(--v-hair); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:4px; }
+  .rail .logo { width:26px; height:26px; border-radius:8px; background:var(--v-accent); color:var(--v-accentText); display:flex; align-items:center; justify-content:center; font-weight:680; font-size:12px; margin-bottom:10px; }
+  .rail a { width:30px; height:30px; border-radius:var(--v-r-row); display:flex; align-items:center; justify-content:center; color:var(--v-faint); }
+  .rail a.on { background:var(--v-hover); color:var(--v-text); }
+  .rail a svg { width:16px; height:16px; }
+  .rail .sp { flex:1; }
+
+  /* ---------- session list ---------- */
+  .slist { width:var(--v-list-w); flex:none; background:var(--v-l1); border-right:1px solid var(--v-hair); display:flex; flex-direction:column; }
+  .slist-head { height:44px; display:flex; align-items:center; gap:8px; padding:0 12px; color:var(--v-muted); font-weight:var(--v-w-m); font-size:12px; box-shadow:inset 0 -1px 0 var(--v-hair); }
+  .slist-head .grow { flex:1; }
+  .slist-search { margin:8px 10px 10px; height:30px; display:flex; align-items:center; gap:7px; padding:0 9px; background:var(--v-input); border:1px solid var(--v-border); border-radius:var(--v-r-ctl); color:var(--v-faint); font-size:12px; }
+  .srow { height:var(--v-row-h); display:flex; align-items:center; gap:7px; margin:0 6px; padding:0 7px; border-radius:var(--v-r-row); color:var(--v-text2); font-size:12.5px; }
+  .srow .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+  .srow .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .srow .meta { color:var(--v-faint); font-size:11px; flex:none; }
+  .srow.on { background:var(--v-accentDim); box-shadow:inset 0 0 0 1px var(--v-accentBorder); color:var(--v-text); position:relative; }
+  .srow.on::before { content:''; position:absolute; left:0; top:5px; bottom:5px; width:2px; border-radius:2px; background:var(--v-accent); }
+  .vc .srow .meta { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; }
+
+  /* ---------- main column ---------- */
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .topbar { height:44px; flex:none; display:flex; align-items:center; gap:10px; padding:0 14px; box-shadow:inset 0 -1px 0 var(--v-hair); }
+  .topbar .title { font-size:13px; font-weight:var(--v-w-t); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chip { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px; border-radius:999px; font-size:11px; font-weight:var(--v-w-m); border:1px solid var(--v-border2); color:var(--v-muted); }
+  .chip.run { color:var(--v-accent); border-color:var(--v-accentBorder); background:var(--v-accentDim); }
+  .chip .spin { width:9px; height:9px; border:1.5px solid var(--v-accent); border-top-color:transparent; border-radius:50%; animation:sp 0.9s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .topbar .grow { flex:1; }
+  .icobtn { width:26px; height:26px; border-radius:var(--v-r-row); display:flex; align-items:center; justify-content:center; color:var(--v-faint); }
+  .icobtn:hover { background:var(--v-hover); color:var(--v-text); }
+  .icobtn svg { width:15px; height:15px; }
+
+  /* transcript */
+  .transcript { flex:1; overflow:hidden; padding:4px 22px 0; }
+  .msg { padding:var(--v-msg-pad); border-bottom:1px solid var(--v-hair); }
+  .msg:last-child { border-bottom:0; }
+  .msg .who { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .msg .who .nm { font-weight:var(--v-w-t); font-size:12.5px; }
+  .msg .who .mdl { color:var(--v-faint); font-size:11px; }
+  .msg .who .tm { margin-left:auto; color:var(--v-faint); font-size:11px; }
+  .av { width:20px; height:20px; border-radius:6px; background:var(--v-hover); display:flex; align-items:center; justify-content:center; color:var(--v-muted); flex:none; }
+  .av svg { width:12px; height:12px; }
+  .msg p { font-size:13px; line-height:1.55; color:var(--v-text2); }
+  .msg p + p { margin-top:8px; }
+  .msg code.ic { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; background:rgba(255,255,255,.05); padding:1px 5px; border-radius:4px; }
+  .tool { margin-top:10px; border:1px solid var(--v-border); border-radius:var(--v-r-card); background:var(--v-l1); overflow:hidden; }
+  .tool .thead { display:flex; align-items:center; gap:8px; padding:7px 10px; color:var(--v-muted); font-size:12px; box-shadow:inset 0 -1px 0 var(--v-hair); }
+  .tool .thead .ok { color:var(--v-accent); }
+  .tool .thead .dur { margin-left:auto; color:var(--v-faint); font-size:11px; }
+  .tool .tbody { padding:8px 10px; font-size:12px; color:var(--v-text2); line-height:1.5; }
+  .tool .tbody .cm { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--v-muted); }
+  .codeblk { margin-top:10px; border:1px solid var(--v-border); border-radius:var(--v-r-card); background:#0b0c0e; overflow:hidden; }
+  .codeblk .chead { display:flex; align-items:center; padding:6px 10px; color:var(--v-faint); font-size:11px; box-shadow:inset 0 -1px 0 var(--v-hair); }
+  .codeblk pre { padding:10px 12px; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; line-height:1.55; color:#c9d1d9; overflow:hidden; }
+  .codeblk .add { color:#7ee2b8; } .codeblk .kw { color:#ff9e64; } .codeblk .str { color:#9ece6a; }
+
+  /* composer */
+  .composer { flex:none; padding:10px 22px 12px; }
+  .cbox { border:1px solid var(--v-border2); border-radius:var(--v-r-card); background:var(--v-input); }
+  .cbox .ta { padding:10px 12px 4px; color:var(--v-faint); font-size:13px; min-height:40px; }
+  .cbar { display:flex; align-items:center; gap:6px; padding:6px 8px 8px; }
+  .cbar .pill { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:6px; font-size:11.5px; color:var(--v-muted); }
+  .cbar .pill:hover { background:var(--v-hover); color:var(--v-text); }
+  .cbar .grow { flex:1; }
+  .send { width:26px; height:26px; border-radius:8px; background:var(--v-accent); color:var(--v-accentText); display:flex; align-items:center; justify-content:center; }
+  .send svg { width:14px; height:14px; }
+
+  /* ---------- right panel ---------- */
+  .panel { width:var(--v-panel-w); flex:none; border-left:1px solid var(--v-hair); background:var(--v-l1); display:flex; flex-direction:column; }
+  .ptabs { height:36px; display:flex; align-items:center; gap:2px; padding:0 8px; box-shadow:inset 0 -1px 0 var(--v-hair); }
+  .ptab { height:26px; padding:0 9px; display:flex; align-items:center; gap:5px; border-radius:var(--v-r-row); color:var(--v-faint); font-size:11.5px; font-weight:var(--v-w-m); }
+  .ptab.on { background:var(--v-hover); color:var(--v-text); }
+  .ptab svg { width:13px; height:13px; }
+  .pbody { flex:1; padding:12px 14px; overflow:hidden; }
+  .psec { color:var(--v-faint); font-size:11px; font-weight:var(--v-w-m); margin:14px 0 6px; }
+  .psec:first-child { margin-top:0; }
+  .plan { display:flex; align-items:center; gap:8px; height:26px; font-size:12.5px; color:var(--v-text2); }
+  .plan .ck { width:14px; height:14px; border-radius:4px; flex:none; display:flex; align-items:center; justify-content:center; }
+  .plan.done .ck { background:var(--v-accentDim); color:var(--v-accent); }
+  .plan.done .tt { color:var(--v-faint); text-decoration:line-through; text-decoration-color:var(--v-faint); }
+  .plan.now .ck { border:1.5px solid var(--v-accent); }
+  .plan.todo .ck { border:1px solid var(--v-border2); }
+  .plan .tt { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* ---------- status bar ---------- */
+  .statusbar { height:28px; flex:none; display:flex; align-items:center; gap:12px; padding:0 14px; box-shadow:inset 0 1px 0 var(--v-hair); color:var(--v-faint); font-size:11px; }
+  .statusbar .i { display:flex; align-items:center; gap:5px; }
+  .statusbar .grow { flex:1; }
+
+  /* variant B: command-bar topbar */
+  .vb .topbar { justify-content:center; position:relative; }
+  .vb .topbar .cmdbar { display:flex; align-items:center; gap:8px; width:340px; height:30px; padding:0 10px; background:var(--v-input); border:1px solid var(--v-border2); border-radius:9px; color:var(--v-faint); font-size:12px; }
+  .vb .topbar .cmdbar kbd { margin-left:auto; color:var(--v-faint); background:var(--v-l3); border:1px solid var(--v-border); border-radius:4px; padding:2px 5px; }
+  .vb .topbar .abs { position:absolute; left:14px; display:flex; gap:4px; }
+  .vb .topbar .absr { position:absolute; right:14px; left:auto; display:flex; gap:4px; }
+  .vb .chip.run { position:absolute; right:52px; }
+  /* variant B: kbd hints on pills + denser transcript handled via vars */
+  .vb .cbar kbd, .vc .cbar kbd { color:var(--v-faint); background:var(--v-l3); border:1px solid var(--v-border); border-radius:4px; padding:2px 5px; }
+  /* variant C: command bar pill like B but left-aligned layout kept; mono meta */
+  .vc .topbar .cmdbar { display:flex; align-items:center; gap:8px; width:300px; height:28px; padding:0 10px; background:var(--v-input); border:1px solid var(--v-border2); border-radius:8px; color:var(--v-faint); font-size:12px; margin-left:auto; }
+  .vc .msg .who .mdl, .vc .msg .who .tm { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; }
+  .vc .statusbar, .vc .chip { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:10.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1 class="opt">A — Linear-faithful</h1>
+  <div class="opt-note">Canvas ladder #08090a→#28282c · Inter optical weights 510/590, title never bold · rows 28px / controls 32px · hairlines <b>#ffffff0d + #23252a</b>, không shadow · accent emerald giữ brand (Linear gốc dùng indigo — ta giữ #10b981, role giữ nguyên: CTA/selection/focus only) · status hues chỉ trên dots.</div>
+  <div class="frame va" id="fa"></div>
+
+  <h1 class="opt">B — Raycast command-bar</h1>
+  <div class="opt-note">Charcoal sâu hơn (#07080a), bậc surface mỏng, radius 6–10 · <b>command bar ở giữa topbar</b> + kbd hints khắp nơi (Raycast grammar: list + actions + ⌘K) · system font stack · rows 26px — dense nhất trong 3 · accent emerald.</div>
+  <div class="frame vb" id="fb"></div>
+
+  <h1 class="opt">C — Hybrid: Linear ladder + Raycast chrome + mono metadata</h1>
+  <div class="opt-note">Ladder của A nhưng dịch nhẹ lên (#090a0c base) · command-bar pill bên phải topbar · <b>metadata mono</b> (model, tokens, time, status bar, chips) — đây là điểm cần nới rule "mono chỉ cho code" · rows 26px.</div>
+  <div class="frame vc" id="fc"></div>
+
+</div>
+
+<template id="app">
+  <!-- left rail -->
+  <nav class="rail">
+    <div class="logo">A</div>
+    <a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M3 12h3m12 0h3M12 3v3m0 12v3"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg></a>
+    <div class="sp"></div>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></a>
+  </nav>
+
+  <!-- session list -->
+  <aside class="slist">
+    <div class="slist-head">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      awog <span class="grow"></span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg>
+    </div>
+    <div class="slist-search">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      Tìm session…
+    </div>
+    <div class="srow"><span class="dot" style="background:#3caefe"></span><span class="t">Review PR auth flow</span><span class="meta">2m</span></div>
+    <div class="srow on"><span class="dot" style="background:var(--v-accent)"></span><span class="t">Refactor session transcript store</span><span class="meta">41.2k</span></div>
+    <div class="srow"><span class="dot" style="background:#8a8f98"></span><span class="t">Fix browser panel occlusion</span><span class="meta">1h</span></div>
+    <div class="srow"><span class="dot" style="background:#f0bf00"></span><span class="t">Điều tra lỗi codex thread</span><span class="meta">3h</span></div>
+    <div class="srow"><span class="dot" style="background:#8a8f98"></span><span class="t">Viết ADR 0094 telemetry opt-in</span><span class="meta">1d</span></div>
+    <div class="srow"><span class="dot" style="background:#27a644"></span><span class="t">Migrate logtime store</span><span class="meta">2d</span></div>
+    <div class="srow"><span class="dot" style="background:#8a8f98"></span><span class="t">Audit MCP idle timeout</span><span class="meta">4d</span></div>
+  </aside>
+
+  <!-- main -->
+  <section class="main">
+    <header class="topbar" id="topbar">
+      <span class="title">Refactor session transcript store</span>
+      <span class="chip run"><span class="spin"></span>Running</span>
+      <span class="chip">claude · Sonnet 4.5</span>
+      <span class="grow"></span>
+      <span class="icobtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="icobtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>
+      <span class="icobtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+    </header>
+
+    <div class="transcript">
+      <!-- user -->
+      <div class="msg">
+        <div class="who"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="nm">kyro</span><span class="tm">14:02</span></div>
+        <p>Tách <code class="ic">useSessionTranscript</code> ra khỏi <code class="ic">sessions.ts</code> — file đang 5.2k dòng, render transcript chậm khi &gt; 200 message. Giữ nguyên IPC contract.</p>
+      </div>
+      <!-- assistant -->
+      <div class="msg">
+        <div class="who"><span class="av" style="background:var(--v-accentDim);color:var(--v-accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">Sonnet 4.5</span><span class="tm">14:02</span></div>
+        <p>Rõ. Kế hoạch: (1) tách composable <code class="ic">useSessionTranscript</code> nhận <code class="ic">sessionId</code>, giữ derive <code class="ic">displayMsgs</code>; (2) chuyển step-render sang <code class="ic">v-memo</code> theo <code class="ic">eid</code>; (3) đo lại bằng trace <code class="ic">step.latency</code>.</p>
+        <div class="tool">
+          <div class="thead"><span class="ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="mono">Bash</span><span class="mono cm">rg "export function" stores/sessions.ts | wc -l</span><span class="dur mono">0.4s</span></div>
+          <div class="tbody"><span class="mono cm">→ 147</span></div>
+        </div>
+        <div class="codeblk">
+          <div class="chead mono">composables/useSessionTranscript.ts · diff</div>
+          <pre><span class="add">+ export function useSessionTranscript(id: Ref&lt;number&gt;) {</span>
+<span class="add">+   const store = useSessionsStore()</span>
+<span class="add">+   const msgs = computed(() =&gt; store.byId(id.value)?.msgs ?? [])</span>
+<span class="kw">    ...</span></pre>
+        </div>
+      </div>
+      <!-- assistant cont -->
+      <div class="msg">
+        <div class="who"><span class="av" style="background:var(--v-accentDim);color:var(--v-accent)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">Sonnet 4.5</span><span class="tm">14:03</span></div>
+        <p>Store đã mỏng: <code class="ic">sessions.ts</code> còn 3.1k dòng, transcript path nằm hẳn trong composable. Đang chạy <code class="ic">pnpm typecheck</code> để bắt import lệch.</p>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div class="cbox">
+        <div class="ta">Reply… <span class="mono" style="font-size:11px">⏎ gửi · ⇧⏎ xuống dòng</span></div>
+        <div class="cbar">
+          <span class="pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></span>
+          <span class="pill">Sonnet 4.5 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+          <span class="pill">High <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+          <span class="grow"></span>
+          <span class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- right panel -->
+  <aside class="panel">
+    <div class="ptabs">
+      <span class="ptab on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Plan</span>
+      <span class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Files</span>
+      <span class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Terminal</span>
+      <span class="ptab"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser</span>
+    </div>
+    <div class="pbody">
+      <div class="psec">Checklist · 3/5</div>
+      <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">Đọc call-site của displayMsgs</span></div>
+      <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">Tách useSessionTranscript</span></div>
+      <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">v-memo theo eid</span></div>
+      <div class="plan now"><span class="ck"></span><span class="tt">pnpm typecheck + lint</span></div>
+      <div class="plan todo"><span class="ck"></span><span class="tt">Xoá dead code ở store</span></div>
+      <div class="psec">Context</div>
+      <div class="plan"><span class="tt" style="color:var(--v-muted)">context <b style="font-weight:var(--v-w-t);color:var(--v-text2)">41.2k</b> / 200k</span></div>
+      <div class="plan"><span class="tt" style="color:var(--v-muted)">tokens in <b style="font-weight:var(--v-w-t);color:var(--v-text2)">18.4k</b> · out <b style="font-weight:var(--v-w-t);color:var(--v-text2)">6.1k</b></span></div>
+    </div>
+  </aside>
+</template>
+
+<script>
+  const tpl = document.getElementById('app')
+  for (const [id, cls] of [['fa','va'],['fb','vb'],['fc','vc']]) {
+    const frag = tpl.content.cloneNode(true)
+    const frame = document.getElementById(id)
+    frame.appendChild(frag)
+    // status bar appended per frame
+    const sb = document.createElement('div')
+    sb.className = 'statusbar'
+    sb.innerHTML = cls === 'vb'
+      ? `<span class="i"><kbd>⌘K</kbd> Command</span><span class="i"><kbd>⌘B</kbd> Panel</span><span class="i"><kbd>⌘J</kbd> Steer</span><span class="grow"></span><span class="i mono">main ↗</span><span class="i mono">3 sessions · 2 running</span>`
+      : `<span class="i"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg> main</span><span class="i">context 41.2k / 200k</span><span class="grow"></span><span class="i">3 sessions · 2 running</span>`
+    frame.appendChild(sb)
+  }
+  // variant B: replace topbar with command bar
+  const fbTop = document.querySelector('#fb .topbar')
+  fbTop.innerHTML = `
+    <span class="abs">
+      <span class="icobtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 12h18M3 6h18M3 18h18"/></svg></span>
+    </span>
+    <span class="cmdbar">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      Refactor session transcript store
+      <kbd>⌘K</kbd>
+    </span>
+    <span class="chip run"><span class="spin"></span>Running</span>
+    <span class="absr">
+      <span class="icobtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="icobtn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+    </span>`
+  // variant B: kbd hints into composer pills
+  document.querySelectorAll('#fb .cbar .pill')[1].insertAdjacentHTML('beforeend', ' <kbd>⌘M</kbd>')
+  document.querySelectorAll('#fb .cbar .pill')[2].insertAdjacentHTML('beforeend', ' <kbd>⌘E</kbd>')
+  // variant C: command bar pill on the right of topbar
+  const fcTop = document.querySelector('#fc .topbar .grow')
+  fcTop.outerHTML = `<span class="cmdbar">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      Nhảy tới…
+      <kbd>⌘K</kbd>
+    </span>`
+</script>
+</body>
+</html>

@@ -7,11 +7,7 @@
 // unaffected by the runtime.
 
 import type { SessionSettings } from '../types/shared.js'
-import type {
-  ApiSourcesConfig,
-  CompiledApiEndpoint,
-  McpServersConfig,
-} from '../runtime/permission-types.js'
+import type { ApiSourcesConfig, CompiledApiEndpoint, McpServersConfig } from '../runtime/permission-types.js'
 
 export interface InvokeArgs {
   // Already-rendered single prompt (no transcript wrapping).
@@ -54,6 +50,12 @@ export interface InvokeArgs {
   // co-author trailer on model-made commits: Claude SDK path sets the SDK's native
   // `attribution`; Pi path appends CO_AUTHOR_INSTRUCTION. Omitted → on (default).
   commitCoAuthor?: boolean
+  // Claude CLI auto-compact policy (snapshotted on the task; Anthropic path only).
+  // Omitted → defaults (on, ~300k tokens). See claude-sdk/shared.ts autoCompactEnv.
+  compactConfig?: {
+    autoCompact?: boolean | undefined
+    compactAtTokens?: number | undefined
+  }
   // USD CÒN LẠI của task cho node này (trần task trừ phần đã tiêu — tasks/budget.ts).
   // Trần task hiện chỉ được kiểm GIỮA các node; con số này để runtime chặn ngay
   // trong node: Claude SDK dùng `maxBudgetUsd`, Pi kiểm ở biên mỗi tool call.

@@ -156,7 +156,6 @@ export interface BackgroundShell {
   exitCode?: number | null
 }
 
-
 export interface CurrentSession {
   id: string
   title: string
@@ -223,9 +222,7 @@ export function showToast(message: string): void {
 
 // Sessions resting at a human gate — drives the app badge + list chips.
 export const awaitingCount = computed(
-  () =>
-    sessionList.value.filter((s) => s.status === 'awaiting').length +
-    (current.value?.permission ? 1 : 0),
+  () => sessionList.value.filter((s) => s.status === 'awaiting').length + (current.value?.permission ? 1 : 0),
 )
 
 // ─── List ─────────────────────────────────────────────────────────────────
@@ -347,10 +344,7 @@ function blankCurrent(id: string, title: string, projectId: string | null): Curr
 
 // `k` is set only when a history.forward is restoring the view — the entry key
 // is adopted instead of writing a new history entry.
-function openSessionInner(
-  summary: Pick<SessionSummary, 'id' | 'title' | 'projectId'>,
-  k?: number,
-): void {
+function openSessionInner(summary: Pick<SessionSummary, 'id' | 'title' | 'projectId'>, k?: number): void {
   const existing = current.value
   if (existing) gateway.unsubscribe(existing.id)
   current.value = blankCurrent(summary.id, summary.title, summary.projectId)
@@ -454,10 +448,7 @@ async function resumeAfterReconnect(): Promise<void> {
 //     desktop (the sidecar persists the user message before the model runs and
 //     the assistant message before the turn deregisters), so the text is safe to
 //     queue again. That absence is the ONLY case we re-send.
-async function reconcileInterrupted(
-  cur: CurrentSession,
-  interrupted: InterruptedTurn,
-): Promise<void> {
+async function reconcileInterrupted(cur: CurrentSession, interrupted: InterruptedTurn): Promise<void> {
   const { messageId, text, requeueable } = interrupted
   let active: boolean
   try {
@@ -754,9 +745,7 @@ export async function cycleTodo(index: number): Promise<void> {
   const cur = current.value
   const item = cur?.todos[index]
   if (!cur || !item) return
-  const next = cur.todos.map((t, i) =>
-    i === index ? { ...t, status: TODO_CYCLE[t.status] } : t,
-  )
+  const next = cur.todos.map((t, i) => (i === index ? { ...t, status: TODO_CYCLE[t.status] } : t))
   const previous = cur.todos
   cur.todos = next
   try {
@@ -960,6 +949,7 @@ function onGatewayEvent(evt: GatewayEvent): void {
     }
     case 'session.background-done': {
       const p = evt.payload as BackgroundDonePayload
+      if (p.native === true) return
       upsertBackground(cur, {
         shellId: p.shellId,
         command: p.command,

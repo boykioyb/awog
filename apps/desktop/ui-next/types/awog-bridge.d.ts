@@ -2,6 +2,16 @@
 // (apps/desktop/electron/src/preload.ts). The renderer talks to the engine + a
 // narrow set of shell/dialog ops ONLY through this object — never Node directly.
 
+import type {
+  CaptureEntry,
+  CaptureEvent,
+  CaptureState,
+  CaptureSummary,
+  ExportHarResult,
+  ReplayRequest,
+  ReplayResult,
+} from './network-capture'
+
 export type AwogEngineEvent = { type: string; payload: unknown }
 export type AwogFileFilter = { name: string; extensions: string[] }
 export type AwogDialogOpts = { title?: string; defaultPath?: string }
@@ -37,6 +47,9 @@ export type AwogBrowserTab = {
   // workflow); vắng = pool global. `scope` của mặt đang xem phải === field này
   // thì tab mới thuộc về mặt đó — main enforce, renderer chỉ lọc để hiển thị.
   scope?: string
+  // Hồ sơ trình duyệt (partition) mà tab này đang chạy trong — `default` hoặc `p-<hex>`.
+  // Optional vì main cũ chưa gửi field; vắng ⇒ coi là hồ sơ mặc định.
+  profileId?: string
   active: boolean
   loading: boolean
   canGoBack: boolean
@@ -51,11 +64,22 @@ export type AwogBrowserTab = {
   zoom: number
   devtools: boolean
   mobile: boolean
+  // Hồ sơ của tab đang đi qua proxy (chỉ cờ — host/creds lấy từ `browserProfiles.list`).
+  // Optional vì main cũ chưa gửi field.
+  proxied?: boolean
+  // Đồng hồ tải trang: mốc bắt đầu lượt tải (epoch ms của main, null = chưa tải) và tổng ms
+  // của lượt gần nhất (null khi đang tải). Optional vì main cũ chưa gửi field.
+  loadStartedAt?: number | null
+  loadMs?: number | null
 }
 // `activeTabId` là active của scope mà lời gọi `tabs(scope)` mang theo (global
 // khi không scope); `activeByScope` là map đầy đủ per-scope — một cửa sổ chứa
 // nhiều panel của nhiều phiên (KeepAlive) nhận cùng MỘT bản broadcast
 // `browser:changed`, nên mỗi panel tự tra active của riêng nó từ map này.
+export type AwogBrowserUserscriptsForTab = {
+  ran: { id: string; name: string; error?: string }[]
+  matching: { id: string; name: string; enabled: boolean }[]
+}
 export type AwogBrowserTabList = {
   tabs: AwogBrowserTab[]
   activeTabId: string | null
@@ -251,6 +275,30 @@ export interface AwogGatewayBridge {
   onStatusChanged(cb: (status: AwogGatewayStatus) => void): () => void
 }
 
+// Network inspector: dữ liệu thô (cookie/token/body) do main giữ; chỉ renderer của app đọc.
+// Mọi lệnh đi qua cổng sở hữu tab (`scope` sai ⇒ "no such browser tab").
+export interface AwogBrowserCaptureBridge {
+  start(tabId: string, scope?: string): Promise<CaptureState>
+  stop(tabId: string, scope?: string): Promise<CaptureState>
+  // Xoá toàn bộ entry (và body) của tab; không đổi cờ recording.
+  clear(tabId: string, scope?: string): Promise<CaptureState>
+  state(tabId: string, scope?: string): Promise<CaptureState>
+  // `sinceSeq`: chỉ entry MỚI có seq > sinceSeq (entry cũ đổi trạng thái đến qua onEvent).
+  list(
+    tabId: string,
+    scope?: string,
+    sinceSeq?: number,
+  ): Promise<{ state: CaptureState; entries: CaptureSummary[] }>
+  get(tabId: string, id: string, scope?: string): Promise<CaptureEntry | null>
+  // Hộp thoại lưu do main mở; `ids` rỗng/thiếu = tất cả.
+  exportHar(tabId: string, scope?: string, ids?: string[]): Promise<ExportHarResult>
+  replay(tabId: string, request: ReplayRequest, scope?: string): Promise<ReplayResult>
+  // Mở/focus MỘT cửa sổ inspector cho tab.
+  openWindow(tabId: string, scope?: string): Promise<void>
+  // Sự kiện đẩy từ main (upsert gộp 150ms); lọc theo tabId ở renderer. Trả hàm huỷ.
+  onEvent(handler: (ev: CaptureEvent) => void): () => void
+}
+
 export interface AwogBridge {
   // Resolves with the JSON-RPC result, or rejects with { code, message, data }.
   request(method: string, params?: unknown): Promise<unknown>
@@ -280,6 +328,8 @@ export interface AwogBridge {
   openPath(root: string, path: string): Promise<void>
   // Open a workspace file in the default browser (file:// URL, path validated).
   openFileExternal(root: string, path: string): Promise<void>
+  // Opaque token for a workspace root → wspreview://<token>/<rel> (HTML preview).
+  previewToken(root: string): Promise<{ token: string }>
   // Open a workspace file in its own OS window (preview popout). Main validates the
   // root/path pair against the workspace and focuses an already-open window for the
   // same file instead of stacking a duplicate.
@@ -347,9 +397,21 @@ export interface AwogBridge {
       browserId: string,
       profileDir: string,
       parts: AwogBrowserImportParts,
+      profileId?: string,
     ): Promise<AwogBrowserImportReport>
-    // Wipe everything the agent's browser holds (the undo for an import).
-    clearData(): Promise<void>
+    // Wipe everything one profile's browser jar holds (the undo for an import).
+    // `profileId` vắng = 'default'.
+    clearData(profileId?: string): Promise<void>
+    // Hồ sơ hiệu lực của một scope (session engineId / `task:<id>` / vắng = pool
+    // global). Main là nguồn sự thật — nó cache kết quả sidecar `browserProfiles.resolveScope`.
+    profileOf(scope?: string): Promise<{ profileId: string }>
+    // Kiểm tra đường proxy của hồ sơ: main gọi qua ĐÚNG partition đó (user bấm mới chạy).
+    testProxy(
+      profileId: string,
+    ): Promise<{ ok: boolean; ip?: string; loc?: string; error?: string }>
+    // Userscript trên trang của tab: script nào ĐÃ chạy (kèm lỗi) và script nào khớp URL
+    // (cả script đang tắt) — cho submenu ⋮ → "Userscript trên trang này".
+    userscriptsForTab(tabId?: string, scope?: string): Promise<AwogBrowserUserscriptsForTab>
     // Restart the app so a staged import lands. Confirm first — it kills running turns.
     relaunch(): Promise<void>
 
@@ -373,6 +435,8 @@ export interface AwogBridge {
     // Host policy (⋮ → Manage allowed sites).
     sites(): Promise<AwogBrowserSites>
     setSites(sites: AwogBrowserSites): Promise<void>
+    // Bộ bắt request của NGƯỜI DÙNG (Network inspector, docs/features/network-capture.md).
+    capture: AwogBrowserCaptureBridge
   }
   // Close the calling window (a preview popout closing itself). Main resolves the
   // target from the IPC sender, so a renderer can never close another window.

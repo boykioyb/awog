@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { listSessionSummaries } from '../sessions/store.js'
+import { listSessionSummariesFresh } from '../sessions/store.js'
 
 // Returns lightweight SessionSummary[] from the index (no messages) — ADR 0048.
 // The UI lazy-loads a session's transcript via sessions.get when it is opened.
@@ -18,7 +18,7 @@ const Params = z.object({
 register('sessions.list', async (raw) => {
   // Method này vốn không nhận tham số — caller cũ gọi không params vẫn hợp lệ.
   const params = Params.parse(raw ?? {})
-  const all = await listSessionSummaries()
+  const all = await listSessionSummariesFresh()
   const sessions = params.includeArchived ? all : all.filter((s) => !s.archived)
   return { sessions }
 })

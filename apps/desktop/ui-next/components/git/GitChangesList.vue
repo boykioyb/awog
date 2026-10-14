@@ -73,7 +73,7 @@
           :selected-paths="selUnstaged"
           @select="(f, s, m) => emit('select', f, s, m)"
           @discard="(f) => emit('discard', f)"
-          @discard-all="(files) => emit('discard-all', files)"
+          @discard-all="(files, folder) => emit('discard-all', files, folder)"
           @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
           @stage-all="emit('stage-all')"
           @context-file="(e, f, s) => emit('context-file', e, f, s)"
@@ -92,7 +92,7 @@
           :selected-paths="selStaged"
           @select="(f, s, m) => emit('select', f, s, m)"
           @discard="(f) => emit('discard', f)"
-          @discard-all="(files) => emit('discard-all', files)"
+          @discard-all="(files, folder) => emit('discard-all', files, folder)"
           @toggle-stage="(f, s) => emit('toggle-stage', f, s)"
           @unstage-all="emit('unstage-all')"
           @context-file="(e, f, s) => emit('context-file', e, f, s)"
@@ -155,7 +155,7 @@ const emit = defineEmits<{
   (e: 'select', file: string, staged: boolean, mods: SelMods): void
   (e: 'select-conflict', file: string): void
   (e: 'discard', file: string): void
-  (e: 'discard-all', files: string[]): void
+  (e: 'discard-all', files: string[], folder?: string): void
   (e: 'toggle-stage', file: string, staged: boolean): void
   (e: 'stage-all'): void
   (e: 'unstage-all'): void

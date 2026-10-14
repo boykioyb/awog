@@ -96,7 +96,7 @@ const { openViews: wpViews, toggleView: wpToggle } = useWorkspacePanel()
 const { isOpen: gtOpen, toggle: gtToggle } = useGlobalTerminal()
 
 // The active session, but only while the Sessions screen is the one in view.
-const active = computed(() => (route.path.startsWith('/sessions') ? sessions.active : null))
+const active = computed(() => (route.path.startsWith('/workbench') ? sessions.active : null))
 const projName = computed(() => (active.value ? projectName(active.value.project) : ''))
 </script>
 

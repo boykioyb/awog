@@ -13,18 +13,35 @@ const CODES = {
   bold: '[1m',
   dim: '[2m',
   italic: '[3m',
-  underline: '[4m',
+  underline: '',
+  inverse: '\x1b[7m',
   fg: {
-    black: '[30m', red: '[31m', green: '[32m', yellow: '[33m',
-    blue: '[34m', magenta: '[35m', cyan: '[36m', white: '[37m',
-    gray: '[90m', brightRed: '[91m', brightGreen: '[92m',
-    brightYellow: '[93m', brightBlue: '[94m', brightMagenta: '[95m',
-    brightCyan: '[96m', brightWhite: '[97m',
+    black: '[30m',
+    red: '[31m',
+    green: '[32m',
+    yellow: '[33m',
+    blue: '[34m',
+    magenta: '[35m',
+    cyan: '[36m',
+    white: '[37m',
+    gray: '[90m',
+    brightRed: '[91m',
+    brightGreen: '[92m',
+    brightYellow: '[93m',
+    brightBlue: '[94m',
+    brightMagenta: '[95m',
+    brightCyan: '[96m',
+    brightWhite: '[97m',
   },
   bg: {
-    red: '[41m', green: '[42m', yellow: '[43m',
-    blue: '[44m', magenta: '[45m', cyan: '[46m',
-    gray: '[100m', brightGray: '[47m',
+    red: '[41m',
+    green: '[42m',
+    yellow: '[43m',
+    blue: '[44m',
+    magenta: '[45m',
+    cyan: '[46m',
+    gray: '[100m',
+    brightGray: '[47m',
   },
 } as const
 
@@ -38,13 +55,14 @@ function colorsOn(): boolean {
 /** Wrap `s` in SGR codes when colors are on; plain string otherwise. */
 export function style(
   s: string,
-  opts: { fg?: Fg; bg?: Bg; bold?: boolean; dim?: boolean; italic?: boolean } = {},
+  opts: { fg?: Fg; bg?: Bg; bold?: boolean; dim?: boolean; italic?: boolean; inverse?: boolean } = {},
 ): string {
   if (!colorsOn() || !s) return s
   let out = ''
   if (opts.bold) out += CODES.bold
   if (opts.dim) out += CODES.dim
   if (opts.italic) out += CODES.italic
+  if (opts.inverse) out += CODES.inverse
   if (opts.fg) out += CODES.fg[opts.fg]
   if (opts.bg) out += CODES.bg[opts.bg]
   return `${out}${s}${RESET}`
@@ -59,6 +77,7 @@ export const sgr = {
   bold: (s: string) => style(s, { bold: true }),
   tool: (s: string) => style(s, { fg: 'yellow' }),
   label: (s: string) => style(s, { fg: 'brightBlack' as Fg }),
+  inverse: (s: string) => style(s, { inverse: true }),
 }
 
 export function isTTY(): boolean {
@@ -74,7 +93,7 @@ export function isTTY(): boolean {
 
 const ANSI_RE = /\x1b\[[0-9;]*m/g
 const vis = (s: string): number => s.replace(ANSI_RE, '').length
-const cut = (s: string, w: number): string => {
+export const cut = (s: string, w: number): string => {
   const plain = s.replace(ANSI_RE, '')
   if (plain.length <= w) return s
   if (w <= 1) return plain.slice(0, w)
@@ -83,11 +102,7 @@ const cut = (s: string, w: number): string => {
 }
 
 /** columns: fixed width or 'flex' (absorbs remaining terminal width). */
-export function table(
-  headers: string[],
-  rows: string[][],
-  columns: Array<number | 'flex'>,
-): string {
+export function table(headers: string[], rows: string[][], columns: Array<number | 'flex'>): string {
   const width = process.stderr.isTTY ? (process.stderr.columns ?? 80) : 80
   const gap = 2
   const fixed = columns.reduce<number>((sum, c) => sum + (c === 'flex' ? 0 : c), 0)
@@ -143,7 +158,7 @@ export interface StepCard {
   body?: string[] // detail lines, already styled
 }
 
-export function renderStepCard(card: StepCard): string {
+export function stepCardLines(card: StepCard): string[] {
   const w = process.stderr.isTTY ? Math.min(process.stderr.columns ?? 80, 110) : 80
   const inner = Math.max(30, w - 4)
   const headMeta = card.meta ? ` ${sgr.dim(card.meta)}` : ''
@@ -156,7 +171,18 @@ export function renderStepCard(card: StepCard): string {
     lines.push(`  ${sgr.dim('│')} ${sgr.dim(`… ${card.body!.length - 24} more lines`)}`)
   }
   lines.push(`  ${sgr.dim('╰─')}`)
-  return lines.join('\n')
+  return lines
+}
+
+export function renderStepCard(card: StepCard): string {
+  return stepCardLines(card).join('\n')
+}
+
+// Same styling as createReplyRenderer, but returns the styled lines instead of
+// writing — the dashboard transcript viewer builds a scrollable buffer.
+export function replyToLines(text: string): string[] {
+  const paint = createReplyPainter()
+  return text.split('\n').map(paint)
 }
 
 /** SessionStep.detail → card body lines (styled). */
@@ -188,13 +214,21 @@ export function detailBody(detail: unknown): { body?: string[] | undefined; meta
     }
   }
   if (d.kind === 'file' && typeof d.content === 'string') {
-    return { body: d.content.split('\n').slice(0, 30).map((l) => sgr.dim(l)) }
+    return {
+      body: d.content
+        .split('\n')
+        .slice(0, 30)
+        .map((l) => sgr.dim(l)),
+    }
   }
   if (d.kind === 'list' && Array.isArray(d.items)) {
     return {
-      body: d.items.slice(0, 20).map((it) =>
-        `${sgr.accent(it.path ?? it.label ?? '')}${it.snippet ? sgr.dim(`  ${it.snippet.slice(0, 60)}`) : ''}`,
-      ),
+      body: d.items
+        .slice(0, 20)
+        .map(
+          (it) =>
+            `${sgr.accent(it.path ?? it.label ?? '')}${it.snippet ? sgr.dim(`  ${it.snippet.slice(0, 60)}`) : ''}`,
+        ),
     }
   }
   return {}
@@ -236,23 +270,69 @@ export function spinner(label: string): { stop: (final?: string) => void } {
 // answers once landed as chat turns.
 
 let sharedRl: Interface | null = null
-// FIFO — concurrent pending questions (two permission prompts from parallel
-// tool calls) resolve in display order instead of overwriting each other.
+let boxedPrompt = false
 const pendingQuestions: Array<(answer: string) => void> = []
 let replHandler: ((line: string) => void) | null = null
 let replClose: (() => void) | null = null
 
+const BOX_W = () => Math.max(20, Math.min(process.stderr.columns ?? 80, 92) - 4)
+const PROMPT_CELL = 6 // "  │ ❯ " on screen
+
+const promptStr = (): string =>
+  boxedPrompt
+    ? `\n  ${sgr.dim(`╭${'─'.repeat(BOX_W())}╮`)}\n  ${sgr.dim('│')} ${sgr.accent('❯')} `
+    : `${sgr.accent('❯')} `
+
+const promptBottom = (): string => `  ${sgr.dim(`╰${'─'.repeat(BOX_W())}╯`)}\n`
+
+// Collapse the input box back into one `❯ text` scrollback line after submit —
+// the way claude clears its bordered input. Rows = top border + input rows.
+function collapsePrompt(inputText: string): void {
+  const cols = process.stderr.columns ?? 80
+  const rows = 1 + Math.min(24, Math.max(1, Math.ceil((PROMPT_CELL + inputText.length) / cols)))
+  process.stderr.write(`\x1b[${rows}A\x1b[J${sgr.accent('❯')} ${sgr.bold(inputText)}\n\n`)
+}
+
+// Redraw the right-hand `│` after every keystroke — readline only echoes left
+// of the cursor, so the border has to be re-anchored per input length.
+function patchRightBorder(rl: Interface): void {
+  const tty = rl as unknown as {
+    _ttyWrite?: (s: string, key: { name?: string }) => void
+    cursor?: number
+    line?: string
+    terminal?: boolean
+  }
+  const orig = tty._ttyWrite?.bind(rl)
+  if (!orig) return
+  tty._ttyWrite = (s: string, key: { name?: string }) => {
+    orig(s, key)
+    if (!boxedPrompt || pendingQuestions.length > 0) return
+    if (key?.name === 'return' || key?.name === 'escape') return
+    if (!tty.terminal) return
+    const line = tty.line ?? ''
+    const cursor = tty.cursor ?? line.length
+    const cur = PROMPT_CELL + line.length
+    const pad = Math.max(0, BOX_W() - cur - 1)
+    const back = pad + (line.length - cursor) + 1
+    process.stderr.write(`${' '.repeat(pad)}${sgr.dim('│')}\x1b[${back}D`)
+  }
+}
+
 function repl(): Interface {
   if (sharedRl) return sharedRl
   sharedRl = createInterface({ input: process.stdin, output: process.stderr })
+  patchRightBorder(sharedRl)
   sharedRl.on('line', (line) => {
     const t = line.trim()
     const q = pendingQuestions.shift()
     if (q) {
       q(t)
-      if (!pendingQuestions.length && replHandler) sharedRl!.setPrompt(`${sgr.accent('❯')} `)
+      if (!pendingQuestions.length && replHandler) sharedRl!.setPrompt(promptStr())
       sharedRl!.prompt()
       return
+    }
+    if (boxedPrompt) {
+      collapsePrompt(line)
     }
     if (t.length && replHandler) replHandler(t)
     else sharedRl!.prompt()
@@ -280,10 +360,7 @@ export async function askLine(question: string): Promise<string> {
 }
 
 /** Single-key picker for permission prompts: y / n / a(lways). */
-export async function askPermission(
-  toolName: string,
-  detail: string,
-): Promise<'allow' | 'deny' | 'always'> {
+export async function askPermission(toolName: string, detail: string): Promise<'allow' | 'deny' | 'always'> {
   const head = `${sgr.warn('⚡')} ${sgr.bold(toolName)}`
   const body = sgr.dim(detail)
   const opts =
@@ -308,9 +385,7 @@ export async function askChoice(
   options: Array<{ label: string; description?: string }>,
   multiSelect: boolean,
 ): Promise<string[]> {
-  process.stderr.write(
-    `\n${sgr.accent('?')} ${header ? `${sgr.dim(`${header} — `)}` : ''}${sgr.bold(question)}\n`,
-  )
+  process.stderr.write(`\n${sgr.accent('?')} ${header ? `${sgr.dim(`${header} — `)}` : ''}${sgr.bold(question)}\n`)
   options.forEach((o, i) => {
     process.stderr.write(
       `   ${sgr.dim(`${i + 1})`)} ${o.label}${o.description ? sgr.dim(` — ${o.description}`) : ''}\n`,
@@ -340,28 +415,47 @@ export async function askText(header: string, question: string): Promise<string>
 // Plain chunks go through verbatim; we style per completed line at flush time.
 // Streaming deltas append to a line buffer; styled once the line closes.
 
-export function createReplyRenderer(): { push: (delta: string) => void; flush: () => void } {
-  let buf = ''
+// Stateful one-line painter — the code-fence state must survive across calls.
+export function createReplyPainter(): (line: string) => string {
   let inCode = false
   const enabled = colorsOn()
-
-  const paint = (line: string): string => {
-    if (!enabled) return line
+  const boxInner = () => Math.max(20, Math.min(process.stdout.columns ?? 80, 92) - 6)
+  return (line: string): string => {
     if (/^```/.test(line)) {
+      if (!enabled) return line
       inCode = !inCode
-      return sgr.dim(line)
+      // Draw a rounded box edge instead of printing the literal fence — the
+      // language tag becomes a label on the top border.
+      if (inCode) {
+        const lang = line.slice(3).trim()
+        const label = lang ? ` ${lang} ` : ''
+        return `  ${sgr.dim('╭' + label + '─'.repeat(Math.max(0, boxInner() - label.length)) + '╮')}`
+      }
+      return `  ${sgr.dim('╰' + '─'.repeat(boxInner()) + '╯')}`
     }
-    if (inCode) return style(line, { fg: 'brightWhite', bg: 'gray' })
+    if (inCode) {
+      if (!enabled) return line
+      // Copyable code block: bounded box, no reflow, bright text.
+      const inner = boxInner()
+      const body = vis(line) > inner ? cut(line, inner) : line
+      return `  ${sgr.dim('│')} ${style(body.padEnd(inner), { fg: 'brightWhite' })} ${sgr.dim('│')}`
+    }
+    if (!enabled) return line
     const h = line.match(/^(#{1,6})\s+(.*)$/)
     if (h) return sgr.bold(sgr.accent(h[2]!))
-    if (/^\s*[-*•]\s/.test(line)) {
-      return line.replace(/^(\s*)([-*•])(\s)/, (_m, a, _b, c) => `${a}${sgr.accent('•')}${c}`)
-    }
-    // inline `code` + **bold**
-    return line
+    // Bullets get a colored marker AND still run through inline styling
+    // (`code` / **bold**) — the early return used to skip both.
+    let out = line.replace(/^(\s*)([-*•])(\s)/, (_m, a, _b, c) => `${a}${sgr.accent('•')}${c}`)
+    return out
       .replace(/`([^`]+)`/g, (_m, g) => style(g as string, { fg: 'cyan' }))
       .replace(/\*\*([^*]+)\*\*/g, (_m, g) => sgr.bold(g as string))
+      .replace(/^(\s*)>\s?(.*)$/, (_m, a, g) => `${a}${sgr.dim('┃')} ${sgr.dim(g as string)}`)
   }
+}
+
+export function createReplyRenderer(): { push: (delta: string) => void; flush: () => void } {
+  let buf = ''
+  const paint = createReplyPainter()
 
   return {
     push(delta: string) {
@@ -384,12 +478,16 @@ export function createReplyRenderer(): { push: (delta: string) => void; flush: (
 
 // ── REPL ─────────────────────────────────────────────────────────────────────
 
-export function createRepl(onLine: (line: string) => void, onClose: () => void): Interface {
+export function createRepl(
+  onLine: (line: string) => void,
+  onClose: () => void,
+  opts: { boxed?: boolean } = {},
+): Interface {
+  boxedPrompt = opts.boxed === true
   const rl = repl()
   replHandler = onLine
   replClose = onClose
-  rl.setPrompt(`${sgr.accent('❯')} `)
+  rl.setPrompt(promptStr())
   rl.prompt()
   return rl
 }
-

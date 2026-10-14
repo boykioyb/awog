@@ -73,9 +73,7 @@ describe('sections', () => {
 describe('lines', () => {
   it('skips both comment styles', () => {
     const f = parseAwsIni(
-      ['; a comment', '# another one', '[default]', '; region = wrong', 'region = us-east-1'].join(
-        '\n',
-      ),
+      ['; a comment', '# another one', '[default]', '; region = wrong', 'region = us-east-1'].join('\n'),
     )
     expect(f['default']!.keys).toEqual({ region: 'us-east-1' })
   })
@@ -165,10 +163,11 @@ describe('allowlist', () => {
 })
 
 describe('empty input', () => {
-  it.each([['', 'empty file'], ['\n\n  \n', 'blank lines'], ['; nothing here', 'comment only']])(
-    '%j → no sections (%s)',
-    (raw: string) => {
-      expect(parseAwsIni(raw)).toEqual({})
-    },
-  )
+  it.each([
+    ['', 'empty file'],
+    ['\n\n  \n', 'blank lines'],
+    ['; nothing here', 'comment only'],
+  ])('%j → no sections (%s)', (raw: string) => {
+    expect(parseAwsIni(raw)).toEqual({})
+  })
 })

@@ -53,9 +53,7 @@ function changedLines(before: string, after: string): { removed: string[]; added
 }
 
 describe('giữ nguyên phần file không liên quan', () => {
-  const out = editAwsIni(CONFIG, [
-    { op: 'upsertSection', section: 'default', keys: { region: 'us-east-1' } },
-  ])
+  const out = editAwsIni(CONFIG, [{ op: 'upsertSection', section: 'default', keys: { region: 'us-east-1' } }])
 
   it('giữ comment đứng riêng, đúng vị trí cũ', () => {
     expect(lines(out)[0]).toBe('# Cấu hình AWS — đừng commit file này')
@@ -95,9 +93,7 @@ describe('giữ nguyên phần file không liên quan', () => {
 
 describe('round-trip: sửa một khoá chỉ đổi đúng một dòng', () => {
   it('đổi region của một profile, diff đúng 1 dòng ra 1 dòng', () => {
-    const out = editAwsIni(CONFIG, [
-      { op: 'upsertSection', section: 'default', keys: { region: 'eu-west-1' } },
-    ])
+    const out = editAwsIni(CONFIG, [{ op: 'upsertSection', section: 'default', keys: { region: 'eu-west-1' } }])
     expect(changedLines(CONFIG, out)).toEqual({
       removed: ['region = ap-southeast-1'],
       added: ['region = eu-west-1'],
@@ -116,9 +112,7 @@ describe('khoá mới', () => {
   })
 
   it('không đẩy dòng trắng ngăn cách xuống dưới khoá mới', () => {
-    const out = editAwsIni(CONFIG, [
-      { op: 'upsertSection', section: 'default', keys: { external_id: 'x1' } },
-    ])
+    const out = editAwsIni(CONFIG, [{ op: 'upsertSection', section: 'default', keys: { external_id: 'x1' } }])
     const l = lines(out)
     // Khoá mới nằm sau dòng cuối CÓ NỘI DUNG của section (block thụt), trước
     // dòng trắng ngăn với section kế.
@@ -132,9 +126,7 @@ describe('khoá mới', () => {
     // `inline_comment_prefixes=None`, nên `output = json ; ghi chú` có giá trị
     // là `json ; ghi chú` — đoạn đó là GIÁ TRỊ, không phải comment. Giữ nó lại
     // khi ghi giá trị mới sẽ tạo ra một giá trị ghép vô nghĩa.
-    const out = editAwsIni(CONFIG, [
-      { op: 'upsertSection', section: 'default', keys: { output: 'text' } },
-    ])
+    const out = editAwsIni(CONFIG, [{ op: 'upsertSection', section: 'default', keys: { output: 'text' } }])
     expect(out).toContain('output = text')
     expect(out).not.toContain('giữ json cho jq')
     expect(parseAwsIni(out)['default']!.keys.output).toBe('text')
@@ -154,20 +146,14 @@ describe('thụt đầu dòng và cách viết `=` của khoá cũ', () => {
 describe('kết thúc dòng và newline cuối file', () => {
   it('file CRLF thì dòng mới cũng CRLF', () => {
     const raw = '[default]\r\nregion = ap-southeast-1\r\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: { output: 'json' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: { output: 'json' } }])
     expect(out).toBe('[default]\r\nregion = ap-southeast-1\r\noutput = json\r\n')
   })
 
   it('file CRLF: section mới cũng CRLF, kể cả dòng trắng ngăn cách', () => {
     const raw = '[default]\r\nregion = ap-southeast-1\r\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'profile new', keys: { region: 'us-east-1' } },
-    ])
-    expect(out).toBe(
-      '[default]\r\nregion = ap-southeast-1\r\n\r\n[profile new]\r\nregion = us-east-1\r\n',
-    )
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'profile new', keys: { region: 'us-east-1' } }])
+    expect(out).toBe('[default]\r\nregion = ap-southeast-1\r\n\r\n[profile new]\r\nregion = us-east-1\r\n')
   })
 
   it('file LF giữ LF', () => {
@@ -192,9 +178,7 @@ describe('kết thúc dòng và newline cuối file', () => {
   })
 
   it('file rỗng: tạo section đầu tiên, không đẻ dòng trắng thừa', () => {
-    const out = editAwsIni('', [
-      { op: 'upsertSection', section: 'default', keys: { region: 'ap-southeast-1' } },
-    ])
+    const out = editAwsIni('', [{ op: 'upsertSection', section: 'default', keys: { region: 'ap-southeast-1' } }])
     // Có newline cuối: file text POSIX bình thường. Không có nó, `aws configure
     // set` hay một script `>>` sẽ nối dòng mới ngay sau `ap-southeast-1`.
     expect(out).toBe('[default]\nregion = ap-southeast-1\n')
@@ -204,9 +188,7 @@ describe('kết thúc dòng và newline cuối file', () => {
 describe('trùng lặp', () => {
   it('khoá chỉ có ở lần khai ĐẦU: sửa tại chỗ, không nhân bản section', () => {
     const raw = '[default]\nregion = a\n[profile x]\nregion = b\n[default]\noutput = json\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: { region: 'z' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: { region: 'z' } }])
     expect(out).toBe('[default]\nregion = z\n[profile x]\nregion = b\n[default]\noutput = json\n')
     expect(lines(out).filter((l) => l === '[default]').length).toBe(2)
   })
@@ -215,9 +197,7 @@ describe('trùng lặp', () => {
     // "Cái sau thắng" là ngữ nghĩa của botocore — sửa bản đầu thì file vẫn chạy
     // bằng giá trị cũ, đúng kiểu bug không ai tìm ra.
     const raw = '[default]\nregion = a\noutput = json\nregion = b\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: { region: 'z' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: { region: 'z' } }])
     expect(out).toBe('[default]\noutput = json\nregion = z\n')
     expect(parseAwsIni(out)['default']!.keys.region).toBe('z')
   })
@@ -255,17 +235,13 @@ describe('section mới', () => {
 describe('removeKeys', () => {
   it('xoá mọi lần xuất hiện của khoá trong section', () => {
     const raw = '[default]\nregion = a\noutput = json\nregion = b\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: {}, removeKeys: ['region'] },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: {}, removeKeys: ['region'] }])
     expect(out).toBe('[default]\noutput = json\n')
   })
 
   it('không đụng khoá cùng tên ở section khác', () => {
     const raw = '[default]\nregion = a\n\n[profile x]\nregion = b\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: {}, removeKeys: ['region'] },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: {}, removeKeys: ['region'] }])
     expect(out).toBe('[default]\n\n[profile x]\nregion = b\n')
   })
 
@@ -298,18 +274,14 @@ describe('renameSection', () => {
 
   it('ném khi không tìm thấy section nguồn', () => {
     expect(() =>
-      editAwsIni('[default]\nregion = a\n', [
-        { op: 'renameSection', from: 'profile nope', to: 'profile x' },
-      ]),
+      editAwsIni('[default]\nregion = a\n', [{ op: 'renameSection', from: 'profile nope', to: 'profile x' }]),
     ).toThrow(/not found/)
   })
 })
 
 describe('deleteSection', () => {
   it('xoá header + thân, giữ comment nằm ngay trên section KẾ TIẾP', () => {
-    const out = editAwsIni(CONFIG, [
-      { op: 'deleteSection', section: 'profile 229015218011_Offshore-Developer' },
-    ])
+    const out = editAwsIni(CONFIG, [{ op: 'deleteSection', section: 'profile 229015218011_Offshore-Developer' }])
     expect(out).not.toContain('sso_account_id = 229015218011')
     expect(out).not.toContain('[profile 229015218011_Offshore-Developer]')
     // Comment là chữ của người dùng — giữ lại, kể cả khi nó đứng ngay trên
@@ -342,9 +314,7 @@ describe('allowlist khoá được phép GHI', () => {
     'ném khi ghi khoá ngoài allowlist: %s',
     (key) => {
       expect(() =>
-        editAwsIni('[default]\nregion = a\n', [
-          { op: 'upsertSection', section: 'default', keys: { [key]: 'x' } },
-        ]),
+        editAwsIni('[default]\nregion = a\n', [{ op: 'upsertSection', section: 'default', keys: { [key]: 'x' } }]),
       ).toThrow(/not writable/)
     },
   )
@@ -386,9 +356,7 @@ describe('allowlist khoá được phép GHI', () => {
         keys: { sso_registration_scopes: 'sso:account:access' },
       },
     ])
-    expect(parseAwsIni(out)['sso-session corp']!.keys.sso_registration_scopes).toBe(
-      'sso:account:access',
-    )
+    expect(parseAwsIni(out)['sso-session corp']!.keys.sso_registration_scopes).toBe('sso:account:access')
   })
 
   it('cho phép sso_start_url/sso_region cho block [sso-session]', () => {
@@ -399,9 +367,7 @@ describe('allowlist khoá được phép GHI', () => {
         keys: { sso_start_url: 'https://d-9xx.awsapps.com/start', sso_region: 'ap-southeast-1' },
       },
     ])
-    expect(parseAwsIni(out)['sso-session corp']!.keys.sso_start_url).toBe(
-      'https://d-9xx.awsapps.com/start',
-    )
+    expect(parseAwsIni(out)['sso-session corp']!.keys.sso_start_url).toBe('https://d-9xx.awsapps.com/start')
   })
 })
 
@@ -411,25 +377,19 @@ describe('giá trị độc không chèn được cấu trúc mới', () => {
     ['xuống dòng CR', 'a\r[evil]'],
   ])('ném khi giá trị chứa %s', (_label, value) => {
     expect(() =>
-      editAwsIni('[default]\nregion = a\n', [
-        { op: 'upsertSection', section: 'default', keys: { region: value } },
-      ]),
+      editAwsIni('[default]\nregion = a\n', [{ op: 'upsertSection', section: 'default', keys: { region: value } }]),
     ).toThrow(/line break/)
   })
 
   it('ném khi giá trị mở đầu bằng `[`', () => {
     expect(() =>
-      editAwsIni('[default]\nregion = a\n', [
-        { op: 'upsertSection', section: 'default', keys: { region: '[evil]' } },
-      ]),
+      editAwsIni('[default]\nregion = a\n', [{ op: 'upsertSection', section: 'default', keys: { region: '[evil]' } }]),
     ).toThrow(/must not start with/)
   })
 
   it('ném khi giá trị rỗng — `region =` sẽ mở block thụt chứ không phải khoá rỗng', () => {
     expect(() =>
-      editAwsIni('[default]\nregion = a\n', [
-        { op: 'upsertSection', section: 'default', keys: { region: '  ' } },
-      ]),
+      editAwsIni('[default]\nregion = a\n', [{ op: 'upsertSection', section: 'default', keys: { region: '  ' } }]),
     ).toThrow(/must not be empty/)
   })
 
@@ -448,16 +408,11 @@ describe('giá trị độc không chèn được cấu trúc mới', () => {
     }
   })
 
-  it.each(['profile a]\n[b', 'a b c', '', 'profile dev<>'])(
-    'ném khi tên section sai định dạng: %j',
-    (name) => {
-      expect(() =>
-        editAwsIni('[default]\nregion = a\n', [
-          { op: 'upsertSection', section: name, keys: { region: 'x' } },
-        ]),
-      ).toThrow(/Invalid INI section name/)
-    },
-  )
+  it.each(['profile a]\n[b', 'a b c', '', 'profile dev<>'])('ném khi tên section sai định dạng: %j', (name) => {
+    expect(() =>
+      editAwsIni('[default]\nregion = a\n', [{ op: 'upsertSection', section: name, keys: { region: 'x' } }]),
+    ).toThrow(/Invalid INI section name/)
+  })
 
   it('chấp nhận tên profile thật của máy dev', () => {
     const out = editAwsIni('', [
@@ -499,9 +454,7 @@ describe('bảo mật: sửa profile A không đụng credential của profile B
   })
 
   it('xoá B không đụng A', () => {
-    const out = editAwsIni(CREDS, [
-      { op: 'deleteSection', section: '229015218011_Offshore-Developer' },
-    ])
+    const out = editAwsIni(CREDS, [{ op: 'deleteSection', section: '229015218011_Offshore-Developer' }])
     expect(out).toContain(`aws_secret_access_key = ${FAKE_SECRET}`)
     expect(out).not.toContain('second-profile-secret-value')
     expect(Object.keys(parseAwsIni(out))).toEqual(['default'])
@@ -552,9 +505,7 @@ describe('copySection', () => {
 
   it('giữ cả khoá lạ và block thụt của section nguồn', () => {
     const src = ['[profile dev]', 'region = a', 'cli_pager =', 's3 =', '  max_concurrent_requests = 20', ''].join('\n')
-    const out = editAwsIni(src, [
-      { op: 'copySection', from: 'profile dev', to: 'profile dev-copy' },
-    ])
+    const out = editAwsIni(src, [{ op: 'copySection', from: 'profile dev', to: 'profile dev-copy' }])
     const body = out.slice(out.indexOf('[profile dev-copy]'))
     expect(body).toContain('cli_pager =')
     expect(body).toContain('  max_concurrent_requests = 20')
@@ -562,13 +513,9 @@ describe('copySection', () => {
 
   it('từ chối khi đích đã tồn tại, trừ khi overwrite', () => {
     const src = '[profile a]\nregion = one\n\n[profile b]\nregion = two\n'
-    expect(() =>
-      editAwsIni(src, [{ op: 'copySection', from: 'profile a', to: 'profile b' }]),
-    ).toThrow(/already exists/)
+    expect(() => editAwsIni(src, [{ op: 'copySection', from: 'profile a', to: 'profile b' }])).toThrow(/already exists/)
 
-    const out = editAwsIni(src, [
-      { op: 'copySection', from: 'profile a', to: 'profile b', overwrite: true },
-    ])
+    const out = editAwsIni(src, [{ op: 'copySection', from: 'profile a', to: 'profile b', overwrite: true }])
     // Đúng MỘT `[profile b]`, và nội dung là của `a`.
     expect(out.match(/\[profile b\]/g)).toHaveLength(1)
     expect(parseAwsIni(out)['profile b']!.keys.region).toBe('one')
@@ -576,18 +523,18 @@ describe('copySection', () => {
 
   it('không chép một section có credential_process', () => {
     const src = '[profile vault]\ncredential_process = /usr/local/bin/vault-aws\n'
-    expect(() =>
-      editAwsIni(src, [{ op: 'copySection', from: 'profile vault', to: 'profile copy' }]),
-    ).toThrow(/credential_process/)
+    expect(() => editAwsIni(src, [{ op: 'copySection', from: 'profile vault', to: 'profile copy' }])).toThrow(
+      /credential_process/,
+    )
   })
 
   it('ném khi nguồn không tồn tại, và khi chép lên chính nó', () => {
-    expect(() => editAwsIni('[profile a]\nregion = x\n', [
-      { op: 'copySection', from: 'profile nope', to: 'profile b' },
-    ])).toThrow(/not found/i)
-    expect(() => editAwsIni('[profile a]\nregion = x\n', [
-      { op: 'copySection', from: 'profile a', to: 'profile a' },
-    ])).toThrow(/itself/)
+    expect(() =>
+      editAwsIni('[profile a]\nregion = x\n', [{ op: 'copySection', from: 'profile nope', to: 'profile b' }]),
+    ).toThrow(/not found/i)
+    expect(() =>
+      editAwsIni('[profile a]\nregion = x\n', [{ op: 'copySection', from: 'profile a', to: 'profile a' }]),
+    ).toThrow(/itself/)
   })
 
   it('giữ CRLF của file khi chép', () => {
@@ -606,9 +553,7 @@ describe('copySection', () => {
 describe('section khai nhiều lần', () => {
   it('sửa đúng lần khai mà botocore đang dùng (cái SAU), không phải cái đầu', () => {
     const raw = '[default]\noutput = json\n\n[default]\nregion = old\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: { region: 'new' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: { region: 'new' } }])
     expect(parseAwsIni(out)['default']!.keys.region).toBe('new')
     expect(out).toBe('[default]\noutput = json\n\n[default]\nregion = new\n')
   })
@@ -623,18 +568,14 @@ describe('section khai nhiều lần', () => {
 
   it('khoá trùng NẰM Ở HAI lần khai: giữ bản cuối, dọn bản trên', () => {
     const raw = '[default]\nregion = a\n\n[default]\nregion = b\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: { region: 'z' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: { region: 'z' } }])
     expect(parseAwsIni(out)['default']!.keys.region).toBe('z')
     expect(out.split('\n').filter((l) => l.startsWith('region')).length).toBe(1)
   })
 
   it('removeKeys xoá khoá ở MỌI lần khai', () => {
     const raw = '[default]\nregion = a\n\n[default]\nregion = b\noutput = json\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: {}, removeKeys: ['region'] },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: {}, removeKeys: ['region'] }])
     expect(parseAwsIni(out)['default']!.keys.region).toBeUndefined()
   })
 
@@ -665,16 +606,12 @@ describe('ranh giới tên section = dấu `]` ĐẦU TIÊN', () => {
   })
 
   it('upsert sửa tại chỗ thay vì nhân bản section', () => {
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'profile dev', keys: { region: 'y' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'profile dev', keys: { region: 'y' } }])
     expect(out).toBe('[profile dev] ; bucket [prod]\nregion = y\n')
   })
 
   it('rename giữ nguyên đuôi comment', () => {
-    const out = editAwsIni(raw, [
-      { op: 'renameSection', from: 'profile dev', to: 'profile prod' },
-    ])
+    const out = editAwsIni(raw, [{ op: 'renameSection', from: 'profile dev', to: 'profile prod' }])
     expect(out).toBe('[profile prod] ; bucket [prod]\nregion = x\n')
   })
 })
@@ -682,17 +619,13 @@ describe('ranh giới tên section = dấu `]` ĐẦU TIÊN', () => {
 describe('file bẩn kiểu thật', () => {
   it('BOM đầu file không làm mất section', () => {
     const raw = '\uFEFF[default]\nregion = a\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'default', keys: { region: 'b' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'default', keys: { region: 'b' } }])
     expect(out).toBe('\uFEFF[default]\nregion = b\n')
     expect(parseAwsIni(out)['default']!.keys.region).toBe('b')
   })
 
   it('file chỉ có comment: nối section mới, giữ comment', () => {
-    const out = editAwsIni('# hi\n', [
-      { op: 'upsertSection', section: 'a', keys: { region: 'x' } },
-    ])
+    const out = editAwsIni('# hi\n', [{ op: 'upsertSection', section: 'a', keys: { region: 'x' } }])
     expect(out).toBe('# hi\n\n[a]\nregion = x\n')
   })
 
@@ -705,23 +638,17 @@ describe('file bẩn kiểu thật', () => {
 
   it('khoá con trong block thụt trùng tên khoá thật thì KHÔNG bị sửa', () => {
     const raw = '[a]\ns3 =\n  region = nested\nregion = real\n'
-    const out = editAwsIni(raw, [
-      { op: 'upsertSection', section: 'a', keys: { region: 'changed' } },
-    ])
+    const out = editAwsIni(raw, [{ op: 'upsertSection', section: 'a', keys: { region: 'changed' } }])
     expect(out).toBe('[a]\ns3 =\n  region = nested\nregion = changed\n')
   })
 
   it('giá trị chứa `=` và `#` đi qua nguyên vẹn', () => {
-    const out = editAwsIni('[a]\n', [
-      { op: 'upsertSection', section: 'a', keys: { external_id: 'ab=cd#ef' } },
-    ])
+    const out = editAwsIni('[a]\n', [{ op: 'upsertSection', section: 'a', keys: { external_id: 'ab=cd#ef' } }])
     expect(parseAwsIni(out)['a']!.keys.external_id).toBe('ab=cd#ef')
   })
 
   it('xoá section ĐẦU file', () => {
-    const out = editAwsIni('[a]\nregion = 1\n\n[b]\nregion = 2\n', [
-      { op: 'deleteSection', section: 'a' },
-    ])
+    const out = editAwsIni('[a]\nregion = 1\n\n[b]\nregion = 2\n', [{ op: 'deleteSection', section: 'a' }])
     expect(out).toBe('[b]\nregion = 2\n')
   })
 
@@ -734,9 +661,7 @@ describe('tên profile mà AWS cho phép', () => {
   it.each(['229015218011_Offshore-Developer', 'a/b', 'a+b', 'a=b', 'a@b', 'a.b', 'a:b', 'a-b'])(
     '%s tạo và đọc lại được',
     (n: string) => {
-      const out = editAwsIni('', [
-        { op: 'upsertSection', section: `profile ${n}`, keys: { region: 'x' } },
-      ])
+      const out = editAwsIni('', [{ op: 'upsertSection', section: `profile ${n}`, keys: { region: 'x' } }])
       expect(Object.keys(parseAwsIni(out))).toEqual([`profile ${n}`])
     },
   )

@@ -22,8 +22,12 @@ import { READ_TERMINAL_TOOL_NAMES, TERMINAL_MCP_SERVER } from './read-terminal-t
 import { BROWSER_MCP_SERVER, BROWSER_TOOL_NAME } from './browser-tool.js'
 import { DEV_SERVER_MCP_SERVER, DEV_SERVER_TOOL_NAMES } from './dev-server-tool.js'
 import { CODE_INDEX_MCP_SERVER, CODE_INDEX_TOOL_NAMES } from './code-index-tool.js'
-import { SESSION_MESSAGING_MCP_SERVER, SESSION_MESSAGING_TOOL_NAMES } from './session-tools.js'
-import { TEAM_MCP_SERVER, TEAM_TOOL_NAMES } from './board-tools.js'
+import {
+  SESSION_MESSAGING_MCP_SERVER,
+  SESSION_MESSAGING_TOOL_NAMES,
+  TEAM_MCP_SERVER,
+  TEAM_TOOL_NAMES,
+} from './tool-names.js'
 import { INFRA_MCP_SERVER, INFRA_TOOL_NAMES } from './infra-tools.js'
 import { INFRA_APP_TOOL_NAMES } from './infra-app-tools.js'
 import { LOGTIME_MCP_SERVER, LOGTIME_TOOL_NAMES } from './logtime-tools.js'
@@ -57,14 +61,7 @@ const BRIDGED_SERVERS: readonly (readonly [string, readonly string[]])[] = [
     'awogssh',
     // Luật quyền cho nhóm này đã được đối chiếu thêm ở tầng cổng (`sshToolName`),
     // nhưng `allowedTools` thì không — nên chúng vẫn phải có mặt ở đây.
-    [
-      'ssh_terminal_run',
-      'ssh_exec',
-      'ssh_list_hosts',
-      'ssh_list_dir',
-      'ssh_read_file',
-      'ssh_write_file',
-    ],
+    ['ssh_terminal_run', 'ssh_exec', 'ssh_list_hosts', 'ssh_list_dir', 'ssh_read_file', 'ssh_write_file'],
   ],
   // Server tên trần `awog` (không hậu tố), đúng như nó được đăng ký.
   ['awog', ['source_list', 'source_create', 'source_test', 'source_oauth_trigger']],
@@ -83,9 +80,7 @@ export const AWOG_BRIDGE_SERVER_OF: Readonly<Record<string, string>> = Object.fr
 // dùng thấy source "đã kết nối" mà model không có lấy một tool nào của nó. Biên
 // tạo source dùng danh sách này để từ chối trước (`sources/reserved.ts`), và
 // migration dùng nó để đổi tên một id MCP di trú thay vì để nó xung đột im lặng.
-export const AWOG_RESERVED_MCP_SERVER_NAMES: readonly string[] = [
-  ...new Set(BRIDGED_SERVERS.map(([server]) => server)),
-]
+export const AWOG_RESERVED_MCP_SERVER_NAMES: readonly string[] = [...new Set(BRIDGED_SERVERS.map(([server]) => server))]
 
 const RESERVED_SERVER_NAMES = new Set(AWOG_RESERVED_MCP_SERVER_NAMES)
 

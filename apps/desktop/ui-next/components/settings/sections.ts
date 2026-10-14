@@ -35,6 +35,8 @@ export const SETTINGS_GROUPS = [
       { id: 'sessions', labelKey: 'settings.nav.sessions', icon: 'sessions' },
       { id: 'git', labelKey: 'settings.nav.git', icon: 'git' },
       { id: 'wiki', labelKey: 'settings.nav.wiki', icon: 'book' },
+      { id: 'browser', labelKey: 'settings.nav.browser', icon: 'globe' },
+      { id: 'userscripts', labelKey: 'userscripts.nav', icon: 'code' },
       { id: 'storage', labelKey: 'settings.nav.storage', icon: 'folder' },
     ],
   },

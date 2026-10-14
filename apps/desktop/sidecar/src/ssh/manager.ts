@@ -129,10 +129,7 @@ export interface Ssh2TransferOptions {
 }
 
 export interface Ssh2Sftp {
-  readdir(
-    location: string,
-    cb: (err: Ssh2Error | undefined, list: Ssh2SftpDirEntry[]) => void,
-  ): void
+  readdir(location: string, cb: (err: Ssh2Error | undefined, list: Ssh2SftpDirEntry[]) => void): void
   stat(path: string, cb: (err: Ssh2Error | undefined, stats: Ssh2SftpStats) => void): void
   lstat(path: string, cb: (err: Ssh2Error | undefined, stats: Ssh2SftpStats) => void): void
   mkdir(path: string, cb: (err: Ssh2Error | undefined) => void): void
@@ -186,28 +183,14 @@ export interface Ssh2Client {
   end(): Ssh2Client
   shell(window: Ssh2ShellWindow, callback: ChannelCallback): boolean
   exec(command: string, callback: ChannelCallback): boolean
-  forwardOut(
-    srcIP: string,
-    srcPort: number,
-    dstIP: string,
-    dstPort: number,
-    callback: ChannelCallback,
-  ): boolean
+  forwardOut(srcIP: string, srcPort: number, dstIP: string, dstPort: number, callback: ChannelCallback): boolean
   // SFTP subsystem (P3). One session per client, cached by connId in sftp.ts.
   sftp(callback: (err: Ssh2Error | undefined, sftp: Ssh2Sftp) => void): boolean
   // Remote forwarding (P4). forwardIn asks the server to listen on
   // bindAddr:bindPort; the callback yields the actual bound port (bindPort=0 →
   // server-assigned). Incoming connections surface as `tcp connection` events.
-  forwardIn(
-    bindAddr: string,
-    bindPort: number,
-    callback: (err: Ssh2Error | undefined, port: number) => void,
-  ): boolean
-  unforwardIn(
-    bindAddr: string,
-    bindPort: number,
-    callback: (err: Ssh2Error | undefined) => void,
-  ): boolean
+  forwardIn(bindAddr: string, bindPort: number, callback: (err: Ssh2Error | undefined, port: number) => void): boolean
+  unforwardIn(bindAddr: string, bindPort: number, callback: (err: Ssh2Error | undefined) => void): boolean
   on(event: 'ready' | 'close' | 'end', listener: () => void): Ssh2Client
   on(event: 'error', listener: (err: Ssh2Error) => void): Ssh2Client
   on(event: 'tcp connection', listener: TcpConnectionListener): Ssh2Client
@@ -512,10 +495,7 @@ class SshManager {
   // user-facing reason (surfaced by connectHeadless) and rejects the handshake —
   // an unknown/changed key is NEVER auto-accepted here (invariant, no strictHostKey
   // opt-out either: the agent path must be trusted out-of-band via the SSH tab).
-  private makeStrictHostVerifier(
-    host: SshHostConfig,
-    onReject: (reason: string) => void,
-  ): HostVerifier {
+  private makeStrictHostVerifier(host: SshHostConfig, onReject: (reason: string) => void): HostVerifier {
     return (keyBlob, verify) => {
       void (async () => {
         try {
@@ -568,9 +548,7 @@ class SshManager {
       // override, and lets an explicit 0 disable it (0 is not nullish).
       keepaliveInterval: host.options?.keepaliveIntervalMs ?? DEFAULT_KEEPALIVE_INTERVAL_MS,
       keepaliveCountMax: DEFAULT_KEEPALIVE_COUNT_MAX,
-      ...(host.options?.compression
-        ? { algorithms: { compress: ['zlib@openssh.com', 'zlib', 'none'] } }
-        : {}),
+      ...(host.options?.compression ? { algorithms: { compress: ['zlib@openssh.com', 'zlib', 'none'] } } : {}),
     }
     return new Promise<Ssh2Client>((resolvePromise, reject) => {
       let settled = false
@@ -667,11 +645,7 @@ class SshManager {
     }
   }
 
-  async connect(params: {
-    hostId: string
-    cols: number
-    rows: number
-  }): Promise<{ connId: string }> {
+  async connect(params: { hostId: string; cols: number; rows: number }): Promise<{ connId: string }> {
     const ssh2 = await this.getSsh2OrThrow()
     const host = await loadHost(params.hostId)
     if (!host) throw new Error(`SSH host not found: ${params.hostId}`)
@@ -852,10 +826,7 @@ class SshManager {
     if (!resolved) throw new Error('No pending host-key prompt for this connection')
   }
 
-  async exec(
-    connId: string,
-    command: string,
-  ): Promise<{ stdout: string; stderr: string; code: number }> {
+  async exec(connId: string, command: string): Promise<{ stdout: string; stderr: string; code: number }> {
     const record = this.connections.get(connId)
     if (!record) throw new Error('Unknown connection')
     record.lastActivityAt = Date.now()
@@ -931,7 +902,10 @@ class SshManager {
         settled = true
         clearTimeout(timer)
         delete record.capture
-        resolvePromise({ output: extractShellOutput(buf, command, nonce), exitCode })
+        resolvePromise({
+          output: extractShellOutput(buf, command, nonce),
+          exitCode,
+        })
       }
       const timer = setTimeout(() => finish(-1), EXEC_TIMEOUT_MS)
       timer.unref?.()
@@ -964,15 +938,13 @@ class SshManager {
       // Run the command, then print the sentinel with its exit code. Two writes so
       // the command's own output lands before the marker.
       stream.write(command + '\n')
-      stream.write("printf '\\n__AWOG_END_" + nonce + "_%d__\\n' \"$?\"\n")
+      stream.write("printf '\\n__AWOG_END_" + nonce + '_%d__\\n\' "$?"\n')
     })
   }
 
   // Auth-only probe: connect, then immediately tear down. Host-key verification
   // still applies (a test can prompt via ssh:host-key-prompt on the same connId).
-  async test(params: {
-    hostId: string
-  }): Promise<{ status: 'connected' | 'error'; error?: string }> {
+  async test(params: { hostId: string }): Promise<{ status: 'connected' | 'error'; error?: string }> {
     const host = await loadHost(params.hostId)
     if (!host) return { status: 'error', error: `SSH host not found: ${params.hostId}` }
     const ssh2 = await getSsh2()
@@ -1008,22 +980,13 @@ class SshManager {
     }
   }
 
-  private emitStatus(
-    connId: string,
-    hostId: string,
-    status: SshConnectionStatus,
-    error?: string,
-  ): void {
+  private emitStatus(connId: string, hostId: string, status: SshConnectionStatus, error?: string): void {
     emit('ssh:status-changed', { connId, hostId, status, ...(error ? { error } : {}) })
   }
 
   // Best-effort: persist last-known status onto the host config so the card shows
   // something on reload. Never throws (a persist failure must not break connect).
-  private async persistStatus(
-    hostId: string,
-    status: SshConnectionStatus,
-    error?: string,
-  ): Promise<void> {
+  private async persistStatus(hostId: string, status: SshConnectionStatus, error?: string): Promise<void> {
     try {
       const host = await loadHost(hostId)
       if (!host) return

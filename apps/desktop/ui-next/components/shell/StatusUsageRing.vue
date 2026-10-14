@@ -1,5 +1,13 @@
 <template>
-  <div v-if="!hidden" class="donut-wrap" :title="account.display">
+  <div
+    v-if="!hidden"
+    ref="wrapEl"
+    class="donut-wrap"
+    :title="account.display"
+    @click="toggleOpen"
+    @pointerenter="hovered = true"
+    @pointerleave="hovered = false"
+  >
     <svg class="donut" viewBox="0 0 36 36" aria-hidden="true">
       <circle class="donut-bg" cx="18" cy="18" r="15.9155" />
       <circle
@@ -13,20 +21,36 @@
     </svg>
     <span class="donut-pct tnum" :style="{ color: ringColor }">{{ ringPct }}%</span>
 
-    <!-- Hover tooltip: account label + every reported limit row -->
-    <div class="donut-pop">
-      <div class="donut-pop-hd">{{ account.label }} · {{ account.provider }}</div>
-      <div v-if="loading && !rows.length" class="donut-pop-hint">
-        {{ t('statusbar.usage.loading') }}
+    <!-- Card usage: TELEPORT ra <body> — `.wbsbar`/`.statusbar` đều có
+         `overflow: hidden` nên popover `position:absolute` mở lên trên bị
+         cắt mất phần nằm ngoài thanh (đo: a11y thấy node nhưng không vẽ).
+         Vị trí đo từ donut bằng usePopoverAnchor (prefer above). -->
+    <Teleport to="body">
+      <div v-if="isOpen" class="donut-backdrop" @click="closePop" />
+      <div
+        v-if="cardVisible"
+        ref="popEl"
+        class="donut-pop"
+        :style="popStyle"
+        :class="{ pin: isOpen }"
+        @pointerenter="hovered = true"
+        @pointerleave="hovered = false"
+      >
+        <div class="donut-pop-hd">{{ account.label }} · {{ account.provider }}</div>
+        <div v-if="loading && !rows.length" class="donut-pop-hint">
+          {{ t('statusbar.usage.loading') }}
+        </div>
+        <div v-else-if="!rows.length" class="donut-pop-hint">
+          {{ t('statusbar.usage.none') }}
+        </div>
+        <div v-for="r in rows" :key="r.type" class="donut-row">
+          <span class="donut-rlbl">{{ r.label }}</span>
+          <span class="donut-rbar"><i :style="{ width: `${r.pct}%`, background: r.color }" /></span>
+          <span class="donut-rpct tnum" :style="{ color: r.color }">{{ r.pct }}%</span>
+          <span class="donut-rreset tnum">{{ r.reset }}</span>
+        </div>
       </div>
-      <div v-else-if="!rows.length" class="donut-pop-hint">{{ t('statusbar.usage.none') }}</div>
-      <div v-for="r in rows" :key="r.type" class="donut-row">
-        <span class="donut-rlbl">{{ r.label }}</span>
-        <span class="donut-rbar"><i :style="{ width: `${r.pct}%`, background: r.color }" /></span>
-        <span class="donut-rpct tnum" :style="{ color: r.color }">{{ r.pct }}%</span>
-        <span class="donut-rreset tnum">{{ r.reset }}</span>
-      </div>
-    </div>
+    </Teleport>
   </div>
 </template>
 
@@ -39,12 +63,45 @@
 //
 // NOTE: classes are prefixed `donut-`, not `ring-` — a bare `.ring` class collides
 // with Tailwind's `ring` utility (a blue box-shadow), which framed each donut.
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { AccountOption } from '~/composables/useAccounts'
 import { useAccountUsage } from '~/composables/useAccountUsage'
+import { useEscToClose } from '~/composables/useEscToClose'
+import { usagePopoverOpenId } from '~/composables/useUsagePopover'
+import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
 
 const props = defineProps<{ account: AccountOption }>()
 const { t } = useI18n()
+
+const wrapEl = ref<HTMLElement | null>(null)
+const popEl = ref<HTMLElement | null>(null)
+const hovered = ref(false)
+
+// Card hiện khi pinned bằng click (usagePopoverOpenId — singleton app-wide, chỉ
+// một card mở) HOẶC đang hover donut/card. Card teleport ra body + đo vị trí
+// từ donut (thanh status bar overflow:hidden clip mọi popover mở lên trên).
+const isOpen = computed(() => usagePopoverOpenId.value === props.account.id)
+const cardVisible = computed(() => isOpen.value || hovered.value)
+const { style: popStyle } = usePopoverAnchor(wrapEl, popEl, cardVisible, {
+  prefer: 'above',
+  align: 'left',
+  gap: 8,
+  width: 240,
+  minHeight: 0,
+  maxHeight: 420,
+})
+
+// Click pins the card; mở thì refresh để số trong card luôn tươi.
+function toggleOpen() {
+  usagePopoverOpenId.value = isOpen.value ? null : props.account.id
+  if (isOpen.value) void refresh()
+}
+
+function closePop() {
+  usagePopoverOpenId.value = null
+}
+
+useEscToClose(() => isOpen.value, closePop)
 
 const { entries, loading, error, refresh } = useAccountUsage(() => ({
   provider: props.account.provider.toLowerCase(),
@@ -145,15 +202,13 @@ function onFocus() {
   line-height: 12px;
 }
 
-/* Tooltip — hidden until hover; opens upward, anchored to the donut. Left-anchored
-   since the donuts sit at the left edge of the bar (opens rightward, no off-screen). */
+/* Card teleports to <body> and is positioned `fixed` by usePopoverAnchor's
+   inline style — the bar's overflow:hidden would clip any absolute child.
+   Visibility is the template's v-if (hover OR click-pin), not CSS. */
 .donut-pop {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
+  position: fixed;
   z-index: 95;
-  display: none;
-  width: 240px;
+  display: flex;
   flex-direction: column;
   gap: 7px;
   padding: 11px 12px;
@@ -164,9 +219,17 @@ function onFocus() {
   border: 1px solid var(--input);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
+  overflow-y: auto;
+  /* app-region resolve ở tầng WINDOW: `.top` là vùng drag — card neo ở thanh
+     đáy nên phần trên có thể lọt strip drag 52px nếu cửa sổ thấp; thiếu
+     no-drag thì OS nuốt tương tác (trap app-shell.css:2418). */
+  -webkit-app-region: no-drag;
 }
-.donut-wrap:hover .donut-pop {
-  display: flex;
+.donut-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 94;
+  -webkit-app-region: no-drag;
 }
 .donut-pop-hd {
   font-size: var(--fs-sm);

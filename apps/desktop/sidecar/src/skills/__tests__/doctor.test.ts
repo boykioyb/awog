@@ -16,8 +16,7 @@ import {
 } from '../doctor.js'
 
 // Một SKILL.md "khoẻ mạnh" làm mốc: mọi test chỉ đổi đúng thứ nó muốn kiểm.
-const GOOD_DESCRIPTION =
-  'Use this when the user asks to fill in a PDF form or extract fields from a PDF file.'
+const GOOD_DESCRIPTION = 'Use this when the user asks to fill in a PDF form or extract fields from a PDF file.'
 const GOOD_BODY = `# PDF filler
 
 Steps to follow when the user hands you a PDF:
@@ -29,9 +28,7 @@ Steps to follow when the user hands you a PDF:
 Keep the original file untouched; always write a copy.`
 
 function build(patch: Partial<InspectInput> = {}, frontmatter?: string): InspectInput {
-  const fm =
-    frontmatter ??
-    ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---'].join('\n')
+  const fm = frontmatter ?? ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---'].join('\n')
   const raw = `${fm}\n${GOOD_BODY}\n`
   return {
     id: 'pdf-filler',
@@ -44,8 +41,7 @@ function build(patch: Partial<InspectInput> = {}, frontmatter?: string): Inspect
   }
 }
 
-const rules = (input: InspectInput): SkillIssueRule[] =>
-  inspectSkillContent(input).issues.map((i) => i.rule)
+const rules = (input: InspectInput): SkillIssueRule[] => inspectSkillContent(input).issues.map((i) => i.rule)
 
 describe('inspectSkillContent — skill khoẻ mạnh', () => {
   it('không báo vấn đề nào', () => {
@@ -95,9 +91,7 @@ describe('inspectSkillContent — frontmatter', () => {
   })
 
   it('tên hiển thị lệch id chỉ là info', () => {
-    const fm = ['---', 'name: Invoice Parser', `description: "${GOOD_DESCRIPTION}"`, '---'].join(
-      '\n',
-    )
+    const fm = ['---', 'name: Invoice Parser', `description: "${GOOD_DESCRIPTION}"`, '---'].join('\n')
     const { issues } = inspectSkillContent(build({}, fm))
     const mismatch = issues.find((i) => i.rule === 'name-id-mismatch')
     expect(mismatch?.severity).toBe('info')
@@ -177,9 +171,7 @@ describe('inspectSkillContent — va chạm giữa các skill', () => {
 
 describe('inspectSkillContent — thân bài', () => {
   it('body rỗng là error', () => {
-    const raw = ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---', ''].join(
-      '\n',
-    )
+    const raw = ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---', ''].join('\n')
     const found = rules(build({ raw, fileBytes: Buffer.byteLength(raw) }))
     expect(found).toContain('body-empty')
     expect(found).not.toContain('body-thin')
@@ -187,9 +179,7 @@ describe('inspectSkillContent — thân bài', () => {
 
   it('body quá mỏng là warn', () => {
     const thin = 'Fill the form when asked.'
-    const raw = ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---', thin].join(
-      '\n',
-    )
+    const raw = ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---', thin].join('\n')
     const { issues } = inspectSkillContent(build({ raw, fileBytes: Buffer.byteLength(raw) }))
     const thinIssue = issues.find((i) => i.rule === 'body-thin')
     expect(thinIssue?.params).toMatchObject({ min: BODY_THIN_CHARS })
@@ -208,16 +198,12 @@ describe('inspectSkillContent — thân bài', () => {
 
 describe('inspectSkillContent — link tới file trong thư mục skill', () => {
   const withRefs = (body: string, assets: { path: string; bytes: number }[] = []): InspectInput => {
-    const raw = ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---', body].join(
-      '\n',
-    )
+    const raw = ['---', 'name: Pdf Filler', `description: "${GOOD_DESCRIPTION}"`, '---', body].join('\n')
     return build({ raw, fileBytes: Buffer.byteLength(raw), assets })
   }
 
   it('link markdown tới file không tồn tại là broken-link', () => {
-    const { issues } = inspectSkillContent(
-      withRefs('Run [the helper](scripts/fill.py) when the user asks.'),
-    )
+    const { issues } = inspectSkillContent(withRefs('Run [the helper](scripts/fill.py) when the user asks.'))
     expect(issues.find((i) => i.rule === 'broken-link')?.params).toMatchObject({
       target: 'scripts/fill.py',
     })
@@ -225,17 +211,13 @@ describe('inspectSkillContent — link tới file trong thư mục skill', () =>
 
   it('file có thật thì không báo', () => {
     const found = rules(
-      withRefs('Run [the helper](scripts/fill.py) when the user asks.', [
-        { path: 'scripts/fill.py', bytes: 400 },
-      ]),
+      withRefs('Run [the helper](scripts/fill.py) when the user asks.', [{ path: 'scripts/fill.py', bytes: 400 }]),
     )
     expect(found).not.toContain('broken-link')
   })
 
   it('path trong backtick cũng được kiểm khi nó trỏ vào thư mục kèm theo', () => {
-    expect(rules(withRefs('Read `references/schema.json` first when needed.'))).toContain(
-      'broken-link',
-    )
+    expect(rules(withRefs('Read `references/schema.json` first when needed.'))).toContain('broken-link')
     expect(rules(withRefs('Run `./setup.sh` when needed.'))).toContain('broken-link')
   })
 
@@ -245,16 +227,12 @@ describe('inspectSkillContent — link tới file trong thư mục skill', () =>
   })
 
   it('nhưng vẫn báo khi thư mục kèm theo đó có thật', () => {
-    const found = rules(withRefs('Open `src/index.ts` when asked.', [
-      { path: 'src/other.ts', bytes: 10 },
-    ]))
+    const found = rules(withRefs('Open `src/index.ts` when asked.', [{ path: 'src/other.ts', bytes: 10 }]))
     expect(found).toContain('broken-link')
   })
 
   it('URL ngoài và anchor không bị coi là file', () => {
-    const found = rules(
-      withRefs('See [docs](https://example.com/a.html) and [top](#intro) when unsure.'),
-    )
+    const found = rules(withRefs('See [docs](https://example.com/a.html) and [top](#intro) when unsure.'))
     expect(found).not.toContain('broken-link')
   })
 

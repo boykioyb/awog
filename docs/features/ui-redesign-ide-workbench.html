@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>AWOG · IDE Workbench — deep spec</title>
+<!--
+  Direction đã chốt: C — IDE workbench.
+  4 trạng thái của cùng layout:
+    S1 Session running + dock Terminal + checklist
+    S2 dock Browser (WebContentsView gắn trong dock)
+    S3 dock COLLAPSED + approval card + tab strip overflow
+    S4 dock Diff
+  Cuối file: anatomy spec (đo + rules) để đưa vào ADR/implement.
+-->
+<link href="https://fonts.googleapis.com/css2?family=Inter+Variable:opsz,wght@14..32,400;14..32,510;14..32,590;14..32,680&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { background:#000; }
+  body { font-family:'Inter Variable',-apple-system,BlinkMacSystemFont,sans-serif; -webkit-font-smoothing:antialiased; }
+  .wrap { padding:28px; }
+  h1.opt { font-size:15px; font-weight:590; color:#f7f8f8; margin:36px 0 4px; }
+  .opt-note { font-size:12px; color:#6e6e73; margin-bottom:14px; max-width:1280px; line-height:1.6; }
+  .opt-note b { color:#a1a1a6; font-weight:510; }
+  svg { display:block; }
+  kbd { font:500 10px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace; color:#5f636b; background:#171a1f; border:1px solid #22252b; border-radius:4px; padding:2px 5px; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+
+  :root {
+    --bg:#090a0c; --l1:#0e1013; --l2:#131519; --l3:#191b20; --input:#171a1f;
+    --hover:#202329; --active:#262a31; --border:#22252b; --border2:#33363e; --hair:rgba(255,255,255,.055);
+    --t1:#f4f6f8; --t2:#d2d7de; --t3:#8b9099; --t4:#5f636b;
+    --ac:#10b981; --acText:#021410; --acDim:rgba(16,185,129,.14); --acBorder:rgba(16,185,129,.42);
+    --warn:#f0bf00; --err:#eb5757; --blue:#3caefe; --ok:#27a644;
+  }
+  .frame { width:1280px; height:780px; display:flex; overflow:hidden; background:var(--bg); color:var(--t1); font-size:13px; border:1px solid var(--border); }
+
+  .ibtn { width:26px; height:26px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--t4); flex:none; }
+  .ibtn:hover { background:var(--hover); color:var(--t1); }
+  .ibtn svg { width:15px; height:15px; }
+  .chip { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 8px; border-radius:999px; font-size:11px; font-weight:510; border:1px solid var(--border2); color:var(--t3); white-space:nowrap; }
+  .chip.run { color:var(--ac); border-color:var(--acBorder); background:var(--acDim); }
+  .spin { width:9px; height:9px; border:1.5px solid var(--ac); border-top-color:transparent; border-radius:50%; animation:sp .9s linear infinite; }
+  @keyframes sp { to { transform:rotate(360deg); } }
+  .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+
+  /* ---------- rail ---------- */
+  .rail { width:46px; flex:none; background:var(--l1); border-right:1px solid var(--hair); display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:4px; }
+  .rail .logo { width:26px; height:26px; border-radius:8px; background:var(--ac); color:var(--acText); display:flex; align-items:center; justify-content:center; font-weight:680; font-size:12px; margin-bottom:10px; }
+  .rail a { width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--t4); }
+  .rail a.on { background:var(--hover); color:var(--t1); }
+  .rail a svg { width:16px; height:16px; }
+  .rail .sp { flex:1; }
+  .rail .badge { position:relative; }
+  .rail .badge::after { content:''; position:absolute; top:2px; right:2px; width:6px; height:6px; border-radius:50%; background:var(--ac); box-shadow:0 0 0 2px var(--l1); }
+
+  /* ---------- header ---------- */
+  .hd { height:36px; flex:none; display:flex; align-items:center; gap:10px; padding:0 12px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .hd .crumb { font-size:11.5px; color:var(--t4); }
+  .hd .crumb b { color:var(--t2); font-weight:510; }
+  .hd .grow { flex:1; }
+  .ctx { color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; display:flex; align-items:center; gap:5px; white-space:nowrap; }
+  .ctx .bar { width:42px; height:3px; border-radius:2px; background:var(--active); overflow:hidden; }
+  .ctx .bar i { display:block; height:100%; background:var(--ac); }
+
+  /* ---------- session tab strip ---------- */
+  .tabs { height:34px; flex:none; display:flex; align-items:flex-end; gap:2px; padding:0 8px; box-shadow:inset 0 -1px 0 var(--hair); overflow:hidden; }
+  .tabi { display:flex; align-items:center; gap:7px; height:28px; padding:0 10px; border-radius:7px 7px 0 0; font-size:12px; color:var(--t3); border:1px solid transparent; border-bottom:0; max-width:200px; flex:none; }
+  .tabi .tt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .tabi.on { background:var(--l2); color:var(--t1); border-color:var(--border); }
+  .tabi .x { color:var(--t4); font-size:11px; opacity:0; }
+  .tabi:hover .x, .tabi.on .x { opacity:1; }
+  .tabi .spin { width:7px; height:7px; }
+  .tabi.of { color:var(--t4); font-family:ui-monospace,Menlo,monospace; font-size:11px; padding:0 8px; }
+  .tabi.add { color:var(--t4); }
+
+  /* ---------- transcript ---------- */
+  .center { flex:1; display:flex; justify-content:center; min-height:0; }
+  .measure { width:780px; max-width:100%; padding:0 24px; display:flex; flex-direction:column; min-height:0; }
+  .tcol { min-width:0; display:flex; flex-direction:column; flex:1; }
+  .msgs { flex:1; overflow:hidden; padding:8px 0 0; }
+  .msg { padding:14px 0; border-bottom:1px solid var(--hair); }
+  .msg:last-child { border-bottom:0; }
+  .who { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+  .who .nm { font-weight:590; font-size:12.5px; }
+  .who .mdl { color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .who .tm { margin-left:auto; color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .av { width:20px; height:20px; border-radius:6px; background:var(--hover); display:flex; align-items:center; justify-content:center; color:var(--t3); flex:none; }
+  .av svg { width:12px; height:12px; }
+  .av.ai { background:var(--acDim); color:var(--ac); }
+  .msg p { font-size:13px; line-height:1.55; color:var(--t2); }
+  .msg p + p { margin-top:8px; }
+  code.ic { font-family:ui-monospace,Menlo,monospace; font-size:12px; background:rgba(255,255,255,.05); padding:1px 5px; border-radius:4px; }
+  .tool { margin-top:10px; border:1px solid var(--border); border-radius:10px; background:var(--l1); overflow:hidden; }
+  .tool .thead { display:flex; align-items:center; gap:8px; padding:7px 10px; color:var(--t3); font-size:12px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .tool .thead .ok { color:var(--ac); }
+  .tool .thead .dur { margin-left:auto; color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .tool .tbody { padding:8px 10px; font-size:12px; color:var(--t2); font-family:ui-monospace,Menlo,monospace; }
+  .codeblk { margin-top:10px; border:1px solid var(--border); border-radius:10px; background:#0b0c0e; overflow:hidden; }
+  .codeblk .chead { display:flex; padding:6px 10px; color:var(--t4); font-size:10.5px; font-family:ui-monospace,Menlo,monospace; box-shadow:inset 0 -1px 0 var(--hair); }
+  .codeblk pre { padding:10px 12px; font-family:ui-monospace,Menlo,monospace; font-size:12px; line-height:1.55; color:#c9d1d9; overflow:hidden; }
+  .codeblk .add { color:#7ee2b8; }
+  .caret { display:inline-block; width:7px; height:14px; background:var(--ac); border-radius:1px; vertical-align:-2px; animation:blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity:0; } }
+
+  /* approval card */
+  .appr { margin-top:10px; border:1px solid rgba(240,191,0,.35); border-radius:10px; background:linear-gradient(180deg, rgba(240,191,0,.06), transparent 60%), var(--l1); overflow:hidden; }
+  .appr .ahead { display:flex; align-items:center; gap:8px; padding:8px 12px; font-size:12px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .appr .ahead .warn { color:var(--warn); }
+  .appr .ahead b { font-weight:590; color:var(--t1); }
+  .appr .abody { padding:8px 12px; font-family:ui-monospace,Menlo,monospace; font-size:12px; color:var(--t2); }
+  .appr .aact { display:flex; align-items:center; gap:8px; padding:8px 12px 10px; }
+  .abtn { height:24px; padding:0 10px; border-radius:7px; font-size:11.5px; font-weight:510; display:inline-flex; align-items:center; gap:6px; }
+  .abtn.yes { background:var(--ac); color:var(--acText); }
+  .abtn.alw { background:var(--input); border:1px solid var(--border2); color:var(--t2); }
+  .abtn.no { color:var(--t3); }
+  .abtn kbd { font-size:9.5px; padding:1px 4px; }
+  .abtn.yes kbd { color:var(--acText); background:rgba(0,0,0,.18); border-color:transparent; }
+
+  /* ---------- composer ---------- */
+  .cwrap { flex:none; padding:10px 0 12px; }
+  .cbox { border:1px solid var(--border2); border-radius:11px; background:var(--input); }
+  .cbox .ta { padding:10px 12px 4px; color:var(--t4); font-size:13px; min-height:38px; }
+  .cbox .ta .hint { font-size:10.5px; font-family:ui-monospace,Menlo,monospace; }
+  .cbar { display:flex; align-items:center; gap:6px; padding:6px 8px 8px; }
+  .pill { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border-radius:6px; font-size:11.5px; color:var(--t3); }
+  .pill:hover { background:var(--hover); color:var(--t1); }
+  .send { width:26px; height:26px; border-radius:8px; background:var(--ac); color:var(--acText); display:flex; align-items:center; justify-content:center; flex:none; }
+  .send svg { width:14px; height:14px; }
+
+  /* ---------- bottom dock ---------- */
+  .dock { flex:none; border-top:1px solid var(--border); background:var(--l1); display:flex; flex-direction:column; position:relative; }
+  .dock .grip { position:absolute; top:-3px; left:0; right:0; height:6px; cursor:row-resize; }
+  .docktabs { height:30px; flex:none; display:flex; align-items:center; gap:2px; padding:0 8px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .dt { height:24px; padding:0 9px; display:flex; align-items:center; gap:5px; border-radius:6px; color:var(--t4); font-size:11.5px; font-weight:510; }
+  .dt.on { background:var(--hover); color:var(--t1); }
+  .dt svg { width:13px; height:13px; }
+  .dt .bdg { background:var(--active); border-radius:8px; padding:0 5px; font-size:10px; font-family:ui-monospace,Menlo,monospace; }
+  .dt .bdg.warn { background:rgba(240,191,0,.15); color:var(--warn); }
+  .dockbody { flex:1; display:flex; min-height:0; }
+  .dock.closed .dockbody { display:none; }
+  .dock.closed { height:30px; border-top-color:var(--hair); }
+
+  /* dock: terminal */
+  .term { flex:1; padding:8px 14px; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; line-height:1.7; color:var(--t2); overflow:hidden; }
+  .term .p { color:var(--ac); } .term .d { color:var(--t4); }
+  .dockside { width:250px; flex:none; border-left:1px solid var(--hair); padding:10px 12px; overflow:hidden; }
+  .psec { color:var(--t4); font-size:10.5px; font-weight:510; margin:12px 0 6px; }
+  .psec:first-child { margin-top:0; }
+  .plan { display:flex; align-items:center; gap:8px; height:24px; font-size:12px; color:var(--t2); }
+  .plan .ck { width:13px; height:13px; border-radius:4px; flex:none; display:flex; align-items:center; justify-content:center; }
+  .plan.done .ck { background:var(--acDim); color:var(--ac); }
+  .plan.done .tt { color:var(--t4); text-decoration:line-through; text-decoration-color:var(--t4); }
+  .plan.now .ck { border:1.5px solid var(--ac); }
+  .plan.todo .ck { border:1px solid var(--border2); }
+  .plan .tt { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+  /* dock: browser */
+  .bwrap { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .btools { height:34px; flex:none; display:flex; align-items:center; gap:4px; padding:0 10px; box-shadow:inset 0 -1px 0 var(--hair); }
+  .btools .nav { display:flex; gap:2px; }
+  .btools .url { flex:1; display:flex; align-items:center; gap:7px; height:24px; padding:0 10px; margin:0 8px; background:var(--input); border:1px solid var(--border); border-radius:8px; color:var(--t3); font-size:11.5px; font-family:ui-monospace,Menlo,monospace; }
+  .btools .url .lock { color:var(--ac); }
+  .bpins { height:28px; flex:none; display:flex; align-items:center; gap:6px; padding:0 10px; overflow:hidden; box-shadow:inset 0 -1px 0 var(--hair); }
+  .bpin { display:inline-flex; align-items:center; gap:5px; height:20px; padding:0 9px; border-radius:999px; background:var(--l2); border:1px solid var(--hair); color:var(--t3); font-size:11px; white-space:nowrap; }
+  .bview { flex:1; background:#101216; padding:18px 22px; overflow:hidden; }
+  .bview .pg { max-width:560px; }
+  .bview h2 { font-size:16px; font-weight:590; color:var(--t1); margin-bottom:6px; }
+  .bview .sub { font-size:12px; color:var(--t3); margin-bottom:14px; }
+  .bview .card { border:1px solid var(--border); border-radius:10px; background:var(--l2); padding:12px 14px; margin-bottom:10px; }
+  .bview .card .t { font-size:12.5px; font-weight:510; color:var(--t2); margin-bottom:3px; }
+  .bview .card .s { font-size:11.5px; color:var(--t4); }
+
+  /* dock: diff */
+  .diff { flex:1; display:flex; min-height:0; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; }
+  .dfiles { width:220px; flex:none; border-right:1px solid var(--hair); overflow:hidden; }
+  .dfile { display:flex; align-items:center; gap:7px; height:26px; padding:0 12px; color:var(--t2); }
+  .dfile.on { background:var(--hover); color:var(--t1); }
+  .dfile .st { margin-left:auto; font-size:10.5px; }
+  .dfile .st .a { color:var(--ok); } .dfile .st .r { color:var(--err); }
+  .dcode { flex:1; overflow:hidden; padding:6px 0; line-height:1.7; }
+  .dcode .ln { display:flex; }
+  .dcode .no { width:44px; flex:none; text-align:right; padding-right:12px; color:var(--t4); font-size:10.5px; }
+  .dcode .tx { color:var(--t2); white-space:pre; }
+  .dcode .ln.add { background:rgba(39,166,68,.08); } .dcode .ln.add .tx { color:#7ee2b8; }
+  .dcode .ln.del { background:rgba(235,87,87,.08); } .dcode .ln.del .tx { color:#f0a0a0; }
+  .dcode .ln.hunk .tx { color:var(--blue); }
+
+  /* ---------- anatomy spec ---------- */
+  .spec { max-width:1280px; margin-top:44px; color:var(--t2); font-size:12.5px; }
+  .spec h2 { font-size:15px; font-weight:590; color:var(--t1); margin:26px 0 8px; }
+  .spec table { width:100%; border-collapse:collapse; }
+  .spec th { text-align:left; color:var(--t4); font-weight:510; font-size:11px; padding:6px 10px 6px 0; border-bottom:1px solid var(--border); }
+  .spec td { padding:6px 10px 6px 0; border-bottom:1px solid var(--hair); vertical-align:top; }
+  .spec td:first-child { color:var(--t1); font-weight:510; white-space:nowrap; }
+  .spec .m { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:var(--ac); }
+  .spec ul { padding-left:18px; margin:6px 0; }
+  .spec li { margin:3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ================= S1 ================= -->
+<h1 class="opt">S1 — Session running · dock Terminal + checklist</h1>
+<div class="opt-note">Trạng thái mặc định. Header 36px · tab strip 34px · transcript measure 780 · dock ~200px (kéo được, persist per-session). Checklist ghim cột phải của dock — luôn thấy tiến độ kể cả khi đang xem terminal.</div>
+<div class="frame sk">
+  <nav class="rail">
+    <div class="logo">A</div>
+    <a class="on badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></a>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h6"/></svg></a>
+    <div class="sp"></div>
+    <a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8m10-10 2.8-2.8"/></svg></a>
+  </nav>
+  <div class="stage" style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div class="hd">
+      <span class="crumb">awog / <b>Sessions</b></span>
+      <span class="chip run"><span class="spin"></span>Running · Sonnet 4.5</span>
+      <span class="grow"></span>
+      <span class="ctx">main ↗</span>
+      <span class="ctx"><span class="bar"><i style="width:21%"></i></span>41.2k/200k</span>
+      <span class="ibtn" title="Bookmark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="ibtn" title="Pop out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>
+      <span class="ibtn" title="More"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+    </div>
+    <div class="tabs">
+      <span class="tabi"><span class="dot" style="background:var(--blue)"></span><span class="tt">Review PR auth</span><span class="x">✕</span></span>
+      <span class="tabi on"><span class="spin"></span><span class="tt">Refactor transcript</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:var(--warn)"></span><span class="tt">Codex thread</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:#8b9099"></span><span class="tt">ADR 0094</span><span class="x">✕</span></span>
+      <span class="tabi add">＋</span>
+    </div>
+    <div class="center"><div class="measure"><div class="tcol">
+      <div class="msgs" data-slot="msgs"></div>
+      <div class="cwrap" data-slot="composer"></div>
+    </div></div></div>
+    <div class="dock" style="height:196px">
+      <div class="grip"></div>
+      <div class="docktabs">
+        <span class="dt on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Terminal</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Files <span class="bdg">12</span></span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M3 12h18"/></svg>Diff</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Plan</span>
+        <span style="flex:1"></span>
+        <span class="ctx" style="margin-right:6px">~/.awog · sidecar <span style="color:var(--ok)">●</span></span>
+        <span class="ibtn" style="width:22px;height:22px" title="Maximize"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m7 14 5-5 5 5"/></svg></span>
+        <span class="ibtn" style="width:22px;height:22px" title="Close ⌘J"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </div>
+      <div class="dockbody">
+        <div class="term">
+          <div><span class="p">awog</span> <span class="d">~/KyroTech/Projects/awog</span> <span style="color:var(--t4)">$</span> pnpm typecheck</div>
+          <div><span class="d">…</span> vue-tsc --noEmit</div>
+          <div><span class="d">apps/desktop/ui-next:</span> 0 errors <span class="d">(4.1s)</span></div>
+          <div><span class="p">awog</span> <span class="d">~/KyroTech/Projects/awog</span> <span style="color:var(--t4)">$</span> <span class="caret" style="height:12px"></span></div>
+        </div>
+        <div class="dockside" data-slot="plan"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= S2 ================= -->
+<h1 class="opt">S2 — dock: Browser (WebContentsView trong dock)</h1>
+<div class="opt-note">Dock cao ~380px khi mở Browser (auto-grow theo loại tool) · toolbar của tab browser nằm TRONG dock: nav · url mono · pins · copy · popout · WebContents gắn vào <b>.bview rect</b> (dùng sẵn browser:attach|bounds — chỉ đổi host rect) · dock đóng/detach khi minimize hoặc đổi tab. Tab agent đang dùng vẫn follow theo đúng cơ chế cũ.</div>
+<div class="frame sk">
+  <nav class="rail"><div class="logo">A</div><a class="on badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></a><div class="sp"></div><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8m10-10 2.8-2.8"/></svg></a></nav>
+  <div class="stage" style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div class="hd">
+      <span class="crumb">awog / <b>Sessions</b></span>
+      <span class="chip run"><span class="spin"></span>Running · Sonnet 4.5</span>
+      <span class="grow"></span>
+      <span class="ctx">main ↗</span><span class="ctx"><span class="bar"><i style="width:21%"></i></span>41.2k/200k</span>
+      <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+    </div>
+    <div class="tabs">
+      <span class="tabi"><span class="dot" style="background:var(--blue)"></span><span class="tt">Review PR auth</span><span class="x">✕</span></span>
+      <span class="tabi on"><span class="spin"></span><span class="tt">Refactor transcript</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:var(--warn)"></span><span class="tt">Codex thread</span><span class="x">✕</span></span>
+      <span class="tabi add">＋</span>
+    </div>
+    <div class="center"><div class="measure"><div class="tcol">
+      <div class="msgs">
+        <div class="msg"><div class="who"><span class="av ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">sonnet-4.5</span><span class="tm">14:05</span></div>
+        <p>Mở doc Vue để đối chiếu API của <code class="ic">v-memo</code> — đang xem ở dock Browser bên dưới.</p></div>
+      </div>
+      <div class="cwrap" data-slot="composer"></div>
+    </div></div></div>
+    <div class="dock" style="height:388px">
+      <div class="grip"></div>
+      <div class="docktabs">
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Terminal</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Files <span class="bdg">12</span></span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M3 12h18"/></svg>Diff</span>
+        <span class="dt on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser <span class="bdg">2</span></span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Plan</span>
+        <span style="flex:1"></span>
+        <span class="ibtn" style="width:22px;height:22px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m7 14 5-5 5 5"/></svg></span>
+        <span class="ibtn" style="width:22px;height:22px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </div>
+      <div class="dockbody"><div class="bwrap">
+        <div class="btools">
+          <span class="nav"><span class="ibtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m15 18-6-6 6-6"/></svg></span><span class="ibtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m9 18 6-6-6-6"/></svg></span><span class="ibtn"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 12a9 9 0 1 1-9-9m9 9a9 9 0 0 0-9-9m9 9H3m9 9a9 9 0 0 1-9-9 9 9 0 0 1 9 9z"/></svg></span></span>
+          <span class="url"><span class="lock"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>vuejs.org/api/built-in-directives.html#v-memo</span>
+          <span class="ibtn" title="Pin"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 17v5M9 10.7a1 1 0 0 0 1-1.3L8.4 4h7.2l-1.6 5.4a1 1 0 0 0 1 1.3l2.5 2.5a1 1 0 0 1-.7 1.7H7.2a1 1 0 0 1-.7-1.7z"/></svg></span>
+          <span class="ibtn" title="Copy URL"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
+          <span class="ibtn" title="Pop out"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg></span>
+        </div>
+        <div class="bpins">
+          <span class="bpin"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>github.com/awog/pull/412</span>
+          <span class="bpin">docs.anthropic.com · sdk options</span>
+          <span class="bpin">pms.sora-techs.com/wiki</span>
+        </div>
+        <div class="bview"><div class="pg">
+          <h2>v-memo</h2>
+          <div class="sub">Built-in Directives — Vue.js API reference</div>
+          <div class="card"><div class="t">v-memo="[depA, depB]"</div><div class="s">Memoizes a sub-tree of the template. Skips updates when none of the dependencies changed — same result as a manual shouldUpdate check.</div></div>
+          <div class="card"><div class="t">Dùng cho list lớn</div><div class="s">v-memo với dependency là identity ổn định (eid) tránh re-render toàn bộ transcript khi stream chunk mới đến…</div></div>
+        </div></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= S3 ================= -->
+<h1 class="opt">S3 — dock collapsed + approval card + tab overflow</h1>
+<div class="opt-note">Dock thu còn strip 30px (⌘J, hoặc bấm tab để bung — Plan tab có badge vàng vì có item chờ). Approval card nằm TRONG transcript: border amber, mono command, 3 action + kbd (⏎ approve · ⇧⏎ always · esc deny). Tab strip overflow: tab xẹt sang phải thay vì co — « +N » mở dropdown list đầy đủ.</div>
+<div class="frame sk">
+  <nav class="rail"><div class="logo">A</div><a class="on badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></a><div class="sp"></div><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8m10-10 2.8-2.8"/></svg></a></nav>
+  <div class="stage" style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div class="hd">
+      <span class="crumb">awog / <b>Sessions</b></span>
+      <span class="chip" style="color:var(--warn);border-color:rgba(240,191,0,.35);background:rgba(240,191,0,.08)"><span class="dot" style="background:var(--warn)"></span>Waiting approval</span>
+      <span class="grow"></span>
+      <span class="ctx">main ↗</span><span class="ctx"><span class="bar"><i style="width:21%"></i></span>41.2k/200k</span>
+      <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+    </div>
+    <div class="tabs">
+      <span class="tabi"><span class="dot" style="background:var(--blue)"></span><span class="tt">Review PR auth</span><span class="x">✕</span></span>
+      <span class="tabi on"><span class="dot" style="background:var(--warn)"></span><span class="tt">Refactor transcript</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:#8b9099"></span><span class="tt">Codex thread</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:#8b9099"></span><span class="tt">ADR 0094</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:var(--ok)"></span><span class="tt">Logtime store</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:#8b9099"></span><span class="tt">MCP idle</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:var(--blue)"></span><span class="tt">Wiki backlinks</span><span class="x">✕</span></span>
+      <span class="tabi of">« +3</span>
+      <span class="tabi add">＋</span>
+    </div>
+    <div class="center"><div class="measure"><div class="tcol">
+      <div class="msgs">
+        <div class="msg"><div class="who"><span class="av ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">sonnet-4.5</span><span class="tm">14:07</span></div>
+        <p>Trước khi xoá phần dead code, chạy lint:fix một lượt để format ổn định:</p>
+        <div class="appr">
+          <div class="ahead"><span class="warn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4m0 4h.01"/></svg></span><b>Bash</b><span class="mono" style="color:var(--t3)">wants to run</span></div>
+          <div class="abody">pnpm lint:fix && pnpm format</div>
+          <div class="aact">
+            <span class="abtn yes">Approve <kbd>⏎</kbd></span>
+            <span class="abtn alw">Always allow <kbd>⇧⏎</kbd></span>
+            <span class="abtn no">Deny <kbd>esc</kbd></span>
+          </div>
+        </div>
+        </div>
+      </div>
+      <div class="cwrap" data-slot="composer"></div>
+    </div></div></div>
+    <div class="dock closed">
+      <div class="docktabs">
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Terminal</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Files <span class="bdg">12</span></span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M3 12h18"/></svg>Diff</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Plan <span class="bdg warn">1</span></span>
+        <span style="flex:1"></span>
+        <kbd>⌘J</kbd>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= S4 ================= -->
+<h1 class="opt">S4 — dock: Diff</h1>
+<div class="opt-note">Diff trong dock: file list trái (220px) + code phải — thay cho tab Diff hiện tại ở right panel. Trạng thái "đã xong" (chip xanh lá, không spinner).</div>
+<div class="frame sk">
+  <nav class="rail"><div class="logo">A</div><a class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9"/></svg></a><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></a><div class="sp"></div><a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4m0 14v4M4.2 4.2l2.8 2.8m10 10 2.8 2.8M1 12h4m14 0h4M4.2 19.8l2.8-2.8m10-10 2.8-2.8"/></svg></a></nav>
+  <div class="stage" style="flex:1;display:flex;flex-direction:column;min-width:0">
+    <div class="hd">
+      <span class="crumb">awog / <b>Sessions</b></span>
+      <span class="chip" style="color:var(--ok);border-color:rgba(39,166,68,.35);background:rgba(39,166,68,.08)">Done · Sonnet 4.5</span>
+      <span class="grow"></span>
+      <span class="ctx">refactor/transcript-store ↗</span><span class="ctx"><span class="bar"><i style="width:83%"></i></span>166k/200k</span>
+      <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="ibtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg></span>
+    </div>
+    <div class="tabs">
+      <span class="tabi"><span class="dot" style="background:var(--blue)"></span><span class="tt">Review PR auth</span><span class="x">✕</span></span>
+      <span class="tabi on"><span class="dot" style="background:var(--ok)"></span><span class="tt">Refactor transcript</span><span class="x">✕</span></span>
+      <span class="tabi"><span class="dot" style="background:var(--warn)"></span><span class="tt">Codex thread</span><span class="x">✕</span></span>
+      <span class="tabi add">＋</span>
+    </div>
+    <div class="center"><div class="measure"><div class="tcol">
+      <div class="msgs">
+        <div class="msg"><div class="who"><span class="av ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">sonnet-4.5</span><span class="tm">14:11</span></div>
+        <p>Xong. <code class="ic">sessions.ts</code> 5.2k → 3.1k dòng; transcript render qua <code class="ic">useSessionTranscript</code> + <code class="ic">v-memo</code>. Diff ở dock bên dưới — 3 file, +84 −61.</p></div>
+      </div>
+      <div class="cwrap" data-slot="composer"></div>
+    </div></div></div>
+    <div class="dock" style="height:300px">
+      <div class="grip"></div>
+      <div class="docktabs">
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Terminal</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Files <span class="bdg">12</span></span>
+        <span class="dt on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3v18M3 12h18"/></svg>Diff <span class="bdg">3</span></span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/></svg>Browser</span>
+        <span class="dt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Plan</span>
+        <span style="flex:1"></span>
+        <span class="ctx" style="margin-right:6px">+84 −61 · staged</span>
+        <span class="ibtn" style="width:22px;height:22px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m7 14 5-5 5 5"/></svg></span>
+        <span class="ibtn" style="width:22px;height:22px"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+      </div>
+      <div class="dockbody"><div class="diff">
+        <div class="dfiles">
+          <div class="dfile on"><span class="mono">useSessionTranscript.ts</span><span class="st"><span class="a">+92</span></span></div>
+          <div class="dfile"><span class="mono">sessions.ts</span><span class="st"><span class="a">+14</span> <span class="r">−58</span></span></div>
+          <div class="dfile"><span class="mono">SessionDetail.vue</span><span class="st"><span class="a">+3</span> <span class="r">−3</span></span></div>
+        </div>
+        <div class="dcode">
+          <div class="ln hunk"><span class="no"></span><span class="tx">@@ composables/useSessionTranscript.ts @@</span></div>
+          <div class="ln add"><span class="no">1</span><span class="tx">+ export function useSessionTranscript(id: Ref&lt;number&gt;) {</span></div>
+          <div class="ln add"><span class="no">2</span><span class="tx">+   const store = useSessionsStore()</span></div>
+          <div class="ln add"><span class="no">3</span><span class="tx">+   const msgs = computed(() =&gt; store.byId(id.value)?.msgs ?? [])</span></div>
+          <div class="ln"><span class="no">4</span><span class="tx">    const display = useTranscriptDisplay(msgs)</span></div>
+          <div class="ln del"><span class="no">5</span><span class="tx">-   return { msgs, display }</span></div>
+          <div class="ln add"><span class="no">5</span><span class="tx">+   return { msgs, display, usage: store.usageOf(id.value) }</span></div>
+          <div class="ln"><span class="no">6</span><span class="tx">  }</span></div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= ANATOMY ================= -->
+<div class="spec">
+  <h2>Anatomy — đo &amp; rules</h2>
+  <table>
+    <tr><th>Vùng</th><th>Kích thước</th><th>Rule</th></tr>
+    <tr><td>Rail</td><td class="m">46px</td><td>Icon-only, badge dot khi có session running ở group đó. Không label.</td></tr>
+    <tr><td>Header</td><td class="m">36px</td><td>Crumb + status chip + ctx meter + ≤3 icon actions. Không title (title sống ở tab).</td></tr>
+    <tr><td>Tab strip</td><td class="m">34px, tab max 200px</td><td>Chỉ SESSIONS đang mở. Overflow xẹt ngang, « +N » dropdown. Middle-click/⌘W đóng. Dot = status: running=spinner, waiting=amber, done=green, idle=gray, error=red.</td></tr>
+    <tr><td>Transcript</td><td class="m">measure 780px, pad-x 24</td><td>Căn giữa; tool/code block vẫn full measure. Approval card nằm inline sau message.</td></tr>
+    <tr><td>Composer</td><td class="m">min 38px</td><td>Ctx meter + send ở cbar phải. Model/effort pill trái.</td></tr>
+    <tr><td>Dock strip</td><td class="m">30px closed</td><td>⌘J toggle. Badge count per tab (files changed, pending plan). Close = strip only, KHÔNG unmount terminal PTY.</td></tr>
+    <tr><td>Dock open</td><td class="m">120–60% stage, default 200px; Browser auto ≥360</td><td>Kéo grip 6px. Height persist per-session. Right-side checklist chỉ render khi tab KHÔNG phải Plan.</td></tr>
+    <tr><td>Browser host</td><td class="m">.bview rect</td><td>WebContentsView attach theo rect này; dock minimize/đổi tab → detach (tái dùng cơ chế panel cũ). Popout vẫn sống ngoài dock.</td></tr>
+    <tr><td>Sessions index</td><td class="m">—</td><td>Rail "Sessions" mở trang list riêng (group theo project như cũ); click session → mở/kích hoạt tab. Tab bar KHÔNG thay list page.</td></tr>
+  </table>
+  <h2>Decision ledger</h2>
+  <table>
+    <tr><th>Decision</th><th>Source</th><th>Why</th></tr>
+    <tr><td>Bottom dock thay right panel</td><td>VSCode/JetBrains tool windows + AWOG: transcript bị kẹp giữa 2 cột</td><td>Trả full-width cho nội dung, giữ 1 bề mặt tool duy nhất thay vì 7 tab trên cột phải hẹp.</td></tr>
+    <tr><td>Session = tab ngang</td><td>Editor tabs (VSCode/Zed)</td><td>Switch O(1) + status dot visible; list dọc vẫn tồn tại ở trang Sessions index.</td></tr>
+    <tr><td>Checklist pin cạnh dock</td><td>ADR 0069 — checklist là shared state, cần luôn thấy</td><td>Dock đóng → checklist vẫn reachable qua Plan tab badge.</td></tr>
+    <tr><td>Header 36px, bỏ title</td><td>Linear app spec (top breadcrumb bar mỏng)</td><td>Title trùng với tab đang active — xoá khỏi header, giữ crumb + status.</td></tr>
+    <tr><td>Mono cho metadata (ctx, ids, durations, chips)</td><td>Linear/Raycast + AWOG là telemetry-heavy tool</td><td>Cần nới rule "mono chỉ code" trong ADR — metadata tabular, căn cột.</td></tr>
+    <tr><td>Bỏ status bar</td><td>AWOG hiện tại + Linear (không có bottom bar)</td><td>Branch/ctx vào header + composer; sidecar status vào dock strip.</td></tr>
+  </table>
+</div>
+
+</div>
+
+<template id="msgs">
+  <div class="msg">
+    <div class="who"><span class="av"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="nm">kyro</span><span class="tm">14:02</span></div>
+    <p>Tách <code class="ic">useSessionTranscript</code> ra khỏi <code class="ic">sessions.ts</code> — file đang 5.2k dòng, render transcript chậm khi &gt; 200 message. Giữ nguyên IPC contract.</p>
+  </div>
+  <div class="msg">
+    <div class="who"><span class="av ai"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg></span><span class="nm">claude</span><span class="mdl">sonnet-4.5</span><span class="tm">14:02</span></div>
+    <p>Rõ. Kế hoạch: (1) tách composable <code class="ic">useSessionTranscript</code> nhận <code class="ic">sessionId</code>, giữ derive <code class="ic">displayMsgs</code>; (2) chuyển step-render sang <code class="ic">v-memo</code> theo <code class="ic">eid</code>; (3) đo lại bằng trace <code class="ic">step.latency</code>.</p>
+    <div class="tool">
+      <div class="thead"><span class="ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="mono">Bash</span><span class="mono" style="color:var(--t3)">rg "export function" stores/sessions.ts | wc -l</span><span class="dur">0.4s</span></div>
+      <div class="tbody">→ 147</div>
+    </div>
+  </div>
+</template>
+
+<template id="composer">
+  <div class="cbox">
+    <div class="ta">Reply… <span class="hint">⏎ send · ⇧⏎ newline</span></div>
+    <div class="cbar">
+      <span class="pill"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 5v14M5 12h14"/></svg></span>
+      <span class="pill">Sonnet 4.5 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+      <span class="pill">High <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></span>
+      <span style="flex:1"></span>
+      <span class="ctx"><span class="bar"><i style="width:21%"></i></span>41.2k/200k</span>
+      <span class="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4z"/><path d="M22 2 11 13"/></svg></span>
+    </div>
+  </div>
+</template>
+
+<template id="plan">
+  <div class="psec">Checklist · 3/5</div>
+  <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">Đọc call-site của displayMsgs</span></div>
+  <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">Tách useSessionTranscript</span></div>
+  <div class="plan done"><span class="ck"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><span class="tt">v-memo theo eid</span></div>
+  <div class="plan now"><span class="ck"></span><span class="tt">pnpm typecheck + lint</span></div>
+  <div class="plan todo"><span class="ck"></span><span class="tt">Xoá dead code ở store</span></div>
+</template>
+
+<script>
+  const T = (id) => document.getElementById(id).content.cloneNode(true)
+  for (const h of document.querySelectorAll('[data-slot="msgs"]')) h.appendChild(T('msgs'))
+  for (const h of document.querySelectorAll('[data-slot="composer"]')) h.appendChild(T('composer'))
+  for (const h of document.querySelectorAll('[data-slot="plan"]')) h.appendChild(T('plan'))
+</script>
+</body>
+</html>

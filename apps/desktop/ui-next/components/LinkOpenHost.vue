@@ -71,8 +71,15 @@ const onKey = (e: KeyboardEvent): void => {
 // bấm lên scrim chỉ preventDefault — giờ xuyên qua, coi như một dismiss để không
 // mở context menu dưới một câu hỏi đang chờ.
 const onDocDismiss = (e: MouseEvent): void => {
-  if (!pending.value) return
+  const p = pending.value
+  if (!p) return
   if ((e.target as HTMLElement | null)?.closest?.('.lop')) return
+  // Cú click ĐÃ MỞ card cũng nổi bọt tới đây: 13 nút mở link bằng lệnh (hàng Link
+  // trong Info, "Open on GitHub"…) gọi `openLink` trong click handler — card được đặt
+  // giữa chừng của chính event đó rồi bị đóng ngay ở bubble phase, người dùng không
+  // thấy gì (lỗi thật 2026-10-13: nút mở link trong Info). Event sinh TRƯỚC lúc card
+  // mở ⇒ không phải "bấm ra ngoài".
+  if (e.timeStamp <= p.openedAt) return
   cancelPending()
 }
 

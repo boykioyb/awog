@@ -4,17 +4,7 @@
 // Run với vitest: `npx vitest run src/runtime/__tests__/permission-rules.test.ts`
 // (vitest chưa nằm trong devDeps của sidecar — xem git/__tests__/discover.test.ts).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  realpath,
-  rm,
-  stat,
-  symlink,
-  utimes,
-  writeFile,
-} from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import type { BeforeToolCallContext } from '@earendil-works/pi-agent-core'
@@ -538,10 +528,7 @@ describe('rule file integrity (F2)', () => {
   })
 
   it('preserves existing entries — including unusable ones — when appending', async () => {
-    const file = await writeUserRules([
-      { rule: 'Bash(rm -rf /)', action: 'deny' },
-      { rule: 'Bash' },
-    ])
+    const file = await writeUserRules([{ rule: 'Bash(rm -rf /)', action: 'deny' }, { rule: 'Bash' }])
     await expect(saveRuleToFile(file, rule('Bash(git status)'))).resolves.toEqual({ saved: true })
     const doc = JSON.parse(await readFile(file, 'utf8')) as { rules: { rule: string }[] }
     expect(doc.rules.map((r) => r.rule)).toEqual(['Bash(rm -rf /)', 'Bash', 'Bash(git status)'])
@@ -610,9 +597,7 @@ describe('makeBeforeToolCall — a DENY rule beats every early return (F3)', () 
   it('blocks a non-gated read tool in execute mode', async () => {
     await denyRule('Read(/home/u/.ssh/**)')
     const hook = makeBeforeToolCall(undefined, 'execute')
-    await expect(
-      hook(toolCtx('Read', { file_path: '/home/u/.ssh/id_rsa' })),
-    ).resolves.toMatchObject({ block: true })
+    await expect(hook(toolCtx('Read', { file_path: '/home/u/.ssh/id_rsa' }))).resolves.toMatchObject({ block: true })
     // Không có luật khớp ⇒ tool đọc vẫn chạy thẳng, không hỏi.
     await expect(hook(toolCtx('Read', { file_path: '/home/u/notes.md' }))).resolves.toBeUndefined()
   })
@@ -620,25 +605,19 @@ describe('makeBeforeToolCall — a DENY rule beats every early return (F3)', () 
   it('blocks WebFetch — a tool the gate never prompts for', async () => {
     await denyRule('WebFetch')
     const hook = makeBeforeToolCall(undefined, 'execute')
-    await expect(hook(toolCtx('WebFetch', { url: 'https://evil.example' }))).resolves.toMatchObject(
-      { block: true },
-    )
+    await expect(hook(toolCtx('WebFetch', { url: 'https://evil.example' }))).resolves.toMatchObject({ block: true })
   })
 
   it('blocks an SSH tool before sshApprovalMode auto is honoured', async () => {
     await denyRule('ssh_exec')
     const hook = makeBeforeToolCall(undefined, 'execute', undefined, false, undefined, 'auto')
-    await expect(
-      hook(toolCtx('ssh_exec', { host: 'box', command: 'whoami' })),
-    ).resolves.toMatchObject({ block: true })
+    await expect(hook(toolCtx('ssh_exec', { host: 'box', command: 'whoami' }))).resolves.toMatchObject({ block: true })
     // Dạng bắc cầu của Claude SDK phải chịu cùng một luật.
-    await expect(
-      hook(toolCtx('mcp__awogssh__ssh_exec', { host: 'box', command: 'whoami' })),
-    ).resolves.toMatchObject({ block: true })
+    await expect(hook(toolCtx('mcp__awogssh__ssh_exec', { host: 'box', command: 'whoami' }))).resolves.toMatchObject({
+      block: true,
+    })
     // Tool SSH khác không bị luật này chạm tới.
-    await expect(
-      hook(toolCtx('ssh_list_dir', { host: 'box', path: '/tmp' })),
-    ).resolves.toBeUndefined()
+    await expect(hook(toolCtx('ssh_list_dir', { host: 'box', path: '/tmp' }))).resolves.toBeUndefined()
   })
 
   it('blocks a gated tool even with auto-approve on', async () => {
@@ -741,9 +720,7 @@ describe('listRulesInFile / deleteRuleFromFile (F10)', () => {
       { rule: 'Bash(git push)', action: 'deny' },
       { rule: 'Bash(git status)', action: 'allow' },
     ])
-    await expect(
-      deleteRuleFromFile(file, { rule: 'Bash(git push)', action: 'allow' }),
-    ).resolves.toEqual({ removed: 1 })
+    await expect(deleteRuleFromFile(file, { rule: 'Bash(git push)', action: 'allow' })).resolves.toEqual({ removed: 1 })
     expect(await readRules(file)).toEqual([
       { rule: 'Bash(git push)', action: 'deny' },
       { rule: 'Bash(git status)', action: 'allow' },
@@ -765,22 +742,19 @@ describe('listRulesInFile / deleteRuleFromFile (F10)', () => {
       { rule: 'Bash(git status)', action: 'allow' },
       { nonsense: true },
     ])
-    await expect(
-      deleteRuleFromFile(file, { rule: 'Bash(git status)', action: 'allow' }),
-    ).resolves.toEqual({ removed: 1 })
-    expect(await readRules(file)).toEqual([
-      { rule: 'Bash(pnpm lint)', action: 'alow' },
-      { nonsense: true },
-    ])
+    await expect(deleteRuleFromFile(file, { rule: 'Bash(git status)', action: 'allow' })).resolves.toEqual({
+      removed: 1,
+    })
+    expect(await readRules(file)).toEqual([{ rule: 'Bash(pnpm lint)', action: 'alow' }, { nonsense: true }])
   })
 
   it('never touches the file when nothing matched', async () => {
     const file = userRuleFile()
     await writeRules(file, [{ rule: 'Bash(git status)', action: 'allow' }])
     const before = await readFile(file, 'utf8')
-    await expect(
-      deleteRuleFromFile(file, { rule: 'Bash(git status)', action: 'deny' }),
-    ).resolves.toEqual({ removed: 0 })
+    await expect(deleteRuleFromFile(file, { rule: 'Bash(git status)', action: 'deny' })).resolves.toEqual({
+      removed: 0,
+    })
     await expect(readFile(file, 'utf8')).resolves.toBe(before)
   })
 
@@ -789,17 +763,15 @@ describe('listRulesInFile / deleteRuleFromFile (F10)', () => {
     await mkdir(dirname(file), { recursive: true })
     const corrupt = '{ "rules": [ { "rule": "Bash(rm -rf /)", "action": "deny" } '
     await writeFile(file, corrupt)
-    await expect(
-      deleteRuleFromFile(file, { rule: 'Bash(rm -rf /)', action: 'deny' }),
-    ).rejects.toThrow(/corrupt/i)
+    await expect(deleteRuleFromFile(file, { rule: 'Bash(rm -rf /)', action: 'deny' })).rejects.toThrow(/corrupt/i)
     await expect(readFile(file, 'utf8')).resolves.toBe(corrupt)
   })
 
   it('reports 0 for a missing file instead of creating one', async () => {
     const file = userRuleFile()
-    await expect(
-      deleteRuleFromFile(file, { rule: 'Bash(git status)', action: 'allow' }),
-    ).resolves.toEqual({ removed: 0 })
+    await expect(deleteRuleFromFile(file, { rule: 'Bash(git status)', action: 'allow' })).resolves.toEqual({
+      removed: 0,
+    })
     await expect(stat(file)).rejects.toThrow()
   })
 
@@ -813,9 +785,9 @@ describe('listRulesInFile / deleteRuleFromFile (F10)', () => {
       projectPath: project,
     })
 
-    await expect(
-      deleteRuleFromFile(userFile, { rule: 'Bash(git status)', action: 'allow' }),
-    ).resolves.toEqual({ removed: 1 })
+    await expect(deleteRuleFromFile(userFile, { rule: 'Bash(git status)', action: 'allow' })).resolves.toEqual({
+      removed: 1,
+    })
     // Tầng project không bị chạm.
     expect(await readRules(projectFile)).toEqual([{ rule: 'Bash(git status)', action: 'allow' }])
     await expect(
@@ -826,9 +798,9 @@ describe('listRulesInFile / deleteRuleFromFile (F10)', () => {
       }),
     ).resolves.toBe('allow')
 
-    await expect(
-      deleteRuleFromFile(projectFile, { rule: 'Bash(git status)', action: 'allow' }),
-    ).resolves.toEqual({ removed: 1 })
+    await expect(deleteRuleFromFile(projectFile, { rule: 'Bash(git status)', action: 'allow' })).resolves.toEqual({
+      removed: 1,
+    })
     const doc = JSON.parse(await readFile(projectFile, 'utf8')) as { projectPath?: string }
     expect(doc.projectPath).toBe(project)
   })
@@ -842,9 +814,7 @@ describe('listRulesInFile / deleteRuleFromFile (F10)', () => {
     expect(removeSessionRule('ses-a', 'Bash(git status)', 'allow')).toBe(1)
     await expect(askBash('ses-a', 'git status')).resolves.toBe('deny')
     await expect(askBash('ses-b', 'git status')).resolves.toBe('allow')
-    expect(listSessionRuleTiers().map((t) => t.sessionId)).toEqual(
-      expect.arrayContaining(['ses-a', 'ses-b']),
-    )
+    expect(listSessionRuleTiers().map((t) => t.sessionId)).toEqual(expect.arrayContaining(['ses-a', 'ses-b']))
     clearSessionRules('ses-a')
     clearSessionRules('ses-b')
   })
@@ -857,14 +827,11 @@ describe('collectRuleCandidates', () => {
     args: { command },
     ...extra,
   })
-  const repeat = (call: HistoryToolCall, n: number): HistoryToolCall[] =>
-    Array.from({ length: n }, () => call)
+  const repeat = (call: HistoryToolCall, n: number): HistoryToolCall[] => Array.from({ length: n }, () => call)
 
   it('suggests a command only once it repeats at least three times', () => {
     const calls = [...repeat(bash('pnpm lint'), 3), ...repeat(bash('pnpm build'), 2)]
-    expect(collectRuleCandidates(calls).map((c) => [c.rule, c.count])).toEqual([
-      ['Bash(pnpm lint)', 3],
-    ])
+    expect(collectRuleCandidates(calls).map((c) => [c.rule, c.count])).toEqual([['Bash(pnpm lint)', 3]])
   })
 
   it('NEVER suggests a compound command, whatever the count', () => {
@@ -949,11 +916,7 @@ describe('scanHistoryToolCalls / suggestRulesFromHistory', () => {
   })
 
   // Một transcript tối thiểu: dòng 1 = header, dòng sau = message của agent.
-  async function writeSession(
-    id: string,
-    steps: unknown[],
-    projectId: string | null = null,
-  ): Promise<void> {
+  async function writeSession(id: string, steps: unknown[], projectId: string | null = null): Promise<void> {
     const dir = join(home, '.awog', 'sessions', id)
     await mkdir(dir, { recursive: true })
     const header = JSON.stringify({ id, title: id, projectId, messageCount: 1 })
@@ -1022,10 +985,7 @@ describe('scanHistoryToolCalls / suggestRulesFromHistory', () => {
       bashStep('pnpm test'),
     ])
     const first = await suggestRulesFromHistory()
-    expect(first.suggestions.map((s) => s.rule).sort()).toEqual([
-      'Bash(pnpm lint)',
-      'Bash(pnpm test)',
-    ])
+    expect(first.suggestions.map((s) => s.rule).sort()).toEqual(['Bash(pnpm lint)', 'Bash(pnpm test)'])
     // Mỗi gợi ý được park dưới một id — UI chỉ gửi id lại, không gửi nội dung luật.
     expect(new Set(first.suggestions.map((s) => s.id)).size).toBe(2)
 
@@ -1176,9 +1136,9 @@ describe('a detached command is not covered by the foreground rule (F12)', () =>
     // chứng lời gọi detached ĐI TỚI chỗ hỏi thay vì được luật ALLOW cho qua.
     const hook = makeBeforeToolCall(undefined, 'ask')
     await expect(hook(toolCtx('Bash', { command: 'npm run dev' }))).resolves.toBeUndefined()
-    await expect(
-      hook(toolCtx('Bash', { command: 'npm run dev', run_in_background: true })),
-    ).resolves.toMatchObject({ block: true })
+    await expect(hook(toolCtx('Bash', { command: 'npm run dev', run_in_background: true }))).resolves.toMatchObject({
+      block: true,
+    })
   })
 })
 
@@ -1207,22 +1167,18 @@ describe('isSafeToolInputOverride (F13)', () => {
 
 describe('ruleMatchesOverriddenInput (F13)', () => {
   it('accepts an override that leaves the rule subject alone', () => {
-    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'git status' })).toBe(
-      true,
-    )
+    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'git status' })).toBe(true)
     // Tham số không tham gia vào luật (timeout) thì không ảnh hưởng.
-    expect(
-      ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'git status', timeout: 500 }),
-    ).toBe(true)
-    expect(ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/a.ts' })).toBe(
-      true,
-    )
+    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'git status', timeout: 500 })).toBe(true)
+    expect(ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/a.ts' })).toBe(true)
   })
 
   it('rejects an override that changes what will actually run', () => {
-    expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), { command: 'rm -rf /' })).toBe(
-      false,
-    )
+    expect(
+      ruleMatchesOverriddenInput(rule('Bash(git status)'), {
+        command: 'rm -rf /',
+      }),
+    ).toBe(false)
     expect(ruleMatchesOverriddenInput(rule('Bash(git status)'), {})).toBe(false)
     expect(
       ruleMatchesOverriddenInput(rule('Bash(npm run dev)'), {
@@ -1230,9 +1186,7 @@ describe('ruleMatchesOverriddenInput (F13)', () => {
         run_in_background: true,
       }),
     ).toBe(false)
-    expect(
-      ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/secrets.ts' }),
-    ).toBe(false)
+    expect(ruleMatchesOverriddenInput(rule('Write(/repo/a.ts)'), { file_path: '/repo/secrets.ts' })).toBe(false)
   })
 })
 
@@ -1272,10 +1226,7 @@ describe('an approved input override cannot walk past a DENY rule (F13)', () => 
   })
 
   it('refuses a prototype-polluting override instead of applying it', async () => {
-    const hostile = JSON.parse('{"__proto__":{"polluted":true},"command":"ls"}') as Record<
-      string,
-      unknown
-    >
+    const hostile = JSON.parse('{"__proto__":{"polluted":true},"command":"ls"}') as Record<string, unknown>
     const args = { command: 'ls' }
     const hook = makeBeforeToolCall(approveWith(hostile), 'ask')
     await expect(hook(toolCtx('Bash', args))).resolves.toMatchObject({ block: true })
@@ -1372,9 +1323,9 @@ describe('sessions.permission — alwaysAllow + updatedInput (F13)', () => {
     await expect(dispatch('sessions.permission', params)).rejects.toThrow(/Invalid params/)
     expect(({} as Record<string, unknown>).polluted).toBeUndefined()
     // Yêu cầu vẫn còn park (chưa ai trả lời) ⇒ dọn bằng một lượt trả lời hợp lệ.
-    await expect(
-      dispatch('sessions.permission', { requestId, decision: 'deny' }),
-    ).resolves.toMatchObject({ resolved: true })
+    await expect(dispatch('sessions.permission', { requestId, decision: 'deny' })).resolves.toMatchObject({
+      resolved: true,
+    })
   })
 })
 
@@ -1428,9 +1379,7 @@ describe('SSH gate: "cho phép luôn" nhớ cho hết phiên', () => {
     expect(ui.asked()).toBe(1)
 
     // Khoá theo (tool, host): host khác vẫn phải hỏi.
-    await expect(
-      hook(toolCtx('ssh_exec', { host: 'other', command: 'whoami' })),
-    ).resolves.toBeUndefined()
+    await expect(hook(toolCtx('ssh_exec', { host: 'other', command: 'whoami' }))).resolves.toBeUndefined()
     expect(ui.asked()).toBe(2)
   })
 
@@ -1778,15 +1727,7 @@ describe('cwd của lượt được nối tới cổng', () => {
 
     // Có cwd ⇒ 'a.ts' giải thành /work/a.ts ⇒ khớp DENY: chặn vì ĐÚNG luật, và lý
     // do nói ra luật nào — thứ người dùng cần để đi sửa nó.
-    const withCwd = makeBeforeToolCall(
-      undefined,
-      'execute',
-      sessionId,
-      false,
-      undefined,
-      'prompt',
-      '/work',
-    )
+    const withCwd = makeBeforeToolCall(undefined, 'execute', sessionId, false, undefined, 'prompt', '/work')
     const wired = await withCwd(toolCtx('Write', args))
     expect(wired?.block).toBe(true)
     expect(wired?.reason).toContain('permission rule')
@@ -1796,15 +1737,7 @@ describe('cwd của lượt được nối tới cổng', () => {
     // Bất đối xứng cố ý: gốc là thứ suy ra được, đoán sai theo chiều CẤP QUYỀN là
     // leo thang. Có cwd cũng không đổi điều đó.
     addSessionRule(sessionId, rule('Write(/work/**)'))
-    const hook = makeBeforeToolCall(
-      undefined,
-      'ask',
-      sessionId,
-      false,
-      undefined,
-      'prompt',
-      '/work',
-    )
+    const hook = makeBeforeToolCall(undefined, 'ask', sessionId, false, undefined, 'prompt', '/work')
     // ALLOW không khớp ⇒ vẫn phải đi qua đường hỏi (không có canUseTool ⇒ chặn).
     const res = await hook(toolCtx('Write', { file_path: 'a.ts' }))
     expect(res?.block).toBe(true)
@@ -1881,8 +1814,7 @@ describe('ALLOW không đi ra ngoài qua symlink (F11c)', () => {
     await rm(root, { recursive: true, force: true })
   })
 
-  const ask = (toolName: string, args: unknown) =>
-    evaluatePermissionRules({ toolName, args, sessionId })
+  const ask = (toolName: string, args: unknown) => evaluatePermissionRules({ toolName, args, sessionId })
 
   it('symlink trỏ RA NGOÀI vùng cho phép ⇒ không cấp, rơi về hỏi', async () => {
     await symlink(outside, join(repo, 'alias'))

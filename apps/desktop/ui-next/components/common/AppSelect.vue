@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootRef" class="asel" :style="{ width }">
+  <div ref="rootRef" class="asel" :class="{ sm: size === 'sm' }" :style="{ width }">
     <button
       ref="triggerRef"
       type="button"
@@ -67,6 +67,8 @@ const props = withDefaults(
     placeholder?: string
     width?: string
     disabled?: boolean
+    // 'sm' = trigger cao `--ctrl-h-sm` (hàng toolbar dày đặc); mặc định giữ `--ctrl-h`.
+    size?: 'default' | 'sm'
     // Ô tìm kiếm trong menu (combobox) — cho danh sách dài như project/repo.
     searchable?: boolean
     searchPlaceholder?: string
@@ -76,6 +78,7 @@ const props = withDefaults(
     placeholder: '',
     width: 'auto',
     disabled: false,
+    size: 'default',
     searchable: false,
     searchPlaceholder: '',
     emptyLabel: 'No matches',
@@ -222,6 +225,11 @@ onBeforeUnmount(() => {
   cursor: pointer;
   font-family: var(--sans);
   box-shadow: var(--shadow-sm);
+}
+.asel.sm .aseltrigger {
+  height: var(--ctrl-h-sm);
+  padding: 0 8px;
+  gap: 6px;
 }
 .aseltrigger:focus-visible {
   outline: none;

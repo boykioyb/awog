@@ -6,14 +6,14 @@ Trước bản này, trình duyệt của agent **không có bề mặt nào đ�
 
 ## Mở bằng cách nào
 
-| Đường | Ở đâu |
-|---|---|
-| **Nút Browser ở status bar** | thanh dưới cùng, cạnh nút Files — một cú bấm, chỉ hiện khi có session đang mở |
-| View picker của Session | nút Workspace ở header → chọn **Browser** |
-| Nút `+` trong panel | thêm view vào panel đang mở |
-| Tray → *Toggle browser window* | mở tab đang active ra **cửa sổ riêng** (popout) |
+| Đường                                     | Ở đâu                                                                                  |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Nút Browser ở status bar**              | thanh dưới cùng, cạnh nút Files — một cú bấm, chỉ hiện khi có session đang mở          |
+| View picker của Session                   | nút Workspace ở header → chọn **Browser**                                              |
+| Nút `+` trong panel                       | thêm view vào panel đang mở                                                            |
+| Tray → _Toggle browser window_            | mở tab đang active ra **cửa sổ riêng** (popout)                                        |
 | Menu `⋯` → **Picture in Picture** · `⇧⌘B` | card nổi trong app giữ view SỐNG — kéo/resize được (xem "Picture-in-Picture" bên dưới) |
-| **Auto** — `browserAutoPip` | agent duyệt web mà không ai hiển thị trang ⇒ card PiP tự hiện |
+| **Auto** — `browserAutoPip`               | agent duyệt web mà không ai hiển thị trang ⇒ card PiP tự hiện                          |
 
 Tab được **mount lười và giữ mounted** như Terminal: chưa mở thì không tốn Chromium nào, mở rồi thì trang (và trạng thái đăng nhập) sống qua mọi lần đổi tab.
 
@@ -22,7 +22,7 @@ Tab được **mount lười và giữ mounted** như Terminal: chưa mở thì 
 - **Tab strip** — mỗi tab của agent một chip: **favicon** của trang (fallback icon globe; spinner đè lên đúng chỗ đó khi tab đang tải), tên tab, `×` để đóng; `+` để mở tab mới. Strip cập nhật **theo từng lần agent điều hướng**, không cần refresh. Favicon đi đường `page-favicon-updated` trên `webContents` → `TabInfo.favicon` → `browser:changed`; URL icon là string do trang khai (L1) nên renderer chỉ gán vào `<img :src>` (chỉ chấp nhận `https?://` và `data:image/`, lỗi tải → globe), không innerHTML.
 - **URL bar** — hai chế độ một khung. **Không focus:** bản đọc — ổ khoá cho `https`, tam giác cảnh báo cho `http`, host nổi bật còn path/search/hash mờ (`--textDim`), scheme giấu đi; bấm vào (hay Tab tới) thì lớp đọc nhường chỗ cho ô nhập, focus + select-all đúng thói quen omnibox. **Đang focus:** input URL đầy đủ như cũ, `⏎` để đi (chuỗi gõ vẫn chuẩn hoá bởi `normalizeUserUrl` ở main). Trước/sau: `←` `→` `⟳`, rồi nút `⋯` gom mọi hành động trên trang + dock + popout + mở rộng.
 - **Thanh tiến trình** — vạch accent cao 2px dọc mép dưới hàng URL, chạy vô định (indeterminate — renderer không biết % tải của trang) khi `activeTab.loading`; tôn trọng `prefers-reduced-motion` bằng vạch đứng yên.
-- **Trang đã ghim** — dải chip dưới URL bar, chỉ hiện khi có pin. Bấm chip = mở tab mới trên trang đó; `×` để bỏ ghim; chip của trang đang xem được tô accent.
+- **Thanh bookmark** — dải chip dưới URL bar (bookmark + thư mục một cấp, `»` cho phần tràn), thay dải "ghim" cũ: xem [browser-profiles-bookmarks.md](browser-profiles-bookmarks.md). Bấm chip = điều hướng tab đang xem, ⌘-click = tab mới; ☆ trong ô URL thêm/sửa bookmark của trang đang xem; chip của trang đang xem được tô accent.
 - **Copy URL** — copy **URL đang tải thật** (`activeTab.url`), không phải chuỗi trong ô input (ô đó là thứ người dùng đang gõ). Icon đổi thành ✓ khoảng 1,4 giây.
 - **Khung trang** — chính trang web, tương tác trực tiếp bằng chuột/bàn phím.
 - **Panel tự theo tab agent đang dùng.** Agent gọi `tab_new`/`tab_select` giữa lượt thì panel chuyển theo — đó là khác biệt giữa "xem agent duyệt web" và "nhìn một tab cũ".
@@ -31,15 +31,15 @@ Tab được **mount lười và giữ mounted** như Terminal: chưa mở thì 
 
 Bố cục theo Claude, hai hàng: **hàng 1** = tab strip (`+` mở tab mới) bên trái, nhóm nút "cửa sổ" (`⋮` menu + `×` đóng) bên phải; **hàng 2** = `←` `→` `⟳` + ô URL + nút `⋯` + vạch tiến trình 2px. [BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue) giờ chỉ còn **ghép mảng + `surface`** — chi tiết sống trong [BrowserTabs.vue](../../apps/desktop/ui-next/components/browser/BrowserTabs.vue) (tab strip + `+`, favicon chip) và [BrowserNavBar.vue](../../apps/desktop/ui-next/components/browser/BrowserNavBar.vue) (nav + ô URL đọc/soạn + `⋯` + cả ba menu). Logic các mục menu nằm ở [useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts); sizing/dock/expand của panel nằm ở [useBrowserPanelSizing.ts](../../apps/desktop/ui-next/composables/useBrowserPanelSizing.ts). Nút `⋮` ở hàng 1 mở menu render trong NavBar qua `defineExpose`. Cả hai bề mặt dùng lại:
 
-| Bề mặt | Khung placeholder | Nhóm nút hàng 1 | Menu `⋯` |
-|---|---|---|---|
-| view Browser của panel — [WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | một hộp trong panel | `⋮` · `×` đóng view | trang (ghim · copy · dịch · trích · chọn) + split-view · mở rộng · **PiP** · popout |
-| cửa sổ popout — [pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | cả cửa sổ | `⋮` · `×` đóng cửa sổ | chỉ mục trang (dock/expand/popout vô nghĩa trong cửa sổ riêng) |
-| **card PiP** — [BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) | thân card nổi (Teleport body) | mini-bar riêng (không dùng BrowserChrome): favicon · title · **thu nhỏ** · panel · popout · `×` | — |
+| Bề mặt                                                                                                                        | Khung placeholder             | Nhóm nút hàng 1                                                                                 | Menu `⋯`                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| view Browser của panel — [WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | một hộp trong panel           | `⋮` · `×` đóng view                                                                             | trang (copy · dịch · trích · chọn) + split-view · mở rộng · **PiP** · popout |
+| cửa sổ popout — [pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue)                                             | cả cửa sổ                     | `⋮` · `×` đóng cửa sổ                                                                           | chỉ mục trang (dock/expand/popout vô nghĩa trong cửa sổ riêng)               |
+| **card PiP** — [BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue)                                 | thân card nổi (Teleport body) | mini-bar riêng (không dùng BrowserChrome): favicon · title · **thu nhỏ** · panel · popout · `×` | —                                                                            |
 
 `useEmbeddedBrowser` sống ở **bề mặt**, không ở chrome: rect dán vào hộp placeholder của chính bề mặt đó, nên mọi luật của composable (view phải đang thật sự hiện trong document, `onDeactivated`/`onActivated`, một-chủ-một-view) vẫn đo trên đúng cái hộp mà người dùng đang nhìn. Cửa sổ popout **không cần kênh IPC mới**: `browser:attach|bounds|detach` lấy cửa sổ đích từ `event.sender`, nên trang tự nhận view vào rect của mình. Nó cũng mount `AppGlobalHosts` — không có nó thì `confirm()` của "Xoá dữ liệu duyệt web", toast đường dẫn ảnh chụp và popover dịch đều im lặng trong cửa sổ đó.
 
-Ba nút "panel" (split-view / mở rộng ở menu `⋯`, đóng ở `×` hàng 1) **không** đi qua props của panel — panel không truyền handler xuống view: chúng ghi thẳng vào `settings.workspacePanel` (dock + cỡ, qua `useBrowserPanelSizing`) và gọi `useWorkspacePanel().toggleView('Browser')`, cùng đường mà nút Browser ở status bar dùng, nên SessionDetail vẫn là nơi duy nhất sở hữu danh sách view đang mở. Hệ quả đã biết: đổi dock sang mép **đang có view khác active** thì Browser vào đó dưới dạng tab *không* active (chọn tab active là việc của panel).
+Ba nút "panel" (split-view / mở rộng ở menu `⋯`, đóng ở `×` hàng 1) **không** đi qua props của panel — panel không truyền handler xuống view: chúng ghi thẳng vào `settings.workspacePanel` (dock + cỡ, qua `useBrowserPanelSizing`) và gọi `useWorkspacePanel().toggleView('Browser')`, cùng đường mà nút Browser ở status bar dùng, nên SessionDetail vẫn là nơi duy nhất sở hữu danh sách view đang mở. Hệ quả đã biết: đổi dock sang mép **đang có view khác active** thì Browser vào đó dưới dạng tab _không_ active (chọn tab active là việc của panel).
 
 ## Mở rộng panel: theo chỗ thật, không theo hằng số
 
@@ -51,10 +51,10 @@ Ba lỗi cùng gốc "renderer tưởng mình biết, nhưng không đo" (sửa 
 min(WP_MAX, 60% của hộp, hộp − sàn chat)      sàn chat: 320px (side) · 220px (bottom)
 ```
 
-| Row | Trước | Sau |
-|---|---|---|
-| 680 | panel 560 · chat **114** | panel 360 · chat 314 |
-| 1180 | panel 560 · chat 614 | **không đổi** (560 · 614) |
+| Row  | Trước                    | Sau                       |
+| ---- | ------------------------ | ------------------------- |
+| 680  | panel 560 · chat **114** | panel 360 · chat 314      |
+| 1180 | panel 560 · chat 614     | **không đổi** (560 · 614) |
 
 **2. Trần phải REACTIVE — và observer không được tự kích lại.** Bản vá đầu của luật trên đọc DOM trong một `computed` — mà cỡ cửa sổ không phải dep reactive nào, nên kéo cửa sổ từ 680 lên 1180 rồi thì nút vẫn nghĩ panel đã mở hết cỡ (đo: panel 360 mà nút hiện "Trả bảng về cỡ cũ"). Nay `room` là `ref`, cập nhật bằng `ResizeObserver` đặt trên **chính hộp flex chứa panel** — hộp đó co lại vì nhiều đường hơn là `window.resize` (gập danh sách phiên, mở panel mép kia).
 
@@ -74,8 +74,7 @@ shrinkTarget = min(WP_DEFAULT, expandTarget)          # không bao giờ vượt
 canExpand    = expandTarget − shrinkTarget > 4        # hết chỗ ⇒ nút TẮT
 ```
 
-`shrinkTarget` phải kẹp theo trần, nếu không thì trên hộp hẹp cú "thu lại" trả về 322 rồi bị watcher clamp kéo xuống ngay — hai bên đá qua đá lại. Và hết chỗ thì `canExpand` **tắt nút** (title: *"Không còn chỗ để mở rộng — hãy nới cửa sổ rộng ra"*): một con số trần thấp hơn mặc định là sự thật về chỗ trống, chỗ để nói ra nó là trạng thái nút chứ không phải giấu bằng cách nâng trần.
-
+`shrinkTarget` phải kẹp theo trần, nếu không thì trên hộp hẹp cú "thu lại" trả về 322 rồi bị watcher clamp kéo xuống ngay — hai bên đá qua đá lại. Và hết chỗ thì `canExpand` **tắt nút** (title: _"Không còn chỗ để mở rộng — hãy nới cửa sổ rộng ra"_): một con số trần thấp hơn mặc định là sự thật về chỗ trống, chỗ để nói ra nó là trạng thái nút chứ không phải giấu bằng cách nâng trần.
 
 ## Hai lỗi giao tiếp renderer ↔ main (cùng sửa 2026-09-09)
 
@@ -85,13 +84,13 @@ canExpand    = expandTarget − shrinkTarget > 4        # hết chỗ ⇒ nút T
 
 ## Menu `⋮`
 
-| Món | Làm gì |
-|---|---|
-| **Lưu ảnh chụp trang** | `browser.saveScreenshot(root)` → toast đường dẫn (rút về tương đối với workspace) và bấm toast để mở trong Finder. Không giải được project ⇒ **tắt** kèm hint "Chưa có thư mục dự án" — cửa sổ popout không có session nào để suy ra root. |
-| **Nhập cookie** | mở `WorkspaceBrowserImport` (trước bản này là một nút riêng trên thanh công cụ) |
-| **Quản lý site được phép** | [BrowserSitesModal.vue](../../apps/desktop/ui-next/components/browser/BrowserSitesModal.vue) — chọn `off` / `allowlist` (`AppSelect`, không `<select>` native) + danh sách host thêm/xoá, đọc `browser.sites()` và **ghi ngay** mỗi lần đổi qua `browser.setSites()` (không có nút Save: một chính sách bảo mật đang hiện trên màn hình mà chưa xuống đĩa là thứ dễ đọc sai nhất ở bề mặt này) |
-| **Mở link trong trình duyệt của app** | công tắc có ✓, nối thẳng vào `useLinkOpen()` mode: tick = `'app'`, bỏ tick = `'ask'` — không có state thứ hai |
-| **Xoá dữ liệu duyệt web** | `browser.clearData()` sau `useConfirm()` (destructive) |
+| Món                                   | Làm gì                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lưu ảnh chụp trang**                | `browser.saveScreenshot(root)` → toast đường dẫn (rút về tương đối với workspace) và bấm toast để mở trong Finder. Không giải được project ⇒ **tắt** kèm hint "Chưa có thư mục dự án" — cửa sổ popout không có session nào để suy ra root.                                                                                                                                                     |
+| **Nhập cookie**                       | mở `WorkspaceBrowserImport` (trước bản này là một nút riêng trên thanh công cụ)                                                                                                                                                                                                                                                                                                                |
+| **Quản lý site được phép**            | [BrowserSitesModal.vue](../../apps/desktop/ui-next/components/browser/BrowserSitesModal.vue) — chọn `off` / `allowlist` (`AppSelect`, không `<select>` native) + danh sách host thêm/xoá, đọc `browser.sites()` và **ghi ngay** mỗi lần đổi qua `browser.setSites()` (không có nút Save: một chính sách bảo mật đang hiện trên màn hình mà chưa xuống đĩa là thứ dễ đọc sai nhất ở bề mặt này) |
+| **Mở link trong trình duyệt của app** | công tắc có ✓, nối thẳng vào `useLinkOpen()` mode: tick = `'app'`, bỏ tick = `'ask'` — không có state thứ hai                                                                                                                                                                                                                                                                                  |
+| **Xoá dữ liệu duyệt web**             | `browser.clearData()` sau `useConfirm()` (destructive)                                                                                                                                                                                                                                                                                                                                         |
 
 Cố ý **không** có: "Open file", "Disable auto verify", "Persist sessions".
 
@@ -105,9 +104,9 @@ Nút **tắt khi không có text bôi đen**, và biết được điều đó p
 
 Nay `useSelectionTranslate` mang thêm `surface: 'dom' | 'browser'`:
 
-| Nguồn | Render ở đâu |
-|---|---|
-| `'dom'` — bôi đen trong DOM của app (transcript, preview) | popover nổi, neo vào selection (như cũ) |
+| Nguồn                                                       | Render ở đâu                                                                                                                                                                                |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'dom'` — bôi đen trong DOM của app (transcript, preview)   | popover nổi, neo vào selection (như cũ)                                                                                                                                                     |
 | `'browser'` — bôi đen **trong trang** của trình duyệt nhúng | [BrowserTranslateStrip.vue](../../apps/desktop/ui-next/components/browser/BrowserTranslateStrip.vue) — một dải trong **chrome**, tức vùng DOM ngoài rect của view ⇒ **không ai phải ẩn đi** |
 
 Chỉ CHỖ RENDER khác nhau: cả hai dùng chung state, cache theo `(lang, text)`, RPC `text.translate` và bộ chọn VI/EN/JA của cùng một composable. Strip in text thuần (không render markdown): nó cao 3–4 dòng trong thanh công cụ, và nội dung là văn bản từ một trang web (L1) — càng ít đường biến nó thành HTML càng tốt.
@@ -116,15 +115,15 @@ Chỉ CHỖ RENDER khác nhau: cả hai dùng chung state, cache theo `(lang, te
 
 ## Ba trạng thái thay cho trang
 
-| Trạng thái | Khi nào | Hiện gì |
-|---|---|---|
-| **Không khả dụng** | chạy trong browser-dev (`pnpm dev` ở :3031), không có shell Electron | "Trình duyệt nhúng chỉ có trong app desktop." |
-| **Đang ở chỗ khác** | tab đang hiển thị ở popout/cửa sổ khác (`shownElsewhere` do main báo) hoặc dock kia trong cùng cửa sổ (instance khác giữ `owner`) | [BrowserElsewhere.vue](../../apps/desktop/ui-next/components/browser/BrowserElsewhere.vue): icon + tiêu đề **phân biệt hai nơi đó** + gợi ý + nút **Hiện ở đây** |
-| **Trang trắng** | `about:blank` hoặc chưa có tab nào (`empty` = `!hasPage()` trong composable) | [BrowserEmptyState.vue](../../apps/desktop/ui-next/components/browser/BrowserEmptyState.vue): icon + hướng dẫn ngắn + **pin dạng card** bấm-mở được (tái dùng `useBrowserPins`) |
+| Trạng thái          | Khi nào                                                                                                                           | Hiện gì                                                                                                                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Không khả dụng**  | chạy trong browser-dev (`pnpm dev` ở :3031), không có shell Electron                                                              | "Trình duyệt nhúng chỉ có trong app desktop."                                                                                                                                                           |
+| **Đang ở chỗ khác** | tab đang hiển thị ở popout/cửa sổ khác (`shownElsewhere` do main báo) hoặc dock kia trong cùng cửa sổ (instance khác giữ `owner`) | [BrowserElsewhere.vue](../../apps/desktop/ui-next/components/browser/BrowserElsewhere.vue): icon + tiêu đề **phân biệt hai nơi đó** + gợi ý + nút **Hiện ở đây**                                        |
+| **Trang trắng**     | `about:blank` hoặc chưa có tab nào (`empty` = `!hasPage()` trong composable)                                                      | [BrowserEmptyState.vue](../../apps/desktop/ui-next/components/browser/BrowserEmptyState.vue): icon + hướng dẫn ngắn + **bookmark dạng card** bấm-mở được (hồ sơ hiệu lực của scope, qua `useBookmarks`) |
 
 Trạng thái "chỗ khác" là hệ quả trực tiếp của việc trang là một **view native**, không phải element: một `webContents` không nằm được trong hai hình chữ nhật.
 
-Trạng thái "trang trắng" cần thêm một luật nữa: **tab trắng không bao giờ attach view** — `hasPage()` nằm trong `wanted` của `syncOnce`, vì một `WebContentsView` trắng vẽ ĐÈ lên DOM sẽ che luôn empty-state phía dưới. Đổi URL tab ↔ trắng được `applyList` + watcher `empty` gỡ/gắn lại; bấm card pin gán `urlDraft` rồi `submitUrl` (navigate đúng tab trắng đó, `open` ở main tự tạo tab nếu chưa có).
+Trạng thái "trang trắng" cần thêm một luật nữa: **tab trắng không bao giờ attach view** — `hasPage()` nằm trong `wanted` của `syncOnce`, vì một `WebContentsView` trắng vẽ ĐÈ lên DOM sẽ che luôn empty-state phía dưới. Đổi URL tab ↔ trắng được `applyList` + watcher `empty` gỡ/gắn lại; bấm card bookmark gán `urlDraft` rồi `submitUrl` (navigate đúng tab trắng đó, `open` ở main tự tạo tab nếu chưa có).
 
 Có một trạng thái thứ tư **không hiện chữ gì**: khi app mở hộp thoại/menu chồng lên khung thì trang nhường chỗ và khung để trống — xem phần ngay dưới.
 
@@ -132,11 +131,11 @@ Có một trạng thái thứ tư **không hiện chữ gì**: khi app mở hộ
 
 Trang không phải `<iframe>` — nó là `WebContentsView` do Electron main sở hữu, **vẽ trên toàn bộ DOM**. Không CSS nào đặt được modal, menu hay toast lên trước nó; z-index band của app ([reference](../coding/nuxt-frontend.md)) vô hiệu với nó. Nên khi app mở một bề mặt nổi chồng lên khung, **trang phải nhường chỗ** — không có lựa chọn thứ hai.
 
-| Đời | Cách làm | Vì sao bỏ |
-|---|---|---|
-| 1 | Danh sách class, **không** đo hình học | thiếu sót (hộp thông báo GitHub, ContextMenu, command palette, chính popover link), **và** ẩn cả trang vì một menu ở tận góc kia màn hình |
-| 2 | Hit-test `elementFromPoint` trên lưới điểm | bắt được mọi thứ, nhưng **đắt** (vài trăm lượt ép layout đồng bộ theo TỪNG mutation của cả app) và bắn cả vì toast / chip dock ở góc ⇒ trang **nhấp nháy giữa lúc làm việc**. Người dùng bác thẳng, và bác đúng |
-| **3** | **danh sách selector + kiểm tra chồng lấn rect** | đang dùng |
+| Đời   | Cách làm                                         | Vì sao bỏ                                                                                                                                                                                                       |
+| ----- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Danh sách class, **không** đo hình học           | thiếu sót (hộp thông báo GitHub, ContextMenu, command palette, chính popover link), **và** ẩn cả trang vì một menu ở tận góc kia màn hình                                                                       |
+| 2     | Hit-test `elementFromPoint` trên lưới điểm       | bắt được mọi thứ, nhưng **đắt** (vài trăm lượt ép layout đồng bộ theo TỪNG mutation của cả app) và bắn cả vì toast / chip dock ở góc ⇒ trang **nhấp nháy giữa lúc làm việc**. Người dùng bác thẳng, và bác đúng |
+| **3** | **danh sách selector + kiểm tra chồng lấn rect** | đang dùng                                                                                                                                                                                                       |
 
 Đời 3 giữ ưu điểm của cả hai và bỏ nhược điểm của cả hai:
 
@@ -150,48 +149,52 @@ Khi ẩn, khung để **trống**. Không còn dòng "Tạm ẩn khi có hộp t
 
 ### `OVERLAYS` — danh sách phải bảo trì
 
-| Selector | Bề mặt |
-|---|---|
-| `.ovl.on` | 23 modal của app — Settings, Preview, Sites, Import, confirm… |
-| `.smenu` | ContextMenu, gồm **menu ⋮ và menu dock của chính trình duyệt** |
-| `.aselmenu` | dropdown của AppSelect |
-| `.pop` | popover: status bar, composer, MCP chip, todo panel |
-| `.sttpop` · `.lop-scrim` | popover dịch (nguồn `'dom'`) · popover "mở link ở đâu" |
-| `.cmdk-ovl` · `.tph-ovl` · `.lbox` · `.shell-scrim` | command palette · hộp nhập text · lightbox · scrim drawer compact |
-| `.dropzone` | khung "thả file vào đây" — `pointer-events:none` nên đời 2 cũng phải đo tay |
+| Selector                                            | Bề mặt                                                                      |
+| --------------------------------------------------- | --------------------------------------------------------------------------- |
+| `.ovl.on`                                           | 23 modal của app — Settings, Preview, Sites, Import, confirm…               |
+| `.smenu`                                            | ContextMenu, gồm **menu ⋮ và menu dock của chính trình duyệt**              |
+| `.aselmenu`                                         | dropdown của AppSelect                                                      |
+| `.pop`                                              | popover: status bar, composer, MCP chip, todo panel                         |
+| `.sttpop` · `.lop-scrim`                            | popover dịch (nguồn `'dom'`) · popover "mở link ở đâu"                      |
+| `.cmdk-ovl` · `.tph-ovl` · `.lbox` · `.shell-scrim` | command palette · hộp nhập text · lightbox · scrim drawer compact           |
+| `.dropzone`                                         | khung "thả file vào đây" — `pointer-events:none` nên đời 2 cũng phải đo tay |
 
 ⚠ **Đây là cái giá của đời 3:** thêm một loại overlay mới mà quên khai báo thì trang sẽ vẽ đè lên nó. Đánh đổi có ý thức — repo không có wrapper modal dùng chung (23 chỗ tự viết `<div class="ovl" :class="{ on }">`), nên đây là chỗ duy nhất biết "app đang có gì nổi lên". Nếu sau này gom được một `AppOverlay` chung thì nên để chính nó tự đăng ký và bỏ danh sách này đi.
 
 Đo trên Chromium thật, 12 kịch bản, khung 322×568 — tất cả PASS:
 
-| Kịch bản | Kết quả |
-|---|---|
-| không có gì · `.ovl` **đóng** (`display:none`) · ContextMenu ở góc kia màn hình · menu chỉ chạm mép 8px | hiện |
-| modal Settings · menu ⋮ trên khung · dropdown AppSelect · popover composer · scrim link · dropzone | ẩn |
-| **dock thu nhỏ 3 chip · dải toast** | **hiện** |
+| Kịch bản                                                                                                | Kết quả  |
+| ------------------------------------------------------------------------------------------------------- | -------- |
+| không có gì · `.ovl` **đóng** (`display:none`) · ContextMenu ở góc kia màn hình · menu chỉ chạm mép 8px | hiện     |
+| modal Settings · menu ⋮ trên khung · dropdown AppSelect · popover composer · scrim link · dropzone      | ẩn       |
+| **dock thu nhỏ 3 chip · dải toast**                                                                     | **hiện** |
 
 Trigger chạy lại: MutationObserver trên `document.body` (`childList` + `class` **+ `style`**, vì popover định vị bằng inline style có thể xuất hiện hoặc dời chỗ mà không đổi hai cái kia) + mỗi nhịp `nudge` (cuộn/đổi cỡ dịch cả khung lẫn overlay). Callback đi qua `nudge` nên gộp về **một lượt mỗi frame**, và mỗi lượt chỉ là một `querySelectorAll` — khác hẳn đời 2, nơi chính callback này chạy hit-test và làm nên cái "giật giật".
 
 ### ⚠ Một lượt `sync` đang chạy không được làm RƠI lượt sau (sửa 2026-09-12)
 
-Triệu chứng người dùng báo: *"nhiều lúc browser vẫn overlay trên modal"* — lúc được lúc không.
+Triệu chứng người dùng báo: _"nhiều lúc browser vẫn overlay trên modal"_ — lúc được lúc không.
 
 `sync()` mở đầu bằng `if (syncing) return`: **vứt** yêu cầu chứ không xếp hàng. Mà `syncing` chỉ bật trong lúc một `attach`/`setBounds` đang bay — tức là đúng lúc người dùng đang cuộn hoặc transcript đang stream. Mọi yêu cầu rơi vào đúng cửa sổ đó (đổi tab, đổi dock, thu panel, rời session) đều bị nuốt, và không ai gọi lại vì watcher chỉ bắn khi trạng thái **đổi** — mà nó đã đổi rồi.
 
 Nay: xếp hàng chứ không vứt — mọi yêu cầu đến trong lúc bận gộp thành **đúng một** vòng chạy lại (`syncAgain`), nên trạng thái cuối cùng luôn được áp dụng.
 
-Đi kèm hai thứ nữa cho triệu chứng *"giật giật"*:
+Đi kèm hai thứ nữa cho triệu chứng _"giật giật"_:
 
 - **Nhớ rect đã gửi.** `setBounds` là một lượt IPC, `nudge` bắn mỗi frame khi transcript cuộn — trong khi cột panel thì **đứng yên**. Không nhớ lại thì mỗi lần cuộn là vài chục lượt IPC không đổi gì.
-- **Không tự giật view về từ popout.** `wanted` đúng khi khung đang hiện, nhưng *"tôi có chỗ cho một view"* ≠ *"đưa view đang ở cửa sổ khác vào đây"* — mà một cú cuộn bất kỳ cũng gọi tới đó. Nay chỉ tự attach khi tab không `shownElsewhere`, hoặc khi instance này vừa tự nhận `owner` (đường tường minh: nút **Lấy lại** trong placeholder).
+- **Không tự giật view về từ popout.** `wanted` đúng khi khung đang hiện, nhưng _"tôi có chỗ cho một view"_ ≠ _"đưa view đang ở cửa sổ khác vào đây"_ — mà một cú cuộn bất kỳ cũng gọi tới đó. Nay chỉ tự attach khi tab không `shownElsewhere`, hoặc khi instance này vừa tự nhận `owner` (đường tường minh: nút **Lấy lại** trong placeholder).
 
 (Nguồn "giật" thứ ba — MutationObserver quét cả app rồi chạy **hit-test** theo từng mutation — biến mất cùng đời 2: observer vẫn còn, nhưng callback nay chỉ là một `querySelectorAll`.)
+
+### Chụp sẵn frame cho nút mở bề mặt nổi trong chrome (sửa 2026-10-13)
+
+Bấm `⋯` (hay ⋮ dải tab, ☆, thư mục/»/chuột phải trên thanh bookmark) mở một bề mặt nổi chồng lên trang ⇒ view nhường chỗ và trang được phủ bằng ảnh `frozen`. Trước đây ảnh chỉ bắt đầu chụp SAU khi view đã gỡ ⇒ khung trống ~0,1–0,4s (capture + decode) = cú "nháy" người dùng thấy. Nay các nút đó gọi `prefetchBrowserFrame()` (cấp module trong `useEmbeddedBrowser`, chạy `prefetchFrame` của instance đang giữ view — cùng cơ chế tab Trao đổi) ở `pointerenter` + `pointerdown`, nên frame thường đã decode xong trước click và `sync` publish ngay lúc detach. Throttle 1,5s/tab vì mỗi `capturePage` nghẽn main 0,1–0,4s. Còn sót: bấm thẳng không rê chuột qua nút (khe press→click ~80–150ms ngắn hơn một capture) thì vẫn có thể thấy một nhịp trống ngắn hơn trước.
 
 ## ⚠ Invariant: view phải bị gỡ khi khung KHÔNG còn trên màn hình
 
 Đây là lỗi đã xảy ra thật (2026-09-09): mở Browser trong một session rồi đổi sang project/session khác thì **trang web của agent nằm đè lên UI mới**.
 
-Nguyên nhân: app này giữ cả hai lớp KeepAlive — `<NuxtPage keepalive>` (đổi trang) và `<KeepAlive :max="5">` quanh `SessionDetail` ([pages/sessions.vue](../../apps/desktop/ui-next/pages/sessions.vue), file đó ghi thẳng *"onUnmounted never fires on navigation"*). Bản đầu của `useEmbeddedBrowser` chỉ nghe `onMounted`/`onUnmounted`, nên rời trang chỉ **deactivate** chứ không unmount ⇒ không có ai gọi `detach()`. Mà view native **không phải element**: không CSS nào, không `v-show` nào, không Vue nào gỡ nó — nó cứ vẽ tiếp ở toạ độ cũ.
+Nguyên nhân: app này giữ cả hai lớp KeepAlive — `<NuxtPage keepalive>` (đổi trang) và `<KeepAlive :max="5">` quanh `SessionDetail` ([pages/sessions.vue](../../apps/desktop/ui-next/pages/sessions.vue), file đó ghi thẳng _"onUnmounted never fires on navigation"_). Bản đầu của `useEmbeddedBrowser` chỉ nghe `onMounted`/`onUnmounted`, nên rời trang chỉ **deactivate** chứ không unmount ⇒ không có ai gọi `detach()`. Mà view native **không phải element**: không CSS nào, không `v-show` nào, không Vue nào gỡ nó — nó cứ vẽ tiếp ở toạ độ cũ.
 
 Hai luật giữ cho việc đó không tái diễn:
 
@@ -208,9 +211,9 @@ Panel kéo được xuống tới **240px** (`WP_SIDE.min` trong SessionDetail).
 
 `flex: 1 1 96px` trên ô URL biến bất đẳng thức đó thành ngưỡng xuống dòng — nên **basis là số học, không phải khẩu vị**. Sau §3.6 nhóm phải chỉ còn **một** nút `⋯` (22px — 5 hành động trang đã vào menu), nên ngưỡng tụt **320 → 216px**: thấp hơn cả `WP_MIN` (240), tức hàng 2 **không còn kịch bản xuống dòng** ở bề rộng hợp lệ nào. (`flex-wrap` giữ nguyên: phòng nút mới và để bất đẳng thức trên vẫn tự chữa.)
 
-| Bề rộng panel | Bố cục hàng 2 | Ô URL | Cao hàng 2 |
-|---|---|---|---|
-| 560 (max) · 420 · **322 (mặc định)** · **240 (min)** | **một dòng** | 440 · 300 · 202 · 120px | 40px |
+| Bề rộng panel                                        | Bố cục hàng 2 | Ô URL                   | Cao hàng 2 |
+| ---------------------------------------------------- | ------------- | ----------------------- | ---------- |
+| 560 (max) · 420 · **322 (mặc định)** · **240 (min)** | **một dòng**  | 440 · 300 · 202 · 120px | 40px       |
 
 (Trước §3.6, actions = 126px và ngưỡng là 320px: 560/420/322 một dòng với ô 336/196/98px, 300/240 hai dòng với ô 206/146px.) Ở mọi bề rộng: `scrollWidth − clientWidth = 0` trên **cả hai** hàng (không tràn) và mọi nút đều hiển thị — hàng 1: `⋮` + `×`; hàng 2: 3 nút điều hướng + `⋯`.
 
@@ -220,11 +223,25 @@ Hàng 1 **không** xuống dòng: tab strip là phần co được (`flex: 1 1 a
 
 ⚠ **Cửa sổ hẹp hơn 1040px thì KHÔNG có panel nào cả** — `prototype.css:640` có `@media(max-width:1040px){.wpanel,.rszwp{display:none!important}}`, áp cho mọi view (Diff/Files/Terminal…), không riêng Browser. Chip "Trình duyệt" ở status bar vẫn sáng trong khi không thấy gì. Đây là hành vi có sẵn từ prototype, không phải do tính năng này; nhưng nó tương tác đúng với luật ở trên: `display:none` ⇒ `onScreen` false ⇒ view **được gỡ** (đo: `detach` bắn khi thu cửa sổ qua ngưỡng), nên không để lại lớp phủ chết.
 
-## Ghim trang ≠ ghim tab
+## Giả lập thiết bị: view nằm TRỌN trong rect (sửa 2026-10-13)
 
-Tab trong trình duyệt này **thuộc về agent**: nó mở giữa lượt, đóng khi xong, và `browser.close()` xoá sạch lúc thoát app. Nên "giữ trang này lại" **không thể** là "giữ tab này" — một pin phải sống lâu hơn mọi tab, và lâu hơn cả lần khởi động lại.
+**Lỗi:** bật "Giả lập thiết bị mobile" (hoặc agent `viewport mobile|tablet`) làm trang hiện thành cột 390px dính góc trên-trái của khung, **cao 844px chạy lố qua đáy panel đè lên dock/terminal**, phần còn lại của khung trắng. Ảnh trước/sau: `.awog/scratch/mobile-emu-before.png` / `mobile-emu-after.png`.
 
-Vì thế pin là một **danh sách `{url, title}` persist** ([useBrowserPins.ts](../../apps/desktop/ui-next/composables/useBrowserPins.ts), `localStorage` key `awog.browserPins`, cap 12, mới nhất trước, vượt cap thì cái cũ nhất rơi ra chứ không từ chối pin), và bấm chip là **mở tab MỚI** trên URL đó. So sánh URL bỏ dấu `/` cuối, vì `wc.getURL()` chuẩn hoá `https://x.com` thành `https://x.com/` còn URL gõ tay thì không — thiếu bước này thì cùng một trang ghim được hai lần và nút toggle không tìm thấy bản cũ.
+**Nguyên nhân (đo trên Electron 33 thật):** `Emulation.setDeviceMetricsOverride` đặt _visible size_ của renderer = `width×height` của thiết bị giả bất kể `WebContentsView` đang to bao nhiêu, và Chromium **không cắt vẽ theo bounds của view** — nên trang vẽ 390×844 từ góc view, lố khỏi rect (view 600×300 ở y=60 vẫn vẽ tới đáy cửa sổ). Gửi override trần như cũ không thể sửa bằng tham số nào của riêng nó.
+
+**Sửa:** để view _chính là_ thiết bị. `applyEmulation` (browser.ts) tính `fitEmulation(slot, w, h)`: bounds = cỡ thiết bị co vừa rect (không phóng to), căn giữa, nguyên số; rồi gửi override kèm `scale` + `screenWidth/Height` + **`dontSetVisibleSize: true`** (Chromium không còn đổi visible size, chỉ co hình). Phần letterbox là DOM của renderer (viewport element đã có nền token `--bg`) lộ ra sau view — không đổi code renderer. `BrowserTab.slot` lưu rect renderer cấp; mọi `attach`/`setViewBounds` (resize panel/cửa sổ, cả popout — cùng đường attach) chạy lại `layoutTab`; override chỉ gửi lại khi key `(w,h,dsf,mobile,scale)` đổi. Tắt giả lập: `tab.emu = null` + `clearDeviceMetricsOverride` + bounds trả về đúng rect.
+
+Đã so ba phương án trên Electron thật: (a) override CDP có `scale` nhưng **không** `dontSetVisibleSize` → vẫn lố (vùng trắng 390px kéo xuống đáy); (b) CDP + `dontSetVisibleSize` + bounds co/căn giữa → đúng; (c) `webContents.enableDeviceEmulation({viewSize, scale…})` → cũng đúng và giống hệt (b). Chọn (b): giữ nguyên đường CDP đã dùng cho touch/UA/clear, một nguồn sự thật.
+
+**Đã kiểm tra:** chuột — `sendInputEvent` tại toạ độ view `(x·s, y·s)` ra `clientX/Y` ≈ `(x, y)` CSS (78,168 cho điểm 80,170 ở s≈0,354) và trúng đúng nút; `innerWidth×innerHeight×dpr` = 390×844×3; resize rect cao hơn → s=1 hoặc co lại, vẫn trong rect; tablet (820×1180) và tắt → bounds về 600×300 và viewport 600×300@1. Ảnh chụp của agent dưới giả lập: **`capturePage` chỉ ra 138×300** (đúng cái đang hiện, model không đọc nổi) nên `captureOrThrow` đi **CDP trước khi `tab.emu`** → 1170×2532 (=390×844@3x), đúng thiết bị. Khung đông cứng (`frameDataUrl`) khi giả lập là **PNG đệm trong suốt đủ cỡ rect** (`padToSlot`), vì renderer phủ ảnh lên toàn rect bằng `object-fit: fill` — ảnh trần sẽ bị kéo méo; thumbnail/`saveScreenshot` dùng chung `captureOrThrow`.
+
+⚠ Còn sót, chấp nhận: khi `scale` không chẵn có thể lộ một vạch ~1px ở mép đáy (làm tròn pixel của compositor). ⚠ Mở DevTools (debugger bị tách) làm mất override — hành vi có sẵn, không đổi.
+
+## Bookmark ≠ ghim tab
+
+Tab trong trình duyệt này **thuộc về agent**: nó mở giữa lượt, đóng khi xong, và `browser.close()` xoá sạch lúc thoát app. Nên "giữ trang này lại" **không thể** là "giữ tab này" — một bookmark phải sống lâu hơn mọi tab, và lâu hơn cả lần khởi động lại.
+
+Trước đây là "pin" (`localStorage` `awog.browserPins`, cap 12). Nay là **bookmark theo hồ sơ** do sidecar lưu ([browser-profiles-bookmarks.md](browser-profiles-bookmarks.md)); pin cũ được chuyển một lần vào hồ sơ mặc định rồi `useBrowserPins.ts`/`BrowserPinStrip.vue` bị xoá. So sánh URL vẫn bỏ dấu `/` cuối vì `wc.getURL()` chuẩn hoá `https://x.com` thành `https://x.com/` còn URL gõ tay thì không — thiếu bước này thì cùng một trang lưu được hai lần và ☆ không tìm thấy bản cũ.
 
 ## Vì sao chỉ một dock hiển thị được
 
@@ -234,7 +251,7 @@ Một `webContents` không thể ở hai hình chữ nhật. Panel có thể doc
 
 [BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) + [useBrowserPip.ts](../../apps/desktop/ui-next/composables/useBrowserPip.ts): một **card nổi trong app** (`Teleport` ra `body`, `position:fixed`, z **96** — trên page/dock 95, dưới modal 100) giữ chính `WebContentsView` sống. Khác PiP của Codex ở đúng chỗ quyết định: đây không phải preview/ảnh chụp — **trang vẫn tương tác** (gõ, bấm, cuộn) vì nó vẫn là webContents thật. Cũng không dùng `documentPictureInPicture` hay cửa sổ always-on-top: view native chỉ đổi **rect**, không đổi bản chất.
 
-- **Mở:** menu `⋯` → *Picture in Picture*, `⇧⌘B` (`toggleBrowserPip` trong keymap), hoặc **tự mở** — xem dưới.
+- **Mở:** menu `⋯` → _Picture in Picture_, `⇧⌘B` (`toggleBrowserPip` trong keymap), hoặc **tự mở** — xem dưới.
 - **Thanh tiêu đề** = tay kéo (pointer capture; focus được, phím mũi tên nudge 16px / ⇧64px) + favicon/spinner + title + ba nút: **về panel** (`useWorkspacePanel().toggleView('Browser')` — cùng đường nút status bar, kiểm `openViews` trước vì nó là toggle), **popout**, **× đóng**. Double-click thanh cũng = về panel.
 - **Resize** bằng tay nắm góc dưới-phải (cũng nhận phím mũi tên). Min 280×180, trần = cửa sổ trừ mép.
 - **Geometry** `{x,y,w,h}` persist ở `localStorage` key `awog.browserPip`, clamp vào viewport lúc nạp + mỗi `window.resize` (vị trí đã lưu có thể trỏ ra ngoài sau khi đổi monitor). Card sửa inline `style` mỗi pointermove → MutationObserver (`style` trên body subtree) + ResizeObserver sẵn có của `useEmbeddedBrowser` `nudge`→`sync`→`setBounds` — **không có đường geometry IPC riêng**, và `sameRect` vẫn lọc nghẽn như cũ.
@@ -244,13 +261,13 @@ Một `webContents` không thể ở hai hình chữ nhật. Panel có thể doc
 
 Trọng tài `owner` của `useEmbeddedBrowser` giờ phân xử **ba** bề mặt cùng cửa sổ (hai dock + PiP), còn `shownElsewhere` phân xử xuyên cửa sổ (popout) như cũ:
 
-| Bàn giao | Cơ chế |
-|---|---|
-| Mở PiP | watcher `open` → `nextTick` → `takeOver()` — chủ động nhận `owner` rồi attach, **giật được cả view đang ở popout**; panel/dock tự chuyển `elsewhere` |
-| Đóng PiP | `v-if` gỡ viewport el → watcher viewport → `sync` → `!wanted` → nhả `owner` + `detach()` → main park view + `changed` → nhánh reclaim của `applyList` ở panel gắn lại — **không reload trang** |
-| View bị giật khi PiP mở | PiP **tự đóng**: watcher `elsewhere` bắn sau khi card đã từng giữ view (`armed`) — cú "Hiện ở đây" của panel hay một popout mới đều thu card lại thay vì để một khung trống nổi |
-| Thu nhỏ PiP (nút `−`) | `visible() = open ∧ !minimized` → `v-if` gỡ viewport → nhả `owner` + park view (trang chạy nền, `backgroundThrottling:false` — tab KHÔNG mất); card sập thành **chip neo góc phải-dưới** (favicon + title + restore/×, style `right/bottom` chứ không theo `rect` — nên drag/nudge bị gate khi đang thu), watcher `elsewhere` bị gate nên chủ khác giành view mà chip vẫn còn; bung ra (bấm chip / nút maximize / dblclick / Enter) chạy lại đúng đường `nextTick → takeOver` |
-| `list.tabs` rỗng | subscriber auto-open đóng card + reset `dismissed` |
+| Bàn giao                | Cơ chế                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mở PiP                  | watcher `open` → `nextTick` → `takeOver()` — chủ động nhận `owner` rồi attach, **giật được cả view đang ở popout**; panel/dock tự chuyển `elsewhere`                                                                                                                                                                                                                                                                                                                          |
+| Đóng PiP                | `v-if` gỡ viewport el → watcher viewport → `sync` → `!wanted` → nhả `owner` + `detach()` → main park view + `changed` → nhánh reclaim của `applyList` ở panel gắn lại — **không reload trang**                                                                                                                                                                                                                                                                                |
+| View bị giật khi PiP mở | PiP **tự đóng**: watcher `elsewhere` bắn sau khi card đã từng giữ view (`armed`) — cú "Hiện ở đây" của panel hay một popout mới đều thu card lại thay vì để một khung trống nổi                                                                                                                                                                                                                                                                                               |
+| Thu nhỏ PiP (nút `−`)   | `visible() = open ∧ !minimized` → `v-if` gỡ viewport → nhả `owner` + park view (trang chạy nền, `backgroundThrottling:false` — tab KHÔNG mất); card sập thành **chip neo góc phải-dưới** (favicon + title + restore/×, style `right/bottom` chứ không theo `rect` — nên drag/nudge bị gate khi đang thu), watcher `elsewhere` bị gate nên chủ khác giành view mà chip vẫn còn; bung ra (bấm chip / nút maximize / dblclick / Enter) chạy lại đúng đường `nextTick → takeOver` |
+| `list.tabs` rỗng        | subscriber auto-open đóng card + reset `dismissed`                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Mở PiP phải đợi `nextTick` trước `takeOver`: sync chạy khi viewport el chưa mount thì `onScreen` false ⇒ `!wanted` ⇒ nhả luôn claim vừa nhận, và lần sync sau (với view ở popout) lại dừng ở nhánh `shownElsewhere` ⇒ PiP không bao giờ giật được.
 
@@ -281,7 +298,7 @@ Ba guard bổ sung đều là sửa-từ-lỗi-thật (2026-09-28):
 
 Kế thừa toàn bộ hàng rào của [browser-tool.md](browser-tool.md) — SSRF 3 sự kiện (`will-navigate`/`will-redirect`/`will-frame-navigate`), chặn popup/download/permission request, partition riêng — cộng bốn điểm của riêng bề mặt này:
 
-- **URL người dùng gõ đi qua ĐÚNG cổng của agent.** `openFromUser` gọi `hostBlocked` y như `navigate`; loopback/IP private bị chặn ở cả panel. Không có cửa sau quanh invariant #7.
+- **URL người dùng gõ đi qua ĐÚNG cổng của agent.** `openFromUser` gọi `hostBlocked` y như `navigate`; loopback/IP private bị chặn ở cả panel (cùng ngoại lệ dev server đang chạy theo phiên — xem [dev-server.md](dev-server.md#trình-duyệt-của-agent-vào-được-dev-server-ngoại-lệ-loopback); `scope` truyền xuống để ngoại lệ không rò sang phiên khác). Không có cửa sau quanh invariant #7.
 - **Renderer không addressing được cửa sổ khác.** `browser:attach|bounds|detach` lấy cửa sổ đích từ `event.sender`; không có window id nào đi qua IPC (invariant #4).
 - **Rect là L1** → `clampRect` ghim mọi field thành số nguyên trong `±10000` trước khi xuống tầng native.
 - **Nội dung trang vẫn chỉ có một cửa vào app.** Bề mặt IPC mới chỉ có điều hướng + hình học. Mọi hành động ĐỌC trang (snapshot/extract/console/network/screenshot) vẫn đi đường sidecar, nơi có hàng rào nonce + `redactString`.
@@ -293,7 +310,10 @@ Từ 2026-09-09 tab này còn có nút ⬇ **nhập cả profile browser thật*
 
 ## Giới hạn đã biết
 
-- `viewport` khi tab đang nhúng trong panel chỉ emulate qua CDP; rect thật thuộc layout của panel nên không đổi theo. Popout và tab đang park thì resize thật được.
+- **Thu phóng trong menu ⋯**: hàng "Thu phóng" có ba nút ngay trên hàng (− · `110%` · +; bấm % = về 100%) thay cho submenu — `MenuItem.buttons` của `AppContextMenu`, bấm KHÔNG đóng menu. ⚠ Menu mở ⇒ view đã nhường chỗ, trang hiện bằng ảnh `frozen` ⇒ zoom của trang thật vô hình ("bấm không thấy động tĩnh" — lỗi thật). Sau mỗi lần zoom, `refreshBrowserFrame()` (cấp module trong `useEmbeddedBrowser`) chụp lại ảnh phủ sau 150ms; đo trên Electron 33: view đang park vẫn ra ảnh đã zoom ở 150ms (hộp 288 → 345 px với +20%). Hint của mọi menu nay căn phải (luật toàn cục `.smenu .mi span { flex: 1 }` từng kéo hint vào giữa hàng).
+- **Đồng hồ tải trang** (cụm `.bch-urltools` cạnh ☆, `composables/usePageLoadTimer.ts`): main ghi `loadStartedAt` ở `did-start-navigation` **khung chính, khác document** và `loadMs` ở `did-stop-loading` **đầu tiên** sau đó (spinner tắt — mọi frame của lượt đó xong, kể cả khi lỗi), đưa qua `TabInfo`. ⚠ KHÔNG dùng `did-start-loading` làm mốc: nó bắn cả cho iframe tải muộn ⇒ một cặp start/stop sau khi trang xong ghi đè con số thật (lỗi thật: đồng hồ nhảy về 0.0s; đo lại trên Electron 33 với iframe chèn sau 1,5s — bản mới giữ 858ms). Renderer đếm sống `Date.now() − loadStartedAt` mỗi 100ms khi `loadMs` còn null (KHÔNG theo `tab.loading`, vì iframe muộn bật lại cờ đó), xong thì giữ `loadMs` (hiện `3.4s`, tooltip ra ms). Mốc lấy từ main nên không cộng độ trễ IPC. Ô URL hẹp ≤ 220px (container query) thì đồng hồ ẩn. Nút quả địa cầu (Proxy / VPN) nằm cùng cụm — xem browser-profiles-bookmarks.md.
+- **Trang lỗi** (`electron/src/browser-error-page.ts`): Electron không có trang lỗi của Chrome — tải hỏng ở khung chính thì tab TRẮNG. `did-fail-load` (trừ -3 ERR_ABORTED = huỷ chủ động) ⇒ bơm HTML (tiêu đề, lý do theo tên lỗi Chromium, URL, mã lỗi, nút **Thử lại** chỉ cho http(s), và — nếu hồ sơ đi qua proxy — dòng nói rõ proxy có thể là thủ phạm) vào document `chrome-error://` bằng `executeJavaScript`. Đo trên Electron 33: URL giữ nguyên là URL hỏng, lịch sử không thêm mục, Thử lại điều hướng lại đúng URL. Ngôn ngữ theo locale OS (như `notify.ts`); mọi chuỗi động đều được escape.
+- `viewport` khi tab đang nhúng (panel/popout): view được **co vừa rect và căn giữa** (xem "Giả lập thiết bị"), không đổi rect của renderer. Tab đang park thì resize holder thật.
 - Model **chưa** tự mở được panel; chỉ người dùng mở. Đang cân nhắc một action `show` (ADR 0086, việc cần làm tiếp).
 - Trang bị gỡ khỏi màn hình một nhịp mỗi lần có popover mở.
 - **Cửa sổ popout không suy ra được workspace root** (nó là renderer riêng, không có session nào đang active) ⇒ "Lưu ảnh chụp trang" tắt ở đó. Muốn bật thì main phải truyền project vào URL của cửa sổ.
@@ -303,35 +323,53 @@ Từ 2026-09-09 tab này còn có nút ⬇ **nhập cả profile browser thật*
 
 ## File chạm
 
-| File | Thay đổi |
-|---|---|
-| [electron/src/browser.ts](../../apps/desktop/electron/src/browser.ts) | tab = `WebContentsView`; `holder` vô hình + `park`/`ensurePainted`; `attachTo`/`setViewBounds`/`detachFrom`; `openFromUser`/`goBack`/`goForward`/`reload`; popout thay cho show/hide theo cửa sổ-mỗi-tab; `listTabs(forWindow)` + `info()`; **+ `BrowserTab.favicon` / `page-favicon-updated` → `TabInfo.favicon`** |
-| [electron/src/ipc.ts](../../apps/desktop/electron/src/ipc.ts) | **Mới** `registerBrowserViewIpc()` — 12 kênh `browser:*` + broadcast `browser:changed` theo từng cửa sổ |
-| [electron/src/preload.ts](../../apps/desktop/electron/src/preload.ts) | `window.awog.browser.*`; `BrowserTabInfo.favicon?` |
-| [ui-next/composables/useEmbeddedBrowser.ts](../../apps/desktop/ui-next/composables/useEmbeddedBrowser.ts) | **Mới** — glue rect ↔ view, luật nhường chỗ (`OVERLAYS`), trọng tài một-chủ, follow tab của agent, poll `selectionText`, action cho chrome; **+ `hasPage` gate trong `wanted` (tab trắng không attach), `empty`/`isOwner` export, detach theo `owner === id`; + nhánh `!wanted` của `syncOnce` chỉ detach khi `owner` đã về `null` (không park nhầm view của chủ mới cùng cửa sổ — fix nhấp nháy lúc PiP/dock takeover)** |
-| [ui-next/composables/useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts) | **Mới (refactor)** — menu `⋯`/dock/`⋮`: anchors, `actionItems`, ghim/copy/dịch/trích/chọn phần tử |
-| [ui-next/composables/useBrowserPanelSizing.ts](../../apps/desktop/ui-next/composables/useBrowserPanelSizing.ts) | **Mới (refactor)** — toàn bộ sizing panel chuyển từ WorkspaceBrowser: `WP_*`/`CHAT_FLOOR`/`room` observer/`expandTarget`/`shrinkTarget`/`canExpand`/`expanded` |
-| [ui-next/components/browser/BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue) | **Mới** — chrome 2 hàng dùng chung; sau refactor chỉ còn ghép mảng (BrowserTabs + nhóm cửa sổ + BrowserNavBar + PinStrip + TranslateStrip) + `surface` |
-| [ui-next/components/browser/BrowserTabs.vue](../../apps/desktop/ui-next/components/browser/BrowserTabs.vue) | **Mới (refactor)** — tab strip + `+`; chip có favicon `<img>` (fallback globe, spinner khi loading) |
-| [ui-next/components/browser/BrowserNavBar.vue](../../apps/desktop/ui-next/components/browser/BrowserNavBar.vue) | **Mới (refactor)** — nav + ô URL (chế độ đọc: lock/warn + host nổi, focus → ô soạn select-all) + `⋯` + thanh tiến trình 2px + ba menu |
-| [ui-next/components/browser/BrowserEmptyState.vue](../../apps/desktop/ui-next/components/browser/BrowserEmptyState.vue) | **Mới** — state "trang trắng": icon + hướng dẫn + pin dạng card |
-| [ui-next/components/browser/BrowserElsewhere.vue](../../apps/desktop/ui-next/components/browser/BrowserElsewhere.vue) | **Mới** — state "ở chỗ khác" phân biệt popout/dock + nút lấy về |
-| [ui-next/components/browser/BrowserSitesModal.vue](../../apps/desktop/ui-next/components/browser/BrowserSitesModal.vue) | **Mới** — `⋮` → quản lý site được phép (`off` / `allowlist` + host list) |
-| [ui-next/components/IconSprite.vue](../../apps/desktop/ui-next/components/IconSprite.vue) | **+ `i-lock`, `i-warn`** (chỉ báo https/http của thanh URL) |
-| [ui-next/pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue) | **Mới** — route của cửa sổ popout: BrowserChrome + placeholder + `AppGlobalHosts`; + empty/elsewhere states giống panel |
-| [ui-next/components/session/workspace/WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue) | **Mới** — sau refactor: BrowserChrome + placeholder + 3 trạng thái (unavailable/elsewhere/empty); sizing → `useBrowserPanelSizing` |
-| [ui-next/components/session/SessionWorkspacePanel.vue](../../apps/desktop/ui-next/components/session/SessionWorkspacePanel.vue) | mount lười + giữ mounted, `FLUSH_TABS`/`HANDLED_TABS` |
-| [ui-next/components/session/SessionDetail.vue](../../apps/desktop/ui-next/components/session/SessionDetail.vue) | `ALL_VIEWS` thêm `Browser` |
-| [ui-next/components/shell/AppStatusBar.vue](../../apps/desktop/ui-next/components/shell/AppStatusBar.vue) | nút Browser một-cú-bấm |
-| [ui-next/composables/useSessionsData.ts](../../apps/desktop/ui-next/composables/useSessionsData.ts) | `WPVIEWS` thêm `['Browser', 'globe']` |
-| [ui-next/types/awog-bridge.d.ts](../../apps/desktop/ui-next/types/awog-bridge.d.ts) | `AwogBrowserRect` / `AwogBrowserTab` / `AwogBrowserTabList`; **+ `AwogBrowserTab.favicon?`** |
-| i18n `sessions.json` + `statusbar.json` (en/vi) | 11 + 1 key; **− `sessions.workspace.browser.elsewhere`** (tách thành 3 key mới) |
-| i18n `browser.json` (en/vi) | **Mới** — 28 key menu `⋮`/site/dịch/trích/toast; **+ 5 key: `empty.*`, `elsewhere.*`; + 9 key `pip.*`** |
-| [ui-next/composables/useBrowserPip.ts](../../apps/desktop/ui-next/composables/useBrowserPip.ts) | **Mới** — state UI cấp module của PiP (`open`/`dismissed`/`minimized`/`rect` + localStorage `awog.browserPip` + clamp), subscriber auto-open lazy chỉ-ở-cửa-sổ-chính, watcher `requested` (detached scope) suppress auto-open khi user đóng view Browser |
-| [ui-next/components/browser/BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue) | **Mới** — card nổi Teleport-body z 96: mini-bar kéo được (favicon/title/về-panel/popout/×), viewport placeholder, tay nắm resize, 3 trạng thái thay trang |
-| [ui-next/layouts/default.vue](../../apps/desktop/ui-next/layouts/default.vue) | mount `<BrowserPip />` — cố ý NGOÀI `AppGlobalHosts` (popout session lắp lại host stack; PiP chỉ ở cửa sổ chính) |
-| [ui-next/composables/useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts) | + mục **Picture in Picture** (`i-pip`) trong menu `⋯` của panel, cạnh dock/popout |
-| [ui-next/components/IconSprite.vue](../../apps/desktop/ui-next/components/IconSprite.vue) | **+ `i-pip`** (lucide picture-in-picture-2) |
-| [ui-next/composables/useKeymap.ts](../../apps/desktop/ui-next/composables/useKeymap.ts) · [useGlobalShortcuts.ts](../../apps/desktop/ui-next/composables/useGlobalShortcuts.ts) | + action `toggleBrowserPip` mặc định `⇧⌘B` (nhóm session) |
-| [ui-next/stores/settings.ts](../../apps/desktop/ui-next/stores/settings.ts) · [SettingsWorkspace.vue](../../apps/desktop/ui-next/components/settings/SettingsWorkspace.vue) | + `sessions.browserAutoPip` (synced, mặc định BẬT) + toggle ở Settings → Workspace |
-| i18n `settings.json` + `settings-keymap.json` (en/vi) | + `settings.workspace.browserPip.*`, `settingsKeymap.act.toggleBrowserPip` |
+| File                                                                                                                                                                            | Thay đổi                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [electron/src/browser.ts](../../apps/desktop/electron/src/browser.ts)                                                                                                           | tab = `WebContentsView`; `holder` vô hình + `park`/`ensurePainted`; `attachTo`/`setViewBounds`/`detachFrom`; `openFromUser`/`goBack`/`goForward`/`reload`; popout thay cho show/hide theo cửa sổ-mỗi-tab; `listTabs(forWindow)` + `info()`; **+ `BrowserTab.favicon` / `page-favicon-updated` → `TabInfo.favicon`**                                                                                                       |
+| [electron/src/browser-emulation.ts](../../apps/desktop/electron/src/browser-emulation.ts)                                                                                       | **Mới** — `fitEmulation(slot, w, h)` thuần: bounds thiết bị co vừa khung + căn giữa + `scale`; test ở `__tests__/browser-emulation.test.ts`. `browser.ts`: `BrowserTab.emu/emuKey/slot`, `applyEmulation`/`layoutTab`, `padToSlot`, `captureOrThrow` ưu tiên CDP khi giả lập                                                                                                                                              |
+| [electron/src/browser-host-policy.ts](../../apps/desktop/electron/src/browser-host-policy.ts)                                                                                   | **Mới** — luật host thuần (`evaluateHost`) + tập cổng dev server theo scope; `browser.ts` `hostBlocked(url, scope)` uỷ quyền; host-handler `browser.setDevServerPorts`                                                                                                                                                                                                                                                    |
+| [electron/src/ipc.ts](../../apps/desktop/electron/src/ipc.ts)                                                                                                                   | **Mới** `registerBrowserViewIpc()` — 12 kênh `browser:*` + broadcast `browser:changed` theo từng cửa sổ                                                                                                                                                                                                                                                                                                                   |
+| [electron/src/preload.ts](../../apps/desktop/electron/src/preload.ts)                                                                                                           | `window.awog.browser.*`; `BrowserTabInfo.favicon?`                                                                                                                                                                                                                                                                                                                                                                        |
+| [ui-next/composables/useEmbeddedBrowser.ts](../../apps/desktop/ui-next/composables/useEmbeddedBrowser.ts)                                                                       | **Mới** — glue rect ↔ view, luật nhường chỗ (`OVERLAYS`), trọng tài một-chủ, follow tab của agent, poll `selectionText`, action cho chrome; **+ `hasPage` gate trong `wanted` (tab trắng không attach), `empty`/`isOwner` export, detach theo `owner === id`; + nhánh `!wanted` của `syncOnce` chỉ detach khi `owner` đã về `null` (không park nhầm view của chủ mới cùng cửa sổ — fix nhấp nháy lúc PiP/dock takeover)** |
+| [ui-next/composables/useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts)                                                                         | **Mới (refactor)** — menu `⋯`/dock/`⋮`: anchors, `actionItems`, copy/dịch/trích/chọn phần tử (mục ghim đã bỏ — ☆ ở ô URL thay thế)                                                                                                                                                                                                                                                                                        |
+| [ui-next/composables/useBrowserPanelSizing.ts](../../apps/desktop/ui-next/composables/useBrowserPanelSizing.ts)                                                                 | **Mới (refactor)** — toàn bộ sizing panel chuyển từ WorkspaceBrowser: `WP_*`/`CHAT_FLOOR`/`room` observer/`expandTarget`/`shrinkTarget`/`canExpand`/`expanded`                                                                                                                                                                                                                                                            |
+| [ui-next/components/browser/BrowserChrome.vue](../../apps/desktop/ui-next/components/browser/BrowserChrome.vue)                                                                 | **Mới** — chrome 2 hàng dùng chung; sau refactor chỉ còn ghép mảng (BrowserTabs + nhóm cửa sổ + BrowserNavBar + TranslateStrip) + `surface`; nhận `scope` + xử lý `open-url` của bookmark                                                                                                                                                                                                                                 |
+| [ui-next/components/browser/BrowserTabs.vue](../../apps/desktop/ui-next/components/browser/BrowserTabs.vue)                                                                     | **Mới (refactor)** — tab strip + `+`; chip có favicon `<img>` (fallback globe, spinner khi loading)                                                                                                                                                                                                                                                                                                                       |
+| [ui-next/components/browser/BrowserNavBar.vue](../../apps/desktop/ui-next/components/browser/BrowserNavBar.vue)                                                                 | **Mới (refactor)** — nav + ô URL (chế độ đọc: lock/warn + host nổi, focus → ô soạn select-all; **☆/★ bookmark**) + `⋯` + thanh tiến trình 2px + ba menu; **+ thanh bookmark + hộp sửa bookmark, phát `open-url`**                                                                                                                                                                                                         |
+| [ui-next/components/browser/BrowserEmptyState.vue](../../apps/desktop/ui-next/components/browser/BrowserEmptyState.vue)                                                         | **Mới** — state "trang trắng": icon + hướng dẫn + bookmark dạng card                                                                                                                                                                                                                                                                                                                                                      |
+| [ui-next/components/browser/BrowserElsewhere.vue](../../apps/desktop/ui-next/components/browser/BrowserElsewhere.vue)                                                           | **Mới** — state "ở chỗ khác" phân biệt popout/dock + nút lấy về                                                                                                                                                                                                                                                                                                                                                           |
+| [ui-next/components/browser/BrowserSitesModal.vue](../../apps/desktop/ui-next/components/browser/BrowserSitesModal.vue)                                                         | **Mới** — `⋮` → quản lý site được phép (`off` / `allowlist` + host list)                                                                                                                                                                                                                                                                                                                                                  |
+| [ui-next/components/IconSprite.vue](../../apps/desktop/ui-next/components/IconSprite.vue)                                                                                       | **+ `i-lock`, `i-warn`** (chỉ báo https/http của thanh URL)                                                                                                                                                                                                                                                                                                                                                               |
+| [ui-next/pages/browser.vue](../../apps/desktop/ui-next/pages/browser.vue)                                                                                                       | **Mới** — route của cửa sổ popout: BrowserChrome + placeholder + `AppGlobalHosts`; + empty/elsewhere states giống panel                                                                                                                                                                                                                                                                                                   |
+| [ui-next/components/session/workspace/WorkspaceBrowser.vue](../../apps/desktop/ui-next/components/session/workspace/WorkspaceBrowser.vue)                                       | **Mới** — sau refactor: BrowserChrome + placeholder + 3 trạng thái (unavailable/elsewhere/empty); sizing → `useBrowserPanelSizing`                                                                                                                                                                                                                                                                                        |
+| [ui-next/components/session/SessionWorkspacePanel.vue](../../apps/desktop/ui-next/components/session/SessionWorkspacePanel.vue)                                                 | mount lười + giữ mounted, `FLUSH_TABS`/`HANDLED_TABS`                                                                                                                                                                                                                                                                                                                                                                     |
+| [ui-next/components/session/SessionDetail.vue](../../apps/desktop/ui-next/components/session/SessionDetail.vue)                                                                 | `ALL_VIEWS` thêm `Browser`                                                                                                                                                                                                                                                                                                                                                                                                |
+| [ui-next/components/shell/AppStatusBar.vue](../../apps/desktop/ui-next/components/shell/AppStatusBar.vue)                                                                       | nút Browser một-cú-bấm                                                                                                                                                                                                                                                                                                                                                                                                    |
+| [ui-next/composables/useSessionsData.ts](../../apps/desktop/ui-next/composables/useSessionsData.ts)                                                                             | `WPVIEWS` thêm `['Browser', 'globe']`                                                                                                                                                                                                                                                                                                                                                                                     |
+| [ui-next/types/awog-bridge.d.ts](../../apps/desktop/ui-next/types/awog-bridge.d.ts)                                                                                             | `AwogBrowserRect` / `AwogBrowserTab` / `AwogBrowserTabList`; **+ `AwogBrowserTab.favicon?`**                                                                                                                                                                                                                                                                                                                              |
+| i18n `sessions.json` + `statusbar.json` (en/vi)                                                                                                                                 | 11 + 1 key; **− `sessions.workspace.browser.elsewhere`** (tách thành 3 key mới)                                                                                                                                                                                                                                                                                                                                           |
+| i18n `browser.json` (en/vi)                                                                                                                                                     | **Mới** — 28 key menu `⋮`/site/dịch/trích/toast; **+ 5 key: `empty.*`, `elsewhere.*`; + 9 key `pip.*`**                                                                                                                                                                                                                                                                                                                   |
+| [ui-next/composables/useBrowserPip.ts](../../apps/desktop/ui-next/composables/useBrowserPip.ts)                                                                                 | **Mới** — state UI cấp module của PiP (`open`/`dismissed`/`minimized`/`rect` + localStorage `awog.browserPip` + clamp), subscriber auto-open lazy chỉ-ở-cửa-sổ-chính, watcher `requested` (detached scope) suppress auto-open khi user đóng view Browser                                                                                                                                                                  |
+| [ui-next/components/browser/BrowserPip.vue](../../apps/desktop/ui-next/components/browser/BrowserPip.vue)                                                                       | **Mới** — card nổi Teleport-body z 96: mini-bar kéo được (favicon/title/về-panel/popout/×), viewport placeholder, tay nắm resize, 3 trạng thái thay trang                                                                                                                                                                                                                                                                 |
+| [ui-next/layouts/default.vue](../../apps/desktop/ui-next/layouts/default.vue)                                                                                                   | mount `<BrowserPip />` — cố ý NGOÀI `AppGlobalHosts` (popout session lắp lại host stack; PiP chỉ ở cửa sổ chính)                                                                                                                                                                                                                                                                                                          |
+| [ui-next/composables/useBrowserActions.ts](../../apps/desktop/ui-next/composables/useBrowserActions.ts)                                                                         | + mục **Picture in Picture** (`i-pip`) trong menu `⋯` của panel, cạnh dock/popout                                                                                                                                                                                                                                                                                                                                         |
+| [ui-next/components/IconSprite.vue](../../apps/desktop/ui-next/components/IconSprite.vue)                                                                                       | **+ `i-pip`** (lucide picture-in-picture-2)                                                                                                                                                                                                                                                                                                                                                                               |
+| [ui-next/composables/useKeymap.ts](../../apps/desktop/ui-next/composables/useKeymap.ts) · [useGlobalShortcuts.ts](../../apps/desktop/ui-next/composables/useGlobalShortcuts.ts) | + action `toggleBrowserPip` mặc định `⇧⌘B` (nhóm session)                                                                                                                                                                                                                                                                                                                                                                 |
+| [ui-next/stores/settings.ts](../../apps/desktop/ui-next/stores/settings.ts) · [SettingsWorkspace.vue](../../apps/desktop/ui-next/components/settings/SettingsWorkspace.vue)     | + `sessions.browserAutoPip` (synced, mặc định BẬT) + toggle ở Settings → Workspace                                                                                                                                                                                                                                                                                                                                        |
+| i18n `settings.json` + `settings-keymap.json` (en/vi)                                                                                                                           | + `settings.workspace.browserPip.*`, `settingsKeymap.act.toggleBrowserPip`                                                                                                                                                                                                                                                                                                                                                |
+
+## Profile trình duyệt — phần sidecar
+
+Dữ liệu do sidecar giữ (`apps/desktop/sidecar/src/browser-profiles/`): `~/.awog/browser/profiles.json` (luôn có `default`, không xoá được) + bookmark mỗi profile ở `~/.awog/browser/profiles/<id>/bookmarks.json` (một cấp thư mục, URL http/https, ≤500 mục, ghi nguyên tử). Id profile `default` | `^[a-z0-9-]{1,32}$` (sidecar cấp `p-<8 hex>`); mọi id đi vào đường dẫn đều qua `assertProfileId`.
+
+Chọn profile cho một scope (`scope.ts`): phiên → `Session.browserProfileId` ⇒ `Project.browserProfileId` ⇒ profile mặc định; `task:<taskId>[:<nodeId>]` ⇒ profile của project của task ⇒ mặc định; không scope/không nhận ra ⇒ mặc định. Id trỏ tới profile đã xoá bị bỏ qua. Sidecar đẩy `browser.setScopeProfile {scope, profile}` sang main trước mỗi lời gọi `browser_tool` (`runBrowserAction`), khi `sessions.setBrowserProfile`, khi project đổi `browserProfileId` (`projects.upsert`), khi đổi profile mặc định / xoá profile. Xoá profile: gỡ tham chiếu ở phiên/project → đẩy lại scope (main dời tab) → cuối cùng mới `browser.wipeProfile {profile}`.
+
+RPC: `browserProfiles.{list,create,update,delete,setDefault,resolveScope}`, `sessions.setBrowserProfile`, `bookmarks.{list,add,addFolder,update,remove,importPins}`. Sự kiện: `browser.profiles-changed`, `bookmarks.changed {profileId}`, `session.browser-profile`.
+
+## Profile trình duyệt — phần Electron main
+
+- `electron/src/browser-profile.ts` (module thuần, có test `__tests__/browser-profile.test.ts`): `partitionForProfile(id)` — `default` → `persist:awog-browser` (giữ login/dữ liệu import cũ), id khác → `persist:awog-browser-<id>`; id không khớp `[a-z0-9-]{1,32}` bị **ném** (id đi vào tên partition và đường dẫn `Partitions/…`).
+- `BrowserController` giữ `scopeProfile: Map<scope, profileId>` + `globalProfile` (= profile mặc định, cho pool không scope). Sidecar đẩy `browser.setScopeProfile {scope, profile}`; thiếu cache thì main hỏi `browserProfiles.resolveScope` (dedupe, lỗi ⇒ tạm `default`, không cache). Tab mang `profileId` cố định suốt đời; đổi profile của scope ⇒ `reopenTabs` đóng tab cũ + mở lại cùng URL/thứ tự/tab active (và attach lại rect nếu đang nhúng) ở partition mới.
+- `ensurePartition(id)` cài **một lần** mỗi partition: từ chối mọi quyền + chặn download. `browser.wipeProfile {profile}` đóng tab còn ở partition rồi `clearStorageData` + `clearCache`.
+- IPC: `browser:profileOf {scope}`; `browser:importProfile`/`browser:clearData` nhận `profileId` (mặc định `default`); `TabInfo.profileId`. Staging import nằm ở `pending-browser-import/<profileId>/`, boot (`applyPendingImport`) áp từng profile; bản staging kiểu cũ ở gốc được dời sang `default`.
+- Đã kiểm trên Electron thật: cookie ở profile A không thấy ở B; chuyển scope A→B mở lại cùng URL + giữ tab active; `wipeProfile` xoá cookie; `default` vẫn là `Partitions/awog-browser`.

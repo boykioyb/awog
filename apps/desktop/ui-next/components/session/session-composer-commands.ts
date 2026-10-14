@@ -98,8 +98,9 @@ export type SlashItem = {
 //   • `clear`   — resets the CLI conversation while AWOG keeps the transcript on
 //                 screen: the model would silently lose the context the user can
 //                 still read. Rewind / fork are the AWOG-side equivalents.
-//   • `compact` — AWOG owns compaction (ADR 0047: always Pi, persists a checkpoint);
-//                 the `/compact` built-in row already drives it.
+//   • `compact` — the `/compact` built-in row already drives it (sessions.compact: the
+//                 CLI's own /compact on Anthropic, a Pi checkpoint elsewhere), and it
+//                 must go through that RPC so the marker + gauge update land.
 // Names starting with `__` are the CLI's internal plumbing, never user-facing.
 const CLI_COMMAND_DENY = new Set(['clear', 'compact'])
 

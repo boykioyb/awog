@@ -37,10 +37,12 @@
 
 <script setup lang="ts">
 // attChip (~1743): file vs image attachment chip inside a user bubble (.uatt).
-// Clicking opens the shared full-window PreviewModal (§7) via usePreview() — the
-// single modal instance (mounted in SessionDetail) reads the shared store.
+// Attachment có `path` đĩa thật → mở thành workbench doc tab qua filePreview
+// (đọc/sửa được, theo project); không có path (ảnh dán, data inline) → modal
+// preview như cũ.
 import type { SessionAttachment } from '~/composables/useSessionsData'
 import { imageSiblingsFromAttachments, previewRefFromAttachment } from '~/composables/usePreview'
+import { useFilePreview } from '~/composables/useFilePreview'
 
 // `siblings` = every attachment on the same message. Handed to the preview so ‹ › steps
 // through THIS message's images instead of whatever else lives in their folder.
@@ -50,8 +52,13 @@ const props = withDefaults(
 )
 const { t } = useI18n()
 const { open } = usePreview()
+const filePreview = useFilePreview()
 
 function openPreview() {
+  if (props.att.path) {
+    void filePreview.open(props.att.path)
+    return
+  }
   open(previewRefFromAttachment(props.att), imageSiblingsFromAttachments(props.siblings))
 }
 </script>

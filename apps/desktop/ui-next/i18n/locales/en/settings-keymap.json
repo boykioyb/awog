@@ -8,7 +8,8 @@
   "settingsKeymap.act.toggleBrowserPip": "Toggle browser Picture-in-Picture",
   "settingsKeymap.act.nextSession": "Next session",
   "settingsKeymap.act.prevSession": "Previous session",
-  "settingsKeymap.act.goSessions": "Go to Sessions",
+  "settingsKeymap.act.lastProject": "Last used project",
+  "settingsKeymap.act.sessionTab1": "First session tab",
   "settingsKeymap.act.goTasks": "Go to Tasks",
   "settingsKeymap.act.goProjects": "Go to Projects"
 }

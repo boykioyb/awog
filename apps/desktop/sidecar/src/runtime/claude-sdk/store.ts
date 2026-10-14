@@ -15,6 +15,7 @@ import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { claudeHome } from '../../util/path.js'
 import { log } from '../../util/logger.js'
+import { closeLiveForCliSession } from './live-process.js'
 
 // Root of the SDK's config dir — the shared Claude home (ADR 0070).
 export function sdkStoreDir(): string {
@@ -37,6 +38,9 @@ export async function removeSdkSession(sdkSessionId: string): Promise<void> {
     log.warn('removeSdkSession: refusing malformed sdkSessionId', { sdkSessionId })
     return
   }
+  // A live CLI still holding this session would answer from a history the caller just
+  // removed (truncate / rewind / delete) and write a file nobody reads (ADR 0099).
+  closeLiveForCliSession(sdkSessionId, 'cli session artifacts removed')
   const projects = join(sdkStoreDir(), 'projects')
   let dirs: string[]
   try {

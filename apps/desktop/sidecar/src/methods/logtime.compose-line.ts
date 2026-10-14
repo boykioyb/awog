@@ -6,10 +6,13 @@ import {
   buildLineSummaryUserPrompt,
   buildSessionDigest,
   parseLineSummary,
+  scrubInternalDetail,
 } from '../logtime/compose.js'
 import { loadSession } from '../sessions/store.js'
 import { loadTask } from '../tasks/store.js'
-import { completePi } from '../runtime/complete.js'
+import { loadSettings } from '../logtime/store.js'
+import { fetchGhRefTitle } from '../github/ref-title.js'
+import { complete } from '../runtime/complete.js'
 
 // Tóm tắt MỘT gợi ý thành note tiếng Việt khi người dùng bấm "Đưa vào form". Rẻ hơn
 // `logtime.compose` (cả ngày) vì chỉ một dòng; gọi mỗi lần bấm nên dùng model nhanh.
@@ -19,6 +22,9 @@ import { completePi } from '../runtime/complete.js'
 const Params = z.object({
   title: z.string().min(1).max(2000),
   projectLabel: z.string().min(1).max(200).optional(),
+  // projectKey → resolve link.githubRepo để fetch tiêu đề thật của issue/PR — nguồn
+  // duy nhất nói việc là TÍNH NĂNG gì (title phiên thường chỉ là URL).
+  projectKey: z.string().min(1).max(120).optional(),
   issue: z.number().int().positive().optional(),
   pr: z.number().int().positive().optional(),
   kind: z.enum(['session', 'task']),
@@ -38,20 +44,33 @@ async function loadDetail(kind: 'session' | 'task', refId: string): Promise<stri
       const s = await loadSession(refId)
       if (!s) return undefined
       const digest = buildSessionDigest(s.messages)
-      return digest || undefined
+      return digest ? scrubInternalDetail(digest) || undefined : undefined
     }
     const task = await loadTask(refId)
     const desc = task?.description?.trim()
-    return desc ? desc.slice(0, 2000) : undefined
+    return desc ? scrubInternalDetail(desc.slice(0, 2000)) || undefined : undefined
   } catch {
     return undefined
   }
 }
 
 register('logtime.composeLine', async (raw) => {
-  const { title, projectLabel, issue, pr, kind, refId, seed, accountId, modelId } = Params.parse(raw)
+  const { title, projectLabel, projectKey, issue, pr, kind, refId, seed, accountId, modelId } = Params.parse(raw)
   const model = modelId ?? 'claude-haiku-4-5'
   const detail = refId ? await loadDetail(kind, refId) : undefined
+  // Tiêu đề thật của issue/PR — đưa vào detail dưới dạng dòng "Việc:" để model viết
+  // note theo TÍNH NĂNG, không theo quy trình kiểm tra.
+  let refTitle: string | undefined
+  if (projectKey) {
+    const link = (await loadSettings()).links.find((l) => l.projectKey === projectKey)
+    if (link?.githubRepo && (issue !== undefined || pr !== undefined)) {
+      // PR trước — PR mang tên tính năng; hỏng thì rơi về issue, rồi không-có-title.
+      refTitle =
+        (pr !== undefined ? await fetchGhRefTitle(link.githubRepo, 'pull', pr) : null) ??
+        (issue !== undefined ? await fetchGhRefTitle(link.githubRepo, 'issue', issue) : null) ??
+        undefined
+    }
+  }
   const seedTrim = seed?.trim()
   log.info('logtime.composeLine', {
     model,
@@ -62,7 +81,7 @@ register('logtime.composeLine', async (raw) => {
     hasSeed: !!seedTrim,
   })
 
-  const text = await completePi({
+  const text = await complete({
     ...(accountId ? { accountId } : {}),
     modelId: model,
     systemPrompt: buildLineSummarySystemPrompt(),
@@ -72,7 +91,12 @@ register('logtime.composeLine', async (raw) => {
       ...(issue !== undefined ? { issue } : {}),
       ...(pr !== undefined ? { pr } : {}),
       kind,
-      ...(detail ? { detail } : {}),
+      // "Việc:" đứng trước digest để model đọc tính năng trước, rồi mới tới quy trình.
+      ...(refTitle || detail
+        ? {
+            detail: [refTitle ? `Việc: ${refTitle}` : '', detail ?? ''].filter(Boolean).join('\n'),
+          }
+        : {}),
       ...(seedTrim ? { seed: seedTrim } : {}),
     }),
   })

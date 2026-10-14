@@ -16,11 +16,7 @@ import { getModel } from '@earendil-works/pi-ai/compat'
 import type { Api, Model } from '@earendil-works/pi-ai'
 import { RpcError } from '../transport/rpc.js'
 import { resolveCredential } from '../credentials/credential-resolver.js'
-import {
-  isAnthropicModel,
-  normalizeModelId,
-  resolveModelRequest,
-} from '../providers/anthropic/models-map.js'
+import { isAnthropicModel, normalizeModelId, resolveModelRequest } from '../providers/anthropic/models-map.js'
 import { log } from '../util/logger.js'
 import type { AccountRecord, EndpointApi, SessionSettings } from '../types/shared.js'
 
@@ -100,6 +96,27 @@ function fallbackAnthropicModel(apiModel: string): Model<Api> | undefined {
     default:
       return undefined
   }
+}
+
+// Một id `claude-*` mới hơn allowlist (vd `claude-opus-5-5`): clone model cùng
+// tier có sẵn thay vì throw. AWOG không nên gatekeep cứng hơn Anthropic — API
+// tự quyết định id có hợp lệ không (reject ⇒ lỗi model-call trả lên rõ ràng).
+// Mọi Pi-path (compact, one-shot, Tasks) lệ thuộc hàm này nên lỗi ở đây phá
+// CÙNG LÚC nhiều tính năng, trong khi Claude SDK path (CLI tự resolve) vẫn
+// chạy — đúng bug compact của model mới hơn catalog. Tier suy từ id; nhầm tier
+// vẫn chạy được (sai giá/hạn mức context báo trên gauge, không sai response).
+function unknownAnthropicModel(modelId: string): Model<Api> | undefined {
+  const lower = modelId.toLowerCase()
+  let baseId: string
+  if (lower.includes('opus')) baseId = 'claude-opus-5'
+  else if (lower.includes('sonnet')) baseId = 'claude-sonnet-5'
+  else if (lower.includes('haiku')) baseId = 'claude-haiku-4-5'
+  else if (lower.includes('fable')) baseId = 'claude-fable-5'
+  else return undefined // prefix claude- nhưng không nhận tier — để caller throw
+  // buildAnthropicModel đã xử lý catalog-hit + fallback — clone bằng nó cho
+  // mọi tier, kể cả fable (Pi catalog có sẵn, không cần fallbackAnthropicModel).
+  const base = buildAnthropicModel(baseId)
+  return { ...base, id: modelId, name: modelId }
 }
 
 // Betas pi 0.85 adds itself for `compat.supportsMidConvoEffort` models. Mirrored
@@ -198,10 +215,22 @@ export function resolveModel(settings: SessionSettings, account: AccountRecord):
     // bearer token is supplied per-turn by getApiKey (codex branch below).
     model = buildCodexModel(settings.modelId)
   } else if (settings.provider === 'anthropic') {
-    if (!isAnthropicModel(normalizeModelId(settings.modelId))) {
-      throw new RpcError(-32015, `unknown anthropic model: ${settings.modelId}`)
+    const normalized = normalizeModelId(settings.modelId)
+    if (!isAnthropicModel(normalized)) {
+      // Id `claude-*` lạ (mới hơn allowlist, hoặc user gõ tay): clone tier gần
+      // nhất — API quyết hợp lệ hay không, AWOG không gatekeep cứng hơn nó.
+      // Không khớp prefix `claude-` thì throw như cũ (id rác đúng nghĩa).
+      if (!normalized.toLowerCase().startsWith('claude-')) {
+        throw new RpcError(-32015, `unknown anthropic model: ${settings.modelId}`)
+      }
+      const unknown = unknownAnthropicModel(normalized)
+      if (!unknown) {
+        throw new RpcError(-32015, `unknown anthropic model: ${settings.modelId}`)
+      }
+      model = unknown
+    } else {
+      model = buildAnthropicModel(normalized)
     }
-    model = buildAnthropicModel(settings.modelId)
   } else {
     model = buildCatalogModel(settings.provider, settings.modelId)
   }

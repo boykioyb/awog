@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, net, protocol, shell } from 'electron'
 import type { BrowserWindowConstructorOptions } from 'electron'
 import { log } from './logger'
+import { PREVIEW_SCHEME } from './preview-url'
 import { MEDIA_SCHEME } from './media'
 import { DEV_URL, preloadPath, uiDir } from './paths'
 
@@ -28,6 +29,18 @@ export function registerAppProtocolScheme(): void {
       // same-privilege source.
       scheme: MEDIA_SCHEME,
       privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    },
+    {
+      // wspreview:// serves a workspace HTML page + its relative assets into the
+      // Workbench "Xem trước" iframe (see html-preview.ts). standard so relative URLs
+      // resolve; secure so the page sees a secure context like a normal site.
+      scheme: PREVIEW_SCHEME,
+      privileges: {
+        standard: true,
+        secure: true,
+        supportFetchAPI: true,
+        stream: true,
+      },
     },
   ])
 }
@@ -74,8 +87,7 @@ function registerAppProtocolHandler(): void {
 //     reload (⌘R, Vite full reload) still passes; a path CHANGE never can, since the
 //     SPA router only ever navigates via pushState.
 export function applyNavigationGuards(win: BrowserWindow): void {
-  const isInternalUrl = (url: string): boolean =>
-    url.startsWith(APP_ORIGIN) || url.startsWith(DEV_URL)
+  const isInternalUrl = (url: string): boolean => url.startsWith(APP_ORIGIN) || url.startsWith(DEV_URL)
   // Path of an in-app URL, for comparing "same document" vs "different route".
   const pathOf = (url: string): string => {
     try {
@@ -100,6 +112,10 @@ export function applyNavigationGuards(win: BrowserWindow): void {
   // là thứ cần chặn, không phải thứ cần chiều.
   win.webContents.on('will-frame-navigate', (details) => {
     if (details.isMainFrame) return
+    // wspreview:// is the Workbench HTML preview's own sandboxed frame (opaque origin,
+    // path-validated server side) — its relative links / redirects between workspace
+    // pages are legitimate. Every other off-app URL (http(s), file:, …) stays blocked.
+    if (details.url.startsWith(`${PREVIEW_SCHEME}://`)) return
     if (isInternalUrl(details.url)) return
     details.preventDefault()
     log.warn('blocked subframe navigation', { url: details.url })
@@ -238,9 +254,7 @@ export function createMainWindow(): BrowserWindow {
     if (input.type !== 'keyDown') return
     const key = input.key.toLowerCase()
     const isToggle =
-      key === 'f12' ||
-      (input.control && input.shift && key === 'i') ||
-      (input.meta && input.alt && key === 'i')
+      key === 'f12' || (input.control && input.shift && key === 'i') || (input.meta && input.alt && key === 'i')
     if (isToggle) win.webContents.toggleDevTools()
   })
 

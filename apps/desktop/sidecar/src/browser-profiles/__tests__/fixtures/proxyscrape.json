@@ -1,0 +1,76 @@
+{
+  "total_records": 6,
+  "proxies": [
+    {
+      "alive": true,
+      "anonymity": "elite",
+      "average_timeout": 3021.9,
+      "ip_data": {
+        "countryCode": "NL",
+        "country": "The Netherlands",
+        "city": "Eygelshoven",
+        "isp": "Secure Internet LLC",
+        "as": "AS219326"
+      },
+      "port": 7052,
+      "protocol": "socks5",
+      "proxy": "45.74.31.46:7052",
+      "ssl": true,
+      "uptime": 20.2,
+      "ip": "45.74.31.46"
+    },
+    {
+      "alive": true,
+      "anonymity": "anonymous",
+      "average_timeout": 900,
+      "ip_data": {
+        "countryCode": "DE",
+        "country": "Germany",
+        "city": "Berlin",
+        "isp": "X"
+      },
+      "port": 8080,
+      "protocol": "http",
+      "proxy": "143.20.37.32:8080",
+      "uptime": 88,
+      "ip": "143.20.37.32"
+    },
+    {
+      "alive": true,
+      "anonymity": "elite",
+      "average_timeout": 100,
+      "ip_data": { "countryCode": "US", "country": "United States" },
+      "port": 1080,
+      "protocol": "socks4",
+      "ip": "8.8.8.8",
+      "uptime": 99
+    },
+    {
+      "alive": true,
+      "anonymity": "transparent",
+      "average_timeout": 100,
+      "ip_data": { "countryCode": "US" },
+      "port": 80,
+      "protocol": "http",
+      "ip": "8.8.4.4",
+      "uptime": 99
+    },
+    {
+      "alive": false,
+      "anonymity": "elite",
+      "ip_data": { "countryCode": "US" },
+      "port": 80,
+      "protocol": "http",
+      "ip": "9.9.9.9"
+    },
+    {
+      "alive": true,
+      "anonymity": "elite",
+      "ip_data": { "countryCode": "US" },
+      "port": 3128,
+      "protocol": "http",
+      "ip": "192.168.1.5",
+      "uptime": 50
+    }
+  ]
+}

@@ -35,9 +35,7 @@ const Params = Type.Object({
   workflowId: Type.String({
     description: 'The id of the workflow to run (see the list of available workflows above).',
   }),
-  title: Type.Optional(
-    Type.String({ description: 'Optional title for the task. Defaults to the workflow name.' }),
-  ),
+  title: Type.Optional(Type.String({ description: 'Optional title for the task. Defaults to the workflow name.' })),
   prompt: Type.Optional(
     Type.String({
       description:
@@ -63,7 +61,7 @@ export interface RunWorkflowToolDeps {
 
 function describeTool(workflows: Workflow[]): string {
   const intro =
-    'Start a background Task by running one of this workspace\'s saved Workflows. ' +
+    "Start a background Task by running one of this workspace's saved Workflows. " +
     'The Task runs its multi-phase pipeline autonomously on the Task engine and is linked back to this session; ' +
     'this tool returns immediately with the new task id (it does NOT wait for the task to finish). ' +
     'Use it when the user asks to kick off durable, multi-step work (review, migration, release) as a tracked task rather than doing it inline.'
@@ -76,9 +74,7 @@ function describeTool(workflows: Workflow[]): string {
   return `${intro}\n\nAvailable workflowId values:\n${menu}`
 }
 
-export function createRunWorkflowTool(
-  deps: RunWorkflowToolDeps,
-): AgentTool<typeof Params, RunWorkflowDetails> {
+export function createRunWorkflowTool(deps: RunWorkflowToolDeps): AgentTool<typeof Params, RunWorkflowDetails> {
   let spawned = 0
 
   return {

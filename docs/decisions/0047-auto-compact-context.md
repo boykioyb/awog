@@ -1,6 +1,6 @@
 # 0047 — Auto-compact ngữ cảnh Session (checkpoint summary, reuse Pi primitives)
 
-- **Trạng thái:** Accepted (đính chính cách đo occupancy 2026-06-29 — xem note cuối)
+- **Trạng thái:** Accepted (đính chính cách đo occupancy 2026-06-29 — xem note cuối); **superseded cho provider `anthropic`** bởi [0099](./0099-anthropic-claude-native-runtime.md) (compact native của Claude CLI + ngưỡng `compactAtTokens`) — Pi/Codex giữ nguyên
 - **Ngày:** 2026-06-18
 - **Người quyết định:** User (chốt 2 lựa chọn UX) + Tech Lead
 - **Liên quan:** sửa lỗi `/compact` của [ADR 0023](./0023-sdk-session-resume-and-compact.md); giải quyết TODO "ADR 0029 C1" trong [ADR 0029](./0029-migrate-llm-runtime-to-pi-sdk.md)
@@ -22,18 +22,23 @@ AWOG **không dùng được** `compact()`/`prepareCompaction()`/`findCutPoint()
 ## Quyết định
 
 ### Mô hình checkpoint (mirror Pi `CompactionResult`)
+
 Thêm `Session.compaction = { summary, firstKeptMessageId, tokensBefore, at }` (chỉ giữ checkpoint **mới nhất** — lần sau bao trùm lần trước) + SessionEvent `session.compacted` (event-sourced, append-only). `fold` set field, **KHÔNG đụng `messages`**: transcript đầy đủ vẫn còn để UI hiển thị; chỉ context gửi model bị cắt.
 
 ### Cắt context ở `buildContext`, KHÔNG fold ẩn tin (user chốt)
+
 Khi có checkpoint, `buildContext` chỉ replay messages **từ `firstKeptMessageId` trở đi**; summary được inject vào **system prompt** (section `## Summary of earlier conversation`) thay vì là một message replay — giữ message list **user-first + so le đúng**, tránh synthetic assistant đầu chuỗi. Tin cũ phía trên **vẫn hiển thị bình thường (không làm mờ)** + 1 marker `SessionCompactionMarker` chèn ngay trước message đầu được giữ.
 
 ### Re-summarise từ raw transcript (KISS)
+
 JSONL là nguồn sự thật (ADR 0029) → mỗi lần compact **tóm tắt lại prefix thô** `messages[0..cut)` bằng `generateSummary`, không chuỗi summary-of-summary. `computeCutPoint` (mới, `runtime/compaction.ts`) giữ ~`keepRecentTokens` lượt gần nhất, snap mốc về biên **user-message**; trả `null` khi không có gì để tóm tắt (chống loop re-compact). `runCompact` skip khi `firstKeptMessageId` không đổi so với checkpoint cũ.
 
 ### Auto-compact "khi sắp đầy" (user nói "đạt 100%")
+
 Trigger ở UI store `sendMessage` trước khi gửi lượt mới: `shouldAutoCompact(session) = used > limit − 16384` (reserve 16k = `DEFAULT_COMPACTION_SETTINGS.reserveTokens`, mirror Pi). **Literal 100% sẽ tràn trước khi kịp tóm tắt** → dùng reserve 16k là hiện thực an toàn của ý "đạt 100%" (giống Claude Code, ~92% trên cửa sổ 200k). Có toggle Settings → Sessions `autoCompact` (default **ON**), persist qua `useSettingsSync`. `used`/`limit` lấy từ util chung `contextUsage` (tách từ `SessionContextStatus.vue`) nên widget % và trigger không lệch nhau.
 
 ### `/compact` chạy với running-state như turn thường (user yêu cầu)
+
 `compactSession` dùng đúng máy móc của `sendMessage`: placeholder agent bubble + `pendingAgentIds` + `activeMessageBySession` → spinner + nút **Stop**; `sessions.compact` nhận `messageId`, `registerAborter` + truyền `abortController` nên Stop hủy được giữa chừng. Xong → gỡ placeholder, set `session.compaction` (marker hiện), KHÔNG tạo reply bubble. Bỏ hẳn breadcrumb `system` cũ.
 
 ## Hệ quả

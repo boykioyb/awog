@@ -1,28 +1,21 @@
 import { z } from 'zod'
 import { completeSimple } from '@earendil-works/pi-ai/compat'
-import { register } from '../transport/rpc.js'
-import { ANTHROPIC_API_HEADERS, REQUIRED_HEADERS } from '../auth/anthropic-oauth.js'
+import { register, RpcError } from '../transport/rpc.js'
 import { codexSubscriptionModelIds } from '../auth/openai-codex-oauth.js'
 import { findAccount, loadCredentials } from '../credentials/store.js'
-import { ensureFreshAccessToken, forceRefresh } from '../credentials/token-manager.js'
+import { ensureFreshAccessToken } from '../credentials/token-manager.js'
 import { resolveCredential } from '../credentials/credential-resolver.js'
 import { normalizeAnthropicBaseURL, validateCustomEndpoint } from '../credentials/endpoint-guard.js'
+import { complete } from '../runtime/complete.js'
 import { resolveModel } from '../runtime/model-resolver.js'
 import { log } from '../util/logger.js'
-import type {
-  AccountRecord,
-  EndpointApi,
-  OAuthTokens,
-  ProviderName,
-  SessionSettings,
-} from '../types/shared.js'
+import type { AccountRecord, EndpointApi, ProviderName, SessionSettings } from '../types/shared.js'
 
 const Params = z.object({
   provider: z.enum(['anthropic', 'openai', 'google']),
   accountId: z.string().min(1),
 })
 
-const DEFAULT_BASE_URL = 'https://api.anthropic.com'
 const DEFAULT_PING_MODEL = 'claude-haiku-4-5'
 
 // Cheapest catalog model to ping per provider for a built-in API-key test (a
@@ -37,82 +30,15 @@ interface TestErrorPayload {
   message: string
 }
 
-type TestResult =
-  | { ok: true; expiresAt?: number }
-  | { ok: false; error: TestErrorPayload }
+type TestResult = { ok: true; expiresAt?: number } | { ok: false; error: TestErrorPayload }
 
 // ─── OAuth (subscription) ────────────────────────────────────────────────────
 
-async function pingMessagesOAuth(tokens: OAuthTokens): Promise<Response> {
-  return fetch(`${DEFAULT_BASE_URL}/v1/messages`, {
-    method: 'POST',
-    headers: {
-      ...REQUIRED_HEADERS,
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${tokens.accessToken}`,
-      'anthropic-version': ANTHROPIC_API_HEADERS.ANTHROPIC_VERSION,
-      'anthropic-beta': ANTHROPIC_API_HEADERS.ANTHROPIC_BETA_OAUTH,
-    },
-    body: JSON.stringify({
-      model: DEFAULT_PING_MODEL,
-      max_tokens: 1,
-      messages: [{ role: 'user', content: 'hi' }],
-    }),
-  })
-}
-
-async function bodySnippet(res: Response): Promise<string> {
-  try {
-    const text = await res.text()
-    return text.slice(0, 200)
-  } catch {
-    return ''
-  }
-}
-
-async function testOAuth(provider: ProviderName, accountId: string): Promise<TestResult> {
-  let tokens: OAuthTokens
-  try {
-    tokens = await ensureFreshAccessToken(provider, accountId)
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: { code: 'AUTH_EXPIRED', message } }
-  }
-
-  let res = await pingMessagesOAuth(tokens)
-  if (res.status === 401) {
-    try {
-      tokens = await forceRefresh(provider, accountId)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return { ok: false, error: { code: 'AUTH_EXPIRED', message } }
-    }
-    res = await pingMessagesOAuth(tokens)
-    if (res.status === 401) {
-      return { ok: false, error: { code: 'AUTH_EXPIRED', message: 'Unauthorized after refresh' } }
-    }
-  }
-
-  if (res.ok) return { ok: true, expiresAt: tokens.expiresAt }
-
-  const snippet = await bodySnippet(res)
-  return { ok: false, error: { code: 'TEST_FAILED', message: `HTTP ${res.status}: ${snippet}` } }
-}
-
-// ─── API key (built-in Anthropic key OR custom Anthropic-compatible endpoint) ──
-
-async function testApiKey(record: AccountRecord): Promise<TestResult> {
-  if (!record.apiKey) {
-    return { ok: false, error: { code: 'NOT_SUPPORTED', message: 'Account has no api key' } }
-  }
-
-  let baseURL = DEFAULT_BASE_URL
-  let model = DEFAULT_PING_MODEL
-  const isCustom = !!record.baseURL
+async function testViaClaude(record: AccountRecord): Promise<TestResult> {
+  let modelId = DEFAULT_PING_MODEL
   if (record.baseURL) {
-    // Normalize (strip trailing /v1) then validate — same transform the runtime
-    // applies, so test + runtime hit the identical URL.
-    baseURL = normalizeAnthropicBaseURL(record.baseURL)
+    // Same transform the runtime applies, so test + runtime hit the identical URL.
+    const baseURL = normalizeAnthropicBaseURL(record.baseURL)
     try {
       validateCustomEndpoint(baseURL)
     } catch (err) {
@@ -121,39 +47,55 @@ async function testApiKey(record: AccountRecord): Promise<TestResult> {
     }
     // A custom endpoint won't know the Anthropic model ids — ping with the
     // first model the user configured for it.
-    if (!record.models?.length) {
-      return { ok: false, error: { code: 'NO_MODEL', message: 'No model configured for endpoint' } }
+    const [first] = record.models ?? []
+    if (!first) {
+      return {
+        ok: false,
+        error: {
+          code: 'NO_MODEL',
+          message: 'No model configured for endpoint',
+        },
+      }
     }
-    model = record.models[0]
+    modelId = first
+  } else if (record.authMode !== 'oauth' && !record.apiKey) {
+    return {
+      ok: false,
+      error: { code: 'NOT_SUPPORTED', message: 'Account has no api key' },
+    }
   }
 
-  let res: Response
   try {
-    res = await fetch(`${baseURL}/v1/messages`, {
-      method: 'POST',
-      headers: {
-        ...REQUIRED_HEADERS,
-        'Content-Type': 'application/json',
-        'x-api-key': record.apiKey,
-        'anthropic-version': ANTHROPIC_API_HEADERS.ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify({ model, max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
+    await complete({
+      provider: 'anthropic',
+      accountId: record.id,
+      modelId,
+      systemPrompt: 'Reply with one word.',
+      prompt: 'hi',
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return { ok: false, error: { code: 'NETWORK', message } }
+    if (err instanceof RpcError && err.code === -32020) {
+      return { ok: false, error: { code: 'AUTH_EXPIRED', message } }
+    }
+    // 404 on a custom endpoint almost always means it doesn't serve the Anthropic
+    // Messages API at <base>/v1/messages (wrong base URL, or an OpenAI-only API).
+    const hint =
+      record.baseURL && /\b404\b/.test(message)
+        ? ' — endpoint must speak the Anthropic Messages API at <base>/v1/messages (enter the base URL without a trailing /v1; OpenAI-compatible endpoints are not supported yet)'
+        : ''
+    return {
+      ok: false,
+      error: { code: 'TEST_FAILED', message: `${message}${hint}` },
+    }
   }
 
-  if (res.ok) return { ok: true }
-
-  const snippet = await bodySnippet(res)
-  // 404 on a custom endpoint almost always means it doesn't serve the Anthropic
-  // Messages API at <base>/v1/messages (wrong base URL, or an OpenAI-only API).
-  const hint =
-    isCustom && res.status === 404
-      ? ' — endpoint must speak the Anthropic Messages API at <base>/v1/messages (enter the base URL without a trailing /v1; OpenAI-compatible endpoints are not supported yet)'
-      : ''
-  return { ok: false, error: { code: 'TEST_FAILED', message: `HTTP ${res.status}: ${snippet}${hint}` } }
+  if (record.authMode === 'oauth') {
+    // complete() refreshed the token if needed; read the (possibly new) expiry.
+    const tokens = await ensureFreshAccessToken('anthropic', record.id)
+    return { ok: true, expiresAt: tokens.expiresAt }
+  }
+  return { ok: true }
 }
 
 // ─── Pi-based test (OpenAI / Google built-in + any custom endpoint) ──────────
@@ -301,13 +243,12 @@ register('accounts.test', async (raw) => {
     } else if (!record.oauth) {
       result = { ok: false, error: { code: 'NOT_SUPPORTED', message: 'Account has no oauth credentials' } }
     } else {
-      result = await testOAuth(params.provider, params.accountId)
+      result = await testViaClaude(record)
     }
   } else if (params.provider === 'anthropic' && (!record.baseURL || record.api !== 'openai-completions')) {
     // Built-in Anthropic key, or a custom Anthropic-compatible endpoint (api
-    // undefined ⇒ anthropic-messages for an anthropic account): direct Messages
-    // API ping (unchanged, proven path).
-    result = await testApiKey(record)
+    // undefined ⇒ anthropic-messages for an anthropic account): Claude Agent SDK.
+    result = await testViaClaude(record)
   } else {
     // OpenAI/Google built-in, or any custom OpenAI-compatible endpoint → Pi.
     result = await testViaPi(params.provider, record)

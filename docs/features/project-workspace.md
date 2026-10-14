@@ -78,32 +78,35 @@ Mục tiêu: một **code workspace full-screen** mở từ một Project, đủ
 ### Tích hợp với Sessions (bridge, không merge)
 
 Hai surface giữ riêng (session = đồng hành agent/overlay đọc context; workspace = người tự code/full-screen) nhưng:
-- **Cầu nối**: route nhận deep-link `/projects/:id/code?file=<path>` — mở thẳng file đó khi Monaco ready. Session **Files tab** thêm nút *"Open in editor"* (chỉ khi session gắn `projectId`) → điều hướng sang workspace với file đang xem.
+
+- **Cầu nối**: route nhận deep-link `/projects/:id/code?file=<path>` — mở thẳng file đó khi Monaco ready. Session **Files tab** thêm nút _"Open in editor"_ (chỉ khi session gắn `projectId`) → điều hướng sang workspace với file đang xem.
 - **Editor dùng chung**: Files tab của session đổi từ line-renderer read-only sang **`MonacoEditor` (read-only)** — nhất quán syntax highlight + jump-to-line (`revealPosition`) cho chat link `path#Lnn`. Vai trò panel không đổi (vẫn read-only đọc context).
 
 ### Terminal & Git
 
-- **Terminal**: tái dùng `terminal.*` (ADR 0019) với `workspaceRoot = project.path`. *Lưu ý:* `terminal.create` hiện đòi `sessionId` — cần nới để gắn theo `projectId`/không session (xem Câu hỏi mở).
+- **Terminal**: tái dùng `terminal.*` (ADR 0019) với `workspaceRoot = project.path`. _Lưu ý:_ `terminal.create` hiện đòi `sessionId` — cần nới để gắn theo `projectId`/không session (xem Câu hỏi mở).
 - **Git**: tái dùng toàn bộ Git Manager (đã có 24 method `git.*`) ở context project này.
 
 ## IPC Contract (mới)
 
 ### Mở rộng `fs.*` từ read-only → read-write + search ([ADR 0022](../decisions/0022-fs-read-write-search-ipc.md))
 
-| Method | Payload | Trả về |
-|---|---|---|
-| `fs.writeFile` | `{workspaceRoot, path, content}` | `{bytesWritten}` |
-| `fs.createFile` | `{workspaceRoot, path}` | `{ok}` (fail nếu đã tồn tại) |
-| `fs.createDir` | `{workspaceRoot, path}` | `{ok}` |
-| `fs.rename` | `{workspaceRoot, fromPath, toPath}` | `{ok}` |
-| `fs.delete` | `{workspaceRoot, path, recursive?}` | `{ok}` |
-| `fs.search` | `{workspaceRoot, query, regex?, caseSensitive?, wholeWord?, includeGlob?, excludeGlob?, maxResults?}` | `{matches: [{path, line, column, preview}], truncated}` |
+| Method          | Payload                                                                                               | Trả về                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `fs.writeFile`  | `{workspaceRoot, path, content}`                                                                      | `{bytesWritten}`                                        |
+| `fs.createFile` | `{workspaceRoot, path}`                                                                               | `{ok}` (fail nếu đã tồn tại)                            |
+| `fs.createDir`  | `{workspaceRoot, path}`                                                                               | `{ok}`                                                  |
+| `fs.rename`     | `{workspaceRoot, fromPath, toPath}`                                                                   | `{ok}`                                                  |
+| `fs.delete`     | `{workspaceRoot, path, recursive?}`                                                                   | `{ok}`                                                  |
+| `fs.search`     | `{workspaceRoot, query, regex?, caseSensitive?, wholeWord?, includeGlob?, excludeGlob?, maxResults?}` | `{matches: [{path, line, column, preview}], truncated}` |
 
 Tất cả đi qua `assertInsideWorkspace` ([path-sanitize.ts](../../apps/desktop/sidecar/src/git/path-sanitize.ts), đã có). Write = atomic `.tmp` + rename. Có size cap. Composable [`useFsApi`](../../apps/desktop/ui/composables/useFsApi.ts) mở rộng các method tương ứng.
 
 ### Watcher project-wide
 
-- Sidecar watch `workspaceRoot` (chokidar, debounce ~300ms, dùng lại pattern [watcher.ts](../../apps/desktop/sidecar/src/watcher.ts)) → emit `fs:changed {workspaceRoot, path, type}`. UI cập nhật cây + reconcile tab đang mở.
+- Sidecar watch `workspaceRoot` ([fs-watcher.ts](../../apps/desktop/sidecar/src/fs-watcher.ts), debounce 300ms, bỏ `SKIP_DIRS`) → emit `fs:changed {workspaceRoot, paths}`. UI cập nhật cây + reconcile tab đang mở.
+- **macOS/Windows dùng `fs.watch(root, { recursive: true })` native** (FSEvents / ReadDirectoryChangesW — một handle cho cả cây, không quét ban đầu); **Linux giữ chokidar** (inotify chung một fd). Quyết định backend nằm ở MỘT chỗ — [fs/watch-tree.ts](../../apps/desktop/sidecar/src/fs/watch-tree.ts) — dùng chung với watcher luôn bật `watcher.ts`. ⚠ KHÔNG đưa chokidar trở lại cho nhánh macOS: chokidar 4+ bỏ fsevents nên mở một `fs.watch` (kqueue ⇒ một fd) cho TỪNG file + thư mục. Đo 2026-10-13 trên repo 4,9k thư mục / 28k file: tiến trình cạn fd (`spawn /bin/sh EBADF`) và event loop đứng ~90s ⇒ engine trượt 3 heartbeat và bị giết ngay sau log `fs-watcher: EMFILE`. Bản native: 0 fd tăng thêm, lag ≤ 2ms, sự kiện tới đúng. Watcher luôn bật cũng vậy: engine cũ giữ ~1,8k fd, bản native thêm 0.
+- EMFILE (nếu vẫn xảy ra) đóng HẲN watcher của root đó bất kể refCount + back-off 30s — bản cũ chỉ trừ refCount nên watcher dùng chung vẫn sống và tiếp tục ngốn fd.
 
 ## Security (8 invariant — [.claude/rules/security.md](../../.claude/rules/security.md))
 

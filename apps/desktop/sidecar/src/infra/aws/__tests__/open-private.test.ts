@@ -33,9 +33,7 @@ describe('isAuthorizeUrl', () => {
   it('từ chối mọi thứ không phải trang đăng nhập AWS', () => {
     // `signin.evil.com` là ca đáng sợ nhất: host trông đúng nhưng không phải AWS.
     expect(isAuthorizeUrl('https://signin.evil.com/v1/authorize?x=1')).toBe(false)
-    expect(isAuthorizeUrl('https://evil.com/ap-southeast-1.signin.aws.amazon.com/v1/authorize')).toBe(
-      false,
-    )
+    expect(isAuthorizeUrl('https://evil.com/ap-southeast-1.signin.aws.amazon.com/v1/authorize')).toBe(false)
     // http (không phải https) và scheme khác.
     expect(isAuthorizeUrl('http://ap-southeast-1.signin.aws.amazon.com/v1/authorize?x=1')).toBe(false)
     expect(isAuthorizeUrl('file:///etc/passwd')).toBe(false)
@@ -43,9 +41,7 @@ describe('isAuthorizeUrl', () => {
     expect(isAuthorizeUrl('https://signin.aws.amazon.com/v1/authorize')).toBe(false)
     expect(isAuthorizeUrl('https://signin.aws.amazon.com/')).toBe(false)
     expect(isAuthorizeUrl('')).toBe(false)
-    expect(isAuthorizeUrl(`https://signin.aws.amazon.com/v1/authorize?x=${'a'.repeat(5000)}`)).toBe(
-      false,
-    )
+    expect(isAuthorizeUrl(`https://signin.aws.amazon.com/v1/authorize?x=${'a'.repeat(5000)}`)).toBe(false)
   })
 })
 
@@ -195,10 +191,12 @@ describe('openInPrivateWindow', () => {
       run,
     })
     expect(got).toEqual({ ok: true, browser: 'Google Chrome' })
-    expect(run).toHaveBeenCalledWith(buildPrivateOpenArgs(
-      { app: 'Google Chrome', path: '/Applications/Google Chrome.app', flags: ['--incognito'] },
-      URL_VN,
-    ))
+    expect(run).toHaveBeenCalledWith(
+      buildPrivateOpenArgs(
+        { app: 'Google Chrome', path: '/Applications/Google Chrome.app', flags: ['--incognito'] },
+        URL_VN,
+      ),
+    )
   })
 
   it('đổi lỗi của `open` thành LAUNCH_FAILED thay vì ném lên UI', async () => {

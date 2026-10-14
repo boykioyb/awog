@@ -10,6 +10,7 @@
       :active="s.id === activeId"
       :selecting="false"
       hide-project
+      no-menu
       @click="$emit('pick', s.id)"
       @ctxmenu="noop"
     />

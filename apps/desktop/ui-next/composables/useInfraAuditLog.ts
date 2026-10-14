@@ -211,7 +211,7 @@ export function useInfraAuditLog() {
     }
     sessions.requestMessageJump(session.id, eid)
     sessions.setActive(session.id)
-    await navigateTo('/sessions')
+    await navigateTo('/workbench')
   }
 
   return {

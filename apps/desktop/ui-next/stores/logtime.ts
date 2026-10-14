@@ -334,6 +334,8 @@ export const useLogtimeStore = defineStore('logtime', () => {
   async function composeLine(input: {
     title: string
     projectLabel?: string
+    // Cần để sidecar resolve link.githubRepo → fetch tiêu đề thật của issue/PR.
+    projectKey?: string
     issue?: number
     pr?: number
     kind: 'session' | 'task'

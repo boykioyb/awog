@@ -10,7 +10,7 @@
 import { z } from 'zod'
 import { register, RpcError } from '../transport/rpc.js'
 import { log } from '../util/logger.js'
-import { completePi, isModelRefusal } from '../runtime/complete.js'
+import { complete, isModelRefusal } from '../runtime/complete.js'
 import { extractJson } from '../util/json-extract.js'
 
 const ModelSchema = z.string().min(1).max(200)
@@ -75,9 +75,7 @@ function buildSystemPrompt(
   })
   const agentList =
     ordered.length > 0
-      ? ordered
-          .map((a) => `- [${a.scope}] id: ${a.id} | role: ${a.role || '—'} | name: ${a.name}`)
-          .join('\n')
+      ? ordered.map((a) => `- [${a.scope}] id: ${a.id} | role: ${a.role || '—'} | name: ${a.name}`).join('\n')
       : '(no agents available — return an empty nodes array and explain in the description)'
 
   // Project skills first so the model sees them as the primary choices (mirror agents).
@@ -134,7 +132,7 @@ register('workflows.generate', async (raw) => {
   // Pure-text generation through the Pi runtime (no tools).
   let collected: string
   try {
-    collected = await completePi({
+    collected = await complete({
       accountId: params.accountId,
       modelId,
       systemPrompt: buildSystemPrompt(params.availableAgents, params.availableSkills),
@@ -149,7 +147,7 @@ register('workflows.generate', async (raw) => {
     log.warn('workflows.generate refused with skills list — retrying without', {
       skills: params.availableSkills.length,
     })
-    collected = await completePi({
+    collected = await complete({
       accountId: params.accountId,
       modelId,
       systemPrompt: buildSystemPrompt(params.availableAgents, []),

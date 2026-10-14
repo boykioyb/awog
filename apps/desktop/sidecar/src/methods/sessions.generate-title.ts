@@ -13,7 +13,7 @@
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
 import { loadSession } from '../sessions/store.js'
-import { completePi } from '../runtime/complete.js'
+import { complete } from '../runtime/complete.js'
 import { log } from '../util/logger.js'
 import type { ProviderName } from '../types/shared.js'
 
@@ -98,10 +98,7 @@ register('sessions.generateTitle', async (raw) => {
   // fall back to the persisted first user message. The session read is best-effort —
   // a title only needs the user's text, so titling still works before anything is on
   // disk (loadSession may legitimately return null on a brand-new session).
-  const userText =
-    params.userText?.trim() ||
-    session?.messages.find((m) => m.role === 'user')?.text.trim() ||
-    ''
+  const userText = params.userText?.trim() || session?.messages.find((m) => m.role === 'user')?.text.trim() || ''
   if (!userText) return { ok: false, reason: 'no-message' }
   const firstAgent = session?.messages.find((m) => m.role === 'agent')
 
@@ -121,13 +118,12 @@ register('sessions.generateTitle', async (raw) => {
 
   // Try the cheap model first, then the session's own model as a fallback.
   const cheap = CHEAP_MODEL[params.provider]
-  const candidates =
-    cheap && cheap !== params.modelId ? [cheap, params.modelId] : [params.modelId]
+  const candidates = cheap && cheap !== params.modelId ? [cheap, params.modelId] : [params.modelId]
 
   for (const modelId of candidates) {
     try {
       // eslint-disable-next-line no-await-in-loop -- intentional sequential fallback
-      const out = await completePi({
+      const out = await complete({
         provider: params.provider,
         ...(params.accountId ? { accountId: params.accountId } : {}),
         modelId,

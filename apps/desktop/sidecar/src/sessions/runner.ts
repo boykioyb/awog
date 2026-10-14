@@ -9,6 +9,7 @@ import type {
   ContextChars,
   ContextConfig,
   ContextItemSize,
+  NativeCompaction,
   SessionAttachment,
   SessionCompaction,
   SessionMessage,
@@ -40,11 +41,7 @@ interface ActiveTurn {
 }
 const ACTIVE_ABORTERS = new Map<string, ActiveTurn>()
 
-export function registerAborter(
-  sessionId: string,
-  messageId: string,
-  controller: AbortController,
-): void {
+export function registerAborter(sessionId: string, messageId: string, controller: AbortController): void {
   ACTIVE_ABORTERS.set(messageId, { sessionId, controller })
 }
 
@@ -293,6 +290,12 @@ export interface RunNonStreamArgs {
   // `attribution` (overriding the claude_code preset's Claude trailer); the Pi
   // path appends CO_AUTHOR_INSTRUCTION to the system prompt. Omitted → on (default).
   commitCoAuthor?: boolean
+  // Background wake on the Claude SDK path (ADR 0099): the CLI process outlived the last
+  // turn and has ALREADY started a model turn on its own (a background task finished).
+  // This turn adopts that turn's output instead of sending `pendingText` — which is only
+  // sent, as an ordinary user message, when there is nothing to adopt (the process was
+  // reaped or replaced since the wake was announced). Ignored by every other runtime.
+  attachWake?: boolean
 }
 
 export interface StreamCallbacks {
@@ -346,6 +349,12 @@ export interface RunStreamResult {
   // the context gauge IMMEDIATELY (before the next turn) so the reduction is
   // visible the instant the checkpoint lands — same estimate the next turn reports.
   compactedHistoryChars?: number
+  // Native Claude CLI compactions that happened during this run (Anthropic path):
+  // the manual `/compact` turn (nativeCommand) yields one, a normal turn yields one
+  // per CLI auto-compact. The CLI keeps the same sdkSessionId; nothing is persisted
+  // by AWOG — the UI marker comes from these figures live and from the CLI JSONL on
+  // replay (sessions/claude-transcript.ts).
+  nativeCompactions?: NativeCompaction[]
   // New/rotated Claude Agent SDK session id (ADR 0058, Anthropic path only). The
   // caller persists it onto the session so the next turn resumes the SDK session.
   // Absent on the Pi path (which resumes by rebuilding Context from JSONL).
@@ -424,7 +433,6 @@ async function runWithAuthRetry(
   }
 }
 
-
 // Model dự phòng cho nhánh PI (đối trọng của `fallbackModel` mà Claude SDK làm sẵn).
 //
 // Provider quá tải là lỗi tạm thời: hôm nay nó giết cả lượt, người dùng chỉ còn cách
@@ -477,18 +485,20 @@ async function runWithModelFallback(
   }
 }
 
-export async function runStream(
-  args: RunNonStreamArgs,
-  cb: StreamCallbacks,
-): Promise<RunStreamResult> {
-  // `/compact` is a provider-agnostic summarization (ADR 0047), NOT a chat turn:
-  // ALWAYS run it through Pi's runCompact, which re-summarises the transcript prefix
-  // and returns a { summary, firstKeptMessageId } checkpoint. This makes /compact
-  // work deterministically on EVERY runtime (unlike the SDK's adaptive native
-  // compaction which no-ops until near-full). On the Claude SDK path the persisted
-  // checkpoint supersedes the SDK session (session.compacted clears sdkSessionId)
-  // and the next turn re-seeds a fresh SDK session from [summary + kept turns].
+export async function runStream(args: RunNonStreamArgs, cb: StreamCallbacks): Promise<RunStreamResult> {
+  // `/compact` for Pi/Codex providers (ADR 0047): a provider-agnostic summarisation
+  // through Pi's runCompact, which re-summarises the transcript prefix and returns a
+  // { summary, firstKeptMessageId } checkpoint the caller persists.
+  //
+  // The Anthropic provider NEVER comes through here: its compaction is the Claude
+  // CLI's own `/compact`, sent as a native command into the resumed SDK session
+  // (sessions.compact / the overflow recovery set `nativeCommand`) — same
+  // sdkSessionId afterwards, nothing for AWOG to persist (ADR 0099). Refuse the
+  // old shape instead of silently summarising with Pi and orphaning the CLI session.
   if (args.slashCommand === 'compact') {
+    if (args.settings.provider === 'anthropic') {
+      throw new RpcError(-32602, "COMPACT_NATIVE_ONLY: Anthropic sessions compact via nativeCommand '/compact'")
+    }
     const { runStreamPi } = await import('../runtime/run-stream.js')
     return withSessionLock(args.sessionId, () => runStreamPi(args, cb))
   }
@@ -497,10 +507,7 @@ export async function runStream(
   // `/goal …` to another provider's model as prose (the UI only offers these on the
   // Anthropic branch, so this is the boundary check behind that).
   if (args.nativeCommand && args.settings.provider !== 'anthropic') {
-    throw new RpcError(
-      -32602,
-      'NATIVE_COMMAND_UNSUPPORTED: Claude CLI slash commands need the Anthropic provider',
-    )
+    throw new RpcError(-32602, 'NATIVE_COMMAND_UNSUPPORTED: Claude CLI slash commands need the Anthropic provider')
   }
 
   // Dual runtime (ADR 0058): the Anthropic provider runs on the Claude Agent SDK

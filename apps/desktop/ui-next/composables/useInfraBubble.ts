@@ -179,7 +179,7 @@ export function useInfraBubble() {
     closeBubble()
     if (id == null) return
     sessions.setActive(id)
-    await navigateTo('/sessions')
+    await navigateTo('/workbench')
   }
 
   /** Trỏ bong bóng sang một phiên khác trong danh sách (chế độ thu nhỏ). */

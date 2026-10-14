@@ -16,15 +16,15 @@
         />
       </span>
       <span class="tname" :class="{ err: block.status === 'error' }">{{ block.tool }}</span>
-      <span class="starg" :title="block.target">
+      <span class="starg" :title="resolvedTarget">
         <!-- dir half ellipsizes, filename stays visible — but a target with no "/"
              (a bare command) must truncate as one span, else the fixed name
              overflows into the result/elapsed chips (reported overflow bug). -->
-        <template v-if="shortTarget(block.target).dir">
-          <span class="min-w-0 truncate">{{ shortTarget(block.target).dir }}</span>
-          <span class="shrink-0">{{ shortTarget(block.target).name }}</span>
+        <template v-if="shortTarget(resolvedTarget).dir">
+          <span class="min-w-0 truncate">{{ shortTarget(resolvedTarget).dir }}</span>
+          <span class="shrink-0">{{ shortTarget(resolvedTarget).name }}</span>
         </template>
-        <span v-else class="truncate">{{ block.target }}</span>
+        <span v-else class="truncate">{{ resolvedTarget }}</span>
       </span>
       <SessionStepResult :text="isTodo ? todoCount : block.result" />
       <!-- Live per-tool elapsed (craft ActivityRow parity): surfaces only once a running
@@ -76,20 +76,20 @@
                 />
               </span>
               <span class="tname">{{ st.tool }}</span>
-              <span class="starg" :title="st.target">
-                <template v-if="shortTarget(st.target).dir">
-                  <span class="min-w-0 truncate">{{ shortTarget(st.target).dir }}</span>
-                  <span class="shrink-0">{{ shortTarget(st.target).name }}</span>
+              <span class="starg" :title="subTarget(st)">
+                <template v-if="shortTarget(subTarget(st)).dir">
+                  <span class="min-w-0 truncate">{{ shortTarget(subTarget(st)).dir }}</span>
+                  <span class="shrink-0">{{ shortTarget(subTarget(st)).name }}</span>
                 </template>
-                <span v-else class="truncate">{{ st.target }}</span>
+                <span v-else class="truncate">{{ subTarget(st) }}</span>
               </span>
               <SessionStepResult :text="st.result" />
               <span
-                v-if="fileTargetOf(st.tool, st.target)"
+                v-if="fileTargetOf(st.tool, subTarget(st))"
                 role="button"
                 class="sview"
                 :title="t('sessions.step.viewFile')"
-                @click.stop="viewFile(st.tool, st.target)"
+                @click.stop="viewFile(st.tool, subTarget(st))"
               >
                 <Icon name="file" style="width: var(--icon-xs); height: var(--icon-xs)" />
               </span>
@@ -104,9 +104,10 @@
               <div class="sbody">
                 <SessionStepBody
                   :tool="st.tool"
-                  :target="st.target"
-                  :detail="st.detail"
-                  :detail-kind="st.detailKind"
+                  :target="subTarget(st)"
+                  :detail="subDetail(st)"
+                  :detail-kind="subDetailKind(st)"
+                  :pending="subDetailPending(st) || subTargetPending(st)"
                 />
               </div>
             </Collapse>
@@ -144,9 +145,10 @@
         <SessionStepBody
           v-else
           :tool="block.tool"
-          :target="block.target"
-          :detail="block.detail"
-          :detail-kind="block.detailKind"
+          :target="resolvedTarget"
+          :detail="resolvedDetail"
+          :detail-kind="resolvedDetailKind"
+          :pending="detailPending || resolvedTargetPending"
         />
       </div>
     </Collapse>
@@ -158,10 +160,98 @@
 // Collapsed-by-default: the header toggles the body, matching the transcript-wide
 // fold broadcast. shadcn re-skin (proto ProtoStepGroup parity): flat rows on
 // hover-wash, ring-spinner while running, destructive tint on failure.
-import type { StepBlock } from '~/composables/useSessionsData'
+import type { StepBlock, SubStep } from '~/composables/useSessionsData'
 
-const props = defineProps<{ block: StepBlock }>()
+const props = defineProps<{
+  block: StepBlock
+  // Persisted id (eid, ADR 0074) của message chứa step này — cần để fetch
+  // detail deferred qua sessions.stepDetail (sessionId + messageId + stepId).
+  msgEid?: string
+}>()
 const { t } = useI18n()
+const scope = useSessionScope()
+const store = useSessionsStore()
+
+// A cache row is either `{pending:true}` (fetch in flight — block "no output")
+// or the resolved `{detail, detailKind, target}`; narrow before reading fields.
+type DetailHit =
+  | { detail?: string; detailKind?: StepBlock['detailKind']; target?: string }
+  | undefined
+function hitOf(stepEid: string | undefined, deferred: boolean | undefined): DetailHit {
+  if (!stepEid || !deferred) return undefined
+  const engineId = scope.session.value?.engineId
+  if (!engineId || !props.msgEid) return undefined
+  const row = store.stepDetailOf(engineId, props.msgEid, stepEid)
+  return row && 'pending' in row ? undefined : row
+}
+function hitPending(stepEid: string | undefined, deferred: boolean | undefined): boolean {
+  if (!stepEid || !deferred) return false
+  const engineId = scope.session.value?.engineId
+  if (!engineId || !props.msgEid) return false
+  const row = store.stepDetailOf(engineId, props.msgEid, stepEid)
+  // Not-yet-fetched also counts as pending — the expand watcher fires the fetch
+  // next tick; showing "(no output)" for one frame would flicker.
+  return row === undefined || 'pending' in row
+}
+
+// Detail payload của block — trực tiếp trên block khi có (live / dưới ngưỡng
+// defer), còn detailDeferred thì đọc từ cache reactive của store (transcript
+// markRaw ⇒ block.detail không thể mutate có phản ứng, cache là đường duy nhất).
+const resolvedDetail = computed<string | undefined>(() => {
+  const b = props.block
+  if (b.detail !== undefined) return b.detail
+  return hitOf(b.eid, b.detailDeferred)?.detail
+})
+const resolvedDetailKind = computed<StepBlock['detailKind']>(() => {
+  const b = props.block
+  if (b.detail !== undefined) return b.detailKind
+  return hitOf(b.eid, b.detailDeferred)?.detailKind ?? b.detailKind
+})
+const detailPending = computed<boolean>(() =>
+  hitPending(props.block.eid, props.block.detailDeferred),
+)
+
+// Substep twins — same deferred contract keyed on the sub-step's own eid.
+function subDetail(st: SubStep): string | undefined {
+  return st.detail !== undefined ? st.detail : hitOf(st.eid, st.detailDeferred)?.detail
+}
+function subDetailKind(st: SubStep): StepBlock['detailKind'] {
+  return st.detail !== undefined
+    ? st.detailKind
+    : (hitOf(st.eid, st.detailDeferred)?.detailKind ?? st.detailKind)
+}
+function subDetailPending(st: SubStep): boolean {
+  return hitPending(st.eid, st.detailDeferred)
+}
+
+// Lazy fetch: the first expand of a deferred step triggers sessions.stepDetail.
+function fetchDetailIfNeeded(stepEid: string | undefined, deferred: boolean | undefined): void {
+  if (!deferred || !stepEid) return
+  const engineId = scope.session.value?.engineId
+  if (!engineId || !props.msgEid) return
+  void store.ensureStepDetail(engineId, props.msgEid, stepEid)
+}
+
+// Target có thể là preview 512B khi `targetDeferred` (lệnh heredoc dài) — full
+// string đi cùng fetch stepDetail. Header/body đọc resolved; khi chưa tới nơi
+// hiển thị preview (đuôi "…" báo còn nữa — appended ở đây vì slice thô không
+// đánh dấu truncate).
+const resolvedTarget = computed<string>(() => {
+  const b = props.block
+  if (!b.targetDeferred) return b.target
+  const hit = hitOf(b.eid, true)
+  return hit?.target ?? `${b.target}…`
+})
+const resolvedTargetPending = computed<boolean>(() =>
+  hitPending(props.block.eid, props.block.targetDeferred),
+)
+function subTarget(st: SubStep): string {
+  if (!st.targetDeferred) return st.target
+  return hitOf(st.eid, true)?.target ?? `${st.target}…`
+}
+function subTargetPending(st: SubStep): boolean {
+  return hitPending(st.eid, st.targetDeferred)
+}
 
 // Live per-tool elapsed (craft ActivityRow parity, ADR 0061 Pha 5). Once a running
 // step has been going ≥2s, show a subtle "Xs" ticker so long-running tools read as
@@ -219,9 +309,15 @@ function fileTargetOf(tool: string, target: string): string | null {
 }
 const topFileTarget = computed(() => fileTargetOf(props.block.tool, props.block.target))
 
+// Write-class tools land on the file's DIFF doc (what the step changed); reads
+// open the file itself. Both route through filePreview's tab resolution.
+const WRITE_TOOL = /edit|write|update|create|notebook/i
+
 function viewFile(tool: string, target: string): void {
   const path = fileTargetOf(tool, target)
-  if (path) filePreview.open(path)
+  if (!path) return
+  if (WRITE_TOOL.test(tool)) filePreview.openDiff(path)
+  else filePreview.open(path)
 }
 
 // A TodoWrite note step (carries `todos`) renders its checklist inline; a subagent
@@ -258,7 +354,8 @@ function shortTarget(target: string): { dir: string; name: string } {
 const summaryText = computed(() => {
   const b = props.block
   if (!b.sub) return ''
-  if (b.detail && (!b.detailKind || b.detailKind === 'text')) return b.detail
+  const detail = resolvedDetail.value
+  if (detail && (!b.detailKind || b.detailKind === 'text')) return detail
   return b.result ?? ''
 })
 
@@ -339,9 +436,27 @@ watch(
   },
 )
 const toggleSub = (i: number) => {
-  if (subExpanded.has(i)) subExpanded.delete(i)
-  else subExpanded.add(i)
+  if (subExpanded.has(i)) {
+    subExpanded.delete(i)
+    return
+  }
+  subExpanded.add(i)
+  const st = props.block.sub?.steps[i]
+  if (st) fetchDetailIfNeeded(st.eid, st.detailDeferred || st.targetDeferred)
 }
+
+// Deferred detail (sessions.get lite): first expand of THIS step's body fires
+// the lazy sessions.stepDetail fetch — covering the own-detail branches
+// (SessionStepBody) AND a subagent's deferred final report (summaryText reads
+// the same cache). Individual sub-steps fetch on their own expand above.
+watch(
+  collapsed,
+  (isCollapsed) => {
+    if (!isCollapsed)
+      fetchDetailIfNeeded(props.block.eid, props.block.detailDeferred || props.block.targetDeferred)
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>

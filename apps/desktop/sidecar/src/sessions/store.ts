@@ -27,8 +27,11 @@ import {
   readSessionMessages,
   readSessionRawLines,
   sessionFilePath,
+  readSessionHeader,
 } from './jsonl.js'
 import { sessionManager, type SessionMetadataPatch } from './session-manager.js'
+import { readSdkTranscriptMessages, resolveSdkTranscriptPath } from './sdk-transcript.js'
+import { refreshImportedSessions } from './claude-import.js'
 
 // ─── CRUD facade ──────────────────────────────────────────────────────────────
 
@@ -45,10 +48,7 @@ export async function createSession(session: Session): Promise<void> {
   await sessionManager.createSession(session)
 }
 
-export async function updateSessionMetadata(
-  id: string,
-  patch: SessionMetadataPatch,
-): Promise<void> {
+export async function updateSessionMetadata(id: string, patch: SessionMetadataPatch): Promise<void> {
   await sessionManager.ensureLoaded()
   await sessionManager.updateMetadata(id, patch)
 }
@@ -66,10 +66,7 @@ export async function appendMessage(sessionId: string, message: SessionMessage):
 // Drops both runtime resume handles: a real truncation rewrites history, so the
 // Claude SDK session (ADR 0058) and the Codex thread (ADR 0087) both still hold the
 // removed turns. The next turn re-seeds from the truncated JSONL instead.
-export async function truncateSession(
-  sessionId: string,
-  keepThroughId: string | null,
-): Promise<void> {
+export async function truncateSession(sessionId: string, keepThroughId: string | null): Promise<void> {
   await sessionManager.ensureLoaded()
   const session = await sessionManager.getSession(sessionId)
   if (!session) {
@@ -85,7 +82,15 @@ export async function truncateSession(
     if (idx < 0) return
     messages = session.messages.slice(0, idx + 1)
   }
-  const { sdkSessionId: _staleSdk, codexThreadId: _staleThread, ...rest } = session
+  // History re-roots in AWOG: drop the pointer fields (ADR 0097) together with
+  // the resume handles so the next persist writes the full body again.
+  const {
+    sdkSessionId: _staleSdk,
+    codexThreadId: _staleThread,
+    transcriptSource: _ts,
+    sdkSessionPath: _sp,
+    ...rest
+  } = session
   await sessionManager.saveSession({ ...rest, messages })
 }
 
@@ -94,10 +99,7 @@ export async function truncateSession(
 // Drops both runtime resume handles: the compaction supersedes the Claude SDK
 // session (ADR 0058) and the Codex thread (ADR 0087), so the next turn re-seeds a
 // fresh, smaller one from [summary + kept turns].
-export async function compactSession(
-  sessionId: string,
-  compaction: SessionCompaction,
-): Promise<void> {
+export async function compactSession(sessionId: string, compaction: SessionCompaction): Promise<void> {
   await sessionManager.ensureLoaded()
   const session = await sessionManager.getSession(sessionId)
   if (!session) {
@@ -106,7 +108,13 @@ export async function compactSession(
   }
   const known = session.messages.some((m) => m.id === compaction.firstKeptMessageId)
   if (!known) return
-  const { sdkSessionId: _supersededSdk, codexThreadId: _supersededThread, ...rest } = session
+  const {
+    sdkSessionId: _supersededSdk,
+    codexThreadId: _supersededThread,
+    transcriptSource: _ts,
+    sdkSessionPath: _sp,
+    ...rest
+  } = session
   await sessionManager.saveSession({ ...rest, compaction })
 }
 
@@ -143,10 +151,7 @@ export async function setSessionRunMembership(
 // header, nên đường ghi phải là RPC riêng `sessions.setAgent` — patch kiểu
 // spread của updateSessionMetadata không xoá được key (y hệt setSessionGroup).
 // Trả về false khi id không tồn tại để RPC báo "Session not found".
-export async function setSessionAgent(
-  id: string,
-  agent: SessionAgentRef | null,
-): Promise<boolean> {
+export async function setSessionAgent(id: string, agent: SessionAgentRef | null): Promise<boolean> {
   await sessionManager.ensureLoaded()
   return sessionManager.setSessionAgent(id, agent)
 }
@@ -154,22 +159,48 @@ export async function setSessionAgent(
 // Override LLM cấp phiên — "đổi account/model khi hết token" (board item →
 // Advanced). `null` = gỡ hẳn key. Y hệt setSessionAgent: RPC riêng vì patch
 // spread của updateMetadata không xoá được key.
-export async function setSessionLlmOverride(
-  id: string,
-  override: SessionLlmOverride | null,
-): Promise<boolean> {
+export async function setSessionLlmOverride(id: string, override: SessionLlmOverride | null): Promise<boolean> {
   await sessionManager.ensureLoaded()
   return sessionManager.setLlmOverride(id, override)
+}
+
+// Khoá chọn profile trình duyệt của một phiên (không nạp transcript).
+export async function getSessionBrowserRef(
+  id: string,
+): Promise<{ browserProfileId: string | null; projectId: string | null } | undefined> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.getSessionBrowserRef(id)
+}
+
+// Tóm tắt mọi phiên (từ bản đồ ấm) — cho lượt đồng bộ scope→profile.
+export async function listSessionBrowserRefs(): Promise<
+  {
+    id: string
+    browserProfileId: string | null
+    projectId: string | null
+    archived: boolean
+  }[]
+> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.getSessions().map((s) => ({
+    id: s.id,
+    browserProfileId: s.browserProfileId ?? null,
+    projectId: s.projectId,
+    archived: s.archived === true,
+  }))
+}
+
+// Profile trình duyệt cấp phiên. `null` = gỡ hẳn key. Trả false khi id không có.
+export async function setSessionBrowserProfile(id: string, profileId: string | null): Promise<boolean> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setBrowserProfile(id, profileId)
 }
 
 // Ghi nhớ / xoá cấu hình spawn của nhóm trên phiên gốc — "duyệt một lần cho cả
 // workflow" (sessions/spawn-approval.ts). `null` = xoá hẳn key, đúng khuôn
 // setSessionGroup/setSessionInfra. `{}` là marker HỢP LỆ ("đã duyệt, kế thừa
 // toàn bộ cha") — xem session-manager.setGroupSpawn.
-export async function setSessionSpawnConfig(
-  id: string,
-  config: SpawnSessionConfig | null,
-): Promise<boolean> {
+export async function setSessionSpawnConfig(id: string, config: SpawnSessionConfig | null): Promise<boolean> {
   await sessionManager.ensureLoaded()
   return sessionManager.setSpawnConfig(id, config)
 }
@@ -206,6 +237,14 @@ export async function listSessionSummaries(): Promise<SessionSummary[]> {
   return sessionManager.getSessions()
 }
 
+// Như `listSessionSummaries` nhưng kéo `updatedAt` của phiên nhập từ Claude Desktop/CLI theo
+// mtime transcript trước (hoạt động làm ở bên kia sau lúc nhập — ADR 0102). Dùng cho Logtime
+// và danh sách phiên: chi phí thường là một `stat` mỗi phiên nhập.
+export async function listSessionSummariesFresh(): Promise<SessionSummary[]> {
+  await refreshImportedSessions()
+  return listSessionSummaries()
+}
+
 // Full sessions (with messages), newest first. Heavy — reads every transcript — so
 // this is for on-demand full-text search only (sessions.search). Reads each file
 // TRANSIENTLY (readSessionJsonl) instead of sessionManager.getSession, so a search
@@ -219,9 +258,26 @@ export async function listFullSessions(): Promise<Session[]> {
     if (!parsed) continue
     // Strip the 4 pre-computed header fields → Omit<Session, 'messages'>, attach body.
     const { messageCount: _mc, preview: _pv, status: _st, lastPreview: _lp, ...meta } = parsed.header
-    sessions.push({ ...meta, messages: parsed.messages })
+    // ADR 0097: pointer sessions keep messages in the CLI transcript — replay it
+    // instead of the (index-only) AWOG body.
+    const sdkPath =
+      meta.transcriptSource === 'sdk' && meta.sdkSessionId
+        ? resolveSdkTranscriptPath(meta.sdkSessionId, meta.sdkSessionPath)
+        : undefined
+    sessions.push({
+      ...meta,
+      messages: sdkPath ? readSdkTranscriptMessages(sdkPath) : parsed.messages,
+    })
   }
   return sessions
+}
+
+// Re-root a pointer session's transcript in AWOG (provider switched off the
+// Claude SDK path — its CLI file stops growing, so keeping the pointer would
+// replay a stale history on the next cold load).
+export async function clearSdkTranscript(id: string): Promise<void> {
+  await sessionManager.ensureLoaded()
+  await sessionManager.clearSdkTranscript(id)
 }
 
 // ─── Bounded token-usage aggregation (dashboard.usage) ──────────────────────
@@ -239,10 +295,7 @@ export interface UsageEntry {
 function sumUsageTokens(usage: SessionMessage['usage']): number {
   if (!usage) return 0
   return (
-    (usage.inputTokens || 0) +
-    (usage.outputTokens || 0) +
-    (usage.cacheReadTokens || 0) +
-    (usage.cacheWriteTokens || 0)
+    (usage.inputTokens || 0) + (usage.outputTokens || 0) + (usage.cacheReadTokens || 0) + (usage.cacheWriteTokens || 0)
   )
 }
 
@@ -261,6 +314,19 @@ function messageTimeMs(msg: SessionMessage): number {
 // single-file format keeps files small; only recently-touched sessions are read).
 // In the new format each message appears once, so the dedupe-by-id is trivially
 // satisfied (kept for parity with the return contract).
+// Read one session's messages for an aggregation pass — routing to the CLI
+// transcript replay when the header marks it pointer-sourced (ADR 0097).
+// Header read is first-line-only so this stays cheap.
+function readMessagesForAggregation(id: string): SessionMessage[] {
+  const file = sessionFilePath(id)
+  const header = readSessionHeader(file)
+  if (header?.transcriptSource === 'sdk' && header.sdkSessionId) {
+    const sdkPath = resolveSdkTranscriptPath(header.sdkSessionId, header.sdkSessionPath)
+    if (sdkPath) return readSdkTranscriptMessages(sdkPath)
+  }
+  return readSessionMessages(file)
+}
+
 export async function collectUsageSince(windowStartMs: number): Promise<UsageEntry[]> {
   await sessionManager.ensureLoaded()
   const summaries = sessionManager.getSessions()
@@ -272,7 +338,7 @@ export async function collectUsageSince(windowStartMs: number): Promise<UsageEnt
     // read error — infosec F1) must not crash the whole dashboard rollup.
     let messages: SessionMessage[]
     try {
-      messages = readSessionMessages(sessionFilePath(s.id))
+      messages = readMessagesForAggregation(s.id)
     } catch (err) {
       log.warn('usage: failed to read session tail', {
         sessionId: s.id,
@@ -343,7 +409,7 @@ export async function collectSessionTurnsSince(
     // Best-effort: skip a session whose transcript can't be read (infosec F1).
     let messages: SessionMessage[]
     try {
-      messages = readSessionMessages(sessionFilePath(s.id))
+      messages = readMessagesForAggregation(s.id)
     } catch (err) {
       log.warn('activity: failed to read session tail', {
         sessionId: s.id,

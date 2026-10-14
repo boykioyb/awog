@@ -26,6 +26,17 @@ export function unregisterTerminalRunner(key: string): void {
   runners.delete(key)
 }
 
+// Terminal ĐANG HIỂN THỊ (WorkspaceTerminal.visible): nút Run ghi vào cái người
+// dùng đang nhìn — dock ⌘J đang mở thắng panel phiên, panel phiên mở tab khác
+// thì rớt về khoá phiên. Một ô nhớ, chủ nhân tự claim/clear khi visible đổi.
+const visibleRunnerKey = ref<string | null>(null)
+export function claimVisibleTerminalRunner(key: string): void {
+  visibleRunnerKey.value = key
+}
+export function releaseVisibleTerminalRunner(key: string): void {
+  if (visibleRunnerKey.value === key) visibleRunnerKey.value = null
+}
+
 // Mẫu lệnh phá huỷ / không hoàn tác được. Cố ý để RỘNG và chấp nhận báo nhầm: giá
 // của một lần hỏi thừa là một cú Enter, còn giá của một lần bỏ sót là mất dữ liệu.
 // Đây KHÔNG phải hàng rào bảo mật (người dùng vẫn chạy được mọi thứ trong terminal
@@ -71,6 +82,10 @@ export function useSessionTerminalRun() {
     const text = command.trim()
     if (!text || busy.value) return false
     const key = `ses:${sessionId}`
+    // Terminal ĐANG HIỂN THỊ thắng khoá phiên: bấm Run lúc dock ⌘J (hoặc panel
+    // Terminal của một phiên khác) đang trên màn hình thì lệnh phải tới đúng cái
+    // đó — không mở/ghi ngầm vào terminal phiên khuất mắt.
+    const targetKey = visibleRunnerKey.value ?? key
 
     // Mở khung Terminal nếu chưa mở. `toggleView` sẽ ĐÓNG nếu đang mở, nên phải
     // kiểm tra trước — bấm Run khi terminal đang mở mà lại đóng nó đi thì vô lý.
@@ -81,9 +96,12 @@ export function useSessionTerminalRun() {
       const deadline = Date.now() + READY_TIMEOUT_MS
       const payload = alt ? text : `${text}\n`
       for (;;) {
-        if (runners.get(key)?.(payload)) return true
+        // Runner của terminal đang hiện có thể tự claim lại khoá bất cứ lúc nào
+        // (tab đổi ngay sau khi nút Run mở panel), nên đọc lại mỗi nhịp.
+        const runner = runners.get(visibleRunnerKey.value ?? targetKey)
+        if (runner?.(payload)) return true
         if (Date.now() > deadline) return false
-        await new Promise((r) => setTimeout(r, POLL_MS))
+        await new Promise<void>((r) => setTimeout(r, POLL_MS))
       }
     } finally {
       busy.value = false

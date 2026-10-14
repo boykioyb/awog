@@ -106,7 +106,7 @@ function restore(e: MinimizedEntry): void {
       break
     case 'session':
       sessions.setActive(e.sessionId)
-      void navigateTo('/sessions')
+      void navigateTo('/workbench')
       break
     case 'task':
       focusTask(e.taskId)

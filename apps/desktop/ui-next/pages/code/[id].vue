@@ -152,7 +152,7 @@ const returnPath = computed<string>(() => {
     : '/projects'
 })
 const backLabel = computed<string>(() =>
-  returnPath.value.startsWith('/sessions')
+  returnPath.value.startsWith('/workbench') || returnPath.value.startsWith('/sessions')
     ? t('editor.backToSessions')
     : t('editor.backToProjects'),
 )

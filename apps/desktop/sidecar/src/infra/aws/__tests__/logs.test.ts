@@ -272,9 +272,7 @@ describe('estimateScan — ước lượng TRƯỚC khi tiêu tiền (2.6)', () 
   })
 
   it('chưa có lịch sử thì cộng storedBytes — một TRẦN TRÊN, và nói rõ là trần trên', async () => {
-    runInfra.mockResolvedValue(
-      ok({ logGroups: [{ logGroupName: '/aws/lambda/a', storedBytes: 1024 ** 3 }] }),
-    )
+    runInfra.mockResolvedValue(ok({ logGroups: [{ logGroupName: '/aws/lambda/a', storedBytes: 1024 ** 3 }] }))
     const result = await estimateScan({ logGroups: ['/aws/lambda/a'], surface: 'logs' })
     expect(result.ok).toBe(true)
     if (!result.ok) return

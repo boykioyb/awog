@@ -152,7 +152,7 @@ async function openFull(): Promise<void> {
   if (!s.value?.engineId) return
   void sessionsStore.openByEngineId(s.value.engineId)
   emit('close')
-  await navigateTo(`/sessions?id=${encodeURIComponent(s.value.engineId)}`)
+  await navigateTo(`/workbench?id=${encodeURIComponent(s.value.engineId)}`)
 }
 
 onMounted(() => {

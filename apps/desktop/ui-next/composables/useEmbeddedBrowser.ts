@@ -45,9 +45,17 @@ import type { AwogBrowserTab, AwogBrowserTabList } from '~/types/awog-bridge'
 // repo (23 chỗ tự viết `<div class="ovl" :class="{ on }">`), nên đây là chỗ duy
 // nhất biết "app đang có gì nổi lên".
 //
-// KHÔNG có `.toast` / `.mdock` trong danh sách, và đó là chủ ý: toast tự tắt sau
-// vài giây, chip dock thì ngồi thường trực ở góc — ẩn cả trang web vì chúng chính
-// là cú nhấp nháy mà đời 2 bị bác.
+// KHÔNG có `.mdock` trong danh sách, và đó là chủ ý: chip dock ngồi thường trực
+// ở góc — ẩn cả trang web vì nó chính là cú nhấp nháy mà đời 2 bị bác.
+//
+// `.tst` (toast) và `.ntf-panel` (hộp thư bell) CÓ trong danh sách — đổi lại
+// quyết định "toast tự tắt nên không liệt kê" của đời 3: người dùng báo thông
+// báo render DƯỚI view native và không cách nào đọc được (DOM không z-index
+// thắng nổi WebContentsView). Giá trả: trang ẩn trong vài giây khi toast bay
+// qua khung — chấp nhận được vì toast sống ngắn và đúng là nội dung đang cần
+// đọc. Vẫn lấy `.tst` (box của card, max-content) chứ không lấy `.tstvp`
+// (viewport fixed rộng 460px sống thường trực — dùng nó thì góc toast mỗi lần
+// hiện sẽ ẩn cả dải khung rộng hơn thẻ thật).
 const OVERLAYS = [
   '.ovl.on', // 23 modal của app: Settings, Preview, Sites, Import, confirm…
   '.lbox', // lightbox ảnh
@@ -60,6 +68,11 @@ const OVERLAYS = [
   '.tph-ovl', // hộp nhập text dùng chung
   '.shell-scrim', // scrim của drawer ở shell compact
   '.dropzone', // khung "thả file vào đây" (pointer-events:none ⇒ hit-test không thấy)
+  '.tst', // toast card (AppToaster) — xem khối comment phía trên
+  '.ntf-panel', // hộp thư GitHub/CI ở TopBar (đỉnh-phải, chính vùng panel)
+  '.wbm', // context menu của workbench explorer (fixed, không phải .smenu)
+  '.wbcm-backdrop', // nền bắt click của WorkbenchContextMenu — trang đè lên sẽ
+  // nuốt click "đóng menu" dù mắt vẫn thấy web
 ].join(', ')
 
 // Chồng bao nhiêu thì mới đáng ẩn. Đủ lớn để một cái chạm mép không tính, đủ nhỏ
@@ -71,6 +84,28 @@ type Rect = { x: number; y: number; width: number; height: number }
 // Claim held by at most one instance per renderer (window).
 const owner = ref<number | null>(null)
 let seq = 0
+
+// Chụp sẵn frame của view đang hiện — cho những nút trong chrome của trình duyệt sắp
+// mở một bề mặt nổi CHỒNG lên trang (menu ⋯, ⋮ của dải tab, hộp bookmark…). Bề mặt
+// nổi làm view phải nhường chỗ (OVERLAYS) và trang được thay bằng ảnh `frozen`; nếu
+// ảnh chưa có sẵn lúc gỡ view thì có một nhịp khung trống ~0,1–0,3s trong lúc
+// capture + decode — chính cú "nháy" khi bấm ⋯. Gọi ở pointerenter/pointerdown của
+// nút để ảnh xong TRƯỚC click (cùng cơ chế `prefetchFrame` của tab Trao đổi).
+// Cấp module vì nút nằm trong BrowserNavBar/BrowserChrome dùng chung ở 4 bề mặt, còn
+// instance giữ view thì chỉ có một (`owner`) — không cần nối emit qua từng cha.
+const prefetchers = new Map<number, () => void>()
+export function prefetchBrowserFrame(): void {
+  if (owner.value !== null) prefetchers.get(owner.value)?.()
+}
+
+// Chụp lại ảnh `frozen` đang phủ — cho thao tác làm đổi trang TRONG LÚC bề mặt nổi vẫn
+// mở (nút thu phóng trên menu ⋯ giữ menu mở để bấm liên tiếp). Không có cái này thì
+// trang thật đã zoom nhưng người dùng chỉ thấy ảnh chụp cũ ⇒ "bấm không thấy gì".
+// Mọi instance đang phủ ảnh tự chụp lại; instance không phủ thì bỏ qua.
+const refreshers = new Map<number, () => void>()
+export function refreshBrowserFrame(): void {
+  for (const fn of refreshers.values()) fn()
+}
 
 export interface EmbeddedBrowserOptions {
   // Element the native view is glued to. Its box IS the browser viewport.
@@ -568,6 +603,20 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   const prefetchFrame = (): void => {
     if (lastHeldTab && (holding.value || owner.value === id)) void captureFrozen(lastHeldTab)
   }
+  // Bản cho nút chrome (`prefetchBrowserFrame`): rê chuột qua lại nút ⋯ không được
+  // bắn capturePage liên tục — mỗi cú nghẽn main ~0,1–0,4s. Frame cùng tab chụp chưa
+  // tới 1,5s thì dùng lại; cũ hơn thì chụp mới (trang có thể đã cuộn/đổi).
+  let prefetchedAt = 0
+  prefetchers.set(id, () => {
+    if (pendingFrame && pendingFrame.tabId === lastHeldTab && Date.now() - prefetchedAt < 1500)
+      return
+    prefetchedAt = Date.now()
+    prefetchFrame()
+  })
+  refreshers.set(id, () => {
+    if (frozen.value === null || !lastHeldTab) return
+    void captureFrozen(lastHeldTab)
+  })
 
   // Giấu view NGAY tại `pointerdown` của tab đích (vd Trao đổi) — trước cả khi
   // `click`/swap DOM xảy ra. Press→click cho người dùng ~80-150ms, đủ để IPC
@@ -838,6 +887,8 @@ export function useEmbeddedBrowser(options: EmbeddedBrowserOptions) {
   })
 
   onUnmounted(() => {
+    prefetchers.delete(id)
+    refreshers.delete(id)
     stopSelectionPoll()
     stopChanged?.()
     mo?.disconnect()

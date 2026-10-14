@@ -16,7 +16,7 @@ import { loadProject } from '../projects/store.js'
 import { emit } from '../transport/stdio.js'
 import { log } from '../util/logger.js'
 import { claudeHome, projectClaudeDir } from '../util/path.js'
-import { authorPi } from '../runtime/complete.js'
+import { author } from '../runtime/complete.js'
 
 const ModelSchema = z.string().min(1).max(200)
 
@@ -40,10 +40,7 @@ const Params = z.object({
 // The transcript is the Anthropic-friendly "User: ... / Assistant: ..." format
 // the runtime context builder consumes — kept inlined here because
 // skills.author has no notion of a SessionMessage row.
-function renderTranscript(
-  history: { role: 'user' | 'agent'; text: string }[],
-  userText: string,
-): string {
+function renderTranscript(history: { role: 'user' | 'agent'; text: string }[], userText: string): string {
   const turns: string[] = []
   for (const m of history) {
     const text = m.text.trim()
@@ -119,7 +116,7 @@ register('skills.author', async (raw) => {
 
   // Author through the Pi runtime. Writes a SKILL.md via the Write tool (cwd
   // bounds it to the chosen scope's dir), forwarding text/step events below.
-  const res = await authorPi(
+  const res = await author(
     {
       accountId: params.accountId,
       modelId,

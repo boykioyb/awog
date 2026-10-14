@@ -348,6 +348,16 @@ async function load(
 // Restore the persisted enabled subset + fetched catalog on module load so the
 // picker + Settings reflect prior toggles/fetches before any component mounts.
 hydrate()
+// Cross-window sync: `catalog`/`enabled` are module-singletons per window, so a
+// fetch/toggle in Settings (or a session popout) only mutates that window's
+// copy. The `storage` event fires on every OTHER window of the same origin —
+// re-hydrating on it pulls the freshly-persisted catalog into this window so a
+// model enabled in Settings actually appears in a picker open elsewhere.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY || e.key === null) hydrate()
+  })
+}
 
 export function useProviderModels() {
   return {

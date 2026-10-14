@@ -48,14 +48,7 @@ import {
 } from './emit.js'
 import type { IsolatedWorkspace } from './worktree.js'
 import type { InvokeToolUse } from '../sdk/invoke.js'
-import type {
-  SessionSettings,
-  Task,
-  TaskRunUsage,
-  TraceNode,
-  Verdict,
-  WorkflowNode,
-} from '../types/shared.js'
+import type { SessionSettings, Task, TaskRunUsage, TraceNode, Verdict, WorkflowNode } from '../types/shared.js'
 
 const DEFAULT_MODEL = 'claude-opus-5'
 const COMMIT_TEMPLATE = '[{phaseId}] {agentName}: {summary}'
@@ -102,9 +95,7 @@ export const GATE_VERDICT_SCHEMA: Record<string, unknown> = {
 
 // Đọc verdict + bản báo cáo từ output structured. Trả undefined khi output không
 // phải JSON đúng schema — người gọi rơi về đường fenced-block, chứ KHÔNG đoán.
-function parseStructuredVerdict(
-  output: string,
-): { verdict: Verdict; report: string } | undefined {
+function parseStructuredVerdict(output: string): { verdict: Verdict; report: string } | undefined {
   const trimmed = output.trim()
   if (!trimmed.startsWith('{')) return undefined
   try {
@@ -194,8 +185,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     // cây mà node đó đã sửa. Worktree chỉ có nghĩa khi node THẬT SỰ commit kết
     // quả (đó là thứ duy nhất mang thay đổi quay về nhánh chính): tắt auto-commit
     // per-phase, hoặc scope 'artifacts-only' ⇒ dùng chung cây gốc như trước.
-    const commitsPerPhase =
-      task.autoCommitPerPhase !== false && (task.autoCommitScope ?? 'workspace') === 'workspace'
+    const commitsPerPhase = task.autoCommitPerPhase !== false && (task.autoCommitScope ?? 'workspace') === 'workspace'
     workspace = await acquireWorkspace({
       owner: { kind: 'task', id: taskId },
       slug: `${node.id}-v${version}`,
@@ -228,9 +218,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     // project — never across unrelated projects.
     const skillProjectIds = [
       ...new Set(
-        [task.projectId, node.agentProjectId].filter(
-          (id): id is string => typeof id === 'string' && id.length > 0,
-        ),
+        [task.projectId, node.agentProjectId].filter((id): id is string => typeof id === 'string' && id.length > 0),
       ),
     ]
     const skill = await loadSkillByIdAnyTier(node.skillId, skillProjectIds)
@@ -307,9 +295,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
     let capturedModel = ''
 
     // Repo-access whitelist → fs-tool roots, resolved against this node's cwd.
-    const agentFsRoots = agentCtx.repos
-      ? resolveAgentFsRoots(cwd, agentCtx.repos)
-      : undefined
+    const agentFsRoots = agentCtx.repos ? resolveAgentFsRoots(cwd, agentCtx.repos) : undefined
 
     const result = await invokeSdk(
       {
@@ -341,6 +327,8 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
         // Co-author trailer on model-made commits inside the node — matches the
         // task's per-phase auto-commit trailer (autoCommitPhase below).
         commitCoAuthor: task.commitCoAuthor ?? true,
+        // Claude CLI auto-compact policy snapshot (Anthropic nodes; ignored by Pi).
+        ...(task.compactConfig ? { compactConfig: task.compactConfig } : {}),
         // USD CÒN LẠI của task. Trần USD xưa nay chỉ được kiểm giữa các node
         // (checkTaskBudget), nên một node đơn lẻ vẫn có thể tiêu vượt trần rồi mới bị
         // phát hiện. Con số này đi thẳng vào `maxBudgetUsd` của SDK (dừng ngay trong
@@ -378,13 +366,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
           // streaming content_block_start time may still hold empty input ({}), so build
           // the result node from res so the trace shows the tool's actual arguments.
           const use = { id: res.id, name: res.name, input: res.input }
-          void emitTrace(
-            taskId,
-            node.id,
-            version,
-            traceFromToolResult(use, res, elapsed),
-            res.parentId ?? rootId,
-          )
+          void emitTrace(taskId, node.id, version, traceFromToolResult(use, res, elapsed), res.parentId ?? rootId)
         },
         onThinking: (id, delta, parentId) => {
           const acc = (thinking.get(id) ?? '') + delta
@@ -434,13 +416,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
       provider: settings.provider,
       ...(settings.accountId ? { accountId: settings.accountId } : {}),
     }
-    if (
-      runUsage.inputTokens +
-        runUsage.outputTokens +
-        runUsage.cacheReadTokens +
-        runUsage.cacheWriteTokens >
-      0
-    ) {
+    if (runUsage.inputTokens + runUsage.outputTokens + runUsage.cacheReadTokens + runUsage.cacheWriteTokens > 0) {
       await emitRunUsage(taskId, node.id, version, runUsage)
     }
 
@@ -485,14 +461,7 @@ export async function runNode(ctx: NodeRunContext): Promise<NodeRunResult> {
         // eslint-disable-next-line no-await-in-loop
         const bytes = await writeArtifact(taskId, name, text)
         // eslint-disable-next-line no-await-in-loop
-        await emitArtifact(
-          taskId,
-          node.id,
-          version,
-          `artifacts/${name}`,
-          bytes,
-          i === 0 ? commitSha : undefined,
-        )
+        await emitArtifact(taskId, node.id, version, `artifacts/${name}`, bytes, i === 0 ? commitSha : undefined)
       } catch (err) {
         log.warn('artifact write failed', {
           taskId,

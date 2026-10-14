@@ -96,9 +96,7 @@ describe('parseInsightsTime', () => {
 
 describe('logGroupOfRow + serviceOfLogGroup', () => {
   it('cắt accountId khỏi @log', () => {
-    expect(logGroupOfRow({ '@log': '123456789012:/aws/lambda/checkout' })).toBe(
-      '/aws/lambda/checkout',
-    )
+    expect(logGroupOfRow({ '@log': '123456789012:/aws/lambda/checkout' })).toBe('/aws/lambda/checkout')
   })
 
   it('không có @log thì nói null, không đoán', () => {
@@ -277,7 +275,12 @@ describe('nhánh X-Ray', () => {
   it('fault/error/throttle và 5xx đều là chặng hỏng', () => {
     const got = hopsFromXrayJson(
       payload([
-        doc({ id: 'a', name: 'api', origin: 'AWS::ApiGateway::Stage', fault: true }),
+        doc({
+          id: 'a',
+          name: 'api',
+          origin: 'AWS::ApiGateway::Stage',
+          fault: true,
+        }),
         doc({
           id: 'b',
           name: 'svc',
@@ -331,9 +334,7 @@ describe('nhánh X-Ray', () => {
   })
 
   it('segment Document hỏng thì bỏ qua đúng segment đó', () => {
-    const got = hopsFromXrayJson(
-      payload(['{hỏng', doc({ id: 'ok', name: 'ok', start_time: 1, end_time: 2 })]),
-    )
+    const got = hopsFromXrayJson(payload(['{hỏng', doc({ id: 'ok', name: 'ok', start_time: 1, end_time: 2 })]))
     expect(got?.hops.map((h) => h.label)).toEqual(['ok'])
   })
 

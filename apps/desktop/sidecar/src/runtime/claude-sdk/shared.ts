@@ -38,10 +38,7 @@ export function commitAttribution(commitCoAuthor?: boolean): { commit: string; p
 //     bỏ qua chứ không hỏng lượt, nên đây không phải đường ném lỗi. Cờ chỉ được
 //     GHI khi bật: gửi `ultracode: false` là ghi đè cả cấu hình người dùng tự đặt
 //     trong ~/.claude/settings.json (settingSources có 'user').
-export function sdkSettings(args: {
-  commitCoAuthor?: boolean | undefined
-  ultracode?: boolean | undefined
-}): Settings {
+export function sdkSettings(args: { commitCoAuthor?: boolean | undefined; ultracode?: boolean | undefined }): Settings {
   const settings: Settings = { attribution: commitAttribution(args.commitCoAuthor) }
   if (args.ultracode) settings.ultracode = true
   return settings
@@ -72,6 +69,58 @@ export function mapClaudeErrorToRpc(err: unknown): RpcError {
   return new RpcError(-32021, `chat failed: ${message}`)
 }
 
+// ── Auto-compact của CLI ────────────────────────────────────────────────────
+//
+// Đo thật trên CLI 0.3.296 / haiku-4-5 (spike ADR 0099), không đoán từ tên biến:
+//   - `CLAUDE_CODE_AUTO_COMPACT_WINDOW` = cửa sổ ngữ cảnh HIỆU DỤNG tính bằng token.
+//     CLI kẹp nó vào [100_000, 1_000_000] (sàn `vD`, trần `xN` trong bundle) rồi lấy
+//     min với cửa sổ thật của model. Ngưỡng tự nén ≈ cửa sổ − 13_000 token dự trữ.
+//     Đặt 100_000: phiên ~27k KHÔNG nén; phiên ~93k (1 tin nhắn khổng lồ) CLI thử nén
+//     ngay (`compact_error: too_few_groups`, vì không có gì để cắt); phiên nhiều lượt
+//     chạm ~170k thì tự nén thật — `compact_boundary.trigger:'auto'`, cùng sdkSessionId,
+//     model vẫn trả lời đúng điều đã nhớ sau đó.
+//   - Dưới sàn 100k giá trị bị nâng lên sàn, nên "nén ở 20k" không tồn tại.
+//   - `DISABLE_AUTO_COMPACT=1` tắt tự nén nhưng `/compact` thủ công vẫn chạy (đã đo).
+//   - `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` (đặt 5, phiên 17k) không kích hoạt gì — chỉ
+//     là núm test của CLI, không dùng. `CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS` không
+//     đo được hiệu ứng, không dùng.
+// Vì ngưỡng thật = window − dự trữ, người dùng khai "nén ở ~N token" thì ta đặt
+// window = N + dự trữ để con số họ thấy khớp lúc nén xảy ra.
+export const DEFAULT_COMPACT_AT_TOKENS = 300_000
+const CLI_COMPACT_RESERVE_TOKENS = 13_000
+const CLI_COMPACT_WINDOW_MIN = 100_000
+const CLI_COMPACT_WINDOW_MAX = 1_000_000
+
+// Cấu hình tự nén đã chốt cho một lần spawn CLI (cùng nghĩa với ContextConfig).
+export interface AutoCompactConfig {
+  enabled?: boolean | undefined
+  atTokens?: number | undefined
+}
+
+// ContextConfig của lượt → cấu hình tự nén. Vắng = mặc định (bật, 300k).
+export function autoCompactFromContext(
+  cfg:
+    | {
+        autoCompact?: boolean | undefined
+        compactAtTokens?: number | undefined
+      }
+    | undefined,
+): AutoCompactConfig {
+  return { enabled: cfg?.autoCompact, atTokens: cfg?.compactAtTokens }
+}
+
+// Env cho CLI. `atTokens === 0` = "dùng mặc định của CLI" → không đặt biến nào.
+export function autoCompactEnv(cfg: AutoCompactConfig): Record<string, string> {
+  if (cfg.enabled === false) return { DISABLE_AUTO_COMPACT: '1' }
+  const at = cfg.atTokens ?? DEFAULT_COMPACT_AT_TOKENS
+  if (at === 0) return {}
+  const window = Math.min(
+    CLI_COMPACT_WINDOW_MAX,
+    Math.max(CLI_COMPACT_WINDOW_MIN, Math.round(at) + CLI_COMPACT_RESERVE_TOKENS),
+  )
+  return { CLAUDE_CODE_AUTO_COMPACT_WINDOW: String(window) }
+}
+
 // Build the SDK subprocess env carrying the Anthropic credential. We do NOT
 // mutate the sidecar's own process.env (that would race across concurrent
 // sessions on different accounts) — the token lives only in the child's env.
@@ -90,6 +139,9 @@ export function buildSdkEnv(
   // Đường CLI PTY truyền base ĐÃ LỌC (cli-registry sanitizedBaseEnv): một
   // process tương tác sống lâu không được kế thừa ngầm env của sidecar.
   base?: Record<string, string>,
+  // Tự nén của CLI (xem autoCompactEnv). Vắng = KHÔNG đụng vào env (đường CLI PTY
+  // của người dùng giữ mặc định CLI); có = chính sách của AWOG cho lượt này.
+  autoCompact?: AutoCompactConfig,
 ): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(base ?? process.env)) {
@@ -98,6 +150,12 @@ export function buildSdkEnv(
   delete env.CLAUDE_CODE_OAUTH_TOKEN
   delete env.ANTHROPIC_API_KEY
   delete env.ANTHROPIC_BASE_URL
+  if (autoCompact) {
+    // Chính sách của AWOG thắng biến lỡ nằm trong env của sidecar.
+    delete env.DISABLE_AUTO_COMPACT
+    delete env.CLAUDE_CODE_AUTO_COMPACT_WINDOW
+    Object.assign(env, autoCompactEnv(autoCompact))
+  }
   // CLAUDE_CONFIG_DIR is deliberately NOT overridden (ADR 0070). It used to
   // point at ~/.awog/claude-sdk to keep the SDK's session store out of the
   // user's real ~/.claude — but that dir holds no skills/, agents/ or
@@ -316,40 +374,31 @@ export function thinkingFromLevel(level: ThinkingLevel): ThinkingConfig {
 
 // Cùng lý do với effortFromSettings: ultracode chạy ở xhigh, nên extended thinking
 // phải BẬT kể cả khi `level` còn sót lại giá trị 'low' (tắt thinking) từ trước.
-export function thinkingFromSettings(s: {
-  level: ThinkingLevel
-  ultracode?: boolean
-}): ThinkingConfig {
+export function thinkingFromSettings(s: { level: ThinkingLevel; ultracode?: boolean }): ThinkingConfig {
   return s.ultracode ? { type: 'adaptive', display: 'summarized' } : thinkingFromLevel(s.level)
 }
 
 // ── Background work ─────────────────────────────────────────────────────────
 //
-// The CLI keeps a turn alive for background subagents/shells and wakes the model
-// when one settles (`system/task_notification`) — but only while its stdin is
-// open. The SDK closes stdin at the FIRST `result` whenever the caller passed a
-// STRING prompt (sdk.mjs sets `isSingleUserTurn` from `typeof prompt === 'string'`),
-// which killed the CLI process mid-run and made the promised notification
-// impossible. The chat path therefore feeds a streaming prompt it holds open until
-// no background task is live (run-stream.ts); this prompt tells the model the
-// resulting contract.
-export function backgroundTurnPrompt(waitCapMs: number): string {
-  const capMinutes = Math.max(1, Math.round(waitCapMs / 60_000))
-  return `<background-work>
-Background work is supported in this session and the turn stays open until it settles: subagents you spawn with \`Task\` (which run in the background by default) and commands you start with \`Bash(run_in_background: true)\` keep running, and you are woken with their result inside this same turn. Use that for genuinely parallel work. What does NOT survive is the END of the turn: never finish your reply expecting to be notified later — if a result matters, wait for it now and answer with it.
+// The chat path keeps ONE Claude CLI process per session alive across turns
+// (live-process.ts, ADR 0099). Work the model starts in the background — subagents it
+// spawns with `Task`, commands it starts with `Bash(run_in_background: true)` — keeps
+// running after the reply ends, and when it finishes the CLI restarts the model by
+// itself (`system/task_notification`); AWOG surfaces that as a normal assistant turn.
+// The model therefore does NOT have to hold its reply open or poll: this prompt tells
+// it so, because the opposite habit (a `sleep 30` poll loop, "I'll wait for it") burns
+// the user's tokens and keeps the turn from ever ending.
+export const BACKGROUND_TURN_PROMPT = `<background-work>
+Background work survives the end of your reply in this session: subagents you spawn with \`Task\` (which run in the background by default) and commands you start with \`Bash(run_in_background: true)\` keep running, and when one finishes you are woken automatically with its result and your reply continues in a new turn. So do NOT poll, \`sleep\`-loop or keep your reply open to wait for it. Start the work, tell the user plainly what is running and what you will do with its result, and end your turn. Use background work for anything slow or genuinely parallel.
 
-The turn is held open for at most ${capMinutes} minutes of background work; past that every live task is stopped and reported as interrupted. So size a watcher to fit inside that budget — a poll loop of \`attempts x interval\` must come to at most ${capMinutes} minutes. When the thing you are watching can legitimately take longer, do not start a watcher that will be cut off: report where it stands and let the user ask you to check again.
+Two limits: the work lives only while the app and this session's process are up (closing the session, or changing the tools or permissions available to it, stops it; switching the model does not), and the user can stop any task from its chip. If a result is needed before you can answer the user at all, run that step in the foreground instead.
 </background-work>`
-}
 
 // The TASK path (workflow nodes) has no such holding: it is a one-shot query whose
 // result ends the node, so a backgrounded subagent there would be killed with it.
 // Force the synchronous form on that path — applied to the tool INPUT via the
 // PreToolUse hook's `updatedInput`, so it holds regardless of what the model asked.
-export function forceForegroundSubagent(
-  toolName: string,
-  toolInput: Record<string, unknown>,
-): void {
+export function forceForegroundSubagent(toolName: string, toolInput: Record<string, unknown>): void {
   if (toolName === 'Task' && toolInput.run_in_background !== false) {
     toolInput.run_in_background = false
   }
@@ -383,11 +432,7 @@ This task node runs as a single one-shot: nothing survives its end, so backgroun
 // đường này chỉ có thể THÊM chặn, không bao giờ làm hỏng workflow đang chạy được.
 export function makeForegroundOnlyHook(
   gate?: BeforeToolCall,
-): (
-  input: HookInput,
-  toolUseID: string | undefined,
-  options: { signal: AbortSignal },
-) => Promise<HookJSONOutput> {
+): (input: HookInput, toolUseID: string | undefined, options: { signal: AbortSignal }) => Promise<HookJSONOutput> {
   return async (input, _toolUseID, { signal }) => {
     if (input.hook_event_name !== 'PreToolUse') return { continue: true }
     const toolInput =
@@ -433,10 +478,7 @@ export function resultErrorMessage(subtype: string | undefined, text?: string): 
     case 'error_max_turns':
       return detail || 'Stopped: this run reached its maximum number of turns.'
     case 'error_max_structured_output_retries':
-      return (
-        detail ||
-        'Stopped: the model could not produce output matching the required schema after several tries.'
-      )
+      return detail || 'Stopped: the model could not produce output matching the required schema after several tries.'
     case 'error_during_execution':
       return detail || 'The run failed during execution.'
     default:

@@ -34,6 +34,7 @@ import {
 import { MAX_BOOKMARKS, MAX_BOOKMARK_AT_LEN, MESSAGE_ID_RE } from './ids.js'
 import { sessionPersistenceQueue } from './persistence-queue.js'
 import { migrateLegacySessions } from './migrate-legacy.js'
+import { readSdkTranscriptMessages, resolveSdkTranscriptPath } from './sdk-transcript.js'
 
 // Metadata a caller may patch on an existing session. Mirrors the event-sourced
 // store's SessionMetadataPatch (intentional duplication for this additive phase).
@@ -57,6 +58,8 @@ type SessionMetadataPatch = Partial<
     | 'parentSessionId'
     | 'forkFromMessageId'
     | 'sdkSessionId'
+    | 'transcriptSource'
+    | 'sdkSessionPath'
     | 'codexThreadId'
     | 'codexToolSignature'
     | 'cliImport'
@@ -72,6 +75,15 @@ type SessionMetadataPatch = Partial<
 type ManagedSession = {
   header: SessionHeader
   messages: SessionMessage[]
+  messagesLoaded: boolean
+}
+
+// Một phiên nhập từ Claude Desktop/CLI, dạng tối thiểu cho bước làm tươi theo transcript.
+export interface ImportedSessionRef {
+  id: string
+  sdkSessionId: string
+  sdkSessionPath: string | undefined
+  updatedAt: string
   messagesLoaded: boolean
 }
 
@@ -127,6 +139,7 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.aboutTaskId !== undefined) summary.aboutTaskId = h.aboutTaskId
   if (h.aboutSshHostId !== undefined) summary.aboutSshHostId = h.aboutSshHostId
   if (h.aboutGhUrl !== undefined) summary.aboutGhUrl = h.aboutGhUrl
+  if (h.importedFrom !== undefined) summary.importedFrom = h.importedFrom
   if (h.infra !== undefined) summary.infra = h.infra
   if (h.parentSessionId !== undefined) summary.parentSessionId = h.parentSessionId
   if (h.teamRunId !== undefined) summary.teamRunId = h.teamRunId
@@ -136,6 +149,7 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.teamProjectId !== undefined) summary.teamProjectId = h.teamProjectId
   if (h.origin !== undefined) summary.origin = h.origin
   if (h.llmOverride !== undefined) summary.llmOverride = h.llmOverride
+  if (h.browserProfileId !== undefined) summary.browserProfileId = h.browserProfileId
   if (h.spawnConfig !== undefined) summary.spawnConfig = h.spawnConfig
   // Agent bound + worktree riêng của member (session-teams §1.1): roster của
   // nhóm đọc từ sessions.list nên hai field này phải lên summary mà không cần
@@ -274,6 +288,18 @@ class SessionManager {
     return m ? (m.header.projectId ?? null) : undefined
   }
 
+  // Hai khoá để chọn profile trình duyệt của một phiên — O(1), cùng lý do với
+  // getSessionProjectId (chạy trước MỖI lời gọi browser_tool). `undefined` = không có phiên.
+  getSessionBrowserRef(id: string): { browserProfileId: string | null; projectId: string | null } | undefined {
+    const m = this.sessions.get(id)
+    return m
+      ? {
+          browserProfileId: m.header.browserProfileId ?? null,
+          projectId: m.header.projectId ?? null,
+        }
+      : undefined
+  }
+
   // List projection — from the resident map only, no disk read.
   getSessions(): SessionSummary[] {
     return [...this.sessions.values()].map((m) => summarizeHeader(m.header)).sort(byUpdatedDesc)
@@ -315,12 +341,43 @@ class SessionManager {
   }
 
   private async loadMessagesFromDisk(m: ManagedSession): Promise<void> {
-    // readSessionMessages returns [] for a MISSING file but THROWS on a real read
-    // error (infosec F1). On a throw, messagesLoaded stays false here and the error
-    // propagates — the cold-persist guard then keeps refusing to overwrite the
-    // transcript with an empty snapshot.
-    m.messages = readSessionMessages(sessionFilePath(m.header.id))
+    m.messages = this.readManagedMessages(m.header)
     m.messagesLoaded = true
+  }
+
+  // ─── ADR 0097 — provider-aware transcript reader ───────────────────────────
+  // A session with `transcriptSource === 'sdk'` keeps its messages ONLY in the
+  // Claude CLI transcript; session.jsonl carries just the header. Hydrating it
+  // replays the CLI file (sync — the cold-persist guard can't await), falling
+  // back to the AWOG body when the transcript file is gone (CLI cleanup /
+  // manual delete) so a pointer session never reads as empty.
+  private readManagedMessages(header: SessionHeader): SessionMessage[] {
+    if (header.transcriptSource === 'sdk' && header.sdkSessionId) {
+      const file = resolveSdkTranscriptPath(header.sdkSessionId, header.sdkSessionPath)
+      if (file) return readSdkTranscriptMessages(file)
+      log.warn('session-manager: sdk transcript missing, reading AWOG body', {
+        id: header.id,
+        sdkSessionId: header.sdkSessionId,
+      })
+    }
+    // readSessionMessages returns [] for a MISSING file but THROWS on a real read
+    // error (infosec F1). On a throw, messagesLoaded stays false in the caller
+    // and the cold-persist guard keeps refusing to overwrite the transcript
+    // with an empty snapshot.
+    return readSessionMessages(sessionFilePath(header.id))
+  }
+
+  // Re-root the transcript in AWOG: drop the SDK pointer fields so the next
+  // persist writes the full body again (ADR 0097). Used when a session that
+  // was transcript-sourced switches to a non-Anthropic provider — the CLI file
+  // stops receiving turns, so it can no longer be the source of truth.
+  async clearSdkTranscript(id: string): Promise<void> {
+    const m = this.sessions.get(id)
+    if (!m) return
+    const { sdkSessionId: _sid, sdkSessionPath: _p, transcriptSource: _t, ...rest } = m.header
+    m.header = rest
+    this.persistSession(m)
+    await sessionPersistenceQueue.flush(id)
   }
 
   // Create a new session and persist it. Flushed immediately (not just debounced) so a
@@ -350,6 +407,58 @@ class SessionManager {
     this.persistSession(m)
   }
 
+  // ─── Phiên nhập từ Claude Desktop/CLI (ADR 0102) ───────────────────────────
+  // Tạo phiên pointer-mode: header tính từ `session.messages` (messageCount/preview/status
+  // đúng ngay) nhưng map KHÔNG giữ messages — lần mở đầu tiên sẽ replay transcript CLI qua
+  // ensureMessagesLoaded. Ghi thẳng snapshot đầy đủ vào queue (không qua persistSession) vì
+  // cold-guard của nó sẽ replay file thêm một lần nữa; queue chỉ ghi dòng header cho
+  // transcriptSource === 'sdk'.
+  async registerImported(session: Session): Promise<void> {
+    this.sessions.set(session.id, {
+      header: createSessionHeader(session),
+      messages: [],
+      messagesLoaded: false,
+    })
+    sessionPersistenceQueue.enqueue(session)
+    await sessionPersistenceQueue.flush(session.id)
+  }
+
+  // Các phiên đã nhập, đọc từ map ấm — đầu vào cho bước làm tươi theo mtime transcript.
+  listImported(): ImportedSessionRef[] {
+    const out: ImportedSessionRef[] = []
+    for (const m of this.sessions.values()) {
+      const h = m.header
+      if (!h.importedFrom || !h.sdkSessionId) continue
+      out.push({
+        id: h.id,
+        sdkSessionId: h.sdkSessionId,
+        sdkSessionPath: h.sdkSessionPath,
+        updatedAt: h.updatedAt,
+        messagesLoaded: m.messagesLoaded,
+      })
+    }
+    return out
+  }
+
+  // Làm tươi NHẸ: chỉ `updatedAt` trong bộ nhớ (không persist, không đọc transcript). Đủ cho
+  // Logtime/sắp xếp danh sách; lần persist kế tiếp (hoặc làm tươi đầy đủ) sẽ ghi xuống đĩa.
+  touchActivity(id: string, updatedAt: string): void {
+    const m = this.sessions.get(id)
+    if (m) m.header = { ...m.header, updatedAt }
+  }
+
+  // Làm tươi ĐẦY ĐỦ: thay messages bằng bản replay mới, tính lại messageCount/preview/status
+  // và giữ `updatedAt` = thời điểm lượt cuối trong transcript (KHÔNG bump về "bây giờ" — đây
+  // không phải hoạt động của AWOG).
+  async refreshImportedMessages(id: string, messages: SessionMessage[], updatedAt: string): Promise<void> {
+    const m = this.sessions.get(id)
+    if (!m) return
+    m.messages = messages
+    m.messagesLoaded = true
+    m.header = createSessionHeader({ ...managedToSession(m), updatedAt })
+    this.persistSession(m)
+  }
+
   // Archive / un-archive một phiên: CHỈ đổi metadata của header, không đụng tới
   // messages, bookmark hay snapshot (xem docs/features/session-lifecycle-ops.md).
   // Tách khỏi updateMetadata vì bỏ lưu trữ phải XOÁ HẲN hai field — patch kiểu spread
@@ -367,8 +476,7 @@ class SessionManager {
     // Đọc membership TRƯỚC khi header bị viết lại: archive một member phải nhả
     // worktree riêng của nó, còn `worktree` sẽ bị xoá ngay bên dưới nên
     // đọc sau là đã mất dấu.
-    const hadMemberWorktree =
-      m.header.teamRunId !== undefined || m.header.worktree !== undefined
+    const hadMemberWorktree = m.header.teamRunId !== undefined || m.header.worktree !== undefined
     if (archived) {
       // Worktree riêng của member được nhả ngay bên dưới ⇒ con trỏ
       // `worktree` trên header là con trỏ chết, phải xoá cùng lúc bật cờ —
@@ -472,8 +580,7 @@ class SessionManager {
     // một cha — một lần sửa nhãn không được phép tháo agent ra khỏi member.
     const priorParent = m.header.teamRunId
     const leavingGroup = parentId === null && priorParent !== undefined
-    const movingGroup =
-      parentId !== null && priorParent !== undefined && parentId !== priorParent
+    const movingGroup = parentId !== null && priorParent !== undefined && parentId !== priorParent
     const keepAgent = !leavingGroup && !movingGroup
     const {
       teamRunId: _oldParent,
@@ -574,6 +681,25 @@ class SessionManager {
     return true
   }
 
+  // Đặt/gỡ profile trình duyệt cấp phiên. `null` = XOÁ HẲN key (kế thừa lại
+  // project/mặc định) — cùng lý do với setLlmOverride. `updatedAt` không bump.
+  async setBrowserProfile(id: string, profileId: string | null): Promise<boolean> {
+    const m = this.sessions.get(id)
+    if (!m) {
+      log.warn('session-manager: setBrowserProfile on unknown session', { id })
+      return false
+    }
+    if (profileId !== null) {
+      m.header = { ...m.header, browserProfileId: profileId }
+    } else {
+      const { browserProfileId: _cleared, ...rest } = m.header
+      m.header = rest
+    }
+    this.persistSession(m)
+    await sessionPersistenceQueue.flush(id)
+    return true
+  }
+
   // Ghi nhớ (hoặc xoá) cấu hình spawn của nhóm trên phiên GỐC — "duyệt một lần
   // cho cả workflow" của popover điều phối (sessions/spawn-approval.ts).
   //
@@ -650,8 +776,7 @@ class SessionManager {
     // nằm ở ~/.awog/session-worktrees/<id> — NGOÀI thư mục phiên nên rm phía
     // dưới không chạm tới nó, phải nhả theo đường riêng.
     const hadMembership =
-      this.sessions.get(id)?.header.teamRunId !== undefined ||
-      this.sessions.get(id)?.header.worktree !== undefined
+      this.sessions.get(id)?.header.teamRunId !== undefined || this.sessions.get(id)?.header.worktree !== undefined
     sessionPersistenceQueue.cancel(id)
     try {
       await rm(sessionDir(id), { recursive: true, force: true })
@@ -677,7 +802,7 @@ class SessionManager {
   // we let it propagate so we abort the write rather than persist an empty transcript.
   private persistSession(m: ManagedSession): void {
     if (!m.messagesLoaded) {
-      m.messages = readSessionMessages(sessionFilePath(m.header.id))
+      m.messages = this.readManagedMessages(m.header)
       m.messagesLoaded = true
     }
     sessionPersistenceQueue.enqueue(managedToSession(m))

@@ -83,18 +83,38 @@ const Params = z.discriminatedUnion('op', [
   z.object({ ...ticketField, op: z.literal('events'), context: k8sContext }),
   // Mười hai bảng đọc thêm của màn Báo cáo (2026-09-17). Tất cả là `get`/`describe`
   // không cờ `-o`, tức `read` chạy thẳng — xem `sensitiveReadOf()`.
-  z.object({ ...ticketField, op: z.literal('describe-nodes'), context: k8sContext }),
+  z.object({
+    ...ticketField,
+    op: z.literal('describe-nodes'),
+    context: k8sContext,
+  }),
   z.object({ ...ticketField, op: z.literal('hpa'), context: k8sContext }),
-  z.object({ ...ticketField, op: z.literal('statefulsets'), context: k8sContext }),
-  z.object({ ...ticketField, op: z.literal('daemonsets'), context: k8sContext }),
+  z.object({
+    ...ticketField,
+    op: z.literal('statefulsets'),
+    context: k8sContext,
+  }),
+  z.object({
+    ...ticketField,
+    op: z.literal('daemonsets'),
+    context: k8sContext,
+  }),
   z.object({ ...ticketField, op: z.literal('jobs'), context: k8sContext }),
   z.object({ ...ticketField, op: z.literal('pvc'), context: k8sContext }),
   z.object({ ...ticketField, op: z.literal('services'), context: k8sContext }),
   z.object({ ...ticketField, op: z.literal('ingresses'), context: k8sContext }),
   z.object({ ...ticketField, op: z.literal('endpoints'), context: k8sContext }),
-  z.object({ ...ticketField, op: z.literal('resourcequota'), context: k8sContext }),
+  z.object({
+    ...ticketField,
+    op: z.literal('resourcequota'),
+    context: k8sContext,
+  }),
   z.object({ ...ticketField, op: z.literal('pdb'), context: k8sContext }),
-  z.object({ ...ticketField, op: z.literal('replicasets'), context: k8sContext }),
+  z.object({
+    ...ticketField,
+    op: z.literal('replicasets'),
+    context: k8sContext,
+  }),
   z.object({
     ...ticketField,
     op: z.literal('containers'),
@@ -128,7 +148,11 @@ const Params = z.discriminatedUnion('op', [
     context: k8sContext,
     pod: z.string().max(253),
   }),
-  z.object({ ...ticketField, op: z.literal('eks-clusters'), context: awsContext }),
+  z.object({
+    ...ticketField,
+    op: z.literal('eks-clusters'),
+    context: awsContext,
+  }),
   z.object({
     ...ticketField,
     op: z.literal('add-cluster'),
@@ -405,11 +429,7 @@ export function buildKubeCommand(raw: z.infer<typeof Params>): Built {
     case 'restart':
       return {
         tool: 'kubectl',
-        args: [
-          'rollout',
-          'restart',
-          `deployment/${requireMatch(raw.deployment, NAME_RE, 'Tên deployment')}`,
-        ],
+        args: ['rollout', 'restart', `deployment/${requireMatch(raw.deployment, NAME_RE, 'Tên deployment')}`],
         context: k8s(raw.context),
         toolName: 'kube_restart',
         op: 'restart',
