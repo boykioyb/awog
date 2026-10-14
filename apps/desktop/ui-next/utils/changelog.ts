@@ -30,6 +30,31 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.41.3',
+    date: '2026-10-14',
+    highlight: {
+      en: 'Session titles shimmer while AWOG regenerates them, and hover buttons in the Workbench explorer fade in without nudging the row.',
+      vi: 'Tiêu đề phiên có hiệu ứng shimmer trong lúc AWOG sinh lại, và nút hover trong explorer của Workbench mờ hiện không đẩy lệch hàng.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Title-generating indicator: while AWOG writes a session title the row shows a soft accent shimmer over the text and a small spinner, in both the sidebar session list and the Workbench Sessions explorer.',
+        vi: 'Chỉ báo đang sinh tiêu đề: trong lúc AWOG viết tiêu đề phiên, hàng hiện shimmer accent trên chữ và spinner nhỏ, ở cả danh sách phiên sidebar lẫn explorer Sessions của Workbench.',
+      },
+      {
+        kind: 'improved',
+        en: 'Workbench explorer polish: hover actions (rename, pin, open, delete…) fade in over the row instead of popping into the layout, so rows no longer shift when the buttons appear.',
+        vi: 'Đánh bóng explorer Workbench: các nút hover (rename, pin, mở, xoá…) mờ hiện trên hàng thay vì đẩy layout, nên hàng không còn nhích khi nút xuất hiện.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Release pipeline: the Windows/macOS/Linux builds failed to install dependencies because the lockfile drifted from the sidecar manifest — it is in sync again.',
+        vi: 'Pipeline release: build Windows/macOS/Linux hỏng ở bước cài dependency vì lockfile lệch manifest của sidecar — đã đồng bộ lại.',
+      },
+    ],
+  },
+  {
     version: '0.41.2',
     date: '2026-10-14',
     highlight: {
