@@ -30,6 +30,51 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.41.4',
+    date: '2026-10-15',
+    highlight: {
+      en: 'Session lists now tell running, waiting, unread and finished apart at a glance, you can jump between your own questions in a long chat, and infrastructure approval cards take far less space.',
+      vi: 'Danh sách phiên giờ phân biệt rõ đang chạy, đang chờ, chưa đọc và đã xong chỉ trong một liếc, có thể nhảy qua lại giữa các câu hỏi của bạn trong hội thoại dài, và thẻ duyệt lệnh hạ tầng chiếm ít chỗ hơn hẳn.',
+    },
+    items: [
+      {
+        kind: 'improved',
+        en: 'Session status indicator: each state has its own shape — spinning arc while running, a question icon while waiting for you, a red icon on error, a solid dot when unread, a hollow ring once read. Used in the Workbench Sessions explorer, the session popover and the ⌘K switcher; unread titles are bold.',
+        vi: 'Chỉ báo trạng thái phiên: mỗi trạng thái một hình riêng — cung xoay khi đang chạy, icon dấu hỏi khi đang chờ bạn, icon đỏ khi lỗi, chấm đặc khi chưa đọc, vòng rỗng khi đã đọc. Dùng ở explorer Sessions của Workbench, popover phiên và ⌘K; tiêu đề phiên chưa đọc in đậm.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The "unread" mark now survives restarting the app, and the Sessions badge in the Workbench counts only sessions that are unread or waiting for you instead of every session.',
+        vi: 'Dấu "chưa đọc" nay còn nguyên sau khi khởi động lại app, và badge Sessions trong Workbench chỉ đếm phiên chưa đọc hoặc đang chờ bạn thay vì đếm mọi phiên.',
+      },
+      {
+        kind: 'added',
+        en: 'Jump between your questions: a small floating control in the transcript moves to the previous / next message you sent, with an n/N position.',
+        vi: 'Nhảy giữa các câu hỏi: nút nổi nhỏ trong transcript đưa bạn tới tin nhắn trước / sau mà bạn đã gửi, kèm vị trí n/N.',
+      },
+      {
+        kind: 'improved',
+        en: 'Infrastructure approval cards are compact: approved cards collapse to a single line (command + status) and expand on click; the "what / expected / risk" summary is clamped to two lines with a "Show details" toggle.',
+        vi: 'Thẻ duyệt lệnh hạ tầng gọn hơn: thẻ đã duyệt thu còn một dòng (dòng lệnh + trạng thái), bấm để mở; phần "sẽ làm gì / kết quả / rủi ro" cắt còn hai dòng kèm nút "Xem chi tiết".',
+      },
+      {
+        kind: 'fixed',
+        en: 'The model-written command explanation is shorter and always in your app language — a reply in the wrong language is discarded and another model is tried.',
+        vi: 'Lời giải thích dòng lệnh do model viết ngắn hơn và luôn đúng ngôn ngữ của app — câu trả lời sai ngôn ngữ bị bỏ và thử model khác.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Workbench: reopening a file you had closed (or reloading it) now shows the current content instead of the stale copy, and switching sessions no longer drops the state of files open in another session.',
+        vi: 'Workbench: mở lại file vừa đóng (hoặc nạp lại) nay hiện nội dung mới thay vì bản cũ, và đổi phiên không còn làm mất trạng thái của file đang mở ở phiên khác.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Workbench dock: the "expand" button no longer shrinks the dock until it gets stuck at its smallest size.',
+        vi: 'Dock Workbench: nút "mở rộng" không còn làm dock co lại tới mức nhỏ nhất rồi kẹt ở đó.',
+      },
+    ],
+  },
+  {
     version: '0.41.3',
     date: '2026-10-14',
     highlight: {
