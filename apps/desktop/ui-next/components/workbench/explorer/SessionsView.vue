@@ -63,24 +63,18 @@
       <div
         v-for="s in filteredRows"
         :key="s.id"
-        class="group relative flex h-[30px] cursor-pointer items-center gap-2.5 rounded-[var(--r-xs)] px-2.5 hover:bg-[var(--bgHover)]"
+        class="group relative flex h-[30px] cursor-pointer items-center gap-2 rounded-[var(--r-xs)] px-2 hover:bg-[var(--bgHover)]"
         :class="{
           'bg-[var(--accentDim)] text-[var(--text)]': s.id === sessions.activeId,
-          'text-[var(--textMuted)]': s.id !== sessions.activeId,
+          'text-[var(--textMuted)]': s.id !== sessions.activeId && !s.unread,
+          'row-unread': s.unread && s.id !== sessions.activeId,
+          'row-run': s.status === 'streaming',
         }"
         :title="`${s.title} · ${fmtTokens(ctxTokens(s))} ctx${costLabel(s)}`"
         @click="activateRow(s.id)"
         @contextmenu.prevent="onRowCtx(s.id, $event.clientX, $event.clientY)"
       >
-        <span
-          v-if="isRunStatus(s.status)"
-          class="size-2 flex-none animate-spin rounded-full border-[1.5px] border-[var(--accent)] border-t-transparent"
-        />
-        <span
-          v-else
-          class="size-[7px] flex-none rounded-full"
-          :style="{ background: STATUS_COLOR[s.status] }"
-        />
+        <SessionStateDot :status="s.status" :unread="s.unread" />
         <input
           v-if="renamingId === s.id"
           ref="renameInput"
@@ -127,13 +121,9 @@
         >
           <Icon name="download" style="width: var(--icon-xs); height: var(--icon-xs)" />
         </span>
-        <span
-          v-if="s.unread"
-          class="undot"
-          :style="{ '--st': STATUS_COLOR[s.status] }"
-          :title="t('sessions.item.unread')"
-        />
-        <span class="flex-none font-mono text-xs tabular-nums text-[var(--textFaint)]">
+        <!-- Chưa đọc đã thể hiện ở chỉ báo bên trái + tiêu đề đậm — không thêm chấm
+             thứ hai bên phải (trước đây trùng màu với chấm trạng thái ⇒ khó phân biệt). -->
+        <span class="flex-none font-mono text-xs font-normal tabular-nums text-[var(--textFaint)]">
           {{ fmtTokens(ctxTokens(s)) }}
         </span>
         <span
@@ -164,15 +154,7 @@
         :title="`${s.title}${costLabel(s)}`"
         @click="activateRow(s.id)"
       >
-        <span
-          v-if="isRunStatus(s.status)"
-          class="size-1.5 flex-none animate-spin rounded-full border-[1.5px] border-[var(--accent)] border-t-transparent"
-        />
-        <span
-          v-else
-          class="size-1.5 flex-none rounded-full"
-          :style="{ background: STATUS_COLOR[s.status] }"
-        />
+        <SessionStateDot :status="s.status" :unread="s.unread" />
         <span class="min-w-0 flex-1 truncate" :class="{ tgen: sessions.titleGenerating.has(s.id) }">
           {{ s.title }}{{ s.id === sessions.activeId ? ' •' : '' }}
         </span>
@@ -243,10 +225,7 @@
           :title="t('wb.strip.reopen')"
           @click="restore(s)"
         >
-          <span
-            class="size-1.5 flex-none rounded-full"
-            :style="{ background: STATUS_COLOR[s.status] }"
-          />
+          <SessionStateDot :status="s.status" />
           <span class="min-w-0 flex-1 truncate text-[var(--textFaint)]">{{ s.title }}</span>
           <span class="flex-none font-mono text-xs text-[var(--textFaint)]">
             {{ fmtTokens(ctxTokens(s)) }}
@@ -295,6 +274,7 @@
 // dùng chung với cột /sessions) + thao tác tab (đóng / đóng các tab khác / clear ctx…).
 import { computed, nextTick, ref, useTemplateRef } from 'vue'
 import { Loader2 } from 'lucide-vue-next'
+import SessionStateDot from '~/components/session/SessionStateDot.vue'
 import ScmIconBtn from './ScmIconBtn.vue'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
@@ -331,7 +311,6 @@ const {
   clearAll,
   restore,
   removeForever,
-  STATUS_COLOR,
   isRunStatus,
   t,
 } = useSessionStrip()
@@ -469,25 +448,31 @@ function onRowCtx(id: number, x: number, y: number) {
   font: inherit;
   outline: none;
 }
-/* Unread dot — cùng khuôn pulse của SessionListItem/.tabi.un. */
-.undot {
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--st, var(--accent));
-  box-shadow: 0 0 0 0 var(--st, var(--accent));
-  animation: un-pulse 1.6s ease-out infinite;
+/* Chưa đọc: tiêu đề đậm + màu chữ đầy đủ, phiên đã đọc giữ màu nhạt. */
+.row-unread {
+  color: var(--text);
+  font-weight: 600;
 }
-@keyframes un-pulse {
+/* Đang chạy: vệt sáng chạy dọc chân hàng (progress bất định). */
+.row-run::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  bottom: 2px;
+  left: 8px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent) no-repeat;
+  background-size: 40% 100%;
+  opacity: 0.8;
+  animation: row-run 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes row-run {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--st, var(--accent)) 60%, transparent);
-  }
-  70% {
-    box-shadow: 0 0 0 6px color-mix(in srgb, var(--st, var(--accent)) 0%, transparent);
+    background-position: -70% 0;
   }
   100% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--st, var(--accent)) 0%, transparent);
+    background-position: 170% 0;
   }
 }
 /* Title shimmer while the model is regenerating it — same sheen as
@@ -511,8 +496,10 @@ function onRowCtx(id: number, x: number, y: number) {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .undot {
+  .row-run::after {
     animation: none;
+    background-size: 100% 100%;
+    opacity: 0.4;
   }
 }
 </style>

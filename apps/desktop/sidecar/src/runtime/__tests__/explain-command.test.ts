@@ -8,7 +8,7 @@
 //
 // Run: `npx vitest run src/runtime/__tests__/explain-command.test.ts`
 import { describe, expect, it } from 'vitest'
-import { parseExplanation } from '../explain-command.js'
+import { matchesLanguage, parseExplanation } from '../explain-command.js'
 
 const ok = JSON.stringify({ what: 'Liệt kê bucket.', expect: 'Danh sách tên.', risk: 'Không đổi gì.' })
 
@@ -60,5 +60,37 @@ describe('parseExplanation', () => {
     expect(res?.what).toBe('a b')
     expect((res?.risk.length ?? 0) <= 420).toBe(true)
     expect(res?.risk.endsWith('…')).toBe(true)
+  })
+})
+
+// Sai ngôn ngữ ⇒ bỏ câu trả lời, thử model kế. Ca thật 2026-10-14: app để tiếng Việt,
+// Haiku trả ba câu tiếng Đức — người duyệt đọc không được mà thẻ vẫn hiện như thường.
+describe('matchesLanguage', () => {
+  const vi = {
+    what: 'Chuyển vào thư mục Terraform, in phiên bản rồi đọc các khai báo biến.',
+    expect: 'Không ghi gì; in ra vài dòng cấu hình.',
+    risk: 'Chỉ đọc, không đổi hạ tầng.',
+  }
+  const de = {
+    what: 'Navigiert zu einem Terraform-Projektverzeichnis und zeigt die Version an.',
+    expect: 'Gibt gefilterte Zeilen aus mehreren .tf-Dateien aus.',
+    risk: 'Nur lesend, ändert nichts.',
+  }
+  const en = {
+    what: 'Changes into the Terraform directory, prints the version, then reads variable declarations.',
+    expect: 'Writes nothing; prints a few config lines.',
+    risk: 'Read-only, changes no infrastructure.',
+  }
+
+  it('tiếng Việt: nhận câu tiếng Việt, loại tiếng Đức và tiếng Anh', () => {
+    expect(matchesLanguage('Vietnamese', vi)).toBe(true)
+    expect(matchesLanguage('Vietnamese', de)).toBe(false)
+    expect(matchesLanguage('Vietnamese', en)).toBe(false)
+  })
+
+  it('tiếng Anh: nhận câu tiếng Anh, loại tiếng Đức và tiếng Việt', () => {
+    expect(matchesLanguage('English', en)).toBe(true)
+    expect(matchesLanguage('English', de)).toBe(false)
+    expect(matchesLanguage('English', vi)).toBe(false)
   })
 })

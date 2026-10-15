@@ -6,7 +6,7 @@
   <div class="relative flex min-h-0 flex-1 flex-col">
     <template v-if="doc">
       <KeepAlive :max="12">
-        <component :is="surfaceOf(doc)" :key="doc.id" :doc="doc" />
+        <component :is="surfaceOf(doc)" :key="surfaceKey(doc)" :doc="doc" />
       </KeepAlive>
     </template>
     <div
@@ -19,7 +19,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, toRaw } from 'vue'
 import type { Component } from 'vue'
 import type { WorkbenchDoc } from '~/types/workbench'
 import { useWorkbenchStore } from '~/stores/workbench'
@@ -38,6 +38,23 @@ import DocUnknown from '~/components/workbench/stage/DocUnknown.vue'
 const wb = useWorkbenchStore()
 const { t } = useI18n()
 const doc = computed(() => wb.docs.find((d) => d.id === wb.activeDoc))
+
+// Key theo LẦN MỞ (object doc), không theo `doc.id`: đóng tab rồi mở lại cùng file
+// thì KeepAlive vẫn còn instance cũ với key `doc.id`, và instance đó đang giữ object
+// state file đã bị bỏ ⇒ tab mở lại hiện nội dung cũ, nút Nạp lại ghi vào object mới
+// mà màn hình không đọc (lỗi "reload không ra file mới"). Mỗi lần mở là một object
+// mới (`wb.openDoc` push object được truyền vào) ⇒ một số thứ tự mới ⇒ mount mới.
+const openSeq = new WeakMap<WorkbenchDoc, number>()
+let nextSeq = 0
+function surfaceKey(d: WorkbenchDoc): string {
+  const raw = toRaw(d)
+  let n = openSeq.get(raw)
+  if (n === undefined) {
+    n = ++nextSeq
+    openSeq.set(raw, n)
+  }
+  return `${d.id}#${n}`
+}
 
 function surfaceOf(d: WorkbenchDoc): Component {
   switch (d.kind) {

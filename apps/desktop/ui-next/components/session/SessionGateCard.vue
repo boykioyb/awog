@@ -35,18 +35,43 @@
     class="gcard"
     :class="{ gate: gateLit && !isProdInfra, iprod: gateLit && isProdInfra }"
   >
-    <div class="gh">
+    <!-- Lệnh hạ tầng: tiêu đề là nút thu/mở cả thẻ. Thu gọn còn MỘT hàng — chip
+         production + lớp lệnh, dòng lệnh cắt một dòng, trạng thái — vì thẻ đã duyệt
+         nằm mãi trong transcript và chiếm cả màn hình. Thẻ đang chờ vẫn giữ nút
+         Từ chối/Cho phép khi thu gọn (xem `showBody`). -->
+    <button
+      v-if="infra"
+      type="button"
+      class="gh ihead"
+      :aria-expanded="infraOpen"
+      :title="infraOpen ? t('infraGate.collapse') : t('infraGate.expand')"
+      @click="infraOpen = !infraOpen"
+    >
+      <Icon name="globe" class="flex-none" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      <span class="flex-none">{{ t('infraGate.title') }}</span>
+      <template v-if="!infraOpen">
+        <span v-for="chip in headChips" :key="chip.key" class="ichip flex-none" :class="chip.tone">
+          {{ chip.label }}
+        </span>
+        <span class="ihcmd">{{ infra.command }}</span>
+        <span class="ihstate" :class="permState.tone">{{ permState.label }}</span>
+      </template>
       <Icon
-        :name="infra ? 'globe' : 'shield'"
+        name="chev"
+        class="ihchev"
+        :class="{ up: infraOpen }"
         style="width: var(--icon-sm); height: var(--icon-sm)"
       />
-      {{ infra ? t('infraGate.title') : t('sessions.gate.permission') }}
+    </button>
+    <div v-else class="gh">
+      <Icon name="shield" style="width: var(--icon-sm); height: var(--icon-sm)" />
+      {{ t('sessions.gate.permission') }}
     </div>
     <!-- Hạ tầng (ADR 0088 §5): hậu quả → dòng lệnh → ngữ cảnh, đúng thứ tự người
          duyệt cần đọc. Dòng lệnh là bản ĐÃ chèn cờ ngữ cảnh của sidecar, nên nó là
          thứ sắp chạy thật chứ không phải thứ model gõ ra. Cả cụm nằm NGOÀI nhánh
          pending nên một lệnh đã duyệt vẫn tra lại được là nó chạm account nào. -->
-    <template v-if="infra">
+    <template v-if="infra && infraOpen">
       <div class="isent" :class="{ hot: infra.commandClass === 'destructive' }">
         {{ t(`infraGate.sentence.${infra.commandClass}`) }}
       </div>
@@ -63,18 +88,24 @@
         </span>
       </div>
       <!-- Ba câu trước khi bấm: sẽ làm gì · kết quả mong đợi · rủi ro. Nhãn đứng
-           trước để đọc lướt vẫn ra nghĩa; xem `infraBrief` cho luật dựng từng dòng. -->
-      <dl class="pbrief">
+           trước để đọc lướt vẫn ra nghĩa; xem `infraBrief` cho luật dựng từng dòng.
+           Mặc định THU GỌN: mỗi dòng tối đa 2 dòng chữ, rủi ro dùng bản tóm tắt, lời
+           rủi ro của model ẩn; bấm "Xem chi tiết" ra bản đầy đủ. -->
+      <dl class="pbrief" :class="{ 'is-open': briefOpen }">
         <template v-for="row in infraBrief" :key="row.label">
           <dt class="pbrief-lbl">{{ row.label }}</dt>
           <dd class="pbrief-txt" :class="row.tone">
-            {{ row.text }}
-            <span v-if="row.ai" class="pbrief-ai" :title="t('infraGate.brief.aiWhy')">
-              {{ t('infraGate.brief.ai') }}
+            <!-- Nhãn "model diễn giải" là sibling ĐỨNG NGOÀI phần bị cắt dòng: nó nói
+                 nguồn của câu chữ, cắt mất nó là người đọc tưởng AWOG tự suy. -->
+            <span class="pbrief-main">
+              <span class="pbrief-body">{{ briefOpen ? row.text : (row.short ?? row.text) }}</span>
+              <span v-if="row.ai" class="pbrief-ai" :title="t('infraGate.brief.aiWhy')">
+                {{ t('infraGate.brief.ai') }}
+              </span>
             </span>
             <!-- Dòng RỦI RO giữ phần AWOG tự suy ở trên; lời mô hình chỉ nối thêm
                  vào đây, có nhãn. Xem `infraBrief` cho lý do ranh giới đó. -->
-            <span v-if="row.note" class="pbrief-note">
+            <span v-if="briefOpen && row.note" class="pbrief-note">
               {{ row.note }}
               <span class="pbrief-ai" :title="t('infraGate.brief.aiWhy')">
                 {{ t('infraGate.brief.ai') }}
@@ -83,6 +114,20 @@
           </dd>
         </template>
       </dl>
+      <button
+        class="pbrief-toggle"
+        type="button"
+        :aria-expanded="briefOpen"
+        @click="briefOpen = !briefOpen"
+      >
+        <Icon
+          name="chev"
+          class="pbrief-chev"
+          :class="{ up: briefOpen }"
+          style="width: var(--icon-xs); height: var(--icon-xs)"
+        />
+        {{ briefOpen ? t('infraGate.brief.less') : t('infraGate.brief.more') }}
+      </button>
       <!-- Chỉ hiện khi đang hỏi hoặc đã hỏng: lúc bình thường ba dòng trên tự nói
            hết, thêm một dòng trạng thái nữa chỉ là nhiễu ngay trên nút Cho phép. -->
       <p v-if="explainState?.loading" class="pbrief-state">
@@ -95,19 +140,21 @@
         </button>
       </p>
     </template>
-    <div v-else class="ptext">
+    <div v-else-if="!infra" class="ptext">
       {{ t('sessions.gate.allowQuestion') }}
       <b>{{ block.tool }}</b>
       {{ t('sessions.gate.on') }}
       <span class="permcode">{{ block.target }}</span>
       ?
     </div>
-    <div v-if="cancelled" class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
+    <template v-if="cancelled">
+      <div v-if="showBody" class="resolved den">{{ t('sessions.gate.cancelled') }}</div>
+    </template>
     <template v-else-if="permStatus === 'pending'">
       <!-- ADR 0080: the rule about to be created, verbatim, BEFORE the button that
            creates it. "Always allow" on `git status` grants `Bash(git status)` — not
            every Bash call — and the only way the user can know that is to read it. -->
-      <div v-if="canRemember" class="prule">
+      <div v-if="canRemember && showBody" class="prule">
         <span class="prulelbl">{{ ruleLabel }}</span>
         <span class="prulecode">{{ ruleText }}</span>
         <span class="prulehint">{{ ruleMeaning }}</span>
@@ -115,11 +162,11 @@
       <!-- No rule could be derived (compound shell command…) → "Always allow" is not
            rendered at all; say why instead of leaving a dead button. Lệnh hạ tầng
            không bao giờ nhớ được, và lý do khác hẳn nên câu chữ cũng khác. -->
-      <div v-else class="pnote">
+      <div v-else-if="showBody" class="pnote">
         <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
         <span>{{ infra ? t('infraGate.noRemember') : noRuleReason }}</span>
       </div>
-      <div v-if="canRemember" class="pscope">
+      <div v-if="canRemember && showBody" class="pscope">
         <span class="prulelbl">{{ t('sessionsPerm.scopeLabel') }}</span>
         <AppSelect
           :model-value="permScope"
@@ -142,7 +189,7 @@
         </Button>
       </div>
     </template>
-    <template v-else-if="permStatus === 'allowed'">
+    <template v-else-if="permStatus === 'allowed' && showBody">
       <div class="resolved">
         <Icon name="check" />
         {{ t('sessions.gate.allowed') }}
@@ -169,7 +216,9 @@
         <pre class="poutbody">{{ permOutput }}</pre>
       </div>
     </template>
-    <div v-else class="resolved den">{{ t('sessions.gate.denied') }}</div>
+    <div v-else-if="permStatus === 'denied' && showBody" class="resolved den">
+      {{ t('sessions.gate.denied') }}
+    </div>
   </div>
 
   <!-- steer -->
@@ -295,6 +344,23 @@ const infra = computed<InfraPrompt | undefined>(() =>
 const isProdInfra = computed<boolean>(() => infra.value?.accountKind === 'production')
 // Thẻ đang "sáng đèn" chờ người duyệt — màu (hổ phách hay đỏ) do isProdInfra chọn.
 const gateLit = computed<boolean>(() => permStatus.value === 'pending' && !cancelled.value)
+
+// Thu/mở cả thẻ lệnh hạ tầng. Mặc định theo trạng thái LÚC MOUNT: thẻ đang chờ thì
+// mở (người duyệt cần đọc), thẻ đã xong trong lịch sử thì thu. Không tự thu ngay sau
+// khi bấm Cho phép — lúc đó người dùng đang chờ đọc phần Kết quả ngay trong thẻ.
+const infraOpen = ref(gateLit.value)
+// Thẻ thường (không phải hạ tầng) không thu được ⇒ luôn hiện đủ thân.
+const showBody = computed<boolean>(() => !infra.value || infraOpen.value)
+// Hàng tiêu đề khi thu gọn chỉ giữ hai chip đọc-trong-một-liếc: production + lớp lệnh.
+const headChips = computed(() =>
+  infraChips.value.filter((c) => c.key === 'prod' || c.key === 'class'),
+)
+const permState = computed<{ label: string; tone: '' | 'ok' | 'warn' }>(() => {
+  if (cancelled.value) return { label: t('sessions.gate.cancelled'), tone: '' }
+  if (permStatus.value === 'pending') return { label: t('sessions.status.awaiting'), tone: 'warn' }
+  if (permStatus.value === 'allowed') return { label: t('sessions.gate.allowed'), tone: 'ok' }
+  return { label: t('sessions.gate.denied'), tone: '' }
+})
 
 // Lệnh hạ tầng nhớ được — nhưng CHỈ trong phiên. Luật ghi xuống đĩa cho nó là dựng
 // nguồn sự thật thứ hai cạnh ma trận quyền và người dùng sẽ tin nhầm cái yếu hơn
@@ -463,7 +529,14 @@ type BriefRow = {
   ai?: boolean
   /** Dòng phụ do mô hình viết, đứng SAU `text` (chỉ dùng ở hàng Rủi ro). */
   note?: string
+  /** Bản tóm tắt hiện khi khối đang thu gọn (chỉ hàng Rủi ro — câu AWOG tự suy dài). */
+  short?: string
 }
+
+// Mặc định thu gọn: thẻ duyệt sống mãi trong transcript, và ba đoạn đầy đủ (nhất là
+// khi có chuỗi shell + tài khoản chưa xác minh) đẩy nút Cho phép xuống dưới màn hình.
+// Bản thu gọn vẫn nói đủ ba ý — chỉ bỏ phần giải thích "vì sao".
+const briefOpen = ref(false)
 
 const infraBrief = computed<BriefRow[]>(() => {
   const i = infra.value
@@ -517,20 +590,27 @@ const infraBrief = computed<BriefRow[]>(() => {
   ]
 
   // ── 3. Rủi ro: ghép đúng những gì payload nói ra ──
-  const risks: string[] = []
+  // Mỗi ý đi thành cặp [đầy đủ, tóm tắt]; ý nào vốn đã ngắn thì hai bản trùng nhau.
+  const risks: [string, string][] = []
   // Đây là chỗ sự thật cũ của "noAccount" chuyển về — nó KHÔNG phải cước chú, nó là
   // lý do thẻ đang hiện PRODUCTION: `accountKindOf` coi account chưa biết là
   // production (fail-safe), nên người đọc phải biết badge kia đến từ đâu.
-  if (!i.accountId) risks.push(t('infraGate.brief.risk.unknownAccount'))
-  else if (i.accountKind === 'production') risks.push(t('infraGate.brief.risk.production'))
-  if (i.shell) risks.push(t('infraGate.brief.risk.shell'))
-  if (i.reason === 'bypass') risks.push(t('infraGate.hint.bypass'))
-  else if (i.reason === 'session-narrowed') risks.push(t('infraGate.hint.narrowed'))
-  if (risks.length === 0) risks.push(t(`infraGate.brief.risk.${i.commandClass}`))
+  const risk = (full: string, short: string = full): void => {
+    risks.push([full, short])
+  }
+  if (!i.accountId)
+    risk(t('infraGate.brief.risk.unknownAccount'), t('infraGate.brief.riskShort.unknownAccount'))
+  else if (i.accountKind === 'production') risk(t('infraGate.brief.risk.production'))
+  if (i.shell) risk(t('infraGate.brief.risk.shell'), t('infraGate.brief.riskShort.shell'))
+  if (i.reason === 'bypass') risk(t('infraGate.hint.bypass'), t('infraGate.brief.riskShort.bypass'))
+  else if (i.reason === 'session-narrowed')
+    risk(t('infraGate.hint.narrowed'), t('infraGate.brief.riskShort.narrowed'))
+  if (risks.length === 0) risk(t(`infraGate.brief.risk.${i.commandClass}`))
 
   rows.push({
     label: t('infraGate.brief.label.risk'),
-    text: risks.join(' '),
+    text: risks.map((r) => r[0]).join(' '),
+    short: risks.map((r) => r[1]).join(' '),
     tone: i.commandClass === 'destructive' ? 'danger' : isProdInfra.value ? 'warn' : '',
     ...(ai ? { note: ai.risk } : {}),
   })
@@ -635,6 +715,62 @@ const onRetry = (): void => {
   color: var(--foreground);
   margin-bottom: 7px;
 }
+/* Tiêu đề thẻ hạ tầng = nút thu/mở. Giữ nguyên chữ/màu của `.gh` (kể cả màu đỏ/hổ
+   phách khi thẻ đang chờ), chỉ bỏ chrome của <button>. Tiền tố `ih*` chứ không `gh*`:
+   `.ghstate` đã là class toàn cục ở prototype.css (pill trạng thái GitHub). */
+.ihead {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ihead[aria-expanded='false'] {
+  margin-bottom: 0;
+}
+/* Dòng lệnh rút gọn: một dòng, cắt bằng dấu …; bản đầy đủ ở thân thẻ khi mở. */
+.ihcmd {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-family: var(--code); /* mono-ok: dòng lệnh shell, cùng bề mặt với .icmd */
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 400;
+  color: var(--muted-foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ihstate {
+  flex: none;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.ihstate.ok {
+  color: var(--success);
+}
+.ihstate.warn {
+  color: var(--warning);
+}
+.ihchev {
+  flex: none;
+  margin-left: auto;
+  color: var(--muted-foreground);
+  transition: transform 0.18s ease;
+}
+.ihchev.up {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ihchev {
+    transition: none;
+  }
+}
 /* Action row — right-aligned (spec idiom). Buttons are ui/Button (shadcn). */
 .cact {
   display: flex;
@@ -711,6 +847,55 @@ const onRetry = (): void => {
 
 .pbrief-txt.danger {
   color: var(--destructive);
+}
+
+/* Phần chữ + nhãn nguồn trên cùng một hàng: chữ co/cắt dòng, nhãn đứng ngoài nên
+   không bao giờ bị cắt mất. */
+.pbrief-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+.pbrief-body {
+  min-width: 0;
+}
+.pbrief-main .pbrief-ai {
+  flex: none;
+  margin-left: 0;
+}
+.pbrief:not(.is-open) .pbrief-body {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pbrief-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--textFaint);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 18px;
+}
+.pbrief-toggle:hover {
+  color: var(--text);
+}
+.pbrief-chev {
+  transition: transform 0.18s ease;
+}
+.pbrief-chev.up {
+  transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pbrief-chev {
+    transition: none;
+  }
 }
 
 /* Nhãn "do model" — nhỏ, không tô màu cảnh báo: nó nói NGUỒN của câu chữ, không

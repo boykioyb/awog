@@ -59,11 +59,12 @@ export function useWorkbenchDock() {
   }
 
   // "Mở rộng": cao tối đa = min(480, 60% stage) — stage là hộp flex cha của
-  // dock; không đo được (hoặc SSR) rớt về cửa sổ, vẫn clamp [34, 480].
+  // dock; không đo được (hoặc SSR) rớt về cửa sổ, vẫn clamp [34, 480]. Không bao
+  // giờ THU dock: stage thấp quá thì giữ nguyên cỡ hiện tại thay vì co lại.
   function expandDock(stageHeight?: number): void {
-    const h = stageHeight ?? (typeof window !== 'undefined' ? window.innerHeight : 0)
+    const h = stageHeight || (typeof window !== 'undefined' ? window.innerHeight : 0)
     const target = Math.min(wb.DOCK_MAX, Math.floor(h * 0.6))
-    wb.dockH = Math.max(wb.DOCK_MIN, Math.min(wb.DOCK_MAX, target))
+    wb.dockH = Math.max(wb.dockH, wb.DOCK_MIN, Math.min(wb.DOCK_MAX, target))
   }
 
   // "Mở Terminal ở đây": hiện dock + chuyển view về Terminal + xếp một tab

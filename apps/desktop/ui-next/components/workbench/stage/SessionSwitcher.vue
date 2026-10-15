@@ -44,15 +44,7 @@
               @click="pick(it.row)"
               @mouseenter="sel = i"
             >
-              <span
-                v-if="isRunStatus(it.row.status)"
-                class="size-2 flex-none animate-spin rounded-full border-[1.5px] border-[var(--accent)] border-t-transparent"
-              />
-              <span
-                v-else
-                class="size-2 flex-none rounded-full"
-                :style="{ background: STATUS_COLOR[it.row.status] }"
-              />
+              <SessionStateDot :status="it.row.status" />
               <span class="min-w-0 truncate">{{ it.row.title }}</span>
               <span class="ml-auto flex-none text-xs text-[var(--textFaint)]">
                 {{ it.row.projectName }}
@@ -93,11 +85,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSessionsStore } from '~/stores/sessions'
 import { useI18n } from '~/composables/useI18n'
-import { STATUS_COLOR, type Session } from '~/composables/useSessionsData'
+import type { Session } from '~/composables/useSessionsData'
+import SessionStateDot from '~/components/session/SessionStateDot.vue'
 import {
   allSessions,
   installSettleToast,
-  isRunStatus,
   jumpTo,
   uninstallSettleToast,
   useSessionSwitcher,

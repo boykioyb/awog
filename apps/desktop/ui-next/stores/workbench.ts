@@ -32,6 +32,15 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     ...sessionDocs.value,
     ...globalDocs.value,
   ])
+  // Id của MỌI doc đang mở ở mọi session (+ global). State file của một doc chỉ được
+  // bỏ khi không còn session nào mở nó — `docs` chỉ là strip của session HIỆN TẠI,
+  // dọn theo nó là xoá state của tab session khác đang giữ (component KeepAlive của
+  // tab đó vẫn trỏ vào object cũ ⇒ quay lại thấy nội dung cũ, nạp lại vô tác dụng).
+  const openDocIds = computed<Set<string>>(() => {
+    const ids = new Set<string>(globalDocs.value.map((d) => d.id))
+    for (const list of docsBySession.values()) for (const d of list) ids.add(d.id)
+    return ids
+  })
 
   function openDoc(d: WorkbenchDoc) {
     if (GLOBAL_KINDS.has(d.kind)) {
@@ -140,6 +149,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   return {
     docs,
+    openDocIds,
     activeDoc,
     openDoc,
     closeDoc,

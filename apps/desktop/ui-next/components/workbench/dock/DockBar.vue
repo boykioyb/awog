@@ -116,10 +116,13 @@ watch(
   { immediate: true },
 )
 
-// Stage = hộp flex chứa dock; trần mở rộng = min(480, 60% stage).
+// Stage = hộp flex chứa dock; trần mở rộng = min(480, 60% stage). Đo hộp CHA của
+// `<section data-wb-dock>`, KHÔNG phải cha trực tiếp của bar: cha trực tiếp chính là
+// section dock (cao = dockH) ⇒ mỗi lần bấm dock co còn 60% của chính nó, rơi về 34
+// rồi kẹt ở đó (60% × 34 < 34) — nút "mở rộng" lại thu dock và không mở ra được nữa.
 const rootEl = useTemplateRef<HTMLElement>('rootEl')
 function expand(): void {
-  dock.expandDock(rootEl.value?.parentElement?.clientHeight)
+  dock.expandDock(rootEl.value?.closest('[data-wb-dock]')?.parentElement?.clientHeight)
 }
 
 // reka Tabs emits AcceptableValue (string|number) — v-model value lại là

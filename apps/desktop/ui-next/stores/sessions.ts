@@ -781,6 +781,41 @@ export const useSessionsStore = defineStore('sessions', () => {
   watch(openProjectTabs, (v) => localStorage.setItem(STORAGE_OPEN_TABS, JSON.stringify(v)))
   watch(activeTab, (v) => localStorage.setItem(STORAGE_ACTIVE_TAB, v))
 
+  // Cờ "chưa đọc" sống qua lần khởi động lại — trước đây chỉ nằm trong RAM nên mở lại
+  // app là mọi phiên thành "đã đọc" và list không còn gì để phân biệt. Lưu tập engineId
+  // ở localStorage, ghi theo DIFF (đọc-sửa-ghi từng id thêm/bớt) chứ không ghi đè cả
+  // tập: cửa sổ popout có store riêng nhưng dùng chung localStorage. Phiên bị xoá rời
+  // list ⇒ rơi khỏi tập ở lần diff kế.
+  const STORAGE_UNREAD = 'awog.sessions.unread'
+  function readUnread(): Set<string> {
+    try {
+      const arr: unknown = JSON.parse(localStorage.getItem(STORAGE_UNREAD) ?? '[]')
+      if (Array.isArray(arr)) return new Set(arr.filter((x): x is string => typeof x === 'string'))
+    } catch {
+      // Corrupt value → nothing unread.
+    }
+    return new Set()
+  }
+  // Bản sao trong RAM của tập đã lưu — summaryToSession tra ở đây (không parse lại
+  // localStorage cho từng phiên) và watch dưới cập nhật nó sau mỗi lần ghi, nên một
+  // lần hydrate lại không hồi sinh cờ của phiên vừa đọc.
+  let persistedUnread = readUnread()
+  watch(
+    () => sessions.value.flatMap((s) => (s.unread && s.engineId ? [s.engineId] : [])),
+    (now, prev) => {
+      const nowSet = new Set(now)
+      const prevSet = new Set(prev)
+      const added = now.filter((id) => !prevSet.has(id))
+      const gone = prev.filter((id) => !nowSet.has(id))
+      if (!added.length && !gone.length) return
+      const stored = readUnread()
+      for (const id of added) stored.add(id)
+      for (const id of gone) stored.delete(id)
+      localStorage.setItem(STORAGE_UNREAD, JSON.stringify([...stored]))
+      persistedUnread = stored
+    },
+  )
+
   // MRU project list — gần nhất đứng đầu. ⌘` đảo qua project dùng gần nhất
   // (toggleLastProject) và popover Đổi project sort theo đây. Cap 10: danh sách
   // này là "gần đây", không phải roster đầy đủ.
@@ -1404,6 +1439,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       status: dto.status ?? (dto.messageCount > 0 ? 'done' : 'idle'),
       when: relativeWhen(dto.updatedAt),
       pinned: dto.pinned ?? false,
+      unread: persistedUnread.has(dto.id),
       mode: modeDisplay(dto.settings?.mode),
       msgs: [],
       loaded: false,

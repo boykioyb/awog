@@ -66,9 +66,13 @@ const scmBadge = computed(() => {
   const n = git.staged.length + git.unstaged.length + git.conflicted.length
   return n ? String(n) : undefined
 })
+// Badge = số phiên cần bạn để ý trong list đang hiện: chưa đọc HOẶC đang chờ trả lời
+// (cùng luật với badge tab project ở useSessionTabs). Trước đây đếm TỔNG số phiên mà
+// vẫn tô màu nhấn ⇒ trông như báo chưa đọc trong khi không phải.
 const sessionsBadge = computed(() => {
   const n = sessions.tabSessions.filter(
-    (s) => !sessions.isArchived(s.id) && !isBoardSession(s),
+    (s) =>
+      !sessions.isArchived(s.id) && !isBoardSession(s) && (s.unread || s.status === 'awaiting'),
   ).length
   return n ? String(n) : undefined
 })

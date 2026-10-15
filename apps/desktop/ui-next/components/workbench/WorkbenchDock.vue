@@ -7,6 +7,7 @@
        dữ liệu tự nạp lại. -->
   <section
     v-show="!wb.dockHidden"
+    data-wb-dock
     class="relative flex min-h-0 flex-none flex-col"
     :style="{
       height: wb.dockH + 'px',

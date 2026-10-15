@@ -68,6 +68,44 @@
         </div>
       </template>
     </div>
+    <!-- Nhảy giữa các câu hỏi của user: ↑ câu trước · vị trí n/N · ↓ câu sau. Đứng
+         riêng, cao hơn cụm lên-đầu/xuống-cuối một khoảng cố định, để không bị đẩy
+         lên xuống khi hai nút kia hiện/ẩn theo mép cuộn. -->
+    <Transition name="fadepop">
+      <div
+        v-if="userIdx.length > 1"
+        class="qnav"
+        role="group"
+        :aria-label="t('sessions.transcript.qnav.label')"
+      >
+        <button
+          class="qbtn"
+          type="button"
+          :disabled="prevQ === null"
+          :title="t('sessions.transcript.qnav.prev')"
+          :aria-label="t('sessions.transcript.qnav.prev')"
+          @click="jumpQuestion(-1)"
+        >
+          <ArrowUp :size="14" />
+        </button>
+        <span
+          class="qpos"
+          :title="t('sessions.transcript.qnav.pos', { n: qPos || '–', total: userIdx.length })"
+        >
+          {{ qPos || '–' }}/{{ userIdx.length }}
+        </span>
+        <button
+          class="qbtn"
+          type="button"
+          :disabled="nextQ === null"
+          :title="t('sessions.transcript.qnav.next')"
+          :aria-label="t('sessions.transcript.qnav.next')"
+          @click="jumpQuestion(1)"
+        >
+          <ArrowDown :size="14" />
+        </button>
+      </div>
+    </Transition>
     <!-- Jump-to-top / jump-to-bottom: each shows only when there's somewhere to go
          in that direction (both hidden when the transcript doesn't overflow). -->
     <div class="scrolljump">
@@ -101,6 +139,7 @@
 // bottom on new content while the user is at the bottom ("stick to bottom"); if
 // they scroll up to read history it leaves their position alone. Floating
 // jump-to-top / jump-to-bottom controls overlay the bottom-right.
+import { ArrowDown, ArrowUp } from 'lucide-vue-next'
 import { questionAnswered, type SessionMessage } from '~/composables/useSessionsData'
 import type { ChapterEntry } from './SessionChapterNav.vue'
 
@@ -223,6 +262,83 @@ function updateEdges() {
   // rendered top isn't the real top) → clicking it reveals all then scrolls up.
   atTop.value = el.scrollTop <= 4 && hiddenCount.value === 0
   atBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 4
+  measureQuestions()
+}
+
+// ── Nhảy giữa các câu hỏi của user ──
+// "Câu hiện tại" = câu hỏi cuối cùng có mép trên đã đi qua mép trên khung đọc (cộng
+// một lề nhỏ) — tức là câu đang đọc câu trả lời của nó. ↑ về câu có mép trên NẰM
+// TRÊN khung (nên lần bấm đầu khi đang giữa câu trả lời là về đầu chính câu đó, như
+// mọi trình chat), ↓ tới câu có mép trên NẰM DƯỚI.
+const Q_EDGE = 24
+const userIdx = computed(() => {
+  const out: number[] = []
+  props.messages.forEach((m, i) => {
+    if (m.role === 'user') out.push(i)
+  })
+  return out
+})
+const curQ = ref<number | null>(null)
+const prevQ = ref<number | null>(null)
+const nextQ = ref<number | null>(null)
+// Vị trí 1-based của câu hiện tại trong danh sách câu hỏi; 0 = đang ở trên câu đầu.
+const qPos = computed(() => (curQ.value === null ? 0 : userIdx.value.indexOf(curQ.value) + 1))
+
+function measureQuestions(): void {
+  const el = msgsEl.value
+  if (!el) return
+  const viewTop = el.getBoundingClientRect().top
+  // Câu hỏi bị cửa sổ render cắt khỏi DOM thì chắc chắn nằm TRÊN khung.
+  let cur: number | null = null
+  let prev: number | null = null
+  let next: number | null = null
+  for (const i of userIdx.value) {
+    if (i < hiddenCount.value) {
+      cur = i
+      prev = i
+    }
+  }
+  // Một lần nhảy đặt câu hỏi ở mép trên + 12px ⇒ vùng [0, Q_EDGE] là "đang đứng ở câu
+  // này": không tính là câu trước cũng không là câu sau, nếu không bấm ↓ lần nữa sẽ
+  // nhảy lại đúng câu đang đứng.
+  for (const row of el.querySelectorAll<HTMLElement>('.urow[data-mi]')) {
+    const i = Number(row.dataset.mi)
+    const top = row.getBoundingClientRect().top - viewTop
+    // Ở đáy thì câu cuối không lên được tới mép trên — vẫn coi là "đang ở" nếu nó
+    // đã hiện trong khung.
+    if (top <= Q_EDGE || (atBottom.value && top < el.clientHeight)) cur = i
+    if (top < 0) prev = i
+    else if (top > Q_EDGE && next === null) next = i
+  }
+  curQ.value = cur
+  prevQ.value = prev
+  // Đã chạm đáy thì câu "sau" dù còn nằm dưới mép trên cũng không cuộn tới được nữa.
+  nextQ.value = atBottom.value ? null : next
+}
+
+// Trong lúc cuộn mượt đang chạy, đo lại vị trí vẫn thấy câu vừa nhắm ở dưới mép ⇒ bấm
+// liên tiếp sẽ nhắm lại đúng câu đó. Nên trong cửa sổ này, bước tiếp theo tính từ
+// câu vừa nhắm chứ không từ hình học.
+const JUMP_SETTLE_MS = 700
+let lastJump: { target: number; at: number } | null = null
+
+async function jumpQuestion(dir: -1 | 1): Promise<void> {
+  const list = userIdx.value
+  let target: number | null
+  if (lastJump && Date.now() - lastJump.at < JUMP_SETTLE_MS) {
+    const k = list.indexOf(lastJump.target) + dir
+    target = k >= 0 && k < list.length ? (list[k] ?? null) : null
+  } else {
+    target = dir < 0 ? prevQ.value : nextQ.value
+  }
+  if (target === null) return
+  lastJump = { target, at: Date.now() }
+  await revealMessage(target)
+  const el = msgsEl.value
+  const row = el?.querySelector<HTMLElement>(`.urow[data-mi="${target}"]`)
+  if (!el || !row) return
+  const delta = row.getBoundingClientRect().top - el.getBoundingClientRect().top - 12
+  el.scrollTo({ top: el.scrollTop + delta, behavior: 'smooth' })
 }
 
 // Start of the turn containing `i` = the largest user-message index ≤ i (0 when the
@@ -449,6 +565,65 @@ onUnmounted(() => {
 }
 .sjbtn:active {
   transform: scale(0.92);
+}
+
+/* Nhảy giữa các câu hỏi — pill dọc cùng ngôn ngữ với `.sjbtn`, neo CỐ ĐỊNH phía trên
+   cụm lên-đầu/xuống-cuối (2 nút 32px + gap 6px + lề 10px) để không nhảy chỗ khi
+   hai nút đó hiện/ẩn. */
+.qnav {
+  position: absolute;
+  right: 16px;
+  bottom: 96px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 32px;
+  padding: 2px 0;
+  border-radius: var(--r-pill);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.qbtn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    background 0.12s ease,
+    transform 0.1s ease;
+}
+.qbtn:hover:not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--foreground);
+}
+.qbtn:active:not(:disabled) {
+  transform: scale(0.92);
+}
+.qbtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.qbtn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.qpos {
+  font-size: 10px; /* design-token-ok: nhãn đếm n/N phải vừa pill rộng 32px */
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  user-select: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .qbtn {
+    transition: none;
+  }
 }
 
 /* Load-older sentinel sits centered above the windowed transcript (align-self is a

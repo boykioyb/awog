@@ -104,6 +104,7 @@ const checking = new Set<string>()
 // Listener fs:changed + activeDoc + window focus: cài MỘT lần cho cả app, trong
 // effect scope tách rời (không chết theo component gọi đầu tiên).
 let diskWatchInstalled = false
+let orphanWatchInstalled = false
 
 export function useWorkbenchDocs() {
   const wb = useWorkbenchStore()
@@ -459,9 +460,9 @@ export function useWorkbenchDocs() {
         ?.closeTab(doc.browId)
         .catch(() => {})
     }
+    // State file KHÔNG bỏ ở đây: cùng file có thể đang mở ở session khác. Watcher
+    // `openDocIds` dưới tự dọn khi không còn session nào mở id này.
     wb.closeDoc(doc.id)
-    fileStates.delete(doc.id)
-    loaded.delete(doc.id)
     return true
   }
 
@@ -486,23 +487,26 @@ export function useWorkbenchDocs() {
     Object.assign(doc, patch)
   }
 
-  // State của file docs mồ côi (doc bị evict/đóng bằng đường khác) — một lần
-  // đăng ký trên effect scope của caller đầu tiên.
-  let watchInstalled = false
-  if (!watchInstalled) {
-    watchInstalled = true
-    watch(
-      () => wb.docs.map((d) => d.id).join('\n'),
-      () => {
-        const alive = new Set(wb.docs.map((d) => d.id))
-        for (const id of fileStates.keys()) {
-          if (!alive.has(id)) {
-            fileStates.delete(id)
-            loaded.delete(id)
+  // Dọn state file của doc không còn mở ở BẤT KỲ session nào (đóng tab, bị evict khỏi
+  // trần 12 doc, …). Theo `openDocIds` chứ không theo `wb.docs`: `wb.docs` chỉ là strip
+  // của session hiện tại, dọn theo nó thì đổi session là xoá state của tab session kia.
+  // Cài MỘT lần cho cả app (trước đây cờ là biến cục bộ ⇒ mỗi lần gọi composable lại
+  // thêm một watcher).
+  if (!orphanWatchInstalled) {
+    orphanWatchInstalled = true
+    effectScope(true).run(() => {
+      watch(
+        () => wb.openDocIds,
+        (alive) => {
+          for (const id of fileStates.keys()) {
+            if (!alive.has(id)) {
+              fileStates.delete(id)
+              loaded.delete(id)
+            }
           }
-        }
-      },
-    )
+        },
+      )
+    })
   }
 
   return {
