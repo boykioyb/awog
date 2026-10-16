@@ -30,6 +30,71 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.41.5',
+    date: '2026-10-16',
+    highlight: {
+      en: 'The board becomes your work log: every session in a project shows up as an issue you can mark done, blocked or pending. Plus a local Git Log with graph and diff, and a GitHub account that sticks to each project.',
+      vi: 'Board thành sổ việc của bạn: mỗi phiên trong một project hiện thành một issue để đánh dấu xong, bị chặn hay tạm dừng. Kèm Git Log ngay trong app có graph và diff, và tài khoản GitHub bám theo từng project.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Sessions as issues: a session in a project automatically gets a board issue that moves to "In progress" while it runs. The session header shows the issue status with quick actions (Done, Blocked, Pending…), and agents can read and update issues with new board tools.',
+        vi: 'Phiên là issue: phiên thuộc một project tự có một issue trên board, chuyển sang "Đang làm" khi chạy. Header phiên hiện trạng thái issue kèm thao tác nhanh (Xong, Bị chặn, Tạm dừng…), và agent đọc/cập nhật issue qua bộ tool board mới.',
+      },
+      {
+        kind: 'added',
+        en: 'New "Pending" status for work you paused on purpose, an AI recap of an issue (including your latest comments), and an AI-written description drafted from the sessions that worked on it.',
+        vi: 'Thêm trạng thái "Tạm dừng" cho việc bạn chủ động gác lại, recap issue bằng AI (tính cả comment mới nhất của bạn) và mô tả do AI viết dựa trên các phiên đã làm issue đó.',
+      },
+      {
+        kind: 'improved',
+        en: 'Issue editor redesigned in a Jira-style layout: title and description read as text until you click Edit, activity sits below, and a GitHub-like sidebar holds kind, start date, deadline, sprint, milestone, issue and PR links. Sprint and milestone can be auto-detected from the linked GitHub issue. Comments are no longer limited.',
+        vi: 'Trình sửa issue làm lại theo bố cục kiểu Jira: tiêu đề và mô tả hiện dạng chữ, bấm Sửa mới thành ô nhập, hoạt động nằm bên dưới, thanh bên kiểu GitHub gồm loại, ngày bắt đầu, hạn chót, sprint, milestone, link issue và PR. Sprint và milestone tự dò được từ issue GitHub đã liên kết. Comment không còn giới hạn số lượng.',
+      },
+      {
+        kind: 'added',
+        en: 'Board filter presets: save a filter (for example one project) under a name and switch back in one click; the board also remembers your last filter.',
+        vi: 'Lưu bộ lọc board: đặt tên cho một bộ lọc (ví dụ một project) và bật lại chỉ một cú bấm; board cũng nhớ bộ lọc lần cuối.',
+      },
+      {
+        kind: 'added',
+        en: 'Workbench: an Issues view, a JetBrains-style Git Log with commit graph, changed files and diff (clicking a commit no longer opens the web), sorting for the Sessions list (newest modified first) with clearer two-line rows, and the "Response style" chip is back in the status bar.',
+        vi: 'Workbench: thêm view Issues, Git Log kiểu JetBrains có graph commit, danh sách file đổi và diff (bấm commit không còn mở web), sắp xếp danh sách Sessions (mặc định sửa gần nhất) với hàng hai dòng dễ đọc hơn, và chip "Phong cách trả lời" đã trở lại thanh trạng thái.',
+      },
+      {
+        kind: 'improved',
+        en: 'Git pull and push set up the upstream branch automatically when it is missing, and always show a success or error notification.',
+        vi: 'Git pull và push tự cấu hình nhánh upstream khi còn thiếu, và luôn báo thành công hoặc lỗi.',
+      },
+      {
+        kind: 'fixed',
+        en: 'The agent\'s terminal keeps using the GitHub account chosen for the project, even after you run "gh auth switch" in your own terminal.',
+        vi: 'Terminal của agent luôn dùng đúng tài khoản GitHub đã chọn cho project, kể cả khi bạn chạy "gh auth switch" ở terminal của mình.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Pop-up windows opened by web pages in the built-in browser (such as sign-in with Google or GitHub) now work.',
+        vi: 'Cửa sổ pop-up do trang web mở trong trình duyệt tích hợp (như đăng nhập Google, GitHub) nay hoạt động bình thường.',
+      },
+      {
+        kind: 'improved',
+        en: 'Notifications appear at the top right and have Copy and Close buttons, handy for copying an error message.',
+        vi: 'Thông báo hiện ở góc trên bên phải, có nút Sao chép và Đóng — tiện để copy nội dung lỗi.',
+      },
+      {
+        kind: 'added',
+        en: '⌘K searches inside Settings: type a keyword and jump straight to the matching setting.',
+        vi: '⌘K tìm sâu vào Cài đặt: gõ từ khoá là nhảy thẳng tới đúng mục cài đặt.',
+      },
+      {
+        kind: 'improved',
+        en: 'Long menus in the status bar and composer (account and model, response style…) are capped in height and scroll instead of filling the screen; the question drawer no longer shows twice.',
+        vi: 'Menu dài ở thanh trạng thái và ô soạn tin (tài khoản và model, phong cách trả lời…) có chiều cao tối đa và cuộn bên trong thay vì phủ kín màn hình; khung câu hỏi không còn hiện hai lần.',
+      },
+    ],
+  },
+  {
     version: '0.41.4',
     date: '2026-10-15',
     highlight: {
