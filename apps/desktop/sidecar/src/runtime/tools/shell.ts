@@ -19,6 +19,7 @@
 import { existsSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { log } from '../../util/logger.js'
+import { ghShimEnv } from './gh-shim.js'
 
 const PROBE_TIMEOUT_MS = 5_000
 
@@ -94,6 +95,9 @@ const ALLOW_ENV = [
 export interface ShellInfraContext {
   awsProfile?: string | undefined
   awsRegion?: string | undefined
+  // Tài khoản gh ghim cho project — PATH có shim gh + git credential trỏ vào shim
+  // (gh-shim.ts). Vắng = gh/git theo tài khoản active của máy.
+  ghAccount?: string | undefined
 }
 
 // Build the filtered env for a spawned shell command. DO_NOT_TRACK is set as
@@ -119,5 +123,6 @@ export function filteredShellEnv(opts?: ShellInfraContext): NodeJS.ProcessEnv {
     out.AWS_REGION = opts.awsRegion
     out.AWS_DEFAULT_REGION = opts.awsRegion
   }
+  if (opts?.ghAccount) Object.assign(out, ghShimEnv(opts.ghAccount, out.PATH))
   return out
 }

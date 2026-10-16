@@ -33,12 +33,36 @@ import { SETTINGS_GROUPS } from '~/components/settings/sections'
 import { useSettingsStore } from '~/stores/settings'
 
 const { t } = useI18n()
-const { open, section, closeSettings } = useSettingsModal()
+const { open, section, focus, closeSettings } = useSettingsModal()
 const settings = useSettingsStore()
 
 watch(open, (isOpen) => {
   if (isOpen) settings.hydrateFromSidecar().catch(() => {})
 })
+
+// Mở từ ⌘K tới MỘT dòng cài đặt: tìm dòng theo tên hiển thị (`.fn` của SettingsField,
+// tiêu đề nhóm `.sech`), cuộn tới giữa và nháy sáng. Mục có thể render trễ (dữ liệu
+// nạp từ sidecar) — thử lại vài khung hình trước khi bỏ cuộc.
+watch(
+  () => [open.value, section.value, focus.value] as const,
+  async ([isOpen, , label]) => {
+    if (!isOpen || !label) return
+    const want = label.trim().toLowerCase()
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => requestAnimationFrame(r))
+      const hit = [...document.querySelectorAll<HTMLElement>('.setpane .fn, .setpane .sech')].find(
+        (el) => (el.textContent ?? '').trim().toLowerCase().startsWith(want),
+      )
+      if (!hit) continue
+      const row = hit.closest<HTMLElement>('.field') ?? hit
+      row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      row.classList.add('set-flash')
+      setTimeout(() => row.classList.remove('set-flash'), 1800)
+      break
+    }
+    focus.value = null
+  },
+)
 
 // Debounced "saved" toast: any persisted setting change bumps settings.savedTick.
 // Show one toast after the change settles (so typing a textarea gives a single
@@ -64,6 +88,23 @@ useEscToClose(() => open.value, closeSettings, { preventDefault: false })
 /* Settings is a 2-pane modal (nav + content) — wider + taller than the default
    .setmodal (640px) so the content pane and Models forms have room. Scoped, so
    the shared What's New modal (plain .setmodal) keeps its narrower width. */
+/* Dòng cài đặt vừa được ⌘K nhắm tới: nháy nền accent rồi tắt dần. :deep vì dòng
+   nằm trong component con (SettingsField). */
+.setmodal-lg :deep(.set-flash) {
+  animation: set-flash 1.8s ease-out;
+  border-radius: var(--r-sm);
+}
+@keyframes set-flash {
+  0%,
+  35% {
+    background: var(--accentDim);
+    box-shadow: 0 0 0 1px var(--accentBorder);
+  }
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
 .setmodal-lg {
   width: 960px;
   max-width: 94vw;

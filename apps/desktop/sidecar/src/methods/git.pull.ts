@@ -7,6 +7,7 @@ import { suppressEchoFor } from '../git/watcher.js'
 import { runGit } from '../git/runner.js'
 import { conflictedFiles } from '../git/conflict-state.js'
 import { runGitStreaming } from '../git/streaming.js'
+import { planUpstream, setUpstreamSameName } from '../git/upstream.js'
 import {
   GIT_RPC_CODE,
   GitErrorCode,
@@ -58,11 +59,22 @@ register('git.pull', async (raw): Promise<Result> => {
       })
     }
 
+    // Branch chưa có upstream (vừa tạo local, hoặc checkout tay) ⇒ không bắt người dùng
+    // tự `--set-upstream-to`: kéo thẳng `<remote> <cùng tên>` rồi gắn tracking khi
+    // thành công. CHỈ cùng tên — không bao giờ đoán sang branch chung (git/upstream.ts).
+    const plan = await planUpstream(params.workspaceRoot, headRef.stdout.trim())
+    if (plan.kind === 'no-remote') {
+      throw new RpcError(GIT_RPC_CODE, 'Repo chưa có remote nào để pull', {
+        gitCode: GitErrorCode.REMOTE_NOT_FOUND,
+      })
+    }
+
     suppressEchoFor(params.workspaceRoot)
     const args = ['pull', '--progress']
     if (params.strategy === 'ff-only') args.push('--ff-only')
     else if (params.strategy === 'merge') args.push('--no-rebase')
     else args.push('--rebase')
+    if (plan.kind === 'untracked') args.push(plan.remote, plan.branch)
 
     const { stdout, stderr, code } = await runGitStreaming({
       workspaceRoot: params.workspaceRoot,
@@ -91,6 +103,15 @@ register('git.pull', async (raw): Promise<Result> => {
           stderrSanitized: sanitized,
         })
       }
+      // Đi đường tường minh mà remote chưa có branch cùng tên ⇒ branch mới chỉ có ở
+      // local: thứ cần làm là Push (push tự gắn upstream), không phải pull.
+      if (plan.kind === 'untracked' && /couldn't find remote ref/i.test(stderr)) {
+        throw new RpcError(
+          GIT_RPC_CODE,
+          `Branch ${plan.branch} chưa có trên ${plan.remote} — Push để đẩy lên (tự gắn upstream)`,
+          { gitCode: GitErrorCode.NO_UPSTREAM, stderrSanitized: sanitized },
+        )
+      }
       if (
         /not possible to fast-forward/i.test(stderr) ||
         /divergent branches/i.test(stderr) ||
@@ -106,6 +127,8 @@ register('git.pull', async (raw): Promise<Result> => {
         stderrSanitized: sanitized,
       })
     }
+
+    if (plan.kind === 'untracked') await setUpstreamSameName(params.workspaceRoot, plan.remote, plan.branch)
 
     const fastForwarded = /Fast-forward/i.test(stdout)
     const commitsApplied = await countAppliedCommits(params.workspaceRoot)

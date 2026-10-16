@@ -26,9 +26,31 @@ export type BoardItemStatus =
   | 'in_progress'
   | 'in_review'
   | 'changes'
+  // Tạm gác có chủ đích — sẽ quay lại; khác blocked (kẹt vì bên ngoài).
+  | 'pending'
   | 'blocked'
   | 'done'
   | 'cancelled'
+
+// Recap gần nhất của issue — mirrors sidecar BoardItemRecap (RPC boards.recap).
+export type BoardItemRecap = {
+  text: string
+  at: string
+  modelUsed?: string
+  sessionIds: string[]
+}
+
+// Kết quả boards.detectTracking — mirrors sidecar DetectTrackingResult.
+export type DetectedTracking = {
+  issueLinks: string[]
+  prLinks: string[]
+  sprint?: string
+  milestone?: string
+  startDate?: string
+  dueDate?: string
+  source?: string
+  missingProjectScope: boolean
+}
 
 export type BoardItemComment = {
   id: string
@@ -64,11 +86,22 @@ export type BoardItem = {
   priority?: BoardItemPriority
   severity?: BoardItemSeverity
   stage?: number
+  // Khuôn GitHub Projects — mirrors sidecar BoardItem: ngày `YYYY-MM-DD`, sprint +
+  // milestone nhãn tự do, link issue/PR.
+  startDate?: string
+  dueDate?: string
+  sprint?: string
+  milestone?: string
+  issueLinks?: string[]
+  prLinks?: string[]
   // sessionId của bên tạo, hoặc null khi người dùng tạo từ UI.
   createdBy: string | null
   createdAt: string
   updatedAt: string
   mergedBranch?: string
+  // Recap mới nhất (boards.recap) + cờ "title đi theo phiên sinh ra item".
+  recap?: BoardItemRecap
+  autoTitle?: boolean
   comments: BoardItemComment[]
 }
 
@@ -111,14 +144,16 @@ export const BOARD_STATUS_ORDER: readonly BoardItemStatus[] = [
   'in_progress',
   'in_review',
   'changes',
+  'pending',
   'blocked',
   'done',
   'cancelled',
 ]
 
 // Status "sống" — mirror WAKE_STATUSES của boards.upsert bên sidecar: item
-// đứng vào các cột này nghĩa là việc đang chạy. backlog = bãi đỗ, done/
-// cancelled = đóng — kéo vào đó KHÔNG spawn ai kể cả khi item mang spec chờ.
+// đứng vào các cột này nghĩa là việc đang chạy. backlog = bãi đỗ, pending =
+// tạm gác, done/cancelled = đóng — kéo vào đó KHÔNG spawn ai kể cả khi item
+// mang spec chờ.
 export const ACTIVE_BOARD_STATUSES: ReadonlySet<BoardItemStatus> = new Set([
   'todo',
   'in_progress',
@@ -251,8 +286,28 @@ export const useBoardStore = defineStore('board', () => {
   async function upsertItem(
     projectId: string,
     item: Partial<
-      Omit<BoardItem, 'stage' | 'assigneeConfig' | 'parentId' | 'priority' | 'severity'>
+      Omit<
+        BoardItem,
+        | 'stage'
+        | 'assigneeConfig'
+        | 'parentId'
+        | 'priority'
+        | 'severity'
+        | 'startDate'
+        | 'dueDate'
+        | 'sprint'
+        | 'milestone'
+        | 'issueLinks'
+        | 'prLinks'
+      >
     > & {
+      // Field kiểu GitHub Projects — null = gỡ về "chưa đặt" (vắng = giữ nguyên).
+      startDate?: string | null
+      dueDate?: string | null
+      sprint?: string | null
+      milestone?: string | null
+      issueLinks?: string[] | null
+      prLinks?: string[] | null
       title: string
       stage?: number | null
       // null = gỡ khỏi cha — về cấp trên của board (sidecar hiểu null là xoá
@@ -416,7 +471,10 @@ export const useBoardStore = defineStore('board', () => {
   // kèm action mở Settings khi credential hỏng — xem pages/teams.vue).
   async function draftItem(input: {
     projectId: string
-    brief: string
+    // brief = lời người dùng (form tạo); itemId = viết mô tả cho issue có sẵn từ
+    // các phiên đã làm nó (modal sửa) — một trong hai.
+    brief?: string
+    itemId?: string
     current?: { title?: string; desc?: string }
     settings: { provider: string; modelId: string; accountId?: string | null }
   }): Promise<{ title: string; desc?: string }> {
@@ -428,6 +486,51 @@ export const useBoardStore = defineStore('board', () => {
       title: typeof res?.draft?.title === 'string' ? res.draft.title : '',
       ...(typeof res?.draft?.desc === 'string' ? { desc: res.draft.desc } : {}),
     }
+  }
+
+  // boards.recap — one-shot LLM tóm issue (đã làm · đang dở · bị chặn · bước tiếp)
+  // từ comment + transcript các phiên đã làm nó; sidecar GHI vào item.recap rồi
+  // emit board.changed. Rethrow như draftItem — caller toast lỗi thật (auth/quota).
+  // `recapping` (khoá `projectId:itemId`) chống bấm hai lần trên cùng một item.
+  const recapping = ref<Record<string, boolean>>({})
+  async function recapItem(
+    projectId: string,
+    itemId: string,
+    settings: { provider: string; modelId: string; accountId?: string | null },
+  ): Promise<BoardItemRecap | null> {
+    const key = `${projectId}:${itemId}`
+    if (!available.value || !projectId || recapping.value[key]) return null
+    recapping.value = { ...recapping.value, [key]: true }
+    try {
+      const res = await sc.request<{ recap?: BoardItemRecap }>('boards.recap', {
+        projectId,
+        itemId,
+        settings: { ...settings, accountId: settings.accountId ?? undefined },
+      })
+      const recap = res?.recap ?? null
+      const it = itemsFor(projectId).find((i) => i.id === itemId)
+      if (it && recap) mergeItem(projectId, { ...it, recap })
+      return recap
+    } finally {
+      const { [key]: _done, ...rest } = recapping.value
+      recapping.value = rest
+    }
+  }
+
+  // boards.detectTracking — nút "Tự nhận diện" của sidebar issue: tìm link GitHub
+  // trong các phiên đã làm issue rồi đọc sprint / milestone / ngày qua gh. CHỈ trả
+  // gợi ý (không ghi) — editor điền vào form, người dùng bấm Lưu. Rethrow: lỗi gh
+  // (chưa login, thiếu gh) phải tới toast.
+  async function detectTracking(
+    projectId: string,
+    itemId: string,
+    account: string,
+  ): Promise<DetectedTracking> {
+    return sc.request<DetectedTracking>('boards.detectTracking', {
+      projectId,
+      itemId,
+      ...(account ? { account } : {}),
+    })
   }
 
   async function deleteItem(projectId: string, itemId: string): Promise<boolean> {
@@ -686,6 +789,9 @@ export const useBoardStore = defineStore('board', () => {
     applyStatus,
     specLabel,
     draftItem,
+    detectTracking,
+    recapItem,
+    recapping,
     deleteItem,
     commentItem,
     lastWake,

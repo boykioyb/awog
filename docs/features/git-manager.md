@@ -1393,3 +1393,17 @@ interface WorkspaceSettings {
 - [apps/desktop/ui/types/index.ts](../../apps/desktop/ui/types/index.ts) — types bổ sung
 - [apps/desktop/ui/stores/workspace.ts](../../apps/desktop/ui/stores/workspace.ts) — store hiện hữu
 - [apps/desktop/ui/stores/settings.ts](../../apps/desktop/ui/stores/settings.ts) — settings bổ sung
+
+## Git Log trong workbench (2026-10-15)
+
+Tab `gitlog:<projectId>` của workbench là màn log kiểu JetBrains, mở từ Explorer → Source Control. Có hai cách mở: bấm một commit (tab mở với commit đó được chọn sẵn, thay vì mở trang GitHub như trước), hoặc bấm nút graph ở tiêu đề mục Commits.
+
+| Phần | Chi tiết |
+| --- | --- |
+| Bảng log | Graph tính từ parent thật (`utils/git-graph.ts`, có test). Xếp làn ổn định; nhánh và merge vẽ cong, đường đi qua vẽ thẳng; merge commit là vòng rỗng. Mỗi hàng có chip HEAD/branch/tag, tác giả, thời gian. Phím ↑/↓ đổi commit; cuộn tới cuối tự tải trang kế (200 commit/trang). |
+| Lọc | Text khớp message, body, tác giả, hash; khi đang lọc thì ẩn graph, giống JetBrains. Phạm vi "Mọi branch" (`--all`) hoặc "Branch hiện tại" (nhớ qua localStorage). Log luôn chạy `--date-order` (con trước cha), là điều kiện để xếp làn. |
+| Panel phải | File thay đổi của commit với trạng thái A/M/D/R (parser đọc `new file mode` / `deleted file mode`). Chi tiết commit: message, body, hash (bấm để copy), tác giả và email, ngày đầy đủ, parent (bấm để nhảy tới). |
+| Diff | Bấm file thì mở tab `cdiff:<pid>/<sha>/<rel>`, dùng `GitDiffViewer` ở chế độ `readonly` (unified/split, không có nút stage). Diff cả commit được cache theo SHA ở mức module (`useCommitDiffCache`). |
+| Merge commit | So với parent đầu (`git show -m --first-parent`), như GitHub/JetBrains. Không dùng `--diff-merges` vì app chỉ yêu cầu git ≥ 2.20. |
+
+Phản hồi của mọi thao tác git (toast lỗi/thành công, hộp lỗi xác thực) do `GitFeedbackHost` trong `AppGlobalHosts` đảm nhận, nên thao tác bấm từ workbench không còn im lặng. Pull/push tự gắn upstream **cùng tên** khi branch chưa có tracking (`git/upstream.ts`).

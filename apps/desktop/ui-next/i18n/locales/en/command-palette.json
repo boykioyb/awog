@@ -37,5 +37,8 @@
   "palette.notify.attention.reply.title": "Awaiting your reply",
   "palette.notify.attention.reply.body": "{title} needs a reply or a permission decision.",
   "palette.notify.attention.approve.title": "Awaiting approval",
-  "palette.notify.attention.approve.body": "{title} is paused for your approval."
+  "palette.notify.attention.approve.body": "{title} is paused for your approval.",
+  "palette.section.setting": "Settings",
+  "palette.setting.open": "Open setting",
+  "palette.setting.prefix": "Settings ›"
 }

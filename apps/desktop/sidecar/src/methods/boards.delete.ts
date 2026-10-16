@@ -5,6 +5,7 @@ import { listSessionSummaries } from '../sessions/store.js'
 import { deleteSessionCascade } from '../sessions/delete-cascade.js'
 import { log } from '../util/logger.js'
 import { MESSAGE_ID_RE } from '../sessions/ids.js'
+import { unlinkIssueSessions } from '../boards/session-issue.js'
 
 // Xoá một work-item khỏi board của project (docs/features/session-teams.md §7).
 // Xoá là của NGƯỜI DÙNG qua UI — không có tool `team_item_delete` cho model:
@@ -23,6 +24,10 @@ register('boards.delete', async (raw) => {
   const params = Params.parse(raw)
   const item = await deleteBoardItem(params.projectId, params.itemId)
   if (!item) throw new RpcError(-32004, 'Board item not found')
+  // Phiên người dùng tự mở để làm issue này (Session.issueId) chỉ mất LINK —
+  // phiên là của người dùng, issue chỉ là sổ theo dõi việc
+  // (docs/features/session-issue-tracking.md).
+  await unlinkIssueSessions(params.projectId, item.id)
   // Cascade: phiên đang được giao item chết theo item — không để assignee chạy
   // mồ côi đốt token cho việc không còn tồn tại. Assignee là GỐC một team run
   // (item giao 'team:…') thì member của run đi theo; phiên nào còn được item
@@ -38,10 +43,14 @@ register('boards.delete', async (raw) => {
     const stillReferenced = new Set(
       remaining.map((i) => i.assigneeSessionId).filter((x): x is string => !!x),
     )
-    const targets = [
-      sid,
-      ...summaries.filter((s) => s.teamRunId === sid).map((s) => s.id),
-    ]
+    // Chỉ cascade phiên do BOARD/TEAM đẻ ra (origin 'board', hoặc gốc/member của
+    // một team spec — mang teamId). Phiên người dùng tự tạo rồi được giao item
+    // (chọn phiên sống, @mention, phiên tự sinh issue) không chết theo sổ việc.
+    const assignee = summaries.find((s) => s.id === sid)
+    const dispatched = !!assignee && (assignee.origin === 'board' || !!assignee.teamId)
+    const targets = dispatched
+      ? [sid, ...summaries.filter((s) => s.teamRunId === sid).map((s) => s.id)]
+      : []
     for (const id of targets) {
       if (stillReferenced.has(id)) continue
       try {

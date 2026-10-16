@@ -515,6 +515,10 @@ type SessionSummaryDto = {
   // Nguồn gốc materialize — mirrors sidecar SessionSummary.origin. 'board' =
   // phiên lone-agent dispatch từ board item — ẩn khỏi danh sách session.
   origin?: 'board'
+  // Issue trên board mà phiên đang làm + cờ "bỏ theo dõi" — mirrors sidecar
+  // SessionSummary (docs/features/session-issue-tracking.md).
+  issueId?: string
+  issueUntracked?: boolean
   // Phiên nhập từ Claude Desktop / CLI — mirrors sidecar SessionSummary.importedFrom.
   importedFrom?: ImportedFrom
   // Cấu hình spawn đã nhớ của nhóm — mirrors sidecar SessionSummary.
@@ -616,6 +620,8 @@ type SessionGetDto = {
   teamProjectId?: string
   // Nguồn gốc materialize — mirrors sidecar Session.origin.
   origin?: 'board'
+  issueId?: string
+  issueUntracked?: boolean
   spawnConfig?: SpawnSessionConfig
   // Session teams — mirrors sidecar Session.agent/worktree.
   agent?: SessionAgentRef
@@ -1466,6 +1472,8 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (dto.teamSource) session.teamSource = dto.teamSource
     if (dto.teamProjectId) session.teamProjectId = dto.teamProjectId
     if (dto.origin) session.origin = dto.origin
+    if (dto.issueId) session.issueId = dto.issueId
+    if (dto.issueUntracked) session.issueUntracked = true
     if (dto.spawnConfig) session.spawnConfig = dto.spawnConfig
     if (dto.agent) session.agent = dto.agent
     if (dto.worktree) session.worktree = dto.worktree
@@ -1560,6 +1568,9 @@ export const useSessionsStore = defineStore('sessions', () => {
         target.teamSource = full.teamSource
         target.teamProjectId = full.teamProjectId
         target.origin = full.origin
+        // Link issue cũng là XOÁ key khi gỡ (sessions.setIssue) — gán trọn.
+        target.issueId = full.issueId
+        target.issueUntracked = full.issueUntracked
         // Gán trọn, cùng lý do với ba field trên: "ngừng điều phối" là XOÁ key.
         target.spawnConfig = full.spawnConfig
         // Agent + worktree của member cũng theo ngữ nghĩa XOÁ key (setAgent
@@ -2210,17 +2221,21 @@ export const useSessionsStore = defineStore('sessions', () => {
     create(projectId, alt.id)
   }
 
-  // Create a session bound to a task to discuss (ADR 0055). Mirrors create() but
-  // seeds the title + aboutTaskId so the sidecar injects the <linked_task> context
-  // and the UI shows the "discussing task" banner. Returns the new client id so the
-  // caller (Task → "Discuss in session") can navigate to it.
-  function createForTask(taskId: string, projectId: string, title: string): number {
+  // Khuôn chung của mọi "phiên mới gắn sẵn ngữ cảnh" (task / host SSH / issue): dựng
+  // phiên trắng theo defaults của project, gắn `link` (aboutTaskId / aboutSshHostId /
+  // issueId…), chọn nó và upsert 'create' — link phải có mặt TRƯỚC create vì cả ba
+  // chỉ đọc ở nhánh create của sessions.upsert.
+  function createLinked(
+    projectId: string | undefined,
+    title: string,
+    link: Pick<Session, 'aboutTaskId' | 'aboutSshHostId' | 'issueId'>,
+  ): number {
     const id = newClientId()
     const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
     const session: Session = {
       id,
       title,
-      project: projectId,
+      project: projectId ?? '',
       model,
       account: acct?.display ?? '',
       style: 'Default',
@@ -2230,7 +2245,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       thinkingLevel: level,
       msgs: [],
       loaded: true,
-      aboutTaskId: taskId,
+      ...link,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
@@ -2247,42 +2262,28 @@ export const useSessionsStore = defineStore('sessions', () => {
     return id
   }
 
+  // Create a session bound to a task to discuss (ADR 0055). Seeds the title +
+  // aboutTaskId so the sidecar injects the <linked_task> context and the UI shows the
+  // "discussing task" banner. Returns the new client id so the caller (Task → "Discuss
+  // in session") can navigate to it.
+  function createForTask(taskId: string, projectId: string, title: string): number {
+    return createLinked(projectId, title, { aboutTaskId: taskId })
+  }
+
   // Create a session bound to an SSH host to work with (ADR 0064, P1). Mirrors
   // createForTask() but seeds aboutSshHostId so the sidecar injects the
   // <linked_ssh_host> context each turn and the UI shows the "working with host"
   // banner. Returns the new client id so the caller (SSH → "Open in session") can
   // navigate to it.
   function createForSshHost(hostId: string, projectId?: string, title?: string): number {
-    const id = newClientId()
-    const { acct, model, level, mcpServerIds } = defaultsForNewSession(projectId)
-    const session: Session = {
-      id,
-      title: title ?? '',
-      project: projectId ?? '',
-      model,
-      account: acct?.display ?? '',
-      style: 'Default',
-      status: 'idle',
-      when: 'vừa xong',
-      mode: modeDisplay(settingsStore.defaults.mode),
-      thinkingLevel: level,
-      msgs: [],
-      loaded: true,
-      aboutSshHostId: hostId,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    if (acct) session.accountId = acct.id
-    if (mcpServerIds !== undefined) session.mcpServerIds = [...mcpServerIds]
-    const frozenInfra = frozenInfraFor(session.project || undefined)
-    if (frozenInfra) session.infra = frozenInfra
-    sessions.value.unshift(session)
-    activate(id)
-    if (useIpc) {
-      session.engineId = engineIdFor(id)
-      pushUpsert(session, 'create')
-    }
-    return id
+    return createLinked(projectId, title ?? '', { aboutSshHostId: hostId })
+  }
+
+  // Phiên mới làm tiếp một issue trên board ("Tiếp tục trong phiên mới" ở modal issue —
+  // docs/features/session-issue-tracking.md). Phiên gắn issueId ngay lúc tạo nên lượt
+  // đầu KHÔNG sinh issue mới mà kéo issue này về in_progress + <linked_issue>.
+  function createForIssue(issueId: string, projectId: string, title: string): number {
+    return createLinked(projectId, title, { issueId })
   }
 
   // Rụng phiên khỏi state cục bộ (KHÔNG gọi RPC) — remove() dùng cho đường
@@ -2628,6 +2629,28 @@ export const useSessionsStore = defineStore('sessions', () => {
     if (!s) return
     s.sshApprovalMode = mode
     if (useIpc) pushUpsert(s, 'update-metadata')
+  }
+  // Issue của phiên (docs/features/session-issue-tracking.md): gắn vào issue có sẵn
+  // (`issueId`), gỡ link (`issueId: null`) hoặc bỏ theo dõi (`untrack`). Đường ghi
+  // riêng `sessions.setIssue` — không qua pushUpsert để bản cũ trong renderer không
+  // ghi đè link sidecar vừa tạo. Event `session.issue` hội tụ mọi cửa sổ; ở đây chỉ
+  // áp kết quả trả về cho cửa sổ gọi. Rethrow: caller toast lỗi thật.
+  async function setIssue(
+    id: number,
+    input: { issueId?: string | null; untrack?: boolean },
+  ): Promise<{ issueId: string | null; untracked: boolean; deletedIssueId?: string } | null> {
+    const s = byId(id)
+    if (!s?.engineId || !useIpc) return null
+    const res = await sc.request<{
+      issueId: string | null
+      untracked: boolean
+      deletedIssueId?: string
+    }>('sessions.setIssue', { sessionId: s.engineId, ...input })
+    if (res.issueId) s.issueId = res.issueId
+    else delete s.issueId
+    if (res.untracked) s.issueUntracked = true
+    else delete s.issueUntracked
+    return res
   }
   // SSH terminal co-pilot (ADR 0064): bind/unbind the visible terminal connId this
   // session drives. TRANSIENT — no upsert (the connId is ephemeral); only forwarded
@@ -3007,6 +3030,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         head.quotes,
         head.autoDelivered,
         head.comm,
+        undefined,
+        head.automated,
       )
   }
   // "Send now" from a queued chip: stop the current turn and run THIS queued message
@@ -3038,6 +3063,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       item.autoDelivered,
       item.comm,
       item.attachWake,
+      item.automated,
     )
   }
 
@@ -3565,6 +3591,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       undefined,
       undefined,
       wakes.some((w) => w.native) || undefined,
+      true,
     ).finally(() => autoWakeStarting.delete(engineId))
   }
 
@@ -3584,6 +3611,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       undefined,
       undefined,
       wakes.some((w) => w.native) || undefined,
+      true,
     )
   }
 
@@ -3635,6 +3663,8 @@ export const useSessionsStore = defineStore('sessions', () => {
       undefined,
       undefined,
       msgs.every((m) => m.comm) || undefined,
+      undefined,
+      true,
     )
   }
 
@@ -4011,6 +4041,23 @@ export const useSessionsStore = defineStore('sessions', () => {
           if (gs && gp && 'spawnConfig' in gp) {
             if (gp.spawnConfig) gs.spawnConfig = gp.spawnConfig
             else delete gs.spawnConfig
+          }
+          return
+        }
+        // `session.issue` cũng trước cổng sở hữu: sidecar gắn issue ở lượt đầu (phiên có
+        // thể đang popout), hoặc board gỡ link khi issue bị xoá. `issueId: null` = XOÁ key.
+        if (evt.type === 'session.issue') {
+          const gp = evt.payload as {
+            sessionId?: string
+            issueId?: string | null
+            issueUntracked?: boolean
+          } | null
+          const gs = typeof gp?.sessionId === 'string' ? byEngineId(gp.sessionId) : undefined
+          if (gs && gp && 'issueId' in gp) {
+            if (gp.issueId) gs.issueId = gp.issueId
+            else delete gs.issueId
+            if (gp.issueUntracked === true) gs.issueUntracked = true
+            else if (gp.issueUntracked === false) delete gs.issueUntracked
           }
           return
         }
@@ -4465,6 +4512,11 @@ export const useSessionsStore = defineStore('sessions', () => {
     // `sessions.setRunMembership` (tách nhóm phải xoá hẳn key).
     if (mode === 'create' && s.teamRunId) session.teamRunId = s.teamRunId
     if (mode === 'create' && s.teamRole) session.teamRole = s.teamRole
+    // Issue: CHỈ ở 'create' (fork làm tiếp đúng issue của phiên gốc, hoặc "mở phiên
+    // cho issue này"). Sau đó đường ghi duy nhất là `sessions.setIssue`.
+    if (mode === 'create' && s.issueId) session.issueId = s.issueId
+    // Fork của phiên đã bỏ theo dõi giữ nguyên lựa chọn đó (cùng luật chỉ-ở-create).
+    if (mode === 'create' && s.issueUntracked) session.issueUntracked = true
     if (s.pinnedContext) session.pinnedContext = s.pinnedContext
     if (s.workspaceFolder) session.workspaceFolder = s.workspaceFolder
     if (s.budget) session.budget = s.budget
@@ -4527,6 +4579,10 @@ export const useSessionsStore = defineStore('sessions', () => {
     // there, so the sidecar adopts it instead of sending `text` (kept as the user-visible
     // echo and as the fallback prompt when there is nothing left to adopt).
     attachWake?: boolean,
+    // Lượt KHÔNG do người dùng gõ (wake nền, tin hộp thư, ping) — sidecar không coi nó
+    // là "quay lại làm việc" nên không lật issue đang tạm dừng về in_progress
+    // (docs/features/session-issue-tracking.md §3.1).
+    automated?: boolean,
   ) {
     const s = byId(id)
     const trimmed = text.trim()
@@ -4546,6 +4602,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (autoDelivered) requeued.autoDelivered = true
       if (comm) requeued.comm = true
       if (attachWake) requeued.attachWake = true
+      if (automated) requeued.automated = true
       s.queue = [requeued, ...(s.queue ?? [])]
       if (!quotesOverride) s.followups = []
       return
@@ -4594,6 +4651,7 @@ export const useSessionsStore = defineStore('sessions', () => {
       if (autoDelivered) requeued.autoDelivered = true
       if (comm) requeued.comm = true
       if (attachWake) requeued.attachWake = true
+      if (automated) requeued.automated = true
       s.queue = [requeued, ...(s.queue ?? [])]
       if (!quotesOverride) s.followups = []
       return
@@ -4651,6 +4709,7 @@ export const useSessionsStore = defineStore('sessions', () => {
         autoDelivered,
         comm,
         attachWake,
+        automated,
       )
     } finally {
       // Backstop: runEngineTurn nhả latch ngay khi push placeholder (đường
@@ -4679,6 +4738,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     // model rẻ + effort thấp sau mọi overlay settings.
     comm?: boolean,
     attachWake?: boolean,
+    automated?: boolean,
   ) {
     if (!s.engineId) s.engineId = engineIdFor(s.id)
     // Any turn start clears this session's pending-wake card (ADR 0066 P2): the
@@ -4796,6 +4856,8 @@ export const useSessionsStore = defineStore('sessions', () => {
         // Lượt trả lời-nhanh của kênh ê-kíp → sidecar kẹp rẻ+low sau mọi overlay.
         ...(comm ? { comm: true } : {}),
         ...(attachWake ? { attachWake: true } : {}),
+        // Tin hộp thư tự giao cũng là lượt tự động — xem tham số `automated`.
+        ...(automated || autoDelivered ? { automated: true } : {}),
         ...(engineAtts.length ? { attachments: engineAtts } : {}),
         history: [],
         settings: engineSettings(s),
@@ -5888,6 +5950,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setActive,
     create,
     createForTask,
+    createForIssue,
     setInfraContext,
     createForSshHost,
     remove,
@@ -5909,6 +5972,7 @@ export const useSessionsStore = defineStore('sessions', () => {
     setUltracode,
     setNoMarkdown,
     setSshApprovalMode,
+    setIssue,
     setAboutSshHost,
     setTodos,
     toggleBookmark,

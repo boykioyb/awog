@@ -58,7 +58,7 @@ import type { AssistantBlock, Session } from '~/composables/useSessionsData'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
-const { dismiss, isDismissed } = useSessionQuestionModal()
+const { dismiss, isDismissed, openTick } = useSessionQuestionModal()
 
 // Câu hỏi đang chờ: quét từ cuối lên (một thời điểm chỉ một câu được park) và bỏ qua
 // câu người dùng đã đóng — thẻ trong transcript vẫn trả lời được.
@@ -87,6 +87,9 @@ watch(block, (b) => {
   // Giữ nội dung cũ tới hết transition của <Collapse> (0.18s) rồi mới gỡ.
   else setTimeout(() => (shown.value = block.value), 220)
 })
+
+// "Trả lời" ở byline / dòng gọn trong transcript ⇒ bung ngăn kéo nếu đang gập.
+watch(openTick, () => (folded.value = false))
 
 // Một dòng tóm tắt cho lúc gập: tiêu đề lời gọi, không có thì lấy câu hỏi đầu tiên.
 const summary = computed<string>(() => {
@@ -154,12 +157,12 @@ const onDismiss = (): void => {
      bên dưới) nên không còn lớp đệm thứ hai nào nữa. 12px là đệm của một cái chip,
      không phải của một tấm thẻ bo xl — chữ dính mép. */
   padding: 12px 15px 14px;
-  /* Bề mặt nổi của ngăn kéo: `--card` (alias --bgEl) + viền `--ring` (alias
-     --accentBorder) — cùng ngôn ngữ popover, khác biệt bằng bóng đổ phía trên. */
+  /* Bề mặt của ngăn kéo: `--card` (alias --bgEl) + viền `--ring` (alias
+     --accentBorder) — cùng ngôn ngữ popover. KHÔNG bóng đổ (người dùng chốt
+     2026-10-16): viền accent đã đủ tách nó khỏi transcript, bóng chỉ làm nhoè mép. */
   background: var(--card);
   border: 1px solid var(--ring, var(--border));
   border-radius: var(--r-card);
-  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
   /* Trồi lên TỪ ô soạn: <Collapse> lo chiều cao, dòng này lo cảm giác. Gốc biến đổi
      ở ĐÁY (phía ô soạn) nên nó nở ra từ dưới lên chứ không phải rơi từ trên xuống,
      và đường cong ease-out mạnh cho nó vọt lên rồi dừng hẳn — giống một tấm trượt

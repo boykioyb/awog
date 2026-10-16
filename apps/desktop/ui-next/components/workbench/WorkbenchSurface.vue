@@ -33,6 +33,8 @@ import DocMermaid from '~/components/workbench/stage/DocMermaid.vue'
 import DocSettings from '~/components/workbench/stage/DocSettings.vue'
 import DocMonitor from '~/components/workbench/stage/DocMonitor.vue'
 import DocDiff from '~/components/workbench/stage/DocDiff.vue'
+import DocGitLog from '~/components/workbench/stage/DocGitLog.vue'
+import DocCommitDiff from '~/components/workbench/stage/DocCommitDiff.vue'
 import DocUnknown from '~/components/workbench/stage/DocUnknown.vue'
 
 const wb = useWorkbenchStore()
@@ -78,6 +80,10 @@ function surfaceOf(d: WorkbenchDoc): Component {
       return DocMonitor
     case 'diff':
       return DocDiff
+    case 'gitlog':
+      return DocGitLog
+    case 'cdiff':
+      return DocCommitDiff
     default:
       return DocUnknown
   }

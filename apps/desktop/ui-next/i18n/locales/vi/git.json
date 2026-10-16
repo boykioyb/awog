@@ -291,6 +291,7 @@
   "git.auth.openSshKeys": "Mở GitHub SSH keys",
   "git.error.NETWORK_ERROR": "Lỗi mạng — không kết nối được remote",
   "git.error.REMOTE_NOT_FOUND": "Không tìm thấy remote",
+  "git.error.NO_UPSTREAM": "Branch này chưa có trên remote — bấm Push trước (Push tự gắn upstream)",
   "git.error.NO_REPO": "Không phải repository git",
   "git.error.BUSY": "Repo đang bận — có thao tác git khác đang chạy",
   "git.error.UNMERGED": "Có file chưa merge — giải quyết xung đột trước",

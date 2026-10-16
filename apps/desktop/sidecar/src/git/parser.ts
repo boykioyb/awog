@@ -502,6 +502,8 @@ interface PendingFile {
   hunks: GitDiffHunk[]
   oldFileMode?: string
   newFileMode?: string
+  isNew?: boolean
+  isDeleted?: boolean
 }
 
 function pushPending(out: GitFileDiff[], cur: PendingFile | null): void {
@@ -515,6 +517,8 @@ function pushPending(out: GitFileDiff[], cur: PendingFile | null): void {
   if (cur.oldPath !== undefined) file.oldPath = cur.oldPath
   if (cur.oldFileMode !== undefined) file.oldFileMode = cur.oldFileMode
   if (cur.newFileMode !== undefined) file.newFileMode = cur.newFileMode
+  if (cur.isNew) file.isNew = true
+  if (cur.isDeleted) file.isDeleted = true
   out.push(file)
 }
 
@@ -555,6 +559,14 @@ export function parseUnifiedDiff(stdout: string): GitFileDiff[] {
     }
     if (line.startsWith('rename to ')) {
       cur.path = unquoteGitPath(line.slice('rename to '.length))
+      continue
+    }
+    if (line.startsWith('new file mode ')) {
+      cur.isNew = true
+      continue
+    }
+    if (line.startsWith('deleted file mode ')) {
+      cur.isDeleted = true
       continue
     }
     if (line.startsWith('old mode ')) {

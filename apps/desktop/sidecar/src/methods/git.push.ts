@@ -7,6 +7,8 @@ import { register, RpcError } from '../transport/rpc.js'
 import { withWorkspaceLock } from '../git/mutex.js'
 import { suppressEchoFor } from '../git/watcher.js'
 import { runGitStreaming } from '../git/streaming.js'
+import { runGit } from '../git/runner.js'
+import { planUpstream } from '../git/upstream.js'
 import {
   GIT_RPC_CODE,
   GitErrorCode,
@@ -73,21 +75,42 @@ register('git.push', async (raw): Promise<Result> => {
   }
 
   return withWorkspaceLock(params.workspaceRoot, async () => {
+    // Push trơn (không chỉ định branch) từ một branch CHƯA có upstream: git sẽ từ
+    // chối "has no upstream branch" — tự làm `push -u <remote> <cùng tên>` như lần
+    // push đầu của mọi branch mới. Chỉ cùng tên (git/upstream.ts); branch đã có
+    // upstream để git tự lo (push.default=simple còn chặn upstream khác tên).
+    let pushRemote = remote
+    let refBranch = params.branch
+    let autoUpstream = false
+    if (!params.branch && !params.targetBranch) {
+      const head = await runGit(params.workspaceRoot, ['symbolic-ref', '--short', 'HEAD'], {
+        throwOnNonZero: false,
+      })
+      if (head.code === 0) {
+        const plan = await planUpstream(params.workspaceRoot, head.stdout.trim())
+        if (plan.kind === 'untracked') {
+          if (params.remote === undefined) pushRemote = plan.remote
+          refBranch = plan.branch
+          autoUpstream = true
+        }
+      }
+    }
+
     suppressEchoFor(params.workspaceRoot)
     const args = ['push', '--progress']
-    if (params.setUpstream) args.push('--set-upstream')
+    if (params.setUpstream || autoUpstream) args.push('--set-upstream')
     // Never bare `--force`: `--force-with-lease` refuses to clobber commits the
     // remote gained since our last fetch (ADR 0017 OQ-12 safety constraint).
     if (params.force) args.push('--force-with-lease')
-    args.push(remote)
+    args.push(pushRemote)
     // Build the refspec server-side so the `:` never arrives from the UI as a
     // raw string (both sides are NAME-validated above). Same name → push the
     // branch as-is; different name → `local:remote` refspec.
-    if (params.branch) {
+    if (refBranch) {
       const refspec =
-        params.targetBranch && params.targetBranch !== params.branch
-          ? `${params.branch}:${params.targetBranch}`
-          : params.branch
+        params.targetBranch && params.targetBranch !== refBranch
+          ? `${refBranch}:${params.targetBranch}`
+          : refBranch
       args.push(refspec)
     }
     if (params.pushTags) args.push('--tags')

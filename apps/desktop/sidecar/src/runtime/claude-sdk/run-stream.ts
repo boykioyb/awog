@@ -966,7 +966,13 @@ export async function runStreamClaude(args: RunNonStreamArgs, cb: StreamCallback
       // Ngữ cảnh hạ tầng đã ghim → `AWS_PROFILE`/`AWS_DEFAULT_REGION` cho CLI (và
       // mọi `Bash` nó spawn). Xem `buildSdkEnv`: trên đường này `Bash` là tool của
       // CLI nên env của tiến trình con là chỗ duy nhất đặt được nó.
-      ...buildSdkEnv(cred, args.settings.infra, undefined, autoCompactFromContext(args.contextConfig)),
+      ...buildSdkEnv(
+        cred,
+        args.settings.infra,
+        undefined,
+        autoCompactFromContext(args.contextConfig),
+        args.settings.ghAccount,
+      ),
       ...ARTIFACT_ENV,
       ...(args.askUserQuestion ? QUESTION_ENV : {}),
     },

@@ -45,9 +45,24 @@
         </div>
 
         <!-- Affordance for the whole-toast click-through (GitHub notification). -->
-        <Icon v-if="tt.onClick && !tt.close" name="chev-right" class="tstgo" />
+        <Icon v-if="tt.onClick" name="chev-right" class="tstgo" />
 
-        <ToastClose v-if="tt.close" class="tstx" :aria-label="t('common.close')" @click.stop>
+        <!-- Copy: lỗi / cảnh báo / toast có phần chi tiết — thứ người dùng hay cần dán
+             đi đâu đó (issue, chat). Chép cả tiêu đề lẫn chi tiết. `.stop` để không
+             kích hoạt click-through của cả toast. -->
+        <button
+          v-if="copyable(tt)"
+          type="button"
+          class="tstx"
+          :title="copyFb.labelFor(tt.id, t('common.copy'))"
+          :aria-label="copyFb.labelFor(tt.id, t('common.copy'))"
+          @click.stop="copyFb.copy(tt.id, copyTextOf(tt))"
+        >
+          <Icon :name="copyFb.iconFor(tt.id)" class="tstxicn" />
+        </button>
+        <!-- Đóng: MỌI toast (người dùng chốt 2026-10-15) — không phải chờ hết giờ hay
+             vuốt mới tắt được một toast đang che chỗ cần bấm. -->
+        <ToastClose class="tstx" :aria-label="t('common.close')" @click.stop>
           <Icon name="x" class="tstxicn" />
         </ToastClose>
 
@@ -83,6 +98,13 @@ import { useSettingsStore } from '~/stores/settings'
 
 const { t } = useI18n()
 const { toasts, remove } = useToast()
+const copyFb = useCopyFeedback()
+
+type CopyableToast = { title: string; description?: string; color?: ToastColor }
+const copyable = (tt: CopyableToast): boolean =>
+  tt.color === 'error' || tt.color === 'warning' || !!tt.description
+const copyTextOf = (tt: CopyableToast): string =>
+  tt.description ? `${tt.title}\n\n${tt.description}` : tt.title
 const settings = useSettingsStore()
 
 const DEFAULT_DURATION = 5000

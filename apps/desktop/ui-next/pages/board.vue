@@ -54,6 +54,54 @@
         <AppCheckbox v-model:checked="showChildren" />
         {{ t('board.showChildren') }}
       </label>
+      <!-- Bộ lọc đã lưu (preset): bật lại một cú bấm, lưu bộ lọc đang bật, xoá lọc.
+           Bộ lọc lần cuối tự nhớ — quay lại trang không về "tất cả". -->
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button variant="outline" size="sm" class="gap-1.5" :title="t('board.preset.menu')">
+            <Icon name="bookmark" class="size-3.5" />
+            <span class="max-w-40 truncate">
+              {{ activePreset?.name ?? t('board.preset.menu') }}
+            </span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" class="w-64">
+          <DropdownMenuItem
+            v-for="p in presets"
+            :key="p.id"
+            class="group"
+            @click="applyPreset(p.id)"
+          >
+            <Icon
+              name="check"
+              class="size-3.5"
+              :class="activePreset?.id === p.id ? 'text-primary' : 'opacity-0'"
+            />
+            <span class="min-w-0 flex-1 truncate">{{ p.name }}</span>
+            <button
+              type="button"
+              class="rounded p-0.5 text-muted-foreground opacity-0 hover:text-destructive group-hover:opacity-100"
+              :title="t('board.preset.delete')"
+              :aria-label="t('board.preset.delete')"
+              @click.stop="deletePreset(p.id)"
+            >
+              <Icon name="x" class="size-3" />
+            </button>
+          </DropdownMenuItem>
+          <div v-if="!presets.length" class="px-2 py-1.5 text-xs text-muted-foreground">
+            {{ t('board.preset.empty') }}
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem :disabled="!isFiltered" @click="onSavePreset">
+            <Icon name="save" class="size-3.5" />
+            {{ activePreset ? t('board.preset.update') : t('board.preset.save') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem :disabled="!isFiltered" @click="clearFilters">
+            <Icon name="x" class="size-3.5" />
+            {{ t('board.preset.clear') }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <span class="bp-flex" />
       <!-- View toggle — segmented dùng đúng shadcn Tabs (muted track, active nổi). -->
       <Tabs :model-value="view" @update:model-value="(v) => (view = v as typeof view)">
@@ -201,7 +249,7 @@
 // toolbar (search · project filter · board/list view toggle). Board giữ là
 // WorkspaceBoard kanban; list là CollectionList hàng phẳng — cùng nguồn item,
 // cùng editor modal (teleport nên v-show vẫn mở được từ list).
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import Icon from '~/components/Icon.vue'
 import Button from '~/components/ui/button/Button.vue'
 import Input from '~/components/ui/input/Input.vue'
@@ -210,6 +258,7 @@ import AppSelect, { type AppSelectOption } from '~/components/common/AppSelect.v
 import DropdownMenu from '~/components/ui/dropdown-menu/DropdownMenu.vue'
 import DropdownMenuContent from '~/components/ui/dropdown-menu/DropdownMenuContent.vue'
 import DropdownMenuItem from '~/components/ui/dropdown-menu/DropdownMenuItem.vue'
+import DropdownMenuSeparator from '~/components/ui/dropdown-menu/DropdownMenuSeparator.vue'
 import DropdownMenuTrigger from '~/components/ui/dropdown-menu/DropdownMenuTrigger.vue'
 import CollectionHeader from '~/components/collection/CollectionHeader.vue'
 import CollectionList from '~/components/collection/CollectionList.vue'
@@ -219,11 +268,10 @@ import { useToast } from '~/composables/useToast'
 import WorkspaceBoard from '~/components/session/workspace/WorkspaceBoard.vue'
 import { exportSlug, saveTextFile } from '~/utils/export'
 import {
+  BOARD_STATUS_ORDER,
   useBoardStore,
   type BoardItem,
-  type BoardItemPriority,
   type BoardItemStatus,
-  type BoardItemType,
 } from '~/stores/board'
 import { useProjectsStore } from '~/stores/projects'
 import { useSessionsStore } from '~/stores/sessions'
@@ -240,16 +288,37 @@ const agentsStore = useAgentsStore()
 const teamsStore = useTeamsStore()
 
 const projects = computed(() => projectsStore.projects)
-// '' = tất cả project — board hợp nhất hiện hết.
-const filterProject = ref<string>('')
-// '' = mọi loại/mọi mức ưu tiên (khuôn Jira của item).
-const filterType = ref<BoardItemType | ''>('')
-const filterPriority = ref<BoardItemPriority | ''>('')
-// Sub-issue mặc định ẨN — board đọc mặt cây tầng trên; tick "Hiện việc con"
-// mới bung các item có parentId.
-const showChildren = ref(false)
-const query = ref('')
-const view = ref<'board' | 'list'>('board')
+// Bộ lọc: '' = tất cả project / mọi loại / mọi mức ưu tiên; sub-issue mặc định ẨN.
+// NHỚ lần cuối + preset có tên — useBoardFilters (localStorage, theo người xem).
+const {
+  filterProject,
+  filterType,
+  filterPriority,
+  showChildren,
+  query,
+  view,
+  presets,
+  activePreset,
+  isFiltered,
+  savePreset,
+  applyPreset,
+  deletePreset,
+  clearFilters,
+} = useBoardFilters()
+const { prompt } = useTextPrompt()
+
+// Tên gợi ý khi lưu: tên project đang lọc (trường hợp hay gặp nhất: "tập trung vào một
+// dự án"), không thì để trống cho người dùng tự đặt.
+async function onSavePreset(): Promise<void> {
+  const name = await prompt({
+    title: t('board.preset.saveTitle'),
+    value:
+      activePreset.value?.name ?? (filterProject.value ? projectName(filterProject.value) : ''),
+    placeholder: t('board.preset.namePh'),
+    submitLabel: t('common.save'),
+  })
+  if (name?.trim()) savePreset(name)
+}
 
 const projectFilterOpts = computed<AppSelectOption[]>(() => [
   { value: '', label: t('board.filterAll') },
@@ -391,29 +460,9 @@ async function bulkDelete(): Promise<void> {
   }
 }
 
-const STATUS_KEY: Record<BoardItemStatus, string> = {
-  backlog: 'sessions.workspace.group.st.backlog',
-  todo: 'sessions.workspace.group.st.todo',
-  in_progress: 'sessions.workspace.group.st.inProgress',
-  in_review: 'sessions.workspace.group.st.inReview',
-  changes: 'sessions.workspace.group.st.changes',
-  blocked: 'sessions.workspace.group.st.blocked',
-  done: 'sessions.workspace.group.st.done',
-  cancelled: 'sessions.workspace.group.st.cancelled',
-}
-const STATUS_STYLE: Record<BoardItemStatus, string> = {
-  backlog: 'var(--muted-foreground)',
-  todo: 'var(--muted-foreground)',
-  in_progress: 'var(--primary)',
-  in_review: 'var(--warning)',
-  changes: 'var(--warning)',
-  blocked: 'var(--destructive)',
-  done: 'var(--success)',
-  cancelled: 'var(--muted-foreground)',
-}
-const statusLabel = (s: BoardItemStatus): string => t(STATUS_KEY[s] ?? s)
-const statusColor = (s: BoardItemStatus): string => STATUS_STYLE[s] ?? 'var(--muted-foreground)'
-const STATUSES = Object.keys(STATUS_KEY) as BoardItemStatus[]
+// Nhãn + màu status: một nguồn với chip issue / view Issues (useIssueStatus).
+const { statusLabel, statusColor } = useIssueStatus()
+const STATUSES = BOARD_STATUS_ORDER
 
 const projectName = (id: string): string => projectsStore.projectById(id)?.name ?? id
 
@@ -442,6 +491,29 @@ onMounted(async () => {
   for (const p of projects.value) void board.listBoard(p.id)
 })
 
+// Deep link `/board?item=<id>&project=<pid>` — chip issue trên header phiên ("Mở
+// trên board") mở thẳng modal của issue. Trang nằm trong KeepAlive nên phải WATCH
+// query chứ không đọc một lần lúc mount; xoá query sau khi mở để quay lại trang
+// không bật modal lần nữa. `flush: 'post'` — chờ WorkspaceBoard mount xong ref.
+const route = useRoute()
+watch(
+  () => route.query.item,
+  async (raw) => {
+    if (route.path !== '/board' || typeof raw !== 'string' || !raw) return
+    const pid = typeof route.query.project === 'string' ? route.query.project : ''
+    // Lần đầu vào trang: WorkspaceBoard nằm sau `v-else` (chờ có project) ⇒ phải đợi
+    // projects hydrate + một nhịp render thì `boardEl` mới có, không thì link mất.
+    if (!projectsStore.loaded) await projectsStore.hydrate()
+    if (pid && !board.itemById(raw)) await board.listBoard(pid)
+    await nextTick()
+    // Người dùng có thể đã rời trang trong lúc chờ — đừng xoá query của trang khác.
+    if (route.path !== '/board' || route.query.item !== raw) return
+    void boardEl.value?.openItem(raw)
+    void navigateTo({ path: route.path }, { replace: true })
+  },
+  { immediate: true, flush: 'post' },
+)
+
 // Item mang assigneeRef ⇒ cần roster spec để resolve tên — nạp lười một lần
 // khi ref đầu tiên xuất hiện.
 watch(
@@ -458,7 +530,14 @@ watch(
 // Filter trỏ vào project đã bị xoá ⇒ rơi về "tất cả"; project vừa link thêm ⇒
 // nạp board của nó để item mới hiện ngay trong view hợp nhất.
 watch(projects, (list) => {
-  if (filterProject.value && !list.some((p) => p.id === filterProject.value)) {
+  // Chỉ khi danh sách ĐÃ nạp: lúc khởi động `projects` còn rỗng — reset ở nhịp đó là
+  // xoá mất bộ lọc vừa khôi phục từ lần trước.
+  if (
+    projectsStore.loaded &&
+    list.length &&
+    filterProject.value &&
+    !list.some((p) => p.id === filterProject.value)
+  ) {
     filterProject.value = ''
   }
   for (const p of list) {
@@ -506,9 +585,14 @@ watch(projects, (list) => {
 }
 
 /* List cells */
-.bp-id {
+/* `.cl-row .cl-cell.bp-id` chứ không phải `.bp-id` trơn: CollectionList đặt
+   `align-items: center` cho mọi ô qua `.cl-body :slotted(.cl-cell)` với độ ưu tiên
+   cao hơn — ở ô xếp DỌC (tiêu đề + mô tả) `center` căn NGANG, nên tiêu đề ngắn bị đẩy
+   vào giữa ô. Căn trái theo chiều ngang, giữ căn giữa theo chiều dọc. */
+.cl-row .cl-cell.bp-id {
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
   gap: 1px;
   min-width: 0;
 }

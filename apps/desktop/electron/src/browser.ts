@@ -6,6 +6,7 @@ import { captureDropTab, captureOnCdp, type CaptureHost } from './browser-captur
 import { fitEmulation } from './browser-emulation'
 import { errorPageScript, renderErrorPage } from './browser-error-page'
 import { clearDevServerPorts, evaluateHost, setDevServerPorts } from './browser-host-policy'
+import { classifyWindowOpen } from './browser-popup'
 import { DEFAULT_PROFILE_ID, isValidProfileId, partitionForProfile } from './browser-profile'
 import {
   buildSessionProxy,
@@ -105,6 +106,8 @@ const SELECTION_MAX = 20_000
 const PICK_TEXT_MAX = 20_000
 const PICK_HTML_MAX = 20_000
 const PAGE_CONTEXT_MAX = 8_000
+// Popup thật (đăng nhập OAuth…) mỗi tab — chặn trang mở dồn cửa sổ.
+const MAX_POPUPS_PER_TAB = 5
 
 // Luật host nằm ở browser-host-policy.ts (thuần, có test). Allowlist site của
 // người dùng (browser-sites.ts) áp SAU guard private/loopback trong đó.
@@ -1125,28 +1128,11 @@ class BrowserController {
     wc.on('will-navigate', (event, url) => guardNav(event, url, 'will-navigate'))
     wc.on('will-redirect', (event, url) => guardNav(event, url, 'will-redirect'))
     wc.on('will-frame-navigate', (details) => guardNav(details, details.url, 'will-frame-navigate'))
-    // `target="_blank"` inside a page. Denying it outright was right while this
-    // surface was headless — nobody could see a link fail to do anything. Now the
-    // user watches the page in the panel, so a dead click reads as a broken app.
-    // Open a real tab instead, through the same SSRF guard as everything else, and
-    // still return `deny` so Chromium never creates a window of its own.
-    wc.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url) && !hostBlocked(url, tab.scope)) {
-        // Popup của một tab scoped phải giữ NGUYÊN scope của nó — không thì link
-        // `target=_blank` trong session A sẽ rơi vào pool global và hiện lên
-        // mọi session khác.
-        void this.newTab(url, true, tab.scope).catch((err: unknown) => {
-          log.warn('browser popup tab failed', {
-            err: err instanceof Error ? err.message : String(err),
-          })
-        })
-      } else if (url) {
-        log.warn('browser popup blocked', {
-          reason: hostBlocked(url, tab.scope) ?? 'non-web scheme',
-        })
-      }
-      return { action: 'deny' }
-    })
+    // `target="_blank"` / `window.open` — xem openHandler: link mở TAB, popup có
+    // features (đăng nhập OAuth/SSO, thanh toán) mở CỬA SỔ POPUP thật giữ opener.
+    wc.setWindowOpenHandler(this.openHandler(tab))
+    wc.on('did-create-window', (child) => this.adoptPopup(tab, child))
+    wc.on('destroyed', () => this.closePopups(tab))
     // Quyền + tải file: handler của partition đã cài ở ensurePartition.
     // Báo cáo của userscript đi qua console — không để lọt vào ring mà agent đọc.
     wc.on('console-message', (_event, level, message, line, sourceId) => {
@@ -2103,6 +2089,117 @@ class BrowserController {
     this.activate(tab)
     this.changed()
     return this.info(tab)
+  }
+
+  // ── Popup của trang (window.open) ──────────────────────────────────────────
+  //
+  // Trước đây MỌI window.open thành tab mới + `deny`. Đúng cho link `target=_blank`,
+  // nhưng làm hỏng popup đăng nhập: "Sign in with Google/GitHub/Microsoft", SSO,
+  // cổng thanh toán mở popup rồi chờ nó postMessage kết quả về qua `window.opener` —
+  // thành tab thì opener mất, trang gốc nhận `null` từ window.open ("popup bị chặn")
+  // và đăng nhập xong không có gì quay về.
+  //
+  // Luật (gần với Chrome):
+  //   • `window.open` có features (width/height/popup) — disposition 'new-window' —
+  //     hoặc mở `about:blank` để ghi rồi mới điều hướng ⇒ CỬA SỔ POPUP thật, cùng
+  //     session/partition với tab (cookie đăng nhập dùng chung), giữ opener.
+  //   • còn lại (link `target=_blank`, window.open không features) ⇒ TAB như cũ.
+  // Cả hai đi qua cùng `hostBlocked` của tab (SSRF, invariant #7); popup còn gắn đủ
+  // guard điều hướng / redirect / iframe như tab (adoptPopup), và đóng theo tab.
+  private popupsByTab = new Map<string, Set<BrowserWindow>>()
+
+  private openHandler(
+    tab: BrowserTab,
+  ): Parameters<Electron.WebContents['setWindowOpenHandler']>[0] {
+    return ({ url, disposition, features }) => {
+      const blank = url === '' || url === 'about:blank'
+      if (classifyWindowOpen({ url, disposition, features }) === 'popup') {
+        const live = this.popupsByTab.get(tab.id)?.size ?? 0
+        if (live >= MAX_POPUPS_PER_TAB) {
+          log.warn('browser popup blocked', { reason: 'too many popups' })
+          return { action: 'deny' }
+        }
+        const reason = blank ? null : /^https?:\/\//i.test(url) ? hostBlocked(url, tab.scope) : 'non-web scheme'
+        if (reason) {
+          log.warn('browser popup blocked', { reason })
+          return { action: 'deny' }
+        }
+        return {
+          action: 'allow',
+          // Cửa sổ trang web thuần: KHÔNG preload của app, sandbox + contextIsolation.
+          // Kích thước theo features của trang (Electron tự áp width/height/left/top);
+          // không đặt `parent` — tab có thể đang đỗ trong holder ẩn, cửa sổ con của
+          // một cửa sổ ẩn cũng ẩn theo.
+          overrideBrowserWindowOptions: {
+            autoHideMenuBar: true,
+            backgroundColor: WINDOW_BACKGROUND,
+            webPreferences: {
+              sandbox: true,
+              contextIsolation: true,
+              nodeIntegration: false,
+            },
+          },
+        }
+      }
+      if (/^https?:\/\//i.test(url) && !hostBlocked(url, tab.scope)) {
+        // Tab mở từ một tab scoped phải giữ NGUYÊN scope — không thì link
+        // `target=_blank` trong session A rơi vào pool global và hiện lên mọi
+        // session khác.
+        void this.newTab(url, true, tab.scope).catch((err: unknown) => {
+          log.warn('browser popup tab failed', {
+            err: err instanceof Error ? err.message : String(err),
+          })
+        })
+      } else if (url) {
+        log.warn('browser popup blocked', {
+          reason: hostBlocked(url, tab.scope) ?? 'non-web scheme',
+        })
+      }
+      return { action: 'deny' }
+    }
+  }
+
+  // Cửa sổ popup vừa được Chromium tạo cho `tab`: gắn cùng bộ guard điều hướng của
+  // tab (scope của TAB gốc, không phải của ai khác), popup lồng popup đi lại đúng
+  // openHandler, và ghi sổ để đóng theo tab.
+  private adoptPopup(tab: BrowserTab, child: BrowserWindow): void {
+    const set = this.popupsByTab.get(tab.id) ?? new Set<BrowserWindow>()
+    set.add(child)
+    this.popupsByTab.set(tab.id, set)
+    child.on('closed', () => {
+      set.delete(child)
+      if (!set.size) this.popupsByTab.delete(tab.id)
+    })
+    const cwc = child.webContents
+    const guard = (event: { preventDefault: () => void }, url: string, where: string): void => {
+      const reason = hostBlocked(url, tab.scope)
+      if (!reason) return
+      log.warn('browser popup navigation blocked', { reason, where })
+      event.preventDefault()
+    }
+    cwc.on('will-navigate', (event, url) => guard(event, url, 'will-navigate'))
+    cwc.on('will-redirect', (event, url) => guard(event, url, 'will-redirect'))
+    cwc.on('will-frame-navigate', (details) => guard(details, details.url, 'will-frame-navigate'))
+    // Điều hướng do OPENER đặt (`popup.location = …` sau window.open('about:blank'))
+    // không chắc đi qua will-navigate của popup — chốt thêm ở did-start-navigation:
+    // URL bị chặn thì đóng hẳn popup trước khi trang kịp tải.
+    cwc.on('did-start-navigation', (details) => {
+      if (!details.isMainFrame || details.url === 'about:blank') return
+      const reason = hostBlocked(details.url, tab.scope)
+      if (!reason) return
+      log.warn('browser popup navigation blocked', { reason, where: 'did-start-navigation' })
+      cwc.stop()
+      child.close()
+    })
+    cwc.setWindowOpenHandler(this.openHandler(tab))
+    cwc.on('did-create-window', (grand) => this.adoptPopup(tab, grand))
+  }
+
+  private closePopups(tab: BrowserTab): void {
+    const set = this.popupsByTab.get(tab.id)
+    if (!set) return
+    this.popupsByTab.delete(tab.id)
+    for (const win of set) if (!win.isDestroyed()) win.close()
   }
 
   closeTab(tabId: string, scope?: string): { closed: string; remaining: number } {

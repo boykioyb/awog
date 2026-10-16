@@ -164,6 +164,16 @@ export async function setSessionLlmOverride(id: string, override: SessionLlmOver
   return sessionManager.setLlmOverride(id, override)
 }
 
+// Gắn/gỡ issue của phiên — xem sessionManager.setIssue. Trả false khi id không có.
+export async function setSessionIssue(
+  id: string,
+  issueId: string | null,
+  untracked?: boolean,
+): Promise<boolean> {
+  await sessionManager.ensureLoaded()
+  return sessionManager.setIssue(id, issueId, untracked)
+}
+
 // Khoá chọn profile trình duyệt của một phiên (không nạp transcript).
 export async function getSessionBrowserRef(
   id: string,

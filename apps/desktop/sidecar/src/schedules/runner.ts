@@ -115,6 +115,9 @@ async function runSessionPrompt(schedule: Schedule, run: ScheduleRun, nowMs: num
     text: job.prompt,
     history: [],
     settings: job.settings,
+    // Lượt chạy theo lịch không phải người dùng bắt tay làm việc — không sinh issue
+    // trên board (docs/features/session-issue-tracking.md §3.1).
+    automated: true,
     ...(job.projectId ? { projectId: job.projectId } : {}),
   })) as { stopReason?: string | null; errorMessage?: string }
 

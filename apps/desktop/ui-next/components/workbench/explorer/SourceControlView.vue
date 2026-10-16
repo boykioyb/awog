@@ -200,8 +200,18 @@
           <ChevronRight v-if="!commitsOpen" :size="10" class="flex-none" />
           <ChevronDown v-else :size="10" class="flex-none" />
           Commits
+          <!-- Mở tab Git Log đầy đủ (graph · file đổi · diff). -->
+          <ScmIconBtn
+            :size="16"
+            hover="active"
+            class="ml-auto"
+            :title="t('wb.gitlog.open')"
+            @click.stop="openGitLog"
+          >
+            <GitGraph :size="12" />
+          </ScmIconBtn>
           <span
-            class="ml-auto rounded-[var(--r-sm)] bg-[var(--bgEl)] px-1.5 text-xs tabular-nums text-[var(--textFaint)]"
+            class="rounded-[var(--r-sm)] bg-[var(--bgEl)] px-1.5 text-xs tabular-nums text-[var(--textFaint)]"
           >
             {{ git.commits.length }}
           </span>
@@ -237,6 +247,7 @@ import {
   ChevronDown,
   ChevronRight,
   GitBranch,
+  GitGraph,
   ListTree,
   Minus,
   RefreshCw,
@@ -245,13 +256,8 @@ import {
 } from 'lucide-vue-next'
 import { computed, ref, useTemplateRef } from 'vue'
 import type { GitFile, Commit } from '~/components/git/git-types'
-import {
-  openWebDoc,
-  useWorkbenchExplorer,
-  type WbCtxItem,
-} from '~/composables/useWorkbenchExplorer'
+import { useWorkbenchExplorer, type WbCtxItem } from '~/composables/useWorkbenchExplorer'
 import { useConfirm } from '~/composables/useConfirm'
-import { useToast } from '~/composables/useToast'
 import { useGitStore } from '~/stores/git'
 import { useWorkbenchDocs } from '~/composables/useWorkbenchDocs'
 import { useWorkbenchStore } from '~/stores/workbench'
@@ -273,7 +279,7 @@ const git = useGitStore()
 const wb = useWorkbenchStore()
 const wbDocs = useWorkbenchDocs()
 const { confirm } = useConfirm()
-const toast = useToast()
+const { t } = useI18n()
 
 const commitsOpen = ref(true)
 
@@ -332,16 +338,17 @@ function onCommitKey(e: KeyboardEvent): void {
   }
 }
 
+// Lỗi của mọi thao tác git ở đây (commit, sinh message, discard…) đi qua
+// store.lastError → GitFeedbackHost (AppGlobalHosts) bật toast — không tự toast lại
+// ở đây (trùng toast, và lastError không tự xoá nên lỗi cũ bị bắn lại).
 async function doCommit(): Promise<void> {
   const msg = git.commitMessage.trim()
   if (!msg || git.isCommitting) return
   await git.commit(msg)
-  if (git.lastError) toast.add({ title: git.lastError.message, color: 'error' })
 }
 
 async function genMsg(): Promise<void> {
   await git.generateCommitMessage()
-  if (git.lastError) toast.add({ title: git.lastError.message, color: 'error' })
 }
 
 async function discardFile(path: string): Promise<void> {
@@ -353,7 +360,6 @@ async function discardFile(path: string): Promise<void> {
   })
   if (!ok) return
   await git.discardFile(path)
-  if (git.lastError) toast.add({ title: git.lastError.message, color: 'error' })
 }
 
 async function discardAll(): Promise<void> {
@@ -365,7 +371,6 @@ async function discardAll(): Promise<void> {
   })
   if (!ok) return
   await git.discardPaths(git.unstaged.map((f) => f.f))
-  if (git.lastError) toast.add({ title: git.lastError.message, color: 'error' })
 }
 
 // Discard theo THƯ MỤC (tree mode) — cùng confirm nguy hiểm như discardAll
@@ -380,7 +385,6 @@ async function discardDir(n: ScmTreeNode): Promise<void> {
   })
   if (!ok) return
   await git.discardPaths(files)
-  if (git.lastError) toast.add({ title: git.lastError.message, color: 'error' })
 }
 
 function dirCtx(n: ScmTreeNode, e: MouseEvent): void {
@@ -416,14 +420,12 @@ const branchBtn = useTemplateRef<{ $el: HTMLElement } | null>('branchBtn')
 const branchBtnEl = computed(() => branchBtn.value?.$el ?? null)
 const branchOpen = ref(false)
 
-// Commit row → mở trang commit trên GitHub (chỉ khi repo có remote github).
+// Commit row → tab Git Log (graph · file đổi · diff · chi tiết, kiểu JetBrains) với
+// commit đó chọn sẵn — xem ngay trong app thay vì mở trang GitHub.
 function openCommit(c: Commit): void {
-  const base = exp.ghBase.value
-  const sha = c.sha || c.h
-  if (!base || !sha) {
-    toast.add({ title: 'Repo chưa có remote GitHub', color: 'neutral' })
-    return
-  }
-  void openWebDoc(`${base}/commit/${sha}`, `${c.h} — ${c.m}`)
+  wbDocs.openGitLog(exp.project.value?.id ?? '', c.sha || c.h)
+}
+function openGitLog(): void {
+  wbDocs.openGitLog(exp.project.value?.id ?? '')
 }
 </script>

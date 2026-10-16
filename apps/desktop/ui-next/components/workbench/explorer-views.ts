@@ -2,7 +2,7 @@
 // ở đầu panel (WorkbenchExplorer) lẫn rail mini khi panel thu gọn (WorkbenchView).
 // Trước đây rail mini chép tay một bản riêng 3 icon nên khi thêm view "Phiên" thì
 // thu gọn panel là mất đường vào view đó.
-export type ExplorerViewId = 'sessions' | 'files' | 'scm' | 'gh'
+export type ExplorerViewId = 'sessions' | 'issues' | 'files' | 'scm' | 'gh'
 
 export type ExplorerView = {
   id: ExplorerViewId
@@ -16,6 +16,11 @@ export const EXPLORER_VIEWS: readonly ExplorerView[] = [
     id: 'sessions',
     title: 'Phiên — danh sách phiên của project',
     icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  },
+  {
+    id: 'issues',
+    title: 'Issues — việc đang làm, tạm dừng, bị chặn',
+    icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18"/></svg>',
   },
   {
     id: 'files',

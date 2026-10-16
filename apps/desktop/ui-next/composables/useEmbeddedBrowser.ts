@@ -58,6 +58,9 @@ import type { AwogBrowserTab, AwogBrowserTabList } from '~/types/awog-bridge'
 // hiện sẽ ẩn cả dải khung rộng hơn thẻ thật).
 const OVERLAYS = [
   '.ovl.on', // 23 modal của app: Settings, Preview, Sites, Import, confirm…
+  // Dialog shadcn/reka (GitAuthErrorModal, GitIdentityModal…) không mang `.ovl` —
+  // thiếu dòng này thì trang web vẽ đè lên hộp thoại đang mở.
+  '[role="dialog"][data-state="open"]',
   '.lbox', // lightbox ảnh
   '.smenu', // ContextMenu — gồm menu ⋮ và menu dock của chính trình duyệt
   '.aselmenu', // dropdown của AppSelect

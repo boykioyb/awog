@@ -36,7 +36,7 @@
       >
         {{ diffMode === 'split' ? t('git.diff.split') : t('git.diff.unified') }}
       </button>
-      <Button variant="outline" size="sm" class="shrink-0" @click="onPrimary">
+      <Button v-if="!readonly" variant="outline" size="sm" class="shrink-0" @click="onPrimary">
         <Icon :name="staged ? 'rewind' : 'check'" class="size-3.5" />
         {{ staged ? t('git.diff.unstageFile') : t('git.diff.stageFile') }}
       </Button>
@@ -70,6 +70,7 @@
             :key="i"
             :line="l"
             :staged="staged"
+            :readonly="readonly"
             @hunk-action="onHunkAction"
           />
         </div>
@@ -103,6 +104,8 @@ const props = defineProps<{
   // The selected row's section: staged → show "Unstage file" + hide per-hunk
   // stage (hunk-level unstage isn't supported yet).
   staged?: boolean
+  // Diff của một commit đã có (tab Git Log): ẩn Stage/Unstage file + nút theo hunk.
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{

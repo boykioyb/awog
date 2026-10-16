@@ -450,9 +450,10 @@ const DEFAULT_GITHUB_NOTIFY: GithubNotifySettings = {
 
 const DEFAULT_NOTIFICATIONS: NotificationSettings = {
   delivery: 'both',
-  // Bottom-right: out of the way of the composer and the centre of the app, and
-  // where desktop notifications usually live.
-  toastPosition: 'bottom-right',
+  // Top-right (người dùng chốt 2026-10-15): đúng chỗ mắt nhìn khi vừa bấm nút trên
+  // thanh công cụ (Source Control, header), không đè composer ở đáy, và TOP_EDGE của
+  // AppToaster đã chừa thanh trên 44px.
+  toastPosition: 'top-right',
   sessionEvents: true,
   cicdEvents: false,
   resources: {

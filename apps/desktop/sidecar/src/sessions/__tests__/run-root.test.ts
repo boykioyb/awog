@@ -111,8 +111,17 @@ describe('runner factories — lead của teams.run có tool ê-kíp ngay', () =
     expect(createMemberRunners({ sessionId: 'ses-m1' })).not.toBeNull()
   })
 
-  it('phiên lẻ không có tool nào — không trả một token schema nào', () => {
+  // Phiên lẻ có project là một người thực thi issue (docs/features/session-issue-tracking.md):
+  // board mở ở chế độ "run một người", còn kênh/bench của ê-kíp thì không có.
+  it('phiên lẻ có project: chỉ board mở — không channel, không member', () => {
     seed({ id: 'ses-lone' })
+    expect(createBoardRunners({ sessionId: 'ses-lone' })).not.toBeNull()
+    expect(createChannelRunners({ sessionId: 'ses-lone' })).toBeNull()
+    expect(createMemberRunners({ sessionId: 'ses-lone' })).toBeNull()
+  })
+
+  it('phiên lẻ không project: không có tool nào — không trả một token schema nào', () => {
+    seed({ id: 'ses-lone', projectId: null })
     expect(createBoardRunners({ sessionId: 'ses-lone' })).toBeNull()
     expect(createChannelRunners({ sessionId: 'ses-lone' })).toBeNull()
     expect(createMemberRunners({ sessionId: 'ses-lone' })).toBeNull()

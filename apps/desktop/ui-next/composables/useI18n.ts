@@ -53,6 +53,12 @@ function interpolate(template: string, params?: Record<string, string | number>)
   })
 }
 
+// Bản dịch của MỘT key ở mọi ngôn ngữ — cho tìm kiếm (⌘K) khớp cả từ khoá tiếng Anh
+// khi app đang chạy tiếng Việt và ngược lại. Không interpolate (giữ nguyên `{n}`).
+export function textsForKey(key: string): string[] {
+  return [...new Set(Object.values(DICTIONARIES).flatMap((d) => (d[key] ? [d[key]] : [])))]
+}
+
 export function useI18n() {
   // Call once on app mount (client-only SPA) to pick up the persisted choice.
   function initLocale() {

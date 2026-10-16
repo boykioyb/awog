@@ -45,6 +45,10 @@ export type Commit = {
   w: string
   body?: string
   files: GitFile[]
+  // SHA đầy đủ của các parent + thời điểm tác giả (ISO) — tab Git Log cần để xếp làn
+  // graph, nhảy tới parent và hiện ngày đầy đủ. Vắng ở các list cũ không cần.
+  parents?: string[]
+  at?: string
 }
 
 // ── Sidebar selection (mirrors production git-section.ts) ──

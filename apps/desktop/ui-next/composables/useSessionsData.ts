@@ -679,6 +679,8 @@ export type QueuedMessage = {
   // Wake of a live Claude CLI process (ADR 0099): sendMessage must adopt the turn that
   // process already started rather than send `text`. Kept through a re-queue.
   attachWake?: boolean
+  // Lượt không do người dùng gõ (wake / hộp thư) — xem sendMessage `automated`.
+  automated?: boolean
 }
 
 // Reasoning effort (Claude Code vocabulary) — forwarded as `settings.level`.
@@ -870,6 +872,12 @@ export type Session = {
   // lone-agent do dispatch từ một board item tạo; danh sách session ẩn các
   // phiên "của board" (chúng sống trong board/Teams UI).
   origin?: 'board'
+  // Issue trên board của project mà phiên này đang làm — phiên là một người thực
+  // thi của issue (docs/features/session-issue-tracking.md). Sidecar tự gắn ở lượt
+  // đầu; đổi/gỡ qua `sessions.setIssue` (store.setIssue). Chip issue trên header.
+  issueId?: string
+  // Người dùng đã "bỏ theo dõi" — sidecar không tự sinh issue cho phiên này nữa.
+  issueUntracked?: boolean
   // Phiên được nhập từ Claude Desktop / CLI (mirrors sidecar header.importedFrom) —
   // hiện badge nguồn; gửi tiếp bị chặn nếu nó có thể đang mở ở nơi gốc.
   importedFrom?: ImportedFrom

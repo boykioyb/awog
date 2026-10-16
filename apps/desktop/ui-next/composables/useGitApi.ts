@@ -134,6 +134,8 @@ export interface SidecarGitFileDiff {
   hunks: SidecarGitDiffHunk[]
   oldFileMode?: string
   newFileMode?: string
+  isNew?: boolean
+  isDeleted?: boolean
 }
 
 export interface SidecarGitDiff {
@@ -180,6 +182,9 @@ export interface LogParams {
   skip?: number
   ref?: string
   path?: string
+  // Tab Git Log: mọi branch (`--all`) + `--date-order` (điều kiện xếp làn graph).
+  all?: boolean
+  dateOrder?: boolean
 }
 
 export interface CommitParams {

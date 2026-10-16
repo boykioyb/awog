@@ -109,7 +109,7 @@ export interface ToolFilter {
   // Ngữ cảnh hạ tầng phiên đã ghim (ADR 0088 §6) → `AWS_PROFILE`/`AWS_DEFAULT_REGION`
   // cho MỌI lệnh `Bash`, không chỉ cho tool CLI (`aws_cli`…). Vắng = không thêm biến
   // nào. Đây là chỗ "ngữ cảnh được chỉ định" phủ tới cả lệnh chạy trong shell.
-  bashInfra?: { profile?: string | undefined; region?: string | undefined }
+  bashInfra?: { profile?: string | undefined; region?: string | undefined; ghAccount?: string | undefined }
   // Chat-session marker: set for every chat turn INCLUDING plan mode. Distinct
   // from `backgroundExec`, which is deliberately off in plan mode because Bash is
   // blocked there. A read-only tool like `read_terminal` should still be reachable

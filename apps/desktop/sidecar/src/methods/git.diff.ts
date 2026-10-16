@@ -91,7 +91,11 @@ register('git.diff', async (raw): Promise<GitDiff> => {
     }
     case 'commit': {
       assertSha(params.sha)
-      args = ['show', '--no-color', '--find-renames', '--format=', params.sha]
+      // Merge commit: `git show` mặc định in combined diff (`diff --cc`) mà parser không
+      // đọc ⇒ danh sách file rỗng. So với parent ĐẦU như JetBrains / GitHub hiển thị.
+      // `-m --first-parent` thay vì `--diff-merges=first-parent` (git ≥ 2.31) — app chỉ
+      // đòi git ≥ 2.20. Commit thường không bị ảnh hưởng.
+      args = ['show', '--no-color', '--find-renames', '-m', '--first-parent', '--format=', params.sha]
       break
     }
     case 'commitRange': {

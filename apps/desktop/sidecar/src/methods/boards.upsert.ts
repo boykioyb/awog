@@ -4,6 +4,8 @@ import {
   BoardError,
   MAX_ITEM_DESC_LEN,
   MAX_ITEM_TITLE_LEN,
+  MAX_LABEL_LEN,
+  MAX_LINKS,
   addBoardItemComment,
   listBoardItems,
   upsertBoardItem,
@@ -12,6 +14,7 @@ import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import { listSessionSummaries } from '../sessions/store.js'
 import { postSessionMessage } from '../sessions/inbox.js'
 import { routeSessionForItem } from '../boards/model-route.js'
+import { tracksIssue } from '../boards/session-issue.js'
 import { log } from '../util/logger.js'
 import type { BoardItem } from '../types/shared.js'
 
@@ -32,6 +35,7 @@ import type { BoardItem } from '../types/shared.js'
 // Trần độ dài ở schema và ở store (cleanTitle/cleanDesc) — store vẫn chuẩn hoá
 // lại vì đường tool không đi qua zod này.
 const PROJECT_ID_RE = /^[a-z0-9][a-z0-9-]*$/
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const SESSION_ID_RE = /^[a-z0-9-]+$/
 // Spec người nhận dự kiến — khoá agent/team của UI: 'agent:global||<id>' hoặc
 // 'team:project|<pid>|<id>', và 'member:<runId>|<title>' cho member spec CHƯA
@@ -40,11 +44,21 @@ const SESSION_ID_RE = /^[a-z0-9-]+$/
 // lọt vào field mà cả agent tool lẫn UI đều đọc.
 const ASSIGNEE_REF_RE = /^(agent|team):(global|project)\|[a-z0-9-]*\|[a-z0-9-]+$|^member:[a-z0-9-]+\|.{1,160}$/
 
-const STATUS_ENUM = z.enum(['backlog', 'todo', 'in_progress', 'in_review', 'changes', 'blocked', 'done', 'cancelled'])
+const STATUS_ENUM = z.enum([
+  'backlog',
+  'todo',
+  'in_progress',
+  'in_review',
+  'changes',
+  'pending',
+  'blocked',
+  'done',
+  'cancelled',
+])
 
 // Status "sống" — đổi chủ khi item đứng ở đây thì người nhận mới phải được báo
-// ngay (đối xứng luật wake của team_item_*). backlog = bãi đỗ, done/cancelled
-// = đã đóng nên không wake ai.
+// ngay (đối xứng luật wake của team_item_*). backlog = bãi đỗ, pending = tạm
+// gác, done/cancelled = đã đóng nên không wake ai.
 const WAKE_STATUSES = new Set(['todo', 'in_progress', 'in_review', 'changes', 'blocked'])
 
 // Wake assignee sau một ghi thành công. Tin gửi TỪ gốc nhóm của assignee
@@ -62,6 +76,10 @@ async function wakeAssignee(item: BoardItem, prev: BoardItem | undefined): Promi
     const summaries = await listSessionSummaries()
     const assignee = summaries.find((s) => s.id === assigneeId)
     if (!assignee || assignee.archived) return
+    // Phiên đang TỰ làm issue này (Session.issueId — docs/features/session-issue-tracking.md)
+    // là phiên người dùng ngồi lái: đổi status từ chip header hay kéo cột chỉ là
+    // ghi sổ, không phải lệnh giao việc — wake ở đây sẽ tự bắn một lượt model.
+    if (tracksIssue(assignee, item.id)) return
     // Auto-route model/effort của phiên nhận theo tính chất item — dispatch là
     // lúc quyết lại cấu hình (model-route.ts). Gốc của một run (có member trỏ
     // về nó) giữ sàn tầm giữa của lead. Best-effort: route tắc không được làm
@@ -190,6 +208,14 @@ const Params = z.object({
     severity: z.enum(['blocker', 'major', 'minor', 'trivial']).nullable().optional(),
     // null = item không còn thuộc đợt (stage) nào.
     stage: z.number().int().min(0).nullable().optional(),
+    // Field kiểu GitHub Projects (sidebar issue). null = gỡ. Store chuẩn hoá +
+    // kiểm lại (ngày hợp lệ, start ≤ due, URL http(s), trần số link).
+    startDate: z.string().regex(DATE_RE).nullable().optional(),
+    dueDate: z.string().regex(DATE_RE).nullable().optional(),
+    sprint: z.string().max(MAX_LABEL_LEN * 2).nullable().optional(),
+    milestone: z.string().max(MAX_LABEL_LEN * 2).nullable().optional(),
+    issueLinks: z.array(z.string().max(500)).max(MAX_LINKS).nullable().optional(),
+    prLinks: z.array(z.string().max(500)).max(MAX_LINKS).nullable().optional(),
   }),
 })
 

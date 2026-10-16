@@ -514,22 +514,15 @@ function readGroupBy(): string {
   return v && GROUPBY.some(([value]) => value === v) ? v : 'none'
 }
 
-// Sort-by also persists across restarts. Default 'updated' — matches the sidecar's
-// newest-updated-first list order, so an unset preference looks like today's order.
-const STORAGE_SORTBY = 'awog.sessions.filter.sortBy'
-
-function readSortBy(): SortBy {
-  const v = localStorage.getItem(STORAGE_SORTBY)
-  return v && (SORTBY as readonly string[]).includes(v) ? (v as SortBy) : 'updated'
-}
-
 // "Show archived" is a saved preference like group-by / sort-by (same key family).
 // Default OFF: archived sessions stay out of the way until asked for.
 const STORAGE_SHOW_ARCHIVED = 'awog.sessions.filter.showArchived'
 
 const filter = ref('')
 const groupBy = ref(readGroupBy())
-const sortBy = ref<SortBy>(readSortBy())
+// Sort-by dùng chung với view Phiên của workbench (useSessionSort — nhớ qua restart,
+// mặc định 'updated').
+const { sortBy, sortSessions } = useSessionSort()
 const showArchived = ref(localStorage.getItem(STORAGE_SHOW_ARCHIVED) === '1')
 const showFilters = ref(false)
 const listMenu = ref(false)
@@ -540,7 +533,6 @@ function runListAction(fn: () => void) {
 }
 
 watch(groupBy, (v) => localStorage.setItem(STORAGE_GROUPBY, v))
-watch(sortBy, (v) => localStorage.setItem(STORAGE_SORTBY, v))
 watch(
   showArchived,
   (v) => {
@@ -644,17 +636,6 @@ const groupByLabel = computed(() => t(`sessions.team.${groupBy.value}`))
 const sortByLabel = computed(() => t(`sessions.sort.${sortBy.value}`))
 
 // Epoch ms of an ISO timestamp (0 when missing/invalid) — for the time-based sorts.
-function tsOf(iso?: string): number {
-  const n = iso ? Date.parse(iso) : NaN
-  return Number.isNaN(n) ? 0 : n
-}
-// Secondary comparator per sort mode; pinned-first is applied ahead of it.
-const SORT_CMP: Record<SortBy, (a: Session, b: Session) => number> = {
-  updated: (a, b) => tsOf(b.updatedAt) - tsOf(a.updatedAt),
-  created: (a, b) => tsOf(b.createdAt) - tsOf(a.createdAt),
-  title: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }),
-}
-
 const filtered = computed(() => {
   const q = filter.value.toLowerCase()
   // Archived rows are out unless the filter drawer asks for them. Phiên "của
@@ -667,12 +648,9 @@ const filtered = computed(() => {
       (showArchived.value || !store.isArchived(s.id)) &&
       !isBoardSession(s),
   )
-  const cmp = SORT_CMP[sortBy.value]
   // Pinned-first, then the chosen sort. Applies to the flat list and — since buckets
   // are filled from this order — keeps pinned sessions atop each group too.
-  return f
-    .slice()
-    .sort((a, b) => Number(b.pinned ?? false) - Number(a.pinned ?? false) || cmp(a, b))
+  return sortSessions(f)
 })
 
 // Per-group pagination (UI-5) — a controlled page instead of infinite/virtual scroll.

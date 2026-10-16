@@ -69,6 +69,7 @@ import {
   FolderGit2,
   MessageSquarePlus,
   Search,
+  Settings2,
   Sparkles,
   Terminal,
   Wand2,
@@ -81,6 +82,7 @@ import { useInfraServiceOpen } from '~/composables/useInfraServiceOpen'
 import { useLinkOpen } from '~/composables/useLinkOpen'
 import Input from '~/components/ui/input/Input.vue'
 import { highlightSegments } from '~/utils/fuzzy'
+import { SETTINGS_SECTIONS } from '~/components/settings/sections'
 import {
   rankCommands,
   useCommandPalette,
@@ -101,6 +103,8 @@ const { request: requestServiceOpen } = useInfraServiceOpen()
 const { openExternally } = useLinkOpen()
 const { start: startTour } = useTour()
 const { reset: rerunSetup } = useOnboarding()
+const { index: settingsIndex, ensureIndex: ensureSettingsIndex } = useSettingsSearch()
+const { openSettings } = useSettingsModal()
 
 const defaultIcon = Terminal
 
@@ -125,6 +129,10 @@ const NAV_ROUTES: { to: string; key: string }[] = [
   { to: '/settings', key: 'palette.cmd.goSettings' },
   { to: '/templates', key: 'palette.cmd.goTemplates' },
 ]
+
+// labelKey của một mục Settings (id → nhãn nav).
+const sectionLabelKey = (id: string): string =>
+  SETTINGS_SECTIONS.find((s) => s.id === id)?.labelKey ?? id
 
 // Cap recent sessions surfaced so the list stays scannable.
 const RECENT_LIMIT = 8
@@ -214,6 +222,27 @@ const commands = computed<PaletteCommand[]>(() => {
     })
   }
 
+  // ── Cài đặt (tìm tới TỪNG dòng) ─────────────────────────────────────────────
+  // Chỉ khi có chữ gõ: chỉ mục có hàng trăm dòng, đổ hết vào palette trống là chôn mọi
+  // thứ khác. Chọn ⇒ mở Settings đúng mục, cuộn tới + nháy sáng đúng dòng.
+  if (typing) {
+    for (const h of settingsIndex.value) {
+      const secLabel = t(sectionLabelKey(h.section))
+      const label =
+        h.kind === 'section' ? `${t('palette.setting.prefix')} ${secLabel}` : t(h.nameKey)
+      out.push({
+        id: `setting-${h.section}-${h.nameKey}`,
+        label,
+        ...(h.kind === 'section' ? {} : { meta: secLabel }),
+        keywords: h.keywords,
+        hint: t('palette.setting.open'),
+        icon: Settings2,
+        section: 'setting',
+        run: () => openSettings(h.section, h.kind === 'section' ? undefined : label),
+      })
+    }
+  }
+
   // Navigate-to-page commands.
   for (const r of NAV_ROUTES) {
     out.push({
@@ -243,7 +272,14 @@ const commands = computed<PaletteCommand[]>(() => {
   return out
 })
 
-const entries = computed<PaletteEntry[]>(() => rankCommands(query.value, commands.value))
+// Cài đặt khớp có thể rất nhiều (khớp qua mô tả) — giữ 12 dòng tốt nhất cho nhóm đó.
+const SETTING_LIMIT = 12
+const entries = computed<PaletteEntry[]>(() => {
+  let settings = 0
+  return rankCommands(query.value, commands.value).filter(
+    (e) => e.section !== 'setting' || ++settings <= SETTING_LIMIT,
+  )
+})
 
 // Group filtered entries by section, preserving rank order within each group,
 // and stamp a flat index for keyboard navigation across all visible rows.
@@ -255,6 +291,7 @@ const grouped = computed<RenderGroup[]>(() => {
     { section: 'session', label: t('palette.section.session') },
     { section: 'project', label: t('palette.section.project') },
     { section: 'service', label: t('palette.section.service') },
+    { section: 'setting', label: t('palette.section.setting') },
     { section: 'navigate', label: t('palette.section.navigate') },
   ]
   let flat = 0
@@ -298,6 +335,7 @@ watch(isOpen, (open) => {
   query.value = ''
   activeIndex.value = 0
   void ensureCatalog()
+  void ensureSettingsIndex()
   nextTick(() => inputRef.value?.focus())
 })
 

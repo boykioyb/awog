@@ -25,6 +25,28 @@
       <!-- Cùng hành vi ô "Tìm file…" (FilesView): focus/có chữ ⇒ ô giãn hết bề ngang,
            nhóm nút trượt ẩn; `inert` khi ẩn để Tab không rơi vào nút vô hình. -->
       <div class="sv-actions" :class="{ 'is-hidden': searching }" :inert="searching || undefined">
+        <!-- Sắp xếp list — cùng lựa chọn với cột /sessions (useSessionSort), mặc định
+             "cập nhật gần nhất". -->
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <ScmIconBtn
+              class="size-6"
+              type="button"
+              :title="`${t('sessions.filter.sortBy')}: ${t(`sessions.sort.${sortBy}`)}`"
+            >
+              <ArrowDownUp class="size-4" />
+            </ScmIconBtn>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="w-48">
+            <DropdownMenuLabel class="text-xs font-normal text-muted-foreground">
+              {{ t('sessions.filter.sortBy') }}
+            </DropdownMenuLabel>
+            <DropdownMenuItem v-for="opt in sortOptions" :key="opt" @click="sortBy = opt">
+              {{ t(`sessions.sort.${opt}`) }}
+              <Icon v-if="opt === sortBy" name="check" class="ml-auto text-primary" />
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <ScmIconBtn class="size-6" type="button" :title="t('wb.strip.new')" @click="create">
           <Icon name="plus" class="size-4" />
         </ScmIconBtn>
@@ -58,14 +80,17 @@
       <div v-if="!filteredRows.length" class="px-2 py-2.5 text-sm text-[var(--textFaint)]">
         {{ t('sessions.list.noMatch') }}
       </div>
-      <!-- Row gọn (1 dòng) — panel hẹp nên không dùng SessionListItem (card 2
-           dòng, padding 9px). Cùng skeleton với popover ▾ bên dưới. -->
+      <!-- Hàng 2 dòng: dòng 1 = chấm trạng thái + tiêu đề (đủ chỗ đọc) + ghim; dòng 2 =
+           meta nhỏ, mờ — thời gian · status issue · token · nguồn nhập. Trước đây cả sáu
+           thứ dồn vào MỘT hàng 30px của panel hẹp: tiêu đề bị cắt cụt, một cột "0" vô
+           nghĩa, icon nhập lẫn với status — rối và khó đọc. Dòng 2 luôn có thời gian nên
+           mọi hàng cao bằng nhau. -->
       <div
         v-for="s in filteredRows"
         :key="s.id"
-        class="group relative flex h-[30px] cursor-pointer items-center gap-2 rounded-[var(--r-xs)] px-2 hover:bg-[var(--bgHover)]"
+        class="srow group relative flex cursor-pointer gap-2 rounded-[var(--r-xs)] px-2 py-1.5 hover:bg-[var(--bgHover)]"
         :class="{
-          'bg-[var(--accentDim)] text-[var(--text)]': s.id === sessions.activeId,
+          on: s.id === sessions.activeId,
           'text-[var(--textMuted)]': s.id !== sessions.activeId && !s.unread,
           'row-unread': s.unread && s.id !== sessions.activeId,
           'row-run': s.status === 'streaming',
@@ -74,60 +99,66 @@
         @click="activateRow(s.id)"
         @contextmenu.prevent="onRowCtx(s.id, $event.clientX, $event.clientY)"
       >
-        <SessionStateDot :status="s.status" :unread="s.unread" />
-        <input
-          v-if="renamingId === s.id"
-          ref="renameInput"
-          v-model="draft"
-          class="renamefield"
-          type="text"
-          :aria-label="t('sessions.item.rename')"
-          @click.stop
-          @contextmenu.stop
-          @keydown.enter.prevent="commitRename"
-          @keydown.esc.prevent.stop="cancelRename"
-          @blur="commitRename"
-        />
-        <span
-          v-else
-          class="min-w-0 flex-1 truncate"
-          :class="{ tgen: sessions.titleGenerating.has(s.id) }"
-          @dblclick.stop="startRename(s)"
-        >
-          {{ s.title }}
+        <span class="flex h-5 flex-none items-center">
+          <SessionStateDot :status="s.status" :unread="s.unread" />
         </span>
-        <Loader2
-          v-if="sessions.titleGenerating.has(s.id) && renamingId !== s.id"
-          class="size-3 flex-none animate-spin text-[var(--primary)]"
-        />
-        <!-- Đã ghim: icon nhỏ ngay sau tên (phiên ghim cũng được đưa lên đầu list). -->
+        <div class="flex min-w-0 flex-1 flex-col">
+          <div class="flex h-5 min-w-0 items-center gap-1.5">
+            <input
+              v-if="renamingId === s.id"
+              ref="renameInput"
+              v-model="draft"
+              class="renamefield"
+              type="text"
+              :aria-label="t('sessions.item.rename')"
+              @click.stop
+              @contextmenu.stop
+              @keydown.enter.prevent="commitRename"
+              @keydown.esc.prevent.stop="cancelRename"
+              @blur="commitRename"
+            />
+            <span
+              v-else
+              class="min-w-0 flex-1 truncate"
+              :class="{ tgen: sessions.titleGenerating.has(s.id) }"
+              @dblclick.stop="startRename(s)"
+            >
+              {{ s.title }}
+            </span>
+            <Loader2
+              v-if="sessions.titleGenerating.has(s.id) && renamingId !== s.id"
+              class="size-3 flex-none animate-spin text-[var(--primary)]"
+            />
+            <!-- Ghim: icon nhỏ cuối dòng tiêu đề (phiên ghim cũng nổi lên đầu list). -->
+            <span
+              v-if="s.pinned"
+              class="flex flex-none text-[var(--textFaint)]"
+              :title="t('sessions.sidebar.pinned')"
+            >
+              <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
+            </span>
+          </div>
+          <div class="smeta flex min-w-0 items-center gap-1.5">
+            <span class="flex-none tabular-nums">{{ whenOf(s) }}</span>
+            <span v-if="ctxTokens(s) > 0" class="flex-none tabular-nums">
+              · {{ fmtTokens(ctxTokens(s)) }}
+            </span>
+            <!-- Nguồn nhập (Claude Desktop/CLI) CỐ Ý không hiện ở hàng — người dùng thấy
+                 nhiễu (2026-10-16). -->
+            <!-- Status issue (docs/features/session-issue-tracking.md) — dồn về mép PHẢI
+                 cho cân: trái là thông tin "khi nào / bao nhiêu", phải là "đang ở đâu".
+                 Chỉ khi việc KHÔNG còn chạy bình thường (tạm dừng / chặn / review / xong). -->
+            <span
+              v-if="issueFlags.get(s.id)"
+              class="schip ml-auto"
+              :style="{ '--st': statusColor(issueFlags.get(s.id)!) }"
+            >
+              {{ statusLabel(issueFlags.get(s.id)!) }}
+            </span>
+          </div>
+        </div>
         <span
-          v-if="s.pinned"
-          class="flex flex-none text-[var(--textFaint)]"
-          :title="t('sessions.sidebar.pinned')"
-        >
-          <Icon name="pin" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </span>
-        <!-- Phiên nhập từ Claude Desktop/CLI (docs/features/claude-session-import.md):
-             hàng 30px không đủ chỗ cho chip chữ như SessionListItem ⇒ chỉ icon + title. -->
-        <span
-          v-if="s.importedFrom"
-          class="flex flex-none text-[var(--textFaint)]"
-          :title="
-            s.importedFrom.kind === 'cli'
-              ? t('sessions.claudeImport.badge.cli')
-              : t('sessions.claudeImport.badge.desktop')
-          "
-        >
-          <Icon name="download" style="width: var(--icon-xs); height: var(--icon-xs)" />
-        </span>
-        <!-- Chưa đọc đã thể hiện ở chỉ báo bên trái + tiêu đề đậm — không thêm chấm
-             thứ hai bên phải (trước đây trùng màu với chấm trạng thái ⇒ khó phân biệt). -->
-        <span class="flex-none font-mono text-xs font-normal tabular-nums text-[var(--textFaint)]">
-          {{ fmtTokens(ctxTokens(s)) }}
-        </span>
-        <span
-          class="absolute right-1.5 cursor-pointer rounded-[var(--r-xs)] bg-[var(--bgHover)] p-0.5 text-[var(--textFaint)] opacity-0 transition-opacity hover:bg-[var(--bgActive)] hover:text-[var(--text)] group-hover:opacity-100"
+          class="absolute right-1.5 top-1.5 cursor-pointer rounded-[var(--r-xs)] bg-[var(--bgHover)] p-0.5 text-[var(--textFaint)] opacity-0 transition-opacity hover:bg-[var(--bgActive)] hover:text-[var(--text)] group-hover:opacity-100"
           role="button"
           :title="t('wb.strip.close')"
           :aria-label="t('wb.strip.close')"
@@ -273,7 +304,12 @@
 // cùng một nguồn phiên. Menu chuột phải = thao tác trên phiên (useSessionActions,
 // dùng chung với cột /sessions) + thao tác tab (đóng / đóng các tab khác / clear ctx…).
 import { computed, nextTick, ref, useTemplateRef } from 'vue'
-import { Loader2 } from 'lucide-vue-next'
+import { ArrowDownUp, Loader2 } from 'lucide-vue-next'
+import DropdownMenu from '~/components/ui/dropdown-menu/DropdownMenu.vue'
+import DropdownMenuContent from '~/components/ui/dropdown-menu/DropdownMenuContent.vue'
+import DropdownMenuItem from '~/components/ui/dropdown-menu/DropdownMenuItem.vue'
+import DropdownMenuLabel from '~/components/ui/dropdown-menu/DropdownMenuLabel.vue'
+import DropdownMenuTrigger from '~/components/ui/dropdown-menu/DropdownMenuTrigger.vue'
 import SessionStateDot from '~/components/session/SessionStateDot.vue'
 import ScmIconBtn from './ScmIconBtn.vue'
 import Button from '~/components/ui/button/Button.vue'
@@ -281,12 +317,32 @@ import Input from '~/components/ui/input/Input.vue'
 import AppContextMenu from '~/components/common/AppContextMenu.vue'
 import SessionRunPicker from '~/components/session/SessionRunPicker.vue'
 import type { Session } from '~/composables/useSessionsData'
+import { useBoardStore, type BoardItemStatus } from '~/stores/board'
 import type { MenuItem } from '~/composables/useContextMenu'
 import { useSessionStrip } from '~/composables/useSessionStrip'
 import { useSessionActions } from '~/composables/useSessionActions'
 import { useClaudeImportModal } from '~/composables/useClaudeImportModal'
+import { relativeTime } from '~/utils/relative-time'
 
 const claudeImport = useClaudeImportModal()
+// Thời gian cập nhật dạng tương đối ("5 phút", "2 giờ") — tính từ `updatedAt`, rơi về
+// `when` (chuỗi chụp lúc hydrate) cho phiên chưa có mốc.
+// `now` là đồng hồ chạy chung (useNow) — nhãn tự trôi "vừa xong" → "1m" → "2m"….
+const now = useNow()
+const whenOf = (s: Session): string => (s.updatedAt ? relativeTime(s.updatedAt, now.value) : s.when)
+const board = useBoardStore()
+const { statusLabel, statusColor } = useIssueStatus()
+const FLAG_STATUSES = new Set<BoardItemStatus>(['pending', 'blocked', 'in_review', 'done'])
+// Một lượt tính cho cả list (không gọi lặp trong template mỗi hàng).
+const issueFlags = computed(() => {
+  const out = new Map<number, BoardItemStatus>()
+  for (const s of filteredRows.value) {
+    if (!s.issueId) continue
+    const st = board.itemsFor(s.project).find((i) => i.id === s.issueId)?.status
+    if (st && FLAG_STATUSES.has(st)) out.set(s.id, st)
+  }
+  return out
+})
 const {
   sessions,
   ctx,
@@ -315,13 +371,15 @@ const {
   t,
 } = useSessionStrip()
 
-// List chính = `tabs` (thứ tự store: mới nhất trước, pinned trước) lọc theo
-// cùng `menuQuery`. `filteredTabs` (sort theo ctx) chỉ dành cho popover ▾.
+// List chính = `tabs` lọc theo cùng `menuQuery`, rồi sắp theo lựa chọn chung của
+// useSessionSort (ghim trước; mặc định cập nhật gần nhất). `filteredTabs` (sort theo
+// ctx) chỉ dành cho popover ▾.
+const { sortBy, sortOptions, sortSessions } = useSessionSort()
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 const filteredRows = computed(() => {
   const q = menuQuery.value.trim()
-  if (!q) return tabs.value
-  return tabs.value.filter((s) => norm(s.title).includes(norm(q)))
+  const rows = q ? tabs.value.filter((s) => norm(s.title).includes(norm(q))) : tabs.value
+  return sortSessions(rows)
 })
 
 // Ô tìm giãn khi đang gõ hoặc còn chữ (giống FilesView). Esc: còn chữ ⇒ xoá, hết chữ ⇒
@@ -452,6 +510,29 @@ function onRowCtx(id: number, x: number, y: number) {
 .row-unread {
   color: var(--text);
   font-weight: 600;
+}
+/* Hàng đang chọn = accent-tint + thanh accent 2px (luật selection của app). */
+.srow.on {
+  background: var(--accentDim);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+/* Dòng meta: nhỏ, mờ, không đậm theo hàng chưa đọc. */
+.smeta {
+  height: 16px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-xs);
+  font-weight: 400;
+  color: var(--textFaint);
+  white-space: nowrap;
+}
+/* Chip status issue: chấm màu + chữ cùng màu status, nền rất nhạt. */
+.schip {
+  flex: none;
+  padding: 0 5px;
+  border-radius: var(--r-xs);
+  color: var(--st);
+  background: color-mix(in srgb, var(--st) 12%, transparent);
 }
 /* Đang chạy: vệt sáng chạy dọc chân hàng (progress bất định). */
 .row-run::after {

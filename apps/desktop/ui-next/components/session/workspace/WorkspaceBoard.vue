@@ -99,6 +99,19 @@
                 >
                   <TriangleAlert class="size-3" />
                 </span>
+                <!-- Hạn chót (khuôn GitHub Projects) — đỏ khi đã qua mà việc chưa đóng. -->
+                <span
+                  v-if="it.dueDate"
+                  class="wsb-due"
+                  :class="{ late: isOverdue(it) }"
+                  :title="t('board.field.dueDate')"
+                >
+                  <CalendarClock class="size-3" />
+                  {{ fmtDue(it.dueDate) }}
+                </span>
+                <span v-if="it.sprint" class="wsb-kids" :title="t('board.field.sprint')">
+                  {{ it.sprint }}
+                </span>
                 <span v-if="childCount(it)" class="wsb-kids" :title="t('board.children')">
                   <ListTree class="size-3" />
                   {{ childCount(it) }}
@@ -148,6 +161,7 @@ import {
   GitMerge,
   Layers,
   ListTree,
+  CalendarClock,
   MessageSquare,
   Plus,
   SquareCheck,
@@ -219,17 +233,8 @@ const columns = computed(() => {
 // Chip project trên card unified board — fallback raw id khi project chưa hydrate.
 const projectName = (id: string): string => projectsStore.projectById(id)?.name ?? id
 
-const STATUS_KEY: Record<BoardItemStatus, string> = {
-  backlog: 'sessions.workspace.group.st.backlog',
-  todo: 'sessions.workspace.group.st.todo',
-  in_progress: 'sessions.workspace.group.st.inProgress',
-  in_review: 'sessions.workspace.group.st.inReview',
-  changes: 'sessions.workspace.group.st.changes',
-  blocked: 'sessions.workspace.group.st.blocked',
-  done: 'sessions.workspace.group.st.done',
-  cancelled: 'sessions.workspace.group.st.cancelled',
-}
-const statusLabel = (s: BoardItemStatus): string => t(STATUS_KEY[s] ?? s)
+// Nhãn status: một nguồn với chip issue / view Issues (useIssueStatus).
+const { statusLabel } = useIssueStatus()
 
 // ── Loại việc / cây cha-con (khuôn Jira) ──
 // Icon kiểu Jira: một glyph màu nhỏ cạnh title — type là cái nhìn đầu tiên
@@ -248,6 +253,15 @@ const typeIcon = (it: BoardItem): unknown => TYPE_ICON[typeOf(it)]
 // hợp nhất nhiều project vẫn đúng vì parentId luôn cùng file/board với con).
 const parentTitle = (it: BoardItem): string =>
   it.parentId ? (items.value.find((p) => p.id === it.parentId)?.title ?? '') : ''
+// `YYYY-MM-DD` là ngày lịch — parse theo giờ địa phương (không UTC) để "hôm nay"
+// và "quá hạn" khớp với lịch người dùng.
+const fmtDue = (d: string): string =>
+  new Date(`${d}T00:00:00`).toLocaleDateString([], { day: '2-digit', month: '2-digit' })
+const isOverdue = (it: BoardItem): boolean =>
+  !!it.dueDate &&
+  it.status !== 'done' &&
+  it.status !== 'cancelled' &&
+  Date.now() > Date.parse(`${it.dueDate}T23:59:59`)
 const childCount = (it: BoardItem): number => items.value.filter((c) => c.parentId === it.id).length
 
 // Tên người nhận: 'user' = sentinel của NGƯỜI DÙNG (không phải sessionId);
@@ -453,6 +467,11 @@ watch(
 .wsb-st[data-st='done'] .wsb-dot,
 .wsb-group[data-st='done'] .wsb-dot {
   background: var(--success);
+}
+/* pending = tạm gác — cùng màu với useIssueStatus (muted, khác chấm backlog nhạt hơn). */
+.wsb-st[data-st='pending'] .wsb-dot,
+.wsb-group[data-st='pending'] .wsb-dot {
+  background: var(--muted-foreground);
 }
 .wsb.cols .wsb-stn {
   margin-left: auto;
@@ -709,5 +728,14 @@ watch(
 }
 .wsb-kids {
   color: var(--textFaint);
+}
+.wsb-due {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--textFaint);
+}
+.wsb-due.late {
+  color: var(--destructive);
 }
 </style>

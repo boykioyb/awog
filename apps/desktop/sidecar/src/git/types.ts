@@ -118,6 +118,10 @@ export interface GitFileDiff {
   hunks: GitDiffHunk[]
   oldFileMode?: string
   newFileMode?: string
+  // File thêm mới / bị xoá trong diff (header `new file mode` / `deleted file mode`).
+  // Vắng = sửa hoặc đổi tên (xem isRename). Danh sách file của commit hiện A/D/M/R.
+  isNew?: boolean
+  isDeleted?: boolean
 }
 
 export interface GitDiff {

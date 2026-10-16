@@ -493,6 +493,7 @@
   "sessions.bg.wake.continue": "Tiếp tục",
   "sessions.bg.wake.dismiss": "Bỏ qua",
   "sessions.message.awaitingAnswer": "Chờ bạn trả lời",
+  "sessions.message.questionInDrawer": "Câu hỏi đang mở ở ô bên dưới ↓",
   "sessions.message.answerNow": "Trả lời",
   "sessions.gate.modalTitle": "Agent đang hỏi bạn",
   "sessions.gate.modalDismiss": "Đóng — trả lời sau trong transcript",

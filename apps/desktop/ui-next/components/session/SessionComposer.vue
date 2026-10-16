@@ -179,7 +179,11 @@
               <Plus />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" class="w-56">
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            class="w-56 max-h-[min(420px,60vh)] overflow-y-auto"
+          >
             <DropdownMenuLabel>{{ t('sessions.composer.attachTitle') }}</DropdownMenuLabel>
             <DropdownMenuItem @click="emit('pick')">
               <Paperclip />
@@ -227,7 +231,11 @@
               <ChevronDown class="opacity-60" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" class="w-52">
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            class="w-52 max-h-[min(420px,60vh)] overflow-y-auto"
+          >
             <!-- Model + account đi một cặp: account quyết định model nào khả dụng,
                  nên menu này có hai tab — cùng quy ước segment của StatusConfig.
                  Tab account chỉ đổi account của session, không phải của app. -->
@@ -281,7 +289,11 @@
               <ChevronDown class="opacity-60" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" class="w-36">
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            class="w-36 max-h-[min(420px,60vh)] overflow-y-auto"
+          >
             <DropdownMenuLabel>{{ t('statusbar.effort.title') }}</DropdownMenuLabel>
             <DropdownMenuItem v-for="[v, l] in THINK" :key="v" @click="selectThink(v)">
               <span class="min-w-0 flex-1 truncate">{{ l }}</span>
@@ -2174,6 +2186,14 @@ function onPaste(e: ClipboardEvent) {
   padding-left: 6px;
   padding-right: 6px;
   border-left: 1px solid color-mix(in srgb, var(--primary-foreground) 25%, transparent);
+}
+/* Mọi popup tự vẽ của composer (Mode, ⋯, ghim context, menu Gửi) cùng trần
+   chiều cao với status bar (`.sb-menu` của StatusConfig): dài hơn thì cuộn trong
+   popup, không vươn gần hết cửa sổ. Dropdown reka mang cùng trần qua class. */
+.smenu,
+.pop {
+  max-height: min(420px, 60vh);
+  overflow-y: auto;
 }
 /* Anchor the menu above the split button (the base .smenu is position:fixed). */
 .sendmenu {

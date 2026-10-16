@@ -5,7 +5,13 @@
   <Teleport to="body">
     <template v-if="menu">
       <div class="wbm-backdrop fixed inset-0" data-nodrag @mousedown.prevent="closeMenu" />
-      <div class="smenu wbm fixed min-w-[200px]" :style="menuStyle" role="menu" data-nodrag>
+      <div
+        class="smenu wbm fixed min-w-[200px]"
+        :class="{ 'wbm-compact': menu.compact }"
+        :style="menuStyle"
+        role="menu"
+        data-nodrag
+      >
         <div v-if="menu.filterPlaceholder" class="wbm-filter">
           <Icon name="search" style="width: var(--icon-xs); height: var(--icon-xs)" />
           <input
@@ -22,7 +28,7 @@
           <div v-if="it.separator" class="ctxsep" />
           <div
             v-else-if="it.header"
-            class="px-2.5 pb-1.5 pt-1 text-[var(--fs-xs)] font-[650] leading-[var(--lh-xs)] text-[var(--textFaint)]"
+            class="wbm-head px-2.5 pb-1.5 pt-1 text-[var(--fs-xs)] font-[650] leading-[var(--lh-xs)] text-[var(--textFaint)]"
           >
             {{ it.header }}
           </div>
@@ -166,6 +172,16 @@ function pickFirst(): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* Menu `compact` (danh sách dài như phong cách trả lời): row 26px thay 34px, header
+   sát hơn — vẫn đủ nhãn + hint. Selector kép để thắng `.smenu .mi` global của
+   prototype.css. */
+.smenu.wbm-compact .mi {
+  padding: 4px 10px;
+}
+.wbm-compact .wbm-head {
+  padding-top: 6px;
+  padding-bottom: 2px;
 }
 /* Disabled nhạt hơn mặc định `.smenu .mi.mdisabled` global (0.45 → 0.55);
    selector giữ specificity cao hơn global để đè được. */

@@ -219,6 +219,17 @@
                 <Icon name="sessions" />
                 {{ t('sessions.spawn.menu') }}
               </DropdownMenuItem>
+              <!-- Theo dõi lại thành issue — chỉ hiện khi người dùng đã "bỏ theo dõi"
+                   từ chip issue (docs/features/session-issue-tracking.md); phiên đang
+                   có issue thì mọi thao tác nằm trên chính chip đó. -->
+              <DropdownMenuItem
+                v-if="issueTrackable && session.issueUntracked"
+                :title="t('sessions.issue.trackHint')"
+                @click="trackIssue"
+              >
+                <Icon name="board" />
+                {{ t('sessions.issue.track') }}
+              </DropdownMenuItem>
               <!-- Ẩn khi chưa resolve được workspace root (browser-dev / phiên không project). -->
               <DropdownMenuItem v-if="codeRoot" @click="openInCode">
                 <Icon name="code" />
@@ -682,6 +693,7 @@
 </template>
 
 <script setup lang="ts">
+import { QUESTION_DRAWER_KEY } from '~/composables/useSessionQuestionModal'
 // Session detail (renderDetail ~1342): header (project chip, context bar, config
 // chip, info/workspace/delete buttons) + chat (todo · transcript · composer) and
 // the optional workspace panel. Context bar math mirrors ctxHtml (~1287); the
@@ -714,6 +726,9 @@ import type { DockView } from '~/types/workbench'
 // workbench thay vai trò nó, dock wb thay panel). Trang sessions/popout không
 // truyền → vẫn full như cũ.
 const props = defineProps<{ session: Session; embedded?: boolean }>()
+// Vùng này có ngăn kéo câu hỏi ⇒ thẻ câu hỏi trong transcript rút thành một dòng
+// (useSessionQuestionModal, QUESTION_DRAWER_KEY).
+provide(QUESTION_DRAWER_KEY, true)
 const { t } = useI18n()
 const { wpIcon } = useSessionsData()
 const { projects, projectName } = useProjects()
@@ -889,6 +904,7 @@ const projName = computed(() => projectName(props.session.project))
 // `code` isn't on PATH; no-op in browser-dev.
 const sc = useSidecar()
 const { root: codeRoot } = useWorkspaceData(() => props.session.project)
+const { trackable: issueTrackable, track: trackIssue } = useSessionIssue(() => props.session)
 async function openInCode() {
   const root = codeRoot.value
   if (!root || !sc.available) return

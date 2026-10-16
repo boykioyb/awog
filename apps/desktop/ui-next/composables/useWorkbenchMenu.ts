@@ -24,6 +24,8 @@ export type WbMenu = {
   onSelect: (id: string) => void
   /** Có ô lọc ở đầu menu (placeholder) — cho danh sách dài như "Đổi project". */
   filterPlaceholder?: string
+  /** Menu dài (vd "Phong cách trả lời" ~20 mục): row thấp hơn để thấy nhiều mục. */
+  compact?: boolean
 }
 
 const menu = ref<WbMenu | null>(null)
@@ -33,6 +35,9 @@ const notifOpen = ref(false)
 // Bề rộng tối đa của menu: nhãn dài (đường dẫn project) cắt "…" thay vì kéo menu
 // rộng gần hết màn hình.
 export const WB_MENU_MAX_W = 380
+// Trần chiều cao của MỌI menu (cùng trần `min(60vh, 420px)` với `.sb-menu` của
+// StatusConfig): danh sách dài cuộn trong menu thay vì vươn gần hết chiều cao cửa sổ.
+const MENU_MAX_H = 420
 
 export function useWorkbenchMenu() {
   /**
@@ -44,7 +49,7 @@ export function useWorkbenchMenu() {
     anchor: HTMLElement,
     items: WbMenuItem[],
     onSelect: (id: string) => void,
-    opts?: { filterPlaceholder?: string },
+    opts?: { filterPlaceholder?: string; compact?: boolean },
   ) {
     if (menu.value?.anchor === anchor) {
       closeMenu()
@@ -56,6 +61,7 @@ export function useWorkbenchMenu() {
       items,
       onSelect,
       ...(opts?.filterPlaceholder ? { filterPlaceholder: opts.filterPlaceholder } : {}),
+      ...(opts?.compact ? { compact: true } : {}),
     }
   }
 
@@ -72,7 +78,7 @@ export function useWorkbenchMenu() {
   // Neo: đáy menu = mép trên chip − 6px (proto). Chip ở nửa phải màn hình thì neo
   // mép PHẢI menu vào mép phải chip — menu rộng tới WB_MENU_MAX_W không tràn viewport.
   // Chiều cao KHÔNG ước lượng: neo theo `bottom` nên menu tự cao theo nội dung, chỉ
-  // chặn trần bằng khoảng trống phía trên chip (bản cũ ước lượng 30px/row trong khi row
+  // chặn trần bằng MENU_MAX_H / 60vh / khoảng trống phía trên chip (bản cũ ước lượng 30px/row trong khi row
   // thật 34px ⇒ trần thấp hơn nội dung, phần cuối bị cắt).
   const menuStyle = computed((): Record<string, string> => {
     const m = menu.value
@@ -86,7 +92,7 @@ export function useWorkbenchMenu() {
     return {
       ...side,
       bottom: `${Math.max(8, window.innerHeight - r.top + 6)}px`,
-      maxHeight: `${Math.max(120, r.top - 14)}px`,
+      maxHeight: `${Math.min(MENU_MAX_H, window.innerHeight * 0.6, Math.max(120, r.top - 14))}px`,
       maxWidth: `${Math.min(WB_MENU_MAX_W, vw - 16)}px`,
     }
   })

@@ -16,6 +16,10 @@ const Params = z.object({
   skip: z.number().int().min(0).optional(),
   ref: z.string().optional(),
   path: z.string().optional(),
+  // Tab Git Log của workbench: mọi branch (`--all`, như JetBrains "All") và thứ tự
+  // `--date-order` (con luôn trước cha — điều kiện để xếp làn graph).
+  all: z.boolean().optional(),
+  dateOrder: z.boolean().optional(),
 })
 
 // %D = ref decoration (e.g. `HEAD -> main, tag: v1.0, origin/main`). Slotted
@@ -48,6 +52,9 @@ register('git.log', async (raw): Promise<Result> => {
     String(limit + 1),
   ]
   if (params.skip !== undefined && params.skip > 0) args.push(`--skip=${params.skip}`)
+  if (params.dateOrder) args.push('--date-order')
+  // `--all` và `ref` loại trừ nhau — ref (đã SAFE_REF) thắng khi có cả hai.
+  if (params.all && params.ref === undefined) args.push('--all')
   if (params.ref !== undefined) args.push(params.ref)
   if (params.path !== undefined) args.push('--', params.path)
 

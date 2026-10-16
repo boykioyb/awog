@@ -169,6 +169,19 @@
             v-else-if="g.type === 'gate' && g.gate.kind === 'findings'"
             :block="g.gate"
           />
+          <!-- Câu hỏi đang mở trong ngăn kéo phía trên ô soạn: ở đây chỉ còn MỘT dòng
+               (bấm ⇒ bung ngăn kéo) thay vì thẻ đầy đủ thứ hai cho cùng câu hỏi. Đóng
+               ngăn kéo (X) thì thẻ đầy đủ quay về đây để trả lời tại chỗ. -->
+          <button
+            v-else-if="questionInDrawer(g.gate)"
+            type="button"
+            class="qstub"
+            @click="openQuestion(g.gate)"
+          >
+            <Icon name="alert" style="width: var(--icon-sm); height: var(--icon-sm)" />
+            <span class="qstub-lbl">{{ t('sessions.message.questionInDrawer') }}</span>
+            <span class="qstub-sum">{{ questionSummary(g.gate) }}</span>
+          </button>
           <SessionGateCard v-else :block="g.gate" />
         </template>
         <!-- Chưa có block nào mà turn đang stream → ba chấm typing trong bubble
@@ -257,6 +270,7 @@ import {
   displayBlockOrder,
 } from '~/utils/session-turns'
 import { parseFencedMessages } from '~/utils/fenced-message'
+import { QUESTION_DRAWER_KEY } from '~/composables/useSessionQuestionModal'
 
 const props = withDefaults(
   defineProps<{
@@ -526,8 +540,22 @@ const pendingQuestion = computed(() => {
   return null
 })
 const parkedOnQuestion = computed(() => !!pendingQuestion.value)
-const { reopen } = useSessionQuestionModal()
+const { reopen, isDismissed } = useSessionQuestionModal()
 const reopenQuestion = (): void => reopen(pendingQuestion.value?.eid)
+// Vùng chứa có ngăn kéo câu hỏi không (SessionDetail / SessionGridPane provide) — chỗ
+// không có (xem lượt toàn màn hình…) vẫn render thẻ đầy đủ.
+const hasQuestionDrawer = inject(QUESTION_DRAWER_KEY, false)
+const questionInDrawer = (b: AssistantBlock): boolean =>
+  hasQuestionDrawer &&
+  b.kind === 'question' &&
+  !questionAnswered(b) &&
+  !b.cancelled &&
+  !isDismissed(b.eid)
+const openQuestion = (b: AssistantBlock): void => {
+  if (b.kind === 'question') reopen(b.eid)
+}
+const questionSummary = (b: AssistantBlock): string =>
+  b.kind === 'question' ? b.title || b.items[0]?.prompt || '' : ''
 
 // ── Streaming-render diagnostics (utils/stream-diag) ─────────────────────────────
 // Snapshot the in-memory `message.blocks` the moment the turn finalizes: how many text
@@ -1293,6 +1321,39 @@ const asstOverflow = computed<(MsgAction | MsgSep)[]>(() =>
 }
 .qwaitbtn:hover {
   background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+/* Dòng thay cho thẻ câu hỏi khi ngăn kéo đang giữ nó — một hàng, cùng tông cảnh báo
+   của thẻ câu hỏi; bấm ⇒ bung ngăn kéo. */
+.qstub {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+  color: var(--warning);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.qstub:hover {
+  background: color-mix(in srgb, var(--warning) 14%, transparent);
+}
+.qstub-lbl {
+  flex: none;
+  font-weight: 600;
+}
+.qstub-sum {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--textDim);
 }
 
 /* Turn-error alert: destructive-tinted box with the provider message + a retry

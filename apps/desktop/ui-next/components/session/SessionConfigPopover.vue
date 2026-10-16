@@ -213,6 +213,8 @@ const filteredGroups = computed<[string, string[]][]>(() => {
   border-color: var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
+  /* Cùng trần chiều cao với các popup khác của composer — dài hơn thì cuộn. */
+  max-height: min(420px, 60vh);
 }
 /* Tab strip — muted labels, neutral accent-wash on the active tab. */
 .poptabs {

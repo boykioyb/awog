@@ -1,7 +1,7 @@
 <template>
-  <!-- Explorer panel của Workbench (ADR 0098, slice B): 4 view theo segmented
+  <!-- Explorer panel của Workbench (ADR 0098, slice B): 5 view theo segmented
        strip phía trên (danh sách ở explorer-views.ts) — sessions (phiên của
-       project), files (cây project + changed files), scm (git stage/commit), gh
+       project), issues (việc trên board theo status), files (cây project + changed files), scm (git stage/commit), gh
        (PR/issue). Bấm icon đang chọn = đóng panel.
        v-show giữ state từng view (scroll, input, list) khi đổi view. -->
   <div class="exp flex h-full min-h-0 flex-col">
@@ -33,6 +33,7 @@
     </div>
     <FilesView v-show="wb.sideView === 'files'" class="min-h-0" />
     <SessionsView v-show="wb.sideView === 'sessions'" class="min-h-0" />
+    <IssuesView v-show="wb.sideView === 'issues'" class="min-h-0" />
     <SourceControlView v-show="wb.sideView === 'scm'" class="min-h-0" />
     <GithubView v-show="wb.sideView === 'gh'" class="min-h-0" />
     <WbExplorerCtxMenu />
@@ -51,12 +52,15 @@ import FilesView from './explorer/FilesView.vue'
 import GithubView from './explorer/GithubView.vue'
 import SourceControlView from './explorer/SourceControlView.vue'
 import SessionsView from './explorer/SessionsView.vue'
+import IssuesView from './explorer/IssuesView.vue'
+import { useBoardStore } from '~/stores/board'
 import { EXPLORER_VIEWS, type ExplorerView, type ExplorerViewId } from './explorer-views'
 
 const wb = useWorkbenchStore()
 const git = useGitStore()
 const exp = useWorkbenchExplorer()
 const sessions = useSessionsStore()
+const board = useBoardStore()
 
 type SegView = ExplorerView & {
   badge?: string
@@ -76,12 +80,22 @@ const sessionsBadge = computed(() => {
   ).length
   return n ? String(n) : undefined
 })
+// Badge Issues = số issue BỊ CHẶN của project đang mở — thứ duy nhất cần người dùng
+// ra tay ngay (đang làm / tạm dừng là trạng thái bình thường, đếm chúng thành nhiễu).
+const issuesBadge = computed(() => {
+  const n = board.itemsFor(sessions.activeTab).filter((i) => i.status === 'blocked').length
+  return n ? String(n) : undefined
+})
 // Badge chỉ ở dải chọn view của panel; danh sách view lấy từ EXPLORER_VIEWS (dùng
 // chung với rail mini khi panel thu gọn).
 const BADGES: Partial<Record<ExplorerViewId, () => Pick<SegView, 'badge' | 'badgeStyle'>>> = {
   sessions: () => ({
     badge: sessionsBadge.value,
     badgeStyle: 'background:var(--accent);color:var(--bg)',
+  }),
+  issues: () => ({
+    badge: issuesBadge.value,
+    badgeStyle: 'background:var(--destructive);color:var(--bg)',
   }),
   scm: () => ({ badge: scmBadge.value, badgeStyle: 'background:var(--amber);color:var(--bg)' }),
 }

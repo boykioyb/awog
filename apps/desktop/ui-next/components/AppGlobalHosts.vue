@@ -3,6 +3,9 @@
        renders into its own fixed layer per the z-index bands) — group by concern. -->
   <SessionPromptEditOverlay />
   <SessionGitModal />
+  <!-- Toast + hộp lỗi xác thực cho MỌI thao tác git (pull/push từ /git, modal Git hay
+       Source Control của workbench). -->
+  <GitFeedbackHost />
   <GitPrSummaryHost />
   <ProjectQuickViewModal />
   <SessionExportModal />

@@ -7,10 +7,12 @@
 // projectId chứ không theo runId (channel thì ngược lại — chết theo nhóm).
 //
 // Hợp đồng status: agent tự ghi qua tool `team_item_update` TRỪ `done`/
-// `cancelled` (của người dùng — merge là click UI). Hệ thống tự sửa đúng hai chỗ:
+// `cancelled` (của người dùng — merge là click UI). Hệ thống tự sửa ba chỗ:
 // lượt của assignee FAIL → `rollbackInProgressItems` đưa in_progress về todo;
 // merge thành công → caller của sessions.integrateMember upsert `done` +
-// `mergedBranch`. Tất cả đều tụ về đây nên trần/chuẩn hoá/redact chỉ viết một lần.
+// `mergedBranch`; phiên làm issue bắt đầu một lượt → issue chưa chạy chuyển
+// sang in_progress (boards/session-issue.ts). Tất cả đều tụ về đây nên
+// trần/chuẩn hoá/redact chỉ viết một lần.
 //
 // Ghi = đọc-sửa-ghi nguyên file dưới một mutex per projectId (chuỗi promise):
 // sidecar một tiến trình nhưng hai tool call `await` xen nhau được, và board là
@@ -30,6 +32,7 @@ import type {
   BoardItem,
   BoardItemComment,
   BoardItemPriority,
+  BoardItemRecap,
   BoardItemSeverity,
   BoardItemStatus,
   BoardItemType,
@@ -42,11 +45,17 @@ const BOARDS_DIR_NAME = sanitizeChild('boards')
 // Trần của spec §1.2. Title là NHÃN → làm phẳng một dòng + cắt có dấu '…' (cùng
 // triết lý oneLineLabel của hộp thư); desc/comment là NỘI DUNG → TỪ CHỐI khi quá
 // trần để bên gọi biết mà viết lại ngắn hơn, thay vì âm thầm mất đuôi.
+// Số comment mỗi item KHÔNG có trần (người dùng chốt 2026-10-15): thread là lịch sử
+// việc, chạm trần là người lẫn agent hết đường nói. Mọi chỗ đưa comment vào prompt
+// (team_item_get, <linked_issue>, boards.recap) đã tự lấy ĐUÔI trong ngân sách riêng.
+// Trần tính trên item ĐANG MỞ (không done/cancelled): mọi phiên có project tự sinh
+// issue (boards/session-issue.ts) và board không có archive, nên đếm cả việc đã đóng
+// thì board tự đầy sau vài tuần dùng — và chặn luôn cả team lẫn nút tạo việc.
 export const MAX_BOARD_ITEMS = 500
 export const MAX_ITEM_TITLE_LEN = 140
 export const MAX_ITEM_DESC_LEN = 8000
 export const MAX_COMMENT_LEN = 4000
-export const MAX_COMMENTS_PER_ITEM = 100
+export const MAX_RECAP_LEN = 6000
 
 // Thứ tự hiển thị board — đúng thứ tự pipeline: backlog và todo (việc đã xếp,
 // chờ bốc) lên đầu, các trạng thái sống giữa, done/cancelled ở đuôi. Export để
@@ -58,6 +67,7 @@ export const BOARD_STATUS_ORDER: readonly BoardItemStatus[] = [
   'in_progress',
   'in_review',
   'changes',
+  'pending',
   'blocked',
   'done',
   'cancelled',
@@ -69,7 +79,6 @@ export type BoardErrorCode =
   | 'invalid-input' // title rỗng / id lạ / status ngoài enum / vượt trần độ dài
   | 'unknown-item' // update/comment/xoá một item không tồn tại
   | 'board-full' // chạm MAX_BOARD_ITEMS
-  | 'comments-full' // chạm MAX_COMMENTS_PER_ITEM
 
 // Từ chối CÓ LÝ DO — cùng khuôn InboxError/SpawnError: tool trả nguyên `message`
 // cho model, RPC bọc thành RpcError cho UI.
@@ -176,6 +185,81 @@ function cleanItemId(raw: string): string {
     throw new BoardError('invalid-input', `Illegal board item id "${raw}".`)
   }
   return raw
+}
+
+// ── Field kiểu GitHub Projects ──
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+export const MAX_LABEL_LEN = 80
+export const MAX_LINKS = 20
+const LINK_RE = /^https?:\/\/[^\s]{1,500}$/
+
+function cleanDate(raw: string, field: string): string {
+  if (!DATE_RE.test(raw) || Number.isNaN(Date.parse(`${raw}T00:00:00Z`))) {
+    throw new BoardError('invalid-input', `${field} must be a YYYY-MM-DD date, got "${raw}".`)
+  }
+  return raw
+}
+
+function cleanLabel(raw: string): string {
+  return oneLine(redactString(raw), MAX_LABEL_LEN)
+}
+
+// Link là http(s) URL một dòng — chỉ để HIỂN THỊ + mở bằng trình duyệt; bỏ trùng,
+// giữ thứ tự người dùng thêm.
+function cleanLinks(raw: readonly string[], field: string): string[] {
+  const out: string[] = []
+  for (const r of raw) {
+    const url = r.trim()
+    if (!LINK_RE.test(url)) throw new BoardError('invalid-input', `${field}: "${url}" is not an http(s) URL.`)
+    if (!out.includes(url)) out.push(url)
+  }
+  if (out.length > MAX_LINKS) {
+    throw new BoardError('invalid-input', `${field}: at most ${MAX_LINKS} links per item.`)
+  }
+  return out
+}
+
+// Áp field GitHub-style lên item (dùng chung cho tạo + sửa). null / '' / [] = gỡ.
+function applyTrackingFields(item: BoardItem, input: UpsertBoardItemInput): void {
+  for (const key of ['startDate', 'dueDate'] as const) {
+    const v = input[key]
+    if (v === undefined) continue
+    if (v === null || v === '') delete item[key]
+    else item[key] = cleanDate(v, key)
+  }
+  for (const key of ['sprint', 'milestone'] as const) {
+    const v = input[key]
+    if (v === undefined) continue
+    const label = v === null ? '' : cleanLabel(v)
+    if (label) item[key] = label
+    else delete item[key]
+  }
+  for (const key of ['issueLinks', 'prLinks'] as const) {
+    const v = input[key]
+    if (v === undefined) continue
+    const links = v === null ? [] : cleanLinks(v, key)
+    if (links.length) item[key] = links
+    else delete item[key]
+  }
+  if (item.startDate && item.dueDate && item.startDate > item.dueDate) {
+    throw new BoardError('invalid-input', `startDate ${item.startDate} is after dueDate ${item.dueDate}.`)
+  }
+}
+
+// Một dòng kế hoạch + link cho prompt của model (team_item_get, <linked_issue>) —
+// rỗng khi item chưa đặt gì. Một nguồn để hai chỗ không lệch nhau.
+export function trackingSummary(item: BoardItem): string {
+  const plan = [
+    item.startDate ? `start ${item.startDate}` : '',
+    item.dueDate ? `due ${item.dueDate}` : '',
+    item.sprint ? `sprint "${item.sprint}"` : '',
+    item.milestone ? `milestone "${item.milestone}"` : '',
+  ].filter(Boolean)
+  const lines: string[] = []
+  if (plan.length) lines.push(`planning: ${plan.join(' · ')}`)
+  if (item.issueLinks?.length) lines.push(`linked issues: ${item.issueLinks.join(' ')}`)
+  if (item.prLinks?.length) lines.push(`linked PRs: ${item.prLinks.join(' ')}`)
+  return lines.join('\n')
 }
 
 const TYPE_SET: ReadonlySet<string> = new Set(['epic', 'story', 'task', 'subtask', 'bug'])
@@ -325,6 +409,33 @@ function sanitizeItems(raw: unknown, projectId: string, file: string): BoardItem
     if (it.type !== undefined && !TYPE_SET.has(it.type)) delete it.type
     if (it.priority !== undefined && !PRIORITY_SET.has(it.priority)) delete it.priority
     if (it.severity !== undefined && !SEVERITY_SET.has(it.severity)) delete it.severity
+    if (it.autoTitle !== undefined && it.autoTitle !== true) delete it.autoTitle
+    if (it.autoDesc !== undefined && it.autoDesc !== true) delete it.autoDesc
+    for (const key of ['startDate', 'dueDate'] as const) {
+      if (it[key] !== undefined && !(typeof it[key] === 'string' && DATE_RE.test(it[key]))) delete it[key]
+    }
+    for (const key of ['sprint', 'milestone'] as const) {
+      if (it[key] !== undefined && typeof it[key] !== 'string') delete it[key]
+    }
+    for (const key of ['issueLinks', 'prLinks'] as const) {
+      const v = it[key]
+      if (v !== undefined && !(Array.isArray(v) && v.every((u) => typeof u === 'string' && LINK_RE.test(u)))) {
+        delete it[key]
+      }
+    }
+    if (it.originSessionId !== undefined && typeof it.originSessionId !== 'string') {
+      delete it.originSessionId
+    }
+    if (
+      it.recap !== undefined &&
+      (typeof it.recap !== 'object' ||
+        it.recap === null ||
+        typeof it.recap.text !== 'string' ||
+        typeof it.recap.at !== 'string' ||
+        !Array.isArray(it.recap.sessionIds))
+    ) {
+      delete it.recap
+    }
     if (it.parentId !== undefined && (it.parentId === it.id || !ids.has(it.parentId))) {
       delete it.parentId
     }
@@ -441,12 +552,28 @@ export interface UpsertBoardItemInput {
   severity?: string | null | undefined
   // null = gỡ stage (item không còn thuộc đợt nào).
   stage?: number | null | undefined
+  // Field kiểu GitHub Projects — null = gỡ (về "chưa đặt"), vắng = giữ nguyên.
+  // Mảng link: thay CẢ mảng; [] hoặc null = gỡ hết.
+  startDate?: string | null | undefined
+  dueDate?: string | null | undefined
+  sprint?: string | null | undefined
+  milestone?: string | null | undefined
+  issueLinks?: string[] | null | undefined
+  prLinks?: string[] | null | undefined
   // Chỉ áp lúc TẠO: sessionId của bên tạo, null = người dùng. Update không được
   // viết lại provenance — đó là lịch sử, không phải field hiện tại.
   createdBy?: string | null | undefined
   // Branch member đã merge — chỉ sessions.integrateMember ghi (đường done của
   // user). null/undefined không đụng tới field.
   mergedBranch?: string | null | undefined
+  // true = title này do phiên sinh ra (BoardItem.autoTitle) — chỉ đường đồng bộ
+  // của boards/session-issue.ts truyền. Mọi lần đổi title KHÁC làm mất cờ.
+  autoTitle?: boolean | undefined
+  // Chỉ áp lúc TẠO — xem BoardItem.originSessionId.
+  originSessionId?: string | undefined
+  // true = desc này là tin nhắn đầu do boards/session-issue.ts chép vào. Mọi lần
+  // đổi desc KHÁC làm mất cờ (BoardItem.autoDesc).
+  autoDesc?: boolean | undefined
 }
 
 export async function upsertBoardItem(
@@ -468,10 +595,17 @@ export async function upsertBoardItem(
       if (input.title !== undefined) {
         const title = cleanTitle(input.title)
         if (!title) throw new BoardError('invalid-input', 'Title cannot be empty.')
+        // Ai đó ngoài đường đồng bộ phiên vừa ĐỔI title ⇒ title thôi đi theo phiên.
+        // So với title cũ: form editor gửi lại title nguyên vẹn mỗi lần lưu, lần lưu
+        // chỉ đổi status không được tính là "người dùng đặt tên".
+        if (input.autoTitle === true) item.autoTitle = true
+        else if (title !== item.title) delete item.autoTitle
         item.title = title
       }
       if (input.desc !== undefined) {
         const desc = cleanDesc(input.desc)
+        // Form editor gửi lại desc nguyên vẹn mỗi lần lưu — chỉ ĐỔI thật mới làm mất cờ.
+        if (desc !== (item.desc ?? '')) delete item.autoDesc
         // '' = xoá desc (form UI gửi chuỗi rỗng khi user xoá trắng ô).
         if (desc === '') delete item.desc
         else item.desc = desc
@@ -506,6 +640,7 @@ export async function upsertBoardItem(
         if (input.stage === null) delete item.stage
         else item.stage = cleanStage(input.stage)
       }
+      applyTrackingFields(item, input)
       if (input.mergedBranch !== undefined && input.mergedBranch !== null) {
         item.mergedBranch = oneLine(redactString(input.mergedBranch), 200)
       }
@@ -516,10 +651,11 @@ export async function upsertBoardItem(
     }
 
     // ── Create ──
-    if (board.items.length >= MAX_BOARD_ITEMS) {
+    const open = board.items.filter((i) => i.status !== 'done' && i.status !== 'cancelled').length
+    if (open >= MAX_BOARD_ITEMS) {
       throw new BoardError(
         'board-full',
-        `The board already has ${MAX_BOARD_ITEMS} items — archive or delete some before adding more.`,
+        `The board already has ${MAX_BOARD_ITEMS} open items — close (done/cancelled) or delete some before adding more.`,
       )
     }
     if (input.title === undefined) {
@@ -537,7 +673,12 @@ export async function upsertBoardItem(
       updatedAt: now,
       comments: [],
     }
-    if (input.desc !== undefined && input.desc !== '') item.desc = cleanDesc(input.desc)
+    if (input.desc !== undefined && input.desc !== '') {
+      item.desc = cleanDesc(input.desc)
+      if (input.autoDesc === true) item.autoDesc = true
+    }
+    if (input.autoTitle === true) item.autoTitle = true
+    if (input.originSessionId) item.originSessionId = input.originSessionId
     if (input.type !== undefined) item.type = cleanType(input.type)
     if (input.priority !== undefined && input.priority !== null) {
       item.priority = cleanPriority(input.priority)
@@ -552,6 +693,7 @@ export async function upsertBoardItem(
     if (input.assigneeRef) item.assigneeRef = oneLine(input.assigneeRef, 200)
     if (input.assigneeConfig) item.assigneeConfig = cleanAssigneeConfig(input.assigneeConfig)
     if (input.stage !== undefined && input.stage !== null) item.stage = cleanStage(input.stage)
+    applyTrackingFields(item, input)
     board.items.push(item)
     await saveBoard(projectId, board)
     emitBoardChanged(projectId)
@@ -584,6 +726,26 @@ export async function deleteBoardItem(
   })
 }
 
+// Xoá CÓ ĐIỀU KIỆN: `shouldDelete` được hỏi trên bản đọc BÊN TRONG khoá ghi, nên
+// một comment/sửa đổi chen vào giữa lúc caller quyết và lúc xoá không bị mất theo
+// (đọc ngoài khoá rồi mới xoá là đúng lỗi đó). Trả item đã xoá, null = giữ lại.
+export async function deleteBoardItemIf(
+  projectId: string,
+  itemId: string,
+  shouldDelete: (item: BoardItem, all: readonly BoardItem[]) => boolean,
+): Promise<BoardItem | null> {
+  return withBoardLock(projectId, async () => {
+    const board = await loadBoard(projectId)
+    const idx = board.items.findIndex((i) => i.id === itemId)
+    const item = board.items[idx]
+    if (!item || !shouldDelete(item, board.items)) return null
+    board.items.splice(idx, 1)
+    await saveBoard(projectId, board)
+    emitBoardChanged(projectId)
+    return item
+  })
+}
+
 export async function addBoardItemComment(
   projectId: string,
   itemId: string,
@@ -593,12 +755,6 @@ export async function addBoardItemComment(
     const board = await loadBoard(projectId)
     const item = board.items.find((i) => i.id === itemId)
     if (!item) return null
-    if (item.comments.length >= MAX_COMMENTS_PER_ITEM) {
-      throw new BoardError(
-        'comments-full',
-        `Item "${item.id}" already has ${MAX_COMMENTS_PER_ITEM} comments — that is the cap.`,
-      )
-    }
     const comment: BoardItemComment = {
       id: mintCommentId(),
       at: new Date().toISOString(),
@@ -612,6 +768,31 @@ export async function addBoardItemComment(
     await saveBoard(projectId, board)
     emitBoardChanged(projectId)
     return comment
+  })
+}
+
+// Ghi recap mới nhất của item (RPC boards.recap). Không đụng `updatedAt`: recap là
+// bản tóm tắt VỀ hoạt động, không phải hoạt động — đếm nó thì issue bỏ dở nào vừa
+// được recap cũng trông như mới làm. Text do model viết ⇒ redact + cắt có dấu.
+export async function setBoardItemRecap(
+  projectId: string,
+  itemId: string,
+  recap: BoardItemRecap,
+): Promise<BoardItem | null> {
+  return withBoardLock(projectId, async () => {
+    const board = await loadBoard(projectId)
+    const item = board.items.find((i) => i.id === itemId)
+    if (!item) return null
+    const text = redactString(recap.text).trim()
+    item.recap = {
+      text: text.length > MAX_RECAP_LEN ? `${text.slice(0, MAX_RECAP_LEN - 1)}…` : text,
+      at: recap.at,
+      sessionIds: recap.sessionIds.slice(0, 50),
+      ...(recap.modelUsed ? { modelUsed: oneLine(recap.modelUsed, 200) } : {}),
+    }
+    await saveBoard(projectId, board)
+    emitBoardChanged(projectId)
+    return item
   })
 }
 
@@ -633,17 +814,15 @@ export async function rollbackInProgressItems(
       if (item.status !== 'in_progress' || item.assigneeSessionId !== sessionId) continue
       item.status = 'todo'
       item.updatedAt = now
-      if (item.comments.length < MAX_COMMENTS_PER_ITEM) {
-        item.comments.push({
-          id: mintCommentId(),
-          at: now,
-          // Comment hệ thống: from=null + fromTitle 'system' — cùng quy ước với
-          // TeamChannelEntry kind 'system' (không phải user, không phải phiên).
-          from: null,
-          fromTitle: 'system',
-          text: 'Turn failed; returned to todo',
-        })
-      }
+      item.comments.push({
+        id: mintCommentId(),
+        at: now,
+        // Comment hệ thống: from=null + fromTitle 'system' — cùng quy ước với
+        // TeamChannelEntry kind 'system' (không phải user, không phải phiên).
+        from: null,
+        fromTitle: 'system',
+        text: 'Turn failed; returned to todo',
+      })
       count += 1
     }
     if (count > 0) {

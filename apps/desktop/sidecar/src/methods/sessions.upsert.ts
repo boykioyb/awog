@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { register } from '../transport/rpc.js'
-import { createSession, updateSessionMetadata } from '../sessions/store.js'
+import { createSession, listSessionSummaries, updateSessionMetadata } from '../sessions/store.js'
+import { detachSessionFromIssue, syncIssueTitle } from '../boards/session-issue.js'
+import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import type { Session, SessionSettings } from '../types/shared.js'
 
 // Legacy migration: 'standard' → 'low' so JSONL persisted pre-rename still parses.
@@ -110,6 +112,11 @@ const SessionSchema = z.object({
   // của 'update-metadata' (cùng khuôn với teamRunId/infra): "ngừng nhớ" phải
   // XOÁ HẲN key mà patch spread không làm được. Đường ghi là `sessions.setSpawnConfig`.
   spawnConfig: SpawnSessionConfigSchema.optional(),
+  // Issue trên board mà phiên mới làm tiếp (fork, hoặc "Mở phiên cho issue này").
+  // Chỉ đọc ở nhánh 'create' — sau đó đường ghi duy nhất là `sessions.setIssue`.
+  issueId: z.string().max(64).regex(MESSAGE_ID_RE).optional(),
+  // Fork của một phiên đã "bỏ theo dõi" giữ nguyên lựa chọn đó. Chỉ đọc ở 'create'.
+  issueUntracked: z.boolean().optional(),
   // Fork lineage.
   parentSessionId: z.string().optional(),
   forkFromMessageId: z.string().optional(),
@@ -198,6 +205,8 @@ function toSession(parsed: z.infer<typeof SessionSchema>): Session {
   if (parsed.aboutGhUrl !== undefined) base.aboutGhUrl = parsed.aboutGhUrl
   if (parsed.teamRunId !== undefined) base.teamRunId = parsed.teamRunId
   if (parsed.teamRole !== undefined) base.teamRole = parsed.teamRole
+  if (parsed.issueId !== undefined) base.issueId = parsed.issueId
+  if (parsed.issueUntracked) base.issueUntracked = true
   const spawnConfig = toSpawnConfig(parsed.spawnConfig)
   if (spawnConfig) base.spawnConfig = spawnConfig
   const budget = toBudget(parsed.budget)
@@ -265,7 +274,19 @@ register('sessions.upsert', async (raw) => {
   if (session.parentSessionId !== undefined) patch.parentSessionId = session.parentSessionId
   if (session.forkFromMessageId !== undefined) patch.forkFromMessageId = session.forkFromMessageId
   // `infra` CỐ Ý không có trong patch — xem InfraContextSchema. Đường ghi duy nhất
-  // sau lúc tạo là `infra.setSessionContext`.
+  // sau lúc tạo là `infra.setSessionContext`. `issueId` cũng vậy — `sessions.setIssue`.
+  // Header từ bản đồ ấm (summary) — KHÔNG loadSession: hydrate cả transcript cho
+  // mỗi lần ghim/đổi mode là phí.
+  const before = (await listSessionSummaries()).find((s) => s.id === session.id)
   await updateSessionMetadata(session.id, patch)
+  if (before?.issueId) {
+    if (before.projectId !== session.projectId) {
+      // Đổi project ⇒ issue ở board project cũ không còn là việc của phiên này.
+      await detachSessionFromIssue(before, 'moved')
+    } else if (before.title !== session.title) {
+      // Auto-title (hoặc người dùng đổi tên) ⇒ issue tự sinh của phiên đổi tên theo.
+      await syncIssueTitle(before, session.title)
+    }
+  }
   return { session }
 })

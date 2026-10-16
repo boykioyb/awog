@@ -43,8 +43,8 @@ export type ToastProps = {
   color?: ToastColor
   // ms before auto-close. 0 = stays until dismissed. Default DEFAULT_DURATION.
   duration?: number
-  // Show the dismiss button. Forced on when duration is 0 — a toast that never
-  // expires and can't be closed is a permanent obstruction.
+  // Không còn tác dụng hiển thị: từ 2026-10-15 AppToaster hiện nút đóng ở MỌI toast.
+  // Giữ field để các nơi gọi cũ (`close: true`) không phải sửa đồng loạt.
   close?: boolean
   actions?: ToastAction[]
   // Whole-toast click-through (the GitHub-notification pattern): runs, then

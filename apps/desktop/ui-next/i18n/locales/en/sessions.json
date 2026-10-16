@@ -493,6 +493,7 @@
   "sessions.bg.wake.continue": "Continue",
   "sessions.bg.wake.dismiss": "Dismiss",
   "sessions.message.awaitingAnswer": "Waiting for your answer",
+  "sessions.message.questionInDrawer": "Question open below ↓",
   "sessions.message.answerNow": "Answer",
   "sessions.gate.modalTitle": "The agent is asking you",
   "sessions.gate.modalDismiss": "Close — answer later in the transcript",

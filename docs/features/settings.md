@@ -163,3 +163,16 @@ Ghi là read-modify-write, **nối chuỗi theo từng file** nên hai lệnh se
 - Có nên hỗ trợ multiple workspace và switch giữa chúng?
 - Settings export/import (chia sẻ config với teammate)?
 - Notification preference fine-grained (chỉ Failed, chỉ Approval, …)?
+
+## Tìm cài đặt bằng ⌘K (2026-10-16)
+
+Gõ trong ⌘K là tìm tới **từng dòng cài đặt**, không chỉ tới từng mục. Chọn một kết quả thì Settings mở đúng mục, cuộn tới dòng đó và nháy sáng nó.
+
+| Phần | Chi tiết |
+| --- | --- |
+| Chỉ mục | Không có danh sách khai tay. `utils/settings-index.ts` (hàm thuần, có test) đọc **mã nguồn** các component Settings: `<SettingsField :name/:desc>`, slot `#name`, tiêu đề nhóm `.sech`. Cài đặt của component con được quy về mục cha. Map mục → component lấy từ chính `SettingsPane.vue`. Mã nguồn tải lười bằng `import.meta.glob(?raw)` khi ⌘K mở lần đầu (`composables/useSettingsSearch.ts`). |
+| Khớp | Tên khớp theo fuzzy như mọi lệnh. Khi tên không khớp thì xét từ khoá: mô tả, tên mục, và bản dịch ở **mọi ngôn ngữ** (`textsForKey`). Mọi từ của query phải có mặt, không phân biệt dấu ("giao dien" khớp "Giao diện"). |
+| Hiển thị | Nhóm "Cài đặt" chỉ hiện khi có chữ gõ, tối đa 12 dòng. Mỗi dòng ghi kèm tên mục (meta). |
+| Điều hướng | `openSettings(section, focusLabel)`. `SettingsModal` tìm dòng có `.fn` / `.sech` khớp tên, thử lại tối đa 20 khung hình (mục có thể render trễ), rồi cuộn tới giữa và gắn lớp `set-flash`. |
+
+Giới hạn: các mục toàn danh sách động (Models, Pricing, Browser, Userscripts, Keymap) chỉ tìm được tới cấp mục.

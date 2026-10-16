@@ -72,8 +72,15 @@ export function createBashTool(
   // ghim; thiếu nó thì lệnh rơi về profile `default`, mà `default` rất thường là
   // production — trong khi thẻ duyệt vẫn nói phiên đã ghim một tài khoản khác.
   // Vắng ngữ cảnh (phiên không đụng hạ tầng) ⇒ không thêm biến nào.
-  infra?: { profile?: string | undefined; region?: string | undefined },
+  // + `ghAccount`: tài khoản gh ghim của project → shim gh trên PATH (gh-shim.ts).
+  infra?: { profile?: string | undefined; region?: string | undefined; ghAccount?: string | undefined },
 ): AgentTool<typeof BashParams, BashDetails> {
+  // Một bản env-opts cho cả lệnh thường lẫn lệnh nền — hai đường phải chạy cùng
+  // tài khoản AWS / gh, không thì `run_in_background` âm thầm đổi danh tính.
+  const shellEnv =
+    infra?.profile || infra?.region || infra?.ghAccount
+      ? { awsProfile: infra.profile, awsRegion: infra.region, ghAccount: infra.ghAccount }
+      : undefined
   return {
     name: 'Bash',
     label: 'Run',
@@ -103,6 +110,7 @@ export function createBashTool(
             sessionId: bg.sessionId,
             cwd,
             command: params.command,
+            ...(shellEnv ? { shellEnv } : {}),
           })
           return {
             content: [
@@ -138,11 +146,7 @@ export function createBashTool(
           cwd,
           // Ngữ cảnh hạ tầng của phiên (ADR 0088 §6): `Bash("aws …")` chạy đúng
           // account đã ghim thay vì rơi về profile `default`.
-          env: filteredShellEnv(
-            infra?.profile || infra?.region
-              ? { awsProfile: infra.profile, awsRegion: infra.region }
-              : undefined,
-          ),
+          env: filteredShellEnv(shellEnv),
           windowsHide: true,
         })
         // Màn Giám sát: lệnh của một lượt là thứ hay ngốn CPU nhất trên nhánh Pi

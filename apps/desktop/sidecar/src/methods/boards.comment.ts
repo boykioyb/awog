@@ -7,6 +7,7 @@ import {
   MAX_COMMENT_LEN,
   upsertBoardItem,
 } from '../boards/store.js'
+import { tracksIssue } from '../boards/session-issue.js'
 import {
   loadMentionRosters,
   materializeAssigneeRef,
@@ -83,7 +84,15 @@ register('boards.comment', async (raw) => {
     }
 
     const assignee = item?.assigneeSessionId
-    if (item && assignee && assignee !== 'user') {
+    // Phiên đang TỰ làm issue này (Session.issueId — docs/features/session-issue-tracking.md)
+    // là phiên người dùng ngồi lái: comment của họ trên issue là ghi chú sổ việc
+    // (vd. lý do tạm dừng từ chip header), không phải lời nhắn — ping sẽ tự bắn
+    // một lượt model. Người dùng muốn phiên làm gì thì nói trong chat.
+    const selfTracked = tracksIssue(
+      summaries.find((s) => s.id === assignee),
+      params.itemId,
+    )
+    if (item && assignee && assignee !== 'user' && !selfTracked) {
       // ── Đường 1: assignee sống — ping giống trước đây.
       const r = await pingAssignee(assignee, item, params.text)
       wakes.push(r.wake)
@@ -155,7 +164,18 @@ register('boards.comment', async (raw) => {
           ...r,
           assigning: false,
         })
-        if (!target || pinged.has(target.sessionId)) continue
+        // Phiên đang tự làm chính issue này là phiên người dùng lái — @mention trong
+        // ghi chú (vd. "tạm dừng, chờ @Dev") không được khởi động một lượt ở đó.
+        if (
+          !target ||
+          pinged.has(target.sessionId) ||
+          tracksIssue(
+            summaries.find((x) => x.id === target.sessionId),
+            params.itemId,
+          )
+        ) {
+          continue
+        }
         const res = await pingMentioned(target.sessionId, item, params.text, target.title)
         wakes.push(res.wake)
         receipts.push(res)

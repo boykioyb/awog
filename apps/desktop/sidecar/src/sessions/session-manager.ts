@@ -148,6 +148,8 @@ function summarizeHeader(h: SessionHeader): SessionSummary {
   if (h.teamSource !== undefined) summary.teamSource = h.teamSource
   if (h.teamProjectId !== undefined) summary.teamProjectId = h.teamProjectId
   if (h.origin !== undefined) summary.origin = h.origin
+  if (h.issueId !== undefined) summary.issueId = h.issueId
+  if (h.issueUntracked) summary.issueUntracked = true
   if (h.llmOverride !== undefined) summary.llmOverride = h.llmOverride
   if (h.browserProfileId !== undefined) summary.browserProfileId = h.browserProfileId
   if (h.spawnConfig !== undefined) summary.spawnConfig = h.spawnConfig
@@ -676,6 +678,28 @@ class SessionManager {
       const { llmOverride: _cleared, ...rest } = m.header
       m.header = rest
     }
+    this.persistSession(m)
+    await sessionPersistenceQueue.flush(id)
+    return true
+  }
+
+  // Gắn/gỡ issue của phiên (Session.issueId) + cờ "bỏ theo dõi". `issueId: null`
+  // = XOÁ HẲN key (patch spread không xoá được); `untracked` true đặt cờ, false
+  // gỡ cờ, vắng = giữ nguyên. Flush ngay: mất ghi này thì lượt sau tự sinh thêm
+  // một issue trùng. `updatedAt` không bump — đây là việc sổ sách, không phải
+  // hoạt động của phiên.
+  async setIssue(id: string, issueId: string | null, untracked?: boolean): Promise<boolean> {
+    const m = this.sessions.get(id)
+    if (!m) {
+      log.warn('session-manager: setIssue on unknown session', { id })
+      return false
+    }
+    const { issueId: _oldIssue, issueUntracked: oldUntracked, ...rest } = m.header
+    const next: SessionHeader = rest
+    if (issueId !== null) next.issueId = issueId
+    const isUntracked = untracked ?? oldUntracked === true
+    if (isUntracked) next.issueUntracked = true
+    m.header = next
     this.persistSession(m)
     await sessionPersistenceQueue.flush(id)
     return true

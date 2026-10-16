@@ -291,6 +291,7 @@
   "git.auth.openSshKeys": "Open GitHub SSH keys",
   "git.error.NETWORK_ERROR": "Network error — couldn’t reach the remote",
   "git.error.REMOTE_NOT_FOUND": "Remote not found",
+  "git.error.NO_UPSTREAM": "This branch isn't on the remote yet — Push it first (Push sets the upstream for you)",
   "git.error.NO_REPO": "Not a git repository",
   "git.error.BUSY": "Repository is busy — another git operation is in progress",
   "git.error.UNMERGED": "Unmerged files — resolve conflicts first",

@@ -17,6 +17,9 @@ export const GitErrorCode = {
   NETWORK_ERROR: 'NETWORK_ERROR',
   WORKSPACE_NOT_FOUND: 'WORKSPACE_NOT_FOUND',
   REMOTE_NOT_FOUND: 'REMOTE_NOT_FOUND',
+  // Pull một branch chưa có upstream mà remote cũng chưa có branch cùng tên — cần
+  // Push trước (push tự gắn upstream, git/upstream.ts).
+  NO_UPSTREAM: 'NO_UPSTREAM',
   UNMERGED: 'UNMERGED',
   FILE_LOCKED: 'FILE_LOCKED',
   GIT_NOT_FOUND: 'GIT_NOT_FOUND',

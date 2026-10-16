@@ -12,6 +12,10 @@
        cục. Điều kiện hiện/ẩn vì thế phải tính LẠI ở đây — con không nói ngược lên
        cha được, mà cha thì cần biết có nên render hàng hay không. -->
   <div v-if="show" class="ctxstrip">
+    <!-- Issue trên board mà phiên đang làm — đứng ĐẦU hàng: "phiên này là việc gì,
+         đang ở đâu" là câu hỏi đầu tiên khi quay lại một phiên. -->
+    <SessionIssueChip :session="session" />
+
     <!-- Task (ADR 0055): bấm thẳng là mở task, như banner cũ — không popover, vì nó
          chỉ có đúng một hành động. -->
     <button
@@ -147,6 +151,7 @@ const { load: loadInfraPresence, anyVisible: hasInfra } = useInfraChipsPresence(
 onMounted(() => void loadInfraPresence())
 const show = computed(
   () =>
+    !!props.session.issueId ||
     !!props.session.aboutTaskId ||
     !!props.session.aboutSshHostId ||
     hasInfra.value ||

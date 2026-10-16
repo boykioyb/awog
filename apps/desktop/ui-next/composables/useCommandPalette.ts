@@ -1,6 +1,7 @@
 import type { Component } from 'vue'
 import { computed, ref } from 'vue'
-import { fuzzy } from '~/utils/fuzzy'
+import { fuzzy, type FuzzyResult } from '~/utils/fuzzy'
+import { matchesAllWords } from '~/utils/settings-index'
 
 // ── ⌘K command palette (§9 globals) ─────────────────────────────────────────
 // A module-level singleton so any component can open/close the palette and the
@@ -17,8 +18,11 @@ export type PaletteCommand = {
   // Secondary dim label between `label` and `hint` — e.g. a session's project name
   // or an AWS service's group. Purely informational; not fuzzy-matched.
   meta?: string
+  // Từ khoá phụ (mô tả, tên mục, bản dịch ngôn ngữ kia…) — khớp khi `label` không khớp,
+  // mọi từ của query phải có mặt, không phân biệt dấu ("giao dien" khớp "Giao diện").
+  keywords?: string
   icon?: Component
-  section: 'navigate' | 'session' | 'project' | 'service'
+  section: 'navigate' | 'session' | 'project' | 'service' | 'setting'
   run: () => void
 }
 
@@ -89,6 +93,11 @@ export function rankCommands(query: string, commands: PaletteCommand[]): Palette
   for (const c of commands) {
     const r = fuzzy(q, c.label)
     if (r) scored.push({ c, r })
+    // Khớp qua từ khoá: điểm thấp cố định (dưới mọi khớp theo tên) và không tô sáng
+    // gì trên nhãn — chữ khớp nằm ở mô tả / bản dịch, không ở nhãn.
+    else if (c.keywords && matchesAllWords(q, `${c.label} ${c.keywords}`)) {
+      scored.push({ c, r: { score: 1, positions: [] } })
+    }
   }
   scored.sort((a, b) => b.r.score - a.r.score)
   return scored.map(({ c, r }) => ({ ...c, positions: r.positions }))

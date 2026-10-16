@@ -8,7 +8,7 @@
       </template>
     </span>
     <button
-      v-if="line.cls === 'hunk' && line.hunk !== undefined"
+      v-if="line.cls === 'hunk' && line.hunk !== undefined && !readonly"
       class="stagehunk"
       :title="staged ? t('git.diff.unstageHunk') : t('git.diff.stageHunk')"
       @click.stop="emit('hunk-action', line.hunk)"
@@ -33,7 +33,11 @@
 // the viewer maps it to the right store call.
 import type { DiffRow } from './git-types'
 
-withDefaults(defineProps<{ line: DiffRow; staged?: boolean }>(), { staged: false })
+// `readonly`: diff của một COMMIT (tab Git Log) — không có gì để stage/unstage.
+withDefaults(defineProps<{ line: DiffRow; staged?: boolean; readonly?: boolean }>(), {
+  staged: false,
+  readonly: false,
+})
 
 const emit = defineEmits<{ (e: 'hunk-action', hunk: number): void }>()
 

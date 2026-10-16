@@ -10,6 +10,10 @@ export type WorkbenchDocKind =
   | 'vid'
   | 'mmd'
   | 'diff'
+  // Git Log kiểu JetBrains (graph + file đổi + chi tiết commit) — id `gitlog:<pid>`.
+  | 'gitlog'
+  // Diff một file TRONG một commit — id `cdiff:<pid>/<sha>/<rel>`.
+  | 'cdiff'
   | 'settings'
   | 'monitor'
   | 'task'
@@ -31,10 +35,12 @@ export interface WorkbenchDoc {
       thư mục cha để fs.* qua được assertInsideWorkspace, rel = basename. */
   root?: string
   rel?: string
+  /** doc 'gitlog': commit được chọn sẵn khi mở (SHA đầy đủ) — click commit ở SCM. */
+  focusSha?: string
 }
 
 export type DockView = 'Terminal' | 'Tasks' | 'Cost' | 'Info' | 'Team'
-export type SideView = 'files' | 'scm' | 'gh' | 'sessions'
+export type SideView = 'files' | 'scm' | 'gh' | 'sessions' | 'issues'
 
 export interface TermTab {
   id: string

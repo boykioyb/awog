@@ -29,7 +29,7 @@ import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { sessionsDir, sessionDir } from './jsonl.js'
 import { sanitizeChild } from '../util/path.js'
-import { resolveBashShell, filteredShellEnv } from '../runtime/tools/shell.js'
+import { resolveBashShell, filteredShellEnv, type ShellInfraContext } from '../runtime/tools/shell.js'
 // An toàn để import từ đây: `task-output.ts` chỉ dùng `node:fs`/`node:os`/`node:path`
 // + `awogHome`, KHÔNG import `@anthropic-ai/claude-agent-sdk` — nên module này không
 // kéo SDK vào nhánh Pi, vốn cũng nạp bg-registry.
@@ -223,6 +223,8 @@ export async function startBackground(input: {
   sessionId: string
   cwd: string
   command: string
+  // Ngữ cảnh AWS + tài khoản gh của phiên — cùng env với lệnh Bash thường.
+  shellEnv?: ShellInfraContext
 }): Promise<BgShellMeta> {
   const { sessionId, cwd, command } = input
   if (countRunning(sessionId) >= MAX_RUNNING_PER_SESSION) {
@@ -256,7 +258,7 @@ export async function startBackground(input: {
   const shell = await resolveBashShell()
   const child = spawn(shell.bin, [shell.flag, wrapper], {
     cwd,
-    env: filteredShellEnv(),
+    env: filteredShellEnv(input.shellEnv),
     detached: true,
     stdio: 'ignore',
     windowsHide: true,

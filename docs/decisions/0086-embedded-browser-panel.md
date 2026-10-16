@@ -69,6 +69,11 @@ Quyết định: **một popover neo tại chỗ bấm, hai lựa chọn (Mở t
 - **`⌘/Ctrl/Shift-click` = ra ngoài, không hỏi.** Quy ước sẵn có của mọi browser, và là đường thoát khi popup thành vướng.
 - **Mở trong app luôn tạo TAB MỚI.** Agent có thể đang giữa lượt trên tab active; chiếm tab đó là làm hỏng việc đang chạy. Đang ở trong session thì mở view Browser của panel; không có session thì popout.
 - **`setWindowOpenHandler` của trình duyệt agent đổi từ `deny` sang mở tab thật** (vẫn qua `hostBlocked`, vẫn trả `deny` để Chromium không tự tạo cửa sổ). Lúc bề mặt còn headless, chặn `target="_blank"` là đúng — không ai thấy một cú bấm không làm gì. Giờ người dùng ngồi xem trang trong panel thì cú bấm chết đọc ra như app hỏng.
+  - **Đính chính 2026-10-15 — popup đăng nhập là cửa sổ thật.** Biến mọi `window.open` thành tab làm hỏng các popup đăng nhập ("Sign in with Google/GitHub/Microsoft", SSO, cổng thanh toán). Lý do: popup gửi kết quả về trang gốc qua `window.opener`, mà tab thì không có opener; và trang nhận `null` từ `window.open` nên báo "popup bị chặn". Luật mới ở `browser-popup.ts` (thuần, có test):
+    - `window.open` có features (disposition `new-window`), hoặc mở `about:blank` ⇒ **cửa sổ popup thật**, cùng partition với tab (cookie dùng chung), giữ opener;
+    - link `target=_blank` và `window.open` không features ⇒ tab như cũ.
+
+    Popup đi qua cùng `hostBlocked` theo scope của tab gốc, có đủ guard `will-navigate` / `will-redirect` / `will-frame-navigate`, thêm `did-start-navigation` (đóng popup nếu bị điều hướng tới host bị chặn). Popup không có preload của app, chạy sandbox. Mỗi tab tối đa 5 popup, và popup đóng theo tab. Popup là cửa sổ HĐH riêng nên không dính luật che `OVERLAYS`.
 - **Hai chỗ CỐ Ý không qua bộ chọn:** dialog OAuth (Claude, Codex) — luồng đăng nhập phải vào browser có phiên thật của người dùng, và auth code **không được** rơi vào jar của agent; và link tải NetBird ở Settings → Devices — partition của agent **chặn download**, nên chào "mở trong app" là chào một ngõ cụt. Cả ba chỗ có comment ghi lý do tại dòng.
 - **Mode ở localStorage, không qua IPC.** Nó chỉ chọn *bề mặt* để mở link, engine không thấy gì — cùng hình dạng với `useKeymap`.
 

@@ -216,3 +216,40 @@ describe('parseStashList', () => {
     })
   })
 })
+
+// Danh sách file của một commit (tab Git Log) hiện A/D/M/R — parser phải nhận header
+// `new file mode` / `deleted file mode`.
+describe('parseUnifiedDiff — file thêm / xoá', () => {
+  it('đánh dấu isNew / isDeleted, file sửa thì không', () => {
+    const out = parseUnifiedDiff(
+      [
+        'diff --git a/new.txt b/new.txt',
+        'new file mode 100644',
+        'index 0000000..e69de29',
+        '--- /dev/null',
+        '+++ b/new.txt',
+        '@@ -0,0 +1 @@',
+        '+hi',
+        'diff --git a/old.txt b/old.txt',
+        'deleted file mode 100644',
+        'index e69de29..0000000',
+        '--- a/old.txt',
+        '+++ /dev/null',
+        '@@ -1 +0,0 @@',
+        '-bye',
+        'diff --git a/mod.txt b/mod.txt',
+        'index 1111111..2222222 100644',
+        '--- a/mod.txt',
+        '+++ b/mod.txt',
+        '@@ -1 +1 @@',
+        '-a',
+        '+b',
+      ].join('\n'),
+    )
+    expect(out.map((f) => [f.path, f.isNew ?? false, f.isDeleted ?? false])).toEqual([
+      ['new.txt', true, false],
+      ['old.txt', false, true],
+      ['mod.txt', false, false],
+    ])
+  })
+})

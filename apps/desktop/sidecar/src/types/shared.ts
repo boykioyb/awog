@@ -224,6 +224,10 @@ export interface SessionSettings {
   // Không có nó thì `decide()` tính mọi lời gọi vào cột `normal` và prompt duyệt
   // không nêu được account — tức cột `production` của ma trận thành hàng chết.
   infra?: InfraContext
+  // Tài khoản gh mà shell của agent (Bash, lệnh nền) chạy bằng — runtime/tools/gh-shim.ts.
+  // Sidecar TỰ resolve mỗi lượt từ Project.githubAccount → settings.githubAccount của
+  // app (send-message), không nhận từ payload UI. Vắng / '' = tài khoản active của gh.
+  ghAccount?: string
 }
 
 // One ordered slice of an assistant turn (ADR 0032). Either a run of reply text
@@ -572,6 +576,14 @@ export interface Session {
   // (kể cả "chat với agent" ở trang Agents) KHÔNG mang field này.
   // Chỉ ghi lúc tạo — không có RPC nào sửa nó.
   origin?: 'board'
+  // Issue trên board của project mà phiên này đang làm (docs/features/session-issue-tracking.md).
+  // Phiên có project tự sinh issue ở lượt đầu (boards/session-issue.ts); phiên là
+  // MỘT người thực thi của issue, chiều ngược lại suy ra bằng cách lọc phiên theo
+  // field này. Đường ghi: sidecar (lượt đầu) + RPC `sessions.setIssue` — CỐ Ý không
+  // nằm trong patch của sessions.upsert để renderer giữ bản cũ không ghi đè được.
+  issueId?: string
+  // Người dùng đã "bỏ theo dõi" phiên này — không tự sinh issue lại nữa.
+  issueUntracked?: boolean
   // Override LLM cấp phiên do NGƯỜI DÙNG đặt tay (board item → Advanced, "đổi
   // account khi hết token"). Áp SAU overlay của agent bind trong send-message —
   // thắng cả pin của spec vì đây là quyết định trực tiếp + mới nhất của con
@@ -752,6 +764,10 @@ export interface SessionSummary {
   // dispatch từ board). Lên summary để renderer ẩn các phiên board khỏi danh
   // sách session mà không nạp transcript.
   origin?: 'board'
+  // Mirrors Session.issueId / issueUntracked — chip issue trên header và badge
+  // trạng thái issue trong danh sách đọc thẳng từ summary.
+  issueId?: string
+  issueUntracked?: boolean
   // Override LLM cấp phiên — mirrors Session.llmOverride. Lên summary để
   // renderer hiện/đổi override (vd. tab Advanced của board item) mà không cần
   // nạp transcript.
@@ -2276,20 +2292,33 @@ export interface TeamSpec {
 // ── Board work-item — backlog THEO PROJECT (~/.awog/boards/<projectId>.json) ──
 //
 // Hợp đồng status (Multica-style): AGENT tự ghi status trong lượt qua tool
-// `team_item_update`; hệ thống chỉ tự sửa ở hai chỗ —
+// `team_item_update`; hệ thống chỉ tự sửa ở ba chỗ —
 //   1. lượt của assignee fail/không retry  → in_progress về todo;
-//   2. user bấm Merge thành công           → in_review/changes về done.
+//   2. user bấm Merge thành công           → in_review/changes về done;
+//   3. phiên làm issue (Session.issueId) bắt đầu lượt → backlog/todo/pending/changes
+//      về in_progress.
 // `done` và `cancelled` là của NGƯỜI DÙNG — agent không tự set hai trạng thái đó.
 // `backlog` là bãi đỗ: không đánh thức ai; kéo ra `todo` mới wake assignee.
+// `pending` cũng không đánh thức ai — việc tạm gác, người dùng tự quay lại.
 export type BoardItemStatus =
   | 'backlog'
   | 'todo'
   | 'in_progress'
   | 'in_review'
   | 'changes' // reviewer/lead trả về, kèm comment nói cần sửa gì
+  | 'pending' // tạm gác có chủ đích — sẽ quay lại; khác blocked (kẹt vì bên ngoài)
   | 'blocked' // member tự báo kẹt — first-class, không phải "fail"
   | 'done'
   | 'cancelled'
+
+export interface BoardItemRecap {
+  text: string
+  at: string
+  // Model đã viết recap — hiện kèm để người đọc biết độ tin.
+  modelUsed?: string
+  // Các phiên đã đọc để dựng recap (lúc recap).
+  sessionIds: string[]
+}
 
 export interface BoardItemComment {
   id: string
@@ -2356,12 +2385,36 @@ export interface BoardItem {
   // Đợt chạy (stage waves): khi mọi item của stage sớm nhất done/cancelled thì
   // hệ thống đánh thức lead để điều phối đợt sau. Vắng mặt = không chia đợt.
   stage?: number
+  // Khuôn GitHub Projects (sidebar issue): ngày bắt đầu / hạn chót dạng
+  // `YYYY-MM-DD` (ngày lịch, không giờ — không lệch múi giờ), sprint + milestone là
+  // nhãn tự do (gợi ý từ giá trị đã dùng trên board), link issue/PR (GitHub hoặc
+  // URL bất kỳ). Vắng = chưa đặt.
+  startDate?: string
+  dueDate?: string
+  sprint?: string
+  milestone?: string
+  issueLinks?: string[]
+  prLinks?: string[]
   // sessionId của bên tạo, hoặc null khi người dùng tạo từ UI.
   createdBy: string | null
   createdAt: string
   updatedAt: string
   // Branch của member đã merge khi item đi tới done qua sessions.integrateMember.
   mergedBranch?: string
+  // Recap gần nhất của issue (RPC boards.recap — one-shot LLM trên mô tả, comment,
+  // checklist và đuôi transcript của mọi phiên đã làm issue). Ghi đè mỗi lần
+  // recap; KHÔNG đăng thành comment để thread không bị rác.
+  recap?: BoardItemRecap
+  // Title đang ĐI THEO title của phiên sinh ra item (auto-title của phiên đổi thì
+  // issue đổi theo). Người hoặc agent sửa title một lần là cờ mất vĩnh viễn.
+  autoTitle?: boolean
+  // Mô tả vẫn là tin nhắn đầu của phiên đã sinh item (chưa ai sửa). Người/agent
+  // sửa mô tả một lần là cờ mất — và item thôi được coi là "issue tự sinh còn trắng".
+  autoDesc?: boolean
+  // Phiên đã TỰ SINH item này ở lượt đầu (boards/session-issue.ts). Chỉ ghi lúc tạo.
+  // "Bỏ theo dõi" chỉ được xoá item khi đúng phiên đó là nguồn gốc — item người
+  // dùng tự viết rồi giao cho phiên thì không bao giờ bị xoá theo.
+  originSessionId?: string
   comments: BoardItemComment[]
 }
 

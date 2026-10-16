@@ -200,6 +200,28 @@ export function useWorkbenchDocs() {
     })
   }
 
+  /** Tab Git Log của project (một tab / project). `focusSha` = commit chọn sẵn —
+      mở lại tab đang có thì chỉ đổi commit được chọn. */
+  function openGitLog(projectId: string, focusSha?: string): void {
+    const id = `gitlog:${projectId}`
+    const existing = wb.docs.find((d) => d.id === id)
+    if (existing) {
+      if (focusSha) existing.focusSha = focusSha
+      wb.openDoc(existing)
+      return
+    }
+    wb.openDoc({ kind: 'gitlog', id, title: 'Git Log', ...(focusSha ? { focusSha } : {}) })
+  }
+
+  /** Diff của MỘT file trong một commit (chỉ đọc) — mở từ tab Git Log. */
+  function openCommitDiff(projectId: string, sha: string, relPath: string): void {
+    wb.openDoc({
+      kind: 'cdiff',
+      id: `cdiff:${projectId}/${sha}/${relPath}`,
+      title: `${sha.slice(0, 7)} · ${relPath.split('/').pop() || relPath}`,
+    })
+  }
+
   /** Tab đã có của app browser → doc. `title` là fallback cho tới khi
       `browser:changed` đưa title thật về. */
   async function openWebTab(tabId: string, opts?: { title?: string }): Promise<void> {
@@ -521,6 +543,8 @@ export function useWorkbenchDocs() {
     openFile,
     openFileAbs,
     openDiff,
+    openGitLog,
+    openCommitDiff,
     openWebTab,
     openNewWebDoc,
     // files

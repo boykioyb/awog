@@ -17,10 +17,13 @@ import { beginSteerTurn, endSteerTurn, drainSteer } from '../sessions/steering.j
 import { buildLinkedTaskBlock } from '../sessions/linked-task.js'
 import { buildLinkedSshHostBlock } from '../sessions/linked-ssh-host.js'
 import { buildSessionChecklistBlock } from '../sessions/todo-context.js'
+import { buildLinkedIssueBlock } from '../sessions/linked-issue.js'
 import { buildTeamBlock } from '../sessions/team-context.js'
 import { mirrorCommReply } from '../sessions/channel.js'
 import { ensureSessionWorkspace } from '../tasks/worktree.js'
 import { rollbackInProgressItems } from '../boards/store.js'
+import { onSessionTurnStart } from '../boards/session-issue.js'
+import { resolveProjectGhAccount } from '../github/project-account.js'
 import { pickModel } from '../boards/model-route.js'
 import { captureSnapshot } from '../sessions/snapshots.js'
 import { MESSAGE_ID_RE } from '../sessions/ids.js'
@@ -165,6 +168,9 @@ const Params = z
     // (payload → agent pin → llmOverride) lượt này bị kẹp về effort 'low' + model
     // rẻ nhất catalog của provider — chỉ lượt này, override persist không đội.
     comm: z.boolean().optional(),
+    // Lượt KHÔNG do người dùng gõ (wake nền, tin hộp thư tự giao, ping) — không tính
+    // là "bắt tay làm việc" cho issue của phiên (docs/features/session-issue-tracking.md).
+    automated: z.boolean().optional(),
     history: z.array(SessionMessageSchema).default([]),
     settings: SessionSettingsSchema,
     systemPrompt: z.string().optional(),
@@ -718,6 +724,15 @@ register('sessions.sendMessage', async (raw) => {
   // trước mọi persist bên dưới. Xem sessions/claude-busy-guard.ts.
   await assertClaudeSessionIdle(groupSession)
 
+  // Phiên ↔ issue (docs/features/session-issue-tracking.md): lượt do NGƯỜI DÙNG gửi
+  // tự sinh issue (lượt đầu) hoặc kéo issue chưa chạy về in_progress. Đặt TRƯỚC
+  // khi dựng context/toolset để <linked_issue> và tool board của chính lượt này
+  // thấy issue. Lượt wake nền / lượt kênh / lệnh CLI không phải "bắt tay làm việc"
+  // nên bỏ qua. Best-effort — hàm tự nuốt lỗi, không bao giờ chặn lượt chat.
+  if (!params.attachWake && !params.comm && !params.nativeCommand && !params.automated) {
+    await onSessionTurnStart(params.sessionId, params.text)
+  }
+
   // agent — "vai có thật" của member/lead (session-teams §3): resolve phía
   // sidecar mỗi lượt. `params.agent` (người dùng chỉ tay) THẮNG — khi nó có mặt,
   // boundAgent giữ null và không overlay gì. `source` vắng ⇒ dò global trước
@@ -770,6 +785,12 @@ register('sessions.sendMessage', async (raw) => {
     if (llmOv.level) sessionSettings.level = llmOv.level
     if (llmOv.mode) sessionSettings.mode = llmOv.mode
   }
+
+  // Tài khoản gh của project → shell của agent (Bash, lệnh nền) chạy `gh`/`git push`
+  // bằng đúng người, bất kể `gh auth switch` ở terminal (runtime/tools/gh-shim.ts).
+  // Resolve từ ĐĨA mỗi lượt (đổi ở Overview là lượt sau theo), không từ payload UI.
+  const ghAccount = await resolveProjectGhAccount(groupSession?.projectId ?? params.projectId)
+  if (ghAccount) sessionSettings.ghAccount = ghAccount
 
   // Lượt comm (wake từ kênh ê-kíp): kẹp rẻ+nhanh SAU mọi overlay — kể cả
   // override tay/auto-route, vì đích của lượt là trả lời nhanh chứ không làm
@@ -1246,6 +1267,16 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
   try {
     const withTodos = await loadSession(params.sessionId)
     sessionChecklist = buildSessionChecklistBlock(withTodos?.todos)
+    // Issue phiên đang làm (docs/features/session-issue-tracking.md) — cùng đường
+    // turn prompt với checklist vì status đổi giữa các lượt mà nhánh Claude SDK
+    // đóng băng system prompt. Đọc SAU onSessionTurnStart nên issue vừa sinh ở
+    // lượt đầu đã có mặt.
+    const linkedIssue = await buildLinkedIssueBlock(
+      withTodos?.projectId,
+      withTodos?.issueId,
+      sessionSettings.provider === 'anthropic' ? { sessionId: params.sessionId } : undefined,
+    )
+    if (linkedIssue) sessionChecklist = sessionChecklist ? `${sessionChecklist}\n\n${linkedIssue}` : linkedIssue
     if (withTodos?.todos?.length) sessionTodos = withTodos.todos
     if (withTodos?.infra) sessionInfra = withTodos.infra
     isGroupChild = !!withTodos?.teamRunId

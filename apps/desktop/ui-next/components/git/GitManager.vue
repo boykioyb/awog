@@ -210,8 +210,6 @@
 
     <GitIdentityModal :open="identityOpen" @close="identityOpen = false" />
 
-    <GitAuthErrorModal :error="store.pendingAuthError" @close="() => store.clearAuthError()" />
-
     <GitBranchDeleteModal
       :open="pendingDelete !== null"
       :branch-name="pendingDelete?.name ?? ''"
@@ -280,57 +278,10 @@ const toast = useToast()
 const pins = useGitBranchPins(() => store.currentProjectId)
 const pinnedBranches = computed(() => [...pins.pinned.value])
 
-// Map a sidecar gitCode (DIRTY_TREE / AUTH_FAILED / …) to a human message; fall
-// back to the raw (already-sanitized) error text when the code isn't translated.
-function gitErrorMessage(code: string | null, fallback: string): string {
-  if (code) {
-    const key = `git.error.${code}`
-    const msg = t(key)
-    if (msg !== key) return msg
-  }
-  return fallback || t('git.error.UNKNOWN')
-}
-
-// A git failure is usually several lines of git's own stderr, so it gets longer on
-// screen than a plain acknowledgement AND a close button — the old one-line toast
-// ellipsized the message away after 3.2s, which is exactly when you need to read it.
-const GIT_ERROR_MS = 10_000
-
-// `git.error.<CODE>` gives a friendly headline for the codes we know; git's own
-// message then goes in the body so nothing is dropped. An unmapped failure has only
-// the raw message, and it becomes the headline with no body.
-function surfaceGitError(code: string | null, message: string): void {
-  const resolved = gitErrorMessage(code, message)
-  const [head, ...rest] = resolved.split('\n')
-  const detail = [rest.join('\n').trim(), resolved === message ? '' : message.trim()]
-    .filter(Boolean)
-    .join('\n\n')
-  toast.add({
-    title: head ?? resolved,
-    ...(detail ? { description: detail } : {}),
-    color: 'error',
-    duration: GIT_ERROR_MS,
-    close: true,
-  })
-}
-
-// Any mutating op that fails surfaces via store.lastError (instead of a silent
-// console.warn) → toast it so the user sees what happened.
-watch(
-  () => store.lastError,
-  (e) => {
-    if (e) surfaceGitError(e.code, e.message)
-  },
-)
-
-// Success notices for fetch/pull/push (incl. the "Already up to date" case) so the
-// ops give visible confirmation instead of silently doing nothing.
-watch(
-  () => store.lastNotice,
-  (n) => {
-    if (n) toast.add({ title: t(n.key, n.params ?? {}), color: 'success' })
-  },
-)
+// Toast lỗi git + phản hồi lastError / lastNotice / lỗi xác thực: dùng chung toàn
+// app (useGitErrorToast + GitFeedbackHost trong AppGlobalHosts) — ở đây chỉ còn các
+// lỗi trả về trực tiếp từ hành động của chính màn này.
+const { surfaceGitError } = useGitErrorToast()
 
 // Switch branch. `git checkout` refuses to clobber uncommitted changes
 // (DIRTY_TREE) — offer to stash them first, then retry. Other failures toast.

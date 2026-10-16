@@ -149,6 +149,18 @@ describe('upsertBoardItem — tạo mới', () => {
       code: 'board-full',
     })
   })
+
+  it('item đã đóng (done/cancelled) không tính vào trần', async () => {
+    const p = pid()
+    await seedBoard(
+      p,
+      Array.from({ length: MAX_BOARD_ITEMS }, (_, i) => ({
+        status: i % 2 ? ('done' as const) : ('cancelled' as const),
+      })),
+    )
+    const item = await upsertBoardItem(p, { title: 'vẫn tạo được', createdBy: null })
+    expect(item.title).toBe('vẫn tạo được')
+  })
 })
 
 describe('upsertBoardItem — update', () => {
@@ -202,7 +214,7 @@ describe('deleteBoardItem + addBoardItemComment', () => {
     expect(emitted).toEqual([])
   })
 
-  it('comment trả về bản ghi, null khi item không tồn tại, cap 100', async () => {
+  it('comment trả về bản ghi, null khi item không tồn tại, không trần số comment', async () => {
     const p = pid()
     const item = await upsertBoardItem(p, { title: 'x', createdBy: null })
     const c = await addBoardItemComment(p, item.id, {
@@ -226,9 +238,10 @@ describe('deleteBoardItem + addBoardItemComment', () => {
         })),
       },
     ])
-    await expect(
-      addBoardItemComment(p, item.id, { from: null, fromTitle: 'You', text: 'tràn' }),
-    ).rejects.toMatchObject({ code: 'comments-full' })
+    // Không có trần số comment — comment thứ 101 vẫn được ghi.
+    const extra = await addBoardItemComment(p, item.id, { from: null, fromTitle: 'You', text: 'thêm' })
+    expect(extra?.text).toBe('thêm')
+    expect((await getBoardItem(p, item.id))?.comments).toHaveLength(101)
   })
 
   it('comment rỗng/quá 4000 bị từ chối', async () => {
@@ -482,5 +495,66 @@ describe('khuôn Jira — type/priority/severity/parentId', () => {
     const orphan = (await listBoardItems(p)).find((i) => i.id === kid.id)
     expect(orphan).toBeDefined()
     expect(orphan?.parentId).toBeUndefined()
+  })
+})
+
+// Field kiểu GitHub Projects (sidebar issue — docs/features/session-issue-tracking.md §4).
+describe('upsertBoardItem — field GitHub-style', () => {
+  it('đặt rồi gỡ (null / rỗng) ngày, sprint, milestone, link', async () => {
+    const p = pid()
+    const item = await upsertBoardItem(p, {
+      title: 't',
+      createdBy: null,
+      startDate: '2026-10-01',
+      dueDate: '2026-10-20',
+      sprint: ' Sprint 12 ',
+      milestone: 'v1.0',
+      issueLinks: ['https://github.com/o/r/issues/1', 'https://github.com/o/r/issues/1'],
+      prLinks: ['https://github.com/o/r/pull/2'],
+    })
+    expect(item).toMatchObject({
+      startDate: '2026-10-01',
+      dueDate: '2026-10-20',
+      sprint: 'Sprint 12',
+      milestone: 'v1.0',
+      issueLinks: ['https://github.com/o/r/issues/1'],
+      prLinks: ['https://github.com/o/r/pull/2'],
+    })
+    const cleared = await upsertBoardItem(p, {
+      id: item.id,
+      startDate: null,
+      dueDate: '',
+      sprint: null,
+      milestone: '',
+      issueLinks: [],
+      prLinks: null,
+    })
+    for (const k of ['startDate', 'dueDate', 'sprint', 'milestone', 'issueLinks', 'prLinks'] as const) {
+      expect(cleared[k]).toBeUndefined()
+    }
+  })
+
+  it('từ chối ngày sai định dạng, start sau due, link không phải http(s)', async () => {
+    const p = pid()
+    await expect(upsertBoardItem(p, { title: 't', createdBy: null, dueDate: '20/10/2026' })).rejects.toMatchObject({
+      code: 'invalid-input',
+    })
+    await expect(
+      upsertBoardItem(p, { title: 't', createdBy: null, startDate: '2026-10-20', dueDate: '2026-10-01' }),
+    ).rejects.toMatchObject({ code: 'invalid-input' })
+    await expect(
+      upsertBoardItem(p, { title: 't', createdBy: null, prLinks: ['javascript:alert(1)'] }),
+    ).rejects.toMatchObject({ code: 'invalid-input' })
+  })
+
+  it('đọc file: giá trị hỏng bị gỡ nhẹ, item vẫn còn', async () => {
+    const p = pid()
+    await seedBoard(p, [
+      { dueDate: 'tomorrow', issueLinks: ['ftp://x'], sprint: 'S1' } as Partial<BoardItem>,
+    ])
+    const [it] = await listBoardItems(p)
+    expect(it?.dueDate).toBeUndefined()
+    expect(it?.issueLinks).toBeUndefined()
+    expect(it?.sprint).toBe('S1')
   })
 })

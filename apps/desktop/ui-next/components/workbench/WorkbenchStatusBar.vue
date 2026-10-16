@@ -43,9 +43,15 @@
     </WbChip>
     <span class="h-3 w-px flex-none" style="background: var(--border)" />
 
-    <!-- Account chip: {account} · {style} — menu account + model + settings. -->
+    <!-- Phong cách trả lời của phiên đang mở (+ bỏ markdown) — WbStyleChip. -->
+    <template v-if="active">
+      <WbStyleChip :session="active" />
+      <span class="h-3 w-px flex-none" style="background: var(--border)" />
+    </template>
+
+    <!-- Account chip — menu account + model + settings (phong cách có chip riêng). -->
     <WbChip
-      title="Account · style — đổi account/model"
+      title="Account — đổi account/model"
       :aria-expanded="menuFor === 'account'"
       data-wbi="account"
       @click="openAccountMenu"
@@ -80,7 +86,6 @@ import { useToast } from '~/composables/useToast'
 import { useWorkbenchMenu, type WbMenuItem } from '~/composables/useWorkbenchMenu'
 import { useWorkbenchMonitor } from '~/composables/useWorkbenchMonitor'
 import { useSessionsData } from '~/composables/useSessionsData'
-import { normalizeStyleSlug } from '~/composables/useSessionModelConfig'
 import { useSessionsStore } from '~/stores/sessions'
 import { useWorkbenchStore } from '~/stores/workbench'
 
@@ -205,16 +210,15 @@ function openProjectMenu(e: MouseEvent) {
 }
 
 // ── Account chip ────────────────────────────────────────────────────────────
-// Nhãn `account · style` lấy từ phiên đang mở (proto `claude-pro · Default`).
+// Nhãn account của phiên đang mở. Phong cách trả lời đã tách ra chip riêng
+// (WbStyleChip) — nhãn cũ `account · style` chỉ hiện chứ không đổi được style.
 // Không có phiên → chỉ tên provider mặc định, không bịa account.
 const accountLabel = computed(() => {
   const s = active.value
   if (!s) return 'Account'
   const disp = s.account || ''
   const idx = disp.lastIndexOf(' · ')
-  const short = (idx > 0 ? disp.slice(0, idx) : disp) || providerOf(disp)
-  const slug = normalizeStyleSlug(s.style)
-  return `${short} · ${slug === 'Default' ? 'Default' : slug}`
+  return (idx > 0 ? disp.slice(0, idx) : disp) || providerOf(disp)
 })
 
 function openAccountMenu(e: MouseEvent) {
@@ -261,7 +265,9 @@ function openAccountMenu(e: MouseEvent) {
 
 // ── aria-expanded cho chip ──────────────────────────────────────────────────
 // Menu là singleton; chip đang mở được nhận diện qua `data-wbi` trên anchor.
-const menuFor = computed(() => menu.value?.anchor.dataset.wbi ?? '')
+// `?.` cả hai tầng: điểm neo nào không phải Element (lỗi gọi sai) cũng không được làm
+// hỏng render cả status bar.
+const menuFor = computed(() => menu.value?.anchor?.dataset?.wbi ?? '')
 </script>
 
 <style scoped>

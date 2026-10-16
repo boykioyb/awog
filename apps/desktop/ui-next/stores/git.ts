@@ -85,6 +85,8 @@ function adaptCommit(c: SidecarGitCommit): Commit {
     merge: c.parents.length > 1,
     refs,
     files: [],
+    parents: c.parents,
+    at: c.authorAt,
   }
 }
 
@@ -486,6 +488,26 @@ export const useGitStore = defineStore('git', () => {
     } catch (err) {
       console.warn('[git] loadHistory failed', err)
     }
+  }
+
+  // Log cho tab Git Log của workbench (graph kiểu JetBrains): `all` = mọi branch,
+  // luôn `--date-order` (con trước cha — điều kiện xếp làn). Trả kết quả cho caller
+  // (composable của tab giữ state riêng), không đụng `commits` của Git Manager.
+  const loadGraphLog = async (opts: {
+    all: boolean
+    skip?: number
+    limit?: number
+  }): Promise<{ commits: Commit[]; hasMore: boolean }> => {
+    const root = workspaceRoot()
+    if (!root) return { commits: [], hasMore: false }
+    const result = await useGitApi().log({
+      workspaceRoot: root,
+      limit: opts.limit ?? 200,
+      dateOrder: true,
+      ...(opts.all ? { all: true } : {}),
+      ...(opts.skip ? { skip: opts.skip } : {}),
+    })
+    return { commits: result.commits.map(adaptCommit), hasMore: result.hasMore }
   }
 
   const loadMoreHistory = () => loadHistory({ append: true, skip: commits.value.length })
@@ -1545,7 +1567,7 @@ export const useGitStore = defineStore('git', () => {
       const result = await useGitApi().diff({ kind: 'commit', workspaceRoot: root, sha })
       const files: GitFile[] = result.files.map((fd) => ({
         f: fd.path,
-        st: fd.isRename ? 'R' : 'M',
+        st: fd.isNew ? 'A' : fd.isDeleted ? 'D' : fd.isRename ? 'R' : 'M',
       }))
       const diffByPath: Record<string, DiffLine[]> = {}
       for (const fd of result.files) diffByPath[fd.path] = adaptFileDiff(fd)
@@ -1942,6 +1964,7 @@ export const useGitStore = defineStore('git', () => {
     loadDiff,
     loadImageDataUrl,
     loadCommitDiff,
+    loadGraphLog,
     stageHunk,
     unstageHunk,
     openFile,

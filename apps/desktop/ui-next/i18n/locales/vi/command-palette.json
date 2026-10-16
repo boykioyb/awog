@@ -37,5 +37,8 @@
   "palette.notify.attention.reply.title": "Đang chờ bạn trả lời",
   "palette.notify.attention.reply.body": "{title} cần bạn trả lời hoặc quyết định quyền.",
   "palette.notify.attention.approve.title": "Đang chờ duyệt",
-  "palette.notify.attention.approve.body": "{title} đang tạm dừng chờ bạn duyệt."
+  "palette.notify.attention.approve.body": "{title} đang tạm dừng chờ bạn duyệt.",
+  "palette.section.setting": "Cài đặt",
+  "palette.setting.open": "Mở cài đặt",
+  "palette.setting.prefix": "Cài đặt ›"
 }

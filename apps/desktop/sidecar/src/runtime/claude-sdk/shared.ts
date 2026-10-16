@@ -19,6 +19,7 @@ import type { BeforeToolCall } from '../permission.js'
 import type { ThinkingLevel } from '../../types/shared.js'
 import { assertSafeUrl } from '../tools/ssrf.js'
 import { CO_AUTHOR_TRAILER } from '../../git/co-author.js'
+import { ghShimEnv } from '../tools/gh-shim.js'
 
 // Commit/PR attribution for the claude_code preset. The preset otherwise injects
 // Claude's own "Generated with Claude Code" + `Co-Authored-By: Claude` trailer
@@ -142,6 +143,9 @@ export function buildSdkEnv(
   // Tự nén của CLI (xem autoCompactEnv). Vắng = KHÔNG đụng vào env (đường CLI PTY
   // của người dùng giữ mặc định CLI); có = chính sách của AWOG cho lượt này.
   autoCompact?: AutoCompactConfig,
+  // Tài khoản gh ghim của project (runtime/tools/gh-shim.ts) → shim gh đầu PATH +
+  // git credential trỏ vào shim, cho mọi `Bash` CLI spawn. Vắng = tài khoản active.
+  ghAccount?: string,
 ): Record<string, string> {
   const env: Record<string, string> = {}
   for (const [k, v] of Object.entries(base ?? process.env)) {
@@ -188,6 +192,7 @@ export function buildSdkEnv(
     env.AWS_REGION = infra.region
     env.AWS_DEFAULT_REGION = infra.region
   }
+  if (ghAccount) Object.assign(env, ghShimEnv(ghAccount, env.PATH))
   // `system/session_state_changed` is the CLI's AUTHORITATIVE turn-over signal
   // ("'idle' fires after heldBackResult flushes and the bg-agent do-while exits"),
   // and it is emitted only behind this env flag. run-stream needs it: without it

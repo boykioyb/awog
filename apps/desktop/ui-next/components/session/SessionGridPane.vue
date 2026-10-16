@@ -60,6 +60,7 @@
 </template>
 
 <script setup lang="ts">
+import { QUESTION_DRAWER_KEY } from '~/composables/useSessionQuestionModal'
 // MỘT ô của chế độ lưới: transcript + composer ĐẦY ĐỦ của một phiên bất kỳ.
 //
 // Mỗi ô tự khai một "transcript surface" của riêng nó (ADR 0075): nhiều transcript sống
@@ -90,6 +91,9 @@ const props = defineProps<{
   primary?: boolean
 }>()
 const emit = defineEmits<{ hide: []; openFull: [id: number] }>()
+// Ô này có ngăn kéo câu hỏi ⇒ thẻ câu hỏi trong transcript rút thành một dòng
+// (useSessionQuestionModal, QUESTION_DRAWER_KEY).
+provide(QUESTION_DRAWER_KEY, true)
 
 const { t } = useI18n()
 const store = useSessionsStore()
