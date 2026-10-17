@@ -30,6 +30,61 @@ export type Release = {
 
 export const CHANGELOG: Release[] = [
   {
+    version: '0.42.0',
+    date: '2026-10-17',
+    highlight: {
+      en: 'Slack threads inside AWOG: follow client threads, read them in the original or translated, reply with mentions and reactions, and hand a thread to an AI session — all without leaving the app.',
+      vi: 'Thread Slack ngay trong AWOG: theo dõi thread với khách, đọc bản gốc hoặc bản dịch, trả lời kèm mention và reaction, rồi giao thread cho một phiên AI — không cần rời app.',
+    },
+    items: [
+      {
+        kind: 'added',
+        en: 'Slack threads: paste a thread link to follow it. Threads are grouped by workspace and channel, show an unread dot and can be linked to a project. Opens as a large window inside the app, or pop it out into its own window that can stay on top.',
+        vi: 'Thread Slack: dán link thread để theo dõi. Thread được gom theo workspace và kênh, có chấm chưa đọc và gắn được với project. Mở dạng cửa sổ lớn trong app, hoặc tách ra cửa sổ riêng có thể ghim luôn nằm trên.',
+      },
+      {
+        kind: 'added',
+        en: 'Read like in Slack: mentions, custom and standard emoji, reactions, attachments with preview and download, and only the latest replies load first (older ones on demand). Buttons jump to the oldest or newest message.',
+        vi: 'Đọc như trong Slack: mention, emoji chuẩn và emoji riêng, reaction, file đính kèm xem trước và tải về, chỉ tải các reply mới nhất trước (tin cũ tải khi cần). Có nút nhảy về tin cũ nhất hoặc mới nhất.',
+      },
+      {
+        kind: 'added',
+        en: 'Reply in the thread with @mention and :emoji: suggestions, edit or delete your own messages, and add or remove reactions. Messages are only ever sent when you press Send.',
+        vi: 'Trả lời trong thread với gợi ý @mention và :emoji:, sửa hoặc xoá tin của mình, thêm hoặc bỏ reaction. Tin chỉ được gửi khi bạn bấm Gửi.',
+      },
+      {
+        kind: 'added',
+        en: 'Translation made for working with Japanese clients: threads open in the original, translate the whole thread or a single message on demand. Names and business terms are kept (with the Japanese term in brackets), and replies can be translated into polite business Japanese — or Japanese + English in one go.',
+        vi: 'Dịch dành cho làm việc với khách Nhật: thread mở ở bản gốc, dịch cả thread hoặc từng tin khi cần. Tên riêng và thuật ngữ nghiệp vụ được giữ nguyên (kèm chữ Nhật trong ngoặc), và câu trả lời dịch được sang tiếng Nhật thương mại lịch sự — hoặc cùng lúc Nhật + Anh.',
+      },
+      {
+        kind: 'added',
+        en: 'Slack quick settings: choose the translation model and account, the style (Precise, Balanced, Natural), reading and sending languages, and edit your own glossary of terms.',
+        vi: 'Cài đặt nhanh cho Slack: chọn model và tài khoản dịch, phong cách (Chính xác, Cân bằng, Tự nhiên), ngôn ngữ đọc và ngôn ngữ gửi, và tự sửa bảng thuật ngữ.',
+      },
+      {
+        kind: 'added',
+        en: 'Open an AI session from a thread: the session gets the thread as context, you push new replies in when you want, and the agent can draft a reply into the Slack box for you to review and send.',
+        vi: 'Mở phiên AI từ một thread: phiên nhận thread làm ngữ cảnh, bạn tự đưa reply mới vào khi muốn, và agent có thể soạn nháp trả lời vào ô Slack để bạn xem lại rồi gửi.',
+      },
+      {
+        kind: 'improved',
+        en: 'Searchable dropdowns now let you type right in the box, and work properly inside dialogs. Dialogs open from the centre of the screen.',
+        vi: 'Ô chọn có tìm kiếm giờ gõ thẳng trong ô, và chạy đúng trong hộp thoại. Hộp thoại mở ra từ giữa màn hình.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Sources: a connection could be marked "needs reconnect" after an hour even though its token was still valid, and Reconnect did not ask for newly added permissions.',
+        vi: 'Sources: kết nối có thể bị báo "cần kết nối lại" sau một giờ dù token vẫn còn dùng được, và nút Kết nối lại không xin các quyền mới thêm.',
+      },
+      {
+        kind: 'fixed',
+        en: 'Closing an in-app browser tab that had already closed no longer shows an error.',
+        vi: 'Đóng một tab trình duyệt trong app mà tab đó đã tự đóng không còn báo lỗi.',
+      },
+    ],
+  },
+  {
     version: '0.41.5',
     date: '2026-10-16',
     highlight: {
