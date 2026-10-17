@@ -1,0 +1,5 @@
+{
+  "slackSession.chip.label": "Slack: {title}",
+  "slackSession.chip.title": "Mở thread Slack này",
+  "slackSession.chip.new": "có reply mới"
+}

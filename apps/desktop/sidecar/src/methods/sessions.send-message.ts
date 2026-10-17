@@ -53,6 +53,8 @@ import { assertInsideWorkspace } from '../git/path-sanitize.js'
 import { loadMemoryFiles } from '../context/memory-files.js'
 import { SKIP_DIRS } from '../fs/skip-dirs.js'
 import { getEffectivePricing, cost as priceCost } from '../pricing/catalog.js'
+import { isSlackSource } from '../slack/session.js'
+import { isSessionSlackTainted } from '../slack/taint.js'
 import { readFile as fsReadFile, readdir, stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import type { AskUserQuestionFn, CanUseTool, McpServersConfig } from '../runtime/permission-types.js'
@@ -786,6 +788,26 @@ register('sessions.sendMessage', async (raw) => {
     if (llmOv.mode) sessionSettings.mode = llmOv.mode
   }
 
+  // Phiên đã từng nhận nội dung Slack (docs/features/slack-threads.md, ADR 0107 D-4):
+  // chữ người ngoài viết nằm trong transcript và model đọc lại nó MỌI lượt, nên ở MỌI
+  // lượt (không chỉ lượt đầu): bỏ autoApprove, kẹp mode tự duyệt (`execute`,
+  // `accept-edits`) và SSH `auto` về hỏi. Một câu injection trong thread không được
+  // chạy lệnh / sửa file / gọi SSH mà người dùng chưa bấm duyệt. Kẹp ở đây — SAU mọi
+  // overlay (agent, llmOverride) và TRƯỚC khi settings đi vào runtime — nên cả ba
+  // runtime (Pi, Claude SDK, Codex) nhận cùng mode/autoApprove đã kẹp: cổng quyền
+  // chung (runtime/permission.ts makeBeforeToolCall) và approvalPolicy của Codex đều
+  // đọc từ đúng hai giá trị này. Cờ chỉ thêm, không gỡ; đọc lỗi ⇒ coi như nhiễm
+  // (slack/taint.ts).
+  const slackTainted = await isSessionSlackTainted(params.sessionId)
+  let autoApprove = params.autoApprove === true
+  if (slackTainted) {
+    if (sessionSettings.mode === 'execute' || sessionSettings.mode === 'accept-edits') {
+      sessionSettings.mode = 'ask'
+    }
+    if (sessionSettings.sshApprovalMode === 'auto') sessionSettings.sshApprovalMode = 'prompt'
+    autoApprove = false
+  }
+
   // Tài khoản gh của project → shell của agent (Bash, lệnh nền) chạy `gh`/`git push`
   // bằng đúng người, bất kể `gh auth switch` ở terminal (runtime/tools/gh-shim.ts).
   // Resolve từ ĐĨA mỗi lượt (đổi ở Overview là lượt sau theo), không từ payload UI.
@@ -1104,9 +1126,15 @@ register('sessions.sendMessage', async (raw) => {
     // narrower scope wins. undefined = "no restriction at this layer".
     const sessionWhitelist = params.mcpServerIds !== undefined ? new Set(params.mcpServerIds) : null
     const agentWhitelist = resolvedAgentMcpIds ? new Set(resolvedAgentMcpIds) : null
+    // Phiên đã từng nhận nội dung Slack (khối thread do người ngoài viết) ⇒ không bao
+    // giờ được có nguồn Slack (gửi tin/react thay người dùng), kể cả khi whitelist của
+    // phiên/agent có nó, kể cả sau khi đã gỡ thread. Phía tạo phiên đã loại sẵn
+    // (slack/session-link.ts); đây là chốt chặn cho mọi đường đổi whitelist về sau.
+    const denySlackSources = slackTainted
     const entries: [string, McpServersConfig[string]][] = []
     for (const s of all) {
       if (!s.enabled) continue
+      if (denySlackSources && isSlackSource(s)) continue
       // Same session ∩ agent whitelist as mcp — the keys are source ids.
       if (sessionWhitelist && !sessionWhitelist.has(s.id)) continue
       if (agentWhitelist && !agentWhitelist.has(s.id)) continue
@@ -1801,7 +1829,8 @@ When delegating work via the Task tool, the subagent inherits these MCP servers 
             // Auto-approve (Settings → Sessions): skip the permission park for gated
             // tools when the user opted in. The runtime's beforeToolCall bypasses
             // canUseTool entirely (see makeBeforeToolCall).
-            ...(params.autoApprove ? { autoApprove: true } : {}),
+            // `autoApprove` (không phải params.autoApprove): đã bị tắt nếu phiên nhiễm Slack.
+            ...(autoApprove ? { autoApprove: true } : {}),
             // Re-feed images (Settings → Sessions): when false the context builder drops
             // prior-turn image attachments (only the current turn carries them).
             ...(params.refeedImages === false ? { refeedImages: false } : {}),

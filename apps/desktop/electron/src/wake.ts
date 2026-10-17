@@ -58,7 +58,14 @@ let pendingRoute: TrayCommand | null = null
 // webContents của cửa sổ chính đã đăng ký nghe engine event. So sánh theo id nên
 // cửa sổ đóng/mở lại (id mới) tự động về trạng thái "chưa sẵn sàng".
 let readyWebContentsId: number | null = null
+// Thời điểm renderer hiện tại của cửa sổ chính đăng ký nghe LẦN ĐẦU — mốc để tính nhịp
+// SUBSCRIBE_SETTLE_MS cho ensureMainWindowReady (không phải lần onEvent cuối cùng).
+let readyAt = 0
+// webContents đã gắn bộ reset readiness khi nạp lại (gắn một lần mỗi webContents).
+const watchedWebContents = new WeakSet<WebContents>()
 let flushTimer: ReturnType<typeof setTimeout> | null = null
+// Nhịp hỏi lại của ensureMainWindowReady trong lúc chờ renderer đăng ký nghe.
+const READY_POLL_MS = 100
 
 export function installWakeBridge(d: WakeDeps): void {
   deps = d
@@ -128,12 +135,69 @@ function park(event: EngineEvent): void {
 
 function onSubscribed(sender: WebContents): void {
   if (!isMainSender(sender)) return
-  readyWebContentsId = sender.id
+  if (readyWebContentsId !== sender.id) {
+    readyWebContentsId = sender.id
+    readyAt = Date.now()
+    watchReload(sender)
+  }
   if (!parked.length || flushTimer) return
   flushTimer = setTimeout(() => {
     flushTimer = null
     flushParked()
   }, SUBSCRIBE_SETTLE_MS)
+}
+
+// Nạp lại trang (⌘R, HMR full reload) GIỮ NGUYÊN webContents.id, nên chỉ so id thì
+// main tưởng renderer mới vẫn đang nghe trong lúc SPA còn boot — event gửi vào khoảng
+// đó rơi mất. Điều hướng document mới ở main frame (không tính pushState của router
+// SPA) hoặc renderer chết ⇒ về "chưa sẵn sàng" tới lần `engine:subscribed` kế tiếp.
+function watchReload(wc: WebContents): void {
+  if (watchedWebContents.has(wc)) return
+  watchedWebContents.add(wc)
+  const reset = (): void => {
+    if (readyWebContentsId === wc.id) readyWebContentsId = null
+  }
+  wc.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) reset()
+  })
+  wc.on('render-process-gone', reset)
+}
+
+// Cửa sổ chính còn sống, renderer đã đăng ký nghe engine event và đã qua nhịp settle
+// (để store phiên — không chắc là listener đầu tiên — kịp gắn).
+function mainSettled(): boolean {
+  const win = deps?.getWindow() ?? null
+  return (
+    !!win &&
+    !win.isDestroyed() &&
+    win.webContents.id === readyWebContentsId &&
+    Date.now() - readyAt >= SUBSCRIBE_SETTLE_MS
+  )
+}
+
+// Bảo đảm có cửa sổ chính ĐANG NGHE `session.*` trước khi sidecar phát event cho nó
+// (Slack threads: `slack.session.open|push` phát `session.created` +
+// `session.inbox-message`, mà main chỉ chuyển `session.*` tới cửa sổ chính + popout —
+// gọi từ cửa sổ Slack riêng lúc cửa sổ chính đã đóng thì khối thread rơi mất).
+// Chưa có cửa sổ chính ⇒ mở lại bằng đúng showWindow của tray/dock. Reject khi quá
+// `timeoutMs` để UI báo lỗi thay vì treo.
+export function ensureMainWindowReady(timeoutMs: number): Promise<void> {
+  const d = deps
+  if (!d) return Promise.reject(new Error('main window bridge not installed'))
+  const win = d.getWindow()
+  if (!win || win.isDestroyed()) d.showWindow()
+  if (mainSettled()) return Promise.resolve()
+  const started = Date.now()
+  return new Promise((resolve, reject) => {
+    const tick = (): void => {
+      if (mainSettled()) return resolve()
+      if (Date.now() - started >= timeoutMs) {
+        return reject(new Error('main window did not become ready in time'))
+      }
+      setTimeout(tick, READY_POLL_MS)
+    }
+    tick()
+  })
 }
 
 function flushParked(): void {

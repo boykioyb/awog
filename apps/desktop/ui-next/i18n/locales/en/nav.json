@@ -15,6 +15,7 @@
   "nav.workflows": "Workflows",
   "nav.schedules": "Schedules",
   "nav.logtime": "Logtime",
+  "nav.slack": "Slack",
   "nav.agents": "Agents",
   "nav.skills": "Skills",
   "nav.commands": "Commands",

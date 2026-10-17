@@ -67,9 +67,16 @@ function stripCodeFence(raw: string): string {
 // as a fallback. Without it (text.translate — on-demand selection, quality matters)
 // it uses the caller's resolved model directly so the user's translate-model
 // setting actually takes effect. Throws RpcError on total failure.
-export async function translateText(args: TranslateArgs, opts: { preferCheap?: boolean } = {}): Promise<string> {
+//
+// `systemPrompt` thay prompt mặc định cho caller cần quy tắc riêng — vd Slack: trao đổi
+// công việc với khách Nhật phải GIỮ tên riêng/thuật ngữ gốc, ngược với prompt mặc định
+// (dịch hết, cấm để bản gốc trong ngoặc) vốn hợp cho bôi-đen-để-dịch.
+export async function translateText(
+  args: TranslateArgs,
+  opts: { preferCheap?: boolean; systemPrompt?: string } = {},
+): Promise<string> {
   const targetLang = args.targetLang?.trim() || DEFAULT_TARGET_LANG
-  const systemPrompt = buildSystemPrompt(targetLang)
+  const systemPrompt = opts.systemPrompt ?? buildSystemPrompt(targetLang)
 
   const cheap = opts.preferCheap ? CHEAP_MODEL[args.provider] : undefined
   const candidates = cheap && cheap !== args.modelId ? [cheap, args.modelId] : [args.modelId]

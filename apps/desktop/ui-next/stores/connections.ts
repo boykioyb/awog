@@ -693,7 +693,10 @@ export const useConnectionsStore = defineStore('connections', () => {
   // subscribe() opens it in the external browser. A user cancel surfaces as
   // RpcError(-32023, 'CANCELED') and is mapped to `{ kind: 'canceled' }` (silent,
   // prior state preserved) — NOT an error. The token never reaches the UI.
-  async function startOAuth(slug: string): Promise<SourceOAuthResult> {
+  async function startOAuth(
+    slug: string,
+    opts: { force?: boolean } = {},
+  ): Promise<SourceOAuthResult> {
     if (!available.value) {
       // Browser-dev stub: flip the source connected so the UI can be exercised.
       const target = sourceBySlug(slug)
@@ -708,7 +711,7 @@ export const useConnectionsStore = defineStore('connections', () => {
       const res = await sc.request<
         | { ok: true; alreadyAuthenticated: boolean; status: SourceConnectionStatus }
         | { ok: false; status: SourceConnectionStatus; error: string }
-      >('source.startOAuth', { slug })
+      >('source.startOAuth', { slug, force: opts.force })
       await refreshSource(slug)
       if (res.ok) return { kind: 'connected', alreadyAuthenticated: res.alreadyAuthenticated }
       return { kind: 'failed', error: res.error }

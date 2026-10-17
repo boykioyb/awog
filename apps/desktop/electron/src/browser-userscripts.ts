@@ -239,12 +239,13 @@ class UserscriptHost {
       // Tab chết giữa chừng không phải lỗi; còn lại thì rơi về đường lùi.
       if (state.wc.isDestroyed()) return;
       state.cdpFailed = true;
-      log.warn(
-        "userscripts: CDP registration failed, using fallback injection",
-        {
-          err: err instanceof Error ? err.message : String(err),
-        },
-      );
+      const message = err instanceof Error ? err.message : String(err);
+      // "target closed" khi webContents vẫn còn = tab đang bị đóng đúng lúc đăng ký (cùng
+      // ca với Network.enable trong browser.ts) ⇒ debug, không phải cảnh báo.
+      const level = /target closed|not attached/i.test(message) ? "debug" : "warn";
+      log[level]("userscripts: CDP registration failed, using fallback injection", {
+        err: message,
+      });
     }
   }
 

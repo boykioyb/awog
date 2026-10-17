@@ -76,6 +76,10 @@ const OVERLAYS = [
   '.wbm', // context menu của workbench explorer (fixed, không phải .smenu)
   '.wbcm-backdrop', // nền bắt click của WorkbenchContextMenu — trang đè lên sẽ
   // nuốt click "đóng menu" dù mắt vẫn thấy web
+  // Bề mặt nổi của trang Slack: bảng emoji (Popover reka), menu ⋯ (DropdownMenu reka —
+  // không mang `.smenu`), danh sách gợi ý @/: của ô trả lời. Gắn chung một attribute
+  // thay vì liệt kê class của từng cái.
+  '[data-slack-overlay]',
 ].join(', ')
 
 // Chồng bao nhiêu thì mới đáng ẩn. Đủ lớn để một cái chạm mép không tính, đủ nhỏ

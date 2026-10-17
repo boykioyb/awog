@@ -31,6 +31,7 @@ import {
 import { INFRA_MCP_SERVER, INFRA_TOOL_NAMES } from './infra-tools.js'
 import { INFRA_APP_TOOL_NAMES } from './infra-app-tools.js'
 import { LOGTIME_MCP_SERVER, LOGTIME_TOOL_NAMES } from './logtime-tools.js'
+import { SLACK_MCP_SERVER, SLACK_TOOL_NAMES } from './slack-tools.js'
 
 // Nguồn: DẪN XUẤT từ chính các hằng danh sách tool mà mỗi server export, chứ
 // không chép tay tên tool. Thêm một tool vào `SURFACE_TOOL_NAMES` là bảng này tự
@@ -55,6 +56,7 @@ const BRIDGED_SERVERS: readonly (readonly [string, readonly string[]])[] = [
   // entry cùng khoá server sẽ tuỳ tầng tiêu thụ mà cái sau đè cái trước.
   [INFRA_MCP_SERVER, [...INFRA_TOOL_NAMES, ...INFRA_APP_TOOL_NAMES]],
   [LOGTIME_MCP_SERVER, LOGTIME_TOOL_NAMES],
+  [SLACK_MCP_SERVER, SLACK_TOOL_NAMES],
   ['awogwiki', ['wiki_search', 'wiki_read', 'wiki_write', 'wiki_delete']],
   ['awogmemory', ['memory_remember', 'memory_forget', 'memory_read']],
   [

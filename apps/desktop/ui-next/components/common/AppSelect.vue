@@ -1,6 +1,37 @@
 <template>
-  <div ref="rootRef" class="asel" :class="{ sm: size === 'sm' }" :style="{ width }">
+  <div
+    ref="rootRef"
+    class="asel"
+    :class="{ sm: size === 'sm', ghost: variant === 'ghost' }"
+    :style="{ width }"
+  >
+    <!-- Searchable + đang mở: chính ô select thành ô gõ tìm (combobox), không tách
+         thêm một ô tìm trong menu. Placeholder = giá trị đang chọn để người dùng vẫn
+         thấy mình đang ở đâu khi chưa gõ gì. -->
+    <div
+      v-if="searchable && open"
+      ref="triggerRef"
+      class="aseltrigger aselcombo"
+      role="combobox"
+      :aria-expanded="open"
+      aria-haspopup="listbox"
+    >
+      <input
+        ref="searchRef"
+        v-model="search"
+        class="aselsearchin"
+        :placeholder="selectedLabel || searchPlaceholder || placeholder"
+        :aria-label="searchPlaceholder || placeholder"
+        @keydown.esc.stop.prevent="open = false"
+        @keydown.enter.prevent="selectActive"
+        @keydown.down.prevent="moveActive(1)"
+        @keydown.up.prevent="moveActive(-1)"
+        @keydown.tab="open = false"
+      />
+      <Icon name="chev" class="aselchev open" @mousedown.prevent="open = false" />
+    </div>
     <button
+      v-else
       ref="triggerRef"
       type="button"
       class="aseltrigger"
@@ -15,31 +46,26 @@
       <Icon name="chev" class="aselchev" :class="{ open }" />
     </button>
     <!-- Teleported to body + fixed-positioned so the menu escapes any
-         overflow-clipping / scroll ancestor (e.g. a modal body). -->
-    <Teleport to="body">
+         overflow-clipping / scroll ancestor (e.g. a modal body). Trong hộp thoại
+         reka (shadcn Dialog) thì teleport vào CHÍNH hộp thoại — xem menuHost. -->
+    <Teleport :to="menuHost">
       <div v-if="open" ref="menuRef" class="aselmenu" role="listbox" :style="menuStyle">
-        <div v-if="searchable" class="aselsearch" @mousedown.stop>
-          <Icon name="search" class="aselsearchic" />
-          <input
-            ref="searchRef"
-            v-model="search"
-            class="aselsearchin"
-            :placeholder="searchPlaceholder || 'Search…'"
-            @keydown.esc.stop="open = false"
-            @keydown.enter.prevent="selectFirst"
-          />
-        </div>
         <div v-if="searchable && !filtered.length" class="aselnone">{{ emptyLabel }}</div>
         <button
-          v-for="opt in filtered"
+          v-for="(opt, i) in filtered"
           :key="opt.value"
           type="button"
           class="aselopt"
-          :class="{ on: opt.value === model, disabled: opt.disabled }"
+          :class="{
+            on: opt.value === model,
+            hl: searchable && i === active,
+            disabled: opt.disabled,
+          }"
           role="option"
           :aria-selected="opt.value === model"
           :aria-disabled="opt.disabled"
           :disabled="opt.disabled"
+          @mousedown.prevent
           @click="select(opt)"
         >
           <span class="aseloptlbl">{{ opt.label }}</span>
@@ -69,6 +95,9 @@ const props = withDefaults(
     disabled?: boolean
     // 'sm' = trigger cao `--ctrl-h-sm` (hàng toolbar dày đặc); mặc định giữ `--ctrl-h`.
     size?: 'default' | 'sm'
+    // 'ghost' = không viền/bóng, chỉ nền nhạt khi hover — cho ô chọn nằm lẫn trong dòng
+    // chữ (vd project trên dòng phụ header thread Slack), nơi viền làm rối mắt.
+    variant?: 'default' | 'ghost'
     // Ô tìm kiếm trong menu (combobox) — cho danh sách dài như project/repo.
     searchable?: boolean
     searchPlaceholder?: string
@@ -79,6 +108,7 @@ const props = withDefaults(
     width: 'auto',
     disabled: false,
     size: 'default',
+    variant: 'default',
     searchable: false,
     searchPlaceholder: '',
     emptyLabel: 'No matches',
@@ -95,6 +125,34 @@ const searchRef = useTemplateRef<HTMLInputElement>('searchRef')
 const menuStyle = ref<Record<string, string>>({})
 const search = ref('')
 
+// Nơi gắn menu. Hộp thoại reka ở chế độ modal khoá focus trong nó và đặt
+// `body { pointer-events: none }` — menu gắn ở <body> thì bấm vào ô tìm / option bị
+// tính là "ngoài hộp thoại" (không gõ được, click xuyên xuống). Nên khi trigger nằm
+// trong một hộp thoại reka đang mở, gắn menu vào chính hộp thoại đó. Hộp thoại căn
+// giữa bằng transform ⇒ nó là containing block của `position: fixed`, toạ độ menu
+// phải trừ gốc của nó (xem updatePosition).
+const menuHost = ref<HTMLElement | 'body'>('body')
+function resolveMenuHost(): HTMLElement | 'body' {
+  return rootRef.value?.closest<HTMLElement>('[role="dialog"][data-state="open"]') ?? 'body'
+}
+// Gốc toạ độ của containing block cho `position: fixed` (viewport, hoặc phần tử có
+// transform/filter/contain). Trả cả kích thước để tính `bottom` khi lật menu lên trên.
+function fixedOrigin(): { x: number; y: number; h: number } {
+  const host = menuHost.value
+  if (host !== 'body') {
+    const cs = getComputedStyle(host)
+    const isContaining =
+      cs.transform !== 'none' ||
+      cs.filter !== 'none' ||
+      /paint|layout|strict|content/.test(cs.contain)
+    if (isContaining) {
+      const b = host.getBoundingClientRect()
+      return { x: b.left + host.clientLeft, y: b.top + host.clientTop, h: host.clientHeight }
+    }
+  }
+  return { x: 0, y: 0, h: window.innerHeight }
+}
+
 // Searchable: lọc theo label không phân biệt hoa-thường; giữ thứ tự options.
 const filtered = computed(() => {
   if (!props.searchable || !search.value.trim()) return props.options
@@ -102,9 +160,34 @@ const filtered = computed(() => {
   return props.options.filter((o) => o.label.toLowerCase().includes(q))
 })
 
-function selectFirst() {
-  const first = filtered.value.find((o) => !o.disabled)
-  if (first) select(first)
+// Dòng đang được chọn bằng phím ↑/↓ (combobox). Reset về option đầu bật được mỗi
+// khi lọc lại, để Enter ngay sau khi gõ chọn kết quả khớp đầu tiên.
+const active = ref(0)
+function firstEnabled(): number {
+  const i = filtered.value.findIndex((o) => !o.disabled)
+  return i < 0 ? 0 : i
+}
+watch(filtered, () => {
+  active.value = firstEnabled()
+})
+function moveActive(step: 1 | -1) {
+  const list = filtered.value
+  if (!list.length) return
+  let i = active.value
+  for (let n = 0; n < list.length; n++) {
+    i = (i + step + list.length) % list.length
+    if (!list[i]?.disabled) break
+  }
+  active.value = i
+  void nextTick(() => {
+    menuRef.value
+      ?.querySelectorAll<HTMLElement>('.aselopt')
+      [i]?.scrollIntoView({ block: 'nearest' })
+  })
+}
+function selectActive() {
+  const opt = filtered.value[active.value]
+  if (opt && !opt.disabled) select(opt)
 }
 
 const selectedLabel = computed(
@@ -129,26 +212,30 @@ function updatePosition() {
   // values — e.g. a repo slug — aren't truncated/scrolled), capped so it never
   // runs past the right viewport edge.
   const vw = window.innerWidth
+  const o = fixedOrigin()
   menuStyle.value = {
-    left: `${Math.round(r.left)}px`,
+    left: `${Math.round(r.left - o.x)}px`,
     minWidth: `${Math.round(r.width)}px`,
     width: 'max-content',
     maxWidth: `${Math.round(Math.max(r.width, vw - r.left - 12))}px`,
     maxHeight: `${Math.round(maxH)}px`,
     ...(flipUp
-      ? { bottom: `${Math.round(vh - r.top + GAP)}px` }
-      : { top: `${Math.round(r.bottom + GAP)}px` }),
+      ? { bottom: `${Math.round(o.y + o.h - r.top + GAP)}px` }
+      : { top: `${Math.round(r.bottom + GAP - o.y)}px` }),
   }
 }
 
 function toggle() {
   if (props.disabled) return
+  if (!open.value) menuHost.value = resolveMenuHost()
   open.value = !open.value
 }
 function select(opt: AppSelectOption) {
   if (opt.disabled) return
   model.value = opt.value
   open.value = false
+  // Ô gõ tìm vừa bị gỡ (combobox về lại nút) ⇒ trả focus cho nút để Tab/phím tiếp tục.
+  if (props.searchable) void nextTick(() => triggerRef.value?.focus())
 }
 
 function onWindowDown(e: MouseEvent) {
@@ -172,6 +259,7 @@ function onReposition() {
 watch(open, async (isOpen) => {
   if (isOpen) {
     search.value = ''
+    active.value = firstEnabled()
     updatePosition()
     window.addEventListener('mousedown', onWindowDown)
     window.addEventListener('keydown', onKey)
@@ -226,6 +314,17 @@ onBeforeUnmount(() => {
   font-family: var(--sans);
   box-shadow: var(--shadow-sm);
 }
+.asel.ghost .aseltrigger {
+  border-color: transparent;
+  box-shadow: none;
+  color: inherit;
+}
+.asel.ghost .aseltrigger:hover:not(:disabled) {
+  background: var(--bgHover);
+}
+.asel.ghost .aselcombo {
+  border-color: var(--input);
+}
 .asel.sm .aseltrigger {
   height: var(--ctrl-h-sm);
   padding: 0 8px;
@@ -269,11 +368,13 @@ onBeforeUnmount(() => {
   /* Fixed + teleported to body — top/left/width/max-height set inline by
      updatePosition so the menu escapes overflow-clipping ancestors. z-index must
      sit above every form-modal overlay that can host a select (.ovl = 100,
-     SessionGitModal = 120, git sub-modals = 150) yet below top-level alerts
-     (confirm / command palette = 200), so it floats over its own modal but a
-     confirm still covers it. */
+     SessionGitModal = 120, git sub-modals = 150, shadcn Dialog = 170) yet below
+     top-level alerts (confirm / command palette = 200), so it floats over its own
+     modal but a confirm still covers it. 180 = cùng tầng popover của shadcn
+     (DropdownMenu / ContextMenu / Tooltip): ở 160 thì menu nằm DƯỚI Dialog shadcn
+     (vd ô chọn project trong hộp "Thêm thread Slack"). */
   position: fixed;
-  z-index: 160;
+  z-index: 180;
   max-height: 280px;
   overflow-y: auto;
   background: var(--popover);
@@ -289,38 +390,27 @@ onBeforeUnmount(() => {
      đổi `.smenu`/`.pop` sang ramp. */
   box-shadow: var(--shadow-lg);
 }
-/* Ô tìm kiếm trong menu (searchable) — sticky trên đầu để luôn nhìn thấy khi
-   option list dài cuộn xuống. */
-.aselsearch {
-  position: sticky;
-  top: -4px; /* bù padding p-1 của menu */
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 4px 6px;
-  margin: -4px -4px 4px;
-  background: var(--popover);
-  border-bottom: 1px solid var(--border);
+/* Combobox: trigger đang mở mang ô gõ tìm thay cho nhãn giá trị. Viền ring như
+   focus-visible vì focus thật nằm ở input bên trong. */
+.aselcombo {
+  cursor: text;
+  box-shadow: 0 0 0 1px var(--ring);
 }
-.aselsearchic {
-  width: var(--icon-sm);
-  height: var(--icon-sm);
-  flex: 0 0 auto;
-  margin-left: 4px;
-  color: var(--muted-foreground);
+.aselcombo .aselchev {
+  cursor: pointer;
 }
 .aselsearchin {
   flex: 1;
   min-width: 0;
+  height: 100%;
   border: 0;
   background: transparent;
   font-size: var(--fs-sm);
   line-height: var(--lh-sm);
-  color: var(--popover-foreground);
+  color: var(--foreground);
   font-family: var(--sans);
   outline: none;
-  padding: 4px 0;
+  padding: 0;
 }
 .aselsearchin::placeholder {
   color: var(--muted-foreground);
@@ -360,7 +450,8 @@ onBeforeUnmount(() => {
   background: var(--accent-wash);
   color: var(--accent-foreground);
 }
-.aselopt.on {
+.aselopt.on,
+.aselopt.hl {
   color: var(--accent-foreground);
   background: var(--accent-wash);
 }

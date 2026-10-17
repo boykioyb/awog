@@ -18,20 +18,37 @@
     <nav class="navscroll">
       <template v-for="group in groups" :key="group.title ?? 'top'">
         <div v-if="group.title" class="navg">{{ t(group.title) }}</div>
-        <NuxtLink
-          v-for="item in group.items"
-          :key="item.to"
-          :to="item.to"
-          class="ni"
-          :class="{ on: isActive(item.to) }"
-          :title="navCollapsed && !compact ? t(item.label) : undefined"
-          :data-tour="item.to === '/workbench' ? 'nav-sessions' : undefined"
-        >
-          <Icon :name="item.icon" />
-          {{ t(item.label) }}
-          <span v-if="item.badge" class="bdg" :class="item.badge.kind">{{ item.badge.n }}</span>
-          <span v-if="item.dot" class="gdot" />
-        </NuxtLink>
+        <template v-for="item in group.items" :key="item.to">
+          <!-- Mục mở modal thay vì đổi trang (Slack): <a> không href để LinkOpenHost bỏ
+               qua, role=button + Enter cho bàn phím; cùng class `.ni` nên trông như mục
+               điều hướng. -->
+          <a
+            v-if="item.modal"
+            class="ni"
+            :class="{ on: item.modal.isOpen() }"
+            role="button"
+            tabindex="0"
+            :title="navCollapsed && !compact ? t(item.label) : undefined"
+            @click="item.modal.open()"
+            @keydown.enter="item.modal.open()"
+          >
+            <Icon :name="item.icon" />
+            {{ t(item.label) }}
+          </a>
+          <NuxtLink
+            v-else
+            :to="item.to"
+            class="ni"
+            :class="{ on: isActive(item.to) }"
+            :title="navCollapsed && !compact ? t(item.label) : undefined"
+            :data-tour="item.to === '/workbench' ? 'nav-sessions' : undefined"
+          >
+            <Icon :name="item.icon" />
+            {{ t(item.label) }}
+            <span v-if="item.badge" class="bdg" :class="item.badge.kind">{{ item.badge.n }}</span>
+            <span v-if="item.dot" class="gdot" />
+          </NuxtLink>
+        </template>
       </template>
     </nav>
 
@@ -102,10 +119,25 @@ import { isBoardSession } from '~/composables/useSessionsData'
 import TopBarNotifications from '~/components/shell/TopBarNotifications.vue'
 
 type NavBadge = { kind: 'run' | 'wait'; n: number }
-type NavItem = { to: string; icon: string; label: string; badge?: NavBadge; dot?: boolean }
+// `modal`: mục mở modal toàn cục thay vì đổi trang (`to` khi đó chỉ làm key).
+type NavModal = { open: () => void; isOpen: () => boolean }
+type NavItem = {
+  to: string
+  icon: string
+  label: string
+  badge?: NavBadge
+  dot?: boolean
+  modal?: NavModal
+}
 type NavGroup = { title?: string; items: NavItem[] }
 
 const sessions = useSessionsStore()
+// Slack threads là modal trong cửa sổ chính (docs/features/slack-threads.md).
+const slackModal = useSlackModal()
+const slackNav: NavModal = {
+  open: () => slackModal.open(),
+  isOpen: () => slackModal.isOpen.value,
+}
 // Sessions needing the user's attention: unread, or paused on a gate (awaiting a
 // question / permission answer). Drives the live "wait" badge on the Sessions nav
 // item — replaces the old static seed. 0 → no badge.
@@ -140,6 +172,7 @@ const groups = computed<NavGroup[]>(() => [
       { to: '/agents', icon: 'brain', label: 'nav.agents' },
       { to: '/schedules', icon: 'clock', label: 'nav.schedules' },
       { to: '/logtime', icon: 'table', label: 'nav.logtime' },
+      { to: '/slack', icon: 'message', label: 'nav.slack', modal: slackNav },
     ],
   },
   {

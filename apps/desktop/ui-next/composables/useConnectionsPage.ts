@@ -274,7 +274,9 @@ export function useConnectionsPage() {
   // component's pending spinner.
   const runOAuth = (source: Source, done: (result: SourceOAuthResult) => void) => {
     void store
-      .startOAuth(source.slug)
+      // Người dùng bấm nút ⇒ luôn xin quyền lại, kể cả khi token còn hạn: đó là
+      // cách duy nhất để token nhận scope mới thêm vào cấu hình nguồn.
+      .startOAuth(source.slug, { force: true })
       .then((result) => {
         if (result.kind === 'connected') {
           toast.add({

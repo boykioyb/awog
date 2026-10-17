@@ -275,6 +275,35 @@ export interface AwogGatewayBridge {
   onStatusChanged(cb: (status: AwogGatewayStatus) => void): () => void
 }
 
+// Slack threads (docs/features/slack-threads.md) — lớp Electron (slack-window.ts +
+// slack-files.ts). Cửa sổ bị tác động luôn là cửa sổ GỌI (main suy từ sender); mọi path
+// phải là file thật trong ~/.awog/slack/files (path tuyệt đối trả về từ RPC
+// `slack.file.fetch`), ngoài đó main từ chối.
+export interface AwogSlackBridge {
+  // Mở (hoặc focus) cửa sổ Slack duy nhất, route `/slack?window=1&thread=<id>`. Cửa sổ
+  // đã mở ⇒ focus + phát onNavigate(threadId) thay vì nạp lại trang. threadId sai
+  // định dạng ⇒ reject.
+  openWindow(threadId?: string): Promise<void>
+  // Bảo đảm có cửa sổ chính ĐANG NGHE engine event: chưa có thì mở lại, rồi chờ
+  // renderer đăng ký nghe (+ nhịp settle). Gọi ở cửa sổ chính ⇒ resolve ngay. Quá
+  // 15s ⇒ reject. Gọi trước `slack.session.open|push` vì `session.*` chỉ tới cửa sổ
+  // chính + popout, không tới cửa sổ Slack riêng.
+  ensureMainWindow(): Promise<void>
+  // Ghim luôn-nằm-trên cho chính cửa sổ gọi; resolve trạng thái thật sau khi đặt.
+  setAlwaysOnTop(on: boolean): Promise<boolean>
+  isAlwaysOnTop(): Promise<boolean>
+  // Hộp thoại "Save as…" (mặc định Downloads/<defaultName đã làm sạch>), chép file.
+  // Resolve path đã lưu, hoặc null khi người dùng huỷ.
+  saveFileAs(srcPath: string, defaultName: string): Promise<string | null>
+  // Mở bằng app mặc định của OS — CHỈ loại chỉ-xem (pdf, ảnh raster, audio/video,
+  // txt/csv/tsv/log/md/json, docx/xlsx/pptx) và không có bit x. Loại khác (zip, dmg,
+  // html, svg, docm…) ⇒ reject, message chứa `slack_open_blocked` — UI nên gợi ý
+  // dùng saveFileAs.
+  openPath(path: string): Promise<void>
+  // Cửa sổ Slack đang mở được yêu cầu chuyển sang thread khác; trả unsubscribe.
+  onNavigate(handler: (threadId: string) => void): () => void
+}
+
 // Network inspector: dữ liệu thô (cookie/token/body) do main giữ; chỉ renderer của app đọc.
 // Mọi lệnh đi qua cổng sở hữu tab (`scope` sai ⇒ "no such browser tab").
 export interface AwogBrowserCaptureBridge {
@@ -438,6 +467,9 @@ export interface AwogBridge {
     // Bộ bắt request của NGƯỜI DÙNG (Network inspector, docs/features/network-capture.md).
     capture: AwogBrowserCaptureBridge
   }
+  // Slack threads. Optional so a shell packaged before the feature degrades (the
+  // renderer guards on `window.awog?.slack`).
+  slack?: AwogSlackBridge
   // Close the calling window (a preview popout closing itself). Main resolves the
   // target from the IPC sender, so a renderer can never close another window.
   closeSelf(): Promise<void>

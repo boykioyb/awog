@@ -16,6 +16,10 @@
          đang ở đâu" là câu hỏi đầu tiên khi quay lại một phiên. -->
     <SessionIssueChip :session="session" />
 
+    <!-- Thread Slack mà phiên này xử lý (docs/features/slack-threads.md): bấm mở cửa
+         sổ Slack tới đúng thread. Tự ẩn khi phiên không gắn thread. -->
+    <SlackThreadChip :session="session" />
+
     <!-- Task (ADR 0055): bấm thẳng là mở task, như banner cũ — không popover, vì nó
          chỉ có đúng một hành động. -->
     <button
@@ -90,6 +94,7 @@
 import type { Session, SshApprovalMode } from '~/composables/useSessionsData'
 import type { AppSelectOption } from '~/components/common/AppSelect.vue'
 import { usePopoverAnchor } from '~/composables/usePopoverAnchor'
+import { useSlackStore } from '~/stores/slack'
 
 const props = defineProps<{ session: Session }>()
 const { t } = useI18n()
@@ -149,9 +154,21 @@ const hasBookmarks = computed(
 // đường bật. `useInfraChipsPresence` đọc khả dụng máy/project một lần.
 const { load: loadInfraPresence, anyVisible: hasInfra } = useInfraChipsPresence(() => props.session)
 onMounted(() => void loadInfraPresence())
+// Thread Slack gắn phiên (SlackThreadChip). Danh sách thread nạp lười một lần mỗi cửa
+// sổ — một lần đọc file `threads.json`, không gọi Slack.
+const slackStore = useSlackStore()
+onMounted(() => {
+  if (!slackStore.loaded) void slackStore.fetchThreads()
+})
+const hasSlackThread = computed(
+  () =>
+    !!props.session.engineId &&
+    slackStore.threads.some((th) => th.sessionId === props.session.engineId),
+)
 const show = computed(
   () =>
     !!props.session.issueId ||
+    hasSlackThread.value ||
     !!props.session.aboutTaskId ||
     !!props.session.aboutSshHostId ||
     hasInfra.value ||

@@ -62,6 +62,11 @@ export type PreviewRef = {
   // in-memory fields / placeholder when absent or unavailable.
   workspaceRoot?: string
   path?: string
+  // File nằm ngoài project mà người dùng không nên thao tác (vd cache file Slack ở
+  // ~/.awog/slack/files): chỉ xem, không sửa / đổi tên / chuyển / xoá / "mở bằng
+  // trình duyệt". Nút mở ngoài bị tắt vì openFileExternal đi thẳng qua OS và bỏ
+  // qua lớp chặn file thực thi của bridge Slack — file do người ngoài gửi tới.
+  readOnlyFile?: boolean
   // Chỉ có mặt khi bên mở là một message của session (xem PreviewQuoteHook). Modal
   // hiện nút Quote + panel preview trích dẫn ở góc khi field này tồn tại.
   quote?: PreviewQuoteHook
@@ -113,6 +118,14 @@ export const isOfficeKind = (kind: PreviewRef['kind']): boolean =>
 // and ignores everything else.
 export function mediaFileUrl(workspaceRoot: string, path: string, version = 0): string {
   const qs = `root=${encodeURIComponent(workspaceRoot)}&path=${encodeURIComponent(path)}`
+  return `media://awog/?${qs}${version ? `&v=${version}` : ''}`
+}
+
+// media:// URL cho video/audio Slack đã tải (path tuyệt đối từ RPC `slack.file.fetch`).
+// Gốc là hằng số `~/.awog/slack/files` ở main (electron/src/media.ts, `scope=slack`) —
+// URL không mang gốc nào, main tự ép path nằm trong thư mục đó. Giữ khớp handler.
+export function slackMediaFileUrl(absPath: string, version = 0): string {
+  const qs = `scope=slack&path=${encodeURIComponent(absPath)}`
   return `media://awog/?${qs}${version ? `&v=${version}` : ''}`
 }
 

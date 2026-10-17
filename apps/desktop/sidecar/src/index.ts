@@ -386,6 +386,30 @@ import './methods/gh.review.js'
 import './methods/gh.translate.js'
 import './methods/gh.enhance.js'
 import './methods/text.translate.js'
+import './methods/slack.status.js'
+import './methods/slack.threads.list.js'
+import './methods/slack.threads.add.js'
+import './methods/slack.threads.remove.js'
+import './methods/slack.threads.update.js'
+import './methods/slack.thread.get.js'
+import './methods/slack.thread.mark-seen.js'
+import './methods/slack.poll.js'
+import './methods/slack.reply.js'
+import './methods/slack.message.update.js'
+import './methods/slack.message.delete.js'
+import './methods/slack.reaction.js'
+import './methods/slack.directory.users.js'
+import './methods/slack.directory.emoji.js'
+import './methods/slack.directory.emoji-images.js'
+import './methods/slack.translate.js'
+import './methods/slack.translate-outgoing.js'
+import './methods/slack.settings.js'
+import './methods/slack.glossary.js'
+import './methods/slack.file.thumb.js'
+import './methods/slack.file.fetch.js'
+import './methods/slack.file.save-to-project.js'
+import './methods/slack.session.open.js'
+import './methods/slack.session.push.js'
 import './methods/fs.list-dir.js'
 import './methods/fs.list-files.js'
 import './methods/fs.read-file.js'
@@ -482,6 +506,7 @@ import { awogWatcher } from './watcher.js'
 import { resumeOnBoot } from './tasks/engine.js'
 import { reloadBackgroundShells } from './sessions/bg-registry.js'
 import { installDevServerBrowserSync } from './devserver/registry.js'
+import { sweepSlackFileCache } from './slack/files.js'
 import { ensureUserPath } from './util/spawn-path.js'
 
 // Last-resort crash guards. A broken pipe from a spawned child (e.g. the Claude
@@ -750,3 +775,10 @@ try {
     err: err instanceof Error ? err.message : String(err),
   })
 }
+
+// Dọn file đính kèm Slack không mở quá 30 ngày (docs/features/slack-threads.md,
+// mục "Lưu trữ"). Chạy lúc khởi động rồi mỗi ngày một lần — app mở liền nhiều
+// tuần vẫn được dọn. `unref` để timer không giữ tiến trình sống khi tắt máy.
+const SLACK_SWEEP_INTERVAL_MS = 24 * 60 * 60_000
+void sweepSlackFileCache()
+setInterval(() => void sweepSlackFileCache(), SLACK_SWEEP_INTERVAL_MS).unref()

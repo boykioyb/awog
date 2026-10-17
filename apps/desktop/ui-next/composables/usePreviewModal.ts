@@ -143,6 +143,9 @@ export function usePreviewModal(
   const hasWorkspaceFile = computed(
     () => !!(item.value?.workspaceRoot && item.value?.path && sc.available),
   )
+  // Thao tác làm đổi file hoặc giao file cho OS (sửa, đổi tên, chuyển, xoá, mở
+  // ngoài, popout) — tắt với file chỉ-xem (PreviewRef.readOnlyFile).
+  const canMutateFile = computed(() => hasWorkspaceFile.value && !item.value?.readOnlyFile)
 
   // Scroll offset to replay once the (re)opened markdown has rendered — set from a
   // minimize-dock restore hint; null otherwise. Applied by the watcher below.
@@ -833,8 +836,7 @@ export function usePreviewModal(
   const editMode = ref(false)
   const draft = ref('')
   const isEditableFile = computed(
-    () =>
-      hasWorkspaceFile.value && (item.value?.kind === 'text' || item.value?.kind === 'markdown'),
+    () => canMutateFile.value && (item.value?.kind === 'text' || item.value?.kind === 'markdown'),
   )
   const dirty = computed(() => editMode.value && draft.value !== effectiveText.value)
   // What the Monaco viewer renders: the live draft while editing, else the file.
@@ -898,7 +900,7 @@ export function usePreviewModal(
   }
   async function openInBrowser() {
     const it = item.value
-    if (!it?.workspaceRoot || !it.path) return
+    if (!it?.workspaceRoot || !it.path || it.readOnlyFile) return
     try {
       await sc.openFileExternal(it.workspaceRoot, it.path)
     } catch {
@@ -910,7 +912,8 @@ export function usePreviewModal(
   // real workspace file — the popout renderer re-reads the content from disk, so an
   // in-memory preview (a fullscreened chat reply, a dropped blob) has nothing to read —
   // and hidden inside a popout, which must not spawn another copy of itself.
-  const canOpenInWindow = computed(() => hasWorkspaceFile.value && !props.windowMode)
+  // Popout đọc lại file theo root+path và không mang cờ readOnlyFile sang ⇒ tắt luôn.
+  const canOpenInWindow = computed(() => canMutateFile.value && !props.windowMode)
   async function openInWindow() {
     const it = item.value
     if (!it?.workspaceRoot || !it.path) return
@@ -1021,7 +1024,7 @@ export function usePreviewModal(
     if (req) await req.run()
   }
   function askDelete() {
-    if (!hasWorkspaceFile.value) return
+    if (!canMutateFile.value) return
     confirmReq.value = {
       titleKey: 'common.preview.deleteTitle',
       messageKey: 'common.preview.deleteConfirm',
@@ -1306,6 +1309,7 @@ export function usePreviewModal(
     loading,
     truncated,
     hasWorkspaceFile,
+    canMutateFile,
     // body / view
     bodyClass,
     headIcon,

@@ -3,6 +3,9 @@
        renders into its own fixed layer per the z-index bands) — group by concern. -->
   <SessionPromptEditOverlay />
   <SessionGitModal />
+  <!-- Slack threads dạng modal trong cửa sổ chính (useSlackModal) — NavRail, route
+       `/slack` và chip phiên mở nó; cửa sổ Slack riêng là pages/slack.vue?window=1. -->
+  <SlackModal />
   <!-- Toast + hộp lỗi xác thực cho MỌI thao tác git (pull/push từ /git, modal Git hay
        Source Control của workbench). -->
   <GitFeedbackHost />

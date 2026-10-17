@@ -6,7 +6,8 @@ import { isAbsolute, join, sep } from 'node:path'
 // assertInsideWorkspace + the old Rust resolve_inside_workspace (security invariant #2).
 // Shared by the IPC shell handlers (ipc.ts), the media:// streaming protocol (media.ts) and
 // the preview popout (preview-window.ts) so the workspace-scope check lives in exactly one
-// place.
+// place. Lớp Slack (slack-files.ts) cũng đi qua đây với gốc CỐ ĐỊNH ~/.awog/slack/files
+// thay cho workspace root.
 //
 // `filePath` may be workspace-RELATIVE or an ABSOLUTE path inside the root. Both shapes
 // reach us: a path a model wrote in chat is opened as-is (the sidecar's path sanitizer

@@ -4,6 +4,7 @@ import { extname } from 'node:path'
 import { Readable } from 'node:stream'
 import { protocol } from 'electron'
 import { log } from './logger'
+import { SLACK_FILES_DIR } from './slack-files'
 import { resolveInsideWorkspace } from './workspace-scope'
 
 // Custom scheme for streaming workspace media (video / audio) into the in-app
@@ -15,6 +16,10 @@ import { resolveInsideWorkspace } from './workspace-scope'
 //
 // URL shape (MUST match mediaFileUrl() in ui-next composables/usePreview.ts):
 //   media://awog/?root=<enc workspaceRoot>&path=<enc workspace-relative path>
+// Biến thể Slack (khớp slackMediaFileUrl() cùng file đó):
+//   media://awog/?scope=slack&path=<enc path tuyệt đối hoặc tương đối trong ~/.awog/slack/files>
+// Ở biến thể này gốc là hằng số SLACK_FILES_DIR của main — URL KHÔNG chọn được gốc,
+// nên video/audio Slack phát được mà không phải giả một workspace root. `scope` lạ ⇒ 400.
 // A preview reload appends a `&v=<n>` cache-buster so the element re-requests a file
 // rewritten in place; only root+path are read here, any other param is ignored.
 // The path is validated inside the workspace via resolveInsideWorkspace before a
@@ -118,10 +123,18 @@ export function registerMediaProtocol(): void {
     let mime: string
     try {
       const url = new URL(request.url)
-      const root = url.searchParams.get('root')
+      const scope = url.searchParams.get('scope')
       const rel = url.searchParams.get('path')
-      if (!root || !rel) return new Response('bad request', { status: 400 })
-      abs = resolveInsideWorkspace(root, rel) // throws if it escapes the workspace
+      if (!rel) return new Response('bad request', { status: 400 })
+      if (scope === 'slack') {
+        abs = resolveInsideWorkspace(SLACK_FILES_DIR, rel) // throws if it escapes the Slack files dir
+      } else if (scope === null) {
+        const root = url.searchParams.get('root')
+        if (!root) return new Response('bad request', { status: 400 })
+        abs = resolveInsideWorkspace(root, rel) // throws if it escapes the workspace
+      } else {
+        return new Response('bad request', { status: 400 })
+      }
       mime = mimeOf(abs)
     } catch (err) {
       log.error(`[media] rejected: ${err instanceof Error ? err.message : String(err)}`)

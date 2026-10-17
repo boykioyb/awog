@@ -78,9 +78,12 @@ export function isTokenExpired(bundle: OAuthTokenBundle): boolean {
 }
 
 // True when the token is expired OR within the 5-min refresh window. A bundle
-// with no expiry can't be reasoned about → treat as needing refresh so the next
-// refresh writes a proper expiresAt (matches Craft's TokenRefreshManager).
+// with no expiry but WITH a refresh token can't be reasoned about → treat as
+// needing refresh so the next refresh writes a proper expiresAt (matches Craft's
+// TokenRefreshManager). A bundle with NEITHER (e.g. a Slack user token without
+// rotation) is a non-expiring token: there is nothing to refresh with, and
+// "needs refresh" would send every caller down a refresh path that can only fail.
 export function tokenNeedsRefresh(bundle: OAuthTokenBundle): boolean {
-  if (typeof bundle.expiresAt !== 'number') return true
+  if (typeof bundle.expiresAt !== 'number') return Boolean(bundle.refreshToken)
   return Date.now() > bundle.expiresAt - REFRESH_WINDOW_MS
 }

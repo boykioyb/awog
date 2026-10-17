@@ -305,19 +305,27 @@ function bundleFromTokenResponse(
   if (typeof data.access_token !== 'string' || !data.access_token) {
     throw new Error('token response missing access_token')
   }
-  // Default to 3600s per RFC 6749 so a token with no expires_in is still
-  // detected as needing refresh (otherwise it would never refresh).
-  const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : 3600
-  const bundle: OAuthTokenBundle = {
-    accessToken: data.access_token,
-    expiresAt: Date.now() + expiresIn * 1000,
-    clientId,
-    tokenType: typeof data.token_type === 'string' ? data.token_type : 'Bearer',
-  }
   const refresh =
     typeof data.refresh_token === 'string' && data.refresh_token
       ? data.refresh_token
       : fallbackRefreshToken
+  const bundle: OAuthTokenBundle = {
+    accessToken: data.access_token,
+    clientId,
+    tokenType: typeof data.token_type === 'string' ? data.token_type : 'Bearer',
+  }
+  // Thiếu expires_in: nếu CÓ refresh token thì mặc định 3600s theo RFC 6749 để
+  // token vẫn được làm mới đúng lúc. Nếu KHÔNG có refresh token thì để trống
+  // expiresAt — token không hạn (Slack user token khi app không bật token
+  // rotation: không trả expires_in lẫn refresh_token, xoxp sống tới khi bị thu hồi).
+  // Gán hạn giả 1h cho loại này làm getFreshToken đánh dấu nguồn needs_auth sau
+  // 1 giờ trong khi token vẫn dùng được (đo 2026-10-16: quá "hạn" 20 phút,
+  // auth.test vẫn ok). Token thu hồi thật thì lời gọi API trả 401/invalid_auth.
+  if (typeof data.expires_in === 'number') {
+    bundle.expiresAt = Date.now() + data.expires_in * 1000
+  } else if (refresh) {
+    bundle.expiresAt = Date.now() + 3600 * 1000
+  }
   if (refresh) bundle.refreshToken = refresh
   return bundle
 }

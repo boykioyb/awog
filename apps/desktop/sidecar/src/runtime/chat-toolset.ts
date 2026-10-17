@@ -28,6 +28,7 @@ import { createRunWorkflowTool, RUN_WORKFLOW_TOOL_NAME } from './tools/run-workf
 import { createInfraTools } from './tools/infra-tools.js'
 import { createInfraAppTools } from './tools/infra-app-tools.js'
 import { createSshTools } from './tools/ssh-tools.js'
+import { createSlackTools, sessionHasSlackThread } from './tools/slack-tools.js'
 import type { BeforeToolCall } from './permission.js'
 import { sessionManager } from '../sessions/session-manager.js'
 import { runRootId } from '../sessions/run-root.js'
@@ -302,6 +303,21 @@ export async function buildChatToolset(
       ...(args.sshTerminalConnId ? { terminalConnId: args.sshTerminalConnId } : {}),
     }).filter((t) => isToolAllowed(t.name, filter))
     tools.push(...sshTools)
+  }
+
+  // Slack (docs/features/slack-threads.md): `slack_draft_reply` CHỈ khi phiên đang gắn
+  // một thread — phiên thường không trả token schema nào. Cấp cả trong plan mode: tool
+  // chỉ điền nháp vào composer, không đụng workspace. Codex cũng nhận từ đây (qua
+  // dynamicTools), nhưng Codex chốt danh sách tool lúc thread/start — phiên Codex gắn
+  // thread SAU lượt đầu sẽ không thấy tool này cho tới phiên Codex mới.
+  if (args.sessionId && (await sessionHasSlackThread(args.sessionId))) {
+    const filter = {
+      ...(args.allowedTools ? { allowedTools: args.allowedTools } : {}),
+      ...(args.disabledTools ? { disabledTools: args.disabledTools } : {}),
+    }
+    tools.push(
+      ...createSlackTools({ sessionId: args.sessionId }).filter((t) => isToolAllowed(t.name, filter)),
+    )
   }
 
   // Tool hạ tầng (ADR 0088 §4): CHỈ có mặt khi phiên đã ghim ngữ cảnh — không ghim

@@ -66,6 +66,8 @@ import { buildSourceToolsSdkServer } from './source-sdk-server.js'
 import { buildSshToolsSdkServer } from './ssh-sdk-server.js'
 import { buildWikiToolsSdkServer } from './wiki-sdk-server.js'
 import { buildLogtimeToolsSdkServer } from './logtime-sdk-server.js'
+import { buildSlackToolsSdkServer } from './slack-sdk-server.js'
+import { SLACK_MCP_SERVER, sessionHasSlackThread } from '../tools/slack-tools.js'
 import { hasLogtimeLinks } from '../../logtime/store.js'
 import { hasWikiContext } from '../../wiki/inject.js'
 import { buildMemoryToolsSdkServer } from './memory-sdk-server.js'
@@ -695,6 +697,10 @@ export async function runStreamClaude(args: RunNonStreamArgs, cb: StreamCallback
   const memoryBodies = memoryOn && (await hasMemoryBodies(args.projectId))
   // Logtime (ADR 0091): chỉ khi đã nối dự án với PMS — cùng luật với nhánh Pi.
   const logtimeOn = await hasLogtimeLinks()
+  // Slack (docs/features/slack-threads.md): chỉ khi phiên đang gắn một thread — cùng
+  // điều kiện với nhánh Pi (chat-toolset.ts). Process CLI sống lâu nhận lại map server
+  // mỗi lượt (setMcpServers) nên gắn thread giữa chừng thì lượt sau đã có tool.
+  const slackOn = await sessionHasSlackThread(args.sessionId)
   // Source nào sắp bị chính AWOG nuốt mất tool thì phải NÓI RA. Không tự đổi tên
   // giữa lượt — đổi id ở đây làm hỏng whitelist per-agent và tiền tố account
   // keychain; việc của dòng này là biến một lỗi câm thành một lỗi đọc được.
@@ -725,6 +731,9 @@ export async function runStreamClaude(args: RunNonStreamArgs, cb: StreamCallback
     // Logtime → mcp__awoglogtime__logtime_day / _projects / _add / _remove.
     // KHÔNG có tool đẩy lên PMS (ADR 0091 D-5): người dùng tự bấm ở trang Logtime.
     ...(logtimeOn ? { awoglogtime: buildLogtimeToolsSdkServer({ canWrite: true }) } : {}),
+    // Slack → mcp__awogslack__slack_draft_reply. CHỈ đổ nháp vào composer; không có
+    // tool gửi/react/sửa/xoá trên Slack — người dùng tự bấm gửi.
+    ...(slackOn ? { [SLACK_MCP_SERVER]: buildSlackToolsSdkServer(args.sessionId) } : {}),
     // Memory → mcp__awogmemory__memory_remember / _forget / _read.
     ...(memoryAutoWrite || memoryBodies
       ? {

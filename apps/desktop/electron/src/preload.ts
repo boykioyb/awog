@@ -446,6 +446,31 @@ const awog = {
       },
     },
   },
+  // Slack threads (docs/features/slack-threads.md). Main suy cửa sổ từ sender và ép
+  // mọi path vào ~/.awog/slack/files — renderer không chọn được cửa sổ hay thư mục gốc.
+  slack: {
+    // Mở/focus cửa sổ Slack duy nhất; threadId (tuỳ chọn) được main kiểm regex.
+    openWindow: (threadId?: string): Promise<void> => ipcRenderer.invoke('slack:openWindow', threadId),
+    // Mở lại cửa sổ chính nếu đã đóng và chờ nó nghe engine event (trần 15s) — gọi
+    // trước slack.session.open|push để session.* sidecar phát ra có người nhận.
+    ensureMainWindow: (): Promise<void> => ipcRenderer.invoke('slack:ensureMainWindow'),
+    // Ghim luôn-nằm-trên cho CHÍNH cửa sổ gọi; trả trạng thái sau khi đặt.
+    setAlwaysOnTop: (on: boolean): Promise<boolean> => ipcRenderer.invoke('slack:setAlwaysOnTop', on),
+    isAlwaysOnTop: (): Promise<boolean> => ipcRenderer.invoke('slack:isAlwaysOnTop'),
+    // Chép file Slack đã tải tới chỗ người dùng chọn (mặc định Downloads). null = huỷ.
+    saveFileAs: (srcPath: string, defaultName: string): Promise<string | null> =>
+      ipcRenderer.invoke('slack:saveFileAs', { srcPath, defaultName }),
+    // Mở bằng app mặc định; main chỉ cho loại chỉ-xem (allowlist), còn lại reject
+    // với message chứa `slack_open_blocked`.
+    openPath: (path: string): Promise<void> => ipcRenderer.invoke('slack:openPath', path),
+    // Cửa sổ Slack đang mở được yêu cầu chuyển sang thread khác; trả unsubscribe.
+    onNavigate(handler: (threadId: string) => void): () => void {
+      const listener = (_e: unknown, threadId: string): void => handler(threadId)
+      // Literal khớp SLACK_NAVIGATE ở slack-window.ts (preload sandbox không import được).
+      ipcRenderer.on('slack:navigate', listener)
+      return () => ipcRenderer.removeListener('slack:navigate', listener)
+    },
+  },
   // Close the calling window — used by a preview popout's own ✕ / Esc. Main resolves
   // the target from the sender, so this can never close another window.
   closeSelf: (): Promise<void> => ipcRenderer.invoke('window:closeSelf'),

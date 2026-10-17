@@ -4,6 +4,7 @@ import { createSession, listSessionSummaries, updateSessionMetadata } from '../s
 import { detachSessionFromIssue, syncIssueTitle } from '../boards/session-issue.js'
 import { MESSAGE_ID_RE } from '../sessions/ids.js'
 import type { Session, SessionSettings } from '../types/shared.js'
+import { inheritSlackTaint } from '../slack/taint.js'
 
 // Legacy migration: 'standard' → 'low' so JSONL persisted pre-rename still parses.
 const ThinkingLevelSchema = z.preprocess(
@@ -250,6 +251,10 @@ register('sessions.upsert', async (raw) => {
   const session = toSession(params.session)
 
   if (params.mode === 'create') {
+    // Fork mang theo transcript của phiên cha — nếu cha đã nhận nội dung Slack thì
+    // phiên con cũng phải chịu cùng chốt ở sendMessage (slack/taint.ts). Ghi cờ TRƯỚC
+    // khi tạo phiên: hỏng thì không có phiên con nào chạy mà thiếu cờ.
+    if (session.parentSessionId) await inheritSlackTaint(session.id, session.parentSessionId)
     await createSession(session)
     return { session }
   }

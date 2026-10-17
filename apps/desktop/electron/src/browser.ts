@@ -2202,6 +2202,30 @@ class BrowserController {
     for (const win of set) if (!win.isDestroyed()) win.close()
   }
 
+  // Nút đóng tab của renderer: id lấy từ BẢN CACHE danh sách tab (event `changed` cuối),
+  // nên có thể xin đóng một tab đã tự đóng — trang gọi window.close(), renderer crash,
+  // hay tab chết ngay lúc đang khởi tạo (lỗi thật 2026-10-17: `Error occurred in handler
+  // for 'browser:closeTab': no such browser tab: tab_3`, ngay sau "target closed" của
+  // userscript + Network.enable). Ý muốn "đóng tab này" khi tab đã không còn là ĐÃ XONG ⇒
+  // không ném. Cùng tinh thần attachTo. Id của scope khác cũng trả y như id không còn
+  // (không ném, không đóng): renderer không thăm dò / chạm được tab của session khác.
+  // Tool agent (`browser.tabClose`) vẫn dùng closeTab() nghiêm ngặt: model cần biết nó
+  // nhắm vào một tab không có thật.
+  closeTabIfOpen(tabId: string, scope?: string): { closed: string; remaining: number } {
+    const tab = this.tabs.get(tabId)
+    if (!tab || (scope !== undefined && tab.scope !== scope)) {
+      return { closed: tabId, remaining: this.tabs.size }
+    }
+    if (tab.view.webContents.isDestroyed()) {
+      // webContents chết mà bản ghi còn ⇒ dọn nốt bản ghi (event `destroyed` có thể chưa tới).
+      this.tabs.delete(tab.id)
+      this.dropActive(tab)
+      this.changed()
+      return { closed: tab.id, remaining: this.tabs.size }
+    }
+    return this.closeTab(tabId, scope)
+  }
+
   closeTab(tabId: string, scope?: string): { closed: string; remaining: number } {
     const tab = this.tab(tabId, scope)
     if (tab.host && !tab.host.isDestroyed()) tab.host.contentView.removeChildView(tab.view)

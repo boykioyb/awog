@@ -177,10 +177,16 @@ function markConnected(source: McpSource | ApiSource, clientId: string): McpSour
 // cancellable flow keyed by slug (so source.cancelOAuth can abort it), runs the
 // loopback dance, persists the token to the keychain, and flips the source
 // status. If a valid/refreshable token already exists, returns immediately
-// without opening a browser. Never throws — returns a status-only result.
+// without opening a browser — unless `force`. Never throws — returns a status-only result.
+//
+// `force`: người dùng bấm "Kết nối lại" để cấp lại quyền. Không có nó thì token còn
+// hạn làm luồng trả "đã kết nối" ngay, nên scope mới thêm vào cấu hình (vd Slack
+// `files:read` trong mcp.oauthParams.user_scope) không bao giờ được xin — token
+// không hạn của Slack còn làm việc này vĩnh viễn. Tool agent giữ hành vi cũ.
 export async function startSourceOAuth(
   slug: string,
   onAuthorizeUrl: (url: string) => void,
+  opts: { force?: boolean | undefined } = {},
 ): Promise<SourceOAuthStartResult> {
   const source = await loadSource(slug)
   if (!source) {
@@ -218,7 +224,7 @@ export async function startSourceOAuth(
   if (resolvedSecret) target.clientSecret = resolvedSecret
 
   // Already have a usable (or refreshable) token → silent success, no browser.
-  const existing = await getFreshToken(oauthSource)
+  const existing = opts.force ? null : await getFreshToken(oauthSource)
   if (existing) {
     log.info('startSourceOAuth: already authenticated', { slug })
     return { ok: true, alreadyAuthenticated: true, status: 'connected' }

@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { isAbsolute, join, sep } from 'node:path'
-import { realpath } from 'node:fs/promises'
+import { copyFile, realpath, stat } from 'node:fs/promises'
 import { pathToFileURL } from 'node:url'
 import { app, ipcMain, shell, dialog, BrowserWindow } from 'electron'
 import { browser, type Rect, type TabInfo } from './browser'
@@ -15,9 +15,19 @@ import {
 } from './browser-import'
 import { DEFAULT_PROFILE_ID, isValidProfileId, partitionForProfile } from './browser-profile'
 import { engine, type RpcErrorShape } from './engine'
+import { log } from './logger'
 import { mintPreviewToken } from './html-preview'
 import { openPreviewWindow } from './preview-window'
 import { closeSessionWindow, openSessionIds, openSessionWindow, sessionWindowList } from './session-window'
+import {
+  markDownloadedFromInternet,
+  openRefusal,
+  resolveSlackFile,
+  safeFileName,
+  SLACK_OPEN_BLOCKED,
+} from './slack-files'
+import { openSlackWindow, slackWindow } from './slack-window'
+import { ensureMainWindowReady } from './wake'
 import { isVscodeAvailable, openInVscode } from './vscode'
 import { resolveInsideWorkspace } from './workspace-scope'
 
@@ -113,6 +123,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   engine.onEvent((event) => {
     for (const win of [getWindow(), ...sessionWindowList()]) {
       if (win && !win.isDestroyed()) win.webContents.send('engine:event', event)
+    }
+    // Cửa sổ Slack chỉ nhận event `slack.*` (slack.changed / slack.draft) — xem
+    // slackWindow() ở slack-window.ts về lý do không đưa cả luồng session.
+    const slack = slackWindow()
+    if (slack && typeof event.type === 'string' && event.type.startsWith('slack.')) {
+      slack.webContents.send('engine:event', event)
     }
   })
 
@@ -378,7 +394,90 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return result.filePath
   })
 
+  registerSlackIpc()
   registerBrowserViewIpc()
+}
+
+// ─── Slack threads (docs/features/slack-threads.md) ──────────────────────────
+//
+// Không kênh nào ở đây nhận một window id hay một thư mục gốc từ renderer: cửa sổ
+// bị tác động luôn suy từ `event.sender`, còn file luôn bị ép nằm trong gốc cố định
+// `~/.awog/slack/files` (slack-files.ts). Remote gateway (mobile) không với tới các
+// kênh này — nó chỉ chuyển tiếp RPC sidecar theo allowlist exact-match, không đi qua
+// ipcMain.
+// Trần chờ renderer cửa sổ chính boot xong + đăng ký nghe engine event. Một lần
+// boot nguội đo được vài giây; 15s đủ dư mà UI vẫn báo lỗi được thay vì treo nút.
+const MAIN_WINDOW_READY_TIMEOUT_MS = 15_000
+
+function registerSlackIpc(): void {
+  const senderWindow = (e: Electron.IpcMainInvokeEvent): BrowserWindow => {
+    const win = BrowserWindow.fromWebContents(e.sender)
+    if (!win) throw new Error('slack: no window for sender')
+    return win
+  }
+
+  // Mở (hoặc focus) cửa sổ Slack duy nhất, tuỳ chọn điều hướng tới một thread.
+  // threadId được kiểm regex trong openSlackWindow trước khi chạm URL.
+  ipcMain.handle('slack:openWindow', async (_e, threadId?: unknown) => {
+    if (threadId !== undefined && threadId !== null && typeof threadId !== 'string') {
+      throw new Error('slack window: threadId must be a string')
+    }
+    openSlackWindow(threadId ?? undefined)
+  })
+
+  // Trước `slack.session.open|push`: bảo đảm cửa sổ chính tồn tại VÀ đang nghe
+  // `session.*` — event sidecar phát cho phiên chỉ tới cửa sổ chính + popout (xem
+  // ensureMainWindowReady ở wake.ts). Không nhận tham số nào từ renderer.
+  ipcMain.handle('slack:ensureMainWindow', async (): Promise<void> => {
+    await ensureMainWindowReady(MAIN_WINDOW_READY_TIMEOUT_MS)
+  })
+
+  // Ghim luôn-nằm-trên cho CỬA SỔ GỌI — suy từ sender, không nhận id cửa sổ, nên
+  // renderer không ghim/bỏ ghim được cửa sổ nào khác ngoài chính nó.
+  ipcMain.handle('slack:setAlwaysOnTop', async (e, on: unknown): Promise<boolean> => {
+    const win = senderWindow(e)
+    win.setAlwaysOnTop(on === true)
+    return win.isAlwaysOnTop()
+  })
+  ipcMain.handle('slack:isAlwaysOnTop', async (e): Promise<boolean> => senderWindow(e).isAlwaysOnTop())
+
+  // "Save as…" một file Slack đã tải. Nguồn (L1) phải là file thật trong
+  // ~/.awog/slack/files; đích do NGƯỜI DÙNG chọn ở hộp thoại native (mặc định
+  // Downloads/<tên đã làm sạch>). Chỉ CHÉP — không bao giờ chạy file. Trả path đã lưu,
+  // null nếu huỷ.
+  ipcMain.handle('slack:saveFileAs', async (e, payload: unknown): Promise<string | null> => {
+    const p = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+    const src = resolveSlackFile(p.srcPath)
+    const options: Electron.SaveDialogOptions = {
+      defaultPath: join(app.getPath('downloads'), safeFileName(p.defaultName)),
+    }
+    const result = await dialog.showSaveDialog(senderWindow(e), options)
+    if (result.canceled || !result.filePath) return null
+    await copyFile(src, result.filePath)
+    // copyFile làm rơi cờ quarantine của bản cache ⇒ gắn lại (slack-files.ts). Lỗi chỉ
+    // log: file đã lưu xong, thiếu cờ không được biến thành "lưu thất bại".
+    try {
+      await markDownloadedFromInternet(result.filePath)
+    } catch (err) {
+      log.warn('slack: failed to mark saved file as downloaded from the Internet', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    }
+    return result.filePath
+  })
+
+  // "Mở bằng app mặc định" một file Slack đã tải. Cùng ràng buộc gốc như saveFileAs,
+  // thêm ALLOWLIST loại chỉ-xem (openRefusal) — file này do người khác gửi lên Slack.
+  // Bị từ chối ⇒ message mang mã ổn định `slack_open_blocked:<lý do>` để UI nhận ra
+  // (Electron chỉ giữ `message` qua invoke) và gợi ý "Lưu thành…".
+  ipcMain.handle('slack:openPath', async (_e, path: unknown) => {
+    const target = resolveSlackFile(path)
+    const st = await stat(target)
+    const refusal = openRefusal(target, st.mode, process.platform)
+    if (refusal) throw new Error(`${SLACK_OPEN_BLOCKED}:${refusal}`)
+    const err = await shell.openPath(target)
+    if (err) throw new Error(err)
+  })
 }
 
 // ─── Embedded browser (ADR 0086) ─────────────────────────────────────────────
@@ -481,7 +580,7 @@ function registerBrowserViewIpc(): void {
     browser.selectTab(optTab(payload?.tabId) ?? '', optScope(payload)),
   )
   ipcMain.handle('browser:closeTab', async (_e, payload: BrowserTabPayload) =>
-    browser.closeTab(optTab(payload?.tabId) ?? '', optScope(payload)),
+    browser.closeTabIfOpen(optTab(payload?.tabId) ?? '', optScope(payload)),
   )
   ipcMain.handle('browser:back', async (_e, payload?: BrowserTabPayload) => {
     browser.goBack(optTab(payload?.tabId), optScope(payload))

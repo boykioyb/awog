@@ -26,10 +26,12 @@ import { resolveOAuthTarget, startSourceOAuth } from '../sources/oauth-start.js'
 
 const Params = z.object({
   slug: z.string().regex(SOURCE_SLUG_RE),
+  // Bỏ qua token đang có, luôn mở trình duyệt xin quyền (nút "Kết nối lại").
+  force: z.boolean().optional(),
 })
 
 register('source.startOAuth', async (raw) => {
-  const { slug } = Params.parse(raw)
+  const { slug, force } = Params.parse(raw)
 
   // Validate up-front so a bad source is a proper -32602 (bad request) rather
   // than a flow-level {ok:false}. startSourceOAuth re-checks defensively.
@@ -38,7 +40,9 @@ register('source.startOAuth', async (raw) => {
   const resolved = resolveOAuthTarget(source)
   if (!resolved.ok) throw new RpcError(-32602, resolved.error)
 
-  const result = await startSourceOAuth(slug, (url) => emit('source.oauth-url', { slug, url }))
+  const result = await startSourceOAuth(slug, (url) => emit('source.oauth-url', { slug, url }), {
+    force,
+  })
 
   if (result.canceled) throw new RpcError(-32023, 'CANCELED')
   if (result.ok) {

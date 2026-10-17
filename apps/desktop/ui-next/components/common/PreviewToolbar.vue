@@ -229,7 +229,7 @@
               <Icon name="folder" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.reveal') }}
             </button>
-            <button class="pvmi" @click="run(openInBrowser)">
+            <button v-if="canMutateFile" class="pvmi" @click="run(openInBrowser)">
               <Icon name="globe" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.openBrowser') }}
             </button>
@@ -237,20 +237,22 @@
               <Icon name="copy" style="width: var(--icon-sm); height: var(--icon-sm)" />
               {{ t('common.preview.copyPath') }}
             </button>
-            <div class="pvmsep" />
-            <button class="pvmi" @click="run(() => openRename('rename'))">
-              <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('common.preview.rename') }}
-            </button>
-            <button class="pvmi" @click="run(() => openRename('move'))">
-              <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('common.preview.move') }}
-            </button>
-            <div class="pvmsep" />
-            <button class="pvmi danger" @click="run(askDelete)">
-              <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
-              {{ t('common.delete') }}
-            </button>
+            <template v-if="canMutateFile">
+              <div class="pvmsep" />
+              <button class="pvmi" @click="run(() => openRename('rename'))">
+                <Icon name="edit" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                {{ t('common.preview.rename') }}
+              </button>
+              <button class="pvmi" @click="run(() => openRename('move'))">
+                <Icon name="move" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                {{ t('common.preview.move') }}
+              </button>
+              <div class="pvmsep" />
+              <button class="pvmi danger" @click="run(askDelete)">
+                <Icon name="trash" style="width: var(--icon-sm); height: var(--icon-sm)" />
+                {{ t('common.delete') }}
+              </button>
+            </template>
           </template>
         </div>
       </div>
@@ -310,6 +312,7 @@ const {
   editMode,
   dirty,
   hasWorkspaceFile,
+  canMutateFile,
   canAddToChat,
   view,
   scale,
